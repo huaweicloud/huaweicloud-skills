@@ -1,0 +1,3 @@
+# huaweicloud-skills
+
+该项目是华为云Skills开源仓库的共建共享仓库，用于内部人员的Skill开发与评审
