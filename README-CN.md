@@ -10,7 +10,7 @@
 
 ## Skills 列表
 
-华为云产品 Skills 列表
+[华为云产品 Skills 列表](https://gitcode.com/developer-skill/huaweicloud-skills/tree/master/skills)
 
 
 ## SKILL.md标准格式
