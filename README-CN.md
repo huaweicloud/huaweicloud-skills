@@ -2,34 +2,16 @@
 
 [English](README.md) | **简体中文**
 
-华为云官方 Agent Skills 集合，为 AI Agent 提供丰富的华为云产品能力和通用工具集。
+华为云官方 Agent Skills 集合，兼容主流Agent,包含Agent类安装部署、管理运维、最佳解决方案和产品案例实践等多个Skills。
 
 ## 概述
 
-本仓库包含了一系列官方维护的 Agent Skills，旨在帮助开发者更高效地使用华为云产品和服务。每个 Skill 都经过精心设计和测试，确保稳定性和可靠性。
+本仓库包含了华为云官方维护的 Agent Skills，skills目录下按照产品域分类，各个产品域下的文件夹是每个skill的目录，每个 Skill 目录包含运行该技能所需的全部文件。
 
 ## Skills 列表
 
-华为云产品 Skills 列表:
+华为云产品 Skills 列表
 
-* huawei-cloud-cli-guidance
-* huawei-cloud-find-skills
-* huawei-cloud-ecs-diagnosis-workflowloud-cli-guidance
-* huawei-cloud-ecs-manage
-* huawei-cloud-as-manage
-* huawei-cloud-vpc-manage
-* huawei-cloud-eip-manage
-* huawei-cloud-elb-manage
-* huawei-cloud-obs-manage
-* huawei-cloud-obs-backup
-* huawei-cloud-evs-manage
-* huawei-cloud-rds-manage
-* huawei-cloud-dcs-manage
-* huawei-cloud-iam-manage
-* huawei-cloud-waf-manage
-* huawei-cloud-ces-manage
-* huawei-cloud-cce-manage
-* huawei-cloud-dtse-workflow
 
 ## SKILL.md标准格式
 
@@ -77,20 +59,17 @@ npx skills add <path>/huaweicloud-skills/skills/<skill-name>
 交互式配置
 
 ```bash
-Access Key Id：<your-access-key-id>
-Secret Access Key：<your-access-key-secret>
+Access Key Id：<your AK>
+Secret Access Key：<yourSKt>
 ```
 
 AccessKey 认证
 
 ```bash
 # 命令设置凭证
-hcloud configure set --cli-access-key=<AK> --cli-secret-key=<SK>
+hcloud configure set --cli-access-key="<your AK> " --cli-secret-key="<yourSK>" --cli-mode="AKSK"
 ```
 
-**安全提示**
-
-- **`AccessKey 认证`** 和 **`配置文件认证的 AK 凭证认证`**，建议仅在本地测试环境时个人使用，避免明文 AK/SK 凭证信息的外泄。
 
 ## 问题
 
