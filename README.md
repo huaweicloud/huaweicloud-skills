@@ -1,109 +1,89 @@
 # Huawei Cloud Skills
 
-**English** | [简体中文](README-CN.md)
+[English](README.md) | **简体中文**
 
-Official Huawei Cloud Agent Skills collection, providing rich Huawei Cloud product capabilities and general toolkits for AI Agents.
+华为云官方 Agent Skills 集合，兼容主流Agent,包含Agent类安装部署、管理运维、最佳解决方案和产品案例实践等多个Skills。
 
-## Overview
+## 概述
 
-This repository contains a collection of officially maintained Agent Skills designed to help developers use Huawei Cloud products and services more efficiently. Each Skill is carefully designed and tested to ensure stability and reliability.
+本仓库包含了华为云官方维护的 Agent Skills，skills目录下按照产品域分类，各个产品域下的文件夹是每个skill的目录，每个 Skill 目录包含运行该技能所需的全部文件。
 
-## Skills List
+## Skills 列表
 
-Huawei Cloud Product Skills List:
+华为云产品 Skills 列表
 
-* huawei-cloud-cli-guidance
-* huawei-cloud-find-skills
-* huawei-cloud-ecs-diagnosis-workflowloud-cli-guidance
-* huawei-cloud-ecs-manage
-* huawei-cloud-as-manage
-* huawei-cloud-vpc-manage
-* huawei-cloud-eip-manage
-* huawei-cloud-elb-manage
-* huawei-cloud-obs-manage
-* huawei-cloud-obs-backup
-* huawei-cloud-evs-manage
-* huawei-cloud-rds-manage
-* huawei-cloud-dcs-manage
-* huawei-cloud-iam-manage
-* huawei-cloud-waf-manage
-* huawei-cloud-ces-manage
-* huawei-cloud-cce-manage
-* huawei-cloud-dtse-workflow
 
-## SKILL.md Standard Format
+## SKILL.md标准格式
 
-skill-name/                    # Skill package root directory
-├── SKILL.md                   # Skill definition file (required, unique entry, default English)
-├── references/                # Reference documentation directory (optional but recommended)
-│   ├── cli-installation-guide.md   # CLI installation guide
-│   ├── iam-policies.md             # IAM permission policies
-│   ├── verification-method.md      # Verification methods
-│   ├── acceptance-criteria.md      # Acceptance criteria
-│   └── related-commands.md         # Related command references
-├── scripts/                   # Executable scripts (optional)
+skill-name/                    # 技能包根目录
+├── SKILL.md                   # 技能定义文件（必需，唯一入口,默认英文）
+├── references/                # 参考文档目录（可选但推荐）
+│   ├── cli-installation-guide.md   # CLI安装指南
+│   ├── iam-policies.md             # IAM权限策略
+│   ├── verification-method.md      # 验证方法
+│   ├── acceptance-criteria.md      # 验收标准
+│   └── related-commands.md         # 相关命令参考
+├── scripts/                   # 可执行脚本（可选）
 │   ├── analyze.py
 │   └── deploy.sh
-├── templates/                 # Template files (optional)
+├── templates/                 # 模板文件（可选）
 │   ├── config.yaml
 │   └── report.md
-└── demo/                      # Demo examples (optional)
+└── demo/                      # 演示样例（可选）
 └── example.json
 
-## Installation
+## 安装
 
-### Install Skills with npx
+### 使用 npx 安装 Skills
 
 ```bash
-# Install a single Skill
+# 安装单个 Skill
 npx skills add https://gitcode.com/developer-skill/huaweicloud-skills --skill <skill-name>
 ```
 
-### Manual Installation
+### 手动安装
 
 ```bash
-# Clone the repository
+# 克隆仓库
 git clone https://gitcode.com/developer-skill/huaweicloud-skills
 
-# Navigate to Skills directory
+# 进入 Skills 目录
 npx skills add <path>/huaweicloud-skills/skills/<skill-name>
+
 ```
 
-## Authentication and Configuration
+## 认证与配置
 
-Using Huawei Cloud product-related Skills requires authentication configuration. The following authentication methods are supported:
+使用华为云产品相关的 Skills 需要配置认证信息。支持以下认证方式：
 
-Interactive Configuration
+交互式配置
 
 ```bash
-Access Key Id：<your-access-key-id>
-Secret Access Key：<your-access-key-secret>
+Access Key Id：<your AK>
+Secret Access Key：<yourSKt>
 ```
 
-AccessKey Authentication
+AccessKey 认证
 
 ```bash
-# Command to set credentials
-hcloud configure set --cli-access-key=<AK> --cli-secret-key=<SK>
+# 命令设置凭证
+hcloud configure set --cli-access-key="<your AK> " --cli-secret-key="<yourSK>" --cli-mode="AKSK"
 ```
 
-**Security Tips**
 
-- **`AccessKey Authentication`** and **`AK credential authentication via configuration file`** are recommended only for personal use in local testing environments to avoid exposure of plaintext AK/SK credential information.
+## 问题
 
-## Issues
+[提交 Issue](https://gitcode.com/developer-skill/huaweicloud-skills/issues)不符合指南的问题可能会立即关闭。
 
-[Submit Issue](https://gitcode.com/developer-skill/huaweicloud-skills/issues) Issues that do not follow the guidelines may be closed immediately.
+## 相关地址
 
-## Related
-
-- [Huawei Cloud Official Website](https://www.huaweicloud.com/)
+- [华为云官网](https://www.huaweicloud.com/)
 - [gitcode](https://gitcode.com/developer-skill/huaweicloud-skills/)
 
-## License
+## 许可证
 
 [MIT License](https://gitcode.com/developer-skill/huaweicloud-skills/blob/master/LICENSE)
 
-## Legal
+## 法务条款
 
-All Skills provided in this repository are open-source projects dedicated to providing developers with rich Agent capability extension tools to help you manage cloud resources more efficiently. They follow the [MIT Open Source License](https://spdx.org/licenses/MIT.html). Before using the Skills provided by this platform, please carefully read the [Legal Terms](https://www.huaweicloud.com/declaration/statement.html) to fully understand potential risks. Once you download, install, or run the Skills provided by this platform in any way, it is deemed that you have fully read and agreed to bear all related operational risks, and confirm that you will bear all consequences arising from using this code.
+该仓库提供的所有 Skills 均为开源项目，致力于为开发者提供丰富的 Agent 能力扩展工具，帮助您更高效地管理云资源。并遵循 [MIT 开源协议](https://spdx.org/licenses/MIT.html)。在您使用本平台提供的Skills之前，请务必仔细阅读[法务条款](https://www.huaweicloud.com/declaration/statement.html)，充分了解可能存在的风险。一旦您下载、安装或通过任何方式运行本平台提供的 Skills，即视为您已充分阅读并同意承担所有相关的操作风险，并确认由您自行承担因使用这些代码而产生的一切后果。
