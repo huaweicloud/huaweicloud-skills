@@ -6,10 +6,10 @@
 </p>
 
 <p align="center">
-  <a href="https://gitcode.com/developer-skill/huaweicloud-skills/blob/master/LICENSE"><img src="https://res-static-hc-cdn.ulanqab.huawei.com/aem/huawei-cloud-skills/license-Apache.svg" alt="License" /></a>
-  <a href="https://gitcode.com/developer-skill/huaweicloud-skills/stargazers"><img src="https://res-static-hc-cdn.ulanqab.huawei.com/aem/huawei-cloud-skills/star.svg" alt="Stars" /></a>
-  <a href="https://support.huaweicloud.com/qs-hcli/hcli_02_003.html"><img src="https://res-static-hc-cdn.ulanqab.huawei.com/aem/huawei-cloud-skills/Agent-Skills.svg" alt="Agent Skills" /></a>
-  <a href="https://nodejs.org"><img src="https://res-static-hc-cdn.ulanqab.huawei.com/aem/huawei-cloud-skills/node.svg" alt="Node.js" /></a>
+  <a href="https://gitcode.com/developer-skill/huaweicloud-skills/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License" /></a>
+  <a href="https://gitcode.com/developer-skill/huaweicloud-skills/stargazers"><img src="https://img.shields.io/github/stars/QianWen-AI/qianwen-ai?style=social" alt="Stars" /></a>
+  <a href="https://support.huaweicloud.com/qs-hcli/hcli_02_003.html"><img src="https://img.shields.io/badge/Agent%20Skills-compatible-brightgreen.svg" alt="Agent Skills" /></a>
+  <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D18-blue.svg" alt="Node.js" /></a>
 </p>
 
 <p align="center">
