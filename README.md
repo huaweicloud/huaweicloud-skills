@@ -1,3 +1,22 @@
+<h1 align="center">Huawei Cloud Skills</h1>
+
+<p align="center">
+  A collection of official Huawei Cloud Agent Skills, compatible with mainstream agents, including skills for agent installation and deployment, management and operations, best practice solutions, and product case studies.
+
+</p>
+
+<p align="center">
+  <a href="https://gitcode.com/developer-skill/huaweicloud-skills/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License" /></a>
+  <a href="https://gitcode.com/developer-skill/huaweicloud-skills/stargazers"><img src="https://img.shields.io/github/stars/QianWen-AI/qianwen-ai?style=social" alt="Stars" /></a>
+  <a href="https://support.huaweicloud.com/qs-hcli/hcli_02_003.html"><img src="https://img.shields.io/badge/Agent%20Skills-compatible-brightgreen.svg" alt="Agent Skills" /></a>
+  <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D18-blue.svg" alt="Node.js" /></a>
+</p>
+
+<p align="center">
+  <a href="./README-CN.md">简体中文</a>
+</p>
+
+---
 # Huawei Cloud Skills
 
  **English** | [简体中文](README-CN.md)
