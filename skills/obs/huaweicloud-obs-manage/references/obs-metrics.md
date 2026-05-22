@@ -1,119 +1,119 @@
-# OBS CES监控指标参考 - 华为云OBS对象存储管理
+# OBS CES Monitoring Metrics Reference - Huawei Cloud OBS Object Storage Management
 
-OBS在CES（云监控服务）中上报的监控指标，命名空间为 `SYS.OBS`。
+Monitoring metrics reported by OBS to CES (Cloud Eye Service), with namespace `SYS.OBS`.
 
-> **参考官方文档：** https://support.huaweicloud.com/usermanual-obs/obs_03_0010.html
+> **Reference official documentation:** https://support.huaweicloud.com/usermanual-obs/obs_03_0010.html
 
-## 命名空间
+## Namespace
 
 `SYS.OBS`
 
-## 维度
+## Dimensions
 
-| 维度 | Key | hcloud参数格式 | 描述 |
-|------|-----|---------------|------|
-| 桶名 | `bucket_name` | `--dim.0=bucket_name,<BucketName>` | OBS桶名称 |
+| Dimension | Key | hcloud parameter format | Description |
+|-----------|-----|------------------------|-------------|
+| Bucket name | `bucket_name` | `--dim.0=bucket_name,<BucketName>` | OBS bucket name |
 
-> **⚠️ hcloud CES维度参数格式**
+> **⚠️ hcloud CES dimension parameter format**
 >
-> hcloud CES ShowMetricData的维度参数使用 `--dim.N=key,value` 格式：
+> hcloud CES ShowMetricData dimension parameters use the `--dim.N=key,value` format:
 > ```bash
 > --dim.0=bucket_name,my-bucket
 > ```
 >
-> ❌ 错误格式（SDK/REST API格式，hcloud不支持）：
+> ❌ Incorrect format (SDK/REST API format, not supported by hcloud):
 > ```bash
 > --dimensions.0.name=bucket_name --dimensions.0.value=my-bucket
 > ```
 
 ---
 
-## 流量指标
+## Traffic Metrics
 
-> **⚠️ 关键：带宽指标 vs 流量指标**
+> **⚠️ Key: Bandwidth metrics vs Traffic metrics**
 >
-> - **流量指标**（累计量，单位Bytes）：直接求和即为总字节数，**查询流量时必须使用此类指标**
-> - **带宽指标**（速率，单位Bytes/s）：需要乘以聚合周期才能换算为字节数，容易出错，**查询流量时禁止使用**
+> - **Traffic metrics** (cumulative, unit Bytes): Direct summation gives total bytes; **must use these metrics when querying traffic**
+> - **Bandwidth metrics** (rate, unit Bytes/s): Need to multiply by aggregation period to convert to bytes; error-prone; **do not use for traffic queries**
 
-### 流量指标（累计量，推荐使用）
+### Traffic Metrics (Cumulative, Recommended)
 
-| 指标名 | 指标ID | 单位 | 描述 |
-|--------|--------|------|------|
-| 公网下载流量 | `download_traffic_extranet` | Bytes | 公网下载对象大小总和（含CDN回源） |
-| 内网下载流量 | `download_traffic_intranet` | Bytes | 内网下载对象大小总和 |
-| 总下载流量 | `download_traffic` | Bytes | 下载对象大小总和 |
-| 公网上传流量 | `upload_traffic_extranet` | Bytes | 公网上传对象大小总和 |
-| 内网上传流量 | `upload_traffic_intranet` | Bytes | 内网上传对象大小总和 |
-| 总上传流量 | `upload_traffic` | Bytes | 上传对象大小总和 |
-| CDN回源流量 | `cdn_traffic` | Bytes | CDN回源请求流量总和 |
+| Metric Name | Metric ID | Unit | Description |
+|-------------|-----------|------|-------------|
+| External download traffic | `download_traffic_extranet` | Bytes | Sum of externally downloaded object sizes (includes CDN origin pull) |
+| Internal download traffic | `download_traffic_intranet` | Bytes | Sum of internally downloaded object sizes |
+| Total download traffic | `download_traffic` | Bytes | Sum of downloaded object sizes |
+| External upload traffic | `upload_traffic_extranet` | Bytes | Sum of externally uploaded object sizes |
+| Internal upload traffic | `upload_traffic_intranet` | Bytes | Sum of internally uploaded object sizes |
+| Total upload traffic | `upload_traffic` | Bytes | Sum of uploaded object sizes |
+| CDN origin pull traffic | `cdn_traffic` | Bytes | Sum of CDN origin pull request traffic |
 
-### 带宽指标（速率，避免用于流量统计）
+### Bandwidth Metrics (Rate, Avoid for Traffic Statistics)
 
-| 指标名 | 指标ID | 单位 | 描述 |
-|--------|--------|------|------|
-| 总下载带宽 | `download_bytes` | Bytes/s | 平均每秒下载对象大小 |
-| 公网下载带宽 | `download_bytes_extranet` | Bytes/s | 平均每秒外网下载对象大小 |
-| 内网下载带宽 | `download_bytes_intranet` | Bytes/s | 平均每秒内网下载对象大小 |
-| 总上传带宽 | `upload_bytes` | Bytes/s | 平均每秒上传对象大小 |
-| 公网上传带宽 | `upload_bytes_extranet` | Bytes/s | 平均每秒公网上传对象大小 |
-| 内网上传带宽 | `upload_bytes_intranet` | Bytes/s | 平均每秒内网上传对象大小 |
+| Metric Name | Metric ID | Unit | Description |
+|-------------|-----------|------|-------------|
+| Total download bandwidth | `download_bytes` | Bytes/s | Average downloaded object size per second |
+| External download bandwidth | `download_bytes_extranet` | Bytes/s | Average externally downloaded object size per second |
+| Internal download bandwidth | `download_bytes_intranet` | Bytes/s | Average internally downloaded object size per second |
+| Total upload bandwidth | `upload_bytes` | Bytes/s | Average uploaded object size per second |
+| External upload bandwidth | `upload_bytes_extranet` | Bytes/s | Average externally uploaded object size per second |
+| Internal upload bandwidth | `upload_bytes_intranet` | Bytes/s | Average internally uploaded object size per second |
 
-> **⚠️ 流量计费说明**
+> **⚠️ Traffic billing notes**
 >
-> - **公网下载流量**（`download_traffic_extranet`）：计费项，公网流出流量按GB计费（含CDN回源）
-> - **内网下载流量**（`download_traffic_intranet`）：免费，同区域/同VPC内网传输不收费
-> - **公网上传流量**（`upload_traffic_extranet`）：免费，公网流入流量不收费
-> - **内网上传流量**（`upload_traffic_intranet`）：免费
+> - **External download traffic** (`download_traffic_extranet`): Billable item; external outgoing traffic billed per GB (includes CDN origin pull)
+> - **Internal download traffic** (`download_traffic_intranet`): Free; intra-region/intra-VPC internal transfer is not charged
+> - **External upload traffic** (`upload_traffic_extranet`): Free; external incoming traffic is not charged
+> - **Internal upload traffic** (`upload_traffic_intranet`): Free
 
 ---
 
-## 请求指标
+## Request Metrics
 
-| 指标名 | 指标ID | 单位 | 描述 |
-|--------|--------|------|------|
-| GET类请求次数 | `get_request_count` | Count | GET请求次数（GetObject、HeadObject、ListObjects等） |
-| PUT类请求次数 | `put_request_count` | Count | PUT请求次数（PutObject、CopyObject等） |
-| POST类请求次数 | `post_request_count` | Count | POST类请求次数 |
-| HEAD类请求次数 | `head_request_count` | Count | HEAD类请求次数 |
-| DELETE类请求次数 | `delete_request_count` | Count | DELETE类请求次数 |
-| 4xx状态码个数 | `request_count_4xx` | Count | 服务端响应4xx的请求数 |
-| 5xx状态码个数 | `request_count_5xx` | Count | 服务端响应5xx的请求数 |
-| GET类请求首字节平均时延 | `first_byte_latency` | ms | GET请求首字节平均时延 |
-| 总TPS | `request_count_per_second` | Count/s | 每秒请求数 |
+| Metric Name | Metric ID | Unit | Description |
+|-------------|-----------|------|-------------|
+| GET-type request count | `get_request_count` | Count | GET request count (GetObject, HeadObject, ListObjects, etc.) |
+| PUT-type request count | `put_request_count` | Count | PUT request count (PutObject, CopyObject, etc.) |
+| POST-type request count | `post_request_count` | Count | POST-type request count |
+| HEAD-type request count | `head_request_count` | Count | HEAD-type request count |
+| DELETE-type request count | `delete_request_count` | Count | DELETE-type request count |
+| 4xx status code count | `request_count_4xx` | Count | Server responded 4xx request count |
+| 5xx status code count | `request_count_5xx` | Count | Server responded 5xx request count |
+| GET-type first byte average latency | `first_byte_latency` | ms | GET request first byte average latency |
+| Total TPS | `request_count_per_second` | Count/s | Requests per second |
 
-> **⚠️ 注意：OBS无 `request_count` 指标**
+> **⚠️ Note: OBS has no `request_count` metric**
 >
-> CES中**不存在**名为 `request_count` 的OBS指标。总请求数需通过各类型请求求和获得：
-> `总请求数 = get_request_count + put_request_count + post_request_count + head_request_count + delete_request_count`
+> CES **does not have** an OBS metric named `request_count`. Total request count must be obtained by summing all request types:
+> `Total requests = get_request_count + put_request_count + post_request_count + head_request_count + delete_request_count`
 >
-> 或使用TPS指标 `request_count_per_second`（每秒请求数，需乘以聚合周期换算为总次数）。
+> Or use the TPS metric `request_count_per_second` (requests per second; multiply by aggregation period to convert to total count).
 
-> **⚠️ 请求计费说明**
+> **⚠️ Request billing notes**
 >
-> - GET/HEAD类请求：按万次计费（价格较低）
-> - PUT/POST/DELETE类请求：按万次计费（价格较高，通常为GET的10倍）
+> - GET/HEAD-type requests: Billed per 10,000 requests (lower price)
+> - PUT/POST/DELETE-type requests: Billed per 10,000 requests (higher price, typically 10x GET)
 
 ---
 
-## 容量指标
+## Capacity Metrics
 
-| 指标名 | 指标ID | 单位 | 描述 |
-|--------|--------|------|------|
-| 存储总用量 | `capacity_total` | Bytes | 所有数据占用的存储空间 |
-| 标准存储用量 | `capacity_standard` | Bytes | 标准存储数据占用的存储空间 |
-| 低频存储用量 | `capacity_infrequent_access` | Bytes | 低频访问存储数据占用的存储空间 |
-| 归档存储用量 | `capacity_archive` | Bytes | 归档存储数据占用的存储空间 |
-| 深度归档存储用量 | `capacity_deep_archive` | Bytes | 深度归档存储数据占用的存储空间 |
+| Metric Name | Metric ID | Unit | Description |
+|-------------|-----------|------|-------------|
+| Total storage usage | `capacity_total` | Bytes | Storage space occupied by all data |
+| Standard storage usage | `capacity_standard` | Bytes | Storage space occupied by standard storage data |
+| Infrequent access storage usage | `capacity_infrequent_access` | Bytes | Storage space occupied by infrequent access storage data |
+| Archive storage usage | `capacity_archive` | Bytes | Storage space occupied by archive storage data |
+| Deep archive storage usage | `capacity_deep_archive` | Bytes | Storage space occupied by deep archive storage data |
 
-> **⚠️ 容量指标采集说明**
+> **⚠️ Capacity metric collection notes**
 >
-> - CES容量指标采集周期为30分钟，非实时值
-> - 若需精确的桶容量和对象数，优先使用 `GetBucketStorageInfo` API
-> - CES容量指标适用于趋势分析和告警
+> - CES capacity metrics have a 30-minute collection cycle; values are not real-time
+> - For exact bucket capacity and object count, prefer the `GetBucketStorageInfo` API
+> - CES capacity metrics are suitable for trend analysis and alerting
 
-> **💡 实战经验：使用CES容量指标批量查询桶容量**
+> **💡 Practical tip: Use CES capacity metrics for batch bucket capacity queries**
 >
-> 查询多个桶容量排名时，逐桶调用GetBucketStorageInfo效率低，推荐通过CES批量查询：
+> When querying capacity rankings for multiple buckets, calling GetBucketStorageInfo per bucket is inefficient; recommended to batch query via CES:
 >
 > ```bash
 > hcloud CES ShowMetricData \
@@ -123,19 +123,19 @@ OBS在CES（云监控服务）中上报的监控指标，命名空间为 `SYS.OB
 >   --dim.0=bucket_name,<BucketName> \
 >   --period=86400 \
 >   --filter=average \
->   --from=<当天0点时间戳ms> \
->   --to=<当前时间戳ms>
+>   --from=<TodayMidnightTimestampMs> \
+>   --to=<CurrentTimestampMs>
 > ```
 >
-> - 使用 `filter=average`（非sum），取最新采样值
-> - 返回 `datapoints[-1].average` 即为当前桶容量（Bytes）
-> - CES容量指标30分钟采集一次，对排名统计足够准确
+> - Use `filter=average` (not sum), taking the latest sample value
+> - The returned `datapoints[-1].average` is the current bucket capacity (Bytes)
+> - CES capacity metrics are collected every 30 minutes, which is accurate enough for ranking statistics
 
 ---
 
-## 查询示例
+## Query Examples
 
-### 查询桶的公网下载流量（本月）
+### Query bucket's external download traffic (this month)
 
 ```bash
 hcloud CES ShowMetricData \
@@ -149,7 +149,7 @@ hcloud CES ShowMetricData \
   --to=1779181505463
 ```
 
-### 查询桶的内网下载流量（本月）
+### Query bucket's internal download traffic (this month)
 
 ```bash
 hcloud CES ShowMetricData \
@@ -163,7 +163,7 @@ hcloud CES ShowMetricData \
   --to=1779181505463
 ```
 
-### 查询桶的GET请求数（本月）
+### Query bucket's GET request count (this month)
 
 ```bash
 hcloud CES ShowMetricData \
@@ -179,7 +179,7 @@ hcloud CES ShowMetricData \
 
 ---
 
-## 官方文档
+## Official Documentation
 
-- [OBS监控指标说明](https://support.huaweicloud.com/usermanual-obs/obs_03_0010.html)
+- [OBS Monitoring Metrics Description](https://support.huaweicloud.com/usermanual-obs/obs_03_0010.html)
 - [CES ShowMetricData API](https://support.huaweicloud.com/api-ces/ces_03_0059.html)

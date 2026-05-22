@@ -1,26 +1,26 @@
-# CLI安装指南 - 华为云OBS对象存储管理
+# CLI Installation Guide - Huawei Cloud OBS Object Storage Management
 
-本skill需要两个CLI工具：hcloud（KooCLI）和obsutil。
+This skill requires two CLI tools: hcloud (KooCLI) and obsutil.
 
-## 目录
+## Table of Contents
 
-- [hcloud (KooCLI) 安装](#hcloud-kocli-安装)
-- [obsutil 安装](#obsutil-安装)
-- [凭证配置](#凭证配置)
-- [验证安装](#验证安装)
-- [故障排除](#故障排除)
+- [hcloud (KooCLI) Installation](#hcloud-kocli-installation)
+- [obsutil Installation](#obsutil-installation)
+- [Credential Configuration](#credential-configuration)
+- [Verify Installation](#verify-installation)
+- [Troubleshooting](#troubleshooting)
 
 ---
 
-## hcloud (KooCLI) 安装
+## hcloud (KooCLI) Installation
 
 ### macOS
 
 ```bash
-# 使用Homebrew安装
+# Install via Homebrew
 brew install hcloudcli
 
-# 或直接下载
+# Or download directly
 curl -O https://obs-community-tool.obs.cn-north-1.myhuaweicloud.com/hcloudcli/latest/hcloudcli-macos-amd64.tar.gz
 tar -xzf hcloudcli-macos-amd64.tar.gz
 chmod +x hcloud
@@ -48,15 +48,15 @@ sudo mv hcloud /usr/local/bin/
 ### Windows
 
 ```powershell
-# 下载并解压
+# Download and extract
 Invoke-WebRequest -Uri "https://obs-community-tool.obs.cn-north-1.myhuaweicloud.com/hcloudcli/latest/hcloudcli-windows-amd64.zip" -OutFile "hcloudcli.zip"
 Expand-Archive hcloudcli.zip
-# 将hcloud.exe添加到PATH
+# Add hcloud.exe to PATH
 ```
 
 ---
 
-## obsutil 安装
+## obsutil Installation
 
 ### macOS
 
@@ -90,54 +90,54 @@ sudo mv obsutil_linux_arm64_*/obsutil /usr/local/bin/
 ```powershell
 Invoke-WebRequest -Uri "https://obs-community-tool.obs.cn-north-1.myhuaweicloud.com/obsutil/current/obsutil_windows_amd64.zip" -OutFile "obsutil.zip"
 Expand-Archive obsutil.zip
-# 将obsutil.exe添加到PATH
+# Add obsutil.exe to PATH
 ```
 
 ---
 
-## 凭证配置
+## Credential Configuration
 
-### hcloud 凭证配置
+### hcloud Credential Configuration
 
-#### 方式一：交互式配置（推荐）
+#### Method 1: Interactive configuration (recommended)
 
 ```bash
 hcloud configure
-# 按提示输入：
-# - 区域（如cn-south-1）
-# - AK（Access Key ID）
-# - SK（Access Key Secret）
+# Enter as prompted:
+# - Region (e.g., cn-south-1)
+# - AK (Access Key ID)
+# - SK (Access Key Secret)
 ```
 
-#### 方式二：环境变量
+#### Method 2: Environment variables
 
 ```bash
 export HUAWEICLOUD_SDK_AK=<your-access-key-id>
 export HUAWEICLOUD_SDK_SK=<your-access-key-secret>
 ```
 
-#### 方式三：非交互式配置
+#### Method 3: Non-interactive configuration
 
 ```bash
 hcloud configure set --cli-profile=default --region=cn-south-1 --access-key-id=<AK> --secret-access-key=<SK>
 ```
 
-> **⚠️ 安全警告**：方式三会在命令历史中暴露AK/SK，仅在安全环境中使用。
+> **⚠️ Security warning**: Method 3 will expose AK/SK in command history; only use in secure environments.
 
-### obsutil 凭证配置
+### obsutil Credential Configuration
 
 ```bash
 obsutil config -ak=<AK> -sk=<SK> -e=obs.cn-south-1.myhuaweicloud.com
 ```
 
-> **⚠️ obsutil的Endpoint格式**
+> **⚠️ obsutil Endpoint format**
 >
-> OBS Endpoint格式：`obs.<region-id>.myhuaweicloud.com`
+> OBS Endpoint format: `obs.<region-id>.myhuaweicloud.com`
 >
-> 常见Endpoint：
+> Common Endpoints:
 >
-> | 区域 | Endpoint |
-> |------|----------|
+> | Region | Endpoint |
+> |--------|----------|
 > | cn-north-1 | obs.cn-north-1.myhuaweicloud.com |
 > | cn-north-4 | obs.cn-north-4.myhuaweicloud.com |
 > | cn-east-2 | obs.cn-east-2.myhuaweicloud.com |
@@ -147,68 +147,68 @@ obsutil config -ak=<AK> -sk=<SK> -e=obs.cn-south-1.myhuaweicloud.com
 
 ---
 
-## 验证安装
+## Verify Installation
 
-### 验证hcloud
+### Verify hcloud
 
 ```bash
-# 检查版本
+# Check version
 hcloud version
-# 预期：>= 3.2.0
+# Expected: >= 3.2.0
 
-# 测试认证
-hcloud OBS ListAllMyBucketsType --region=cn-south-1 --limit=1
+# Test authentication
+hcloud obs ls
 ```
 
-### 验证obsutil
+### Verify obsutil
 
 ```bash
-# 检查版本
+# Check version
 obsutil version
-# 预期：>= 5.5.0
+# Expected: >= 5.5.0
 
-# 测试认证（列出桶，限制1个）
+# Test authentication (list buckets, limit 1)
 obsutil ls -limit=1
 ```
 
 ---
 
-## 故障排除
+## Troubleshooting
 
-### hcloud 常见问题
+### hcloud Common Issues
 
-| 问题 | 原因 | 解决 |
-|------|------|------|
-| `hcloud: command not found` | 未安装或不在PATH中 | 安装hcloud或将路径添加到PATH |
-| `authentication failed` | 凭证无效或过期 | 重新配置凭证 |
-| `insufficient permissions` | IAM权限不足 | 添加所需IAM策略 |
-| `region not found` | 区域ID错误 | 使用正确的区域ID |
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| `hcloud: command not found` | Not installed or not in PATH | Install hcloud or add path to PATH |
+| `authentication failed` | Invalid or expired credentials | Reconfigure credentials |
+| `insufficient permissions` | Insufficient IAM permissions | Add required IAM policies |
+| `region not found` | Incorrect region ID | Use the correct region ID |
 
-### obsutil 常见问题
+### obsutil Common Issues
 
-| 问题 | 原因 | 解决 |
-|------|------|------|
-| `obsutil: command not found` | 未安装或不在PATH中 | 安装obsutil或将路径添加到PATH |
-| `Status code: 403` | AK/SK错误或权限不足 | 重新运行 `obsutil config` 配置凭证 |
-| `Status code: 404` | 桶不存在 | 确认桶名正确 |
-| `connection timeout` | 网络问题或Endpoint错误 | 检查网络连接和Endpoint配置 |
-
----
-
-## 安全最佳实践
-
-1. **禁止在对话中直接提供AK/SK** - 始终通过交互式配置或环境变量
-2. **定期轮换AK/SK** - 建议每90天更换一次
-3. **使用IAM临时凭证** - 优先使用IAM代理委托或临时凭证
-4. **最小权限原则** - 只授予所需最小权限
-5. **审计日志** - 开启OBS桶日志记录访问请求
-6. **obsutil凭证文件权限** - 确保obsutil配置文件权限为600
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| `obsutil: command not found` | Not installed or not in PATH | Install obsutil or add path to PATH |
+| `Status code: 403` | Incorrect AK/SK or insufficient permissions | Re-run `obsutil config` to configure credentials |
+| `Status code: 404` | Bucket does not exist | Confirm bucket name is correct |
+| `connection timeout` | Network issue or incorrect Endpoint | Check network connection and Endpoint configuration |
 
 ---
 
-## 官方文档
+## Security Best Practices
 
-- [hcloud安装指南](https://support.huaweicloud.com/cli/cli_hcloud_install.html)
-- [obsutil安装指南](https://support.huaweicloud.com/utiltg-obs/obs_11_0003.html)
-- [obsutil配置指南](https://support.huaweicloud.com/utiltg-obs/obs_11_0005.html)
-- [OBS区域与Endpoint](https://support.huaweicloud.com/devg-obs/obs_03_0110.html)
+1. **Do not provide AK/SK directly in conversation** - Always use interactive configuration or environment variables
+2. **Rotate AK/SK regularly** - Recommended every 90 days
+3. **Use IAM temporary credentials** - Prefer IAM agency delegation or temporary credentials
+4. **Least privilege principle** - Grant only the minimum required permissions
+5. **Audit logs** - Enable OBS bucket logging for access request auditing
+6. **obsutil credential file permissions** - Ensure obsutil config file permissions are 600
+
+---
+
+## Official Documentation
+
+- [hcloud Installation Guide](https://support.huaweicloud.com/cli/cli_hcloud_install.html)
+- [obsutil Installation Guide](https://support.huaweicloud.com/utiltg-obs/obs_11_0003.html)
+- [obsutil Configuration Guide](https://support.huaweicloud.com/utiltg-obs/obs_11_0005.html)
+- [OBS Regions and Endpoints](https://support.huaweicloud.com/devg-obs/obs_03_0110.html)
