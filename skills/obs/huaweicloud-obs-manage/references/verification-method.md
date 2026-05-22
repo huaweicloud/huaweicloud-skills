@@ -1,31 +1,29 @@
-# 验证方法 - 华为云OBS对象存储管理
+# Verification Method - Huawei Cloud OBS Object Storage Management
 
-## 目录
+## Table of Contents
 
-- [验证桶列表查询](#验证桶列表查询)
-- [验证文件上传](#验证文件上传)
-- [验证定时上传](#验证定时上传)
-- [验证流量查询](#验证流量查询)
-- [验证请求查询](#验证请求查询)
-- [端到端验证脚本](#端到端验证脚本)
+- [Verify Bucket List Query](#verify-bucket-list-query)
+- [Verify File Upload](#verify-file-upload)
+- [Verify Scheduled Upload](#verify-scheduled-upload)
+- [Verify Traffic Query](#verify-traffic-query)
+- [Verify Request Query](#verify-request-query)
+- [End-to-End Verification Script](#end-to-end-verification-script)
 
 ---
 
-## 验证桶列表查询
+## Verify Bucket List Query
 
-### 步骤 1：列出桶
+### Step 1: List buckets
 
 ```bash
-hcloud OBS ListAllMyBucketsType \
-  --region=cn-south-1 \
-  --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-manage
+hcloud obs ls
 ```
 
-**预期结果：**
-- 返回桶列表，每个桶包含 `Name`、`Location`、`CreationDate`
-- 若无桶，返回空列表（正常）
+**Expected result:**
+- Returns a bucket list, each bucket containing `Name`, `Location`, `CreationDate`
+- If no buckets exist, returns an empty list (normal)
 
-### 步骤 2：查询桶容量和对象数
+### Step 2: Query bucket capacity and object count
 
 ```bash
 hcloud OBS GetBucketStorageInfo \
@@ -34,103 +32,103 @@ hcloud OBS GetBucketStorageInfo \
   --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-manage
 ```
 
-**预期结果：**
-- 返回 `size`（字节）和 `objectNumber`（对象数）
-- size >= 0，objectNumber >= 0
+**Expected result:**
+- Returns `size` (bytes) and `objectNumber` (object count)
+- size >= 0, objectNumber >= 0
 
-### 步骤 3：验证输出格式
+### Step 3: Verify output format
 
 ```
-桶名                容量(GB)    对象数
-my-bucket-1         125.3       1024
-my-bucket-2         0.5         15
+Bucket               Capacity(GB)  Objects
+my-bucket-1          125.3         1024
+my-bucket-2          0.5           15
 ```
 
-**验证项：**
-- ✅ 容量以GB为单位，保留1位小数
-- ✅ 对象数为整数
-- ✅ 所有桶均已查询
+**Verification items:**
+- ✅ Capacity is in GB, with 1 decimal place
+- ✅ Object count is an integer
+- ✅ All buckets have been queried
 
 ---
 
-## 验证文件上传
+## Verify File Upload
 
-### 步骤 1：上传测试文件
+### Step 1: Upload test file
 
 ```bash
-# 创建测试文件
+# Create test file
 echo "test content" > /tmp/obs-upload-test.txt
 
-# 上传
+# Upload
 obsutil cp /tmp/obs-upload-test.txt obs://<BucketName>/test/obs-upload-test.txt -flat
 ```
 
-**预期结果：**
-- 返回上传成功信息
-- 显示上传文件大小和耗时
+**Expected result:**
+- Returns upload success message
+- Shows uploaded file size and duration
 
-### 步骤 2：验证文件已上传
+### Step 2: Verify file has been uploaded
 
 ```bash
 obsutil ls obs://<BucketName>/test/ -limit=10
 ```
 
-**预期结果：**
-- 列表中包含 `test/obs-upload-test.txt`
-- 文件大小与本地文件一致
+**Expected result:**
+- List contains `test/obs-upload-test.txt`
+- File size matches local file
 
-### 步骤 3：清理测试文件
+### Step 3: Clean up test file
 
 ```bash
-# 通过OBS控制台删除测试对象，或通过obsutil手动删除
+# Delete test object via OBS console, or manually via obsutil
 obsutil rm obs://<BucketName>/test/obs-upload-test.txt -flat
 ```
 
-> **⚠️ 注意**：此清理步骤为验证流程中的必要操作，非skill功能，需手动执行。
+> **⚠️ Note**: This cleanup step is a necessary operation in the verification process, not a skill feature; it must be executed manually.
 
 ---
 
-## 验证定时上传
+## Verify Scheduled Upload
 
-### 步骤 1：创建上传脚本
+### Step 1: Create upload script
 
 ```bash
-# 创建测试目录和文件
+# Create test directory and file
 mkdir -p /tmp/obs-scheduled-test
 echo "test $(date)" > /tmp/obs-scheduled-test/test.txt
 
-# 创建上传脚本
+# Create upload script
 cat > $HOME/obs-scheduled-upload-test.sh << 'EOF'
 #!/bin/bash
 export PATH=/usr/local/bin:$PATH
 LOG_FILE="$HOME/obs-scheduled-upload-test.log"
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] 开始定时上传" >> "$LOG_FILE"
-obsutil cp /tmp/obs-scheduled-test/ obs://<BucketName>/scheduled-test/ -r -flat >> "$LOG_FILE" 2>&1
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting scheduled upload" >> "$LOG_FILE"
+obsutil cp /tmp/obs-scheduled-test/ obs://<BucketName>/scheduled-test/ -r >> "$LOG_FILE" 2>&1
 EOF
 chmod +x $HOME/obs-scheduled-upload-test.sh
 ```
 
-### 步骤 2：设置crontab（每5分钟执行，仅用于测试）
+### Step 2: Set crontab (every 5 minutes, for testing only)
 
 ```bash
 (crontab -l 2>/dev/null; echo "*/5 * * * * /bin/bash $HOME/obs-scheduled-upload-test.sh") | crontab -
 ```
 
-### 步骤 3：验证定时任务
+### Step 3: Verify scheduled task
 
 ```bash
-# 检查crontab
+# Check crontab
 crontab -l
 
-# 等待5分钟后检查日志
+# Wait 5 minutes then check log
 sleep 310
 cat $HOME/obs-scheduled-upload-test.log
 
-# 检查OBS桶中文件
+# Check files in OBS bucket
 obsutil ls obs://<BucketName>/scheduled-test/ -limit=10
 ```
 
-### 步骤 4：清理定时任务
+### Step 4: Clean up scheduled task
 
 ```bash
 crontab -l | grep -v "obs-scheduled-upload-test" | crontab -
@@ -139,22 +137,22 @@ rm $HOME/obs-scheduled-upload-test.sh $HOME/obs-scheduled-upload-test.log
 
 ---
 
-## 验证流量查询
+## Verify Traffic Query
 
-### 步骤 1：计算时间范围
+### Step 1: Calculate time range
 
 ```bash
-# 本月起始时间戳(ms)
+# Current month start timestamp (ms)
 FROM_TS=$(($(date -d "$(date +%Y-%m-01)" +%s) * 1000))
-# 当前时间戳(ms)
+# Current timestamp (ms)
 TO_TS=$(($(date +%s) * 1000))
-# 上月起始时间戳(ms)
+# Last month start timestamp (ms)
 LAST_MONTH_FROM_TS=$(($(date -d "$(date -d "$(date +%Y-%m-01) -1 month" +%Y-%m-01)" +%s) * 1000))
-# 上月截止时间戳(ms)
+# Last month end timestamp (ms)
 LAST_MONTH_TO_TS=$(($(date -d "$(date +%Y-%m-01) -1 second" +%s) * 1000))
 ```
 
-### 步骤 2：查询本月外网下载流量
+### Step 2: Query current month external download traffic
 
 ```bash
 hcloud CES ShowMetricData \
@@ -170,11 +168,11 @@ hcloud CES ShowMetricData \
   --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-manage
 ```
 
-**预期结果：**
-- 返回datapoints数组
-- 每个datapoint包含timestamp和sum值
+**Expected result:**
+- Returns datapoints array
+- Each datapoint contains timestamp and sum value
 
-### 步骤 3：查询上月外网下载流量
+### Step 3: Query last month external download traffic
 
 ```bash
 hcloud CES ShowMetricData \
@@ -190,22 +188,22 @@ hcloud CES ShowMetricData \
   --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-manage
 ```
 
-### 步骤 4：验证月环比计算
+### Step 4: Verify month-over-month calculation
 
 ```
-月环比 = (本月流量 - 上月流量) / 上月流量 × 100%
+MoM (%) = (Current Month Value - Last Month Value) / Last Month Value × 100%
 ```
 
-**验证项：**
-- ✅ 流量值以Bytes返回，需转换为GB显示
-- ✅ 月环比百分比保留2位小数
-- ✅ 上月值为0时特殊处理
+**Verification items:**
+- ✅ Traffic value returned in Bytes, needs to be converted to GB for display
+- ✅ MoM percentage rounded to 2 decimal places
+- ✅ Special handling when last month value is 0
 
 ---
 
-## 验证请求查询
+## Verify Request Query
 
-### 步骤 1：查询本月总请求数
+### Step 1: Query current month total request count
 
 ```bash
 hcloud CES ShowMetricData \
@@ -221,13 +219,13 @@ hcloud CES ShowMetricData \
   --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-manage
 ```
 
-**预期结果：**
-- 返回datapoints数组，sum值为请求数
+**Expected result:**
+- Returns datapoints array, sum value is the request count
 
-### 步骤 2：查询分类型请求数
+### Step 2: Query request count by type
 
 ```bash
-# GET请求数
+# GET request count
 hcloud CES ShowMetricData \
   --region=cn-south-1 \
   --namespace=SYS.OBS \
@@ -240,7 +238,7 @@ hcloud CES ShowMetricData \
   --to=$TO_TS \
   --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-manage
 
-# PUT请求数
+# PUT request count
 hcloud CES ShowMetricData \
   --region=cn-south-1 \
   --namespace=SYS.OBS \
@@ -254,61 +252,59 @@ hcloud CES ShowMetricData \
   --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-manage
 ```
 
-### 步骤 3：验证汇总
+### Step 3: Verify aggregation
 
-**验证项：**
+**Verification items:**
 - ✅ request_count >= get_request_count + put_request_count
-- ✅ 所有请求数 >= 0
-- ✅ 月环比计算正确
+- ✅ All request counts >= 0
+- ✅ MoM calculation is correct
 
 ---
 
-## 端到端验证脚本
+## End-to-End Verification Script
 
 ```bash
 #!/bin/bash
-# OBS管理技能端到端验证脚本
+# OBS management skill end-to-end verification script
 
 REGION="${1:-cn-south-1}"
 BUCKET_NAME="${2}"
 
 if [ -z "$BUCKET_NAME" ]; then
-  echo "用法: $0 <region> <bucket_name>"
+  echo "Usage: $0 <region> <bucket_name>"
   exit 1
 fi
 
 echo "=========================================="
-echo "OBS管理技能端到端验证"
-echo "区域: $REGION"
-echo "桶名: $BUCKET_NAME"
+echo "OBS Management Skill End-to-End Verification"
+echo "Region: $REGION"
+echo "Bucket: $BUCKET_NAME"
 echo "=========================================="
 
-# 1. 验证hcloud
-echo -e "\n[1/6] 验证hcloud版本..."
+# 1. Verify hcloud
+echo -e "\n[1/6] Verifying hcloud version..."
 hcloud version
 
-# 2. 验证obsutil
-echo -e "\n[2/6] 验证obsutil版本..."
+# 2. Verify obsutil
+echo -e "\n[2/6] Verifying obsutil version..."
 obsutil version
 
-# 3. 验证桶列表
-echo -e "\n[3/6] 验证桶列表查询..."
-hcloud OBS ListAllMyBucketsType \
-  --region=$REGION \
-  --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-manage
+# 3. Verify bucket list
+echo -e "\n[3/6] Verifying bucket list query..."
+hcloud obs ls
 
-# 4. 验证桶容量
-echo -e "\n[4/6] 验证桶容量查询..."
+# 4. Verify bucket capacity
+echo -e "\n[4/6] Verifying bucket capacity query..."
 hcloud OBS GetBucketStorageInfo \
   --region=$REGION \
   --bucket=$BUCKET_NAME \
   --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-manage
 
-# 5. 验证CES流量指标
+# 5. Verify CES traffic metrics
 FROM_TS=$(($(date -d "$(date +%Y-%m-01)" +%s) * 1000))
 TO_TS=$(($(date +%s) * 1000))
 
-echo -e "\n[5/6] 验证CES外网下载流量查询..."
+echo -e "\n[5/6] Verifying CES external download traffic query..."
 hcloud CES ShowMetricData \
   --region=$REGION \
   --namespace=SYS.OBS \
@@ -321,8 +317,8 @@ hcloud CES ShowMetricData \
   --to=$TO_TS \
   --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-manage
 
-# 6. 验证CES请求指标
-echo -e "\n[6/6] 验证CES请求总数查询..."
+# 6. Verify CES request metrics
+echo -e "\n[6/6] Verifying CES total request count query..."
 hcloud CES ShowMetricData \
   --region=$REGION \
   --namespace=SYS.OBS \
@@ -336,18 +332,18 @@ hcloud CES ShowMetricData \
   --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-manage
 
 echo -e "\n=========================================="
-echo "验证完成！"
+echo "Verification complete!"
 echo "=========================================="
 ```
 
 ---
 
-## 错误处理
+## Error Handling
 
-| 错误码 | 描述 | 排障命令 |
-|--------|------|---------|
-| 403 | 权限不足 | `hcloud configure list` 检查凭证 |
-| 404 | 桶不存在 | `obsutil ls -limit=100` 列出桶 |
-| 400 | 请求参数错误 | 检查region、桶名等参数 |
-| 500 | 服务内部错误 | 稍后重试或联系华为云技术支持 |
-| Empty datapoints | CES无数据 | 检查namespace、metric_name、时间范围 |
+| Error Code | Description | Troubleshooting Command |
+|------------|-------------|----------------------|
+| 403 | Insufficient permissions | `hcloud configure list` to check credentials |
+| 404 | Bucket does not exist | `obsutil ls -limit=100` to list buckets |
+| 400 | Invalid request parameters | Check region, bucket name, and other parameters |
+| 500 | Internal service error | Retry later or contact Huawei Cloud technical support |
+| Empty datapoints | No CES data | Check namespace, metric_name, and time range |

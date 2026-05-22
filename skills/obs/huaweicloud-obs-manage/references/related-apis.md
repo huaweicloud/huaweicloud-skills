@@ -1,78 +1,78 @@
-# 相关API - 华为云OBS对象存储管理
+# Related APIs - Huawei Cloud OBS Object Storage Management
 
-本文档列出OBS对象存储管理技能中使用的所有CLI命令和API。
+This document lists all CLI commands and APIs used in the OBS object storage management skill.
 
-## 目录
+## Table of Contents
 
-- [API概览](#api概览)
-- [API详情](#api详情)
-  - [1. ListBucketsWithStats - 列出桶名及其容量和对象数](#1-listbucketswithstats---列出桶名及其容量和对象数)
-  - [2. UploadFile - 上传本地文件或目录到目标桶](#2-uploadfile---上传本地文件或目录到目标桶)
-  - [3. ScheduledUpload - 定时上传本地目录到目标桶](#3-scheduledupload---定时上传本地目录到目标桶)
-  - [4. GetMonthlyTraffic - 查询本月外网内网下载流量](#4-getmonthlytraffic---查询本月外网内网下载流量)
-  - [5. GetMonthlyRequests - 查询本月请求总数](#5-getmonthlyrequests---查询本月请求总数)
-- [月环比计算](#月环比计算)
-- [官方文档](#官方文档)
-
----
-
-## API概览
-
-| 产品 | CLI命令 | API操作 | 描述 |
-|------|---------|---------|------|
-| OBS | `hcloud obs ls` | ListAllMyBucketsType | 列出所有桶（obsutil方式，hcloud OBS模块无此命令） |
-| OBS | `hcloud OBS GetBucketStorageInfo` | GetBucketStorageInfo | 获取桶存储信息（容量、对象数，可能不被hcloud支持） |
-| CES | `hcloud CES ShowMetricData` | ShowMetricData | 查询监控指标数据（流量、请求数、容量） |
-| OBS | `obsutil cp` | PutObject / UploadPart | 上传文件/目录 |
+- [API Overview](#api-overview)
+- [API Details](#api-details)
+  - [1. ListBucketsWithStats - List Buckets with Capacity and Object Count](#1-listbucketswithstats---list-buckets-with-capacity-and-object-count)
+  - [2. UploadFile - Upload Local File or Directory to Target Bucket](#2-uploadfile---upload-local-file-or-directory-to-target-bucket)
+  - [3. ScheduledUpload - Schedule Periodic Upload of Local Directory to Target Bucket](#3-scheduledupload---schedule-periodic-upload-of-local-directory-to-target-bucket)
+  - [4. GetMonthlyTraffic - Query Monthly External/Internal Download Traffic](#4-getmonthlytraffic---query-monthly-externalinternal-download-traffic)
+  - [5. GetMonthlyRequests - Query Monthly Total Request Count](#5-getmonthlyrequests---query-monthly-total-request-count)
+- [Month-over-Month Calculation](#month-over-month-calculation)
+- [Official Documentation](#official-documentation)
 
 ---
 
-## API详情
+## API Overview
 
-### 1. ListBucketsWithStats - 列出桶名及其容量和对象数
+| Product | CLI Command | API Operation | Description |
+|---------|------------|---------------|-------------|
+| OBS | `hcloud obs ls` | obsutil ls | List all buckets (obsutil mode) |
+| OBS | `hcloud OBS GetBucketStorageInfo` | GetBucketStorageInfo | Get bucket storage info (capacity, object count; may not be supported by hcloud) |
+| CES | `hcloud CES ShowMetricData` | ShowMetricData | Query monitoring metric data (traffic, request count, capacity) |
+| OBS | `obsutil cp` | PutObject / UploadPart | Upload file/directory |
 
-> **⚠️ 关键：region参数必须由用户提供**
+---
+
+## API Details
+
+### 1. ListBucketsWithStats - List Buckets with Capacity and Object Count
+
+> **⚠️ Key: region parameter must be provided by the user**
 >
-> `--region` 参数**必须由用户显式提供**。Agent **禁止猜测或使用默认值**。
+> The `--region` parameter **must be explicitly provided by the user**. The Agent **must not guess or use a default value**.
 >
-> **前置检查步骤：**
-> 1. 检查用户是否提供了 `--region` 参数
-> 2. 若区域缺失，**立即要求用户提供**：
+> **Pre-check steps:**
+> 1. Check whether the user has provided the `--region` parameter
+> 2. If region is missing, **immediately ask the user to provide it**:
 >    ```
->    请提供OBS所在区域，例如：cn-north-1, cn-north-4, cn-east-2, cn-east-3, cn-south-1 等
+>    Please provide the OBS region, e.g., cn-north-1, cn-north-4, cn-east-2, cn-east-3, cn-south-1, etc.
 >    ```
-> 3. 若区域明显无效（如空字符串、纯数字、包含特殊字符），**提示用户**
+> 3. If the region is obviously invalid (empty string, pure numbers, special characters), **prompt the user**
 
-**步骤 1：列出所有桶**
+**Step 1: List all buckets**
 
-> **⚠️ 关键：hcloud OBS模块无ListAllMyBucketsType命令**
+> **⚠️ Key: hcloud OBS module has no ListAllMyBucketsType command**
 >
-> hcloud CLI（v7.2.2实测）**不存在** `ListAllMyBucketsType` 命令，必须使用obsutil方式：
+> hcloud CLI (v7.2.2 tested) **does not have** the `ListAllMyBucketsType` command; must use obsutil mode:
 
 ```bash
-# 列出所有桶
+# List all buckets
 hcloud obs ls
 
-# 筛选指定地域
+# Filter by specific region
 hcloud obs ls 2>&1 | grep "cn-south-1"
 
-# 提取桶名
+# Extract bucket names
 hcloud obs ls 2>&1 | awk '/obs:\/\// && /cn-south-1/ {print $1}' | sed 's|obs://||'
 ```
 
-**响应关键字段：**
+**Response key fields:**
 
-| 字段 | 描述 |
-|------|------|
-| `Buckets.Bucket[].Name` | 桶名称 |
-| `Buckets.Bucket[].Location` | 桶所在区域 |
-| `Buckets.Bucket[].CreationDate` | 桶创建时间 |
+| Field | Description |
+|-------|-------------|
+| `Buckets.Bucket[].Name` | Bucket name |
+| `Buckets.Bucket[].Location` | Bucket region |
+| `Buckets.Bucket[].CreationDate` | Bucket creation time |
 
-**步骤 2：获取每个桶的容量和对象数**
+**Step 2: Get capacity and object count per bucket**
 
-> **⚠️ 关键：推荐使用CES容量指标批量查询，效率更高**
+> **⚠️ Key: CES capacity metric batch query recommended for higher efficiency**
 >
-> 逐桶调用GetBucketStorageInfo效率低，推荐通过CES `capacity_total` 指标批量查询：
+> Calling GetBucketStorageInfo per bucket is inefficient; recommended to batch query via CES `capacity_total` metric:
 > ```bash
 > hcloud CES ShowMetricData \
 >   --region=<RegionId> \
@@ -81,10 +81,10 @@ hcloud obs ls 2>&1 | awk '/obs:\/\// && /cn-south-1/ {print $1}' | sed 's|obs://
 >   --dim.0=bucket_name,<BucketName> \
 >   --period=86400 \
 >   --filter=average \
->   --from=<当天0点时间戳ms> \
->   --to=<当前时间戳ms>
+>   --from=<TodayMidnightTimestampMs> \
+>   --to=<CurrentTimestampMs>
 > ```
-> 返回 `datapoints[-1].average` 即为桶容量（Bytes）。
+> The returned `datapoints[-1].average` is the bucket capacity (Bytes).
 
 ```bash
 hcloud OBS GetBucketStorageInfo \
@@ -92,215 +92,222 @@ hcloud OBS GetBucketStorageInfo \
   --bucket=<BucketName>
 ```
 
-**GetBucketStorageInfo 响应关键字段：**
+**GetBucketStorageInfo response key fields:**
 
-| 字段 | 类型 | 描述 |
-|------|------|------|
-| `size` | long | 桶中对象总大小（字节） |
-| `objectNumber` | int | 桶中对象总数 |
+| Field | Type | Description |
+|-------|------|-------------|
+| `size` | long | Total size of objects in the bucket (bytes) |
+| `objectNumber` | int | Total number of objects in the bucket |
 
-> **⚠️ 注意：hcloud OBS模块可能无GetBucketStorageInfo命令**
+> **⚠️ Note: hcloud OBS module may not have GetBucketStorageInfo command**
 >
-> 若hcloud不支持 `GetBucketStorageInfo`，替代方案：
-> - 通过obsutil查询桶信息：`obsutil ls -bucket=<BucketName> -limit=0 -s`
-> - 通过OBS API直接调用：`GET /?storageInfo` 获取桶存储信息
+> If hcloud does not support `GetBucketStorageInfo`, alternatives:
+> - Query bucket info via obsutil: `obsutil ls -bucket=<BucketName> -limit=0 -s`
+> - Call OBS API directly: `GET /?storageInfo` to get bucket storage info
 >
-> 若obsutil也不支持该查询，可通过列出桶内所有对象并累加大小来获取（性能较差，仅作兜底方案）。
+> If obsutil also does not support this query, you can get it by listing all objects in the bucket and summing their sizes (poor performance, use as fallback only).
 
-**错误处理：**
-1. 若提示"Access Denied"，提示用户检查IAM权限或桶策略
-2. 若桶数量为0，提示用户当前区域无桶，可能需要切换区域
-3. 若GetBucketStorageInfo报错，跳过该桶并在输出中标注"获取失败"
+**Error handling:**
+1. If "Access Denied" is reported, prompt the user to check IAM permissions or bucket policy
+2. If bucket count is 0, prompt the user that no buckets exist in the current region; they may need to switch regions
+3. If GetBucketStorageInfo errors, skip the bucket and mark "query failed" in the output
 
 ---
 
-### 2. UploadFile - 上传本地文件或目录到目标桶
+### 2. UploadFile - Upload Local File or Directory to Target Bucket
 
-> **⚠️ 关键：上传使用obsutil，非hcloud**
+> **⚠️ Key: Upload uses obsutil, not hcloud**
 >
-> hcloud CLI不支持OBS对象上传操作，必须使用obsutil。
+> hcloud CLI does not support OBS object upload operations; must use obsutil.
 
-> **前置检查：**
-> 1. 检查obsutil是否安装：`obsutil version`
-> 2. 检查obsutil是否已配置凭证：`obsutil ls -limit=1`
-> 3. 检查本地路径是否存在
+> **Pre-check:**
+> 1. Check obsutil is installed: `obsutil version`
+> 2. Check obsutil credentials are configured: `obsutil ls -limit=1`
+> 3. Check local path exists
 
-**必需参数：**
+**Required parameters:**
 
-| 参数 | 描述 | 示例 |
-|------|------|------|
-| 本地路径 | 上传的文件或目录路径 | `/home/user/data/report.csv` |
-| 目标桶名 | OBS桶名称 | `my-bucket` |
-| 目标对象键（可选） | 桶内对象路径 | `reports/report.csv` |
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| Local path | File or directory path to upload | `/home/user/data/report.csv` |
+| Target bucket name | OBS bucket name | `my-bucket` |
+| Target object key (optional) | Object path within bucket | `reports/report.csv` |
 
-**CLI命令：**
+**CLI commands:**
 
 ```bash
-# 上传单个文件
+# Upload a single file
 obsutil cp <LocalFilePath> obs://<BucketName>/<ObjectKey> -flat
 
-# 上传整个目录（递归）
-obsutil cp <LocalDirPath> obs://<BucketName>/<Prefix> -r -flat
+# Upload an entire directory (preserves directory structure by default)
+obsutil cp <LocalDirPath> obs://<BucketName>/<Prefix> -r
 
-# 上传并指定并发数（大文件/大量文件）
-obsutil cp <LocalPath> obs://<BucketName>/<Prefix> -r -flat -p=10
+# Upload with specified concurrency (large files/many files)
+obsutil cp <LocalPath> obs://<BucketName>/<Prefix> -r -p=10
 ```
 
-**可选参数：**
-
-| 参数 | 默认值 | 描述 |
-|------|--------|------|
-| `-flat` | - | 不保留本地目录结构 |
-| `-r` | - | 递归上传目录 |
-| `-p` | 5 | 并发数 |
-| `-threshold` | 50MB | 分片上传阈值 |
-| `-fr` | 续传 | 断点续传模式 |
-| `-v` | 关闭 | 详细日志模式 |
-| `-config` | 默认配置 | 指定obsutil配置文件 |
-
-> **⚠️ 上传大文件注意事项**
+> **⚠️ Key: Do NOT use `-flat` for directory uploads by default**
 >
-> - 单个对象最大支持48.8TB
-> - 大文件自动使用分片上传，默认分片大小9MB
-> - 网络不稳定时建议降低并发数（`-p=3`）
-> - 上传中断后支持断点续传（默认启用）
+> When the user specifies a directory, the entire directory should be uploaded as-is (preserving structure).
+> Only add `-flat` if the user **explicitly requests** flattening.
+> - Without `-flat`: `/home/user/data/sub/file.txt` → `obs://bucket/prefix/sub/file.txt` (structure preserved)
+> - With `-flat`: `/home/user/data/sub/file.txt` → `obs://bucket/prefix/file.txt` (structure lost)
 
-**错误处理：**
-1. `bucket not exist`：确认桶名正确，桶名全局唯一需精确匹配
-2. `access denied`：检查obsutil凭证配置和桶ACL/策略
-3. `no such file or directory`：确认本地路径正确
-4. `network timeout`：降低并发数或增加超时时间
+**Optional parameters:**
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `-flat` | off | Discard local directory structure (only use for single files or if user explicitly requests) |
+| `-r` | - | Recursively upload directory |
+| `-p` | 5 | Concurrency |
+| `-threshold` | 50MB | Multipart upload threshold |
+| `-fr` | resume | Resumable upload mode |
+| `-v` | off | Verbose log mode |
+| `-config` | default config | Specify obsutil config file |
+
+> **⚠️ Large file upload notes**
+>
+> - Single object max size: 48.8TB
+> - Large files automatically use multipart upload, default part size 9MB
+> - For unstable networks, reduce concurrency (`-p=3`)
+> - Upload interruption supports resumable upload (enabled by default)
+
+**Error handling:**
+1. `bucket not exist`: Confirm bucket name is correct; bucket names are globally unique and must match exactly
+2. `access denied`: Check obsutil credential configuration and bucket ACL/policy
+3. `no such file or directory`: Confirm local path is correct
+4. `network timeout`: Reduce concurrency or increase timeout
 
 ---
 
-### 3. ScheduledUpload - 定时上传本地目录到目标桶
+### 3. ScheduledUpload - Schedule Periodic Upload of Local Directory to Target Bucket
 
-> **基于操作系统定时任务（crontab）实现，无需额外守护进程**
+> **Based on OS-level scheduled tasks (crontab); no additional daemon process required**
 
-**必需参数：**
+**Required parameters:**
 
-| 参数 | 描述 | 示例 |
-|------|------|------|
-| 本地目录路径 | 需定时上传的目录 | `/home/user/data/` |
-| 目标桶名 | OBS桶名称 | `my-bucket` |
-| 目标路径前缀（可选） | 桶内路径前缀 | `backup/` |
-| 定时周期 | 执行周期 | `每小时`、`每天8:00`、`*/30 * * * *` |
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| Local directory path | Directory to upload periodically | `/home/user/data/` |
+| Target bucket name | OBS bucket name | `my-bucket` |
+| Target path prefix (optional) | Path prefix within bucket | `backup/` |
+| Schedule period | Execution period | `hourly`, `daily at 8:00`, `*/30 * * * *` |
 
-**实现步骤：**
+**Implementation steps:**
 
-**步骤 1：创建上传脚本**
+**Step 1: Create upload script**
 
 ```bash
 #!/bin/bash
-# OBS定时上传脚本
+# OBS scheduled upload script
 LOG_FILE="$HOME/obs-scheduled-upload-<BucketName>.log"
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] 开始定时上传" >> "$LOG_FILE"
-obsutil cp <LocalDirPath> obs://<BucketName>/<Prefix> -r -flat >> "$LOG_FILE" 2>&1
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting scheduled upload" >> "$LOG_FILE"
+obsutil cp <LocalDirPath> obs://<BucketName>/<Prefix> -r >> "$LOG_FILE" 2>&1
 RESULT=$?
 if [ $RESULT -eq 0 ]; then
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] 上传成功" >> "$LOG_FILE"
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Upload succeeded" >> "$LOG_FILE"
 else
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] 上传失败，退出码: $RESULT" >> "$LOG_FILE"
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Upload failed, exit code: $RESULT" >> "$LOG_FILE"
 fi
 ```
 
-**步骤 2：设置crontab**
+**Step 2: Set crontab**
 
-| 周期描述 | crontab表达式 |
-|---------|--------------|
-| 每30分钟 | `*/30 * * * *` |
-| 每小时 | `0 * * * *` |
-| 每天8:00 | `0 8 * * *` |
-| 每周一0:00 | `0 0 * * 1` |
-| 每月1日0:00 | `0 0 1 * *` |
+| Period description | Crontab expression |
+|-------------------|-------------------|
+| Every 30 minutes | `*/30 * * * *` |
+| Every hour | `0 * * * *` |
+| Daily at 8:00 | `0 8 * * *` |
+| Monday at 0:00 | `0 0 * * 1` |
+| 1st of month at 0:00 | `0 0 1 * *` |
 
 ```bash
-# 添加crontab任务
+# Add crontab task
 (crontab -l 2>/dev/null; echo "<CronExpr> /bin/bash $HOME/obs-scheduled-upload-<BucketName>.sh") | crontab -
 ```
 
-**步骤 3：验证**
+**Step 3: Verify**
 
 ```bash
 crontab -l
 ```
 
-> **⚠️ crontab环境注意事项**
+> **⚠️ Crontab environment notes**
 >
-> - crontab的PATH环境变量最小，需在脚本中使用obsutil完整路径
-> - 建议在脚本开头添加：`export PATH=/usr/local/bin:$PATH`
-> - obsutil的AK/SK配置文件路径需确认在crontab环境中可访问
+> - Crontab has a minimal PATH environment variable; use the full path to obsutil in the script
+> - Recommend adding at the top of the script: `export PATH=/usr/local/bin:$PATH`
+> - Confirm the obsutil AK/SK config file path is accessible in the crontab environment
 
-**管理定时任务：**
+**Managing scheduled tasks:**
 
 ```bash
-# 列出所有定时任务
+# List all scheduled tasks
 crontab -l
 
-# 删除特定定时任务
+# Remove a specific scheduled task
 crontab -l | grep -v "obs-scheduled-upload-<BucketName>" | crontab -
 
-# 查看上传日志
+# View upload log
 tail -f $HOME/obs-scheduled-upload-<BucketName>.log
 ```
 
 ---
 
-### 4. GetMonthlyTraffic - 查询本月外网内网下载流量
+### 4. GetMonthlyTraffic - Query Monthly External/Internal Download Traffic
 
-> **⚠️ 关键：流量数据通过CES获取，非OBS直接API**
+> **⚠️ Key: Traffic data is obtained via CES, not directly from OBS API**
 >
-> OBS服务本身不提供流量统计API，流量数据由CES（云监控服务）采集。
+> The OBS service itself does not provide traffic statistics APIs; traffic data is collected by CES (Cloud Eye Service).
 
-**必需参数：**
+**Required parameters:**
 
-| 参数 | hcloud参数名 | 描述 | 示例 |
-|------|-------------|------|------|
-| 区域 | `--region` | 桶所在区域 | `cn-south-1` |
-| 桶名 | `--dim.0` | 维度 `bucket_name,<BucketName>` | `bucket_name,my-bucket` |
+| Parameter | hcloud parameter | Description | Example |
+|-----------|-----------------|-------------|---------|
+| Region | `--region` | Bucket region | `cn-south-1` |
+| Bucket name | `--dim.0` | Dimension `bucket_name,<BucketName>` | `bucket_name,my-bucket` |
 
-**时间范围计算：**
+**Time range calculation:**
 
-> **⚠️ 关键：时间范围必须精确匹配用户表述**
+> **⚠️ Key: Time range must precisely match the user's expression**
 >
-> | 用户表述 | 时间范围 | 说明 |
-> |---------|---------|------|
-> | "本月" | 当月1日 00:00:00 ~ 当前时间 | 自然月 |
-> | "最近一个月" / "最近30天" | 当前时间-30天 ~ 当前时间 | 滚动30天窗口 |
-> | "上月" | 上月1日 00:00:00 ~ 上月最后一天 23:59:59 | 上个自然月 |
-> | 具体日期范围 | 用户指定的起止时间 | 如"5月1日到5月19日" |
+> | User expression | Time range | Description |
+> |----------------|-----------|-------------|
+> | "This month" | 1st of current month 00:00:00 ~ current time | Calendar month |
+> | "Last month" / "Last 30 days" | Current time - 30 days ~ current time | Rolling 30-day window |
+> | "Previous month" | 1st of previous month 00:00:00 ~ last day of previous month 23:59:59 | Previous calendar month |
+> | Specific date range | User-specified start and end times | e.g., "May 1 to May 19" |
 >
-> **"本月" ≠ "最近一个月"**：本月从当月1日算起，最近一个月从当前时间往前推30天。
-> 华为云OBS控制台默认统计"最近30天"。
+> **"This month" ≠ "Last month"**: "This month" starts from the 1st of the current month; "Last month" goes back 30 days from the current time.
+> Huawei Cloud OBS console defaults to "Last 30 days".
 
-**月环比对照期计算：**
+**Month-over-month comparison period calculation:**
 
-| 查询周期 | 对照期 |
-|---------|--------|
-| 本月（自然月） | 上月（上个自然月） |
-| 最近30天 | 再往前推30天（前30~60天） |
-| 具体日期范围 | 前一个等长周期 |
+| Query period | Comparison period |
+|-------------|------------------|
+| This month (calendar month) | Previous month (previous calendar month) |
+| Last 30 days | 30 days prior (days 31-60) |
+| Specific date range | Previous equal-length period |
 
 ```
-# 本月
-起始：当月1日 00:00:00 → Unix时间戳(ms)
-截止：当前时间 → Unix时间戳(ms)
+# This month
+Start: 1st of current month 00:00:00 → Unix timestamp (ms)
+End: Current time → Unix timestamp (ms)
 
-# 最近30天
-起始：当前时间 - 30天 → Unix时间戳(ms)
-截止：当前时间 → Unix时间戳(ms)
+# Last 30 days
+Start: Current time - 30 days → Unix timestamp (ms)
+End: Current time → Unix timestamp (ms)
 
-# 上月（对照期）
-起始：上月1日 00:00:00 → Unix时间戳(ms)
-截止：上月最后一天 23:59:59 → Unix时间戳(ms)
+# Previous month (comparison period)
+Start: 1st of previous month 00:00:00 → Unix timestamp (ms)
+End: Last day of previous month 23:59:59 → Unix timestamp (ms)
 ```
 
-**CLI命令：**
+**CLI commands:**
 
-> **⚠️ CES ShowMetricData不支持--User-Agent参数，禁止附加**
+> **⚠️ CES ShowMetricData does not support --User-Agent parameter; do not append it**
 
 ```bash
-# 查询本月外网下载流量
+# Query this month's external download traffic
 hcloud CES ShowMetricData \
   --region=<RegionId> \
   --namespace=SYS.OBS \
@@ -311,7 +318,7 @@ hcloud CES ShowMetricData \
   --from=<FromTimestamp> \
   --to=<ToTimestamp>
 
-# 查询本月内网下载流量
+# Query this month's internal download traffic
 hcloud CES ShowMetricData \
   --region=<RegionId> \
   --namespace=SYS.OBS \
@@ -324,48 +331,48 @@ hcloud CES ShowMetricData \
   --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-manage
 ```
 
-**CES ShowMetricData参数说明：**
+**CES ShowMetricData parameter description:**
 
-| 参数 | 必需 | 描述 |
-|------|------|------|
-| `--namespace` | 是 | 固定值 `SYS.OBS` |
-| `--metric_name` | 是 | 指标名称 |
-| `--dim.0` | 是 | 维度，格式 `bucket_name,<BucketName>` |
-| `--period` | 是 | 聚合周期，`86400`（1天） |
-| `--filter` | 是 | 聚合方式，`sum`（求和） |
-| `--from` | 是 | 起始时间（毫秒时间戳） |
-| `--to` | 是 | 截止时间（毫秒时间戳） |
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `--namespace` | Yes | Fixed value `SYS.OBS` |
+| `--metric_name` | Yes | Metric name |
+| `--dim.0` | Yes | Dimension, format `bucket_name,<BucketName>` |
+| `--period` | Yes | Aggregation period, `86400` (1 day) |
+| `--filter` | Yes | Aggregation method, `sum` (sum) |
+| `--from` | Yes | Start time (millisecond timestamp) |
+| `--to` | Yes | End time (millisecond timestamp) |
 
-**响应关键字段：**
+**Response key fields:**
 
-| 字段 | 描述 |
-|------|------|
-| `datapoints[].average` | 聚合周期内的平均值 |
-| `datapoints[].sum` | 聚合周期内的求和值 |
-| `datapoints[].timestamp` | 数据点时间戳 |
+| Field | Description |
+|-------|-------------|
+| `datapoints[].average` | Average value within the aggregation period |
+| `datapoints[].sum` | Sum value within the aggregation period |
+| `datapoints[].timestamp` | Data point timestamp |
 
-> **⚠️ 关键：必须使用流量指标，不能使用带宽指标**
+> **⚠️ Key: Must use traffic metrics, not bandwidth metrics**
 >
-> - ✅ `download_traffic_extranet`：公网下载流量（单位Bytes，累计量）
-> - ✅ `download_traffic_intranet`：内网下载流量（单位Bytes，累计量）
-> - ❌ `download_bytes`：总下载带宽（单位Bytes/s，速率值，不是累计量）
-> - ❌ `download_bytes_extranet`/`download_bytes_intranet`：带宽指标（速率值）
+> - ✅ `download_traffic_extranet`: External download traffic (unit: Bytes, cumulative)
+> - ✅ `download_traffic_intranet`: Internal download traffic (unit: Bytes, cumulative)
+> - ❌ `download_bytes`: Total download bandwidth (unit: Bytes/s, rate, not cumulative)
+> - ❌ `download_bytes_extranet`/`download_bytes_intranet`: Bandwidth metrics (rate values)
 >
-> 查询时使用 `filter=sum` 获取时间范围内的总流量，流量指标直接求和即为总字节数。
-> 结果需将字节转换为合适单位：`GB = bytes / (1024^3)`, `MB = bytes / (1024^2)`, `KB = bytes / 1024`
+> Use `filter=sum` to get total traffic within the time range; summing traffic metrics directly gives total bytes.
+> Results need to be converted to appropriate units: `GB = bytes / (1024^3)`, `MB = bytes / (1024^2)`, `KB = bytes / 1024`
 
 ---
 
-### 5. GetMonthlyRequests - 查询本月请求总数
+### 5. GetMonthlyRequests - Query Monthly Total Request Count
 
-> **⚠️ 关键：请求数据通过CES获取，非OBS直接API**
+> **⚠️ Key: Request data is obtained via CES, not directly from OBS API**
 
-**必需参数：** 同GetMonthlyTraffic
+**Required parameters:** Same as GetMonthlyTraffic
 
-**CLI命令：**
+**CLI commands:**
 
 ```bash
-# 查询本月总请求数
+# Query this month's total request count
 hcloud CES ShowMetricData \
   --region=<RegionId> \
   --namespace=SYS.OBS \
@@ -376,7 +383,7 @@ hcloud CES ShowMetricData \
   --from=<FromTimestamp> \
   --to=<ToTimestamp>
 
-# 查询本月GET请求数
+# Query this month's GET request count
 hcloud CES ShowMetricData \
   --region=<RegionId> \
   --namespace=SYS.OBS \
@@ -387,7 +394,7 @@ hcloud CES ShowMetricData \
   --from=<FromTimestamp> \
   --to=<ToTimestamp>
 
-# 查询本月PUT请求数
+# Query this month's PUT request count
 hcloud CES ShowMetricData \
   --region=<RegionId> \
   --namespace=SYS.OBS \
@@ -399,45 +406,45 @@ hcloud CES ShowMetricData \
   --to=<ToTimestamp>
 ```
 
-> **⚠️ 注意：OBS请求计费相关**
+> **⚠️ Note: OBS request billing relevance**
 >
-> - GET类请求（GetObject、HeadObject、ListObjects等）
-> - PUT类请求（PutObject、CopyObject、CreateMultipartUpload等）
-> - 不同类型请求的计费单价不同，详细参见OBS定价页面
+> - GET-type requests (GetObject, HeadObject, ListObjects, etc.)
+> - PUT-type requests (PutObject, CopyObject, CreateMultipartUpload, etc.)
+> - Different request types have different billing rates; see OBS pricing page for details
 
 ---
 
-## 月环比计算
+## Month-over-Month Calculation
 
-**公式：**
-
-```
-月环比(%) = (本月值 - 上月值) / 上月值 × 100%
-```
-
-**特殊情况：**
-
-| 情况 | 处理 |
-|------|------|
-| 上月值 = 0，本月值 > 0 | 显示 "新增（上月为0）" |
-| 上月值 = 0，本月值 = 0 | 显示 "N/A" |
-| 上月值 > 0 | 计算月环比百分比，保留2位小数 |
-
-**示例：**
+**Formula:**
 
 ```
-本月外网下载流量 = 125.3 GB
-上月外网下载流量 = 98.7 GB
-月环比 = (125.3 - 98.7) / 98.7 × 100% = +26.95%
+MoM (%) = (Current Month Value - Last Month Value) / Last Month Value × 100%
+```
+
+**Special cases:**
+
+| Case | Handling |
+|------|---------|
+| Last month value = 0, current month value > 0 | Display "New (last month was 0)" |
+| Last month value = 0, current month value = 0 | Display "N/A" |
+| Last month value > 0 | Calculate MoM percentage, rounded to 2 decimal places |
+
+**Example:**
+
+```
+Current month external download traffic = 125.3 GB
+Last month external download traffic = 98.7 GB
+MoM = (125.3 - 98.7) / 98.7 × 100% = +26.95%
 ```
 
 ---
 
-## 官方文档
+## Official Documentation
 
-- [OBS API参考](https://support.huaweicloud.com/api-obs/obs_04_0001.html)
-- [OBS SDK参考](https://support.huaweicloud.com/sdk-python-devg-obs/obs_22_0100.html)
-- [obsutil命令行工具](https://support.huaweicloud.com/utiltg-obs/obs_11_0001.html)
+- [OBS API Reference](https://support.huaweicloud.com/api-obs/obs_04_0001.html)
+- [OBS SDK Reference](https://support.huaweicloud.com/sdk-python-devg-obs/obs_22_0100.html)
+- [obsutil CLI Tool](https://support.huaweicloud.com/utiltg-obs/obs_11_0001.html)
 - [CES ShowMetricData API](https://support.huaweicloud.com/api-ces/ces_03_0059.html)
-- [CES OBS监控指标](https://support.huaweicloud.com/usermanual-ces/ces_03_0065.html)
-- [OBS定价](https://www.huaweicloud.com/pricing.html#/obs)
+- [CES OBS Monitoring Metrics](https://support.huaweicloud.com/usermanual-ces/ces_03_0065.html)
+- [OBS Pricing](https://www.huaweicloud.com/pricing.html#/obs)

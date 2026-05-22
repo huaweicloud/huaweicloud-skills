@@ -1,23 +1,22 @@
-# IAM权限策略 - 华为云OBS对象存储管理
+# IAM Permission Policies - Huawei Cloud OBS Object Storage Management
 
-本skill所需的IAM权限策略说明。
+IAM permission policies required by this skill.
 
-## 所需权限概览
+## Required Permissions Overview
 
-| 操作 | IAM Action（旧版v3） | IAM Action（新版v5） | 描述 |
-|------|----------------------|---------------------|------|
-| 列出桶 | `obs:bucket:ListAllMyBuckets` | `obs:bucket:listAllMyBuckets` | 列出当前账号所有桶 |
-| 获取桶存储信息 | `obs:bucket:GetBucketStorageInfo` | `obs:bucket:getBucketStorageInfo` | 获取桶容量和对象数 |
-| 获取桶属性 | `obs:bucket:GetBucketMetadata` | `obs:bucket:getBucketMetadata` | 获取桶元数据 |
-| 上传对象 | `obs:object:PutObject` | `obs:object:putObject` | 上传对象到桶 |
-| 列出对象 | `obs:bucket:ListBucket` | `obs:bucket:listBucket` | 列出桶内对象 |
-| 查询CES指标 | `ces:metric:get` | `ces:metric:get` | 查询CES监控指标 |
+| Operation | IAM Action (Legacy v3) | IAM Action (New v5) | Description |
+|-----------|----------------------|---------------------|-------------|
+| List buckets | `obs:bucket:ListAllMyBuckets` | `obs:bucket:listAllMyBuckets` | List all buckets for the current account |
+| Get bucket storage info | `obs:bucket:GetBucketStorageInfo` | `obs:bucket:getBucketStorageInfo` | Get bucket capacity and object count |
+| Get bucket metadata | `obs:bucket:GetBucketMetadata` | `obs:bucket:getBucketMetadata` | Get bucket metadata |
+| Upload object | `obs:object:PutObject` | `obs:object:putObject` | Upload object to bucket |
+| List objects | `obs:bucket:ListBucket` | `obs:bucket:listBucket` | List objects in bucket |
 
 ---
 
-## 最低所需策略（JSON）
+## Minimum Required Policy (JSON)
 
-### 旧版IAM（v3接口 - 角色与策略授权）
+### Legacy IAM (v3 API - Role and Policy Authorization)
 
 ```json
 {
@@ -38,7 +37,7 @@
 }
 ```
 
-### 新版IAM（v5接口 - 身份策略授权）
+### New IAM (v5 API - Identity Policy Authorization)
 
 ```json
 {
@@ -65,9 +64,9 @@
 
 ---
 
-## 资源级策略（推荐）
+## Resource-Level Policy (Recommended)
 
-限制到特定桶，提高安全性：
+Restrict to specific buckets for improved security:
 
 ```json
 {
@@ -102,9 +101,9 @@
 
 ---
 
-## 只读策略
+## Read-Only Policy
 
-仅需查看桶信息和监控数据（不允许上传）：
+Only view bucket information and monitoring data (no upload allowed):
 
 ```json
 {
@@ -130,29 +129,29 @@
 
 ---
 
-## 系统策略
+## System Policies
 
-可使用华为云预置的系统策略简化授权：
+You can use Huawei Cloud preset system policies to simplify authorization:
 
-| 系统策略 | 包含权限 | 适用场景 |
-|---------|---------|---------|
-| `OBS OperateAccess` | 桶和对象读写（不含删除） | ✅ 推荐本skill使用 |
-| `OBS ReadOnlyAccess` | 桶和对象只读 | 仅查看场景 |
-| `OBS Administrator` | OBS全部权限 | ⚠️ 权限过大，不推荐 |
-| `CES ReadOnlyAccess` | CES只读权限 | 查看监控指标 |
+| System Policy | Included Permissions | Applicable Scenario |
+|--------------|---------------------|---------------------|
+| `OBS OperateAccess` | Bucket and object read/write (no delete) | ✅ Recommended for this skill |
+| `OBS ReadOnlyAccess` | Bucket and object read-only | View-only scenarios |
+| `OBS Administrator` | Full OBS permissions | ⚠️ Overly permissive, not recommended |
+| `CES ReadOnlyAccess` | CES read-only permissions | View monitoring metrics |
 
-**推荐组合：** `OBS OperateAccess` + `CES ReadOnlyAccess`
+**Recommended combination:** `OBS OperateAccess` + `CES ReadOnlyAccess`
 
-> **⚠️ OBS OperateAccess说明**
+> **⚠️ OBS OperateAccess note**
 >
-> OBS OperateAccess包含桶和对象的读写权限，但**不包含删除权限**，
-> 与本skill的"禁止删除"安全约束一致，推荐使用。
+> OBS OperateAccess includes bucket and object read/write permissions but **does not include delete permissions**,
+> which aligns with this skill's "no delete" security constraint. Recommended for use.
 
 ---
 
-## 桶策略授权
+## Bucket Policy Authorization
 
-除IAM策略外，也可通过桶策略（Bucket Policy）授权：
+In addition to IAM policies, you can also authorize via bucket policies:
 
 ```json
 {
@@ -176,19 +175,19 @@
 
 ---
 
-## 策略最佳实践
+## Policy Best Practices
 
-1. **最小权限原则**：只授予所需最小权限，优先使用资源级策略
-2. **禁止删除权限**：本skill禁止删除操作，策略中不应包含删除权限
-3. **推荐OBS OperateAccess**：系统策略中OBS OperateAccess最匹配本skill需求
-4. **CES数据访问**：查询监控指标需要CES ReadOnlyAccess
-5. **定期审查**：定期检查IAM策略，确保无多余权限
+1. **Least privilege principle**: Grant only the minimum required permissions; prefer resource-level policies
+2. **No delete permissions**: This skill prohibits delete operations; policies should not include delete permissions
+3. **Recommend OBS OperateAccess**: Among system policies, OBS OperateAccess best matches this skill's requirements
+4. **CES data access**: Querying monitoring metrics requires CES ReadOnlyAccess
+5. **Regular review**: Periodically review IAM policies to ensure no excessive permissions
 
 ---
 
-## 官方文档
+## Official Documentation
 
-- [OBS IAM授权](https://support.huaweicloud.com/perms-cfg-obs/obs_40_0001.html)
-- [创建IAM自定义策略](https://support.huaweicloud.com/usermanual-iam/iam_01_0605.html)
-- [OBS桶策略配置](https://support.huaweicloud.com/usermanual-obs/obs_03_0123.html)
-- [CES IAM授权](https://support.huaweicloud.com/api-ces/ces_03_0046.html)
+- [OBS IAM Authorization](https://support.huaweicloud.com/perms-cfg-obs/obs_40_0001.html)
+- [Create IAM Custom Policy](https://support.huaweicloud.com/usermanual-iam/iam_01_0605.html)
+- [OBS Bucket Policy Configuration](https://support.huaweicloud.com/usermanual-obs/obs_03_0123.html)
+- [CES IAM Authorization](https://support.huaweicloud.com/api-ces/ces_03_0046.html)
