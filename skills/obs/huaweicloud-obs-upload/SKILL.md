@@ -1,13 +1,14 @@
 ---
-name: huaweicloud-obs-manage
+name: huaweicloud-obs-upload
 description: |
-  Huawei Cloud OBS (Object Storage Service) management skill. Used to list buckets with capacity and object count, upload local files or directories to a target bucket, and schedule periodic uploads to a target bucket.
-  Trigger words: "OBS", "object storage", "bucket list", "bucket capacity", "upload file", "upload directory", "scheduled upload", "OBS management", "Huawei Cloud OBS", "对象存储", "桶列表", "OBS桶", "桶容量", "上传文件", "上传目录", "定时上传"
+  Upload local files or directories to Huawei Cloud OBS (Object Storage Service) buckets, list OBS buckets with capacity and object count, and schedule periodic uploads via crontab.
+  Use this skill when the user wants to: (1) upload a local file or directory to an OBS bucket, (2) list OBS buckets and check their storage capacity and object count, (3) set up a scheduled/periodic upload task to automatically sync a local directory to an OBS bucket.
+  Trigger: user mentions "OBS", "object storage", "bucket list", "bucket capacity", "upload to OBS", "upload file", "upload directory", "scheduled upload", "periodic upload", "sync to bucket", "对象存储", "桶列表", "桶容量", "上传文件", "上传目录", "定时上传", "OBS管理"
 ---
 
-# Huawei Cloud OBS Object Storage Management
+# Huawei Cloud OBS Upload
 
-Manage Huawei Cloud OBS (Object Storage Service): list buckets with capacity and object count, upload local files or directories to a target bucket, and schedule periodic uploads to a target bucket.
+Upload local files or directories to Huawei Cloud OBS buckets, list OBS buckets with capacity and object count, and schedule periodic uploads via crontab.
 
 ## ⛔ Prohibited Operations (Security Constraints)
 

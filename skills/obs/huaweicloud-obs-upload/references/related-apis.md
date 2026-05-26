@@ -328,7 +328,7 @@ hcloud CES ShowMetricData \
   --filter=sum \
   --from=<FromTimestamp> \
   --to=<ToTimestamp> \
-  --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-manage
+  --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-upload
 ```
 
 **CES ShowMetricData parameter description:**
