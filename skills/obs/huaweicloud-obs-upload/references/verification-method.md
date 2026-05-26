@@ -29,7 +29,7 @@ hcloud obs ls
 hcloud OBS GetBucketStorageInfo \
   --region=cn-south-1 \
   --bucket=<BucketName> \
-  --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-manage
+  --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-upload
 ```
 
 **Expected result:**
@@ -165,7 +165,7 @@ hcloud CES ShowMetricData \
   --filter=sum \
   --from=$FROM_TS \
   --to=$TO_TS \
-  --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-manage
+  --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-upload
 ```
 
 **Expected result:**
@@ -185,7 +185,7 @@ hcloud CES ShowMetricData \
   --filter=sum \
   --from=$LAST_MONTH_FROM_TS \
   --to=$LAST_MONTH_TO_TS \
-  --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-manage
+  --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-upload
 ```
 
 ### Step 4: Verify month-over-month calculation
@@ -216,7 +216,7 @@ hcloud CES ShowMetricData \
   --filter=sum \
   --from=$FROM_TS \
   --to=$TO_TS \
-  --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-manage
+  --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-upload
 ```
 
 **Expected result:**
@@ -236,7 +236,7 @@ hcloud CES ShowMetricData \
   --filter=sum \
   --from=$FROM_TS \
   --to=$TO_TS \
-  --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-manage
+  --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-upload
 
 # PUT request count
 hcloud CES ShowMetricData \
@@ -249,7 +249,7 @@ hcloud CES ShowMetricData \
   --filter=sum \
   --from=$FROM_TS \
   --to=$TO_TS \
-  --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-manage
+  --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-upload
 ```
 
 ### Step 3: Verify aggregation
@@ -298,7 +298,7 @@ echo -e "\n[4/6] Verifying bucket capacity query..."
 hcloud OBS GetBucketStorageInfo \
   --region=$REGION \
   --bucket=$BUCKET_NAME \
-  --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-manage
+  --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-upload
 
 # 5. Verify CES traffic metrics
 FROM_TS=$(($(date -d "$(date +%Y-%m-01)" +%s) * 1000))
@@ -315,7 +315,7 @@ hcloud CES ShowMetricData \
   --filter=sum \
   --from=$FROM_TS \
   --to=$TO_TS \
-  --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-manage
+  --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-upload
 
 # 6. Verify CES request metrics
 echo -e "\n[6/6] Verifying CES total request count query..."
@@ -329,7 +329,7 @@ hcloud CES ShowMetricData \
   --filter=sum \
   --from=$FROM_TS \
   --to=$TO_TS \
-  --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-manage
+  --User-Agent HuaweiCloud-Agent-Skills/huaweicloud-obs-upload
 
 echo -e "\n=========================================="
 echo "Verification complete!"

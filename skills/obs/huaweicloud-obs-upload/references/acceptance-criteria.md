@@ -1,4 +1,4 @@
-# Acceptance Criteria: huaweicloud-obs-manage
+# Acceptance Criteria: huaweicloud-obs-upload
 
 **Scenario**: Huawei Cloud OBS Object Storage Management
 **Purpose**: Skill test acceptance criteria
