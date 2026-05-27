@@ -437,7 +437,5 @@ Bytes → TB: / (1024 * 1024 * 1024 * 1024)
 
 ## Official Documentation
 
-- [hcloud Troubleshooting](https://support.huaweicloud.com/cli/cli_hcloud_faq.html)
 - [obsutil Troubleshooting](https://support.huaweicloud.com/utiltg-obs/obs_11_0006.html)
-- [CES FAQ](https://support.huaweicloud.com/ces_faq/ces_faq_0001.html)
 - [OBS Error Codes Reference](https://support.huaweicloud.com/api-obs/obs_04_0115.html)

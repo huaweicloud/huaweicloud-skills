@@ -188,7 +188,3 @@ Periodically upload a local directory to a specified OBS bucket incrementally vi
 | [acceptance-criteria.md](references/acceptance-criteria.md) | Correct/error pattern comparison |
 | [cli-installation-guide.md](references/cli-installation-guide.md) | CLI installation guide |
 | [troubleshooting.md](references/troubleshooting.md) | Troubleshooting and practical experience |
-| [OBS Product Page](https://www.huaweicloud.com/product/obs.html) | Official product page |
-| [OBS API Reference](https://support.huaweicloud.com/api-obs/obs_04_0001.html) | Official API reference |
-| [obsutil Documentation](https://support.huaweicloud.com/utiltg-obs/obs_11_0001.html) | obsutil CLI tool guide |
-| [CES Monitoring Metrics Reference](https://support.huaweicloud.com/usermanual-obs/obs_03_0010.html) | CES OBS monitoring metrics |
