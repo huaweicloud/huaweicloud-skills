@@ -445,5 +445,3 @@ MoM = (125.3 - 98.7) / 98.7 × 100% = +26.95%
 - [OBS SDK Reference](https://support.huaweicloud.com/sdk-python-devg-obs/obs_22_0100.html)
 - [obsutil CLI Tool](https://support.huaweicloud.com/utiltg-obs/obs_11_0001.html)
 - [CES ShowMetricData API](https://support.huaweicloud.com/api-ces/ces_03_0059.html)
-- [CES OBS Monitoring Metrics](https://support.huaweicloud.com/usermanual-ces/ces_03_0065.html)
-- [OBS Pricing](https://www.huaweicloud.com/pricing.html#/obs)

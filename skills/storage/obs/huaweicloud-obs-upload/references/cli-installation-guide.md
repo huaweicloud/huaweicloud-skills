@@ -208,7 +208,5 @@ obsutil ls -limit=1
 
 ## Official Documentation
 
-- [hcloud Installation Guide](https://support.huaweicloud.com/cli/cli_hcloud_install.html)
 - [obsutil Installation Guide](https://support.huaweicloud.com/utiltg-obs/obs_11_0003.html)
 - [obsutil Configuration Guide](https://support.huaweicloud.com/utiltg-obs/obs_11_0005.html)
-- [OBS Regions and Endpoints](https://support.huaweicloud.com/devg-obs/obs_03_0110.html)

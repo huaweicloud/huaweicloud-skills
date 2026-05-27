@@ -275,8 +275,6 @@ MoM = (125.3 - 98.7) / 98.7 × 100% = +26.95%
 
 ## References
 
-- [OBS CLI Help](https://support.huaweicloud.com/cli/cli-hcloud-help.html)
-- [Huawei Cloud CLI Documentation](https://support.huaweicloud.com/cli/cli.html)
 - [OBS API Reference](https://support.huaweicloud.com/api-obs/obs_04_0001.html)
 - [obsutil Documentation](https://support.huaweicloud.com/utiltg-obs/obs_11_0001.html)
 - [CES API Reference](https://support.huaweicloud.com/api-ces/ces_03_0001.html)
