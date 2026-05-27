@@ -21,7 +21,7 @@
 #### ✅ Correct
 ```bash
 hcloud obs ls
-hcloud CES ShowMetricData --region=cn-south-1 --namespace=SYS.OBS --metric_name=download_bytes
+hcloud CES ShowMetricData --region=cn-south-1 --namespace=SYS.OBS --metric_name=capacity_total
 hcloud version
 ```
 
@@ -58,10 +58,10 @@ hcloud obs list-buckets                 # Incorrect: obsutil command is ls
 hcloud CES ShowMetricData \
   --region=cn-south-1 \
   --namespace=SYS.OBS \
-  --metric_name=download_bytes \
+  --metric_name=capacity_total \
   --dim.0=bucket_name,my-bucket \
   --period=86400 \
-  --filter=sum \
+  --filter=average \
   --from=1746057600000 \
   --to=1747612800000
 ```
@@ -111,11 +111,7 @@ obsutil cp /home/user/data/ obs://my-bucket/ -r -flat  # Incorrect: -flat discar
 #### ✅ Correct
 ```bash
 --namespace=SYS.OBS
---metric_name=download_bytes
---metric_name=download_bytes_intranet
---metric_name=request_count
---metric_name=get_request_count
---metric_name=put_request_count
+--metric_name=capacity_total
 --dim.0=bucket_name,my-bucket
 ```
 
@@ -123,8 +119,8 @@ obsutil cp /home/user/data/ obs://my-bucket/ -r -flat  # Incorrect: -flat discar
 ```bash
 --namespace=OBS              # Incorrect: Should be SYS.OBS
 --namespace=SYS.OBJECT_STORAGE  # Incorrect: Should be SYS.OBS
---metric_name=downloadBytes  # Incorrect: Should be download_bytes (snake_case)
---metric_name=download_flow  # Incorrect: Should be download_bytes
+--metric_name=capacityTotal  # Incorrect: Should be capacity_total (snake_case)
+--metric_name=download_bytes  # Incorrect: Not used in this skill; capacity_total is the actual metric
 --dim.0=bucketName,my-bucket  # Incorrect: Dimension key should be bucket_name
 --dim.0=bucket,my-bucket      # Incorrect: Dimension key should be bucket_name
 ```
