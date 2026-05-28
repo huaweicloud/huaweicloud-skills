@@ -1,0 +1,22 @@
+[
+  {
+    "project_id": "",
+    "region": "cn-north-4",
+    "region_name": "华北-北京四"
+  },
+  {
+    "project_id": "",
+    "region": "cn-east-3",
+    "region_name": "华东-上海一"
+  },
+  {
+    "project_id": "",
+    "region": "cn-south-1",
+    "region_name": "华南-广州"
+  },
+  {
+    "project_id": "",
+    "region": "cn-southwest-2",
+    "region_name": "西南-贵阳一"
+  }
+]
