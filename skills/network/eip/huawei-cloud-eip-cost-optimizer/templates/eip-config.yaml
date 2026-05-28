@@ -1,0 +1,59 @@
+# EIP Configuration Template
+# Copy this file and customize for your environment
+# 
+# IMPORTANT: Authentication credentials (AK/SK) must be provided via environment variables:
+#   export HUAWEI_CLOUD_AK=<your-ak>
+#   export HUAWEI_CLOUD_SK=<your-sk>
+#   export HUAWEI_CLOUD_REGION=cn-north-4
+# 
+# NEVER commit real AK/SK values to version control
+
+# Region Configuration
+region: cn-north-4
+
+# Idle EIP Detection
+idle_detection:
+  enabled: true
+  idle_days_threshold: 7
+  low_traffic_threshold: 5
+  low_traffic_period_days: 7
+  protected_tags:
+    - env:prod
+    - persistent:true
+    - protected:true
+
+# Auto Release Policy
+auto_release:
+  enabled: false
+  require_confirmation: true
+  exclude_eip_ids: []
+  # EIPs matching these tags will NOT be auto-released
+  protected_tags:
+    - env:prod
+    - persistent:true
+
+# Bandwidth Policy
+bandwidth_policy:
+  idle_default_bandwidth: 1
+  max_bandwidth: 200
+
+# Monitoring & Alerting
+monitoring:
+  enabled: true
+  scan_interval_hours: 24
+  wechat_webhook: ""
+  dingtalk_webhook: ""
+  alert_email: ""
+
+# Cost Report
+cost_report:
+  enabled: true
+  output_dir: /tmp/eip-reports
+  price_per_mbps: 2.0
+  currency: CNY
+
+# Audit Log
+audit:
+  enabled: true
+  log_dir: ~/.eip-audit-logs
+  export_format: json
