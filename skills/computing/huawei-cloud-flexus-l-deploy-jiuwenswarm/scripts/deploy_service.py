@@ -440,7 +440,7 @@ def main():
     )
 
     if execute_uuid:
-        print("\nNext step: Run phase5_verify_deployment.py to verify JiuwenSwarm service deployment result")
+        print("\nNext step: Run verify_deployment.py to verify JiuwenSwarm service deployment result")
     else:
         print("\n[ERROR] Deployment job failed")
         sys.exit(1)

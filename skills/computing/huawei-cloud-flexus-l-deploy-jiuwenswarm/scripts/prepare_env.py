@@ -143,7 +143,7 @@ def main():
     print("\n" + "=" * 60)
     print("  Environment preparation completed!")
     print("=" * 60)
-    print("\nNext step: Run phase2_create_instance.py to create Flexus L instance")
+    print("\nNext step: Run create_instance.py to create Flexus L instance")
 
 if __name__ == "__main__":
     main()

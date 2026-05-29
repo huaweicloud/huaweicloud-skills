@@ -192,19 +192,19 @@ def main():
         epilog="""
 Usage Examples:
   # Query single task status
-  python phase8_query_coc_status.py --uuid SCT20250101000000000000000
+  python query_coc_status.py --uuid SCT20250101000000000000000
 
   # Query with verbose output
-  python phase8_query_coc_status.py --uuid SCT20250101000000000000000 --verbose
+  python query_coc_status.py --uuid SCT20250101000000000000000 --verbose
 
   # Wait for task completion
-  python phase8_query_coc_status.py --uuid SCT20250101000000000000000 --wait
+  python query_coc_status.py --uuid SCT20250101000000000000000 --wait
 
   # Custom wait time and polling interval
-  python phase8_query_coc_status.py --uuid SCT20250101000000000000000 --wait --timeout 3600 --interval 30
+  python query_coc_status.py --uuid SCT20250101000000000000000 --wait --timeout 3600 --interval 30
 
   # Load UUID from JSON file (for execute_uuid saved during deployment)
-  python phase8_query_coc_status.py --from-file new_instance_info.json
+  python query_coc_status.py --from-file new_instance_info.json
         """
     )
 
