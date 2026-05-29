@@ -1,0 +1,7 @@
+vpc_name              = "tf_test_vpc"
+subnet_name           = "tf_test_subnet"
+security_group_name   = "tf_test_security_group"
+instance_name         = "tf_test_instance"
+enterprise_project_id = "0"
+plugin_name           = "tf_test_plugin"
+plugin_description    = "Created by Terraform script"
