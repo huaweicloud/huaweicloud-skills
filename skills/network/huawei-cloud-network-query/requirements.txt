@@ -1,0 +1,8 @@
+huaweicloudsdkcore>=3.1.0
+huaweicloudsdkeip>=3.1.0
+huaweicloudsdkelb>=3.1.0
+huaweicloudsdkiam>=3.1.0
+huaweicloudsdknat>=3.1.0
+huaweicloudsdkvpc>=3.1.0
+huaweicloudsdkvpn>=3.1.0
+huaweicloudsdkdns>=3.1.0
