@@ -214,7 +214,7 @@ Use the following policy if you need to create new Flexus L instances:
 After creating the policy, verify permissions with:
 
 ```bash
-python scripts/phase1_prepare_env.py
+python scripts/prepare_env.py
 ```
 
 Successful output should show all dependency modules checked successfully.

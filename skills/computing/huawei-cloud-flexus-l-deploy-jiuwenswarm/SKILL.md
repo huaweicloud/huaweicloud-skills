@@ -256,11 +256,11 @@ Based on instance information from Phase 2: instance_id, public_ip, ecs_instance
 ```
 1. Query task status by COC execution UUID
 2. Support three query methods:
-   - Direct query: python phase8_query_coc_status.py --uuid <execute_uuid>
-   - Detailed output: python phase8_query_coc_status.py --uuid <execute_uuid> --verbose
-   - Wait for completion: python phase8_query_coc_status.py --uuid <execute_uuid> --wait
+   - Direct query: python query_coc_status.py --uuid <execute_uuid>
+   - Detailed output: python query_coc_status.py --uuid <execute_uuid> --verbose
+   - Wait for completion: pythonquery_coc_status.py --uuid <execute_uuid> --wait
 3. Load UUID from JSON file:
-   - python phase8_query_coc_status.py --from-file new_instance_info.json
+   - python query_coc_status.py --from-file new_instance_info.json
 4. Return task status, duration, output results, etc.
 ```
 
@@ -272,23 +272,23 @@ COC task status query supports the following features:
 3. Wait for completion - Continuous polling until task completes or timeout
 4. File loading - Read UUID from JSON file saved during deployment
 
-Script location: scripts/phase8_query_coc_status.py
+Script location: scripts/query_coc_status.py
 
 Usage examples:
   # Query single task status
-  python phase8_query_coc_status.py --uuid SCT20250101000000000000000
+  python query_coc_status.py --uuid SCT20250101000000000000000
 
   # Query with detailed output
-  python phase8_query_coc_status.py --uuid SCT20250101000000000000000 --verbose
+  python query_coc_status.py --uuid SCT20250101000000000000000 --verbose
 
   # Wait for task completion
-  python phase8_query_coc_status.py --uuid SCT20250101000000000000000 --wait
+  python query_coc_status.py --uuid SCT20250101000000000000000 --wait
 
   # Custom wait time and polling interval
-  python phase8_query_coc_status.py --uuid SCT20250101000000000000000 --wait --timeout 3600 --interval 30
+  python query_coc_status.py --uuid SCT20250101000000000000000 --wait --timeout 3600 --interval 30
 
   # Load UUID from JSON file
-  python phase8_query_coc_status.py --from-file new_instance_info.json
+  python query_coc_status.py --from-file new_instance_info.json
 
 COC Task Status Description:
 | Status | Description |
@@ -400,28 +400,28 @@ export HUAWEICLOUD_REGION="cn-north-4"
 ### Quick Deployment Flow
 ```bash
 # 1. Environment preparation
-python scripts/phase1_prepare_env.py
+python scripts/prepare_env.py
 
 # 2. Create instance (interactive confirmation)
-python scripts/phase2_create_instance.py --name jiuwenSwarm-demo --flavor medium --wait
+python scripts/create_instance.py --name jiuwenSwarm-demo --flavor medium --wait
 
 # 3. Install dependencies
-python scripts/phase3_install_deps.py --ip <public_ip>
+python scripts/install_deps.py --ip <public_ip>
 
 # 4. Deploy service
-python scripts/phase4_deploy_service.py --ip <public_ip>
+python scripts/deploy_service.py --ip <public_ip>
 
 # 5. Verify deployment
-python scripts/phase5_verify_deployment.py --ip <public_ip>
+python scripts/verify_deployment.py --ip <public_ip>
 
 # 6. Configure model
-python scripts/phase6_config_model.py --ip <public_ip> --interactive
+python scripts/config_model.py --ip <public_ip> --interactive
 
 # 7. Configure message channel
-python scripts/phase7_config_channel.py --channel xiaoyi --ip <public_ip> --interactive
+python scripts/config_channel.py --channel xiaoyi --ip <public_ip> --interactive
 
 # 8. Query COC task status
-python scripts/phase8_query_coc_status.py --uuid <execute_uuid> --verbose
+python scripts/query_coc_status.py --uuid <execute_uuid> --verbose
 ```
 
 ---
@@ -440,7 +440,7 @@ Web UI access requires manual security group configuration in Huawei Cloud Conso
 
 ## Script Parameter Description
 
-### phase2_create_instance.py
+### create_instance.py
 | Parameter | Description | Default Value |
 |-----------|-------------|---------------|
 | --name | Instance name | jiuwenSwarm-{timestamp} |
@@ -450,14 +450,14 @@ Web UI access requires manual security group configuration in Huawei Cloud Conso
 | --timeout | Timeout in seconds | 600 |
 | --confirm | Skip confirmation prompt | False |
 
-### phase4_deploy_service.py
+### deploy_service.py
 | Parameter | Description | Default Value |
 |-----------|-------------|---------------|
 | --ip | Instance public IP | Required |
 | --wait | Wait for deployment completion | True |
 | --timeout | Timeout in seconds | 1800 |
 
-### phase6_config_model.py
+### config_model.py
 | Parameter | Description |
 |-----------|-------------|
 | --api-base | Model API URL |
@@ -467,14 +467,14 @@ Web UI access requires manual security group configuration in Huawei Cloud Conso
 | --ip | Instance public IP |
 | --interactive | Interactive configuration |
 
-### phase7_config_channel.py
+### config_channel.py
 | Parameter | Description |
 |-----------|-------------|
 | --channel | Channel type (xiaoyi/feishu/dingtalk) |
 | --ip | Instance public IP |
 | --interactive | Interactive configuration |
 
-### phase8_query_coc_status.py
+### query_coc_status.py
 | Parameter | Description | Default Value |
 |-----------|-------------|---------------|
 | --uuid, -u | COC execution UUID | Required |
