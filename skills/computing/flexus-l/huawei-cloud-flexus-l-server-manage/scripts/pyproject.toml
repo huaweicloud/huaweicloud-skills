@@ -1,0 +1,19 @@
+[project]
+name = "huawei-cloud-flexus-l-server-manage"
+version = "1.0.0"
+description = "Huawei Cloud Flexus L instance lifecycle management (create, renewal, unsubscribe)"
+dependencies = [
+    "requests>=2.31.0",
+    "huaweicloudsdkcore>=3.1.70",
+    "huaweicloudsdkbss>=3.1.0",
+    "six>=1.16.0",
+    "defusedxml>=0.7.1",
+    "pyasn1>=0.5.0",
+    "pyyaml>=6.0.0",
+    "requests-toolbelt>=0.10.1",
+    "simplejson>=3.19.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

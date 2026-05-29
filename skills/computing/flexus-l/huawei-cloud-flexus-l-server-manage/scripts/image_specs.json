@@ -1,0 +1,221 @@
+{
+  "_comment": "华为云 Flexus L 系统镜像规格配置 - 严格基于官方文档表10和附录2",
+  "_source": "https://support.huaweicloud.com/api-flexusl/create_instance_0001.html",
+  "_updated": "2026-05-26",
+  
+  "spec_definitions": {
+    "_comment": "附录2：规格编码对应的规格信息",
+    
+    "_table12_linux_beijing_shanghai_guangzhou": "Linux系统规格编码的规格（北京四、上海一、广州区域）",
+    "hf.small.1.linux": {"vcpu": 2, "memory": 2, "disk": 40, "bandwidth": 3, "traffic": 400, "os": "linux"},
+    "hf.small.2.linux": {"vcpu": 2, "memory": 2, "disk": 50, "bandwidth": 4, "traffic": 600, "os": "linux"},
+    "hf.medium.1.linux": {"vcpu": 2, "memory": 4, "disk": 70, "bandwidth": 5, "traffic": 1000, "os": "linux"},
+    "hf.medium.2.linux": {"vcpu": 2, "memory": 4, "disk": 80, "bandwidth": 6, "traffic": 1200, "os": "linux"},
+    "hf.medium.3.linux": {"vcpu": 2, "memory": 4, "disk": 100, "bandwidth": 8, "traffic": 1600, "os": "linux"},
+    "hf.large.1.linux": {"vcpu": 2, "memory": 8, "disk": 120, "bandwidth": 10, "traffic": 2000, "os": "linux"},
+    "hf.xlarge.1.linux": {"vcpu": 4, "memory": 8, "disk": 180, "bandwidth": 6, "traffic": 1200, "os": "linux"},
+    "hf.xlarge.3.linux": {"vcpu": 4, "memory": 16, "disk": 180, "bandwidth": 10, "traffic": 2000, "os": "linux"},
+    "hf.large.1.2m.linux": {"vcpu": 2, "memory": 2, "disk": 40, "bandwidth": 2, "traffic": 200, "os": "linux"},
+    "hf.large.2.3m.linux": {"vcpu": 2, "memory": 4, "disk": 50, "bandwidth": 3, "traffic": 400, "os": "linux"},
+    "ahf.large.05.40g.2m.linux": {"vcpu": 2, "memory": 1, "disk": 40, "bandwidth": 2, "traffic": 100, "os": "linux"},
+    "ahf.large.1.40g.2m.linux": {"vcpu": 2, "memory": 2, "disk": 40, "bandwidth": 2, "traffic": 100, "os": "linux"},
+    
+    "_table13_linux_hk_singapore": "Linux系统规格编码的规格（香港、新加坡区域）",
+    "hf.large.025.30m.linux": {"vcpu": 2, "memory": 0.5, "disk": 20, "bandwidth": 30, "traffic": 1024, "os": "linux"},
+    "hf.large.05.40g.30m.linux": {"vcpu": 2, "memory": 1, "disk": 40, "bandwidth": 30, "traffic": 1024, "os": "linux"},
+    "hf.large.1.40g.30m.linux": {"vcpu": 2, "memory": 2, "disk": 40, "bandwidth": 30, "traffic": 1024, "os": "linux"},
+    "hf.large.2.60g.30m.linux": {"vcpu": 2, "memory": 4, "disk": 60, "bandwidth": 30, "traffic": 2048, "os": "linux"},
+    "hf.large.4.80g.30m.linux": {"vcpu": 2, "memory": 8, "disk": 80, "bandwidth": 30, "traffic": 3072, "os": "linux"},
+    "hf.xlarge.2.160g.30m.linux": {"vcpu": 4, "memory": 8, "disk": 160, "bandwidth": 30, "traffic": 4096, "os": "linux"},
+    "hf.xlarge.4.240g.30m.linux": {"vcpu": 4, "memory": 16, "disk": 240, "bandwidth": 30, "traffic": 5120, "os": "linux"},
+    
+    "_table14_linux_guizhou": "Linux系统规格编码的规格（贵阳一区域）",
+    "ahf.large.1.2m.linux": {"vcpu": 2, "memory": 2, "disk": 40, "bandwidth": 2, "traffic": 200, "os": "linux"},
+    "ahf.small.1.linux": {"vcpu": 2, "memory": 2, "disk": 40, "bandwidth": 3, "traffic": 400, "os": "linux"},
+    "ahf.small.2.linux": {"vcpu": 2, "memory": 2, "disk": 50, "bandwidth": 4, "traffic": 600, "os": "linux"},
+    "ahf.large.2.3m.linux": {"vcpu": 2, "memory": 4, "disk": 50, "bandwidth": 3, "traffic": 400, "os": "linux"},
+    "ahf.medium.1.linux": {"vcpu": 2, "memory": 4, "disk": 70, "bandwidth": 5, "traffic": 1000, "os": "linux"},
+    "ahf.medium.2.linux": {"vcpu": 2, "memory": 4, "disk": 80, "bandwidth": 6, "traffic": 1200, "os": "linux"},
+    "ahf.medium.3.linux": {"vcpu": 2, "memory": 4, "disk": 100, "bandwidth": 8, "traffic": 1600, "os": "linux"},
+    "ahf.large.1.linux": {"vcpu": 2, "memory": 8, "disk": 120, "bandwidth": 10, "traffic": 2000, "os": "linux"},
+    "ahf.xlarge.1.linux": {"vcpu": 4, "memory": 8, "disk": 180, "bandwidth": 6, "traffic": 1200, "os": "linux"},
+    "ahf.xlarge.3.linux": {"vcpu": 4, "memory": 16, "disk": 180, "bandwidth": 10, "traffic": 2000, "os": "linux"},
+    
+    "_table15_windows_beijing_shanghai_guangzhou": "Windows系统规格编码的规格（北京四、上海一、广州区域）",
+    "hf.small.1.win": {"vcpu": 2, "memory": 2, "disk": 40, "bandwidth": 3, "traffic": 400, "os": "windows"},
+    "hf.small.2.win": {"vcpu": 2, "memory": 2, "disk": 50, "bandwidth": 4, "traffic": 600, "os": "windows"},
+    "hf.medium.1.win": {"vcpu": 2, "memory": 4, "disk": 70, "bandwidth": 5, "traffic": 1000, "os": "windows"},
+    "hf.medium.2.win": {"vcpu": 2, "memory": 4, "disk": 80, "bandwidth": 6, "traffic": 1200, "os": "windows"},
+    "hf.medium.3.win": {"vcpu": 2, "memory": 4, "disk": 100, "bandwidth": 8, "traffic": 1600, "os": "windows"},
+    "hf.large.1.win": {"vcpu": 2, "memory": 8, "disk": 120, "bandwidth": 10, "traffic": 2000, "os": "windows"},
+    "hf.xlarge.1.win": {"vcpu": 4, "memory": 8, "disk": 180, "bandwidth": 6, "traffic": 1200, "os": "windows"},
+    "hf.xlarge.3.win": {"vcpu": 4, "memory": 16, "disk": 180, "bandwidth": 10, "traffic": 2000, "os": "windows"},
+    "hf.large.1.2m.win": {"vcpu": 2, "memory": 2, "disk": 40, "bandwidth": 2, "traffic": 200, "os": "windows"},
+    "hf.large.2.3m.win": {"vcpu": 2, "memory": 4, "disk": 50, "bandwidth": 3, "traffic": 400, "os": "windows"},
+    "ahf.large.1.40g.2m.win": {"vcpu": 2, "memory": 2, "disk": 40, "bandwidth": 2, "traffic": 100, "os": "windows"},
+    
+    "_table16_windows_hk_singapore": "Windows系统规格编码的规格（香港、新加坡区域）",
+    "hf.large.1.40g.30m.win": {"vcpu": 2, "memory": 2, "disk": 40, "bandwidth": 30, "traffic": 1024, "os": "windows"},
+    "hf.large.2.60g.30m.win": {"vcpu": 2, "memory": 4, "disk": 60, "bandwidth": 30, "traffic": 2048, "os": "windows"},
+    "hf.large.4.80g.30m.win": {"vcpu": 2, "memory": 8, "disk": 80, "bandwidth": 30, "traffic": 3072, "os": "windows"},
+    "hf.xlarge.2.160g.30m.win": {"vcpu": 4, "memory": 8, "disk": 160, "bandwidth": 30, "traffic": 4096, "os": "windows"},
+    "hf.xlarge.4.240g.30m.win": {"vcpu": 4, "memory": 16, "disk": 240, "bandwidth": 30, "traffic": 5120, "os": "windows"},
+    
+    "_table17_windows_guizhou": "Windows系统规格编码的规格（贵阳一区域）",
+    "ahf.large.1.2m.win": {"vcpu": 2, "memory": 2, "disk": 40, "bandwidth": 2, "traffic": 200, "os": "windows"},
+    "ahf.small.1.win": {"vcpu": 2, "memory": 2, "disk": 40, "bandwidth": 3, "traffic": 400, "os": "windows"},
+    "ahf.small.2.win": {"vcpu": 2, "memory": 2, "disk": 50, "bandwidth": 4, "traffic": 600, "os": "windows"},
+    "ahf.large.2.3m.win": {"vcpu": 2, "memory": 4, "disk": 50, "bandwidth": 3, "traffic": 400, "os": "windows"},
+    "ahf.medium.1.win": {"vcpu": 2, "memory": 4, "disk": 70, "bandwidth": 5, "traffic": 1000, "os": "windows"},
+    "ahf.medium.2.win": {"vcpu": 2, "memory": 4, "disk": 80, "bandwidth": 6, "traffic": 1200, "os": "windows"},
+    "ahf.medium.3.win": {"vcpu": 2, "memory": 4, "disk": 100, "bandwidth": 8, "traffic": 1600, "os": "windows"},
+    "ahf.large.1.win": {"vcpu": 2, "memory": 8, "disk": 120, "bandwidth": 10, "traffic": 2000, "os": "windows"},
+    "ahf.xlarge.1.win": {"vcpu": 4, "memory": 8, "disk": 180, "bandwidth": 6, "traffic": 1200, "os": "windows"},
+    "ahf.xlarge.3.win": {"vcpu": 4, "memory": 16, "disk": 180, "bandwidth": 10, "traffic": 2000, "os": "windows"}
+  },
+  
+  "regions": {
+    "cn-north-4": {
+      "name": "华北-北京四",
+      "spec_prefix": "hf",
+      "system_images": {
+        "WindowsServer": {
+          "versions": ["2022_standard_ch", "2022_datacenter_ch", "2019_standard_ch", "2019_datacenter_ch", "2016_standard_ch", "2016_datacenter_ch", "2012R2_standard_ch", "2012R2_datacenter_ch"],
+          "specs": ["hf.small.1.win", "hf.small.2.win", "hf.medium.1.win", "hf.medium.2.win", "hf.medium.3.win", "hf.large.1.win", "hf.xlarge.1.win", "hf.xlarge.3.win", "hf.large.1.2m.win", "hf.large.2.3m.win", "ahf.large.1.40g.2m.win"]
+        },
+        "Ubuntu": {
+          "versions": ["24.04", "22.04", "20.04", "18.04", "16.04"],
+          "specs": ["hf.small.1.linux", "hf.small.2.linux", "hf.medium.1.linux", "hf.medium.2.linux", "hf.medium.3.linux", "hf.large.1.linux", "hf.xlarge.1.linux", "hf.xlarge.3.linux", "hf.large.1.2m.linux", "hf.large.2.3m.linux", "ahf.large.05.40g.2m.linux", "ahf.large.1.40g.2m.linux"],
+          "_note": "16.04不支持 ahf.large.05.40g.2m.linux 和 ahf.large.1.40g.2m.linux"
+        },
+        "Huawei Cloud EulerOS": {
+          "versions": ["2.0", "ThreeLevel_2.0"],
+          "specs": ["hf.small.1.linux", "hf.small.2.linux", "hf.medium.1.linux", "hf.medium.2.linux", "hf.medium.3.linux", "hf.large.1.linux", "hf.xlarge.1.linux", "hf.xlarge.3.linux", "hf.large.1.2m.linux", "hf.large.2.3m.linux", "ahf.large.05.40g.2m.linux", "ahf.large.1.40g.2m.linux"],
+          "_note": "仅2.0支持 ahf.large.05.40g.2m.linux 和 ahf.large.1.40g.2m.linux"
+        },
+        "CentOS": {
+          "versions": ["8.2", "8.1", "8.0", "7.9", "7.8", "7.7", "7.6", "7.5", "7.4", "7.3", "7.2"],
+          "specs": ["hf.small.1.linux", "hf.small.2.linux", "hf.medium.1.linux", "hf.medium.2.linux", "hf.medium.3.linux", "hf.large.1.linux", "hf.xlarge.1.linux", "hf.xlarge.3.linux", "hf.large.1.2m.linux", "hf.large.2.3m.linux", "ahf.large.05.40g.2m.linux", "ahf.large.1.40g.2m.linux"]
+        },
+        "Debian": {
+          "versions": ["12.0", "11.1", "9.0"],
+          "specs": ["hf.small.1.linux", "hf.small.2.linux", "hf.medium.1.linux", "hf.medium.2.linux", "hf.medium.3.linux", "hf.large.1.linux", "hf.xlarge.1.linux", "hf.xlarge.3.linux", "hf.large.1.2m.linux", "hf.large.2.3m.linux", "ahf.large.05.40g.2m.linux", "ahf.large.1.40g.2m.linux"],
+          "_note": "12.0不支持 ahf.large.05.40g.2m.linux 和 ahf.large.1.40g.2m.linux"
+        },
+        "CentOS_Stream": {
+          "versions": ["9.0", "8.0"],
+          "specs": ["hf.small.1.linux", "hf.small.2.linux", "hf.medium.1.linux", "hf.medium.2.linux", "hf.medium.3.linux", "hf.large.1.linux", "hf.xlarge.1.linux", "hf.xlarge.3.linux", "hf.large.1.2m.linux", "hf.large.2.3m.linux"]
+        },
+        "AlmaLinux": {
+          "versions": ["9.0", "9.3", "9.4"],
+          "specs": ["hf.small.1.linux", "hf.small.2.linux", "hf.medium.1.linux", "hf.medium.2.linux", "hf.medium.3.linux", "hf.large.1.linux", "hf.xlarge.1.linux", "hf.xlarge.3.linux", "hf.large.1.2m.linux", "hf.large.2.3m.linux"]
+        },
+        "CoreOS": {
+          "versions": ["2079.4.0"],
+          "specs": ["hf.small.1.linux", "hf.small.2.linux", "hf.medium.1.linux", "hf.medium.2.linux", "hf.medium.3.linux", "hf.large.1.linux", "hf.xlarge.1.linux", "hf.xlarge.3.linux", "hf.large.1.2m.linux", "hf.large.2.3m.linux"]
+        },
+        "openEuler": {
+          "versions": ["20.03", "22.03"],
+          "specs": ["hf.small.1.linux", "hf.small.2.linux", "hf.medium.1.linux", "hf.medium.2.linux", "hf.medium.3.linux", "hf.large.1.linux", "hf.xlarge.1.linux", "hf.xlarge.3.linux", "hf.large.1.2m.linux", "hf.large.2.3m.linux", "ahf.large.05.40g.2m.linux", "ahf.large.1.40g.2m.linux"],
+          "_note": "22.03不支持 ahf.large.05.40g.2m.linux 和 ahf.large.1.40g.2m.linux"
+        },
+        "OpenSUSE": {
+          "versions": ["15.0"],
+          "specs": ["hf.small.1.linux", "hf.small.2.linux", "hf.medium.1.linux", "hf.medium.2.linux", "hf.medium.3.linux", "hf.large.1.linux", "hf.xlarge.1.linux", "hf.xlarge.3.linux", "hf.large.1.2m.linux", "hf.large.2.3m.linux"]
+        },
+        "Rocky Linux": {
+          "versions": ["8.4", "8.5", "8.8", "8.10", "9.0", "9.2", "9.3", "9.4", "9.5"],
+          "specs": ["hf.small.1.linux", "hf.small.2.linux", "hf.medium.1.linux", "hf.medium.2.linux", "hf.medium.3.linux", "hf.large.1.linux", "hf.xlarge.1.linux", "hf.xlarge.3.linux", "hf.large.1.2m.linux", "hf.large.2.3m.linux", "ahf.large.05.40g.2m.linux", "ahf.large.1.40g.2m.linux"],
+          "_note": "8.4不支持 ahf.large.05.40g.2m.linux 和 ahf.large.1.40g.2m.linux"
+        }
+      }
+    },
+    
+    "cn-east-3": {
+      "name": "华东-上海一",
+      "_same_as": "cn-north-4",
+      "system_images": "同北京四"
+    },
+    
+    "cn-south-1": {
+      "name": "华南-广州",
+      "_same_as": "cn-north-4",
+      "system_images": "同北京四"
+    },
+    
+    "ap-southeast-1": {
+      "name": "中国-香港",
+      "spec_prefix": "hf",
+      "system_images": {
+        "WindowsServer": {
+          "versions": ["2019_standard_ch", "2016_standard_ch", "2012R2_standard_ch"],
+          "specs": ["hf.large.1.40g.30m.win", "hf.large.2.60g.30m.win", "hf.large.4.80g.30m.win", "hf.xlarge.2.160g.30m.win", "hf.xlarge.4.240g.30m.win"]
+        },
+        "Ubuntu": {
+          "versions": ["24.04", "22.04", "20.04", "18.04", "16.04"],
+          "specs": ["hf.large.05.40g.30m.linux", "hf.large.1.40g.30m.linux", "hf.large.2.60g.30m.linux", "hf.large.4.80g.30m.linux", "hf.xlarge.2.160g.30m.linux", "hf.xlarge.4.240g.30m.linux"],
+          "_note": "16.04不支持 hf.large.05.40g.30m.linux"
+        },
+        "Huawei Cloud EulerOS": {
+          "versions": ["2.0"],
+          "specs": ["hf.large.025.30m.linux", "hf.large.05.40g.30m.linux", "hf.large.1.40g.30m.linux", "hf.large.2.60g.30m.linux", "hf.large.4.80g.30m.linux", "hf.xlarge.2.160g.30m.linux", "hf.xlarge.4.240g.30m.linux"]
+        },
+        "CentOS": {
+          "versions": ["8.2", "8.1", "8.0", "7.9", "7.8", "7.7", "7.6", "7.5", "7.4", "7.3", "7.2"],
+          "specs": ["hf.large.025.30m.linux", "hf.large.05.40g.30m.linux", "hf.large.1.40g.30m.linux", "hf.large.2.60g.30m.linux", "hf.large.4.80g.30m.linux", "hf.xlarge.2.160g.30m.linux", "hf.xlarge.4.240g.30m.linux"],
+          "_note": "仅7.6支持 hf.large.025.30m.linux"
+        },
+        "Debian": {
+          "versions": ["12.0", "11.1", "9.0"],
+          "specs": ["hf.large.025.30m.linux", "hf.large.05.40g.30m.linux", "hf.large.1.40g.30m.linux", "hf.large.2.60g.30m.linux", "hf.large.4.80g.30m.linux", "hf.xlarge.2.160g.30m.linux", "hf.xlarge.4.240g.30m.linux"],
+          "_note": "9.0不支持 hf.large.025.30m.linux"
+        },
+        "CentOS_Stream": {
+          "versions": ["9.0"],
+          "specs": ["hf.large.025.30m.linux", "hf.large.05.40g.30m.linux", "hf.large.1.40g.30m.linux", "hf.large.2.60g.30m.linux", "hf.large.4.80g.30m.linux", "hf.xlarge.2.160g.30m.linux", "hf.xlarge.4.240g.30m.linux"]
+        }
+      }
+    },
+    
+    "ap-southeast-3": {
+      "name": "亚太-新加坡",
+      "_same_as": "ap-southeast-1",
+      "system_images": "同香港"
+    },
+    
+    "cn-southwest-2": {
+      "name": "西南-贵阳一",
+      "spec_prefix": "ahf",
+      "system_images": {
+        "WindowsServer": {
+          "versions": ["2022_standard_ch", "2022_datacenter_ch", "2019_standard_ch", "2019_datacenter_ch", "2016_standard_ch", "2016_datacenter_ch", "2012R2_standard_ch", "2012R2_datacenter_ch"],
+          "specs": ["ahf.large.1.40g.2m.win", "ahf.large.1.2m.win", "ahf.small.1.win", "ahf.small.2.win", "ahf.large.2.3m.win", "ahf.medium.1.win", "ahf.medium.2.win", "ahf.medium.3.win", "ahf.large.1.win", "ahf.xlarge.1.win", "ahf.xlarge.3.win"]
+        },
+        "Ubuntu": {
+          "versions": ["24.04", "22.04", "20.04", "18.04"],
+          "specs": ["ahf.large.05.40g.2m.linux", "ahf.large.1.40g.2m.linux", "ahf.large.1.2m.linux", "ahf.small.1.linux", "ahf.small.2.linux", "ahf.large.2.3m.linux", "ahf.medium.1.linux", "ahf.medium.2.linux", "ahf.medium.3.linux", "ahf.large.1.linux", "ahf.xlarge.1.linux", "ahf.xlarge.3.linux"]
+        },
+        "Huawei Cloud EulerOS": {
+          "versions": ["2.0"],
+          "specs": ["ahf.large.05.40g.2m.linux", "ahf.large.1.40g.2m.linux", "ahf.large.1.2m.linux", "ahf.small.1.linux", "ahf.small.2.linux", "ahf.large.2.3m.linux", "ahf.medium.1.linux", "ahf.medium.2.linux", "ahf.medium.3.linux", "ahf.large.1.linux", "ahf.xlarge.1.linux", "ahf.xlarge.3.linux"]
+        },
+        "CentOS": {
+          "versions": ["8.2", "8.1", "8.0", "7.9", "7.8", "7.7", "7.6", "7.5", "7.4", "7.3", "7.2"],
+          "specs": ["ahf.large.05.40g.2m.linux", "ahf.large.1.40g.2m.linux", "ahf.large.1.2m.linux", "ahf.small.1.linux", "ahf.small.2.linux", "ahf.large.2.3m.linux", "ahf.medium.1.linux", "ahf.medium.2.linux", "ahf.medium.3.linux", "ahf.large.1.linux", "ahf.xlarge.1.linux", "ahf.xlarge.3.linux"]
+        },
+        "Debian": {
+          "versions": ["12.0", "11.1", "9.0"],
+          "specs": ["ahf.large.05.40g.2m.linux", "ahf.large.1.40g.2m.linux", "ahf.large.1.2m.linux", "ahf.small.1.linux", "ahf.small.2.linux", "ahf.large.2.3m.linux", "ahf.medium.1.linux", "ahf.medium.2.linux", "ahf.medium.3.linux", "ahf.large.1.linux", "ahf.xlarge.1.linux", "ahf.xlarge.3.linux"]
+        },
+        "openEuler": {
+          "versions": ["20.03"],
+          "specs": ["ahf.large.05.40g.2m.linux", "ahf.large.1.40g.2m.linux", "ahf.large.1.2m.linux", "ahf.small.1.linux", "ahf.small.2.linux", "ahf.large.2.3m.linux", "ahf.medium.1.linux", "ahf.medium.2.linux", "ahf.medium.3.linux", "ahf.large.1.linux", "ahf.xlarge.1.linux", "ahf.xlarge.3.linux"]
+        },
+        "Rocky Linux": {
+          "versions": ["8.5", "8.8", "8.10", "9.0", "9.2", "9.3", "9.4", "9.5"],
+          "specs": ["ahf.large.05.40g.2m.linux", "ahf.large.1.40g.2m.linux", "ahf.large.1.2m.linux", "ahf.small.1.linux", "ahf.small.2.linux", "ahf.large.2.3m.linux", "ahf.medium.1.linux", "ahf.medium.2.linux", "ahf.medium.3.linux", "ahf.large.1.linux", "ahf.xlarge.1.linux", "ahf.xlarge.3.linux"]
+        }
+      }
+    }
+  }
+}
