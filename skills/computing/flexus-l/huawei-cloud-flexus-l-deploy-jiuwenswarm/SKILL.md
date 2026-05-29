@@ -1,15 +1,11 @@
 ---
 name: huawei-cloud-flexus-l-deploy-jiuwenswarm
 description: "One-click deployment of JiuwenSwarm multi-Agent collaboration platform on Huawei Cloud Flexus L instances. Usage scenarios: When users need to quickly deploy JiuwenSwarm/JiuwenClaw on Huawei Cloud Flexus L instances, when they need to automatically create cloud instances and deploy AI Agent platforms, when they need to configure model APIs and message channels (Xiaoyi/Feishu/DingTalk). Automatically create instances, deploy applications via COC, configure models and message channels. Trigger keywords: JiuwenSwarm deployment, JiuwenClaw deployment, 九问Swarm部署, 九问Claw部署, 一键部署JiuwenSwarm, AI智能体平台部署, 部署九问Swarm, 部署九问Claw,云服务器部署AI平台."
+version: 1.0.0
 tags:
   - JiuwenSwarm
   - JiuwenClaw
-  - deployment
-  - Huawei Cloud
-  - Flexus L Instance
   - AI Agent
-  - model management
-  - channel management
 metadata: {"jiuwenswarm": {"requires": {"bins": ["python3"]}, "install": [{"kind": "pip", "command": "pip install -r requirements.txt"}]}}
 ---
 
@@ -24,6 +20,68 @@ metadata: {"jiuwenswarm": {"requires": {"bins": ["python3"]}, "install": [{"kind
 
 This skill provides a complete automated deployment solution for the JiuwenSwarm (JiuwenClaw) multi-Agent collaboration platform on Huawei Cloud Flexus L instances. It implements full-process automation from environment preparation to message channel configuration through phased scripts.
 
+---
+
+## Prerequisites
+
+Before using this skill, the following prerequisites must be met:
+
+### 1. Huawei Cloud Account Requirements
+- A valid Huawei Cloud account with active subscription
+- Sufficient balance or billing method configured
+- Flexus L instance quota available in the target region (cn-north-4)
+
+### 2. IAM Credentials
+- Huawei Cloud Access Key (AK) and Secret Key (SK) with appropriate permissions
+- Required IAM permissions:
+  - `hcss:lightInstance:create` - Create Flexus L instances
+  - `hcss:lightInstance:list` - Query instance information
+  - `rms:resource:list` - Query resource information
+  - `coc:execution:create` - Execute COC scripts
+  - `coc:execution:list` - Query COC task status
+  - `iam:project:list` - Get project information
+
+### 3. Environment Requirements
+- Python 3.8+ installed with pip
+- Required Python packages:
+  - `requests` - HTTP client
+  - `huaweicloudsdkcore` - Huawei Cloud SDK core
+  - `huaweicloudsdkcoc` - COC service SDK
+  - `huaweicloudsdkrms` - RMS service SDK
+  - `huaweicloudsdkiam` - IAM service SDK
+
+### 4. Network Requirements
+- Internet access to Huawei Cloud APIs
+- Security group rules allowing outbound HTTP/HTTPS traffic (ports 80, 443)
+- For web access: Port 5173 needs to be opened in security group after deployment
+
+### 5. Resource Requirements
+- Flexus L instance with minimum specifications:
+  - Flavor: medium (2 vCPUs, 4GB RAM) or higher
+  - System disk: 40GB or larger
+  - Network: Public IP required
+
+### 6. Configuration Requirements
+- Model API credentials (API_BASE, API_KEY) for LLM integration (required for Phase 6)
+- Message channel credentials (Xiaoyi/Feishu/DingTalk) if channel configuration is needed (required for Phase 7)
+
+---
+
+### Architecture Diagram
+
+This skill is built on multiple Huawei Cloud services, involving the following cloud services and components:
+
+```
+User/Agent      ──────▶│   Flexus L Instance   │──────▶│   JiuwenSwarm App    │──────▶│ Model Config     │ ──────▶│  Channel Config     │ 
+(Skill caller)           (Target Host)                 (Multi-Agent Platform)           (API_BASE/KEY)            (Xiaoyi/Feishu/Dingtalk)            
+```
+
+**Component Description**:
+- **User/Agent**: Skill caller that triggers JiuwenSwarm deployment operations via natural language or API
+- **Flexus L Instance**: Huawei Cloud Elastic Cloud Server, serving as the target host for JiuwenSwarm deployment
+- **JiuwenSwarm App**: Multi-agent collaboration platform running on the Flexus L instance
+- **Model Config**: Configuration for external LLM services (API_BASE, API_KEY, MODEL_NAME, MODEL_PROVIDER)
+- **Channel Config**: Messaging channel configuration (Huawei Xiaoyi, Feishu, Dingtalk)
 ---
 
 ## Skill Responsibilities
@@ -42,89 +100,7 @@ This skill provides a complete automated deployment solution for the JiuwenSwarm
 Phase 1: Environment Preparation → Phase 2: Create Instance → Phase 3: Install Dependencies → COC Status Query → Phase 4: Deploy Service → COC Status Query → Phase 5: Verify Deployment → Phase 6: Model Configuration → Phase 7: Message Channel Configuration
 ```
 
-### ─────────────────────────────────────────── Architecture Diagram ───────────────────────────────────────────
-```bash
-┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│【huawei-cloud-flexus-l-deploy-jiuwenswarm】                                                                 │
-├─────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                                             │
-│  ┌─────────────────┐                                                                                       │
-│  │ User Trigger     │ ◄── User requests deployment of JiuwenSwarm/JiuwenClaw                               │
-│  └────────┬────────┘                                                                                       │
-│           │                                                                                                 │
-│           ▼                                                                                                 │
-│  ┌─────────────────┐                                                                                       │
-│  │ Environment      │ ◄── Verify Huawei Cloud credentials, check dependency modules                        │
-│  │ Preparation      │                                                                                       │
-│  └────────┬────────┘                                                                                       │
-│           │                                                                                                 │
-│           ▼                                                                                                 │
-│  ┌─────────────────┐                                                                                       │
-│  │ Customer        │ ◄── Obtain user confirmation, display instance configuration                          │
-│  │ Confirmation    │                                                                                       │
-│  └────────┬────────┘                                                                                       │
-│           │                                                                                                 │
-│           ▼                                                                                                 │
-│  ┌─────────────────┐    ┌─────────────────────────────────────────────────────────────────────────────┐   │
-│  │ Create Flexus L  │───▶│ Huawei Cloud APIs                                                           │   │
-│  │ Instance         │    ├─────────────────────────────────────────────────────────────────────────────┤   │
-│  └────────┬────────┘    │ • IAM API: Get project ID                                                     │   │
-│           │              │ • Flexus L API: Create instance                                               │   │
-│           │              │ • RMS API: Query instance status                                              │   │
-│           ▼              │ • COC API: Remote script execution                                            │   │
-│  ┌─────────────────┐    └─────────────────────────────────────────────────────────────────────────────┘   │
-│  │ COC Remote      │                                                                                       │
-│  │ Deployment      │ ◄── Execute scripts remotely via COC                                                 │
-│  └───────┬────────┘                                                                                       │
-│           │                                                                                                 │
-│           │                                                                                                 
-│           ▼                                                                                                 │
-│  ┌─────────────────┐                                                                                        │
-│  │ Install         │                                                                                       │
-│  │ Dependencies    │                                                                                         │
-│  └────────┬────────┘                                                                                       │
-│           │                                       
-│           ▼                                                                                               │
-│  ┌─────────────────┐                                                                                       │
-│  │ Deploy          │                                                                                       │
-│  │ service         │                                                                                       │
-│  └─────────────────┘                                                                                        │
-│           │                                                                                                 │
-│           ▼                                                                                                 │
-│  ┌─────────────────┐                                                                                       │
-│  │ Model           │ ◄── Configure API_BASE, API_KEY, MODEL_NAME, MODEL_PROVIDER                          │
-│  │ Configuration   │                                                                                       │
-│  └────────┬────────┘                                                                                       │
-│           │                                                                                                 │
-│           ▼                                                                                                 │
-│  ┌─────────────────┐                                                                                       │
-│  │ Message Channel │ ◄── Configure message channels (Xiaoyi/Feishu/DingTalk)                              │
-│  │ Configuration   │                                                                                       │
-│  └────────┬────────┘                                                                                       │
-│           │                                                                                                 │
-│           ▼                                                                                                 │
-│  ┌─────────────────┐                                                                                       │
-│  │ Deployment      │ ◄── Output deployment results, provide web access URL                                │
-│  │ Complete        │                                                                                       │
-│  └─────────────────┘                                                                                       │
-│                                                                                                             │
-│                                                                                                             │
-└─────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-```
-
 ---
-
-## Trigger Scenarios
-
-| Scenario | Trigger Condition |
-|----------|------------------|
-| JiuwenSwarm Deployment | User requests to deploy JiuwenSwarm, deploy JiuwenClaw, or deploy AI applications on Flexus L |
-
-**Trigger Keywords**: 
-- **English**: JiuwenSwarm deployment, JiuwenClaw deployment, deploy JiuwenSwarm, deploy JiuwenClaw,  AI Agent deployment
-- **中文**: 九问Swarm部署, 九问Claw部署, 一键部署JiuwenSwarm, AI智能体平台部署, 部署九问Swarm, 部署九问Claw, 华为云服务器部署, Flexus L实例部署, 云服务器部署AI平台
-
-**Note**: Only trigger when the user explicitly mentions deploying JiuwenSwarm/JiuwenClaw or related Chinese keywords.
 
 ### Typical Use Cases
 
