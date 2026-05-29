@@ -1,5 +1,0 @@
-huaweicloudsdkcore>=3.1.0
-huaweicloudsdkcoc>=3.1.0
-huaweicloudsdkrms>=3.1.0
-requests>=2.31.0
-pyyaml>=6.0
