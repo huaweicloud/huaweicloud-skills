@@ -1,6 +1,5 @@
 ---
 name: huawei-cloud-flexus-l-deploy-jiuwenswarm
-version: "3.3.0"
 description: "One-click deployment of JiuwenSwarm multi-Agent collaboration platform on Huawei Cloud Flexus L instances. Usage scenarios: When users need to quickly deploy JiuwenSwarm/JiuwenClaw on Huawei Cloud Flexus L instances, when they need to automatically create cloud instances and deploy AI Agent platforms, when they need to configure model APIs and message channels (Xiaoyi/Feishu/DingTalk). Automatically create instances, deploy applications via COC, configure models and message channels. Trigger keywords: JiuwenSwarm deployment, JiuwenClaw deployment, 九问Swarm部署, 九问Claw部署, 一键部署JiuwenSwarm, AI智能体平台部署, 部署九问Swarm, 部署九问Claw,云服务器部署AI平台."
 tags:
   - JiuwenSwarm
@@ -11,7 +10,7 @@ tags:
   - AI Agent
   - model management
   - channel management
-metadata: {"jiuwenswarm": {"version": "3.3.0", "requires": {"bins": ["python3"]}, "install": [{"kind": "pip", "command": "pip install -r requirements.txt"}]}}
+metadata: {"jiuwenswarm": {"requires": {"bins": ["python3"]}, "install": [{"kind": "pip", "command": "pip install -r requirements.txt"}]}}
 ---
 
 ## **Important Notes**:
@@ -363,14 +362,14 @@ huawei-cloud-flexus-l-deploy-jiuwenSwarm/
 ├── requirements.txt            # Python dependency list
 ├── scripts/                    # Phased deployment scripts
 │   ├── utils.py                # Utility functions
-│   ├── phase1_prepare_env.py   # Environment preparation
-│   ├── phase2_create_instance.py # Create Flexus L instance
-│   ├── phase3_install_deps.py  # COC remote dependency installation
-│   ├── phase4_deploy_service.py # COC remote service deployment
-│   ├── phase5_verify_deployment.py # Verify deployment result
-│   ├── phase6_config_model.py  # Model configuration
-│   ├── phase7_config_channel.py # Message channel configuration
-│   └── phase8_query_coc_status.py # COC task status query
+│   ├── prepare_env.py   # Environment preparation
+│   ├── create_instance.py # Create Flexus L instance
+│   ├── install_deps.py  # COC remote dependency installation
+│   ├── deploy_service.py # COC remote service deployment
+│   ├── verify_deployment.py # Verify deployment result
+│   ├── config_model.py  # Model configuration
+│   ├── config_channel.py # Message channel configuration
+│   └── query_coc_status.py # COC task status query
 ├── assets/                     # Template files
 │   ├── deploy_script_template.sh # Deployment script template
 │   ├── jiuwenswarm.service.template # systemd service template
