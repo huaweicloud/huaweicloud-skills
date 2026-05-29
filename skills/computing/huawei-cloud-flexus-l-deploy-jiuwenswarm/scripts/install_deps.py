@@ -8,7 +8,7 @@ on Flexus L instances using Huawei Cloud COC service.
 Main installations include: Python 3.11+, Node.js 18.x, Git, and basic system tools.
 
 Note: This script only installs the basic dependency environment, not the JiuwenSwarm service itself.
-Service deployment will be completed in phase4_deploy_service.py.
+Service deployment will be completed in deploy_service.py.
 """
 
 import os
@@ -856,9 +856,9 @@ def main():
             print("  install   - Install dependency environment")
             print("  status    - Check job status")
             print("\nUsage Examples:")
-            print("  python phase3_install_deps.py install --ip X.X.X.X")
-            print("  python phase3_install_deps.py status --execute-uuid SCTxxx")
-            print("  python phase3_install_deps.py --ip X.X.X.X  (legacy format, backward compatible)")
+            print("  python install_deps.py install --ip X.X.X.X")
+            print("  python install_deps.py status --execute-uuid SCTxxx")
+            print("  python install_deps.py --ip X.X.X.X  (legacy format, backward compatible)")
             return
     else:
         print_error(f"Unknown command: {args.command}")
@@ -959,10 +959,10 @@ def main():
         print("  - System basic tools")
         
         if not args.no_wait:
-            print("\nNext step: Run phase4_deploy_service.py for JiuwenSwarm service deployment")
+            print("\nNext step: Run deploy_service.py for JiuwenSwarm service deployment")
         else:
             print("\n[Note] --no-wait parameter used, script submitted but not waiting for completion")
-            print("       Run python phase3_install_deps.py status --execute-uuid " + result.get('execute_uuid', '') + " to check job status")
+            print("       Run python install_deps.py status --execute-uuid " + result.get('execute_uuid', '') + " to check job status")
         print("\nNote: This phase only installs basic dependencies. Service deployment will be done in the next phase")
     else:
         print_error("Dependency installation task failed")

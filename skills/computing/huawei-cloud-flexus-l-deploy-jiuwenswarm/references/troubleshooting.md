@@ -41,7 +41,7 @@ echo $HUAWEICLOUD_SDK_SK
 **Solutions**:
 ```bash
 # Check COC task status
-python scripts/phase8_query_coc_status.py --uuid <execute_uuid>
+python scripts/query_coc_status.py --uuid <execute_uuid>
 
 # Manually check instance status
 curl -H "X-Auth-Token: <token>" https://rms.cn-north-4.myhuaweicloud.com/v1/resource-manager/domains/{domain_id}/resources
@@ -168,8 +168,8 @@ journalctl -u jiuwenswarm
 ### COC Execution Logs
 ```
 # Query execution logs via COC API
-# Use phase8_query_coc_status.py script
-python scripts/phase8_query_coc_status.py --uuid <execute_uuid>
+# Use query_coc_status.py script
+python scripts/query_coc_status.py --uuid <execute_uuid>
 ```
 
 ## Emergency Recovery

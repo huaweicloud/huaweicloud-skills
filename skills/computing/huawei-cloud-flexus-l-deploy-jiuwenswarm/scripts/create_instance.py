@@ -387,7 +387,7 @@ def main():
                                 print(f"  - Instance ID: {instance_info['instance_id']}")
                                 print(f"  - Public IP: {instance_info['public_ip']}")
                                 print(f"  - ECS Instance ID: {instance_info['ecs_instance_id']}")
-                            print("\nNext step: Run phase3_install_deps.py for COC remote dependency installation")
+                            print("\nNext step: Run install_deps.py for COC remote dependency installation")
                             sys.exit(0)
                         break
 
@@ -398,7 +398,7 @@ def main():
         sys.exit(1)
 
     print("\n[INFO] Instance creation request submitted, use RMS API to query instance status")
-    print("Next step: Run phase3_install_deps.py for COC remote dependency installation")
+    print("Next step: Run install_deps.py for COC remote dependency installation")
 
 if __name__ == "__main__":
     main()

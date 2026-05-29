@@ -239,7 +239,7 @@ def main():
     success = verify_deployment(instance_info)
 
     if success:
-        print("\nNext step: Run phase6_config_model.py to configure model parameters")
+        print("\nNext step: Run config_model.py to configure model parameters")
         sys.exit(0)
     else:
         print("\nVerification failed")

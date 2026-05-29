@@ -517,7 +517,7 @@ def main():
         json.dump(result, f, indent=2, ensure_ascii=False)
 
     print(f"\n[INFO] Configuration result saved to {output_path}")
-    print("\nNext step: Run phase7_config_channel.py to configure message channels")
+    print("\nNext step: Run config_channel.py to configure message channels")
 
 if __name__ == "__main__":
     main()
