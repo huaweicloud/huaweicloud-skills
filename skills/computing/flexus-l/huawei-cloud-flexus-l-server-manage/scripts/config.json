@@ -1,0 +1,26 @@
+[
+  {
+    "region": "cn-north-4",
+    "region_name": "华北-北京四"
+  },
+  {
+    "region": "cn-east-3",
+    "region_name": "华东-上海一"
+  },
+  {
+    "region": "cn-south-1",
+    "region_name": "华南-广州"
+  },
+  {
+    "region": "cn-southwest-2",
+    "region_name": "西南-贵阳一"
+  },
+  {
+    "region": "ap-southeast-1",
+    "region_name": "中国-香港"
+  },
+  {
+    "region": "ap-southeast-3",
+    "region_name": "亚太-新加坡"
+  }
+]
