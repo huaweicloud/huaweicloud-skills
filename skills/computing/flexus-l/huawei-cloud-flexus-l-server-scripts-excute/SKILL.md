@@ -1,0 +1,431 @@
+---
+name: huawei-cloud-flexus-l-server-scripts-excute
+description: "Based on Huawei Cloud COC (Cloud Operations Center) APIs for script management and remote execution. Supports creating custom scripts (Shell, Python, Bat) and batch execution on target host instances via UniAgent. Applicable to cloud operations automation and batch script deployment scenarios. Trigger keywords: L-instance, COC script, script management, script execution, cloud operations, custom script, batch execution; COC, script management, script execution, cloud operations (中文触发词：L实例执行脚本)."
+---
+
+# Huawei Cloud Flexus L Instance COC Skill
+
+## Overview
+
+### Architecture Diagram
+
+This skill is built on Huawei Cloud COC (Cloud Operations Center) service, involving the following cloud services and components:
+
+```
+User/Agent    │──────▶│   COC API   │──────▶│   UniAgent    │──────▶│  Flexus L Instance│
+(Skill caller)       (Cloud Ops Center)       (Proxy program)              (Target Host) 
+```
+
+**Component Description**:
+- **User/Agent**: Skill caller that triggers script management operations via natural language or API
+- **COC API**: Huawei Cloud COC (Cloud Operations Center) provides core capabilities including script management, execution scheduling, and status query
+- **UniAgent**: Agent program deployed on target hosts, responsible for receiving scripts and executing them locally
+- **Flexus L Instance**: Huawei Cloud Elastic Cloud Server, serving as the target host for script execution
+
+### Applicable Scenarios
+
+- **Batch Operations**: Execute the same script on multiple Flexus L instances (e.g., software installation, configuration updates)
+- **Automated Operations**: Periodically execute inspection scripts, log collection, health checks
+- **Emergency Response**: Quickly deploy emergency scripts to handle security incidents or system failures
+- **Application Deployment**: Batch deploy applications and update configuration files
+- **Data Processing**: Execute data processing tasks in parallel across multiple instances
+
+### Typical Use Cases
+
+1. "Create a Shell script to clean server logs"
+2. "Execute backup script on all L instances"
+3. "List my recently created scripts"
+4. "Execute Python script on specified L instance"
+5. "Create a script to batch install Nginx"
+
+### Trigger Keywords
+
+**Routing Keywords**: COC script, script management, script execution, cloud operations, custom script, batch execution; COC, script management, script execution, cloud operations.
+
+## Prerequisites
+
+### CLI Version Requirements and Verification Commands
+
+**COC SDK Version Requirement**: huaweicloudsdkcoc >= 3.1.0
+
+**Verification Commands**:
+```bash
+# Check current SDK version
+python -c "import huaweicloudsdkcoc; print(huaweicloudsdkcoc.__version__)"
+
+# Verify COC client availability
+python -c "from huaweicloudsdkcoc.v1 import CocClient; print('COC SDK version verification passed')"
+```
+
+### Authentication Configuration and Security Rules
+
+**Supported Authentication Methods**:
+
+1. **Command Line Parameters** (Recommended):
+```bash
+python {baseDir}/scripts/caller.py create --ak "your_access_key" --sk "your_secret_key" --region "cn-north-4"
+```
+
+2. **Interactive Input** (Testing):
+```bash
+python {baseDir}/scripts/caller.py create
+# Will prompt for AK/SK/region
+```
+
+**Security Rules**:
+- **No Hardcoded Credentials**: Never embed AK/SK directly in code or configuration files
+- **Principle of Least Privilege**: Grant only the minimum permissions required
+- **Regular Key Rotation**: Rotate AK/SK every 90 days
+- **Enable Key Rotation Alerts**: Set up expiration reminders in Huawei Cloud Console
+
+### IAM Permissions List
+
+This skill requires the following IAM permissions. For detailed information, refer to [IAM Policies Documentation](references/iam-policies.md):
+
+| Permission Category | Permission Name | Description |
+|---------------------|-----------------|-------------|
+| Script Management | `coc:script:create` | Create script |
+| Script Management | `coc:script:list` | List scripts |
+| Script Management | `coc:script:get` | Get script details |
+| Script Management | `coc:script:update` | Update script |
+| Script Management | `coc:script:delete` | Delete script |
+| Execution Management | `coc:execution:create` | Create execution task |
+| Execution Management | `coc:execution:list` | List execution tasks |
+| Execution Management | `coc:execution:get` | Get execution details |
+| Instance Management | `coc:instance:list` | List target instances |
+
+### Permission Failure Handling Flow
+
+**Insufficient Permission Error Handling**:
+
+1. **Error Identification**:
+```bash
+# Typical error message
+error: AccessDenied
+message: You do not have permission to perform this action.
+```
+
+2. **Troubleshooting Steps**:
+   - Verify AK/SK configuration
+   - Confirm user has required COC permissions
+   - Validate region configuration
+   - Check if IAM policy is active
+
+3. **Resolution**:
+   - Contact administrator for required permissions
+   - Confirm IAM policy is properly attached to user/role
+   - Wait for policy to take effect (typically 5-10 minutes)
+
+4. **Verification**:
+```bash
+# Re-execute to verify permissions
+python {baseDir}/scripts/caller.py list
+```
+
+## Core Commands
+
+### Script Management Commands
+
+**Create Script**: `python {baseDir}/scripts/caller.py create --ak "your_ak" --sk "your_sk" --name "backup_script" --type SHELL --content "echo 'Backup completed'" --description "Data backup script"`
+
+**View Script Details**: `python {baseDir}/scripts/caller.py show --ak "your_ak" --sk "your_sk" --script-uuid "SC202xxxxxxxx13701c4a8a62"`
+
+**List Scripts**: `python {baseDir}/scripts/caller.py list --ak "your_ak" --sk "your_sk" --page 1 --size 10`
+
+### Script Execution Commands
+
+**Execute Script**: `python {baseDir}/scripts/caller.py execute --ak "your_ak" --sk "your_sk" --script-uuid "SC202xxxxxxxx13701c4a8a62" --execute-user root --timeout 300`
+
+**Interactive Execution**: `python {baseDir}/scripts/caller.py execute --ak "your_ak" --sk "your_sk"`
+
+**Query Execution Result**: `python {baseDir}/scripts/caller.py query --ak "your_ak" --sk "your_sk" --execute-uuid "SCT202xxxxxxxx01af694bf"`
+
+## Parameter Reference
+
+### Global Parameters (All Commands)
+
+| Parameter | Description | Required | Default |
+|-----------|-------------|----------|---------|
+| --ak | Huawei Cloud Access Key | Yes | - |
+| --sk | Huawei Cloud Secret Key | Yes | - |
+| --region | COC Service Region | No | cn-north-4 |
+
+### create Command Parameters
+
+| Parameter | Description | Required | Default |
+|-----------|-------------|----------|---------|
+| --name | Script name | Yes | - |
+| --type | Script type (SHELL/PYTHON/BAT) | Yes | - |
+| --content | Script content | Yes | - |
+| --description | Script description | Yes | - |
+| --risk-level | Risk level (LOW/MEDIUM/HIGH) | No | LOW |
+| --version | Script version | No | 1.0.0 |
+
+### execute Command Parameters
+
+| Parameter | Description | Required | Default |
+|-----------|-------------|----------|---------|
+| --script-uuid | Script UUID | No | Most recent script |
+| --execute-user | Execute user | No | root |
+| --timeout | Timeout in seconds (5-1800) | No | 300 |
+| --success-rate | Success rate (0.01-100) | No | 1 |
+| --rotation-strategy | Rotation strategy (CONTINUE/PAUSE) | No | CONTINUE |
+
+### show Command Parameters
+
+| Parameter | Description | Required | Default |
+|-----------|-------------|----------|---------|
+| --script-uuid | Script UUID | Yes | - |
+
+### list Command Parameters
+
+| Parameter | Description | Required | Default |
+|-----------|-------------|----------|---------|
+| --page | Page number | No | 1 |
+| --size | Page size | No | 10 |
+
+### query Command Parameters
+
+| Parameter | Description | Required | Default |
+|-----------|-------------|----------|---------|
+| --execute-uuid | Execution task UUID | Yes | - |
+
+### SDK Installation
+
+Before creating or executing scripts for the first time, ensure the Huawei Cloud COC SDK dependencies are installed. Run from the skill directory (`skills/coc`):
+
+```bash
+pip install -r {baseDir}/requirements.txt
+```
+
+**Installation Notes**:
+- Installation may take a few minutes, please be patient
+- After successful installation, you can call the Python code in the `scripts` directory for script creation and execution
+- Use the following mirrors to install the SDK (second pip mirror, preferred):
+  ```bash
+  pip install -r {baseDir}/requirements.txt -i https://pypi.org/project/huaweicloudsdkcoc/
+  ```
+  or
+  ```bash
+  pip install -r {baseDir}/requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple/
+  ```
+
+**Installation Verification**:
+```bash
+python -c "from huaweicloudsdkcoc.v1 import CocClient; print('SDK installed successfully!')"
+```
+
+## Workflow
+
+### Basic Workflow
+
+1. **Create a script**:
+```bash
+python {baseDir}/scripts/caller.py create --ak "your_ak" --sk "your_sk" --name "test_script" --type SHELL --content "echo hello" --description "Test script"
+```
+
+2. **Execute a script**:
+```bash
+python {baseDir}/scripts/caller.py execute --ak "your_ak" --sk "your_sk" --script-uuid "SC202xxxxxxxx13701c4a8a62" --execute-user root --timeout 300 --success-rate 100
+```
+
+> **Tip**: Refer to the "Parameter Reference" section for complete parameter documentation.
+
+### Interactive Mode
+
+When executing scripts, the following information will be requested interactively (L-instance only):
+
+**Required Parameters**:
+- L-instance resource ID (resource_id)
+- L-instance region (region_id)
+
+**Optional Parameters** (press Enter to use default values):
+- Script UUID (default uses the most recently created script)
+- Execute user (default root)
+- Timeout (default 300 seconds)
+- Success rate (default 1)
+- Rotation strategy (default CONTINUE)
+
+## Output Format
+
+### List Scripts Output
+
+```
+Found 25 scripts (Page 1, 10 per page):
+--------------------------------------------------------------------------------
+No.    Script UUID                    Name                 Type        Risk Level
+--------------------------------------------------------------------------------
+1       SC202xxxxxxxx13701c4a8a62     backup_script        SHELL       LOW
+2       SC202xxxxxxxx10302201d5b9e78     deploy_script        SHELL       HIGH
+3       SC202xxxxxxxx13701c4a8a62     monitor_script       PYTHON      MEDIUM
+--------------------------------------------------------------------------------
+```
+
+### JSON Output Format
+
+**Create Script Success Response**:
+```json
+{
+  "ok": true,
+  "text": "Script created successfully: SC202xxxxxxxx13701c4a8a62",
+  "result": {
+    "data": "SC202xxxxxxxx13701c4a8a62"
+  },
+  "error": null
+}
+```
+
+**Execute Script Success Response**:
+```json
+{
+  "ok": true,
+  "text": "Script execution started: SCT202xxxxxxxx01af694bf",
+  "result": {
+    "data": "SCT202xxxxxxxx01af694bf"
+  },
+  "error": null
+}
+```
+
+**Query Execution Result Response**:
+```json
+{
+  "data": {
+    "batch_index": 1,
+    "total_instances": 1,
+    "execute_instances": [
+      {
+        "id": 40304358,
+        "cmd_uuid": "2exxxxxxxxxxxxxx6b5",
+        "job_sign": null,
+        "target_instance": {
+          "resource_id": "6axxxxxxxxxxxxxxx9e",
+          "agent_sn": "e5xxxxxxxxxxxxxxxxxx77",
+          "agent_status": null,
+          "agent_version": "1.1.8",
+          "region_id": "cn-north-4",
+          "project_id": null,
+          "properties": {
+            "host_name": "dify-test-001",
+            "fixed_ip": null,
+            "floating_ip": null,
+            "region_id": "cn-north-4",
+            "zone_id": null,
+            "application": null,
+            "group": null,
+            "project_id": null
+          },
+          "custom_attributes": null,
+          "provider": "hcss",
+          "type": "l-instance"
+        },
+        "gmt_created": 1779934038727,
+        "gmt_finished": 1779934107670,
+        "execute_costs": 68943,
+        "status": "ABNORMAL",
+        "message": "Reading package lists...\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n\nBuilding dependency tree...\nReading state information...\nexpect is already the newest version (5.45.4-2build1).\n\n[SYSTEM INFO] script job execute timeout."
+      }
+    ]
+  }
+}
+```
+
+**Status Description**:
+- `FINISHED` - Execution successful
+- `ABNORMAL` - Execution failed
+- `PROCESSING`/`READY` - In progress
+
+## Validation Methods
+
+### 1. SDK Installation Verification
+```bash
+python -c "from huaweicloudsdkcoc.v1 import CocClient; print('SDK installed successfully!')"
+```
+
+### 2. Create Script Verification
+```bash
+python {baseDir}/scripts/caller.py create --ak "your_ak" --sk "your_sk" --name "test_script" --type SHELL --content "echo hello" --description "Test script" --non-interactive
+# Expected output: Script UUID returned
+```
+
+### 3. Execute Script Verification
+```bash
+python {baseDir}/scripts/caller.py execute --ak "your_ak" --sk "your_sk" --script-uuid "SC202xxxxxxxx13701c4a8a62" --execute-user root --timeout 300 --non-interactive
+# Expected output: Execution task ID returned
+```
+
+### 4. Smoke Test
+```bash
+python {baseDir}/scripts/smoke_test.py
+# This will test the configuration and optional API connectivity
+```
+
+## Notes
+
+### General Notes
+- **Script execution required parameters** - Need to provide L-instance resource_id and region_id
+- **Script UUID auto-retrieval** - If not specified, will automatically use the most recently created script
+- **Script type must match** - SHELL/PYTHON/BAT
+- **Risk level must be set correctly** - LOW/MEDIUM/HIGH
+- **Execution results need polling** - Execute API returns task ID, need to query execution status separately
+
+## Best Practices
+### Script Management Best Practices
+
+1. **Script Reusability**: Create generic scripts with configurable parameters for maximum reusability
+2. **Error Handling**: Always include error handling and logging in your scripts
+3. **Idempotency**: Design scripts to be idempotent (can be safely run multiple times)
+4. **Script Versioning**: Maintain version control for important scripts
+5. **Resource Tagging**: Use consistent naming conventions and tags for scripts
+
+### Execution Best Practices
+
+1. **Test First**: Always test scripts on a single L-instance before batch execution
+2. **Risk Assessment**: Set appropriate risk levels for scripts (LOW/MEDIUM/HIGH)
+3. **Scheduling**: Use scheduled execution for periodic tasks
+4. **Monitoring**: Monitor execution results and set up alerts for failures
+
+### Region Concepts
+
+COC involves two different region concepts:
+
+**1. COC Service Region** (API endpoint region):
+- cn-north-4 (China North-Beijing-4, default)
+- ap-southeast-3 (APAC-Singapore)
+- eu-west-101 (Europe-Frankfurt)
+
+**2. Target Instance Region** (where the L-instance is located):
+- Can be any Huawei Cloud global region
+- Interactive input supports both region ID and region name
+
+> **Important**: COC service region and target instance region can be different.
+
+### Error Handling
+
+**Authentication Failed (403)**:
+```
+error: Authentication failed
+```
+- AK/SK is invalid, reconfigure with correct credentials
+
+**API Quota Exceeded (429)**:
+```
+error: API quota exceeded
+```
+- API quota exhausted, wait or upgrade
+
+**Parameter Error (400)**:
+```
+error: Invalid parameter
+```
+- Check if request parameters are correct
+
+### Security Notes
+
+- **AK/SK Security**: AK/SK are important credentials for accessing Huawei Cloud APIs. Please keep them safe and do not share them with others.
+- **Credential Obtaining**: Log in to Huawei Cloud Management Console → My Credentials → Access Keys → New Access Key
+
+## Reference Documentation
+
+- [IAM Policy Configuration](references/iam-policies.md)
+- [Project Dependencies Configuration](scripts/pyproject.toml)
