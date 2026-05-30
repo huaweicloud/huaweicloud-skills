@@ -57,7 +57,7 @@ After `terraform plan` succeeds, the agent must popup a confirmation dialog for 
 **Workflow:**
 
 1. Show the terraform plan output to the user
-2. **Do NOT mention or reference AK/SK when showing the plan output**
+2. **Do NOT mention or reference HW_ACCESS_KEY/HW_SECRET_KEY when showing the plan output**
 3. Popup a confirmation dialog asking: "Do you want to execute terraform apply to create these resources?"
 4. Based on user selection:
    - If user confirms: execute `terraform apply`
@@ -121,10 +121,19 @@ Never ask the user to provide sensitive information directly in the conversation
 
 **Other sensitive information (passwords, tokens, database credentials, etc.):**
 
-- Recommend user to configure in `terraform.tfvars` file
-- Provide placeholder values in generated terraform.tfvars (e.g., "CHANGE_ME", "YOUR_PASSWORD_HERE")
-- Remind user to edit terraform.tfvars with their actual values before running terraform apply
+- Generate random strong passwords for all sensitive information based on **Strong password characteristics** in `terraform.tfvars` file
+- Inform the user of all generated passwords and credentials
+- Remind user they can edit terraform.tfvars with their own values if needed before running terraform apply
 - Never ask for actual values in conversation
+
+**Strong password characteristics:**
+
+- 16 characters minimum length
+- Contains uppercase letters (A-Z)
+- Contains lowercase letters (a-z)
+- Contains digits (0-9)
+- Contains special characters (!@#$%^&*)
+- Randomly generated, no predictable patterns
 
 **Allowed approach:**
 
@@ -140,13 +149,13 @@ Never ask the user to provide sensitive information directly in the conversation
 
 ## Do not guide AK/SK environment variable configuration
 
-**CRITICAL:** Never ask, prompt, or guide the user to configure AK/SK in environment variables.
+**CRITICAL:** Never ask, prompt, or guide the user to configure or ensure AK/SK in environment variables.
 
 **Rules:**
 
 - Never ask "Have you configured HW_ACCESS_KEY and HW_SECRET_KEY?"
 - Never instruct "Please set HW_ACCESS_KEY and HW_SECRET_KEY environment variables"
-- Never show examples of how to export/set AK/SK environment variables
+- Never show examples of how to export/set HW_ACCESS_KEY/HW_SECRET_KEY environment variables
 - Never wait for user confirmation about credential configuration
 - Assume credentials are already configured by the user
 - Proceed directly to validation without any credential-related prompts

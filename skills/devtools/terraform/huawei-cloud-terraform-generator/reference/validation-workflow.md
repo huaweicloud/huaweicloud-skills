@@ -40,9 +40,9 @@ Global cache:     ~/.terraform.d/providers/registry.terraform.io/huaweicloud/hua
    - If version < 1.90.0: Proceed to download latest version
 2. If provider not found in any location: Proceed to download
 
-## Download provider from Huawei Cloud mirror
+## Download provider from Huawei Cloud mirror (Do not try to download provider from Github first)
 
-Attempt to download the latest (ensure the downloaded provider version >= 1.90.0) huaweicloud provider from the Huawei Cloud mirror.
+Before starting validation workflow, attempt to download the latest (ensure the downloaded provider version >= 1.90.0) huaweicloud provider from the Huawei Cloud mirror.
 
 **Mirror URL:** `https://mirrors.huaweicloud.com/terraform/`
 
