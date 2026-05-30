@@ -13,6 +13,7 @@ Generate files in this exact order:
 5. `README.md`
 
 **Note:** Do NOT generate:
+
 - `outputs.tf`
 - any `output` blocks
 - additional `.tf` files beyond the required structure
@@ -100,17 +101,45 @@ Rules:
 - include region
 - include all required user-facing values
 - reflect the confirmed plan where applicable
-- never include real credentials in examples
 - never include access_key and secret_key
 
-**Sensitive information handling:**
-For non-AK/SK sensitive fields (passwords, tokens, database credentials, etc.):
+**Sensitive Information Handling:**
 
-- Use placeholder values (e.g., "CHANGE_ME", "YOUR_PASSWORD_HERE", "REQUIRED")
-- Add comments instructing user to replace with actual values
-- Example: `db_password = "CHANGE_ME"  # Replace with your actual database password`
+For all sensitive information (passwords, database credentials, API tokens, etc.), automatically generate random strong passwords:
 
-Remind user to review and update terraform.tfvars before running terraform apply.
+1. **Generate strong passwords** for each sensitive field:
+   - 16 characters minimum length
+   - Contains uppercase letters (A-Z), lowercase letters (a-z), digits (0-9), special characters (!@#$%^&*)
+   - Use cryptographically secure random generation
+
+2. **Write to terraform.tfvars**:
+   - Include the generated passwords in terraform.tfvars
+   - Use descriptive variable names (e.g., `db_password`, `admin_password`, `api_token`)
+
+3. **Inform the user**:
+   - Display all generated passwords and credentials to the user
+   - Remind user they can edit terraform.tfvars with their own values if needed
+
+**Example terraform.tfvars with generated passwords:**
+
+```hcl
+region = "cn-north-4"
+
+# Generated strong passwords - you can change these if needed
+db_password    = "Kx9#mP2$vL7@nQ4!"
+admin_password = "Rt5^wY8*bF3#zC6@"
+api_token      = "Hj2&mN9$kB5!pV8#"
+```
+
+**Strong password generation example (Python):**
+
+```python
+import secrets
+import string
+
+chars = string.ascii_letters + string.digits + '!@#$%^&*'
+password = ''.join(secrets.choice(chars) for _ in range(16))
+```
 
 ## README.md
 
@@ -125,7 +154,9 @@ README.md must include:
 - reminder not to commit secrets
 - instructions for running terraform apply
 - note that AK/SK should be configured via environment variables (HW_ACCESS_KEY, HW_SECRET_KEY) without providing setup examples
-- instructions to review and update terraform.tfvars with actual values for non-AK/SK sensitive fields (passwords, tokens, etc.)
+- note that all sensitive information (passwords, database credentials, API tokens, etc.) are automatically set to random strong passwords in terraform.tfvars
+- display of all generated passwords and credentials
+- reminder that user can edit terraform.tfvars with their own values if needed
 
 ## Use reliable resource information during planning
 
