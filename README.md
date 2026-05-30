@@ -19,7 +19,7 @@
 
 ## Overview
 
-This repository contains officially maintained Huawei Cloud Agent Skills. Skills are organized by product domain in different directories. Each Skill directory contains all files required to run that skill, allowing developers to use these skills safely and efficiently.
+This repository contains officially maintained Huawei Cloud Agent Skills. Skills are organized by product domain or functional domain in different directories. Each Skill directory contains all files required to run that skill. All skills have been tested and verified and are compatible with mainstream AI Agents, allowing developers to use them safely and efficiently.
 
 ## Skills List
 
@@ -42,7 +42,10 @@ skill-name/        # Skill package root directory
 
 ```bash
 # Install a single Skill
-npx skills add https://github.com/huaweicloud/huaweicloud-skills --skill <skill-name>
+npx skills add huaweicloud/huaweicloud-skills --skill <skill-name>
+
+# Install all Skills
+npx skills add huaweicloud/huaweicloud-skills
 ```
 
 ### Manual Installation
