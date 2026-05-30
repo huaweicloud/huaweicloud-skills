@@ -43,7 +43,7 @@ Important rules:
 - they must come from a reliable source, such as a trusted resource lookup channel or explicit user input
 - users should not be expected to know exact product models or specification names in advance
 - when exact values are not yet confirmed, present them as pending choices rather than pretending they are validated
-- do not ask user anything about AK/SK configuration
+- do not ask user anything about HW_ACCESS_KEY/HW_SECRET_KEY configuration
 
 Do not ask the user to provide every parameter manually. Instead:
 
@@ -65,11 +65,13 @@ You must first infer the intended Huawei Cloud architecture from the user's obje
 ### 4.2 Determine the resource set
 
 Based on the user's goal, identify:
+
 - which resources need to be created
 - which existing resources may be reused
 - what dependencies exist between the resources
 
 For example:
+
 - a simple public website may require VPC, subnet, security group, ECS, and EIP
 - a managed database deployment may require VPC, subnet, security group, and RDS
 - a scalable public service may require VPC, subnet, security group, ECS or AS, ELB, and public access
@@ -77,12 +79,14 @@ For example:
 ### 4.3 Propose a resource plan for confirmation
 
 Before generating Terraform, propose a concrete resource plan for the user to confirm following the rules in the Parameter Confirmation section.
+When proposing the plan, **do not** ask any sensitive information from the user
 
 ### 4.4 Generate Terraform after confirmation
 
 Once the user confirms the resource plan, generate the Terraform files following the required structure and style rules.
 
 **Required files (all must be generated):**
+
 - `providers.tf`
 - `variables.tf`
 - `main.tf`
@@ -90,6 +94,7 @@ Once the user confirms the resource plan, generate the Terraform files following
 - `README.md`
 
 **Critical:**
+
 - Generate all 5 required files before reporting completion
 - Verify each file exists on disk after writing
 - Only report "Terraform files generated successfully" after all files are confirmed to exist
@@ -100,19 +105,23 @@ See `reference/terraform-generation-guide.md` for detailed file structure and co
 ### 4.5 Verify credentials configuration
 
 Before proceeding to validation, verify that Huawei Cloud credentials are configured via environment variables:
-- **Do NOT ask or guide the user to configure AK/SK in environment variables**
+
+- **Do NOT ask or guide the user to configure HW_ACCESS_KEY/HW_SECRET_KEY in environment variables**
 - Assume the user has already configured credentials appropriately
 - Proceed directly to validation without prompting about credential setup
+- If Huawei Cloud credentials are configured, tell user the information
 
 ### 4.6 Validate and fix the generated configuration
 
 Run validation directly:
+
 - `terraform fmt -recursive`
 - `terraform init`
 - `terraform validate`
 - `terraform plan`
 
 If any step fails:
+
 - inspect the exact error
 - identify the real cause
 - fix the generated configuration or required inputs
@@ -123,8 +132,9 @@ See `reference/validation-workflow.md` for detailed validation steps.
 ### 4.7 Execute terraform apply with user confirmation
 
 After `terraform plan` succeeds:
+
 - Show the plan output to the user
-- **Do NOT mention or reference AK/SK in the plan output summary**
+- Do not mention or reference HW_ACCESS_KEY/HW_SECRET_KEY environment variables in the plan output summary
 - Popup a confirmation dialog for user to confirm execution
 - If user confirms: execute `terraform apply`
 - If user declines: stop and inform the user they can manually run apply later
@@ -133,6 +143,7 @@ After `terraform plan` succeeds:
 ### 4.8 Apply error repair loop
 
 If `terraform apply` fails:
+
 - Inspect the exact error output
 - Identify the root cause
 - Fix the Terraform configuration or inputs accordingly
@@ -144,6 +155,7 @@ If `terraform apply` fails:
 ### 4.9 Post-apply resource verification
 
 After `terraform apply` succeeds:
+
 - Verify that the deployed cloud resources match the resource plan confirmed by the user
 - Check key resource attributes (types, specifications, names, counts, dependencies) against the confirmed plan
 - If discrepancies are found between deployed resources and the confirmed plan:
@@ -164,7 +176,7 @@ Key principles:
 - Do not generate outputs
 - Validate security group port numbers (no port 0)
 - Do not request sensitive information
-- Do not guide AK/SK environment variable configuration
+- Do not mention anything about HW_ACCESS_KEY/HW_SECRET_KEY environment variable configuration
 
 ## 6. Terraform Generation Rules
 
@@ -182,6 +194,7 @@ Follow these principles when generating Terraform:
 ### 6.2 File structure and content
 
 See `reference/terraform-generation-guide.md` for detailed guidance on:
+
 - Fixed file structure
 - providers.tf requirements
 - variables.tf requirements
@@ -194,9 +207,10 @@ See `reference/terraform-generation-guide.md` for detailed guidance on:
 ## 7. Environment Preparation and Validation
 
 See `reference/validation-workflow.md` for detailed guidance on:
+
 - Ensuring Terraform is available
 - Checking local provider cache version
-- Downloading provider from Huawei Cloud mirror
+- Perfer to download provider from Huawei Cloud mirror
 - Handling provider download failure
 - Validation order
 - Authentication handling
@@ -212,6 +226,7 @@ Use the reference materials, templates, examples, and helper utilities already i
 If the package contains service-specific reference documents, consult them when the user's request involves that service.
 
 These references may provide:
+
 - recommended architecture patterns
 - required resources
 - dependency design
@@ -225,9 +240,11 @@ Typical services may include: VPC, ECS, RDS, CCE, ELB, OBS, EVS, NAT, VPN and ot
 If the package already contains an example or template close to the user's target scenario, use it as a starting point instead of inventing structure.
 
 Example:
+
 - `assets/vpc/basic` may serve as a complete working example for a basic VPC scenario
 
 When using an existing example or template:
+
 - preserve the useful structure
 - adapt it to the confirmed plan
 - remove resources that are not needed
@@ -238,6 +255,7 @@ When using an existing example or template:
 When the user describes a business goal instead of explicit resource names, map the goal to the most relevant service references.
 
 Examples:
+
 - "deploy a website" may map to VPC + ECS + EIP, and possibly ELB or OBS
 - "create a managed database" may map to RDS with related network resources
 - "build a Kubernetes environment" may map to CCE with required networking and node configuration
@@ -247,6 +265,7 @@ Examples:
 References and templates are guides, not mandatory full blueprints.
 
 When using them:
+
 - keep the final Terraform aligned with the user-confirmed plan
 - follow the Minimum Viable Configuration principle
 - avoid adding optional resources unless the user actually needs them
@@ -257,6 +276,7 @@ When using them:
 A matching template or example does not guarantee correctness for the current request.
 
 Always:
+
 - check whether the template matches the confirmed plan
 - verify that specifications and dependencies are still appropriate
 - adjust variables, data sources, and resource arguments as needed
