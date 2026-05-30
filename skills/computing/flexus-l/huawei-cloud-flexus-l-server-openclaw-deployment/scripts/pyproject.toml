@@ -1,0 +1,11 @@
+[project]
+name = "huawei-cloud-flexus-l-server-openclaw-deployment"
+version = "1.0.0"
+dependencies = [
+    "requests>=2.31.0",
+    "huaweicloudsdkcore>=3.1.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
