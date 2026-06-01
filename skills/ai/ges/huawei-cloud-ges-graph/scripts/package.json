@@ -1,0 +1,18 @@
+{
+  "name": "ges-graph-skill",
+  "version": "1.0.0",
+  "description": "华为云GES图引擎SDK for Node.js",
+  "main": "ges_graph_skill.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "huawei",
+    "GES",
+    "graph",
+    "database",
+    "sdk"
+  ],
+  "author": "",
+  "license": "MIT"
+}
