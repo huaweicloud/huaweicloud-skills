@@ -7,7 +7,7 @@ graph_name,your_graph_name
 graph_id,your_graph_id
 
 # IAM认证配置
-iam_url,https://iam.cn-north-7.ulanqab.huawei.com/v3/auth/tokens
+iam_url,https://iam.cn-north-4.myhuaweicloud.com/v3/auth/tokens
 region,cn-north-7
 # AKSK/用户名密码认证 二选一
 # AKSK认证
