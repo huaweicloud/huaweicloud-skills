@@ -84,18 +84,17 @@ Config file path: `.env/ges_env.csv`
 | username | Username | Conditional** | your_username |
 | password | Password | Conditional** | your_password |
 | domain_name | Domain name | Conditional** | your_domain_name |
-| region | Region | Yes | cn-north-7 |
+| region | Region | Yes | cn-north-4 |
 
 > * **access_key/secret_key required** for AKSK authentication.
 > ** **username/password/domain_name conditionally required** when AKSK is not available.
 
 ### IAM URLs by Region
 
-| Region | Region Value | IAM URL |
-|--------|--------------|---------|
-| Ulanqab 3 | cn-north-7 | https://iam.cn-north-7.ulanqab.huawei.com/v3/auth/tokens |
-| Ulanqab 1 | cn-north-5 | https://iam.cn-north-5.myhuaweicloud.com/v3/auth/tokens |
-| Beijing 4 | cn-north-4 | https://iam.cn-north-4.myhuaweicloud.com/v3/auth/tokens |## Token Acquisition
+| Region     | URL                                                 | protocol |
+|------------|-----------------------------------------------------|----------|
+| cn-north-4 | iam.cn-north-4.myhuaweicloud.com/v3/auth/tokens     | HTTPS |
+| ap-southeast-1 | iam.ap-southeast-1.myhuaweicloud.com/v3/auth/tokens | HTTPS |
 
 Three methods are supported (priority from high to low):
 1. Environment variable `GES_TOKEN`
