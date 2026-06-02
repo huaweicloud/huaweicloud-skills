@@ -46,10 +46,11 @@ Four types of billing questions and routing: see `references/semantic/catalog.ym
 |Gather Evidence|Minimal read-only queries within `evidence_boundary`; first query copy from `related-commands.md` current entry `####` template|`billing-ontology.yml` + `related-commands.md`|No `--help` to discover operations; no self-constructed JSON; no full detail list first|
 |Deliver|Conclusion first then facts; conclusion must be reducible to quadruple|This document "Response Requirements"|No sending command process; no transferring investigation burden|
 
-Two defaults only valid during evidence gathering phase:
+Two defaults and one fixed config only valid during evidence gathering phase:
 
 - **Reconciliation** — When user has expressed read-only intent, default to current profile and current (or given) billing period, gather evidence per `related-commands.md` `reconciliation` order; ask one ID at a time only when blocking ID is missing.
 - **Enterprise / Partner** — When ontology requires `customer_id` or other prerequisite IDs, first provide read-only acquisition path or one clarification, then make responsibility judgment.
+- **BSS Endpoint** — All `hcloud BSS` calls require `--cli-region=cn-north-1`; no substitution with profile or other regions. [Fixed config, non-adjustable]
 
 ## Hard Constraints (Non-Negotiable)
 

@@ -1,6 +1,6 @@
 # Command Contract Appendix
 
-This document only retains operation contracts: purpose, required fields, templates, and limits. Routing see `semantic/catalog.yml` (`required_context` + `triggers`), semantic boundary see `semantic/billing-ontology.yml`.
+This document only retains operation contracts: purpose, required fields, templates, and limits. Routing see `semantic/catalog.yml` (`required_context`; `triggers` as auxiliary, full triggers/refusal see `SKILL.md`), semantic boundary see `semantic/billing-ontology.yml` entity `evidence_boundary`.
 
 ## Command Format Standard
 

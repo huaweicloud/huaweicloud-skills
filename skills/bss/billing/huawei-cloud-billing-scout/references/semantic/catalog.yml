@@ -1,62 +1,51 @@
 name: HuaweiCloudBillingSemanticCatalog
 type: semantic_catalog
-description: 薄路由；按 scope/time/money_basis 映射到 billing-ontology.yml 实体。
-provider_gate:
-  required_signal: 华为云 / Huawei Cloud / BSS / KooCLI / 当前 hcloud profile
-  rule: 用户表述未含上述信号且无法从对话确定为当前华为云账号时，先一条澄清确认，禁直接执行 BSS 查询；其他云厂商账务不在范围。
-workflow:
-  - 校验 provider_gate；不满足先澄清，不路由
-  - 解析 scope、time、money_basis，匹配 entry_point（triggers 仅作辅助提示）
-  - 路由 ontology_entities 并只读取证
-  - 输出事实表、小结与必要下一步
+description: 薄路由；scope/time/money_basis → ontology_entities。provider_gate、workflow、拒答、触发词补全归 SKILL.md。
+coverage:
+  expected_query_operations: 53
+  source_version: KooCLI 7.2.2
 entry_points:
   balance_and_debt:
-    process: account_snapshot
     required_context:
       scope: [current_profile]
       time: [point_in_time]
       money_basis: [outstanding, billed]
-    triggers: [华为云余额, 华为云欠费, 华为云账户余额, 华为云可用额度, 华为云储值卡]
+    triggers: [华为云余额, 华为云欠费]
     ontology_entities: [AccountBalance, AccountChangeRecord, StoredValueCard]
   monthly_spend:
-    process: periodic_spend
     required_context:
       scope: [current_profile]
       time: [bill_cycle]
       money_basis: [billed, amortized]
-    triggers: [华为云本月花费, 华为云上月花费, 华为云月度汇总, 华为云服务排行, 华为云企业项目费用]
+    triggers: [华为云本月花费, 华为云月度汇总]
     ontology_entities: [MonthlyBillSummary, CostAnalysis, AmortizedCost]
   charge_attribution:
-    process: charge_attribution
     required_context:
       scope: [current_profile]
       time: [bill_cycle, date_range]
       money_basis: [billed]
-    triggers: [华为云扣费原因, 华为云为什么扣费, 华为云一直扣费, 华为云删除后扣费, 华为云哪个资源在扣费]
+    triggers: [华为云扣费原因, 华为云哪个资源在扣费]
     ontology_entities: [ResourceBillRecord, ResourceBillDetail, OrderEvidence]
   reconciliation:
-    process: reconciliation
     required_context:
       scope: [current_profile]
       time: [bill_cycle]
       money_basis: [billed, paid]
-    triggers: [华为云账单对账, 华为云账务对账, 华为云导出对不上, 华为云汇总和明细不一致, 华为云订单和消费对不上]
+    triggers: [华为云账单对账, 华为云汇总和明细不一致]
     ontology_entities: [BillingStatement, MonthlyBillSummary, ResourceBillDetail, OrderEvidence]
   entitlement_and_deduction:
-    process: entitlement
     required_context:
       scope: [current_profile]
       time: [bill_cycle, point_in_time]
       money_basis: [billed, paid]
-    triggers: [华为云资源包, 华为云优惠券, 华为云券额度, 华为云费用抵扣, 华为云没抵扣]
+    triggers: [华为云资源包, 华为云优惠券]
     ontology_entities: [FreeResourcePackage, CouponChangeRecord, CouponQuota, StoredValueCard]
   account_scope:
-    process: multi_account
     required_context:
       scope: [enterprise, partner, sub_customer]
       time: [bill_cycle, point_in_time]
       money_basis: [billed, outstanding]
-    triggers: [华为云企业主账号, 华为云子账号账单, 华为云伙伴账务, 华为云代售客户余额, 华为云客户账单, 华为云调账记录]
+    triggers: [华为云企业主账号, 华为云伙伴账务]
     ontology_entities:
       - EnterpriseAndPartnerContext
       - EnterpriseAccountContext
@@ -64,18 +53,9 @@ entry_points:
       - PartnerAccountContext
       - PartnerBilling
   reference_dimensions:
-    process: reference_lookup
     required_context:
       scope: [current_profile]
       time: [not_applicable]
       money_basis: [not_applicable]
-    triggers: [华为云服务编码, 华为云资源类型, 华为云用量类型, 华为云计量单位, 华为云地域字典]
+    triggers: [华为云服务编码, 华为云计量单位]
     ontology_entities: [ReferenceDimensions]
-out_of_scope:
-  refuse_examples:
-    - 价格试算 / 续订报价 / 折扣策略：由控制台或销售侧定价工具处理，不在本只读账务范围。
-    - 实名认证审核结果：由控制台账号中心处理，不在本只读账务范围。
-    - 非华为云账务（AWS / Azure / 阿里云等）：仅说明超出范围，不取证。
-coverage:
-  expected_query_operations: 53
-  source_version: KooCLI 7.2.2
