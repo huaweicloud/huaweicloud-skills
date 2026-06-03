@@ -39,6 +39,8 @@ except ImportError as e:
 
 from urllib.parse import urlparse
 
+from config import REGIONS
+
 
 # ============================================================================
 # Dynamic Data Fetching
@@ -119,16 +121,6 @@ def get_region_name_by_id(region_id: str) -> Optional[str]:
 # Spec Query Functions
 # ============================================================================
 
-# Region to short name mapping
-REGION_MAP = {
-    "cn-north-4": "beijing",
-    "ap-southeast-1": "hongkong",
-    "cn-southwest-2": "guizhou",
-    "cn-south-1": "guangzhou",
-    "cn-east-3": "shanghai",
-    "ap-southeast-3": "singapore",
-}
-
 
 def get_available_images(region: str) -> Dict[str, Dict]:
     """
@@ -143,7 +135,7 @@ def get_available_images(region: str) -> Dict[str, Dict]:
     system_images = fetch_specs_data("images")
     
     result = {}
-    region_short = REGION_MAP.get(region, "beijing")
+    region_short = REGIONS.get(region, {}).get("short", "beijing")
     
     for img_name, img_info in system_images.items():
         region_data = img_info.get(region_short, {})
@@ -168,7 +160,7 @@ def get_available_specs(region: str, image_name: str) -> List[str]:
     """
     system_images = fetch_specs_data("images")
     
-    region_short = REGION_MAP.get(region, "beijing")
+    region_short = REGIONS.get(region, {}).get("short", "beijing")
     
     if image_name in system_images:
         return system_images[image_name].get(region_short, {}).get("specs", [])
@@ -208,7 +200,7 @@ def find_matching_spec(region: str, cpu: int, memory: int, os_type: str = "linux
     spec_defs = data.get("spec_definitions", {})
     system_images = data.get("system_images", {})
     
-    region_short = REGION_MAP.get(region, "beijing")
+    region_short = REGIONS.get(region, {}).get("short", "beijing")
     
     # If image is specified, search from that image's available specs first
     if image_name and image_name in system_images:
@@ -688,7 +680,7 @@ def show_unsubscribe_policy():
     print()
     print("[Unsubscribe Types]")
     print()
-    print("Type 1: Unsubscribe resource and renewal period")
+    print("Type 1: Unsubscribe resource and its renewed periods")
     print("  - Effect: Resource stops and releases immediately")
     print("  - Refund: Proportional refund based on remaining time")
     print()
