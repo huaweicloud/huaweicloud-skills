@@ -69,6 +69,21 @@ variable "region" {
 }
 ```
 
+**Huawei Cloud Region and Project Name Mapping:**
+
+| Region Code | Project Name |
+|-------------|--------------|
+| cn-north-1 | 华北-北京一 |
+| cn-north-4 | 华北-北京四 |
+| cn-north-9 | 华北-乌兰察布一 |
+| cn-east-2 | 华东-上海二 |
+| cn-east-3 | 华东-上海一 |
+| cn-south-1 | 华南-广州 |
+| cn-south-2 | 华南-深圳 |
+| cn-southwest-2 | 西南-贵阳一 |
+| cn-northeast-1 | 东北-大连 |
+| ap-southeast-1 | 中国-香港 |
+
 Use variables only for user-configurable values, such as:
 
 - names
