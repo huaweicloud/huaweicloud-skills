@@ -1,0 +1,644 @@
+﻿{
+    "repo":  "developer-skill/huaweicloud-skills",
+    "platform":  "gitcode",
+    "branch":  "master",
+    "generated_at":  "2026-06-02T12:47:30Z",
+    "total_skills":  37,
+    "skills_with_descriptions":  37,
+    "skills_with_triggers":  20,
+    "categories":  [
+                       "ai",
+                       "bss",
+                       "computing",
+                       "container",
+                       "devtools",
+                       "monitoring",
+                       "network",
+                       "security",
+                       "solution",
+                       "storage"
+                   ],
+    "skills":  [
+                   {
+                       "name":  "huawei-cloud-ges-graph",
+                       "category":  "ai",
+                       "service":  "ges",
+                       "description":  "Provides access guide for Huawei Cloud Graph Database GES service.\nCovers Cypher queries, GQL queries, schema/label management,\nsummary info queries, graph data editing and more. Use this skill when users\nwant to operate Huawei Cloud graph database GES service via terminal.",
+                       "triggers":  [
+                                        "Graph Database",
+                                        "图数据库",
+                                        "Cypher查询",
+                                        "GES图",
+                                        "图引擎",
+                                        "使用Cypher查一下图数据库",
+                                        "华为云图引擎",
+                                        "操作图数据库"
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-maas-tokens-usage",
+                       "category":  "ai",
+                       "service":  "maas",
+                       "description":  "Query Huawei Cloud MaaS (Model as a Service) tokens usage statistics, including total tokens, prompt tokens, completion tokens, total requests, and total errors. Supports preset service, my service, and custom endpoint with time range queries (last 7/14/30 days or custom). Data source is MaaS ShowStatistics API, consistent with console.\nUse this skill when the user wants to: (1) query MaaS token consumption statistics, (2) check MaaS service request counts and error rates, (3) analyze token usage for preset service or my service, (4) monitor MaaS usage over a specific time period.\nTrigger: user mentions \"MaaS\", \"Model as a Service\", \"tokens usage\", \"token consumption\", \"request count\", \"error count\", \"MaaS usage\", \"preset service usage\", \"completion tokens\", \"prompt tokens\", \"MaaS statistics\", \"模型服务\", \"令牌用量\", \"token统计\", \"token用量\", \"词元用量\", \"请求次数\", \"MaaS监控\", \"华为云MaaS\"",
+                       "triggers":  [
+                                        "user mentions \"MaaS",
+                                        "Model as a Service",
+                                        "tokens usage",
+                                        "token consumption",
+                                        "request count",
+                                        "error count",
+                                        "MaaS usage",
+                                        "preset service usage",
+                                        "completion tokens",
+                                        "prompt tokens",
+                                        "MaaS statistics",
+                                        "模型服务",
+                                        "令牌用量",
+                                        "token统计",
+                                        "token用量",
+                                        "词元用量",
+                                        "请求次数",
+                                        "MaaS监控",
+                                        "华为云MaaS"
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-billing-scout",
+                       "category":  "bss",
+                       "service":  "billing",
+                       "description":  "Huawei Cloud BSS billing (not AWS/Azure/other clouds; refuses pricing quotes, real-name review, and any non-billing scope): balance, spend, attribution, reconciliation, coupons, stored-value cards, enterprise/partner billing. One-page briefing via hcloud. Use only when the user explicitly mentions 华为云 / Huawei Cloud / BSS and 余额/账单/对账/资源包/代金券/储值卡/企业或伙伴账务; refuses pay, renew, refund, delete.",
+                       "triggers":  [
+
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-business-support-query",
+                       "category":  "bss",
+                       "service":  "billing",
+                       "description":  "Queries Huawei Cloud billing and pricing. Covers balances, bills, coupons, cash coupons, stored-value cards, orders, refunds, costs, free resources, resource usage, enterprise accounts, and on-demand/period/ELB/NAT/DCS pricing. No write operations. Use this skill when the user needs to check fees, view bills, estimate prices, review coupon balances, query orders, or get consumption stats. Triggers: 华为云计费, 账单, 余额, 优惠券, 代金券, 储值卡, 订单, 退款, 成本, 资源用量, 询价, 定价, 费用查看, 账单明细, 价格估算, 消费统计, billing, pricing, cost.",
+                       "triggers":  [
+
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-flexus-l-deploy-jiuwenswarm",
+                       "category":  "computing",
+                       "service":  "flexus-l",
+                       "description":  "One-click deployment of JiuwenSwarm multi-Agent collaboration platform on Huawei Cloud Flexus L instances. Usage scenarios: When users need to quickly deploy JiuwenSwarm/JiuwenClaw on Huawei Cloud Flexus L instances, when they need to automatically create cloud instances and deploy AI Agent platforms, when they need to configure model APIs and message channels (Xiaoyi/Feishu/DingTalk). Automatically create instances, deploy applications via COC, configure models and message channels. Trigger keywords: JiuwenSwarm deployment, JiuwenClaw deployment, 九问Swarm部署, 九问Claw部署, 一键部署JiuwenSwarm, AI智能体平台部署, 部署九问Swarm, 部署九问Claw,云服务器部署AI平台.",
+                       "triggers":  [
+                                        "JiuwenSwarm deployment",
+                                        "JiuwenClaw deployment",
+                                        "九问Swarm部署",
+                                        "九问Claw部署",
+                                        "一键部署JiuwenSwarm",
+                                        "AI智能体平台部署",
+                                        "部署九问Swarm",
+                                        "部署九问Claw",
+                                        "云服务器部署AI平台."
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-flexus-l-server-hermes-deployment",
+                       "category":  "computing",
+                       "service":  "flexus-l",
+                       "description":  "One-click deployment tool for Hermes on Huawei Cloud Flexus L instances. Supports one-click deployment, ModelArts large model configuration, and robot channel configuration. This skill provides a complete workflow for deploying and configuring Hermes AI Agent platform.\nTrigger words: \"Deploy Hermes\", \"Install Hermes\", \"Configure Model\", \"Configure Channel\", \"部署Hermes\", \"安装Hermes\", \"配置大模型\", \"配置机器人通道\"",
+                       "triggers":  [
+                                        "Deploy Hermes",
+                                        "Install Hermes",
+                                        "Configure Model",
+                                        "Configure Channel",
+                                        "部署Hermes",
+                                        "安装Hermes",
+                                        "配置大模型",
+                                        "配置机器人通道"
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-flexus-l-server-manage",
+                       "category":  "computing",
+                       "service":  "flexus-l",
+                       "description":  "Manages Huawei Cloud Flexus L server lifecycle: create, renew, and unsubscribe instances. Use this skill when the user mentions \"Flexus L\", \"Huawei Cloud lightweight server\", \"purchase server\", \"renew\", \"unsubscribe\". (中文触发词：\"购买/创建L实例\", \"L实例续费\", \"L实例退订\")",
+                       "triggers":  [
+
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-flexus-l-server-openclaw-deployment",
+                       "category":  "computing",
+                       "service":  "flexus-l",
+                       "description":  "Create Huawei Cloud Flexus L Instance (Lightweight Server), deploy OpenClaw application platform on it, and support installation and configuration of models and channels for deployed OpenClaw instances. Web UI access needs to be manually enabled in Huawei Cloud console.\nTrigger words: \"Deploy OpenClaw\", \"Deploy Flexus L Instance\", \"Deploy Huawei Cloud Lightweight Server\", \"Model setting\", \"Channel Setting\", \"部署OpenClaw\", \"部署Flexus L实例\", \"部署华为云轻量服务器\", \"设置模型\", \"设置通道\"",
+                       "triggers":  [
+                                        "Deploy OpenClaw",
+                                        "Deploy Flexus L Instance",
+                                        "Deploy Huawei Cloud Lightweight Server",
+                                        "Model setting",
+                                        "Channel Setting",
+                                        "部署OpenClaw",
+                                        "部署Flexus L实例",
+                                        "部署华为云轻量服务器",
+                                        "设置模型",
+                                        "设置通道"
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-flexus-l-server-ops",
+                       "category":  "computing",
+                       "service":  "flexus-l",
+                       "description":  "Based on Huawei Cloud Flexus L API for instance management and operations. Supports querying instance list and details, querying traffic packages, batch start/stop/reboot instances, resetting passwords,    and modifying instance information. Suitable for daily operations, lifecycle management, configuration changes, traffic monitoring, and other scenarios for Flexus L instances. Triggers: Flexus L, Huawei Cloud ops, query instance, start, stop, reboot, reset password, modify info, check traffic, traffic package (中文触发词: L实例运维，查询L实例，L实例开机，L实例关机，L实例重启，L实例重置密码，查询L实例流量包).",
+                       "triggers":  [
+
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-flexus-l-server-scripts-excute",
+                       "category":  "computing",
+                       "service":  "flexus-l",
+                       "description":  "Based on Huawei Cloud COC (Cloud Operations Center) APIs for script management and remote execution. Supports creating custom scripts (Shell, Python, Bat) and batch execution on target host instances via UniAgent. Applicable to cloud operations automation and batch script deployment scenarios. Trigger keywords: L-instance, COC script, script management, script execution, cloud operations, custom script, batch execution; COC, script management, script execution, cloud operations (中文触发词：L实例执行脚本).",
+                       "triggers":  [
+                                        "L-instance",
+                                        "COC script",
+                                        "script management",
+                                        "script execution",
+                                        "cloud operations",
+                                        "custom script",
+                                        "batch execution",
+                                        "COC",
+                                        "script management",
+                                        "script execution",
+                                        "cloud operations (中文触发词：L实例执行脚本)."
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-functiongraph-function-create",
+                       "category":  "computing",
+                       "service":  "functiongraph",
+                       "description":  "Create FunctionGraph functions on Huawei Cloud. Use this skill when users ask to create, deploy, or upload cloud functions, serverless functions, or FunctionGraph functions. Triggered by keywords like \"create function\", \"deploy function\", \"upload function\", \"create cloud function\", \"创建函数\", \"部署函数\", \"上传函数\", \"创建云函数\", \"FunctionGraph function\", \"serverless function\".",
+                       "triggers":  [
+
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-functiongraph-trigger-create",
+                       "category":  "computing",
+                       "service":  "functiongraph",
+                       "description":  "Create and configure scheduled TIMER triggers for Huawei Cloud FunctionGraph functions using Quartz Cron expressions. Use this skill when users ask to create triggers, schedule function execution, set up periodic tasks, or configure timers for functions. Triggered by keywords like \"create trigger\", \"set up trigger\", \"schedule function\", \"periodic task\", \"timer\", \"cron\", \"创建云函数触发器\", \"配置云函数触发器\", \"云函数定时触发\", \"定时执行\", \"定时任务\", \"创建定时器\", \"FunctionGraph trigger\", \"schedule function execution\".",
+                       "triggers":  [
+
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-computing-query",
+                       "category":  "computing",
+                       "service":  "ops",
+                       "description":  "Queries Huawei Cloud computing resources (ECS/BMS/IMS/AS), Covers ECS instances, flavors, keypairs, quotas, server groups, block devices, NICs, VNC console, BMS bare metal servers/flavors/quotas, IMS images/OS versions/members/quotas, and AS scaling groups/configs/policies/activity logs/lifecycle hooks/warm pools/quotas. No write operations. Use this skill when the user needs to query ECS instance details, list flavors, check BMS availability, browse images, or view auto-scaling group/policy status. Triggers: 弹性云服务器, ECS, 裸金属, BMS, 镜像, IMS, 弹性伸缩, AS, 伸缩组, 伸缩策略, 规格查询, flavor, instance, image, scaling.",
+                       "triggers":  [
+
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-cce-cluster-management",
+                       "category":  "container",
+                       "service":  "cce",
+                       "description":  "Huawei Cloud CCE (Cloud Container Engine) cluster lifecycle management skill using Python SDK v3.\nUse this skill when the user wants to: (1) create, delete, hibernate, or awake CCE clusters, (2) list clusters and query cluster/node/nodepool/addon information, (3) manage node pools (create, delete, resize), (4) manage nodes (create, delete, cordon, uncordon, drain), (5) manage addons (install, uninstall, update), (6) bind/unbind cluster EIP for public access, (7) get cluster kubeconfig.\nTrigger: user mentions \"CCE cluster\", \"create cluster\", \"delete cluster\", \"node pool\", \"node management\", \"hibernate cluster\", \"awake cluster\", \"addon\", \"kubeconfig\", \"EIP binding\", \"CCE 集群\", \"创建集群\", \"删除集群\", \"节点池\", \"节点管理\", \"休眠集群\", \"唤醒集群\", \"插件\", \"kubeconfig\", \"EIP 绑定\"",
+                       "triggers":  [
+                                        "user mentions \"CCE cluster",
+                                        "create cluster",
+                                        "delete cluster",
+                                        "node pool",
+                                        "node management",
+                                        "hibernate cluster",
+                                        "awake cluster",
+                                        "addon",
+                                        "kubeconfig",
+                                        "EIP binding",
+                                        "CCE 集群",
+                                        "创建集群",
+                                        "删除集群",
+                                        "节点池",
+                                        "节点管理",
+                                        "休眠集群",
+                                        "唤醒集群",
+                                        "插件",
+                                        "kubeconfig",
+                                        "EIP 绑定"
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-cci-instance-management",
+                       "category":  "container",
+                       "service":  "cci",
+                       "description":  "Huawei Cloud CCI (Cloud Container Instance) full lifecycle management using hcloud CLI. Covers Namespace, Network, Deployment, StatefulSet, Pod creation/update/delete/status, EIPPool for public IP, logs and metrics. Two-step confirmation for all destructive operations (delete namespace cascades all resources under it). Use this skill when the user wants to operate CCI serverless containers via command line. Triggers: CCI, 云容器实例, serverless container, 容器实例, namespace, deployment, statefulset, pod, EIPPool, CCI负载, 无服务器容器, 创建容器实例, 删除容器实例, 容器状态, 容器日志",
+                       "triggers":  [
+
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-swr-enterprise-instance",
+                       "category":  "container",
+                       "service":  "swr",
+                       "description":  "Huawei Cloud SWR enterprise instance management skill using hcloud CLI.\nUse this skill when the user wants to: (1) manage SWR enterprise instances - create/list/show/delete/update configuration, (2) manage instance namespaces - create/list/show/update/delete with security scanning settings, (3) manage instance registries (sync targets) - create/list/show/update/delete, (4) manage instance repositories - list/show/delete/update, (5) manage instance artifacts (image versions) - list/show/delete/scan, (6) manage instance credentials - long-term and temporary, (7) manage instance endpoints - internal/public access, (8) manage instance domains - add/list/show/delete/update, (9) check instance statistics and job status.\nTrigger: user mentions \"SWR enterprise instance\", \"SWR 企业实例\", \"SWR 企业版\", \"企业仓库实例\", \"SWR instance\", \"SWR 专业版\", \"swr.ee\", \"instance namespace\", \"instance registry\", \"instance repository\", \"instance artifact\", \"instance credential\", \"instance endpoint\", \"instance domain\", \"企业仓库\", \"实例管理\"",
+                       "triggers":  [
+                                        "user mentions \"SWR enterprise instance",
+                                        "SWR 企业实例",
+                                        "SWR 企业版",
+                                        "企业仓库实例",
+                                        "SWR instance",
+                                        "SWR 专业版",
+                                        "swr.ee",
+                                        "instance namespace",
+                                        "instance registry",
+                                        "instance repository",
+                                        "instance artifact",
+                                        "instance credential",
+                                        "instance endpoint",
+                                        "instance domain",
+                                        "企业仓库",
+                                        "实例管理"
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-swr-image-automation",
+                       "category":  "container",
+                       "service":  "swr",
+                       "description":  "Huawei Cloud SWR (Software Repository for Container) image automation and operations skill using hcloud CLI.\nUse this skill when the user wants to: (1) configure cross-region image sync (auto or manual), (2) manage SWR triggers for auto-deploy to CCE/CCI, (3) query available sync target regions, (4) check sync job status, (5) create/update/delete trigger configurations.\nTrigger: user mentions \"SWR automation\", \"SWR 自动化\", \"镜像同步\", \"SWR sync\", \"跨区域同步\", \"cross-region sync\", \"触发器\", \"SWR trigger\", \"自动部署\", \"auto deploy\", \"镜像复制\", \"image replication\", \"SWR 触发器\"",
+                       "triggers":  [
+                                        "user mentions \"SWR automation",
+                                        "SWR 自动化",
+                                        "镜像同步",
+                                        "SWR sync",
+                                        "跨区域同步",
+                                        "cross-region sync",
+                                        "触发器",
+                                        "SWR trigger",
+                                        "自动部署",
+                                        "auto deploy",
+                                        "镜像复制",
+                                        "image replication",
+                                        "SWR 触发器"
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-swr-image-governance",
+                       "category":  "container",
+                       "service":  "swr",
+                       "description":  "Huawei Cloud SWR (Software Repository for Container) image governance skill using hcloud CLI.\nUse this skill when the user wants to: (1) manage SWR namespace permissions - grant/query/modify/revoke, (2) manage repository permissions - grant/query/modify/revoke, (3) manage image retention rules - create/list/update/delete, (4) manage shared download domains - create/list/update/delete, (5) manage image sharing - list shared repos/query feature gates, (6) check SWR agency status and create agency delegation, (7) list repo accessories and references.\nTrigger: user mentions \"SWR image governance\", \"SWR 镜像治理\", \"SWR 权限管理\", \"SWR retention\", \"SWR 保留策略\", \"SWR 共享域名\", \"SWR 共享镜像\", \"SWR 委托\", \"SWR agency\", \"namespace permissions\", \"repository permissions\", \"镜像权限\", \"保留规则\", \"共享下载\", \"镜像分享\"",
+                       "triggers":  [
+                                        "user mentions \"SWR image governance",
+                                        "SWR 镜像治理",
+                                        "SWR 权限管理",
+                                        "SWR retention",
+                                        "SWR 保留策略",
+                                        "SWR 共享域名",
+                                        "SWR 共享镜像",
+                                        "SWR 委托",
+                                        "SWR agency",
+                                        "namespace permissions",
+                                        "repository permissions",
+                                        "镜像权限",
+                                        "保留规则",
+                                        "共享下载",
+                                        "镜像分享"
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-swr-image-management",
+                       "category":  "container",
+                       "service":  "swr",
+                       "description":  "Huawei Cloud SWR (Software Repository for Container) image lifecycle management skill using hcloud CLI.\nUse this skill when the user wants to: (1) manage SWR namespaces (organizations) - create/query/delete, (2) manage image repositories - create/query/update/delete, (3) manage image tags/versions - query/create/delete, (4) obtain docker login credentials for SWR, (5) check SWR quotas and usage limits.\nTrigger: user mentions \"SWR image management\", \"SWR 镜像管理\", \"container image\", \"镜像仓库\", \"SWR 组织\", \"SWR namespace\", \"镜像版本\", \"docker login\", \"SWR 配额\", \"SWR tag\", \"容器镜像\", \"镜像生命周期\", \"SWR repository\", \"SWR 登录\", \"SWR quota\"",
+                       "triggers":  [
+                                        "user mentions \"SWR image management",
+                                        "SWR 镜像管理",
+                                        "container image",
+                                        "镜像仓库",
+                                        "SWR 组织",
+                                        "SWR namespace",
+                                        "镜像版本",
+                                        "docker login",
+                                        "SWR 配额",
+                                        "SWR tag",
+                                        "容器镜像",
+                                        "镜像生命周期",
+                                        "SWR repository",
+                                        "SWR 登录",
+                                        "SWR quota"
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "ucs-cluster-onboarding-manager",
+                       "category":  "container",
+                       "service":  "ucs",
+                       "description":  "Huawei Cloud UCS (Universal Cloud Service) cluster onboarding, lifecycle, and fleet grouping management skill using hcloud CLI.\nUse this skill when the user wants to: (1) register self-managed or CCE clusters to UCS - register/query/remove, (2) manage cluster lifecycle - update/query/list clusters, (3) manage fleet groups - create/delete/query cluster groups, (4) obtain cluster access information and kubeconfig, (5) download federation kubeconfig for multi-cluster access, (6) check UCS resource quotas.\nTrigger: user mentions \"UCS cluster onboarding\", \"UCS 集群纳管\", \"UCS cluster registration\", \"UCS 注册集群\", \"UCS fleet\", \"UCS 舰队\", \"UCS 集群组\", \"cluster group\", \"fleet grouping\", \"UCS kubeconfig\", \"UCS 集群接入\", \"UCS federation\", \"UCS 联邦\", \"UCS 配额\", \"cluster lifecycle\", \"集群生命周期\", \"managed clusters\", \"纳管集群\", \"集群管理\"",
+                       "triggers":  [
+                                        "user mentions \"UCS cluster onboarding",
+                                        "UCS 集群纳管",
+                                        "UCS cluster registration",
+                                        "UCS 注册集群",
+                                        "UCS fleet",
+                                        "UCS 舰队",
+                                        "UCS 集群组",
+                                        "cluster group",
+                                        "fleet grouping",
+                                        "UCS kubeconfig",
+                                        "UCS 集群接入",
+                                        "UCS federation",
+                                        "UCS 联邦",
+                                        "UCS 配额",
+                                        "cluster lifecycle",
+                                        "集群生命周期",
+                                        "managed clusters",
+                                        "纳管集群",
+                                        "集群管理"
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "ucs-policy-governor",
+                       "category":  "container",
+                       "service":  "ucs",
+                       "description":  "Huawei Cloud UCS (Universal Cloud Service) policy governance and compliance management skill using hcloud CLI.\nUse this skill when the user wants to: (1) manage UCS policy instances - create/update/query/delete, (2) manage UCS policy definitions - query/list, (3) enable/disable policies on clusters or fleet groups, (4) check policy enforcement job status, (5) audit fleet compliance and review policy enforcement status.\nTrigger: user mentions \"UCS policy\", \"UCS 策略\", \"UCS governance\", \"UCS 治理\", \"UCS compliance\", \"UCS 合规\", \"policy instance\", \"策略实例\", \"policy definition\", \"策略定义\", \"enable policy\", \"启用策略\", \"disable policy\", \"禁用策略\", \"fleet compliance\", \"舰队合规\", \"policy audit\", \"策略审计\", \"UCS 策略管理\", \"UCS 合规治理\", \"policy governance\", \"策略治理\"",
+                       "triggers":  [
+                                        "user mentions \"UCS policy",
+                                        "UCS 策略",
+                                        "UCS governance",
+                                        "UCS 治理",
+                                        "UCS compliance",
+                                        "UCS 合规",
+                                        "policy instance",
+                                        "策略实例",
+                                        "policy definition",
+                                        "策略定义",
+                                        "enable policy",
+                                        "启用策略",
+                                        "disable policy",
+                                        "禁用策略",
+                                        "fleet compliance",
+                                        "舰队合规",
+                                        "policy audit",
+                                        "策略审计",
+                                        "UCS 策略管理",
+                                        "UCS 合规治理",
+                                        "policy governance",
+                                        "策略治理"
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-cli-guidance",
+                       "category":  "devtools",
+                       "service":  "cli",
+                       "description":  "Provides guidance for Huawei Cloud KooCLI command-line tool operations. Covers KooCLI installation, IAM authentication configuration, access credential configuration, command construction, common error troubleshooting. Use this skill when users ask about any cloud-related services or wants to operate Huawei Cloud services from the terminal. Triggers: Huawei Cloud, huaweiyun, \"华为云\"，\"华为cli\", \"命令行\"， KooCLI, hcloud, huaweiyunCLI, Huawei Cloud command line, OBS, ECS, VPC, \"云\", yun， huaweiyun tool, huawei tool, \"华为云工具\", \"云工具\", \"工具\"",
+                       "triggers":  [
+
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-terraform-generator",
+                       "category":  "devtools",
+                       "service":  "terraform",
+                       "description":  "Generate Huawei Cloud Terraform configurations and execute deployment with user-guided approval. Use this skill when users want to create Huawei Cloud infrastructure as Terraform, whether they ask explicitly for Terraform or describe goals such as deploying a website, launching an application, or creating network, compute, database, load balancing, or storage resources. Trigger when users mention 创建/create、生成/generate、部署/deploy、配置/configure、使用/use、管理/manage、华为云/Huawei Cloud、Terraform、ECS、VPC、资源/resource、云服务器/ECS、虚拟机/VM、实例/instance、网络/network、负载均衡/ELB、数据库/database、RDS、存储/storage、OBS、桶/bucket、域名/domain、DNS、证书/certificate、SSL、监控/monitoring、日志/log、备份/backup、容器/container、CCE、函数工作流/FunctionGraph",
+                       "triggers":  [
+
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-terraform-installer",
+                       "category":  "devtools",
+                       "service":  "terraform",
+                       "description":  "Installs Terraform CLI cross-platform with Huawei Cloud mirror support. Use this skill whenever the user mentions installing Terraform, setting up Terraform environment, or when IaC tasks detect missing Terraform. Trigger: install terraform, setup terraform, terraform environment, huaweicloud provider.",
+                       "triggers":  [
+                                        "install terraform",
+                                        "setup terraform",
+                                        "terraform environment",
+                                        "huaweicloud provider."
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-ces-ecs-monitoring",
+                       "category":  "monitoring",
+                       "service":  "ces",
+                       "description":  "Huawei Cloud ECS monitoring skill using Cloud Eye Service (CES). Provides comprehensive monitoring\nand metrics query for Elastic Cloud Server instances including CPU, memory, disk, network, and\nsystem metrics. Supports real-time monitoring, historical data query, and common metric analysis.\nUse when users need to monitor ECS instance performance, check resource utilization, analyze\ntrends, or troubleshoot performance issues.\nTriggers: \"Huawei Cloud ECS monitoring\", \"ECS metrics\", \"Cloud Eye Service\", \"CES\", \"monitor ECS\",\n\"CPU usage\", \"memory usage\", \"disk IO\", \"network traffic\", \"instance performance\", \"monitoring data\",\n\"华为云ECS监控\", \"云监控\", \"CES监控\", \"ECS指标\", \"CPU使用率\", \"内存使用率\", \"磁盘IO\", \"网络流量\"",
+                       "triggers":  [
+
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-ecs-alert",
+                       "category":  "monitoring",
+                       "service":  "ecs",
+                       "description":  "Automate batch creation and management of Huawei Cloud CES alarm rules for ECS instances using hcloud CLI v7.2.2+.\nUse this skill to: (1) batch create alarms with templates (web/database), (2) update SMN notifications, (3) query ECS metrics and alarm lists.\nTrigger: \"ECS alert\", \"create alert\", \"list alarms\", \"CPU alert\", \"memory alert\", \"ECS monitoring\", \"监控告警\", \"创建告警\", \"ECS 监控\", \"告警规则\", \"查询告警\"",
+                       "triggers":  [
+                                        "ECS alert",
+                                        "create alert",
+                                        "list alarms",
+                                        "CPU alert",
+                                        "memory alert",
+                                        "ECS monitoring",
+                                        "监控告警",
+                                        "创建告警",
+                                        "ECS 监控",
+                                        "告警规则",
+                                        "查询告警"
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-monitoring-query",
+                       "category":  "monitoring",
+                       "service":  "ops",
+                       "description":  "Queries Huawei Cloud monitoring and enterprise project resources (CES/EPS). Covers alarm rules, alarm histories, alarm templates, dashboards, notification masks, resource groups, one-click alarms, and enterprise projects (list/detail/quotas/bound resources/migration records). No write operations. Use this skill when the user needs to check alarm status, view monitoring dashboards, query alarm rules, or manage enterprise project info. Triggers: 云监控, 告警, 告警规则, 告警历史, 仪表盘, 企业项目, CES, EPS, 告警模板, 资源分组, alarm, monitoring, alert.",
+                       "triggers":  [
+
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-eip-cost-optimizer",
+                       "category":  "network",
+                       "service":  "eip",
+                       "description":  "Huawei Cloud EIP (Elastic IP) cost optimization skill using Python SDK v2.\nUse this skill when the user wants to: (1) list and query EIPs across regions with detailed status, (2) identify idle/unbound EIPs and generate cost optimization reports, (3) set up idle EIP monitoring with webhook/email alerts, (4) generate HTML/JSON cost analysis reports, (5) maintain operation audit logs for compliance. **Read-only analysis only - NO bandwidth adjustment, tag management, or EIP release/deletion**.\nTrigger: user mentions \"EIP cost optimization\", \"idle EIP analysis\", \"EIP audit\", \"cost report\", \"EIP status query\", \"EIP list\", \"EIP monitoring\", \"EIP alert\", \"cost analysis\", \"idle monitoring\", \"operation audit\", \"EIP 成本优化\", \"闲置 EIP 分析\", \"EIP 审计\", \"成本报告\", \"EIP 状态查询\", \"EIP 查询\", \"EIP 列表\", \"EIP 监控\", \"EIP 告警\", \"成本分析\", \"闲置监控\", \"操作审计\"",
+                       "triggers":  [
+                                        "user mentions \"EIP cost optimization",
+                                        "idle EIP analysis",
+                                        "EIP audit",
+                                        "cost report",
+                                        "EIP status query",
+                                        "EIP list",
+                                        "EIP monitoring",
+                                        "EIP alert",
+                                        "cost analysis",
+                                        "idle monitoring",
+                                        "operation audit",
+                                        "EIP 成本优化",
+                                        "闲置 EIP 分析",
+                                        "EIP 审计",
+                                        "成本报告",
+                                        "EIP 状态查询",
+                                        "EIP 查询",
+                                        "EIP 列表",
+                                        "EIP 监控",
+                                        "EIP 告警",
+                                        "成本分析",
+                                        "闲置监控",
+                                        "操作审计"
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-network-query",
+                       "category":  "network",
+                       "service":  "ops",
+                       "description":  "Queries Huawei Cloud network resources (VPC/EIP/ELB/NAT/VPN/DNS). Covers VPCs, subnets, security groups, firewalls, route tables, flow logs, EIPs, bandwidths, load balancers, listeners, pools, health monitors, NAT gateways, SNAT/DNAT rules, VPN gateways, VPN connections, DNS zones, record sets, PTR records, and endpoints. No write operations. Use this skill when the user needs to query network topology, security group rules, load balancer config, NAT rules, VPN status, or DNS resolution info. Triggers: VPC, 子网, 安全组, EIP, 弹性公网IP, ELB, 负载均衡, NAT网关, VPN, DNS, 域名解析, 路由表, 防火墙, 带宽, network, subnet, security group.",
+                       "triggers":  [
+
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-iam-query",
+                       "category":  "security",
+                       "service":  "iam",
+                       "description":  "Queries Huawei Cloud identity and access management resources (IAM) via read-only Python SDK. Covers users, groups, policies, agencies, AK/SK, MFA devices, login/password/ACL policies, security compliance, and account quotas. No write operations. Use this skill when the user needs to query IAM identity info, check policies/permissions, view agency details, or inspect AK/SK/MFA status. Triggers: IAM, 用户, 用户组, 策略, 委托, 权限, AK/SK, MFA, 密码策略, 安全合规, 身份查询, 身份认证, identity, policy, agency.",
+                       "triggers":  [
+
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-cce-env-assessment",
+                       "category":  "solution",
+                       "service":  "csm",
+                       "description":  "A skill for huawei cloud container(CCE) assessment. \nIt automatically collects metrics and configurations from containerized application environments on Huawei Cloud to generate a comprehensive assessment report. \nUse this when users want to evaluate if their Huawei Cloud applications align with cloud-native best practices and identify areas for improvement.",
+                       "triggers":  [
+
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-sac-yolo",
+                       "category":  "solution",
+                       "service":  "sac",
+                       "description":  "\"Deploy YOLO training platform on Huawei Cloud with GPU ECS via Terraform. Use when building or managing a YOLO GPU training environment.\nTrigger: deploy YOLO, YOLO training, GPU training, 部署YOLO, YOLO训练, GPU训练, 视觉模型训练\"",
+                       "triggers":  [
+                                        "deploy YOLO",
+                                        "YOLO training",
+                                        "GPU training",
+                                        "部署YOLO",
+                                        "YOLO训练",
+                                        "GPU训练",
+                                        "视觉模型训练"
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-obs-bucket-create",
+                       "category":  "storage",
+                       "service":  "obs",
+                       "description":  "Skill specialized for creating buckets on Huawei Cloud OBS. Use this skill when users need to create OBS buckets, set bucket properties, configure access permissions, or need guidance on the bucket creation process. Trigger conditions: \"创建OBS桶\", \"华为云存储桶\", \"存储空间创建\", \"create OBS bucket\", \"Huawei Cloud storage bucket\", \"OBS bucket\", \"Huawei Cloud bucket\", \"storage creation\" or when setting up Huawei Cloud object storage.",
+                       "triggers":  [
+                                        "创建OBS桶",
+                                        "华为云存储桶",
+                                        "存储空间创建",
+                                        "create OBS bucket",
+                                        "Huawei Cloud storage bucket",
+                                        "OBS bucket",
+                                        "Huawei Cloud bucket"
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-obs-stats",
+                       "category":  "storage",
+                       "service":  "obs",
+                       "description":  "Query Huawei Cloud OBS (Object Storage Service) statistics: list buckets with capacity and object counts, query extranet/intranet download traffic with month-over-month comparison, and query total requests with month-over-month comparison.\nUse this skill when the user wants to: (1) list OBS buckets and check their storage capacity and object count, (2) query download traffic with MoM comparison, (3) query request counts with MoM comparison.\nTrigger: user mentions \"OBS\", \"object storage\", \"bucket list\", \"bucket capacity\", \"download traffic\", \"total requests\", \"request count\", \"month-over-month\", \"OBS stats\", \"OBS management\", \"对象存储\", \"桶列表\", \"桶容量\", \"下载流量\", \"请求总数\", \"月环比\", \"OBS监控\"",
+                       "triggers":  [
+                                        "user mentions \"OBS",
+                                        "object storage",
+                                        "bucket list",
+                                        "bucket capacity",
+                                        "download traffic",
+                                        "total requests",
+                                        "request count",
+                                        "month-over-month",
+                                        "OBS stats",
+                                        "OBS management",
+                                        "对象存储",
+                                        "桶列表",
+                                        "桶容量",
+                                        "下载流量",
+                                        "请求总数",
+                                        "月环比",
+                                        "OBS监控"
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-obs-upload",
+                       "category":  "storage",
+                       "service":  "obs",
+                       "description":  "Upload local files or directories to Huawei Cloud OBS (Object Storage Service) buckets, list OBS buckets with capacity and object count, and schedule periodic uploads via crontab.\nUse this skill when the user wants to: (1) upload a local file or directory to an OBS bucket, (2) list OBS buckets and check their storage capacity and object count, (3) set up a scheduled/periodic upload task to automatically sync a local directory to an OBS bucket.\nTrigger: user mentions \"OBS\", \"object storage\", \"bucket list\", \"bucket capacity\", \"upload to OBS\", \"upload file\", \"upload directory\", \"scheduled upload\", \"periodic upload\", \"sync to bucket\", \"对象存储\", \"桶列表\", \"桶容量\", \"上传文件\", \"上传目录\", \"定时上传\", \"OBS管理\"",
+                       "triggers":  [
+                                        "user mentions \"OBS",
+                                        "object storage",
+                                        "bucket list",
+                                        "bucket capacity",
+                                        "upload to OBS",
+                                        "upload file",
+                                        "upload directory",
+                                        "scheduled upload",
+                                        "periodic upload",
+                                        "sync to bucket",
+                                        "对象存储",
+                                        "桶列表",
+                                        "桶容量",
+                                        "上传文件",
+                                        "上传目录",
+                                        "定时上传",
+                                        "OBS管理"
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-obs-website-host",
+                       "category":  "storage",
+                       "service":  "obs",
+                       "description":  "Configure Huawei Cloud OBS static website hosting with Python SDK. Use when the user needs to enable or repair OBS website hosting, set index or error pages, expose an existing bucket for public website access, or connect a custom domain through Huawei Cloud DNS. Triggers include OBS static website hosting, website endpoint, index page, error page, public-read bucket website access, custom domain CNAME, Huawei Cloud DNS, setBucketWebsite. 中文触发词包括：OBS 静态网站托管、网站托管、自定义域名解析。",
+                       "triggers":  [
+
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-storage-query",
+                       "category":  "storage",
+                       "service":  "obs",
+                       "description":  "Queries Huawei Cloud storage resources (EVS/OBS/SFS/CBR). Covers cloud disks (volumes/snapshots/types/quotas/recycle bin), OBS buckets (ACL/metadata/notifications/policies/objects), SFS Turbo file systems (shares/perm rules/backend targets/quotas/LDAP/AD), and CBR backups (vaults/policies/backups/tasks/agents/protectables). No write operations. Use this skill when the user needs to query disk info, list buckets/objects, check file system status, or view backup/policy details. Triggers: 云硬盘, EVS, 对象存储, OBS, 文件系统, SFS, 备份, CBR, 存储库, 快照, 桶, volume, bucket, backup, vault.",
+                       "triggers":  [
+
+                                    ],
+                       "has_description":  true
+                   }
+               ]
+}
