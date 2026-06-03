@@ -115,7 +115,7 @@ Never ask the user to provide sensitive information directly in the conversation
 
 **AK/SK (Access Keys):**
 
-- Must be configured via environment variables (HW_ACCESS_KEY, HW_SECRET_KEY)
+- Can only be configured via environment variables (HW_ACCESS_KEY, HW_SECRET_KEY)
 - Never guide or prompt user to configure them
 - Assume user has already configured them appropriately
 

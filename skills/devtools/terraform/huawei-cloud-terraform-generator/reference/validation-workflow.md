@@ -30,6 +30,7 @@ Before downloading from remote, check if local provider cache exists and is up-t
 Project-local:    .terraform/providers/registry.terraform.io/huaweicloud/huaweicloud/
 Global cache:     ~/.terraform.d/providers/registry.terraform.io/huaweicloud/huaweicloud/
                   ~/.terraform.d/plugins/registry.terraform.io/huaweicloud/huaweicloud/
+                  ~/.terraform.d/plugins/local-registry/huaweicloud/huaweicloud/
 ```
 
 **Decision process:**
