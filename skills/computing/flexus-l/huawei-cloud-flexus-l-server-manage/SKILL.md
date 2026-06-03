@@ -24,7 +24,7 @@ This skill provides core lifecycle management capabilities for Huawei Cloud Flex
 
 ### Architecture
 
-```bash
+```
 ┌─────────────────────────────────────────────────────────────┐
 │                    Flexus L Lifecycle Skill                  │
 ├─────────────────────────────────────────────────────────────┤
@@ -33,6 +33,10 @@ This skill provides core lifecycle management capabilities for Huawei Cloud Flex
 │  └────┬─────┘  └────┬─────┘  └──────┬───────┘              │
 │       │             │                │                       │
 │       └─────────────┴────────────────┘                       │
+│                     │                                        │
+│       ┌─────────────▼─────────────┐                         │
+│       │  flexus_specs_extractor  │                         │
+│       └─────────────┬─────────────┘                         │
 │                     │                                        │
 │              ┌──────▼──────┐                                 │
 │              │  HCSS API   │  (Instance Management)          │
@@ -45,6 +49,12 @@ This skill provides core lifecycle management capabilities for Huawei Cloud Flex
 │              └─────────────┘                                 │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+### Data Source
+
+- **Region, Image, Spec Information**: Dynamically fetched from official documentation, no local config file needed
+- **Official Documentation**: https://support.huaweicloud.com/api-flexusl/create_instance_0001.html
+- **On-Demand Fetch**: Automatically fetches latest data when executing `show-regions`, `show-images`, `show-specs`, `create-instance`
 
 ### Use Cases
 
@@ -160,7 +170,7 @@ Activate this skill when users mention:
 | Command | Function | Required Params | Optional Params |
 |---------|----------|-----------------|-----------------|
 | `show-regions` | Show available regions | None | None |
-| `show-images` | Show available images | None | `--region`, `--type` |
+| `show-images` | Show available images | None | `--region` |
 | `show-specs` | Show available specs | `--image` | `--region` |
 | `create-instance` | Create instance | `--ak`, `--sk` | `--region`, `--image`, `--plan-spec`, `--cpu`, `--memory`, `--period-num`, `--period-type`, `--instance-name`, `--auto-renew`, `--auto-pay`, `--dry-run`, `--confirm` |
 | `renewal` | Renew instance | `--ak`, `--sk`, `--resource-ids` | `--period-num`, `--period-type`, `--auto-pay`, `--dry-run`, `--confirm` |
@@ -192,7 +202,7 @@ Activate this skill when users mention:
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `--region` | `cn-north-4` | North China - Beijing 4 |
-| `--image` | `Ubuntu:22.04` | Ubuntu 22.04 system image |
+| `--image` | `Ubuntu` | Ubuntu system image |
 | `--period-num` | `1` | Purchase/renew for 1 month |
 | `--period-type` | `month` | Monthly billing |
 | `--type` (unsubscribe) | `1` | Immediate unsubscribe |
@@ -210,6 +220,14 @@ Confirmation methods (choose one):
 1. **Dialog confirmation**: Reply "confirm" or "yes" in conversation
 2. **Command-line confirmation**: Use `--confirm` flag
 3. **Dry-run preview**: Use `--dry-run` to preview without executing
+
+**⚠️ Failure Handling Rule:**
+
+When user confirms the preview order and the purchase fails:
+- **Only make ONE request** - do not retry automatically
+- **Return the failure reason** to the user
+- **Guide user to repurchase** - let user decide next steps
+- **NEVER change parameters** (region, spec, image, etc.) without user's explicit request
 
 ---
 
@@ -246,20 +264,13 @@ python scripts/flexus_lifecycle.py show-regions
 **Show available images for a region:**
 
 ```bash
-# Show all images
-python scripts/flexus_lifecycle.py show-images --region cn-north-4
-
-# Show only system images
-python scripts/flexus_lifecycle.py show-images --region cn-north-4 --type system
-
-# Show only app images
-python scripts/flexus_lifecycle.py show-images --region cn-north-4 --type app
+python scripts/flexus_lifecycle.py --region cn-north-4 show-images
 ```
 
 **Show available specs for an image:**
 
 ```bash
-python scripts/flexus_lifecycle.py show-specs --region cn-north-4 --image Ubuntu:22.04
+python scripts/flexus_lifecycle.py --region cn-north-4 show-specs --image Ubuntu
 ```
 
 ---
@@ -275,7 +286,7 @@ Purchase new Flexus L instances, supports Windows/Linux.
 python scripts/flexus_lifecycle.py create-instance \
   --ak <AK> --sk <SK> \
   --region cn-north-4 \
-  --image Ubuntu:22.04 \
+  --image Ubuntu \
   --cpu 2 \
   --memory 4
 ```
@@ -286,7 +297,7 @@ python scripts/flexus_lifecycle.py create-instance \
 python scripts/flexus_lifecycle.py create-instance \
   --ak <AK> --sk <SK> \
   --region cn-north-4 \
-  --image Ubuntu:22.04 \
+  --image Ubuntu \
   --plan-spec hf.medium.1.linux
 ```
 
@@ -297,14 +308,14 @@ python scripts/flexus_lifecycle.py create-instance \
 python scripts/flexus_lifecycle.py create-instance \
   --ak <AK> --sk <SK> \
   --region cn-north-4 \
-  --image Ubuntu:22.04
+  --image Ubuntu
 ```
 
 **Create Parameters:**
 
 | Parameter | Description | Default |
 | ----------- | ------------- | --------- |
-| `--image` | Image (format: name:version) | Ubuntu:22.04 |
+| `--image` | Image name | Ubuntu |
 | `--plan-spec` | Instance specification | Auto-match or config default |
 | `--cpu` | CPU cores (for auto-match) | - |
 | `--memory` | Memory GB (for auto-match) | - |
@@ -427,104 +438,82 @@ python scripts/flexus_lifecycle.py unsubscribe \
 
 ---
 
-## File Structure
-
-```bash
-huawei-cloud-flexus-l-server-manage/
-├── SKILL.md                    # English skill documentation
-├── references/                 # Reference documentation
-│   ├── api-reference.md        # English API reference
-│   ├── iam-policies.md         # IAM policy definitions
-│   ├── image-specs-guide.md    # System image specs reference
-│   ├── permission-guide.md     # Permission setup guide
-│   └── troubleshooting.md     # Troubleshooting guide
-└── scripts/                    # Executable scripts and configs
-    ├── config.json             # Region mapping config
-    ├── flexus_lifecycle.py     # Unified lifecycle management script
-    ├── image_specs.json        # System image specs config
-    └── pyproject.toml          # Python dependencies config
-```
-
-### image_specs.json Configuration
-
-The image specs config file contains:
-
-```json
-{
-  "spec_definitions": {
-    // Appendix 2: Spec details for each code
-    "hf.small.1.linux": {"vcpu": 2, "memory": 2, "disk": 40, "os": "linux"},
-    "hf.medium.1.linux": {"vcpu": 2, "memory": 4, "disk": 70, "os": "linux"},
-    // ...
-  },
-  "regions": {
-    "cn-north-4": {
-      "system_images": {
-        // Appendix 1: Spec codes for each image type
-        "Ubuntu": {
-          "22.04": ["hf.small.1.linux", "hf.medium.1.linux", ...]
-        }
-      }
-    }
-  }
-}
-```
-
-**Update Config:** Sync this file when official documentation updates.
-
----
-
 ## Dependencies
 
-- Python 3.8+
-- huaweicloudsdkcore >= 3.1.0
-- huaweicloudsdkbss >= 3.1.0
-- requests >= 2.31.0
+### Python Dependencies
 
-### Install Huawei Cloud SDK
-
-**⚠️ Must use Huawei Cloud mirror for faster installation:**
+Install via pip:
 
 ```bash
-pip install -i https://repo.huaweicloud.com/repository/pypi/simple huaweicloudsdkcore huaweicloudsdkbss requests
+pip install requests huaweicloudsdkcore huaweicloudsdkbss
+```
+
+Or use pyproject.toml:
+
+```bash
+cd scripts
+pip install -e .
+```
+
+### pyproject.toml
+
+```toml
+[project]
+name = "flexus-lifecycle"
+version = "1.0.0"
+dependencies = [
+    "requests>=2.28.0",
+    "huaweicloudsdkcore>=3.0.0",
+    "huaweicloudsdkbss>=3.0.0",
+]
 ```
 
 ---
 
-## Important Warnings
+## File Structure
 
-1. **Cost Warning**: Creating instances incurs costs, unsubscribing may involve refunds
-2. **Data Loss Risk**: Instance data may be unrecoverable after unsubscribe
-3. **Irreversible Operation**: Unsubscribe cannot be undone
-4. **Credential Security**: Never save AK/SK to configuration files
+```
+skills/huawei-cloud-flexus-l-server-manage/
+├── SKILL.md                    # This file
+├── scripts/
+│   ├── flexus_lifecycle.py     # Main lifecycle script
+│   ├── flexus_specs_extractor.py  # Dynamic specs fetcher
+│   └── pyproject.toml          # Dependencies
+└── references/
+    ├── api-reference.md        # API reference
+    ├── iam-policies.md         # IAM policies
+    ├── image-specs-guide.md    # Image specs guide
+    ├── permission-guide.md     # Permission setup
+    └── troubleshooting.md      # Troubleshooting
+```
 
 ---
 
 ## Error Handling
 
-| Error Code | Description | Suggestion |
-| ------------ | ------------- | ------------ |
-| 401 | Authentication failed | Check if AK/SK is correct |
-| 403 | Permission denied | Check Flexus L service permissions |
-| 404 | Resource not found | Check resource ID |
-| HCSS.14000001 | Spec code mismatch | Check spec prefix matches region (Guiyang 1 uses ahf.*) |
-| BSS.0501 | Resource not found or not owned | Verify resource ID |
-| BSS.0502 | Resource state not operable | Check resource state |
+### Common Errors
+
+| Error Code | Description | Solution |
+| ------------ | ------------- | ---------- |
+| `401 Unauthorized` | Invalid AK/SK | Verify AK/SK is correct and active |
+| `403 Forbidden` | Permission denied | Add required IAM policies |
+| `APIGW.0101` | API not found | Check service is enabled in region |
+| `APIGW.0301` | Signature verification failed | Check SK is correct |
+| `BSS.0501` | Resource not found | Verify resource ID is correct |
+| `BSS.0502` | Resource state invalid | Check resource status |
+| `400 Bad Request` | Invalid parameters | Check spec/image compatibility |
+
+See [references/troubleshooting.md](references/troubleshooting.md) for detailed error handling.
 
 ---
 
 ## References
 
-This skill includes the following reference documents in the `references/` directory:
-
-| Document | Description |
-| ---------- | ------------- |
-| [api-reference.md](references/api-reference.md) | Huawei Cloud API Reference (English) |
-| [api-reference-cn.md](references/api-reference-cn.md) | Huawei Cloud API Reference (Chinese) |
-| [iam-policies.md](references/iam-policies.md) | IAM Permissions and Policy Configuration |
-| [permission-guide.md](references/permission-guide.md) | IAM Permission Configuration Guide |
-| [troubleshooting.md](references/troubleshooting.md) | Troubleshooting Guide |
-| [image-specs-guide.md](references/image-specs-guide.md) | System Image Specs Reference |
+- [API Reference](references/api-reference.md)
+- [IAM Policies](references/iam-policies.md)
+- [Image Specs Guide](references/image-specs-guide.md)
+- [Permission Guide](references/permission-guide.md)
+- [Troubleshooting](references/troubleshooting.md)
 
 ### External References
 
