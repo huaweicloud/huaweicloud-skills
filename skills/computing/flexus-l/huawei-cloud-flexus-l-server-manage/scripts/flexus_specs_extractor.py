@@ -24,6 +24,8 @@ import random
 import gzip
 from typing import List, Dict, Optional
 
+from config import REGIONS
+
 
 # Configuration constants
 REQUEST_TIMEOUT = 20
@@ -36,16 +38,6 @@ KNOWN_IMAGE_NAMES = [
     'AlmaLinux', 'Rocky Linux', 'openEuler', 'OpenSUSE', 'CoreOS',
     'CentOS_Stream', 'Fedora', 'EulerOS',
 ]
-
-# Region configuration (from official documentation)
-REGIONS = {
-    'cn-north-4': {'name': '华北-北京四', 'short': 'beijing'},
-    'cn-south-1': {'name': '华南-广州', 'short': 'guangzhou'},
-    'cn-east-3': {'name': '华东-上海一', 'short': 'shanghai'},
-    'cn-southwest-2': {'name': '西南-贵阳一', 'short': 'guizhou'},
-    'ap-southeast-1': {'name': '中国-香港', 'short': 'hongkong'},
-    'ap-southeast-3': {'name': '亚太-新加坡', 'short': 'singapore'},
-}
 
 
 class FlexusSpecsExtractor:
