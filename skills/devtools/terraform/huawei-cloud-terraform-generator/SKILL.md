@@ -25,7 +25,7 @@ This skill provides an interactive workflow where the agent guides the user thro
 Before using this skill, ensure the following are available:
 
 1. **Terraform** — installed in PATH or auto-installable (see validation-workflow.md)
-2. **Provider download source** — the Huawei Cloud mirror must be reachable (see validation-workflow.md)
+2. **Provider download source** — the Huawei Cloud mirror should be reachable (see validation-workflow.md)
 3. **Target region** — the deployment region (e.g. cn-north-4, cn-south-1) must be identified
 
 ## 3. Parameter Confirmation
@@ -37,13 +37,7 @@ Before generating Terraform, propose a concrete resource plan for the user to co
 - whether to create new resources or reuse existing ones
 - pricing information only when obtained from a reliable source
 
-Important rules:
-
-- recommended specifications, models, and prices must not be fabricated
-- they must come from a reliable source, such as a trusted resource lookup channel or explicit user input
-- users should not be expected to know exact product models or specification names in advance
-- when exact values are not yet confirmed, present them as pending choices rather than pretending they are validated
-- do not ask user anything about HW_ACCESS_KEY/HW_SECRET_KEY configuration
+See `reference/guardrails.md` for rules about not fabricating specifications and prices.
 
 Do not ask the user to provide every parameter manually. Instead:
 
@@ -79,208 +73,93 @@ For example:
 ### 4.3 Propose a resource plan for confirmation
 
 Before generating Terraform, propose a concrete resource plan for the user to confirm following the rules in the Parameter Confirmation section.
-When proposing the plan, **do not** ask any sensitive information from the user
+
+See `reference/guardrails.md` for rules about handling sensitive information.
 
 ### 4.4 Generate Terraform after confirmation
 
 Once the user confirms the resource plan, generate the Terraform files following the required structure and style rules.
 
-**Required files (all must be generated):**
-
-- `providers.tf`
-- `variables.tf`
-- `main.tf`
-- `terraform.tfvars`
-- `README.md`
-
-**Critical:**
-
-- Generate all 5 required files before reporting completion
-- Verify each file exists on disk after writing
-- Only report "Terraform files generated successfully" after all files are confirmed to exist
-- If any file fails to generate, report the specific file that failed and do not proceed to step 5
-
 See `reference/terraform-generation-guide.md` for detailed file structure and content rules.
+
+**Critical:** Generate all required files (providers.tf, variables.tf, main.tf, terraform.tfvars, README.md) and verify they exist before proceeding.
 
 ### 4.5 Verify credentials configuration
 
-Before proceeding to validation, verify that Huawei Cloud credentials are configured via environment variables:
+Before proceeding to validation, verify that Huawei Cloud credentials are configured via environment variables.
 
-- **Do NOT ask or guide the user to configure HW_ACCESS_KEY/HW_SECRET_KEY in environment variables**
-- Assume the user has already configured credentials appropriately
-- Proceed directly to validation without prompting about credential setup
-- If Huawei Cloud credentials are configured, tell user the information
+See `reference/guardrails.md` for rules about AK/SK handling.
 
 ### 4.6 Validate and fix the generated configuration
 
-Run validation directly:
+Run validation in order: `terraform fmt -recursive` → `terraform init` → `terraform validate` → `terraform plan`
 
-- `terraform fmt -recursive`
-- `terraform init`
-- `terraform validate`
-- `terraform plan`
-
-If any step fails:
-
-- inspect the exact error
-- identify the real cause
-- fix the generated configuration or required inputs
-- retry until `terraform plan` succeeds
+If any step fails, inspect the error, fix the configuration, and retry until `terraform plan` succeeds.
 
 See `reference/validation-workflow.md` for detailed validation steps.
 
 ### 4.7 Execute terraform apply with user confirmation
 
-After `terraform plan` succeeds:
+After `terraform plan` succeeds, show the plan output to user and popup a confirmation dialog before executing `terraform apply`.
 
-- Show the plan output to the user
-- Do not mention or reference HW_ACCESS_KEY/HW_SECRET_KEY environment variables in the plan output summary
-- Popup a confirmation dialog for user to confirm execution
-- If user confirms: execute `terraform apply`
-- If user declines: stop and inform the user they can manually run apply later
-- Report the apply result to the user
+See `reference/guardrails.md` for rules about user confirmation workflow.
 
 ### 4.8 Apply error repair loop
 
-If `terraform apply` fails:
-
-- Inspect the exact error output
-- Identify the root cause
-- Fix the Terraform configuration or inputs accordingly
-- Re-run `terraform plan` to validate the fix
-- Re-execute `terraform apply` after plan succeeds
-- Repeat until `terraform apply` completes successfully
-- Do not stop at the first apply failure; continue fixing and retrying
+If `terraform apply` fails, inspect the error, fix the configuration, re-run `terraform plan`, and re-execute `terraform apply`. Repeat until successful.
 
 ### 4.9 Post-apply resource verification
 
-After `terraform apply` succeeds:
-
-- Verify that the deployed cloud resources match the resource plan confirmed by the user
-- Check key resource attributes (types, specifications, names, counts, dependencies) against the confirmed plan
-- If discrepancies are found between deployed resources and the confirmed plan:
-  - Report the discrepancies to the user
-  - Propose and apply fixes to align the deployment with the confirmed plan
-  - Re-run apply if needed and re-verify
-- Confirm to the user that the deployed resources are consistent with the confirmed plan
+After `terraform apply` succeeds, verify that deployed resources match the confirmed plan. If discrepancies found, report and fix them.
 
 ## 5. Guardrails
 
 See `reference/guardrails.md` for detailed guardrail rules.
 
 Key principles:
-
 - Do not fabricate specifications, prices, or resource facts
-- Prefer recommended defaults, but do not fabricate validated facts
 - Execute terraform apply with explicit user confirmation
-- Do not generate outputs
-- Validate security group port numbers (no port 0)
 - Do not request sensitive information
-- Do not mention anything about HW_ACCESS_KEY/HW_SECRET_KEY environment variable configuration
 
 ## 6. Terraform Generation Rules
 
 After the user confirms the resource plan, generate Terraform that is minimal, valid, and aligned with the confirmed solution.
 
-### 6.1 Core generation principles
+See `reference/terraform-generation-guide.md` for detailed guidance on file structure, content rules, data source usage, and variable design.
 
-Follow these principles when generating Terraform:
-
+Core principles:
 1. Start from the confirmed resource plan
 2. Follow the Minimum Viable Configuration principle
 3. Prefer Terraform validity over unnecessary flexibility
 4. Use existing package references when relevant
 
-### 6.2 File structure and content
-
-See `reference/terraform-generation-guide.md` for detailed guidance on:
-
-- Fixed file structure
-- providers.tf requirements
-- variables.tf requirements
-- main.tf structure
-- terraform.tfvars content
-- README.md content
-- Data source usage rules
-- Variables vs data sources
-
 ## 7. Environment Preparation and Validation
 
-See `reference/validation-workflow.md` for detailed guidance on:
-
-- Ensuring Terraform is available
-- Checking local provider cache version
-- Perfer to download provider from Huawei Cloud mirror
-- Handling provider download failure
-- Validation order
-- Authentication handling
-- Repair loop
-- Cleanup
+See `reference/validation-workflow.md` for detailed guidance on ensuring Terraform availability, provider download **(from Huawei Cloud mirror)**, validation order, authentication, and repair loop.
 
 ## 8. Reference Usage and Template Guidance
 
-Use the reference materials, templates, examples, and helper utilities already included in the skill package when they are relevant to the current scenario.
+Use the reference materials, templates, examples, and helper utilities in the skill package when relevant.
 
 ### 8.1 Use existing references when relevant
 
-If the package contains service-specific reference documents, consult them when the user's request involves that service.
-
-These references may provide:
-
-- recommended architecture patterns
-- required resources
-- dependency design
-- common parameter structures
-- service-specific best practices
-
-Typical services may include: VPC, ECS, RDS, CCE, ELB, OBS, EVS, NAT, VPN and other Huawei Cloud services covered by the package.
+Consult service-specific reference documents (VPC, ECS, RDS, CCE, ELB, OBS, etc.) when the user's request involves that service.
 
 ### 8.2 Use existing examples and templates as a starting point
 
-If the package already contains an example or template close to the user's target scenario, use it as a starting point instead of inventing structure.
+If the package contains an example close to the target scenario, use it as a starting point. Preserve useful structure, adapt to the confirmed plan, and remove unneeded resources.
 
-Example:
+### 8.3 Match user goals to relevant references
 
-- `assets/vpc/basic` may serve as a complete working example for a basic VPC scenario
-
-When using an existing example or template:
-
-- preserve the useful structure
-- adapt it to the confirmed plan
-- remove resources that are not needed
-- avoid copying unrelated complexity
-
-### 8.3 Match user goals to the most relevant references
-
-When the user describes a business goal instead of explicit resource names, map the goal to the most relevant service references.
-
-Examples:
-
-- "deploy a website" may map to VPC + ECS + EIP, and possibly ELB or OBS
-- "create a managed database" may map to RDS with related network resources
-- "build a Kubernetes environment" may map to CCE with required networking and node configuration
+Map business goals to service references (e.g., "deploy a website" → VPC + ECS + EIP, "managed database" → RDS + network).
 
 ### 8.4 Use references to improve, not to overbuild
 
-References and templates are guides, not mandatory full blueprints.
-
-When using them:
-
-- keep the final Terraform aligned with the user-confirmed plan
-- follow the Minimum Viable Configuration principle
-- avoid adding optional resources unless the user actually needs them
-- prefer simpler configurations when they are sufficient
+Keep the final Terraform aligned with the user-confirmed plan and follow Minimum Viable Configuration principle.
 
 ### 8.5 Do not rely on templates blindly
 
-A matching template or example does not guarantee correctness for the current request.
-
-Always:
-
-- check whether the template matches the confirmed plan
-- verify that specifications and dependencies are still appropriate
-- adjust variables, data sources, and resource arguments as needed
-- validate the final generated Terraform through the normal validation workflow
+Always verify that the template matches the confirmed plan and validate through the normal validation workflow.
 
 ## 9. Quality Checklist
 
@@ -289,14 +168,6 @@ Before finalizing, ensure:
 - [ ] The generated Terraform matches the confirmed resource plan
 - [ ] All 5 required files were generated and verified (providers.tf, variables.tf, main.tf, terraform.tfvars, README.md)
 - [ ] No sensitive information was requested from user
-- [ ] terraform.tfvars does not contain access_key or secret_key
-- [ ] Recommended values were not fabricated
-- [ ] Queryable cloud facts use Terraform data sources where supported
-- [ ] `variables.tf` includes `region`
-- [ ] No `outputs.tf` or output blocks were generated
-- [ ] Security group rules do not use port 0
 - [ ] Validation reached `terraform plan`, or the blocker was clearly explained
 - [ ] User was asked for confirmation via confirmation dialog before terraform apply
 - [ ] `terraform apply` was executed only after explicit user confirmation (or user declined)
-- [ ] Network reachability was checked before provider installation when needed
-- [ ] Terraform CLI provider installation behavior was configured appropriately when using a mirror or local provider source
