@@ -184,8 +184,6 @@ Query results are output in JSON format and contain the following common fields:
 
 ## Reference Documentation
 
-- [Huawei Cloud Python SDK Official Documentation](https://doc.huihua.com/api/sdk/python.html)
-- [Huawei Cloud API Explorer](https://support.huaweicloud.com/apiexplorer/index.html)
 - Query script usage guides for each service: `references/<service>/guide.md`
 
 ---
