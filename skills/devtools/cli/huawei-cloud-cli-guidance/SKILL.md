@@ -16,8 +16,9 @@ tags: [KooCLI, Huawei Cloud, cli, command line]
 
 Huawei Cloud KooCLI command-line tool guidance skill, providing comprehensive KooCLI usage guide. This skill covers core functionalities including KooCLI installation, authentication configuration, command construction, common error troubleshooting, helping users efficiently manage Huawei Cloud resources.
 
-## Any issues encountered during the use of koocli must be addressed by prioritizing the guidance steps provided in this skill. [MUST][IMPORTANT]
-## It is essential to read this document in its entirety and make full use of its guidance during the process.[MUST][IMPORTANT]
+## Attention 
+1. Any issues encountered during the use of koocli must be addressed by prioritizing the guidance steps provided in this skill. [MUST][IMPORTANT]
+2. It is essential to read this document in its entirety and make full use of its guidance during the process.[MUST][IMPORTANT]
 
 
 ## Prerequisites
