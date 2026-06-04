@@ -19,8 +19,9 @@ def do_check_uniagent(args):
     Args:
         args: Command line argument object with the following attributes:
             - resource_id: L instance resource ID
-            - ak: Huawei Cloud AK
-            - sk: Huawei Cloud SK
+            - ak: Huawei Cloud AK (can be temporary AK)
+            - sk: Huawei Cloud SK (can be temporary SK)
+            - security_token: Security token for temporary credentials (optional)
     
     Returns:
         None
@@ -31,6 +32,8 @@ def do_check_uniagent(args):
     
     ak = getattr(args, 'ak', None)
     sk = getattr(args, 'sk', None)
+    security_token = getattr(args, 'security_token', None)
+
     
     if not ak or not sk:
         print("\nHuawei Cloud credentials not configured, entering interactive configuration...")
@@ -48,7 +51,7 @@ def do_check_uniagent(args):
     print(f"  Resource ID: {resource_id}")
     
     print("\nQuerying UniAgent status...")
-    result = query_uniagent_status(resource_id, ak, sk)
+    result = query_uniagent_status(resource_id, ak, sk, security_token)
     
     if result.get("ok"):
         print(f"\n[OK] {result['text']}")

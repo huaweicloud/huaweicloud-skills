@@ -99,6 +99,7 @@ Examples:
     deploy_parser.add_argument('--region', choices=REGION_IDS, help='Region ID (optional, default cn-north-4)')
     deploy_parser.add_argument('--ak', help='Huawei Cloud AK (optional, will prompt for input if not provided)')
     deploy_parser.add_argument('--sk', help='Huawei Cloud SK (optional, will prompt for input if not provided)')
+    deploy_parser.add_argument('--security-token', help='Huawei Cloud Security Token (optional, will prompt for input if not provided)')
     deploy_parser.add_argument('--non-interactive', action='store_true', help='Non-interactive mode, execute without confirmation')
 
     maas_parser = subparsers.add_parser('maas', help='Install models on remote L instance via COC')
@@ -109,6 +110,7 @@ Examples:
     maas_parser.add_argument('--execute-user', default='root', help='Execute user (optional, default root)')
     maas_parser.add_argument('--ak', help='Huawei Cloud AK (optional, will prompt for input if not provided)')
     maas_parser.add_argument('--sk', help='Huawei Cloud SK (optional, will prompt for input if not provided)')
+    maas_parser.add_argument('--security-token', help='Huawei Cloud Security Token (optional, will prompt for input if not provided)')
     maas_parser.add_argument('--non-interactive', action='store_true', help='Non-interactive mode, execute without confirmation')
 
     channel_parser = subparsers.add_parser('channel', help='Install channels on remote L instance via COC')
@@ -119,6 +121,7 @@ Examples:
     channel_parser.add_argument('--execute-user', default='root', help='Execute user (optional, default root)')
     channel_parser.add_argument('--ak', help='Huawei Cloud AK (optional, will prompt for input if not provided)')
     channel_parser.add_argument('--sk', help='Huawei Cloud SK (optional, will prompt for input if not provided)')
+    channel_parser.add_argument('--security-token', help='Huawei Cloud Security Token (optional, will prompt for input if not provided)')
     channel_parser.add_argument('--non-interactive', action='store_true', help='Non-interactive mode, execute without confirmation')
 
     args = parser.parse_args()

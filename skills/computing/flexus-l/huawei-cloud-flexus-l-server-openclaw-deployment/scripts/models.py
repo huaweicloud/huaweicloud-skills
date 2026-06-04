@@ -13,21 +13,22 @@ from scripts.lib import install_maas_models_remote, install_maas_models_local, q
 from scripts.utils import prompt_for_input, REGION_IDS
 
 
-def _check_prerequisites(resource_id, region_id, ak, sk):
+def _check_prerequisites(resource_id, region_id, ak, sk, security_token):
     """
     Check prerequisites (UniAgent status)
     
     Args:
         resource_id: L instance resource ID
         region_id: Region ID
-        ak: Huawei Cloud AK
-        sk: Huawei Cloud SK
+        ak: Huawei Cloud AK (can be temporary AK)
+        sk: Huawei Cloud SK (can be temporary SK)
+        security_token: Security token for temporary credentials (optional)
     
     Returns:
         bool: True if check passed, False if check failed
     """
     print("\nChecking UniAgent status...")
-    result = query_uniagent_status(resource_id, ak, sk)
+    result = query_uniagent_status(resource_id, ak, sk, security_token)
     
     if not result.get("ok"):
         print(f"  [FAIL] UniAgent status check failed: {result.get('error', {}).get('message', 'Unknown error')}")
@@ -63,8 +64,9 @@ def do_install_maas(args):
             - model_params: Model parameters JSON (command line arg --model-params), must use valid JSON format with double quotes for keys and values
             - timeout: Timeout duration (command line arg --timeout)
             - execute_user: Execute user (command line arg --execute-user)
-            - ak: Huawei Cloud AK (command line arg --ak)
-            - sk: Huawei Cloud SK (command line arg --sk)
+            - ak: Huawei Cloud AK (can be temporary AK) (command line arg --ak)
+            - sk: Huawei Cloud SK (can be temporary SK) (command line arg --sk)
+            - security_token: Security token for temporary credentials (command line arg --security-token)
             - non_interactive: Whether non-interactive mode (command line arg --non-interactive)
     
     Returns:
@@ -76,6 +78,7 @@ def do_install_maas(args):
     
     ak = getattr(args, 'ak', None)
     sk = getattr(args, 'sk', None)
+    security_token = getattr(args, 'security_token', None)
     
     if not ak or not sk:
         print("\nHuawei Cloud credentials not configured, entering interactive configuration...")
@@ -148,12 +151,12 @@ def do_install_maas(args):
             return
     
     print("\nChecking prerequisites...")
-    if not _check_prerequisites(resource_id, region_id, ak, sk):
+    if not _check_prerequisites(resource_id, region_id, ak, sk, security_token):
         print("\nPrerequisite check failed, please resolve and retry")
         return
     
     print("\nStarting model installation...")
-    result = install_maas_models_remote(resource_id, region_id, model_params, timeout, "root", ak, sk)
+    result = install_maas_models_remote(resource_id, region_id, model_params, timeout, "root", ak, sk, security_token)
     
     if result.get("ok"):
         print(f"\n[OK] {result['text']}")

@@ -20,8 +20,9 @@ def do_check_gateway(args):
         args: Command line argument object with the following attributes:
             - resource_id: L instance resource ID
             - region_id: Region ID
-            - ak: Huawei Cloud AK
-            - sk: Huawei Cloud SK
+            - ak: Huawei Cloud AK (can be temporary AK)
+            - sk: Huawei Cloud SK (can be temporary SK)
+            - security_token: Security token for temporary credentials (optional)
     
     Returns:
         None
@@ -32,6 +33,7 @@ def do_check_gateway(args):
     
     ak = getattr(args, 'ak', None)
     sk = getattr(args, 'sk', None)
+    security_token = getattr(args, 'security_token', None)
     
     if not ak or not sk:
         print("\nHuawei Cloud credentials not configured, entering interactive configuration...")
@@ -54,7 +56,7 @@ def do_check_gateway(args):
     print(f"  Region: {region_id}")
     
     print("\nQuerying gateway status...")
-    result = check_gateway_status_remote(resource_id, region_id, 600, "root", ak, sk)
+    result = check_gateway_status_remote(resource_id, region_id, 600, "root", ak, sk,security_token)
     
     if result.get("ok"):
         print(f"\n[OK] {result['text']}")
