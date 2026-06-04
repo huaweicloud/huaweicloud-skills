@@ -4,7 +4,7 @@ description: |
   Huawei Cloud Ascend model deployment and testing skill for large language models on Ascend DevServer (910B series). Supports single-machine and dual-machine deployment for LLM, VL (vision-language), Embedding, and Rerank models. Provides model inference testing, deployment log viewing, and status monitoring with automated model matching and deployment script generation.
   Use this skill when the user wants to: (1) deploy a model on Ascend DevServer, (2) test model inference, (3) view deployment logs or status, (4) list supported models, (5) check deployment prerequisites.
   Trigger: deploy, test, model list, deployment log, Ascend, DevServer, 910B, ModelArts, LLM, VL, Embedding, Rerank, multimodal, inference, model catalog, 昇腾, 部署模型, 测试模型, 模型列表, 部署日志, 模型部署, 推理测试
-tags: [Ascend, LLM, deploy, inference, 昇腾]
+tags: [Ascend, LLM, deploy, inference]
 ---
 
 # Huawei Cloud Ascend Models Deploy
@@ -311,7 +311,7 @@ python3 scripts/deploy_helper.py list [LLM|VL|Embedding|Rerank|OpenSource]
 
 ---
 
-## 核心命令
+## Core Commands
 
 Core commands for model deployment and testing. See [Operation Flow](#operation-flow) for detailed steps.
 
