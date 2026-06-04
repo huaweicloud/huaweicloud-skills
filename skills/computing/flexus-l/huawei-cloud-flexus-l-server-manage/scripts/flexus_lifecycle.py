@@ -3,7 +3,8 @@
 Huawei Cloud Flexus L Instance Lifecycle Management Tool
 Integrates three core functions: create, renewal, and unsubscribe
 
-Supports automatic spec matching for system images and application images
+Supports automatic spec matching for system images
+Data is fetched dynamically from official documentation
 """
 
 import os
@@ -12,6 +13,7 @@ import json
 import argparse
 import requests
 import uuid
+import subprocess
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime
@@ -37,9 +39,11 @@ except ImportError as e:
 
 from urllib.parse import urlparse
 
+from config import REGIONS
+
 
 # ============================================================================
-# Configuration Loading
+# Dynamic Data Fetching
 # ============================================================================
 
 def get_script_dir() -> str:
@@ -47,141 +51,119 @@ def get_script_dir() -> str:
     return os.path.dirname(os.path.abspath(__file__))
 
 
-def load_config() -> List[Dict]:
-    """Load region configuration from config.json"""
-    config_path = os.path.join(get_script_dir(), "config.json")
+def fetch_specs_data(data_type: str = "all") -> Dict:
+    """
+    Call flexus_specs_extractor.py to fetch latest data
     
-    if os.path.exists(config_path):
-        with open(config_path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return []
-
-
-def load_image_specs() -> Dict:
-    """Load image specs configuration from image_specs.json"""
-    config_path = os.path.join(get_script_dir(), "image_specs.json")
+    Args:
+        data_type: all / regions / specs / images
     
-    if os.path.exists(config_path):
-        with open(config_path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
+    Returns:
+        Fetched data dictionary
+    """
+    extractor_path = os.path.join(get_script_dir(), "flexus_specs_extractor.py")
+    
+    if not os.path.exists(extractor_path):
+        print(f"❌ Extractor script not found: {extractor_path}")
+        return {}
+    
+    try:
+        cmd = ["python3", extractor_path]
+        if data_type != "all":
+            cmd.append(f"--{data_type}")
+        
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        
+        if result.returncode == 0:
+            return json.loads(result.stdout)
+        else:
+            print(f"❌ Failed to fetch data: {result.stderr}")
+            return {}
+            
+    except subprocess.TimeoutExpired:
+        print("❌ Fetch timeout (30s)")
+        return {}
+    except json.JSONDecodeError as e:
+        print(f"❌ Failed to parse data: {e}")
+        return {}
+    except Exception as e:
+        print(f"❌ Fetch error: {e}")
+        return {}
 
 
 def get_region_ids() -> List[str]:
-    """获取所有区域ID列表"""
-    config = load_config()
-    return [item.get("region") for item in config if item.get("region")]
+    """Get all region ID list"""
+    regions = fetch_specs_data("regions")
+    return list(regions.keys())
 
 
 def get_region_by_name(region_name: str) -> Optional[str]:
-    """根据区域名称获取区域ID"""
-    config = load_config()
-    for item in config:
-        if item.get("region_name") == region_name:
-            return item.get("region")
+    """Get region ID by region name"""
+    regions = fetch_specs_data("regions")
+    for region_id, info in regions.items():
+        if info.get("name") == region_name:
+            return region_id
     return None
 
 
 def get_region_name_by_id(region_id: str) -> Optional[str]:
     """Get region name by region ID"""
-    config = load_config()
-    for item in config:
-        if item.get("region") == region_id:
-            return item.get("region_name")
-    return None
+    regions = fetch_specs_data("regions")
+    return regions.get(region_id, {}).get("name")
 
 
 # ============================================================================
 # Spec Query Functions
 # ============================================================================
 
-def get_available_images(region: str, image_type: str = "system") -> Dict[str, List[str]]:
+
+def get_available_images(region: str) -> Dict[str, Dict]:
     """
     Get available images for a specified region
     
     Args:
         region: Region ID
-        image_type: Image type (system/app/all)
     
     Returns:
-        Mapping from image names to versions
+        Mapping from image names to version/specs info
     """
-    specs = load_image_specs()
-    regions = specs.get("regions", {})
+    system_images = fetch_specs_data("images")
     
-    if region not in regions:
-        return {}
-    
-    region_data = regions[region]
     result = {}
+    region_short = REGIONS.get(region, {}).get("short", "beijing")
     
-    if image_type in ("system", "all"):
-        system_images = region_data.get("system_images", {})
-        for img_name, versions in system_images.items():
-            result[img_name] = list(versions.keys())
-    
-    if image_type in ("app", "all"):
-        app_images = region_data.get("app_images", {})
-        for img_name, versions in app_images.items():
-            if img_name not in result:
-                result[img_name] = []
-            result[img_name].extend(list(versions.keys()))
+    for img_name, img_info in system_images.items():
+        region_data = img_info.get(region_short, {})
+        version = region_data.get("version", "")
+        specs = region_data.get("specs", [])
+        if specs:
+            result[img_name] = {"version": version, "specs": specs}
     
     return result
 
 
-def get_available_specs(region: str, image_name: str, image_version: str) -> List[str]:
+def get_available_specs(region: str, image_name: str) -> List[str]:
     """
     Get available specs for a specified region and image
     
     Args:
         region: Region ID
         image_name: Image name
-        image_version: Image version
     
     Returns:
         List of available spec codes
     """
-    specs = load_image_specs()
-    regions = specs.get("regions", {})
+    system_images = fetch_specs_data("images")
     
-    if region not in regions:
-        return []
+    region_short = REGIONS.get(region, {}).get("short", "beijing")
     
-    region_data = regions[region]
-    
-    # Handle _same_as reference
-    if "_same_as" in region_data:
-        ref_region = region_data["_same_as"]
-        if ref_region in regions:
-            region_data = regions[ref_region]
-    
-    # Check system images
-    system_images = region_data.get("system_images", {})
     if image_name in system_images:
-        img_data = system_images[image_name]
-        # Handle two formats: direct version list or structure with specs
-        if isinstance(img_data, dict):
-            if "specs" in img_data:
-                return img_data["specs"]
-            if image_version in img_data:
-                versions = img_data[image_version]
-                if isinstance(versions, list):
-                    return versions
-        return []
-    
-    # Check application images
-    app_images = region_data.get("app_images", {})
-    if image_name in app_images:
-        img_data = app_images[image_name]
-        if isinstance(img_data, dict):
-            if "specs" in img_data:
-                return img_data["specs"]
-            if image_version in img_data:
-                versions = img_data[image_version]
-                if isinstance(versions, list):
-                    return versions
-        return []
+        return system_images[image_name].get(region_short, {}).get("specs", [])
     
     return []
 
@@ -196,47 +178,11 @@ def get_spec_info(spec_code: str) -> Optional[Dict]:
     Returns:
         Spec info dictionary
     """
-    specs = load_image_specs()
-    spec_defs = specs.get("spec_definitions", {})
-    return spec_defs.get(spec_code)
+    data = fetch_specs_data("specs")
+    return data.get(spec_code)
 
 
-def get_effective_region_config(specs: Dict, region: str) -> Optional[Dict]:
-    """
-    Get effective region config (handles _same_as reference)
-    
-    Args:
-        specs: Image specs configuration
-        region: Region ID
-    
-    Returns:
-        Region config dictionary, or None if region doesn't exist
-    """
-    regions = specs.get("regions", {})
-    
-    if region not in regions:
-        return None
-    
-    region_data = regions[region]
-    
-    # Handle _same_as reference
-    if "_same_as" in region_data:
-        ref_region = region_data["_same_as"]
-        if ref_region in regions:
-            # Copy the referenced region's config
-            ref_data = regions[ref_region]
-            effective_config = {
-                "name": region_data.get("name", ref_data.get("name")),
-                "spec_prefix": ref_data.get("spec_prefix", "hf"),
-                "system_images": ref_data.get("system_images", {}),
-                "app_images": ref_data.get("app_images", {})
-            }
-            return effective_config
-    
-    return region_data
-
-
-def find_matching_spec(region: str, cpu: int, memory: int, os_type: str = "linux", image_name: str = None, image_version: str = None) -> Optional[str]:
+def find_matching_spec(region: str, cpu: int, memory: int, os_type: str = "linux", image_name: str = None) -> Optional[str]:
     """
     Find matching spec based on CPU, memory and OS type (region-aware)
     
@@ -246,23 +192,19 @@ def find_matching_spec(region: str, cpu: int, memory: int, os_type: str = "linux
         memory: Memory in GB
         os_type: OS type (linux/windows)
         image_name: Optional, image name for precise matching
-        image_version: Optional, image version for precise matching
     
     Returns:
         Matching spec code, or None if not found
     """
-    specs = load_image_specs()
-    spec_defs = specs.get("spec_definitions", {})
+    data = fetch_specs_data("all")
+    spec_defs = data.get("spec_definitions", {})
+    system_images = data.get("system_images", {})
     
-    # Get effective region config
-    region_config = get_effective_region_config(specs, region)
-    if not region_config:
-        print(f"⚠️ Region {region} not in configuration")
-        return None
+    region_short = REGIONS.get(region, {}).get("short", "beijing")
     
     # If image is specified, search from that image's available specs first
-    if image_name and image_version:
-        available_specs = get_available_specs(region, image_name, image_version)
+    if image_name and image_name in system_images:
+        available_specs = system_images[image_name].get(region_short, {}).get("specs", [])
         if available_specs:
             # Prefer exact match
             for spec_code in available_specs:
@@ -285,22 +227,8 @@ def find_matching_spec(region: str, cpu: int, memory: int, os_type: str = "linux
             if best_match:
                 return best_match
     
-    # Search from all available specs in the region
-    all_available_specs = set()
-    system_images = region_config.get("system_images", {})
-    app_images = region_config.get("app_images", {})
-    
-    for img_data in system_images.values():
-        if isinstance(img_data, dict) and "specs" in img_data:
-            all_available_specs.update(img_data["specs"])
-    
-    for img_data in app_images.values():
-        if isinstance(img_data, dict) and "specs" in img_data:
-            all_available_specs.update(img_data["specs"])
-    
-    # Search for match in region's available specs
-    for spec_code in all_available_specs:
-        spec_info = spec_defs.get(spec_code, {})
+    # Search from all specs
+    for spec_code, spec_info in spec_defs.items():
         if spec_info.get("os") == os_type:
             if spec_info.get("vcpu") == cpu and spec_info.get("memory") == memory:
                 return spec_code
@@ -309,8 +237,7 @@ def find_matching_spec(region: str, cpu: int, memory: int, os_type: str = "linux
     best_match = None
     best_diff = float('inf')
     
-    for spec_code in all_available_specs:
-        spec_info = spec_defs.get(spec_code, {})
+    for spec_code, spec_info in spec_defs.items():
         if spec_info.get("os") == os_type:
             diff = abs(spec_info.get("vcpu", 0) - cpu) + abs(spec_info.get("memory", 0) - memory)
             if diff < best_diff:
@@ -330,15 +257,10 @@ def is_region_supported(region: str) -> Tuple[bool, str]:
     Returns:
         (is_supported, reason)
     """
-    specs = load_image_specs()
-    regions = specs.get("regions", {})
+    regions = fetch_specs_data("regions")
     
     if region not in regions:
-        return False, f"Region {region} not in configuration"
-    
-    region_data = regions[region]
-    if region_data.get("supported") == False:
-        return False, region_data.get("_note", "This region does not support Flexus L")
+        return False, f"Region {region} not supported"
     
     return True, "Supported"
 
@@ -453,7 +375,7 @@ def create_flexus_l_instance(
     # Build request body
     request_body = {
         "instance_name": instance_name,
-        "description": "Flexus L instance created via Huawei Cloud SDK",
+        "description": "Flexus L instance created via API",
         "plan_spec": plan_spec,
         "image_ref": {
             "image_name": image_name,
@@ -492,11 +414,12 @@ def create_flexus_l_instance(
             }
         }
     
-    # Actual creation
+    # Actual creation - URL hardcoded to cn-north-4 as per API requirement
     try:
         credentials = BasicCredentials(ak, sk, project_id)
         signer = Signer(credentials)
         
+        # API URL is hardcoded to cn-north-4 (global endpoint)
         url = "https://hcss.cn-north-4.myhuaweicloud.com/v1/light-instances"
         parsed_url = urlparse(url)
         
@@ -674,35 +597,31 @@ def unsubscribe_resources(
 
 def show_regions():
     """Display all available regions"""
-    specs = load_image_specs()
-    regions = specs.get("regions", {})
+    print("Fetching region information...")
+    regions = fetch_specs_data("regions")
     
-    print("=" * 70)
+    print("\n" + "=" * 60)
     print("Flexus L Available Regions")
-    print("=" * 70)
-    print(f"{'Region ID':<25} {'Region Name':<20} {'Status':<10}")
-    print("-" * 70)
+    print("=" * 60)
+    print(f"{'Region ID':<25} {'Region Name':<20}")
+    print("-" * 60)
     
-    for region_id, region_data in regions.items():
-        region_name = region_data.get("name", "Unknown")
-        supported = region_data.get("supported", True)
-        status = "✅ Supported" if supported else "❌ Not Supported"
-        note = region_data.get("_note", "")
-        print(f"{region_id:<25} {region_name:<20} {status:<10}")
-        if note:
-            print(f"  └─ {note}")
+    for region_id, region_info in regions.items():
+        region_name = region_info.get("name", "Unknown")
+        print(f"{region_id:<25} {region_name:<20}")
     
-    print("=" * 70)
+    print("=" * 60)
 
 
-def show_images(region: str, image_type: str = "all"):
+def show_images(region: str):
     """Display available images for a region"""
     supported, reason = is_region_supported(region)
     if not supported:
-        print(f"❌ {reason}")
+        print(f"[ERROR] {reason}")
         return
     
-    images = get_available_images(region, image_type)
+    print(f"Fetching image information for region {region}...")
+    images = get_available_images(region)
     
     if not images:
         print(f"Region {region} has no configured image information")
@@ -710,42 +629,45 @@ def show_images(region: str, image_type: str = "all"):
     
     region_name = get_region_name_by_id(region) or region
     
-    print("=" * 70)
+    print("\n" + "=" * 60)
     print(f"Region {region} ({region_name}) Available Images")
-    print("=" * 70)
+    print("=" * 60)
     
-    for img_name, versions in images.items():
-        print(f"\n📦 {img_name}")
-        for version in versions:
-            specs = get_available_specs(region, img_name, version)
-            print(f"  ├─ {version}")
-            if specs:
-                print(f"  │  └─ Available specs: {', '.join(specs[:3])}{'...' if len(specs) > 3 else ''}")
+    for img_name, img_data in images.items():
+        version = img_data.get("version", "")
+        specs = img_data.get("specs", [])
+        print(f"\n[IMAGE] {img_name}")
+        if version:
+            print(f"  |-- Version: {version.replace(chr(10), ', ')}")
+        if specs:
+            print(f"  |-- Available Specs: {', '.join(specs[:3])}{'...' if len(specs) > 3 else ''}")
     
-    print("\n" + "=" * 70)
+    print("\n" + "=" * 60)
 
 
-def show_specs(region: str, image_name: str, image_version: str):
+def show_specs(region: str, image_name: str):
     """Display available specs for an image"""
-    specs = get_available_specs(region, image_name, image_version)
-    spec_defs = load_image_specs().get("spec_definitions", {})
+    print(f"Fetching spec information for {image_name} in {region}...")
+    specs = get_available_specs(region, image_name)
+    spec_defs = fetch_specs_data("specs")
     
     if not specs:
-        print(f"❌ Image {image_name}:{image_version} in region {region} has no configured specs")
+        print(f"[ERROR] Image {image_name} has no configured specs in region {region}")
         return
     
+    print("\n" + "=" * 70)
+    print(f"Available Specs for {image_name} in Region {region}")
     print("=" * 70)
-    print(f"Available specs for {image_name}:{image_version} in region {region}")
-    print("=" * 70)
-    print(f"{'Spec Code':<30} {'CPU':<6} {'Memory':<8} {'Disk':<8}")
+    print(f"{'Spec Code':<30} {'CPU':<8} {'Memory':<8} {'Disk':<8} {'Bandwidth':<8}")
     print("-" * 70)
     
     for spec_code in specs:
         info = spec_defs.get(spec_code, {})
-        cpu = info.get("cpu", "?")
+        cpu = info.get("vcpu", "?")
         memory = info.get("memory", "?")
         disk = info.get("disk", "?")
-        print(f"{spec_code:<30} {cpu} cores   {memory}GB      {disk}GB")
+        bandwidth = info.get("bandwidth", "?")
+        print(f"{spec_code:<30} {cpu} cores   {memory}GB      {disk}GB      {bandwidth}Mbps")
     
     print("=" * 70)
 
@@ -762,13 +684,13 @@ def show_unsubscribe_policy():
     print("  - Effect: Resource stops and releases immediately")
     print("  - Refund: Proportional refund based on remaining time")
     print()
-    print("Type 2: Only unsubscribe resource's renewed periods")
+    print("Type 2: Unsubscribe renewal period only")
     print("  - Effect: Resource continues until expiration")
-    print("  - Refund: Refund the renewed portion")
+    print("  - Refund: Refund the renewal portion")
     print()
     print("[General Rules]")
-    print("  • Backup important data before unsubscribing")
-    print("  • Unsubscribe is irreversible and cannot be undone")
+    print("  * Please backup important data before unsubscribing")
+    print("  * Unsubscribe operation is irreversible")
     print("=" * 60)
 
 
@@ -792,15 +714,14 @@ def main():
     
     subparsers.add_parser("show-regions", help="Show all available regions")
     
-    show_images_parser = subparsers.add_parser("show-images", help="Show available images for a region")
-    show_images_parser.add_argument("--type", default="all", choices=["system", "app", "all"])
+    subparsers.add_parser("show-images", help="Show available images for a region")
     
     show_specs_parser = subparsers.add_parser("show-specs", help="Show available specs for an image")
-    show_specs_parser.add_argument("--image", required=True, help="Image (format: name:version)")
+    show_specs_parser.add_argument("--image", required=True, help="Image name")
     
     create_parser = subparsers.add_parser("create-instance", help="Create Flexus L instance")
     create_parser.add_argument("--plan-spec", help="Instance spec")
-    create_parser.add_argument("--image", default="Ubuntu:22.04", help="Image")
+    create_parser.add_argument("--image", default="Ubuntu", help="Image name")
     create_parser.add_argument("--cpu", type=int, help="CPU cores")
     create_parser.add_argument("--memory", type=int, help="Memory in GB")
     create_parser.add_argument("--period-num", type=int, default=1)
@@ -833,13 +754,10 @@ def main():
             show_regions()
             
         elif args.command == "show-images":
-            show_images(args.region, args.type)
+            show_images(args.region)
             
         elif args.command == "show-specs":
-            image_parts = args.image.split(":")
-            image_name = image_parts[0]
-            image_version = image_parts[1] if len(image_parts) > 1 else ""
-            show_specs(args.region, image_name, image_version)
+            show_specs(args.region, args.image)
             
         elif args.command == "create-instance":
             if not args.ak or not args.sk:
@@ -848,31 +766,34 @@ def main():
             
             supported, reason = is_region_supported(args.region)
             if not supported:
-                print(f"❌ {reason}")
+                print(f"[ERROR] {reason}")
                 return
             
-            image_parts = args.image.split(":")
-            image_name = image_parts[0]
-            image_version = image_parts[1] if len(image_parts) > 1 else ""
+            # Parse image name and version
+            image_input = args.image
+            if ":" in image_input:
+                image_name, image_version = image_input.split(":", 1)
+            else:
+                image_name = image_input
+                image_version = None
             
             plan_spec = args.plan_spec
             
             if not plan_spec:
                 if args.cpu and args.memory:
                     os_type = "windows" if "win" in image_name.lower() or "windows" in image_name.lower() else "linux"
-                    plan_spec = find_matching_spec(args.region, args.cpu, args.memory, os_type, image_name, image_version)
+                    plan_spec = find_matching_spec(args.region, args.cpu, args.memory, os_type, image_name)
                     if not plan_spec:
-                        print(f"❌ Cannot find spec matching {args.cpu} cores {args.memory}GB in region {args.region}")
-                        print(f"   Tip: Different regions use different spec codes, use show-specs command to view available specs")
+                        print(f"[ERROR] Cannot find matching spec for {args.cpu} cores {args.memory}GB in region {args.region}")
                         return
-                    print(f"✅ Auto-matched spec: {plan_spec} (region: {args.region})")
+                    print(f"[OK] Auto-matched spec: {plan_spec} (region: {args.region})")
                 else:
-                    available_specs = get_available_specs(args.region, image_name, image_version)
+                    available_specs = get_available_specs(args.region, image_name)
                     if available_specs:
                         plan_spec = available_specs[0]
-                        print(f"✅ Using default spec: {plan_spec}")
+                        print(f"[OK] Using default spec: {plan_spec}")
                     else:
-                        print(f"❌ Image {args.image} in region {args.region} has no configured specs")
+                        print(f"[ERROR] Image {image_name} has no configured specs in region {args.region}")
                         return
             
             spec_info = get_spec_info(plan_spec)
@@ -881,15 +802,15 @@ def main():
             print("Create Flexus L Instance")
             print("=" * 70)
             print(f"Region: {args.region} ({get_region_name_by_id(args.region) or 'Unknown'})")
-            print(f"Image: {args.image}")
+            print(f"Image: {image_name}")
             print(f"Spec: {plan_spec}")
             if spec_info:
-                print(f"  └─ CPU: {spec_info.get('cpu', '?')} cores, Memory: {spec_info.get('memory', '?')}GB")
+                print(f"  |-- CPU: {spec_info.get('vcpu', '?')} cores, Memory: {spec_info.get('memory', '?')}GB")
             print(f"Period: {args.period_num} {args.period_type}")
             print("=" * 70)
             
             if not args.dry_run and not args.confirm:
-                print("\n⚠️ This operation will incur charges!")
+                print("\n[WARNING] This operation will incur charges!")
                 confirm = input("Confirm creation? (type 'yes' to confirm): ")
                 if confirm.lower() != 'yes':
                     print("Cancelled")
@@ -897,7 +818,7 @@ def main():
             
             result = create_flexus_l_instance(
                 ak=args.ak, sk=args.sk, region=args.region,
-                plan_spec=plan_spec, image_name=image_name, image_version=image_version,
+                plan_spec=plan_spec, image_name=image_name, image_version=image_version or "22.04",
                 period_num=args.period_num, period_type=args.period_type,
                 instance_name=args.instance_name, auto_renew=args.auto_renew,
                 auto_pay=args.auto_pay, dry_run=args.dry_run
@@ -905,13 +826,13 @@ def main():
             
             if result["success"]:
                 if args.dry_run:
-                    print("\n✅ Dry run successful")
+                    print("\n[OK] Dry run successful")
                 else:
-                    print("\n✅ Created successfully!")
+                    print("\n[OK] Creation successful!")
                     print(f"Order ID: {result.get('order_id')}")
                     print(f"Instance ID: {result.get('instance_ids')}")
             else:
-                print(f"\n❌ Creation failed: {result.get('error')}")
+                print(f"\n[ERROR] Creation failed: {result.get('error')}")
                 
         elif args.command == "renewal":
             if not args.ak or not args.sk:
@@ -940,10 +861,10 @@ def main():
             )
             
             if result["success"]:
-                print("\n✅ Renewal successful!")
+                print("\n[OK] Renewal successful!")
                 print(f"Order ID: {result.get('order_ids')}")
             else:
-                print(f"\n❌ Renewal failed: {result.get('error')}")
+                print(f"\n[ERROR] Renewal failed: {result.get('error')}")
                 
         elif args.command == "unsubscribe":
             if not args.ak or not args.sk:
@@ -956,11 +877,11 @@ def main():
             print("Unsubscribe Flexus L Instance")
             print("=" * 60)
             print(f"Instance: {resource_ids}")
-            print(f"Unsubscribe type: {args.type}")
+            print(f"Unsubscribe Type: {args.type}")
             print("=" * 60)
             
             if not args.dry_run and not args.confirm:
-                print("\n⚠️ This operation is irreversible!")
+                print("\n[WARNING] This operation is irreversible!")
                 confirm = input("Confirm unsubscribe? (type 'yes' to confirm): ")
                 if confirm.lower() != 'yes':
                     print("Cancelled")
@@ -972,16 +893,16 @@ def main():
             )
             
             if result["success"]:
-                print("\n✅ Unsubscribe successful!")
+                print("\n[OK] Unsubscribe successful!")
                 print(f"Order ID: {result.get('order_ids')}")
             else:
-                print(f"\n❌ Unsubscribe failed: {result.get('error')}")
+                print(f"\n[ERROR] Unsubscribe failed: {result.get('error')}")
                 
         elif args.command == "unsubscribe-policy":
             show_unsubscribe_policy()
             
     except KeyboardInterrupt:
-        print("\nOperation interrupted by user")
+        print("\nOperation cancelled by user")
     except Exception as e:
         print(f"\nExecution failed: {e}")
 
