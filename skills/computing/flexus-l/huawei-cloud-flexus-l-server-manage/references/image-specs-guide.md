@@ -1,74 +1,95 @@
-# Flexus L 系统镜像与规格参考
+# Flexus L System Images and Specifications Reference
 
-> 本文档从 SKILL_CN.md 移出，避免技能文档臃肿。
+## Data Source
 
-## 支持的系统镜像
+Image and specification information is dynamically fetched from official documentation, no local configuration file needed:
 
-配置文件 `image_specs.json` 定义了各区域支持的系统镜像和规格映射：
+- **Data Source**: https://support.huaweicloud.com/api-flexusl/create_instance_0001.html
+- **Fetch Method**: Automatically retrieves latest data when executing `show-regions`, `show-images`, `show-specs`
+- **Script**: `scripts/flexus_specs_extractor.py`
 
-| 镜像名称 | 版本 | 说明 |
-| --------- | ------ | ------ |
-| Ubuntu | 22.04, 20.04 | Linux 系统 |
-| CentOS | 7.9, 8.0 | Linux 系统 |
-| Debian | 11.0, 12.0 | Linux 系统 |
-| WindowsServer | 2019_standard_ch, 2022_standard_ch | Windows 系统 |
+## Supported System Images
 
-## 可用规格参考
+| Image Name | Versions | Description |
+| ---------- | -------- | ----------- |
+| Ubuntu | 24.04, 22.04, 20.04, 18.04, 16.04 | Linux system |
+| CentOS | 8.2, 8.1, 8.0, 7.9, 7.8, 7.7... | Linux system |
+| CentOS_Stream | 9.0, 8.0 | Linux system |
+| Debian | 12.0, 11.1, 9.0 | Linux system |
+| Huawei Cloud EulerOS | 2.0 | Huawei EulerOS |
+| openEuler | 20.03, 22.03 | Open source EulerOS |
+| AlmaLinux | 9.0, 9.3, 9.4 | Linux system |
+| Rocky Linux | 8.4, 8.5, 8.8, 8.10, 9.0... | Linux system |
+| OpenSUSE | 15.0 | Linux system |
+| CoreOS | 2079.4.0 | Container OS |
+| WindowsServer | 2012R2~2022 | Windows system |
 
-> **⚠️ 重要：规格编码前缀因区域而异！**
+## Available Specifications Reference
+
+> **⚠️ Important: Spec code prefixes vary by region!**
 >
-> | 区域 | 规格前缀 | 示例 |
-> | ------ | ---------- | ------ |
-> | 华北-北京四、华东-上海一、华南-广州等 | `hf.*` | `hf.small.1.win` |
-> | **西南-贵阳一 (cn-southwest-2)** | `ahf.*` | `ahf.small.1.win` |
+> | Region | Spec Prefix | Example |
+> | ------ | ----------- | ------- |
+> | North China-Beijing 4, East China-Shanghai 1, South China-Guangzhou, etc. | `hf.*` | `hf.small.1.win` |
+> | **Southwest China-Guiyang 1 (cn-southwest-2)** | `ahf.*` | `ahf.small.1.win` |
 >
-> **使用错误前缀会导致 `HCSS.14000001` 错误！**
+> **Using the wrong prefix will result in `HCSS.14000001` error!**
 
-### 标准规格（hf.* 前缀）
+### Standard Specifications (hf.* prefix)
 
-适用于北京四、上海一、广州等区域：
+Applies to Beijing 4, Shanghai 1, Guangzhou, and other regions:
 
-| 规格编码 | OS | CPU | 内存 |
-| --------- | ----- | ----- | ------ |
-| `hf.small.1.linux` | Linux | 1核 | 1GB |
-| `hf.small.2.linux` | Linux | 1核 | 2GB |
-| `hf.medium.1.linux` | Linux | 2核 | 2GB |
-| `hf.medium.2.linux` | Linux | 2核 | 4GB |
-| `hf.large.1.linux` | Linux | 4核 | 4GB |
-| `hf.xlarge.1.linux` | Linux | 8核 | 8GB |
-| `hf.small.1.win` | Windows | 1核 | 2GB |
-| `hf.medium.1.win` | Windows | 2核 | 4GB |
-| `hf.large.1.win` | Windows | 4核 | 8GB |
+| Spec Code | OS | CPU | Memory |
+| --------- | -- | --- | ------ |
+| `hf.small.1.linux` | Linux | 2 vCPUs | 2GB |
+| `hf.small.2.linux` | Linux | 2 vCPUs | 2GB |
+| `hf.medium.1.linux` | Linux | 2 vCPUs | 4GB |
+| `hf.medium.2.linux` | Linux | 2 vCPUs | 4GB |
+| `hf.large.1.linux` | Linux | 2 vCPUs | 8GB |
+| `hf.xlarge.1.linux` | Linux | 4 vCPUs | 8GB |
+| `hf.small.1.win` | Windows | 2 vCPUs | 2GB |
+| `hf.medium.1.win` | Windows | 2 vCPUs | 4GB |
+| `hf.large.1.win` | Windows | 2 vCPUs | 8GB |
 
-### 贵阳一规格（ahf.* 前缀）
+### Guiyang 1 Specifications (ahf.* prefix)
 
-适用于 cn-southwest-2 区域：
+Applies to cn-southwest-2 region:
 
-| 规格编码 | OS | CPU | 内存 |
-| --------- | ----- | ----- | ------ |
-| `ahf.small.1.win` | Windows | 1核 | 2GB |
-| `ahf.medium.1.win` | Windows | 2核 | 4GB |
-| `ahf.large.1.win` | Windows | 4核 | 8GB |
-| `ahf.small.1.linux` | Linux | 1核 | 1GB |
-| `ahf.medium.1.linux` | Linux | 2核 | 2GB |
-| `ahf.large.1.linux` | Linux | 4核 | 8GB |
+| Spec Code | OS | CPU | Memory |
+| --------- | -- | --- | ------ |
+| `ahf.small.1.win` | Windows | 2 vCPUs | 2GB |
+| `ahf.medium.1.win` | Windows | 2 vCPUs | 4GB |
+| `ahf.large.1.win` | Windows | 2 vCPUs | 8GB |
+| `ahf.small.1.linux` | Linux | 2 vCPUs | 2GB |
+| `ahf.medium.1.linux` | Linux | 2 vCPUs | 4GB |
+| `ahf.large.1.linux` | Linux | 2 vCPUs | 8GB |
 
-## 可用镜像参考
+## Available Images Reference
 
-**Windows 镜像：**
+**Windows Images:**
 
 - `WindowsServer:2012R2_standard_ch`
 - `WindowsServer:2016_standard_ch`
 - `WindowsServer:2019_standard_ch`
 - `WindowsServer:2022_standard_ch`
 
-**Linux 镜像：**
+**Linux Images:**
 
-- `Ubuntu:22.04_amd64`
-- `CentOS:7.9_amd64`
-- `Debian:10.2.0_amd64`
+- `Ubuntu:24.04`
+- `Ubuntu:22.04`
+- `CentOS:7.9`
+- `CentOS:8.2`
+- `Debian:12.0`
+- `Huawei Cloud EulerOS:2.0`
 
-> **💡 备注**：各区域、镜像版本支持的规格编码各有差异，购买前请查阅官方文档 [Flexus L 实例购买指南](https://support.huaweicloud.com/api-flexusl/create_instance_0001.html#create_instance_0001__section1881914176434)：
+> **💡 Note**: Spec codes vary by region and image version. Please refer to the official documentation [Flexus L Instance Purchase Guide](https://support.huaweicloud.com/api-flexusl/create_instance_0001.html#create_instance_0001__section1881914176434) before purchasing:
 >
-> - **附录1**：各类镜像对应的规格编码
-> - **附录2**：规格编码对应的规格信息
+> - **Appendix 1**: Spec codes for each image type
+> - **Appendix 2**: Spec details for each code
+>
+> Or use the command-line tool for real-time queries:
+>
+> ```bash
+> python scripts/flexus_lifecycle.py --region cn-north-4 show-images
+> python scripts/flexus_lifecycle.py --region cn-north-4 show-specs --image Ubuntu
+> ```
