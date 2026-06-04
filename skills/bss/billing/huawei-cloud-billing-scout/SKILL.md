@@ -14,11 +14,13 @@ Using **hcloud ≥7.2.2** and BSS read-only IAM, answer in one conversation: how
 
 > **Prerequisite check: Huawei Cloud CLI (hcloud) >= 7.2.2 required**
 > Run `hcloud version` to verify version >= 7.2.2, and `hcloud configure list` to check profile exists.
+> Run `hcloud configure set --cli-lang=cn` — BSS requires Chinese mode.
 > If not installed or version is too low, see [references/cli-installation-guide.md](references/cli-installation-guide.md) for installation guide.
 
 ```bash
 hcloud version
 hcloud configure list
+hcloud configure set --cli-lang=cn
 ```
 
 ## Principles
