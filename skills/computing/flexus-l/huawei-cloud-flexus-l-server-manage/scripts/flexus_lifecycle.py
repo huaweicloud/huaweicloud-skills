@@ -269,12 +269,15 @@ def is_region_supported(region: str) -> Tuple[bool, str]:
 # Authentication
 # ============================================================================
 
-def get_project_id_by_region(ak: str, sk: str, region: str) -> Optional[str]:
+def get_project_id_by_region(ak: str, sk: str, security_token: Optional[str], region: str) -> Optional[str]:
     """Get Project ID for a specified region"""
     iam_endpoint = "https://iam.myhuaweicloud.com/v3/projects"
     
     try:
-        credentials = BasicCredentials(ak, sk)
+        if security_token:
+            credentials = BasicCredentials(ak, sk).with_security_token(security_token)
+        else:
+            credentials = BasicCredentials(ak, sk)
         signer = Signer(credentials)
         
         request = SdkRequest()
@@ -315,12 +318,15 @@ def get_project_id_by_region(ak: str, sk: str, region: str) -> Optional[str]:
         return None
 
 
-def create_bss_client(ak: str, sk: str, region: str = "cn-north-1"):
+def create_bss_client(ak: str, sk: str, security_token: Optional[str], region: str = "cn-north-1"):
     """Create BSS client"""
     if not SDK_AVAILABLE:
         raise ImportError("Huawei Cloud BSS SDK not installed")
     
-    credentials = GlobalCredentials(ak, sk)
+    if security_token:
+        credentials = GlobalCredentials(ak, sk).with_security_token(security_token)
+    else:
+        credentials = GlobalCredentials(ak, sk)
     config = HttpConfig.get_default_config()
     config.ignore_ssl_verification = True
     
@@ -340,6 +346,7 @@ def create_bss_client(ak: str, sk: str, region: str = "cn-north-1"):
 def create_flexus_l_instance(
     ak: str,
     sk: str,
+    security_token: Optional[str],
     region: str = "cn-north-4",
     plan_spec: str = "hf.small.1.win",
     image_name: str = "WindowsServer",
@@ -360,7 +367,7 @@ def create_flexus_l_instance(
         return {"success": False, "error": reason}
     
     # Get project ID
-    project_id = get_project_id_by_region(ak, sk, region)
+    project_id = get_project_id_by_region(ak, sk, security_token, region)
     if not project_id:
         return {"success": False, "error": f"Failed to get project ID for region {region}"}
     
@@ -416,7 +423,10 @@ def create_flexus_l_instance(
     
     # Actual creation - URL hardcoded to cn-north-4 as per API requirement
     try:
-        credentials = BasicCredentials(ak, sk, project_id)
+        if security_token:
+            credentials = BasicCredentials(ak, sk, project_id).with_security_token(security_token)
+        else:
+            credentials = BasicCredentials(ak, sk, project_id)
         signer = Signer(credentials)
         
         # API URL is hardcoded to cn-north-4 (global endpoint)
@@ -480,6 +490,7 @@ def create_flexus_l_instance(
 def renewal_resources(
     ak: str,
     sk: str,
+    security_token: Optional[str],
     resource_ids: List[str],
     period_num: int = 1,
     period_type: str = "month",
@@ -507,7 +518,7 @@ def renewal_resources(
         }
     
     try:
-        client = create_bss_client(ak, sk)
+        client = create_bss_client(ak, sk, security_token)
         
         request = RenewalResourcesRequest()
         request.body = RenewalResourcesReq(
@@ -540,6 +551,7 @@ def renewal_resources(
 def unsubscribe_resources(
     ak: str,
     sk: str,
+    security_token: Optional[str],
     resource_ids: List[str],
     unsubscribe_type: int = 1,
     reason: Optional[str] = None,
@@ -564,7 +576,7 @@ def unsubscribe_resources(
         }
     
     try:
-        client = create_bss_client(ak, sk)
+        client = create_bss_client(ak, sk, security_token)
         
         request = CancelResourcesSubscriptionRequest()
         request.body = UnsubscribeResourcesReq(
@@ -704,8 +716,9 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     
-    parser.add_argument("--ak", help="Access Key ID")
-    parser.add_argument("--sk", help="Secret Access Key")
+    parser.add_argument("--ak", help="Huawei Cloud Access Key AK (can be temporary AK, or set HW_ACCESS_KEY env var)")
+    parser.add_argument("--sk", help="Huawei Cloud Access Key SK (can be temporary SK, or set HW_SECRET_KEY env var)")
+    parser.add_argument("--security-token", help="Security token for temporary credentials (required when using temporary AK/SK, or set HW_SECURITY_TOKEN env var)")
     parser.add_argument("--region", default="cn-north-4", help="Region ID")
     parser.add_argument("--dry-run", action="store_true", help="Dry run")
     parser.add_argument("--confirm", action="store_true", help="Force confirm")
@@ -760,8 +773,13 @@ def main():
             show_specs(args.region, args.image)
             
         elif args.command == "create-instance":
-            if not args.ak or not args.sk:
-                print("Error: --ak and --sk are required")
+            # Get credentials from args or environment variables
+            ak = args.ak or os.environ.get("HW_ACCESS_KEY")
+            sk = args.sk or os.environ.get("HW_SECRET_KEY")
+            security_token = args.security_token or os.environ.get("HW_SECURITY_TOKEN")
+            
+            if not ak or not sk or not security_token:
+                print("Error: --ak, --sk, and --security-token are required (or set HW_ACCESS_KEY, HW_SECRET_KEY, and HW_SECURITY_TOKEN env vars)")
                 return
             
             supported, reason = is_region_supported(args.region)
@@ -817,7 +835,7 @@ def main():
                     return
             
             result = create_flexus_l_instance(
-                ak=args.ak, sk=args.sk, region=args.region,
+                ak=ak, sk=sk, region=args.region, security_token=security_token,
                 plan_spec=plan_spec, image_name=image_name, image_version=image_version or "22.04",
                 period_num=args.period_num, period_type=args.period_type,
                 instance_name=args.instance_name, auto_renew=args.auto_renew,
@@ -835,8 +853,13 @@ def main():
                 print(f"\n[ERROR] Creation failed: {result.get('error')}")
                 
         elif args.command == "renewal":
-            if not args.ak or not args.sk:
-                print("Error: --ak and --sk are required")
+            # Get credentials from args or environment variables
+            ak = args.ak or os.environ.get("HW_ACCESS_KEY")
+            sk = args.sk or os.environ.get("HW_SECRET_KEY")
+            security_token = args.security_token or os.environ.get("HW_SECURITY_TOKEN")
+            
+            if not ak or not sk or not security_token:
+                print("Error: --ak, --sk, and --security-token are required (or set HW_ACCESS_KEY, HW_SECRET_KEY, and HW_SECURITY_TOKEN env vars)")
                 return
             
             resource_ids = [rid.strip() for rid in args.resource_ids.split(",")]
@@ -855,7 +878,7 @@ def main():
                     return
             
             result = renewal_resources(
-                ak=args.ak, sk=args.sk, resource_ids=resource_ids,
+                ak=ak, sk=sk, resource_ids=resource_ids, security_token=security_token,
                 period_num=args.period_num, period_type=args.period_type,
                 auto_pay=args.auto_pay, dry_run=args.dry_run
             )
@@ -867,8 +890,13 @@ def main():
                 print(f"\n[ERROR] Renewal failed: {result.get('error')}")
                 
         elif args.command == "unsubscribe":
-            if not args.ak or not args.sk:
-                print("Error: --ak and --sk are required")
+            # Get credentials from args or environment variables
+            ak = args.ak or os.environ.get("HW_ACCESS_KEY")
+            sk = args.sk or os.environ.get("HW_SECRET_KEY")
+            security_token = args.security_token or os.environ.get("HW_SECURITY_TOKEN")
+            
+            if not ak or not sk or not security_token:
+                print("Error: --ak, --sk, and --security-token are required (or set HW_ACCESS_KEY, HW_SECRET_KEY, and HW_SECURITY_TOKEN env vars)")
                 return
             
             resource_ids = [rid.strip() for rid in args.resource_ids.split(",")]
@@ -888,7 +916,7 @@ def main():
                     return
             
             result = unsubscribe_resources(
-                ak=args.ak, sk=args.sk, resource_ids=resource_ids,
+                ak=ak, sk=sk, resource_ids=resource_ids, security_token=security_token,
                 unsubscribe_type=args.type, reason=args.reason, dry_run=args.dry_run
             )
             
