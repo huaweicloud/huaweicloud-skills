@@ -70,6 +70,10 @@ This skill provides core lifecycle management capabilities for Huawei Cloud Flex
 - Cost control and budget management
 - Project resource cleanup and decommissioning
 
+### Important Notes
+
+**⚠️ All scripts and environment check scripts are inside the skill package. You must use skill action=exec to execute them; do not run them directly in the shell.**
+
 ## Prerequisites
 
 Before using this skill, ensure the following conditions are met:
@@ -88,6 +92,34 @@ Before using this skill, ensure the following conditions are met:
   - `HCSS`: Flexus L instance management
   - `IAM`: Project ID query (read-only)
 - How to obtain: [Huawei Cloud Console](https://console.huaweicloud.com/) → My Credentials → Access Keys → Create Access Key
+
+**Credential Configuration Methods:**
+
+| Method | Description | Priority |
+| -------- | ------------- | ---------- |
+| **Command-line Parameters** | `--ak`, `--sk`, `--security-token` | Highest |
+| **Environment Variables** | `HW_ACCESS_KEY`, `HW_SECRET_KEY`, `HW_SECURITY_TOKEN` | Lower |
+| **Default** | AK/SK required, Security Token optional | - |
+
+**Credential Types:**
+
+| Type | Parameters | Description |
+| ---- | ---------- | ----------- |
+| **Permanent AK/SK** | `--ak <AK> --sk <SK>` | Long-term access keys from Huawei Cloud console |
+| **Temporary AK/SK** | `--ak <AK> --sk <SK> --security-token <TOKEN>` | Temporary credentials with security token |
+
+**Environment Variables:**
+
+```bash
+export HW_ACCESS_KEY="your-access-key-id"
+export HW_SECRET_KEY="your-secret-access-key"
+export HW_SECURITY_TOKEN="your-security-token"  # Optional, only for temporary credentials
+```
+
+**Security Token Usage:**
+- **Permanent AK/SK**: Only need `--ak` and `--sk`, no security token required
+- **Temporary AK/SK**: Need `--ak`, `--sk`, and `--security-token` (required for temporary credentials)
+- **Optional**: Security token is only needed when using temporary AK/SK credentials
 
 ### 3. IAM Permissions
 
@@ -159,9 +191,21 @@ Activate this skill when users mention:
 
 **⚠️ AK/SK Security Requirements:**
 
-- AK/SK must be provided by user each time, never saved to any configuration file
-- Supports environment variables: `CLOUD_SDK_AK` and `CLOUD_SDK_SK`
-- Supports command-line parameters: `--ak` and `--sk`
+- AK/SK must be provided via command-line parameters or environment variables
+- **Environment Variables (Recommended)**: `HW_ACCESS_KEY`, `HW_SECRET_KEY`, `HW_SECURITY_TOKEN`
+- **Command-line Parameters**: `--ak`, `--sk`, `--security-token`
+- **Priority**: Command-line parameters > Environment variables
+- **Security Token**: Optional - only needed for temporary credentials
+
+**Credential Usage:**
+
+```python
+# With security token (temporary credentials)
+BasicCredentials(ak, sk).with_security_token(security_token)
+
+# Without security token (permanent credentials)
+BasicCredentials(ak, sk)
+```
 
 ---
 
@@ -172,9 +216,9 @@ Activate this skill when users mention:
 | `show-regions` | Show available regions | None | None |
 | `show-images` | Show available images | None | `--region` |
 | `show-specs` | Show available specs | `--image` | `--region` |
-| `create-instance` | Create instance | `--ak`, `--sk` | `--region`, `--image`, `--plan-spec`, `--cpu`, `--memory`, `--period-num`, `--period-type`, `--instance-name`, `--auto-renew`, `--auto-pay`, `--dry-run`, `--confirm` |
-| `renewal` | Renew instance | `--ak`, `--sk`, `--resource-ids` | `--period-num`, `--period-type`, `--auto-pay`, `--dry-run`, `--confirm` |
-| `unsubscribe` | Unsubscribe instance | `--ak`, `--sk`, `--resource-ids` | `--type`, `--reason`, `--dry-run`, `--confirm` |
+| `create-instance` | Create instance | `--ak`, `--sk` | `--security-token`, `--region`, `--image`, `--plan-spec`, `--cpu`, `--memory`, `--period-num`, `--period-type`, `--instance-name`, `--auto-renew`, `--auto-pay`, `--dry-run`, `--confirm` |
+| `renewal` | Renew instance | `--ak`, `--sk`, `--resource-ids` | `--security-token`, `--period-num`, `--period-type`, `--auto-pay`, `--dry-run`, `--confirm` |
+| `unsubscribe` | Unsubscribe instance | `--ak`, `--sk`, `--resource-ids` | `--security-token`, `--type`, `--reason`, `--dry-run`, `--confirm` |
 
 ---
 
@@ -184,8 +228,9 @@ Activate this skill when users mention:
 
 | Parameter | Description | Validation Rule |
 |-----------|-------------|-----------------|
-| `--ak` | Huawei Cloud Access Key ID | Non-empty, 20 characters |
-| `--sk` | Huawei Cloud Secret Access Key | Non-empty, 40 characters |
+| `--ak` | Huawei Cloud Access Key ID | Non-empty, 20 characters (or set `HW_ACCESS_KEY` env var) |
+| `--sk` | Huawei Cloud Secret Access Key | Non-empty, 40 characters (or set `HW_SECRET_KEY` env var) |
+| `--security-token` | Security Token | Optional (or set `HW_SECURITY_TOKEN` env var) |
 | `--resource-ids` | Resource IDs | Non-empty, comma-separated for multiple |
 | `--image` | Image name | Format: `name:version`, e.g. `Ubuntu:22.04` |
 | `--region` | Region ID | Must be in supported regions list |
@@ -241,13 +286,67 @@ python scripts/flexus_lifecycle.py <command> [options] --ak <AK> --sk <SK>
 
 ### Global Parameters
 
-| Parameter | Description | Required |
-| ----------- | ------------- | ---------- |
-| `--ak` | Huawei Cloud Access Key ID | Yes |
-| `--sk` | Huawei Cloud Secret Access Key | Yes |
-| `--region` | Region ID (default: cn-north-4) | No |
-| `--dry-run` | Dry run, don't actually execute | No |
-| `--confirm` | Force confirmation, skip interactive | No |
+| Parameter | Description | Required | Environment Variable |
+| ----------- | ------------- | ---------- | --------------------- |
+| `--ak` | Huawei Cloud Access Key ID | Yes | `HW_ACCESS_KEY` |
+| `--sk` | Huawei Cloud Secret Access Key | Yes | `HW_SECRET_KEY` |
+| `--security-token` | Security Token | No | `HW_SECURITY_TOKEN` |
+| `--region` | Region ID (default: cn-north-4) | No | - |
+| `--dry-run` | Dry run, don't actually execute | No | - |
+| `--confirm` | Force confirmation, skip interactive | No | - |
+
+### Credential Configuration Examples
+
+**Method 1: Using Permanent AK/SK (Recommended for automation)**
+
+```bash
+# Using environment variables
+export HW_ACCESS_KEY="your-access-key-id"
+export HW_SECRET_KEY="your-secret-access-key"
+
+python scripts/flexus_lifecycle.py create-instance --image Ubuntu --cpu 2 --memory 4
+
+# Or using command-line parameters
+python scripts/flexus_lifecycle.py create-instance \
+  --ak your-access-key-id \
+  --sk your-secret-access-key \
+  --image Ubuntu \
+  --cpu 2 \
+  --memory 4
+```
+
+**Method 2: Using Temporary AK/SK with Security Token**
+
+```bash
+# Using environment variables
+export HW_ACCESS_KEY="temporary-access-key-id"
+export HW_SECRET_KEY="temporary-secret-access-key"
+export HW_SECURITY_TOKEN="your-security-token"
+
+python scripts/flexus_lifecycle.py create-instance --image Ubuntu --cpu 2 --memory 4
+
+# Or using command-line parameters
+python scripts/flexus_lifecycle.py create-instance \
+  --ak temporary-access-key-id \
+  --sk temporary-secret-access-key \
+  --security-token your-security-token \
+  --image Ubuntu \
+  --cpu 2 \
+  --memory 4
+```
+
+**Method 3: Mixed (Command-line overrides environment)**
+
+```bash
+export HW_ACCESS_KEY="default-ak"
+export HW_SECRET_KEY="default-sk"
+
+# Override with command-line parameters
+python scripts/flexus_lifecycle.py create-instance \
+  --ak different-ak \
+  --sk different-sk \
+  --image Ubuntu
+```
 
 ---
 
@@ -282,9 +381,26 @@ Purchase new Flexus L instances, supports Windows/Linux.
 #### Method 1: Auto-match Spec (Recommended)
 
 ```bash
-# Auto-match spec based on CPU and memory
+# Using permanent AK/SK with environment variables
+export HW_ACCESS_KEY="your-ak"
+export HW_SECRET_KEY="your-sk"
+python scripts/flexus_lifecycle.py create-instance \
+  --region cn-north-4 \
+  --image Ubuntu \
+  --cpu 2 \
+  --memory 4
+
+# Using permanent AK/SK with command-line parameters
 python scripts/flexus_lifecycle.py create-instance \
   --ak <AK> --sk <SK> \
+  --region cn-north-4 \
+  --image Ubuntu \
+  --cpu 2 \
+  --memory 4
+
+# Using temporary AK/SK with security token
+python scripts/flexus_lifecycle.py create-instance \
+  --ak <Temporary-AK> --sk <Temporary-SK> --security-token <TOKEN> \
   --region cn-north-4 \
   --image Ubuntu \
   --cpu 2 \
@@ -309,6 +425,28 @@ python scripts/flexus_lifecycle.py create-instance \
   --ak <AK> --sk <SK> \
   --region cn-north-4 \
   --image Ubuntu
+```
+
+#### Method 4: With Security Token
+
+```bash
+# Using environment variables
+export HW_ACCESS_KEY="your-ak"
+export HW_SECRET_KEY="your-sk"
+export HW_SECURITY_TOKEN="your-token"
+python scripts/flexus_lifecycle.py create-instance \
+  --region cn-north-4 \
+  --image Ubuntu \
+  --cpu 2 \
+  --memory 4
+
+# Or using command-line parameter
+python scripts/flexus_lifecycle.py create-instance \
+  --ak <AK> --sk <SK> --security-token <TOKEN> \
+  --region cn-north-4 \
+  --image Ubuntu \
+  --cpu 2 \
+  --memory 4
 ```
 
 **Create Parameters:**
@@ -336,7 +474,25 @@ See [references/image-specs-guide.md](references/image-specs-guide.md) for detai
 Renew existing Flexus L instances.
 
 ```bash
+# Using permanent AK/SK with environment variables (recommended)
+export HW_ACCESS_KEY="your-ak"
+export HW_SECRET_KEY="your-sk"
+
 # Preview renewal (recommended)
+python scripts/flexus_lifecycle.py renewal \
+  --resource-ids <resource-id> \
+  --period-num 1 \
+  --period-type month \
+  --dry-run
+
+# Confirm renewal
+python scripts/flexus_lifecycle.py renewal \
+  --resource-ids <resource-id> \
+  --period-num 6 \
+  --period-type month \
+  --confirm
+
+# Using permanent AK/SK with command-line parameters
 python scripts/flexus_lifecycle.py renewal \
   --resource-ids <resource-id> \
   --period-num 1 \
@@ -344,13 +500,13 @@ python scripts/flexus_lifecycle.py renewal \
   --dry-run \
   --ak <AK> --sk <SK>
 
-# Confirm renewal
+# Using temporary AK/SK with security token
 python scripts/flexus_lifecycle.py renewal \
   --resource-ids <resource-id> \
-  --period-num 6 \
+  --period-num 1 \
   --period-type month \
   --confirm \
-  --ak <AK> --sk <SK>
+  --ak <Temporary-AK> --sk <Temporary-SK> --security-token <TOKEN>
 
 # Renew multiple instances
 python scripts/flexus_lifecycle.py renewal \
@@ -377,18 +533,34 @@ python scripts/flexus_lifecycle.py renewal \
 Cancel Flexus L instance subscription.
 
 ```bash
+# Using permanent AK/SK with environment variables (recommended)
+export HW_ACCESS_KEY="your-ak"
+export HW_SECRET_KEY="your-sk"
+
 # Preview unsubscribe (recommended)
 python scripts/flexus_lifecycle.py unsubscribe \
   --resource-ids <resource-id> \
-  --dry-run \
-  --ak <AK> --sk <SK>
+  --dry-run
 
 # Immediate unsubscribe (type 1)
 python scripts/flexus_lifecycle.py unsubscribe \
   --resource-ids <resource-id> \
   --type 1 \
+  --confirm
+
+# Using permanent AK/SK with command-line parameters
+python scripts/flexus_lifecycle.py unsubscribe \
+  --resource-ids <resource-id> \
+  --type 1 \
   --confirm \
   --ak <AK> --sk <SK>
+
+# Using temporary AK/SK with security token
+python scripts/flexus_lifecycle.py unsubscribe \
+  --resource-ids <resource-id> \
+  --type 1 \
+  --confirm \
+  --ak <Temporary-AK> --sk <Temporary-SK> --security-token <TOKEN>
 
 # Expiry unsubscribe (type 2)
 python scripts/flexus_lifecycle.py unsubscribe \
