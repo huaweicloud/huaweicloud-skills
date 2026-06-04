@@ -75,7 +75,11 @@ python scripts/caller.py deploy
 
 **Command 2: Non-Interactive Mode**
 ```bash
+# Using permanent AK/SK
 python scripts/caller.py deploy --name my-openclaw --region cn-north-4 --ak <Your Huawei Cloud Access Key AK> --sk <Huawei Cloud Access Key SK> --non-interactive
+
+# Using temporary AK/SK with security-token
+python scripts/caller.py deploy --name my-openclaw --region cn-north-4 --ak <Temporary AK> --sk <Temporary SK> --security-token <Security Token> --non-interactive
 ```
 
 **Parameter Description**:
@@ -83,8 +87,9 @@ python scripts/caller.py deploy --name my-openclaw --region cn-north-4 --ak <You
 |-----------|-------------|----------------------------|-----------------------|---------|
 | --name | OpenClaw instance name | No | openclaw-{timestamp} | `--name my-openclaw` |
 | --region | Target region ID where L instance (OpenClaw deployed server) is located | No | cn-north-4 | `--region cn-north-4` |
-| --ak | Huawei Cloud Access Key AK (HW_ACCESS_KEY) | Yes | Prompted | `--ak AXXX...` |
-| --sk | Huawei Cloud Access Key SK (HW_SECRET_KEY) | Yes | Prompted | `--sk SXXX...` |
+| --ak | Huawei Cloud Access Key AK (can be temporary AK) | Yes | Prompted | `--ak AXXX...` |
+| --sk | Huawei Cloud Access Key SK (can be temporary SK) | Yes | Prompted | `--sk SXXX...` |
+| --security-token | Security token for temporary credentials (required when using temporary AK/SK) | No | Prompted | `--security-token XXXX...` |
 | --non-interactive | Enable non-interactive mode | No | false | `--non-interactive` |
 
 Note: OpenClaw only supports deployment in the following regions before June 2026 (before deploying to other regions, you can remind users to check the official website for the latest supported regions): China North-Beijing-4 (cn-north-4), China East-Shanghai-1 (cn-east-3), China South-Guangzhou (cn-south-1), China Southwest-Guiyang-1 (cn-southwest-2)
@@ -123,7 +128,11 @@ python scripts/caller.py maas
 ```
 **Command 2: Non-Interactive Mode**
 ```bash
+# Using permanent AK/SK
 python scripts/caller.py maas --resource-id <Instance Resource ID> --region-id cn-north-4 --model-params '<Model configuration parameters (strictly follow JSON format, keys and values must be wrapped in double quotes)>' --ak <Your Huawei Cloud Access Key AK> --sk <Your Huawei Cloud Access Key SK> --non-interactive
+
+# Using temporary AK/SK with security-token
+python scripts/caller.py maas --resource-id <Instance Resource ID> --region-id cn-north-4 --model-params '<Model configuration parameters>' --ak <Temporary AK> --sk <Temporary SK> --security-token <Security Token> --non-interactive
 ```
 **Parameter Description**:
 | Parameter | Description | Required (Non-interactive) | Default (Interactive) | Example |
@@ -131,8 +140,9 @@ python scripts/caller.py maas --resource-id <Instance Resource ID> --region-id c
 | --resource-id | L instance resource ID (instance ID returned after deploying OpenClaw instance) | Yes | Prompted | `--resource-id 0e1234567890abcdef` |
 | --region-id | Region ID where L instance is located, consistent with the region selected when deploying the instance | Yes | Prompted | `--region-id cn-north-4` |
 | --model-params | Model configuration parameters (JSON format), note: parameters must use valid JSON format, keys and values must be wrapped in double quotes | Yes | Prompted | --model-params '{"provider":"huawei","api_key":"your_maas_api_key","model_ids":["deepseek-v3.2"]}' |
-| --ak | Huawei Cloud Access Key AK (HW_ACCESS_KEY) | Yes | Prompted | `--ak AXXX...` |
-| --sk | Huawei Cloud Access Key SK (HW_SECRET_KEY) | Yes | Prompted | `--sk SXXX...` |
+| --ak | Huawei Cloud Access Key AK (can be temporary AK) | Yes | Prompted | `--ak AXXX...` |
+| --sk | Huawei Cloud Access Key SK (can be temporary SK) | Yes | Prompted | `--sk SXXX...` |
+| --security-token | Security token for temporary credentials (required when using temporary AK/SK) | No | Prompted | `--security-token XXXX...` |
 | --timeout | Script execution timeout (seconds) | No | 600 | `--timeout 900` |
 | --non-interactive | Enable non-interactive mode | No | false | `--non-interactive` |
 
@@ -172,7 +182,11 @@ python scripts/caller.py channel
 
 **Command 2: Non-Interactive Mode**
 ```bash
+# Using permanent AK/SK
 python scripts/caller.py channel --resource-id <Instance Resource ID> --region-id cn-north-4 --channel-list '<JSON array (strictly follow JSON format, keys and values must be wrapped in double quotes)>' --ak <AK> --sk <SK> --non-interactive
+
+# Using temporary AK/SK with security-token
+python scripts/caller.py channel --resource-id <Instance Resource ID> --region-id cn-north-4 --channel-list '<JSON array>' --ak <Temporary AK> --sk <Temporary SK> --security-token <Security Token> --non-interactive
 ```
 
 **Parameter Description**:
@@ -181,8 +195,9 @@ python scripts/caller.py channel --resource-id <Instance Resource ID> --region-i
 | --resource-id | L instance resource ID (instance ID returned after deploying OpenClaw instance) | Yes | Prompted | `--resource-id 0e1234567890abcdef` |
 | --region-id | Region ID where instance is located, consistent with the region selected when deploying the instance | Yes | Prompted | `--region-id cn-north-4` |
 | --channel-list | Channel configuration (JSON array format) | No | Prompted | '[{"channel":"wecom","account_id":"bot-xxx","bot_name":"bot-xxx","id":"xxx","secret":"xxx"},{"channel":"feishu","account_id":"bot-yyy","bot_name":"bot-yyy","id":"yyy","secret":"yyy"}]' |
-| --ak | Huawei Cloud Access Key AK (HW_ACCESS_KEY) | Yes | Prompted | `--ak AXXX...` |
-| --sk | Huawei Cloud Access Key SK (HW_SECRET_KEY) | Yes | Prompted | `--sk SXXX...` |
+| --ak | Huawei Cloud Access Key AK (can be temporary AK) | Yes | Prompted | `--ak AXXX...` |
+| --sk | Huawei Cloud Access Key SK (can be temporary SK) | Yes | Prompted | `--sk SXXX...` |
+| --security-token | Security token for temporary credentials (required when using temporary AK/SK) | No | Prompted | `--security-token XXXX...` |
 | --timeout | Script execution timeout (seconds) | No | 600 | `--timeout 900` |
 | --non-interactive | Enable non-interactive mode | No | false | `--non-interactive` |
 
