@@ -1,0 +1,22 @@
+apiversion: modelslim_v1
+
+spec:
+  process:
+    - type: "linear_quant"
+      qconfig:
+        act:
+          scope: "per_token"    # dynamic
+          dtype: "int8"
+          symmetric: True
+          method: "minmax"
+        weight:
+          scope: "per_channel"
+          dtype: "int8"
+          symmetric: True
+          method: "minmax"
+      include: ["*"]            # allModelQuantization
+      exclude: []               # notFallback
+
+  save:
+    - type: "ascendv1_saver"
+      part_file_size: 4
