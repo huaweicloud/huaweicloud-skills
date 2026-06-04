@@ -20,19 +20,21 @@ from typing import Any, Optional, List, Dict
 
 
 class Credentials:
-    def __init__(self, ak, sk):
+    def __init__(self, ak, sk, security_token=None):
         self.ak = ak
         self.sk = sk
+        self.security_token = security_token
 
 
-def get_project_id_by_region(region: str, ak: str, sk: str) -> Optional[str]:
+def get_project_id_by_region(region: str, ak: str, sk: str, security_token: str = None) -> Optional[str]:
     """
     Get Project ID for specified region via AK/SK
     
     Args:
         region: Target region, e.g. cn-north-4, cn-southwest-2
-        ak: Huawei Cloud AK
-        sk: Huawei Cloud SK
+        ak: Huawei Cloud AK (can be temporary AK)
+        sk: Huawei Cloud SK (can be temporary SK)
+        security_token: Security token for temporary credentials (optional)
     
     Returns:
         Project ID string, or None if failed
@@ -47,7 +49,7 @@ def get_project_id_by_region(region: str, ak: str, sk: str) -> Optional[str]:
         from huaweicloudsdkcore.signer.signer import Signer
         from huaweicloudsdkcore.sdk_request import SdkRequest
         
-        credentials = Credentials(ak, sk)
+        credentials = Credentials(ak, sk, security_token)
         signer = Signer(credentials)
         
         request = SdkRequest()
@@ -60,6 +62,10 @@ def get_project_id_by_region(region: str, ak: str, sk: str) -> Optional[str]:
             "Content-Type": "application/json",
             "Client-Request-Id": str(uuid.uuid4())
         }
+        
+        if security_token:
+            request.header_params["X-Security-Token"] = security_token
+        
         request.query_params = []
         
         signed_request = signer.sign(request)
@@ -99,13 +105,14 @@ def get_project_id_by_region(region: str, ak: str, sk: str) -> Optional[str]:
         return None
 
 
-def get_coc_client(ak: str, sk: str):
+def get_coc_client(ak: str, sk: str, security_token: str = None):
     """
     Create and return COC client
     
     Args:
-        ak: Huawei Cloud AK
-        sk: Huawei Cloud SK
+        ak: Huawei Cloud AK (can be temporary AK)
+        sk: Huawei Cloud SK (can be temporary SK)
+        security_token: Security token for temporary credentials (optional)
     
     Returns:
         CocClient instance
@@ -119,7 +126,10 @@ def get_coc_client(ak: str, sk: str):
     
     region = os.environ.get("HUAWEICLOUD_REGION", "cn-north-4")
     
-    credentials = GlobalCredentials(ak, sk)
+    if security_token is None:
+        credentials = GlobalCredentials(ak, sk)
+    else:
+        credentials = GlobalCredentials(ak, sk).with_security_token(security_token)
     client = CocClient.new_builder() \
         .with_credentials(credentials) \
         .with_region(CocRegion.value_of(region)) \
@@ -128,7 +138,7 @@ def get_coc_client(ak: str, sk: str):
     return client
 
 
-def create_openclaw_instance(instance_name=None, region=None, ak=None, sk=None):
+def create_openclaw_instance(instance_name = None, region = None, ak = None, sk = None, security_token = None):
     """
     Create Huawei Cloud Flexus L instance (dedicated for OpenClaw)
     
@@ -137,8 +147,9 @@ def create_openclaw_instance(instance_name=None, region=None, ak=None, sk=None):
     Args:
         instance_name: Instance name, optional, auto-generated as openclaw-timestamp if not specified
         region: Target region, optional, defaults to cn-north-4 if not specified
-        ak: Huawei Cloud AK, required
-        sk: Huawei Cloud SK, required
+        ak: Huawei Cloud AK (can be temporary AK), required
+        sk: Huawei Cloud SK (can be temporary SK), required
+        security_token: Security token for temporary credentials (optional)
     
     Returns:
         dict: Result dictionary containing ok, text, result, error fields
@@ -156,7 +167,7 @@ def create_openclaw_instance(instance_name=None, region=None, ak=None, sk=None):
     
     target_region = region if region else "cn-north-4"
     
-    project_id = get_project_id_by_region(target_region, ak, sk)
+    project_id = get_project_id_by_region(target_region, ak, sk, security_token)
     if not project_id:
         return {
             "ok": False,
@@ -204,7 +215,7 @@ def create_openclaw_instance(instance_name=None, region=None, ak=None, sk=None):
         from huaweicloudsdkcore.signer.signer import Signer
         from huaweicloudsdkcore.sdk_request import SdkRequest
         
-        credentials = Credentials(ak, sk)
+        credentials = Credentials(ak, sk, security_token)
         signer = Signer(credentials)
         
         parsed_url = urlparse(endpoint)
@@ -221,6 +232,10 @@ def create_openclaw_instance(instance_name=None, region=None, ak=None, sk=None):
             "Content-Type": "application/json",
             "Client-Request-Id": str(uuid.uuid4())
         }
+        
+        if security_token:
+            request.header_params["X-Security-Token"] = security_token
+        
         request.query_params = []
         
         signed_request = signer.sign(request)
@@ -321,6 +336,7 @@ def coc_create_script(
     version: str = "1.0.0",
     ak: str = None,
     sk: str = None,
+    security_token: str = None
 ) -> dict[str, Any]:
     """
     Create custom script in COC
@@ -332,8 +348,9 @@ def coc_create_script(
         description: Script description
         risk_level: Risk level (LOW/MEDIUM/HIGH), default LOW
         version: Script version, default 1.0.0
-        ak: Huawei Cloud AK
-        sk: Huawei Cloud SK
+        ak: Huawei Cloud AK (can be temporary AK)
+        sk: Huawei Cloud SK (can be temporary SK)
+        security_token: Security token for temporary credentials (optional)
 
     Returns:
         {
@@ -355,7 +372,7 @@ def coc_create_script(
         return _error("INPUT_ERROR", f"risk_level must be one of {VALID_RISK_LEVELS}")
 
     try:
-        client = get_coc_client(ak, sk)
+        client = get_coc_client(ak, sk,security_token)
     except ValueError as e:
         return _error("CONFIG_ERROR", str(e))
 
@@ -404,53 +421,56 @@ def coc_execute_script(
     wait_for_complete: bool = True,
     ak: str = None,
     sk: str = None,
+    security_token: str = None
+
 ) -> dict[str, Any]:
     """
-    在目标实例上执行自定义脚本
+    Execute custom script on target instances
 
-    参数:
-        script_uuid: 要执行的脚本 UUID
-        execute_user: 执行脚本的用户（如 root）
-        timeout: 执行超时时间（秒，5 < timeout < 1800）
-        success_rate: 成功率（支持一位小数，如 1 或 100）
-        target_instances: 目标实例列表，每个实例包含:
-            - resource_id: 实例 ID（必填）
-            - region_id: 服务器区域（必填）
-            - provider: 资源提供者（ECS 不需要，L 实例默认 "HCSS"）
-            - type: 资源类型（ECS 不需要，L 实例默认 "L-INSTANCE"）
-        rotation_strategy: 轮转策略 (CONTINUE/STOP)，默认 CONTINUE
-        wait_for_complete: 是否等待执行完成并获取日志，默认 True
-        ak: 华为云 AK
-        sk: 华为云 SK
+    Args:
+        script_uuid: Script UUID to execute
+        execute_user: User to execute script (e.g., root)
+        timeout: Execution timeout (seconds, 5 < timeout < 1800)
+        success_rate: Success rate (supports one decimal, e.g., 1 or 100)
+        target_instances: Target instance list, each instance contains:
+            - resource_id: Instance ID (required)
+            - region_id: Server region (required)
+            - provider: Resource provider (not needed for ECS, defaults to "HCSS" for L instances)
+            - type: Resource type (not needed for ECS, defaults to "L-INSTANCE" for L instances)
+        rotation_strategy: Rotation strategy (CONTINUE/STOP), default CONTINUE
+        wait_for_complete: Whether to wait for execution completion and get logs, default True
+        ak: Huawei Cloud AK (can be temporary AK)
+        sk: Huawei Cloud SK (can be temporary SK)
+        security_token: Security token for temporary credentials (optional)
 
-    返回:
+    Returns:
         {
             "ok": True,
-            "text": "脚本执行已启动: SCT2023083109562601af694bf",
+            "text": "Script execution started: SCT2023083109562601af694bf",
             "result": { 
                 "execute_uuid": "SCT2023083109562601af694bf",
                 "status": "SUCCESS",
-                "output": "脚本执行输出日志...",
-                "error": "错误消息（如有）"
+                "output": "Script execution output log...",
+                "error": "Error message (if any)"
             },
             "error": None
         }
     """
     if not script_uuid:
-        return _error("INPUT_ERROR", "script_uuid 参数必填")
+        return _error("INPUT_ERROR", "script_uuid parameter is required")
     if not execute_user:
-        return _error("INPUT_ERROR", "execute_user 参数必填")
+        return _error("INPUT_ERROR", "execute_user parameter is required")
     if timeout <= 5 or timeout >= 1800:
-        return _error("INPUT_ERROR", "timeout 必须在 5 到 1800 秒之间")
+        return _error("INPUT_ERROR", "timeout must be between 5 and 1800 seconds")
     if success_rate < 0 or success_rate > 100:
-        return _error("INPUT_ERROR", "success_rate 必须在 0 到 100 之间")
+        return _error("INPUT_ERROR", "success_rate must be between 0 and 100")
     if not target_instances or not isinstance(target_instances, list):
-        return _error("INPUT_ERROR", "target_instances 参数必填")
+        return _error("INPUT_ERROR", "target_instances parameter is required")
     if rotation_strategy not in VALID_ROTATION_STRATEGIES:
-        return _error("INPUT_ERROR", f"rotation_strategy 必须是 {VALID_ROTATION_STRATEGIES} 之一")
+        return _error("INPUT_ERROR", f"rotation_strategy must be one of {VALID_ROTATION_STRATEGIES}")
 
     try:
-        client = get_coc_client(ak, sk)
+        client = get_coc_client(ak, sk, security_token)
     except ValueError as e:
         return _error("CONFIG_ERROR", str(e))
 
@@ -507,7 +527,7 @@ def coc_execute_script(
         if not wait_for_complete:
             return {
                 "ok": True,
-                "text": f"脚本执行已启动: {execute_uuid}",
+                "text": f"Script execution started: {execute_uuid}",
                 "result": {"execute_uuid": execute_uuid},
                 "error": None,
             }
@@ -518,18 +538,18 @@ def coc_execute_script(
         status = ""
         
         while elapsed_time < max_wait_time:
-            query_result = coc_query_execution(execute_uuid, ak, sk)
+            query_result = coc_query_execution(execute_uuid, ak, sk, security_token)
             
             data = query_result.get("data", {})
             if not data:
-                # 查询失败，记录日志并继续
+                # Query failed, log and continue
                 error_msg = query_result.get("error", {}).get("message", "Unknown error") if isinstance(query_result, dict) else "Query failed"
                 print(f"Failed to query execution status: {error_msg}")
                 time.sleep(wait_interval)
                 elapsed_time += wait_interval
                 continue
             
-            # 从新格式中提取状态和输出
+            # Extract status and output from new format
             instances = data.get("execute_instances", [])
             if instances:
                 status = instances[0].get("status", "")
@@ -540,7 +560,7 @@ def coc_execute_script(
                 output = data.get("message", "")
                 error = output if status == "ABNORMAL" else ""
             
-            # 如果状态是UNKNOWN且已经等待了一段时间（比如30秒），返回错误
+            # If status is UNKNOWN and waited for some time (e.g., 30 seconds), return error
             if status == "UNKNOWN" and elapsed_time > 60:
                 return {
                     "ok": False,
@@ -594,17 +614,18 @@ def coc_execute_script(
         return _error("UNKNOWN_ERROR", error_msg)
 
 
-def coc_list_scripts(page: int = 1, limit: int = 10, ak: str = None, sk: str = None) -> dict[str, Any]:
+def coc_list_scripts(page: int = 1, limit: int = 10, ak: str = None, sk: str = None, security_token: str = None) -> dict[str, Any]:
     """
-    列出 COC 脚本
+    List COC scripts
 
-    参数:
-        page: 页码（从 1 开始）
-        limit: 每页数量
-        ak: 华为云 AK
-        sk: 华为云 SK
+    Args:
+        page: Page number (starting from 1)
+        limit: Number per page
+        ak: Huawei Cloud AK (can be temporary AK)
+        sk: Huawei Cloud SK (can be temporary SK)
+        security_token: Security token for temporary credentials (optional)
 
-    返回:
+    Returns:
         {
             "ok": True,
             "text": "Script list obtained",
@@ -616,7 +637,7 @@ def coc_list_scripts(page: int = 1, limit: int = 10, ak: str = None, sk: str = N
         }
     """
     try:
-        client = get_coc_client(ak, sk)
+        client = get_coc_client(ak, sk, security_token)
     except ValueError as e:
         return _error("CONFIG_ERROR", str(e))
 
@@ -671,14 +692,15 @@ def coc_list_scripts(page: int = 1, limit: int = 10, ak: str = None, sk: str = N
         return _error("UNKNOWN_ERROR", error_msg)
 
 
-def coc_query_execution(execute_uuid: str, ak: str = None, sk: str = None) -> dict[str, Any]:
+def coc_query_execution(execute_uuid: str, ak: str = None, sk: str = None, security_token: str = None) -> dict[str, Any]:
     """
     Query script execution status
 
     Args:
         execute_uuid: Execution UUID (format: SCT2023083109562601af694bf)
-        ak: Huawei Cloud AK
-        sk: Huawei Cloud SK
+        ak: Huawei Cloud AK (can be temporary AK)
+        sk: Huawei Cloud SK (can be temporary SK)
+        security_token: Security token for temporary credentials (optional)
 
     Returns:
         {
@@ -723,7 +745,7 @@ def coc_query_execution(execute_uuid: str, ak: str = None, sk: str = None) -> di
         return _error("INPUT_ERROR", "execute_uuid parameter is required")
 
     try:
-        client = get_coc_client(ak, sk)
+        client = get_coc_client(ak, sk, security_token)
     except ValueError as e:
         return _error("CONFIG_ERROR", str(e))
 
@@ -891,6 +913,7 @@ def install_maas_models_remote(
     execute_user: str = "root",
     ak: str = None,
     sk: str = None,
+    security_token: str = None
 ) -> dict[str, Any]:
     """
     Install MaaS models on remote L instance via COC
@@ -901,8 +924,9 @@ def install_maas_models_remote(
         model_params: Model parameters string, format: {"provider":"huawei","api_key":"xxx","model_ids":["model1","model2"]}
         timeout: Execution timeout (seconds), default 600
         execute_user: Execute user, default root
-        ak: Huawei Cloud AK
-        sk: Huawei Cloud SK
+        ak: Huawei Cloud AK (can be temporary AK)
+        sk: Huawei Cloud SK (can be temporary SK)
+        security_token: Security token for temporary credentials (optional)
 
     Returns:
         {
@@ -925,6 +949,7 @@ def install_maas_models_remote(
         risk_level=script_info["risk_level"],
         ak=ak,
         sk=sk,
+        security_token=security_token
     )
     
     if not create_result.get("ok"):
@@ -948,6 +973,7 @@ def install_maas_models_remote(
         rotation_strategy="CONTINUE",
         ak=ak,
         sk=sk,
+        security_token=security_token
     )
     
     return execute_result
@@ -961,6 +987,7 @@ def install_channel_remote(
     execute_user: str = "root",
     ak: str = None,
     sk: str = None,
+    security_token: str = None
 ) -> dict[str, Any]:
     """
     Install channels on remote L instance via COC
@@ -971,8 +998,9 @@ def install_channel_remote(
         channel_list: Channel configuration JSON array string, format: [{"channel":"wecom","account_id":"xxx",...}]
         timeout: Execution timeout (seconds), default 600
         execute_user: Execute user, default root
-        ak: Huawei Cloud AK
-        sk: Huawei Cloud SK
+        ak: Huawei Cloud AK (can be temporary AK)
+        sk: Huawei Cloud SK (can be temporary SK)
+        security_token: Security token for temporary credentials (optional)
 
     Returns:
         {
@@ -995,6 +1023,7 @@ def install_channel_remote(
         risk_level=script_info["risk_level"],
         ak=ak,
         sk=sk,
+        security_token=security_token
     )
     
     if not create_result.get("ok"):
@@ -1018,6 +1047,7 @@ def install_channel_remote(
         rotation_strategy="CONTINUE",
         ak=ak,
         sk=sk,
+        security_token=security_token
     )
     
     return execute_result
@@ -1203,6 +1233,7 @@ def check_gateway_status_remote(
     execute_user: str = "root",
     ak: str = None,
     sk: str = None,
+    security_token: str = None
 ) -> dict[str, Any]:
     """
     Query OpenClaw gateway status on remote L instance via COC
@@ -1212,8 +1243,9 @@ def check_gateway_status_remote(
         region_id: L instance region
         timeout: Execution timeout (seconds), default 600
         execute_user: Execute user, default root
-        ak: Huawei Cloud AK
-        sk: Huawei Cloud SK
+        ak: Huawei Cloud AK (can be temporary AK)
+        sk: Huawei Cloud SK (can be temporary SK)
+        security_token: Security token for temporary credentials (optional)
 
     Returns:
         {
@@ -1236,6 +1268,7 @@ def check_gateway_status_remote(
         risk_level=script_info["risk_level"],
         ak=ak,
         sk=sk,
+        security_token=security_token        
     )
     
     if not create_result.get("ok"):
@@ -1259,6 +1292,7 @@ def check_gateway_status_remote(
         rotation_strategy="CONTINUE",
         ak=ak,
         sk=sk,
+        security_token=security_token
     )
     
     return execute_result
@@ -1268,14 +1302,16 @@ def query_uniagent_status(
     resource_id: str,
     ak: str,
     sk: str,
+    security_token: str = None
 ) -> dict[str, Any]:
     """
     Query L instance UniAgent status via COC API
 
     Args:
         resource_id: L instance resource ID
-        ak: Huawei Cloud AK
-        sk: Huawei Cloud SK
+        ak: Huawei Cloud AK (can be temporary AK)
+        sk: Huawei Cloud SK (can be temporary SK)
+        security_token: Security token for temporary credentials (optional)
 
     Returns:
         {
@@ -1299,7 +1335,7 @@ def query_uniagent_status(
         from huaweicloudsdkcore.sdk_request import SdkRequest
         from urllib.parse import urlparse
         
-        credentials = Credentials(ak, sk)
+        credentials = Credentials(ak, sk, security_token)
         signer = Signer(credentials)
         
         endpoint = "https://coc.myhuaweicloud.com/v1/resources"
@@ -1324,6 +1360,9 @@ def query_uniagent_status(
             "Content-Type": "application/json",
             "Client-Request-Id": str(uuid.uuid4())
         }
+        
+        if security_token:
+            request.header_params["X-Security-Token"] = security_token
         
         signed_request = signer.sign(request)
         

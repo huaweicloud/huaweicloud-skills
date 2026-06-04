@@ -20,8 +20,9 @@ def do_deploy_openclaw(args):
         args: Command line argument object with the following attributes:
             - name: Instance name (command line arg --name)
             - region: Region ID (command line arg --region)
-            - ak: Huawei Cloud AK (command line arg --ak)
-            - sk: Huawei Cloud SK (command line arg --sk)
+            - ak: Huawei Cloud AK (can be temporary AK) (command line arg --ak)
+            - sk: Huawei Cloud SK (can be temporary SK) (command line arg --sk)
+            - security_token: Security token for temporary credentials (command line arg --security-token)
             - non_interactive: Whether non-interactive mode (command line arg --non-interactive)
     
     Returns:
@@ -33,7 +34,8 @@ def do_deploy_openclaw(args):
     
     ak = getattr(args, 'ak', None)
     sk = getattr(args, 'sk', None)
-    
+    security_token = getattr(args, 'security_token', None)
+
     if not ak or not sk:
         print("\nHuawei Cloud credentials not configured, entering interactive configuration...")
         print("Please configure Huawei Cloud credentials:")
@@ -75,7 +77,7 @@ def do_deploy_openclaw(args):
         print("  Non-interactive mode: Auto-confirming")
     
     print("\nStarting to create OpenClaw instance...")
-    result = create_openclaw_instance(instance_name, region, ak, sk)
+    result = create_openclaw_instance(instance_name, region, ak, sk,security_token)
     
     if result.get("ok"):
         print(f"\n[OK] {result['text']}")
