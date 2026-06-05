@@ -29,6 +29,7 @@ from scripts.deploy import do_deploy_hermes
 from scripts.models import do_install_maas
 from scripts.channels import do_install_channel
 from scripts.gateway import do_restart_gateway
+from scripts.uniagent import do_check_uniagent
 from scripts.lib import coc_query_execution
 
 
@@ -44,18 +45,19 @@ def show_main_menu():
     print("  3. Configure bot channels on deployed Hermes instance")
     print("  4. Restart Hermes Gateway")
     print("  5. Query COC script execution result")
+    print("  6. Query UniAgent status")
     print("  0. Exit")
     print("")
     print("=" * 60)
     
     while True:
         try:
-            choice = input("Please enter your choice (0-5): ")
+            choice = input("Please enter your choice (0-6): ")
             choice = int(choice)
-            if choice in [0, 1, 2, 3, 4, 5]:
+            if choice in [0, 1, 2, 3, 4, 5, 6]:
                 return choice
             else:
-                print("Invalid input, please enter a number between 0-5")
+                print("Invalid input, please enter a number between 0-6")
         except ValueError:
             print("Invalid input, please enter a number")
 
@@ -140,6 +142,12 @@ Examples:
     query_parser.add_argument('--security-token', required=True, help='Security token for temporary credentials (required)')
     query_parser.add_argument('--execute-uuid', required=True, help='Script execution UUID (e.g.: SCT2023083109562601af694bf)')
 
+    uniagent_parser = subparsers.add_parser('uniagent', help='Query UniAgent status')
+    uniagent_parser.add_argument('--ak', required=True, help='Huawei Cloud Temporary AK (required)')
+    uniagent_parser.add_argument('--sk', required=True, help='Huawei Cloud Temporary SK (required)')
+    uniagent_parser.add_argument('--security-token', required=True, help='Security token for temporary credentials (required)')
+    uniagent_parser.add_argument('--resource-id', required=True, help='L Instance resource ID (required)')
+
     args = parser.parse_args()
 
     try:
@@ -178,6 +186,8 @@ Examples:
                 print("=" * 60)
             else:
                 print(f"Query failed: {result.get('error', {}).get('message', 'Unknown error')}")
+        elif args.command == 'uniagent':
+            do_check_uniagent(args)
         elif args.command == 'maas':
             do_install_maas(args)
         elif args.command == 'channel':
@@ -241,6 +251,9 @@ Examples:
                     print("=" * 60)
                 else:
                     print(f"Query failed: {result.get('error', {}).get('message', 'Unknown error')}")
+            elif choice == 6:
+                args.command = 'uniagent'
+                do_check_uniagent(args)
     except KeyboardInterrupt:
         print("\n\nUser interrupted operation")
         sys.exit(0)
