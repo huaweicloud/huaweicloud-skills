@@ -1,6 +1,6 @@
 ---
-id: ucs-policy-governor
-name: ucs-policy-governor
+id: huawei-cloud-ucs-policy-governor
+name: huawei-cloud-ucs-policy-governor
 description: |
   Huawei Cloud UCS (Universal Cloud Service) policy governance and compliance management skill using hcloud CLI.
   Use this skill when the user wants to: (1) manage UCS policy instances - create/update/query/delete, (2) manage UCS policy definitions - query/list, (3) enable/disable policies on clusters or fleet groups, (4) check policy enforcement job status, (5) audit fleet compliance and review policy enforcement status.
@@ -17,7 +17,7 @@ This skill provides policy governance and compliance management capabilities for
 **Architecture**: hcloud CLI → UCS Service API → PolicyInstance/PolicyDefinition/PolicyJob resources
 
 **Related Skills**:
-- `ucs-cluster-onboarding-manager` - Cluster registration, lifecycle, fleet grouping, and access management
+- `huawei-cloud-ucs-cluster-onboarding-manager` - Cluster registration, lifecycle, fleet grouping, and access management
 
 **Capabilities**:
 - Create policy instances for clusters or fleet groups
@@ -368,7 +368,7 @@ See [Common Pitfalls & Solutions](references/common-pitfalls.md) for detailed tr
 | --------------------------- | ------------------------------- | -------------------------------------------- |
 | Wrong create operation      | Create fails with wrong scope   | Use CreateClusterPolicyInstance for clusters, CreateClusterGroupPolicyInstance for fleet groups |
 | Constraint template not found | Create fails                  | Use `ListPolicyDefinitions` to find valid template ID |
-| Cluster not registered      | EnableClusterPolicy fails       | Register cluster with `ucs-cluster-onboarding-manager` |
+| Cluster not registered      | EnableClusterPolicy fails       | Register cluster with `huawei-cloud-ucs-cluster-onboarding-manager` |
 | Fleet group empty           | Policy not enforced anywhere    | Add clusters to fleet group first            |
 | Wrong param names           | Command fails (underscore vs camelCase) | Use `--policyinstanceid` not `--instance_id`, `--clusterid` not `--cluster_id` |
 | GetPolicyAssignment used    | Operation not found             | Use `ListPolicyJobs`/`ShowPolicyJob` instead |
