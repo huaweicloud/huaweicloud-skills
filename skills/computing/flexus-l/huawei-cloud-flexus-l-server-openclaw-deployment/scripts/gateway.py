@@ -20,9 +20,9 @@ def do_check_gateway(args):
         args: Command line argument object with the following attributes:
             - resource_id: L instance resource ID
             - region_id: Region ID
-            - ak: Huawei Cloud AK (can be temporary AK)
-            - sk: Huawei Cloud SK (can be temporary SK)
-            - security_token: Security token for temporary credentials (optional)
+            - ak: Huawei Cloud temporary AK
+            - sk: Huawei Cloud temporary SK
+            - security_token: Security token for temporary credentials (required)
     
     Returns:
         None
@@ -36,11 +36,12 @@ def do_check_gateway(args):
     security_token = getattr(args, 'security_token', None)
     
     if not ak or not sk:
-        print("\nHuawei Cloud credentials not configured, entering interactive configuration...")
-        print("Please configure Huawei Cloud credentials:")
+        print("\nHuawei Cloud temporary credentials not configured, entering interactive configuration...")
+        print("Please configure Huawei Cloud temporary credentials:")
         print("-" * 40)
-        ak = prompt_for_input("Huawei Cloud AK", required=True)
-        sk = prompt_for_input("Huawei Cloud SK", required=True, hide_input=True)
+        ak = prompt_for_input("Huawei Cloud temporary AK", required=True)
+        sk = prompt_for_input("Huawei Cloud temporary SK", required=True, hide_input=True)
+        security_token = prompt_for_input("Huawei Cloud Security Token (required for temporary credentials)", required=True)
     
     resource_id = args.resource_id if hasattr(args, 'resource_id') and args.resource_id else None
     region_id = args.region_id if hasattr(args, 'region_id') and args.region_id else None
