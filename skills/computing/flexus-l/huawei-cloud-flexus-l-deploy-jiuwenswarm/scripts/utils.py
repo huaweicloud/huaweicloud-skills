@@ -54,15 +54,27 @@ def save_json_file(file_path: Path, data: Dict[str, Any]) -> bool:
         return False
 
 def get_huaweicloud_credentials():
-    # Support new COC environment variables while maintaining backward compatibility
-    AK = os.getenv("COC_AK") or os.getenv("HUAWEICLOUD_SDK_AK")
-    SK = os.getenv("COC_SK") or os.getenv("HUAWEICLOUD_SDK_SK")
-    REGION = os.getenv("COC_REGION") or os.getenv("HUAWEICLOUD_REGION", "cn-north-4")
+    """
+    Get Huawei Cloud credentials from environment variables.
+    Supports both permanent credentials and temporary security credentials (STS token).
+    
+    Permanent credentials: HUAWEICLOUD_SDK_AK, HUAWEICLOUD_SDK_SK, HUAWEICLOUD_REGION
+    Temporary credentials: Add HUAWEICLOUD_SDK_SECURITY_TOKEN to permanent credentials
+    
+    
+    Returns:
+        tuple: (AK, SK, REGION, SECURITY_TOKEN)
+               SECURITY_TOKEN is None for permanent credentials
+    """
+    AK = os.getenv("HUAWEICLOUD_SDK_AK")
+    SK = os.getenv("HUAWEICLOUD_SDK_SK")
+    SECURITY_TOKEN = os.getenv("HUAWEICLOUD_SDK_SECURITY_TOKEN")
+    REGION = os.getenv("HUAWEICLOUD_REGION", "cn-north-4")
 
     if not AK or not SK:
-        raise ValueError("Please set environment variables COC_AK and COC_SK (or HUAWEICLOUD_SDK_AK and HUAWEICLOUD_SDK_SK)")
+        raise ValueError("Please set environment variables HUAWEICLOUD_SDK_AK and HUAWEICLOUD_SDK_SK")
 
-    return AK, SK, REGION
+    return AK, SK, REGION, SECURITY_TOKEN
 
 def print_header(title: str):
     print("\n" + "=" * 60)
@@ -83,8 +95,8 @@ def print_info(message: str):
 
 # COC related utility functions
 def get_coc_client():
-    """Get COC client"""
-    from huaweicloudsdkcore.auth.credentials import GlobalCredentials
+    """Get COC client with support for Huawei Cloud credentials (permanent and temporary)"""
+    from huaweicloudsdkcore.auth.credentials import GlobalCredentials, BasicCredentials
     from huaweicloudsdkcoc.v1.region.coc_region import CocRegion
     from huaweicloudsdkcoc.v1 import CocClient
     from huaweicloudsdkcoc.v1.model.create_script_request import CreateScriptRequest
@@ -97,9 +109,16 @@ def get_coc_client():
     from huaweicloudsdkcoc.v1.model.script_properties_model import ScriptPropertiesModel
     from huaweicloudsdkcoc.v1.model.add_script_model import AddScriptModel
     
-    AK, SK, REGION = get_huaweicloud_credentials()
+    AK, SK, REGION, SECURITY_TOKEN = get_huaweicloud_credentials()
     
-    credentials = GlobalCredentials(AK, SK)
+    # Use BasicCredentials with security token if available (temporary credentials)
+    # Otherwise use GlobalCredentials for permanent credentials
+    if SECURITY_TOKEN:
+        log.info(f"Using temporary security credentials (STS token)")
+        credentials = BasicCredentials(AK, SK).with_security_token(SECURITY_TOKEN)
+    else:
+        credentials = GlobalCredentials(AK, SK)
+    
     return CocClient.new_builder() \
         .with_credentials(credentials) \
         .with_region(CocRegion.value_of(REGION)) \
@@ -162,12 +181,12 @@ def coc_query_execution(execute_uuid: str) -> dict:
         
         response = client.get_script_job_info(request)
         
-        # 解析API响应
+        # Parse API response
         result_dict = {}
         if hasattr(response, 'data'):
             data = response.data
             
-            # 提取基本字段
+            # Extract basic fields
             if hasattr(data, 'execute_uuid'):
                 result_dict['execute_uuid'] = data.execute_uuid
             if hasattr(data, 'status'):
@@ -180,12 +199,12 @@ def coc_query_execution(execute_uuid: str) -> dict:
                 result_dict['finish_time'] = data.gmt_finished
             if hasattr(data, 'execute_costs'):
                 result_dict['execute_costs'] = data.execute_costs
-                # 添加秒级时间转换
+                # Add seconds conversion
                 result_dict['execute_costs_seconds'] = data.execute_costs / 1000 if data.execute_costs else 0
             if hasattr(data, 'script_content'):
                 result_dict['script_content'] = data.script_content
             
-            # 提取properties中的信息
+            # Extract information from properties
             if hasattr(data, 'properties'):
                 props = data.properties
                 if hasattr(props, 'script_name'):
@@ -197,7 +216,7 @@ def coc_query_execution(execute_uuid: str) -> dict:
                 if hasattr(props, 'current_execute_batch_index'):
                     result_dict['current_execute_batch_index'] = props.current_execute_batch_index
                 
-                # 提取execute_param中的信息
+                # Extract information from execute_param
                 if hasattr(props, 'execute_param'):
                     execute_param = props.execute_param
                     if hasattr(execute_param, 'execute_user'):
@@ -209,16 +228,16 @@ def coc_query_execution(execute_uuid: str) -> dict:
                     if hasattr(execute_param, 'resourceful'):
                         result_dict['resourceful'] = execute_param.resourceful
                 
-                # 将整个properties对象也保存，方便后续解析
+                # Save the entire properties object for later parsing
                 result_dict['properties'] = props
             
-            # 设置默认值
+            # Set default values
             result_dict.setdefault('total_count', 1)
             result_dict.setdefault('success_count', 0)
             result_dict.setdefault('fail_count', 0)
             result_dict.setdefault('processing_count', 0)
             
-            # 根据状态设置成功/失败计数
+            # Set success/failure counts based on status
             if result_dict.get('status') == 'FINISHED':
                 result_dict['success_count'] = 1
                 result_dict['total_count'] = 1
@@ -235,17 +254,17 @@ def coc_query_execution(execute_uuid: str) -> dict:
                 result_dict['fail_count'] = 0
                 result_dict['processing_count'] = 1
             
-            # 设置默认实例详情
+            # Set default instance details
             result_dict['instance_details'] = []
             
             return {
                 "ok": True,
-                "text": "执行状态查询成功",
+                "text": "Execution status query successful",
                 "result": result_dict,
                 "error": None,
             }
         else:
-            return _error("API_ERROR", "API响应中没有data字段")
+            return _error("API_ERROR", "API response does not contain data field")
 
     except Exception as e:
         error_msg = str(e)
@@ -496,7 +515,7 @@ def create_and_execute_script(client, name, script_content, description, target_
         from huaweicloudsdkcoc.v1.model.execute_resource_instance import ExecuteResourceInstance
         from huaweicloudsdkcoc.v1.model.script_execute_param import ScriptExecuteParam
         
-        print_info(f"创建COC脚本: {name}")
+        print_info(f"Creating COC script: {name}")
         
         properties = ScriptPropertiesModel(risk_level="LOW", version="1.0.0")
         request = CreateScriptRequest()
@@ -510,9 +529,9 @@ def create_and_execute_script(client, name, script_content, description, target_
 
         response = client.create_script(request)
         script_uuid = response.data if hasattr(response, 'data') else str(response)
-        print_info(f"脚本创建成功: {script_uuid}")
+        print_info(f"Script created successfully: {script_uuid}")
         
-        print_info("在目标实例上执行脚本...")
+        print_info("Executing script on target instances...")
         execute_request = ExecuteScriptRequest()
         execute_request.script_uuid = script_uuid
 
@@ -539,7 +558,7 @@ def create_and_execute_script(client, name, script_content, description, target_
 
         execute_response = client.execute_script(execute_request)
         execute_uuid = execute_response.data if hasattr(execute_response, 'data') else str(execute_response)
-        print_info(f"执行提交成功: {execute_uuid}")
+        print_info(f"Execution submitted successfully: {execute_uuid}")
         return execute_uuid
         
     except Exception as e:
@@ -568,7 +587,7 @@ def submit_and_monitor_script(client, name, script_content, description, target_
     result, job_info = wait_for_execution_completion(client, execute_uuid, timeout, max_retries=max_retries)
     
     if result == 'RETRY':
-        print_warning("正在重试脚本执行...")
+        print_warning("Retrying script execution...")
         return submit_and_monitor_script(client, name, script_content, description, target_instances, timeout, max_retries)
     
     return result, job_info
@@ -640,7 +659,7 @@ def coc_create_script(
 
         return {
             "ok": True,
-            "text": f"脚本创建成功: {script_uuid}",
+            "text": f"Script created successfully: {script_uuid}",
             "result": {"script_uuid": script_uuid},
             "error": None,
         }
@@ -701,37 +720,37 @@ def coc_query_execution_with_statistics(execute_uuid: str) -> dict[str, Any]:
     
     result_dict = result.get("result", {})
     
-    # 添加额外的统计信息（如果API没有提供，则计算）
+    # Add additional statistics (calculate if not provided by API)
     total_count = result_dict.get('total_count', 0)
     success_count = result_dict.get('success_count', 0)
     fail_count = result_dict.get('fail_count', 0)
     
-    # 计算处理中的实例数
+    # Calculate processing instance count
     if total_count > 0:
         processing_count = max(0, total_count - success_count - fail_count)
         result_dict['processing_count'] = processing_count
     else:
         result_dict['processing_count'] = 0
     
-    # 添加错误详情列表
+    # Add error details list
     error_details = []
     if result_dict.get('error'):
         error_details.append(result_dict['error'])
     
-    # 尝试从其他字段获取错误详情
+    # Try to get error details from other fields
     if 'error_details' not in result_dict and error_details:
         result_dict['error_details'] = error_details
     
-    # 如果没有实例详情，添加一个空列表
+    # Add empty list if no instance details
     if 'instance_details' not in result_dict:
         result_dict['instance_details'] = []
     
     return {
-        "ok": True,
-        "text": "执行状态查询成功（增强版）",
-        "result": result_dict,
-        "error": None
-    }
+            "ok": True,
+            "text": "Execution status query successful (enhanced)",
+            "result": result_dict,
+            "error": None
+        }
 
 
 def coc_execute_script(
