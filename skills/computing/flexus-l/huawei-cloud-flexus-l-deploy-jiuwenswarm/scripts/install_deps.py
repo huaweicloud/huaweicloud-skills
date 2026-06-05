@@ -220,8 +220,9 @@ def query_instance_by_ip(public_ip):
     # Get credentials
     AK, SK, REGION, SECURITY_TOKEN = get_huaweicloud_credentials()
     
+    # RMS requires GlobalCredentials
     if SECURITY_TOKEN:
-        credentials = BasicCredentials(AK, SK).with_security_token(SECURITY_TOKEN)
+        credentials = GlobalCredentials(AK, SK).with_security_token(SECURITY_TOKEN)
     else:
         credentials = GlobalCredentials(AK, SK)
     client = RmsClient.new_builder() \

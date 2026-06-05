@@ -43,8 +43,9 @@ def query_instance_by_ip(public_ip, ak, sk, region, security_token=None):
     from huaweicloudsdkrms.v1 import RmsClient
     from huaweicloudsdkrms.v1.region.rms_region import RmsRegion
 
+    # RMS requires GlobalCredentials
     if security_token:
-        credentials = BasicCredentials(ak, sk).with_security_token(security_token)
+        credentials = GlobalCredentials(ak, sk).with_security_token(security_token)
     else:
         credentials = GlobalCredentials(ak, sk)
     
@@ -275,7 +276,7 @@ update_param() {
         # Parameter exists, update its value
         sed -i "s|^\s*$key=.*|$key=\"$value\"|" "$env_file"
         echo "[INFO] Updated $key"
-    else:
+    else
         # Parameter doesn't exist, add to end of file
         echo "$key=\"$value\"" >> "$env_file"
         echo "[INFO] Added $key"
@@ -410,6 +411,31 @@ def main():
     if SECURITY_TOKEN:
         print(f"[INFO] Using temporary security credentials (STS token)")
 
+    config = None
+    if args.config:
+        with open(args.config, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+    elif args.api_base and args.api_key and args.model_name and args.model_provider:
+        config = {
+            'api_base': args.api_base,
+            'api_key': args.api_key,
+            'model_name': args.model_name,
+            'model_provider': args.model_provider
+        }
+    elif args.interactive:
+        config = configure_model_interactive()
+    else:
+        config = configure_model_interactive()
+
+    if not config:
+        return
+
+    instance_info = None
+    if args.instance_id:
+        instance_info = {'instance_id': args.instance_id, 'public_ip': args.ip, 'instance_name': 'Unknown'}
+    elif args.ip:
+        print(f"[INFO] Querying instance info by public IP: {args.ip}")
+        instance_info = query_instance_by_ip(args.ip, AK, SK, REGION, SECURITY_TOKEN)
         if not instance_info:
             print(f"[ERROR] Cannot find instance with public IP: {args.ip}")
             return
