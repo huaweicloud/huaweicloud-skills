@@ -1,0 +1,14 @@
+{
+  "弹性云服务器": "ecs", "云服务器": "ecs", "裸金属": "bms", "镜像": "ims", "弹性伸缩": "as",
+  "对象存储": "obs", "块存储": "evs", "文件存储": "sfs", "云硬盘": "evs",
+  "虚拟私有云": "vpc", "弹性公网": "eip", "负载均衡": "elb", "域名": "dns",
+  "关系型数据库": "rds", "图数据库": "ges",
+  "容器": "cce", "集群": "cce", "镜像仓库": "swr",
+  "监控": "ces", "告警": "ces", "日志": "lts",
+  "身份认证": "iam", "安全": "security",
+  "账单": "bss", "计费": "bss", "费用": "bss",
+  "命令行": "cli", "编排": "terraform",
+  "昇腾": "ascend", "NPU": "ascend", "模型迁移": "ascend", "算子优化": "ascend",
+  "模型训练": "modelarts", "模型部署": "modelarts", "模型分析": "modelarts", "模型适配": "modelarts",
+  "技能搜索": "find-skills", "技能发现": "find-skills"
+}

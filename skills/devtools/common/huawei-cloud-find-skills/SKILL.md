@@ -23,7 +23,7 @@ This skill enables users to:
 - **View Skill Details**: Fetch full SKILL.md content from GitHub for specific skills
 - **Install Skills**: Guide users through skill installation via `npx skills add`
 
-**Architecture**: Pre-built index (`references/index.json`) → Smart search → GitHub raw fetch for details → Install
+**Architecture**: Pre-built index (`references/index.json`) → Script-based search → GitHub raw fetch for details → Install
 
 ### Use Cases
 
@@ -47,19 +47,31 @@ INDEX=references/index.json
 
 ### Step 1: Search Skills
 
-Given `keyword` (from AI-understood user intent) and optional `category`, read `references/index.json` and search for matching skills.
+> **MANDATORY**: The agent MUST execute the search script to read `references/index.json`. Do NOT read the JSON file directly — always use the script.
 
-**Scoring algorithm** (per skill, higher = better match):
-- Name contains keyword → **+10** points
-- Any trigger contains keyword → **+8** points
-- Description contains keyword → **+5** points
+Given `keyword` (from AI-understood user intent) and optional `category`, run the search script:
 
-Results are sorted by score descending.
+```powershell
+# PowerShell
+.\scripts\search-skills.ps1 -Keyword "<keyword>"
+.\scripts\search-skills.ps1 -Keyword "<keyword>" -Category "<category>"
+.\scripts\search-skills.ps1 -Category "<category>"
+```
 
-**Search modes**:
-- **Keyword only**: `search-skills -Keyword "ECS"` — matches across name/description/triggers
-- **Category only**: `search-skills -Category "storage"` — filters by category field
-- **Combined**: `search-skills -Keyword "OBS" -Category "storage"` — both constraints
+```bash
+# Bash
+./scripts/search-skills.sh "<keyword>"
+./scripts/search-skills.sh "<keyword>" "<category>"
+./scripts/search-skills.sh "" "<category>"
+```
+
+→ [scripts/search-skills.ps1](scripts/search-skills.ps1) (PowerShell) · [scripts/search-skills.sh](scripts/search-skills.sh) (Bash)
+
+**What the script does**:
+1. Reads `references/index.json` and parses the `skills` array
+2. Expands keywords via `references/cn-en-map.json` (bidirectional CN↔EN, e.g., "ECS" → "ECS, 弹性云服务器, 云服务器")
+3. Scores each skill: name match **+10**, trigger match **+8**, description match **+5**, service match **+3**
+4. Sorts by score descending, outputs formatted results with matched keywords
 
 **Fallback iteration** (if no results): 1) Switch CN↔EN keywords 2) Expand keywords 3) Remove category filter 4) Try synonyms 5) List all skills
 
@@ -70,39 +82,42 @@ The process should persist until the skill is found or its absence is confirmed.
 Fetch the full SKILL.md content from GitHub for intent validation. Skip this step if the search results from Step 1 are sufficiently informative.
 
 ```bash
-# URL pattern
-DETAIL_URL="https://raw.githubusercontent.com/huaweicloud/huaweicloud-skills/master/skills/${category}/${service}/${skill-name}/SKILL.md"
+# URL pattern — use the skill's category, service, and name from index
+DETAIL_URL="https://raw.githubusercontent.com/huaweicloud/huaweicloud-skills/master/skills/${category}/${service}/${name}/SKILL.md"
 ```
 
-The agent can fetch this URL using `curl` or its web-fetch tool, then present the skill's full description to the user.
+The agent can fetch this URL using `curl` or its web-fetch tool, then present the skill's full documentation to the user.
 
 ### Step 3: Install Skill
 
-Trigger the installation routine corresponding to the desired skill.
+> **MANDATORY**: Use ONLY one of the two commands below.
 
 ```bash
-# Option A: Using npx skills add (default)
+# Option A: npx skills add (default)
 npx skills add huaweicloud/huaweicloud-skills --skill <skill-name>
 
-# Option B: Using npx clawhub install (OpenClaw ecosystem)
+# Option B: npx clawhub install (OpenClaw ecosystem)
 npx clawhub install <skill-name>
 ```
 
-Restart (optional) Agent to verify and load the new skill.
+If installation fails, report the error message to the user. Do NOT attempt any method outside the two commands above.
 
 ## Parameters
 
 | Parameter | Required/Optional | Description | Default |
 |-----------|-------------------|-------------|---------|
-| `Keyword` | Optional | Search keyword (matched against name, description, triggers) | None |
+| `Keyword` | Optional | Search keyword (matched against name, description, triggers, service) | None |
 | `Category` | Optional | Category code for filtering (e.g., "computing", "storage", "network") | None |
-| `skill-name` | Required (Step 3-4) | Exact skill name for viewing details or installing | None |
+| `skill-name` | Required (Step 3) | Exact skill name for installing | None |
 
 ## Reference Documentation
 
 | Document | Description |
 |----------|-------------|
 | [references/index.json](references/index.json) | Pre-built skill index with 37 entries (name, description, triggers, category, service) |
+| [references/cn-en-map.json](references/cn-en-map.json) | Chinese-English keyword mapping for search expansion (bidirectional) |
+| [scripts/search-skills.ps1](scripts/search-skills.ps1) | Step 1 search script (PowerShell) — reads index.json, expands keywords, scores, sorts |
+| [scripts/search-skills.sh](scripts/search-skills.sh) | Step 1 search script (Bash) — reads index.json, expands keywords, scores, sorts |
 
 ## Search Heuristics
 
@@ -114,10 +129,15 @@ Restart (optional) Agent to verify and load the new skill.
 
 ## Troubleshooting
 
+### Issue: Script fails with "index.json not found"
+
+**Cause**: Script cannot locate `references/index.json` relative to its own path
+**Solution**: Ensure the skill directory structure is intact: `scripts/search-skills.ps1` and `references/index.json` must both exist
+
 ### Issue: raw.githubusercontent.com returns 404
 
 **Cause**: File path incorrect or default branch is not `master`
-**Solution**: Verify the skill's `category`, `service`, and `name` from `references/index.json`
+**Solution**: Verify the skill's `category`, `service`, and `name` from search results
 
 ### Issue: Search returns no results
 
@@ -125,11 +145,12 @@ Restart (optional) Agent to verify and load the new skill.
 **Solution**:
 1. Try broader keywords
 2. Switch between Chinese and English keywords (e.g., "对象存储" → "obs")
-3. List all skills from the index
+3. List all skills: `.\scripts\search-skills.ps1 -Category "computing"`
 
 ## Notes
 
 - This skill is **read-only** and does not create any cloud resources
 - **No cache management needed** — index is pre-built and shipped with the skill
 - **Offline search** — index is local, only Step 2 requires network
+- **MUST use script to search** — do not read index.json directly
 - Repo: `https://github.com/huaweicloud/huaweicloud-skills` (branch: `master`)
