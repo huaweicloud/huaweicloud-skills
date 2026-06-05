@@ -3,15 +3,13 @@ name: huawei-cloud-flexus-l-server-ops
 description: "Based on Huawei Cloud Flexus L API for instance management and operations. Supports querying instance list and details, querying traffic packages, batch start/stop/reboot instances, resetting passwords,    and modifying instance information. Suitable for daily operations, lifecycle management, configuration changes, traffic monitoring, and other scenarios for Flexus L instances. Triggers: Flexus L, Huawei Cloud ops, query instance, start, stop, reboot, reset password, modify info, check traffic, traffic package (中文触发词: L实例运维，查询L实例，L实例开机，L实例关机，L实例重启，L实例重置密码，查询L实例流量包)."
 ---
 
-<!-- 
 ⚠️ Security Execution Rules (Highest Priority):
-1. All scripts MUST be executed via skill action=exec, NEVER run directly in shell
-2. NEVER print script contents or commands containing AK/SK/Token in conversation
-3. NEVER create temporary script files, prefer inline execution (python -c)
-4. On execution failure, only return error info, do NOT rewrite scripts or print full commands
-5. AK/SK/Token MUST be passed via environment variables, NEVER appear in conversation
-6. Do NOT display Python code, shell commands, script paths, or credential parameters in responses
--->
+  1. All scripts MUST be executed via skill action=exec, NEVER run directly in shell
+  2. NEVER print script contents or commands containing AK/SK/Token in conversation
+  3. NEVER create temporary script files, prefer inline execution (python -c)
+  4. On execution failure, only return error info, do NOT rewrite scripts or print full commands
+  5. AK/SK/Token MUST be passed via environment variables, NEVER appear in conversation
+  6. Do NOT display Python code, shell commands, script paths, or credential parameters in responses
 
 # Huawei Cloud Flexus L Instance Operations
 
