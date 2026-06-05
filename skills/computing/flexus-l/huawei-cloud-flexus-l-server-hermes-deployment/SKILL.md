@@ -13,13 +13,13 @@ tags:
 metadata: {"hermes": {"version": "1.0.0", "requires": {"bins": ["uv", "python3"]}, "install": [{"kind": "uv", "command": "uv sync --index-url https://repo.huaweicloud.com/repository/pypi/simple"}]}}
 ---
 
-⚠️ Security Execution Rules (Highest Priority):
-  1. All scripts MUST be executed via skill action=exec, NEVER run directly in shell
-  2. NEVER print script contents or commands containing AK/SK/Token in conversation
-  3. NEVER create temporary script files, prefer inline execution (python -c)
-  4. On execution failure, only return error info, do NOT rewrite scripts or print full commands
-  5. AK/SK/Token MUST be passed via environment variables, NEVER appear in conversation
- 
+ ⚠️ Security Execution Rules (Highest Priority):
+ 1. All scripts MUST be executed via skill action=exec, NEVER run directly in shell
+ 2. NEVER print script contents or commands containing AK/SK/Token in conversation
+ 3. NEVER create temporary script files, prefer inline execution (python -c)
+ 4. On execution failure, only return error info, do NOT rewrite scripts or print full commands
+ 5. AK/SK/Token MUST be passed via environment variables, NEVER appear in conversation
+
 # Hermes One-Click Deployment Skill
 
 ## Overview
@@ -38,29 +38,18 @@ This skill supports both interactive mode (step-by-step prompts) and non-interac
 ### Account Requirements
 
 - Valid Huawei Cloud account with sufficient permissions
-- Huawei Cloud credentials (supports two methods):
-  - **Permanent credentials**: AK/SK access keys
-  - **Temporary credentials**: Temporary AK/SK + security_token (recommended for temporary access scenarios)
+- Huawei Cloud temporary credentials: Temporary AK/SK + security_token
 - Required permissions:
   - Creating Flexus L instances
   - Accessing COC (Cloud Operations Center) services
 
 **Credential Acquisition Methods:**
 
-This skill supports obtaining Huawei Cloud credentials through the following methods (in order of priority from high to low):
-
-1. **Environment Variables** (highest priority)
-   - `HW_ACCESS_KEY`: Huawei Cloud Access Key AK
-   - `HW_SECRET_KEY`: Huawei Cloud Access Key SK
+This skill supports obtaining Huawei Cloud temporary credentials through the following methods:
+1. **Environment Variables**
+   - `HW_ACCESS_KEY`: Temporary Access Key AK
+   - `HW_SECRET_KEY`: Temporary Access Key SK
    - `HW_SECURITY_TOKEN`: Security token for temporary credentials
-
-2. **Command Line Parameters** (used when environment variables are not provided)
-   - `--ak`: Huawei Cloud Access Key AK
-   - `--sk`: Huawei Cloud Access Key SK
-   - `--security-token`: Security token for temporary credentials (required when using temporary AK/SK)
-
-3. **Interactive Input** (when neither of the above methods are provided)
-   - The program will prompt the user to input credential information such as AK/SK
 
 ### Architecture Diagram
 
@@ -86,9 +75,6 @@ User/Agent      ──────▶│   Flexus L Instance   │────�
 ### Deployment Commands
 
 ```bash
-# Deploy Hermes to Flexus L instance using permanent AK/SK (custom name, if not specified, auto-generates timestamp format: hermes-20260605143022)
-python scripts/caller.py deploy --ak <your_ak> --sk <your_sk> --name hermes-{timestamp} --region cn-north-4
-
 # Deploy using temporary AK/SK and security-token (custom name, if not specified, auto-generates timestamp format: hermes-20260605143022)
 python scripts/caller.py deploy --ak <temp_ak> --sk <temp_sk> --security-token <security_token> --name hermes-{timestamp} --region cn-north-4
 
@@ -103,9 +89,6 @@ python scripts/caller.py deploy
 ### Model Configuration Commands
 
 ```bash
-# Configure ModelArts model using permanent AK/SK
-python scripts/caller.py maas --ak <your_ak> --sk <your_sk> --resource-id <instance_id> --region-id cn-north-4 --api-key <api_key> --model-name deepseek-v3.2
-
 # Configure model using temporary AK/SK and security-token
 python scripts/caller.py maas --ak <temp_ak> --sk <temp_sk> --security-token <security_token> --resource-id <instance_id> --region-id cn-north-4 --api-key <api_key> --model-name deepseek-v3.2
 
@@ -116,14 +99,8 @@ python scripts/caller.py maas
 ### Channel Configuration Commands
 
 ```bash
-# Configure Feishu channel using permanent AK/SK
-python scripts/caller.py channel --ak <your_ak> --sk <your_sk> --resource-id <instance_id> --region-id cn-north-4 --bot-platform feishu --feishu-app-id <app_id> --feishu-app-secret <app_secret>
-
 # Configure Feishu channel using temporary AK/SK and security-token
 python scripts/caller.py channel --ak <temp_ak> --sk <temp_sk> --security-token <security_token> --resource-id <instance_id> --region-id cn-north-4 --bot-platform feishu --feishu-app-id <app_id> --feishu-app-secret <app_secret>
-
-# Configure WeCom channel using permanent AK/SK
-python scripts/caller.py channel --ak <your_ak> --sk <your_sk> --resource-id <instance_id> --region-id cn-north-4 --bot-platform wecom --wecom-bot-id <bot_id> --wecom-secret <secret>
 
 # Configure WeCom channel using temporary AK/SK and security-token
 python scripts/caller.py channel --ak <temp_ak> --sk <temp_sk> --security-token <security_token> --resource-id <instance_id> --region-id cn-north-4 --bot-platform wecom --wecom-bot-id <bot_id> --wecom-secret <secret>
@@ -135,9 +112,6 @@ python scripts/caller.py channel
 ### Gateway Management Commands
 
 ```bash
-# Restart Hermes gateway using permanent AK/SK
-python scripts/caller.py gateway --ak <your_ak> --sk <your_sk> --resource-id <instance_id> --region-id cn-north-4
-
 # Restart gateway using temporary AK/SK and security-token
 python scripts/caller.py gateway --ak <temp_ak> --sk <temp_sk> --security-token <security_token> --resource-id <instance_id> --region-id cn-north-4
 
@@ -148,9 +122,6 @@ python scripts/caller.py gateway
 ### Query Execution Result Commands
 
 ```bash
-# Query COC script execution result using permanent AK/SK
-python scripts/caller.py query --ak <your_ak> --sk <your_sk> --execute-uuid SCT2023083109562601af694bf
-
 # Query execution result using temporary AK/SK and security-token
 python scripts/caller.py query --ak <temp_ak> --sk <temp_sk> --security-token <security_token> --execute-uuid SCT2023083109562601af694bf
 ```
@@ -163,15 +134,36 @@ python scripts/caller.py query --ak <temp_ak> --sk <temp_sk> --security-token <s
 - `ABNORMAL`: Execution failed
 - `RUNNING`: Executing
 
+### UniAgent Status Query Commands
+
+```bash
+# Query UniAgent status using temporary AK/SK and security-token
+python scripts/caller.py uniagent --ak <temp_ak> --sk <temp_sk> --security-token <security_token> --resource-id <instance_id>
+
+# Query UniAgent status in interactive mode
+python scripts/caller.py uniagent
+```
+
+**UniAgent Status Description**:
+- `ONLINE`: UniAgent is running normally, can execute COC scripts
+- `OFFLINE`: UniAgent is not running, cannot execute COC scripts
+- `UNKNOWN`: Status cannot be determined
+
+**When to Use**:
+- Before configuring models or channels, ensure UniAgent is ONLINE
+- Troubleshoot COC script execution failures
+- Verify instance operational status after deployment
+- After the instance creation command is successfully issued (with status codes "200", "201", or "202"), automatically check whether the preconditions are met (status of the gateway and UniAgent). If they are met, you can immediately proceed to the next steps!
+
 ## Parameter Reference
 
 ### Global Parameters
 
 | Parameter | Description | Required | Default Value |
 |-----------|-------------|----------|---------------|
-| `--ak` | Huawei Cloud Access Key (supports permanent or temporary AK) | Yes | - |
-| `--sk` | Huawei Cloud Secret Key (supports permanent or temporary SK) | Yes | - |
-| `--security-token` | Security token for temporary credentials (required when using temporary credentials) | No | - |
+| `--ak` | Temporary Access Key AK | Yes | - |
+| `--sk` | Temporary Access Key SK | Yes | - |
+| `--security-token` | Security token for temporary credentials | Yes | - |
 | `--non-interactive` | Run in non-interactive mode | No | false |
 
 ### Deploy Command Parameters
@@ -215,6 +207,12 @@ python scripts/caller.py query --ak <temp_ak> --sk <temp_sk> --security-token <s
 | `--region-id` | COC service region | No | cn-north-4 |
 | `--timeout` | Execution timeout (seconds) | No | 120 |
 | `--execute-user` | Execution user | No | root |
+
+### UniAgent Command Parameters
+
+| Parameter | Description | Required | Default Value |
+|-----------|-------------|----------|---------------|
+| `--resource-id` | L instance resource ID | Yes | - |
 
 ## Workflow
 
@@ -323,10 +321,10 @@ python scripts/caller.py gateway --ak <ak> --sk <sk> --resource-id <instance_id>
 
 ### 1. Credential Management
 
-- **Permanent credentials**: Store AK/SK in secure environment variables instead of hardcoding
-- **Temporary credentials**: Recommended for temporary access scenarios using temporary AK/SK + security-token for higher security
-  - Temporary credentials are typically issued by STS service with expiration time limits
+- **Temporary credentials**: Use temporary AK/SK + security_token for authentication, providing higher security
+  - Temporary credentials are issued by STS service with expiration time limits
   - Use `--security-token` parameter to pass the security token
+  - Supports environment variables, command line parameters, and interactive input methods
 - Use IAM roles with minimal permissions for production environments
 - Rotate credentials regularly according to security policies
 

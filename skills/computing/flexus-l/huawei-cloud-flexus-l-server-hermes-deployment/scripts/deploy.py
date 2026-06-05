@@ -2,6 +2,9 @@
 # coding: utf-8
 """
 Huawei Cloud Flexus L Instance One-Click Hermes Deployment - Deployment Module
+
+Note: This module only supports temporary credentials (temporary AK/SK + security_token).
+      Permanent AK/SK credentials are not supported.
 """
 
 import os
@@ -70,7 +73,7 @@ def do_deploy_hermes(args):
     
     # Execute deployment
     print("\nStarting Hermes instance creation...")
-    result = create_hermes_instance(ak, sk, instance_name, region, security_token)
+    result = create_hermes_instance(ak, sk, security_token, instance_name, region)
     
     if result.get("ok"):
         print(f"\n✓ {result['text']}")
