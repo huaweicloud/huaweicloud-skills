@@ -2,6 +2,9 @@
 # coding: utf-8
 """
 Huawei Cloud Flexus L Instance One-Click Hermes Deployment - Utility Function Module
+
+Note: This module only supports temporary credentials (temporary AK/SK + security_token).
+      Permanent AK/SK credentials are not supported.
 """
 
 import os
@@ -87,15 +90,17 @@ def prompt_for_input(prompt, required=True, default=None, choices=None, hide_inp
 
 
 def setup_credentials_interactive():
-    """Interactive setup for Huawei Cloud credentials (deprecated, use CLI parameters to pass AK/SK)"""
-    print("\nWarning: setup_credentials_interactive is deprecated. Please use CLI parameters --ak and --sk to pass credentials")
+    """Interactive setup for Huawei Cloud temporary credentials (deprecated, use CLI parameters to pass AK/SK/security-token)"""
+    print("\nWarning: setup_credentials_interactive is deprecated. Please use CLI parameters --ak, --sk and --security-token to pass credentials")
     print("-" * 40)
     
-    ak = prompt_for_input("Huawei Cloud AK", required=True)
-    sk = prompt_for_input("Huawei Cloud SK", required=True, hide_input=True)
+    ak = prompt_for_input("Huawei Cloud Temporary AK", required=True)
+    sk = prompt_for_input("Huawei Cloud Temporary SK", required=True, hide_input=True)
+    security_token = prompt_for_input("Huawei Cloud Security Token", required=True, hide_input=True)
     
     print(f"\n✓ Credentials input completed")
     print(f"  AK: {ak[:4]}...{ak[-4:]}")
     print(f"  SK: {'*' * len(sk)}")
+    print(f"  Security Token: {'*' * len(security_token)}")
     
-    return ak, sk
+    return ak, sk, security_token
