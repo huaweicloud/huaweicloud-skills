@@ -1687,3 +1687,117 @@ def _error(code: str, message: str) -> dict:
         "result": None,
         "error": {"code": code, "message": message},
     }
+
+
+def query_uniagent_status(
+    resource_id: str,
+    ak: str,
+    sk: str,
+    security_token: str = None
+) -> dict[str, Any]:
+    """
+    Query L instance UniAgent status via COC API
+
+    Args:
+        resource_id: L instance resource ID
+        ak: Huawei Cloud AK (can be temporary AK)
+        sk: Huawei Cloud SK (can be temporary SK)
+        security_token: Security token for temporary credentials (optional)
+
+    Returns:
+        {
+            "ok": True,
+            "text": "Query successful",
+            "result": {...},
+            "error": None
+        }
+    """
+    if not resource_id:
+        return _error("INPUT_ERROR", "resource_id parameter is required")
+    
+    if not ak or not sk:
+        return _error("CONFIG_ERROR", "Please provide AK and SK parameters")
+    
+    region = os.environ.get("HUAWEICLOUD_REGION", "cn-north-4")
+    
+    try:
+        from huaweicloudsdkcore.auth.credentials import GlobalCredentials
+        from huaweicloudsdkcore.signer.signer import Signer
+        from huaweicloudsdkcore.sdk_request import SdkRequest
+        from urllib.parse import urlparse
+        
+        credentials = Credentials(ak, sk, security_token)
+        signer = Signer(credentials)
+        
+        endpoint = "https://coc.myhuaweicloud.com/v1/resources"
+        
+        query_params = {
+            "resource_id_list": resource_id,
+            "limit": "100",
+            "provider": "hcss",
+            "type": "l-instance"
+        }
+        
+        url_with_params = endpoint + "?" + "&".join([f"{k}={v}" for k, v in query_params.items()])
+        parsed_url = urlparse(url_with_params)
+        
+        request = SdkRequest()
+        request.method = "GET"
+        request.schema = parsed_url.scheme
+        request.host = parsed_url.hostname
+        request.resource_path = parsed_url.path
+        request.query_params = [[k, v] for k, v in query_params.items()]
+        request.header_params = {
+            "Content-Type": "application/json",
+            "Client-Request-Id": str(uuid.uuid4())
+        }
+        
+        if security_token:
+            request.header_params["X-Security-Token"] = security_token
+        
+        signed_request = signer.sign(request)
+        
+        headers = {}
+        for key, value in signed_request.header_params.items():
+            if isinstance(value, bytes):
+                headers[key] = value.decode('iso-8859-1')
+            else:
+                headers[key] = str(value)
+        
+        print(f"Request URL: {url_with_params}")
+        print(f"Request headers: {headers}")
+        
+        resp = requests.request(
+            "GET",
+            url_with_params,
+            headers=headers,
+            verify=True
+        )
+        
+        print(f"Response status code: {resp.status_code}")
+        print(f"Response content: {resp.text}")
+        
+        if resp.status_code in [200, 202]:
+            response_data = resp.json()
+            return {
+                "ok": True,
+                "text": "UniAgent status query successful",
+                "result": response_data,
+                "error": None
+            }
+        else:
+            return {
+                "ok": False,
+                "text": f"Query failed: {resp.reason}",
+                "result": None,
+                "error": {
+                    "code": str(resp.status_code),
+                    "message": resp.text
+                }
+            }
+    
+    except ImportError as e:
+        return _error("SDK_ERROR", f"Please install huaweicloudsdkcore: {str(e)}")
+    except Exception as e:
+        error_msg = str(e)
+        return _error("UNKNOWN_ERROR", error_msg)
