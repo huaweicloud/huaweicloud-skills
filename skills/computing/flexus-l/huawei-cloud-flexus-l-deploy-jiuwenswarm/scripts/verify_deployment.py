@@ -31,8 +31,9 @@ def query_instance_by_ip(ak, sk, security_token, region, public_ip):
     from huaweicloudsdkrms.v1 import RmsClient
     from huaweicloudsdkrms.v1.region.rms_region import RmsRegion
 
+    # RMS requires GlobalCredentials
     if security_token:
-        credentials = BasicCredentials(ak, sk).with_security_token(security_token)
+        credentials = GlobalCredentials(ak, sk).with_security_token(security_token)
     else:
         credentials = GlobalCredentials(ak, sk)
     
@@ -98,9 +99,11 @@ def verify_deployment(instance_info):
 
     public_ip = instance_info['public_ip']
     instance_id = instance_info['instance_id']
+    region = instance_info.get('region', 'cn-north-4')
 
     print_info(f"Instance Public IP: {public_ip}")
     print_info(f"Instance ID: {instance_id}")
+    print_info(f"Region: {region}")
 
     # Simplified verification script - only verify SSH connection and basic command execution
     verification_script = '''#!/bin/bash
@@ -137,7 +140,7 @@ exit 0
 
     target_instances = [{
         "resource_id": instance_id,
-        "region_id": REGION,
+        "region_id": region,
         "provider": "HCSS",
         "type": "L-INSTANCE"
     }]
