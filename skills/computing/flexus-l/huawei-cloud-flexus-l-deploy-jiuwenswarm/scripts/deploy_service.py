@@ -67,8 +67,9 @@ def query_instance_by_ip(public_ip):
     # Get credentials
     ak, sk, region, security_token = get_credentials()
     
+    # RMS requires GlobalCredentials
     if security_token:
-        credentials = BasicCredentials(ak, sk).with_security_token(security_token)
+        credentials = GlobalCredentials(ak, sk).with_security_token(security_token)
     else:
         credentials = GlobalCredentials(ak, sk)
     
@@ -168,7 +169,7 @@ def execute_script_via_coc(client, instance_id, ecs_instance_id, script_content)
         execute_param = ScriptExecuteParam(timeout=1799, success_rate=100, execute_user="root")
 
         # Get credentials
-        _, _, region = get_credentials()
+        _, _, region, _ = get_credentials()
         
         instance = ExecuteResourceInstance(
             resource_id=instance_id,

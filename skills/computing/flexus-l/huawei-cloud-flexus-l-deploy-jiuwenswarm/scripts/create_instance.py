@@ -168,6 +168,32 @@ def create_flexus_l_instance(ak, sk, security_token, project_id, region, instanc
     # Manually add X-Security-Token header for temporary credentials (not automatically added by SDK signing)
     if security_token:
         headers["X-Security-Token"] = security_token
+
+    resp = requests.post(FLEXUS_API_ENDPOINT, headers=headers, data=body_str, timeout=30)
+
+    if resp.status_code in [200, 201, 202]:
+        result = resp.json()
+        order_id = result.get('order_id')
+        log.info(f"Instance creation request submitted, Order ID: {order_id}")
+        return order_id
+    else:
+        log.error(f"Instance creation failed: HTTP {resp.status_code}, {resp.text}")
+        return None
+
+def query_instance_status(ak, sk, security_token, region, resource_id):
+    from huaweicloudsdkcore.auth.credentials import GlobalCredentials
+    from huaweicloudsdkrms.v1 import RmsClient
+    from huaweicloudsdkrms.v1.region.rms_region import RmsRegion
+
+    # RMS requires GlobalCredentials
+    if security_token:
+        credentials = GlobalCredentials(ak, sk).with_security_token(security_token)
+    else:
+        credentials = GlobalCredentials(ak, sk)
+    
+    client = RmsClient.new_builder() \
+        .with_credentials(credentials) \
+        .with_region(RmsRegion.value_of(region)) \
         .build()
 
     from huaweicloudsdkrms.v1 import model
@@ -190,15 +216,15 @@ def create_flexus_l_instance(ak, sk, security_token, project_id, region, instanc
     return None
 
 def get_instance_info(ak, sk, security_token, region, resource_id):
-    from huaweicloudsdkcore.auth.credentials import GlobalCredentials, BasicCredentials
+    from huaweicloudsdkcore.auth.credentials import GlobalCredentials
     from huaweicloudsdkrms.v1 import RmsClient
     from huaweicloudsdkrms.v1.region.rms_region import RmsRegion
 
-    # Use BasicCredentials with security token for STS, BasicCredentials for permanent credentials
+    # RMS requires GlobalCredentials
     if security_token:
-        credentials = BasicCredentials(ak, sk).with_security_token(security_token)
+        credentials = GlobalCredentials(ak, sk).with_security_token(security_token)
     else:
-        credentials = BasicCredentials(ak, sk)
+        credentials = GlobalCredentials(ak, sk)
     
     client = RmsClient.new_builder() \
         .with_credentials(credentials) \
@@ -353,18 +379,15 @@ def main():
                 from huaweicloudsdkrms.v1 import model
 
                 if SECURITY_TOKEN:
-                    credentials = BasicCredentials(AK, SK).with_security_token(SECURITY_TOKEN)
+                    credentials = GlobalCredentials(AK, SK).with_security_token(SECURITY_TOKEN)
                 else:
-                    credentials = BasicCredentials(AK, SK)
+                    credentials = GlobalCredentials(AK, SK)
                 
                 client = RmsClient.new_builder() \
                     .with_credentials(credentials) \
                     .with_region(RmsRegion.value_of(args.region)) \
                     .build()
 
-=======
-                from huaweicloudsdkrms.v1 import model
->>>>>>> upstream/master
                 request = model.ListAllResourcesRequest()
                 request.region_id = args.region
                 request.type = "hcss.l-instance"
@@ -383,7 +406,6 @@ def main():
 
                         if status == 'RUNNING':
                             print("\n[SUCCESS] Instance created successfully!")
-<<<<<<< HEAD
                             instance_info = get_instance_info(AK, SK, SECURITY_TOKEN, args.region, resource_id)
                             if instance_info:
                                 info_file = Path(__file__).parent / "new_instance_info.json"
