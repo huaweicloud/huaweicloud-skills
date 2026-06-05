@@ -1,176 +1,95 @@
 #!/usr/bin/env python3
 # coding: utf-8
-"""
-Huawei Cloud Flexus L Server Lifecycle Management Script
-
-Supports: start, stop, reboot operations
-
-Before using, set environment variables:
-- CLOUD_SDK_AK or HUAWEICLOUD_SDK_AK: Huawei Cloud Access Key
-- CLOUD_SDK_SK or HUAWEICLOUD_SDK_SK: Huawei Cloud Secret Key
-"""
+"""Flexus L instance lifecycle management (start/stop/reboot)"""
 
 import os
 import sys
-from huaweicloudsdkcore.auth.credentials import BasicCredentials
-from huaweicloudsdkecs.v2.region.ecs_region import EcsRegion
+
 from huaweicloudsdkcore.exceptions import exceptions
-from huaweicloudsdkecs.v2 import *
+from huaweicloudsdkecs.v2 import (
+    BatchStartServersRequest, BatchStartServersRequestBody, BatchStartServersOption,
+    BatchStopServersRequest, BatchStopServersRequestBody, BatchStopServersOption,
+    BatchRebootServersRequest, BatchRebootServersRequestBody, BatchRebootSeversOption,
+    ServerId
+)
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from auth import AuthManager
 
 
-def manage_servers(action: str, server_ids: list, region: str = "cn-north-4", reboot_type: str = "SOFT"):
-    """
-    Manage Flexus L servers lifecycle (start/stop/reboot)
-    
-    Args:
-        action: Action to perform (start/stop/reboot)
-        server_ids: List of server IDs
-        region: Huawei Cloud region, default cn-north-4
-        reboot_type: Reboot type (SOFT/HARD), only for reboot action
-    
-    Returns:
-        dict: Operation result
-    """
-    # Validate action
+def manage_servers(action: str, server_ids: list, region: str = "cn-north-4", reboot_type: str = "SOFT", auth: AuthManager = None):
+    """Manage Flexus L instance lifecycle (start/stop/reboot)"""
     action = action.lower()
     if action not in ["start", "stop", "reboot"]:
-        raise ValueError(f"Invalid action: {action}. Must be start, stop, or reboot")
+        raise ValueError(f"Invalid action: {action}, must be start/stop/reboot")
     
-    # Get credentials from environment variables
-    ak = os.environ.get("CLOUD_SDK_AK") or os.environ.get("HUAWEICLOUD_SDK_AK")
-    sk = os.environ.get("CLOUD_SDK_SK") or os.environ.get("HUAWEICLOUD_SDK_SK")
-
-    if not ak or not sk:
-        raise ValueError("Please set environment variables CLOUD_SDK_AK and CLOUD_SDK_SK")
+    auth = auth or AuthManager()
+    if not auth.is_configured():
+        raise ValueError("Please set environment variables HW_ACCESS_KEY, HW_SECRET_KEY, HW_SECURITY_TOKEN or provide --ak --sk parameters")
     
-    # Create credentials and client
-    credentials = BasicCredentials(ak, sk)
-    
-    client = EcsClient.new_builder() \
-        .with_credentials(credentials) \
-        .with_region(EcsRegion.value_of(region)) \
-        .build()
+    client = auth.get_ecs_client(region)
+    server_id_list = [ServerId(id=sid) for sid in server_ids]
     
     try:
-        # Build server ID list
-        server_id_list = [ServerId(id=server_id) for server_id in server_ids]
-        
-        # Execute action
         if action == "start":
-            # Start servers
-            request = BatchStartServersRequest()
-            osstartbody = BatchStartServersOption(servers=server_id_list)
-            request.body = BatchStartServersRequestBody(os_start=osstartbody)
+            request = BatchStartServersRequest(body=BatchStartServersRequestBody(
+                os_start=BatchStartServersOption(servers=server_id_list)))
             response = client.batch_start_servers(request)
-            
         elif action == "stop":
-            # Stop servers
-            request = BatchStopServersRequest()
-            osstopbody = BatchStopServersOption(servers=server_id_list)
-            request.body = BatchStopServersRequestBody(os_stop=osstopbody)
+            request = BatchStopServersRequest(body=BatchStopServersRequestBody(
+                os_stop=BatchStopServersOption(servers=server_id_list)))
             response = client.batch_stop_servers(request)
-            
-        elif action == "reboot":
-            # Reboot servers
-            request = BatchRebootServersRequest()
-            rebootbody = BatchRebootSeversOption(servers=server_id_list, type=reboot_type)
-            request.body = BatchRebootServersRequestBody(reboot=rebootbody)
+        else:  # reboot
+            request = BatchRebootServersRequest(body=BatchRebootServersRequestBody(
+                reboot=BatchRebootSeversOption(servers=server_id_list, type=reboot_type)))
             response = client.batch_reboot_servers(request)
         
-        return {
-            "success": True,
-            "response": str(response),
-            "action": action,
-            "server_ids": server_ids,
-            "region": region,
-            "reboot_type": reboot_type if action == "reboot" else None
-        }
-        
+        return {"success": True, "response": str(response), "action": action, "server_ids": server_ids}
     except exceptions.ClientRequestException as e:
-        return {
-            "success": False,
-            "error": {
-                "status_code": e.status_code,
-                "request_id": e.request_id,
-                "error_code": e.error_code,
-                "error_msg": e.error_msg
-            },
-            "action": action,
-            "server_ids": server_ids,
-            "region": region
-        }
+        return {"success": False, "error": {"status_code": e.status_code, "request_id": e.request_id, 
+                                            "error_code": e.error_code, "error_msg": e.error_msg}}
 
 
 def main():
-    """Command line entry point"""
-    if len(sys.argv) < 3:
-        print("Usage: python lifecycle.py <action> <server_id1> [server_id2] ... [--region <region>] [--type <SOFT|HARD>]")
-        print("\nActions:")
-        print("  start   - Start servers")
-        print("  stop    - Stop servers")
-        print("  reboot  - Reboot servers")
-        print("\nExamples:")
-        print("  python lifecycle.py start 28f0xxx 9c98xxx")
-        print("  python lifecycle.py stop 28f0xxx --region cn-north-4")
-        print("  python lifecycle.py reboot 28f0xxx --type HARD")
+    """Command line entry: parse arguments and execute lifecycle operations"""
+    if len(sys.argv) < 2:
+        print("Usage: python lifecycle.py <action> --instance-id <ID> [--instance-id <ID2>...] [--region <region>] [--type SOFT|HARD] [--ak <AK>] [--sk <SK>] [--security-token <TOKEN>]")
+        print("Actions: start / stop / reboot")
         sys.exit(1)
     
-    # Parse arguments
-    action = sys.argv[1].lower()
-    server_ids = []
-    region = "cn-north-4"  # Default region
-    reboot_type = "SOFT"  # Default reboot type
-    
+    action, server_ids, region, reboot_type = sys.argv[1].lower(), [], "cn-north-4", "SOFT"
+    ak, sk, security_token = None, None, None
     i = 2
     while i < len(sys.argv):
-        if sys.argv[i] == "--region" and i + 1 < len(sys.argv):
-            region = sys.argv[i + 1]
+        if sys.argv[i] == "--instance-id" and i + 1 < len(sys.argv):
+            server_ids.append(sys.argv[i + 1])
             i += 2
+        elif sys.argv[i] == "--region" and i + 1 < len(sys.argv):
+            region, i = sys.argv[i + 1], i + 2
         elif sys.argv[i] == "--type" and i + 1 < len(sys.argv):
-            reboot_type = sys.argv[i + 1].upper()
-            i += 2
+            reboot_type, i = sys.argv[i + 1].upper(), i + 2
+        elif sys.argv[i] == "--ak" and i + 1 < len(sys.argv):
+            ak, i = sys.argv[i + 1], i + 2
+        elif sys.argv[i] == "--sk" and i + 1 < len(sys.argv):
+            sk, i = sys.argv[i + 1], i + 2
+        elif sys.argv[i] == "--security-token" and i + 1 < len(sys.argv):
+            security_token, i = sys.argv[i + 1], i + 2
         else:
-            server_ids.append(sys.argv[i])
             i += 1
     
-    if not server_ids:
-        print("Error: Please provide at least one server ID")
+    if not server_ids or action not in ["start", "stop", "reboot"]:
+        print("ERROR: Invalid parameters. Please provide --instance-id")
         sys.exit(1)
     
-    if action not in ["start", "stop", "reboot"]:
-        print(f"Error: Invalid action '{action}'. Must be start, stop, or reboot")
-        sys.exit(1)
-    
-    if action == "reboot" and reboot_type not in ["SOFT", "HARD"]:
-        print("Error: Reboot type must be SOFT or HARD")
-        sys.exit(1)
-    
-    # Action descriptions
-    action_desc = {
-        "start": "Starting",
-        "stop": "Stopping",
-        "reboot": "Rebooting"
-    }
-    
-    print(f"{action_desc[action]} {len(server_ids)} server(s)...")
-    print(f"Action: {action.upper()}")
-    print(f"Server IDs: {server_ids}")
-    print(f"Region: {region}")
-    if action == "reboot":
-        print(f"Reboot type: {reboot_type} ({'Normal reboot' if reboot_type == 'SOFT' else 'Forced reboot'})")
-    
-    result = manage_servers(action, server_ids, region, reboot_type)
+    auth = AuthManager(ak=ak, sk=sk, security_token=security_token)
+    action_name = "Starting" if action == "start" else "Stopping" if action == "stop" else "Rebooting"
+    print(f"{action_name} {len(server_ids)} server(s)...")
+    result = manage_servers(action, server_ids, region, reboot_type, auth)
     
     if result["success"]:
-        print(f"\n✅ {action.upper()} operation submitted")
-        print(f"Response: {result['response']}")
+        print(f"SUCCESS: {action.upper()} operation submitted")
     else:
-        print(f"\n❌ {action.upper()} operation failed")
-        error = result["error"]
-        print(f"Status code: {error['status_code']}")
-        print(f"Request ID: {error['request_id']}")
-        print(f"Error code: {error['error_code']}")
-        print(f"Error message: {error['error_msg']}")
+        print(f"ERROR: Operation failed: {result['error']['error_msg']}")
         sys.exit(1)
 
 
