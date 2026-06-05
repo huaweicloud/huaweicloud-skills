@@ -2,10 +2,10 @@
     "repo":  "developer-skill/huaweicloud-skills",
     "platform":  "gitcode",
     "branch":  "master",
-    "generated_at":  "2026-06-05T00:58:06Z",
-    "total_skills":  46,
-    "skills_with_descriptions":  46,
-    "skills_with_triggers":  27,
+    "generated_at":  "2026-06-05T09:10:04Z",
+    "total_skills":  49,
+    "skills_with_descriptions":  49,
+    "skills_with_triggers":  28,
     "categories":  [
                        "ai",
                        "bss",
@@ -131,6 +131,36 @@
                        "has_description":  true
                    },
                    {
+                       "name":  "huawei-cloud-ascend-op-mfu-calculator",
+                       "category":  "ai",
+                       "service":  "modelarts",
+                       "description":  "Calculate MFU (Machine FLOP Utilization) for operators like matmul/GEMM/FlashAttention on Ascend NPU, providing clear formulas and derivation process\nUse this skill when the user wants to: (1) calculate MFU for matrix operations, (2) analyze operator performance efficiency, (3) understand hardware utilization, (4) optimize operator implementation\nTrigger: user mentions \"MFU\", \"machine flop utilization\", \"operator FLOPs\", \"matmul performance\", \"GEMM efficiency\", \"Ascend MFU\", \"算子MFU\", \"算力利用率\", \"矩阵乘效率\", \"GEMM性能\", \"FlashAttention性能\"",
+                       "triggers":  [
+                                        "user mentions \"MFU",
+                                        "machine flop utilization",
+                                        "operator FLOPs",
+                                        "matmul performance",
+                                        "GEMM efficiency",
+                                        "Ascend MFU",
+                                        "算子MFU",
+                                        "算力利用率",
+                                        "矩阵乘效率",
+                                        "GEMM性能",
+                                        "FlashAttention性能"
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-ascend-profiler-db-explorer",
+                       "category":  "ai",
+                       "service":  "modelarts",
+                       "description":  "Convert natural language questions into safe executable SQL to query\nAscend PyTorch Profiler / msprof database for operator time consumption,\ncommunication, dispatch, and other performance data. Supports table schema\nextraction from official documentation.\nUse this skill when the user wants to: (1) analyze Ascend profiling database,\n(2) query operator performance data, (3) analyze communication and dispatch\nbottlenecks, (4) check table schema for profiling data.\nTrigger: user mentions \"profiler db\", \"sqlite\", \"sql\", \"table\", \"schema\",\n\"ascend-pytorch-profiler\", \"msprof\", \"operator time\", \"communication time\",\n\"dispatch analysis\", \"性能分析\", \"算子耗时\", \"数据库查询\", \"性能数据\",\n\"性能瓶颈\"",
+                       "triggers":  [
+
+                                    ],
+                       "has_description":  true
+                   },
+                   {
                        "name":  "huawei-cloud-ascend-remote-connect",
                        "category":  "ai",
                        "service":  "modelarts",
@@ -218,6 +248,16 @@
                        "category":  "ai",
                        "service":  "modelarts",
                        "description":  "Analyze candidate models before adapter implementation. Determine model\nimplementation source (transformers or model-local), structural features,\nlayer-by-layer loading requirements, and MoE fused weight risks. Use this\nskill when the user wants to: (1) assess model adaptation feasibility before\ncreating msModelSlim adapters, (2) analyze model structure and type\nclassification, (3) evaluate MoE compatibility for quantization. Trigger:\nuser mentions \"model analysis\", \"msModelSlim\", \"adapter\", \"transformers\",\n\"MoE\", \"layer-by-layer\", \"model assessment\", \"feasibility\", \"模型分析\",\n\"适配可行性\", \"模型评估\", \"MoE分析\"",
+                       "triggers":  [
+
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-msot-msopprof-operator-profiler",
+                       "category":  "ai",
+                       "service":  "modelarts",
+                       "description":  "Collect operator-level performance data on Ascend NPU using msopprof tool.\nSupports both device mode and simulator mode, generates performance analysis\nreports. Use this skill when the user wants to: (1) profile operator\nperformance on Ascend NPU, (2) collect performance data for analysis,\n(3) identify performance bottlenecks through operator execution characteristics.\nTrigger: user mentions \"msopprof\", \"profiler\", \"performance profiling\",\n\"operator profiling\", \"Ascend\", \"NPU\", \"profile data\", \"性能采集\",\n\"算子性能\", \"性能剖析\", \"算子耗时采集\"",
                        "triggers":  [
 
                                     ],
