@@ -1000,8 +1000,6 @@ def install_channel_remote(
             - channel: Channel type (required): 'wecom' (WeCom), 'feishu' (Feishu), 'dingtalk' (DingTalk), 'qqbot' (QQ)
             - id: Bot ID/APP ID/Client ID (required)
             - secret: Bot secret/APP secret/Client secret (required)
-            - account_id: Bot enterprise account ID (optional, auto-generated as 'bot-{timestamp}' if not provided)
-            - bot_name: Bot name (optional, auto-generated as 'bot-{4-random-lowercase-letters}' if not provided)
         timeout: Execution timeout (seconds), default 600
         execute_user: Execute user, default root
         ak: Huawei Cloud AK (can be temporary AK)
@@ -1020,7 +1018,6 @@ def install_channel_remote(
     import random
     import string
     
-    # Parse channel_list and auto-generate missing account_id and bot_name
     if channel_list:
         try:
             channels = json.loads(channel_list)

@@ -108,8 +108,6 @@ def do_install_channel(args):
         print("  - channel: Channel type (required): 'wecom', 'feishu', 'dingtalk', 'qqbot'")
         print("  - id: Bot ID/APP ID/Client ID (required)")
         print("  - secret: Bot secret/APP secret/Client secret (required)")
-        print("  - account_id: Bot account ID (optional, auto-generated as 'bot-{timestamp}' if not provided)")
-        print("  - bot_name: Bot name (optional, auto-generated as 'bot-{4-random-letters}' if not provided)")
         channel_list = prompt_for_input("Channel configuration JSON (optional, press Enter to skip)", required=False)
     
     def normalize_json_string(input_str):
