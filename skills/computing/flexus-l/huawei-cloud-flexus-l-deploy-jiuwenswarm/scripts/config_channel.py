@@ -41,12 +41,17 @@ except ImportError as e:
     log.error("Please ensure utils.py exists")
     sys.exit(1)
 
-def query_instance_by_ip(public_ip, ak, sk, region):
-    from huaweicloudsdkcore.auth.credentials import GlobalCredentials
+def query_instance_by_ip(public_ip, ak, sk, region, security_token=None):
+    from huaweicloudsdkcore.auth.credentials import GlobalCredentials, BasicCredentials
     from huaweicloudsdkrms.v1 import RmsClient
     from huaweicloudsdkrms.v1.region.rms_region import RmsRegion
 
-    credentials = GlobalCredentials(ak, sk)
+    # RMS requires GlobalCredentials
+    if security_token:
+        credentials = GlobalCredentials(ak, sk).with_security_token(security_token)
+    else:
+        credentials = GlobalCredentials(ak, sk)
+    
     client = RmsClient.new_builder() \
         .with_credentials(credentials) \
         .with_region(RmsRegion.value_of(region)) \
@@ -183,7 +188,7 @@ def wait_for_completion(client, execute_uuid, timeout=300, interval=10):
             return False
 
         try:
-            # 使用华为云COC GetScriptJobInfo API查询状态
+            # Query status using Huawei Cloud COC GetScriptJobInfo API
             result = coc_query_execution(execute_uuid)
             
             if not result.get("ok"):
@@ -207,7 +212,7 @@ def wait_for_completion(client, execute_uuid, timeout=300, interval=10):
             
             print(f"  Status: {status} ({status_display}) (Elapsed: {int(elapsed)}s)", end='\r')
 
-            # According to Huawei Cloud COC API, when status becomes ABNORMAL, CANCELED, or FINISHED, script execution has ended
+            # According to Huawei Cloud COC API, script execution ends when status is ABNORMAL, CANCELED, or FINISHED
             if status == 'FINISHED':
                 success_count = job_info.get('success_count', 0)
                 fail_count = job_info.get('fail_count', 0)
@@ -269,28 +274,28 @@ import os
 
 config_file = "/root/.jiuwenswarm/config/config.yaml"
 
-# 读取现有配置
+# Read existing configuration
 with open(config_file, 'r', encoding='utf-8') as f:
     config = yaml.safe_load(f) or {{}}
 
-# 确保channels部分存在
+# Ensure channels section exists
 if 'channels' not in config:
     config['channels'] = {{}}
 
-# 确保xiaoyi配置部分存在
+# Ensure xiaoyi configuration section exists
 if 'xiaoyi' not in config['channels']:
     config['channels']['xiaoyi'] = {{}}
 
-# 只更新指定的字段，保持其他字段不变
+# Update only specified fields, keep other fields unchanged
 xiaoyi_config = config['channels']['xiaoyi']
 
-# 更新小艺配置
+# Update Xiaoyi configuration
 xiaoyi_config['ak'] = '{ak}'
 xiaoyi_config['sk'] = '{sk}'
 xiaoyi_config['agent_id'] = '{agent_id}'
 xiaoyi_config['enabled'] = True
 
-# 写入更新后的配置
+# Write updated configuration
 with open(config_file, 'w', encoding='utf-8') as f:
     yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
@@ -385,27 +390,27 @@ import os
 
 config_file = "/root/.jiuwenswarm/config/config.yaml"
 
-# 读取现有配置
+# Read existing configuration
 with open(config_file, 'r', encoding='utf-8') as f:
     config = yaml.safe_load(f) or {{}}
 
-# 确保channels部分存在
+# Ensure channels section exists
 if 'channels' not in config:
     config['channels'] = {{}}
 
-# 确保feishu配置部分存在
+# Ensure feishu configuration section exists
 if 'feishu' not in config['channels']:
     config['channels']['feishu'] = {{}}
 
-# 只更新指定的字段，保持其他字段不变
+# Update only specified fields, keep other fields unchanged
 feishu_config = config['channels']['feishu']
 
-# 更新飞书配置
+# Update Feishu configuration
 feishu_config['app_id'] = '{app_id}'
 feishu_config['app_secret'] = '{app_secret}'
 feishu_config['enabled'] = True
 
-# 写入更新后的配置
+# Write updated configuration
 with open(config_file, 'w', encoding='utf-8') as f:
     yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
@@ -417,37 +422,37 @@ echo "[OK] Configuration file permissions set"
 
 echo ""
 echo "[INFO] ==========================================="
-echo "[INFO] 停止 JiuwenSwarm 服务"
+echo "[INFO] Stopping JiuwenSwarm Service"
 echo "[INFO] ==========================================="
 
 if systemctl is-active --quiet jiuwenswarm; then
-    echo "[INFO] 正在停止 jiuwenswarm 服务..."
+    echo "[INFO] Stopping jiuwenswarm service..."
     systemctl stop jiuwenswarm
-    echo "[OK] jiuwenswarm 服务已停止"
+    echo "[OK] jiuwenswarm service stopped"
 else
-    echo "[WARN] jiuwenswarm 服务当前未运行"
+    echo "[WARN] jiuwenswarm service is not running"
 fi
 
 echo ""
-echo "[INFO] 等待 3 秒..."
+echo "[INFO] Waiting 3 seconds..."
 sleep 3
 
 echo ""
 echo "[INFO] ==========================================="
-echo "[INFO] 重启 JiuwenSwarm 服务"
+echo "[INFO] Restarting JiuwenSwarm Service"
 echo "[INFO] ==========================================="
 
-echo "[INFO] 正在启动 jiuwenswarm 服务..."
+echo "[INFO] Starting jiuwenswarm service..."
 systemctl start jiuwenswarm
 
-echo "[INFO] 等待服务启动..."
+echo "[INFO] Waiting for service to start..."
 sleep 5
 
 if systemctl is-active --quiet jiuwenswarm; then
-    echo "[OK] jiuwenswarm 服务已成功启动"
+    echo "[OK] jiuwenswarm service started successfully"
     systemctl status jiuwenswarm --no-pager
 else
-    echo "[ERROR] jiuwenswarm 服务启动失败"
+    echo "[ERROR] Failed to start jiuwenswarm service"
     systemctl status jiuwenswarm --no-pager
     exit 1
 fi
@@ -500,28 +505,28 @@ import os
 
 config_file = "/root/.jiuwenswarm/config/config.yaml"
 
-# 读取现有配置
+# Read existing configuration
 with open(config_file, 'r', encoding='utf-8') as f:
     config = yaml.safe_load(f) or {{}}
 
-# 确保channels部分存在
+# Ensure channels section exists
 if 'channels' not in config:
     config['channels'] = {{}}
 
-# 确保dingtalk配置部分存在
+# Ensure dingtalk configuration section exists
 if 'dingtalk' not in config['channels']:
     config['channels']['dingtalk'] = {{}}
 
-# 只更新指定的字段，保持其他字段不变
+# Update only specified fields, keep other fields unchanged
 dingtalk_config = config['channels']['dingtalk']
 
-# 更新钉钉配置
+# Update DingTalk configuration
 dingtalk_config['client_id'] = '{client_id}'
 dingtalk_config['client_secret'] = '{client_secret}'
 dingtalk_config['allow_from'] = '{allow_from}'
 dingtalk_config['enabled'] = True
 
-# 写入更新后的配置
+# Write updated configuration
 with open(config_file, 'w', encoding='utf-8') as f:
     yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
@@ -533,37 +538,37 @@ echo "[OK] Configuration file permissions set"
 
 echo ""
 echo "[INFO] ==========================================="
-echo "[INFO] 停止 JiuwenSwarm 服务"
+echo "[INFO] Stopping JiuwenSwarm Service"
 echo "[INFO] ==========================================="
 
 if systemctl is-active --quiet jiuwenswarm; then
-    echo "[INFO] 正在停止 jiuwenswarm 服务..."
+    echo "[INFO] Stopping jiuwenswarm service..."
     systemctl stop jiuwenswarm
-    echo "[OK] jiuwenswarm 服务已停止"
+    echo "[OK] jiuwenswarm service stopped"
 else
-    echo "[WARN] jiuwenswarm 服务当前未运行"
+    echo "[WARN] jiuwenswarm service is not running"
 fi
 
 echo ""
-echo "[INFO] 等待 3 秒..."
+echo "[INFO] Waiting 3 seconds..."
 sleep 3
 
 echo ""
 echo "[INFO] ==========================================="
-echo "[INFO] 重启 JiuwenSwarm 服务"
+echo "[INFO] Restarting JiuwenSwarm Service"
 echo "[INFO] ==========================================="
 
-echo "[INFO] 正在启动 jiuwenswarm 服务..."
+echo "[INFO] Starting jiuwenswarm service..."
 systemctl start jiuwenswarm
 
-echo "[INFO] 等待服务启动..."
+echo "[INFO] Waiting for service to start..."
 sleep 5
 
 if systemctl is-active --quiet jiuwenswarm; then
-    echo "[OK] jiuwenswarm 服务已成功启动"
+    echo "[OK] jiuwenswarm service started successfully"
     systemctl status jiuwenswarm --no-pager
 else
-    echo "[ERROR] jiuwenswarm 服务启动失败"
+    echo "[ERROR] Failed to start jiuwenswarm service"
     systemctl status jiuwenswarm --no-pager
     exit 1
 fi
@@ -711,10 +716,13 @@ def main():
     args = parse_args()
 
     try:
-        AK, SK, REGION = get_huaweicloud_credentials()
+        AK, SK, REGION, SECURITY_TOKEN = get_huaweicloud_credentials()
     except ValueError as e:
         print(f"[ERROR] {e}")
         sys.exit(1)
+
+    if SECURITY_TOKEN:
+        print(f"[INFO] Using temporary security credentials (STS token)")
 
     # Get configuration
     config_result = None
@@ -753,7 +761,7 @@ def main():
         instance_info = {'instance_id': args.instance_id, 'public_ip': args.ip, 'instance_name': 'Unknown'}
     elif args.ip:
         print(f"[INFO] Querying instance info by public IP: {args.ip}")
-        instance_info = query_instance_by_ip(args.ip, AK, SK, REGION)
+        instance_info = query_instance_by_ip(args.ip, AK, SK, REGION, SECURITY_TOKEN)
         if not instance_info:
             print(f"[ERROR] Cannot find instance with public IP: {args.ip}")
             return
@@ -839,7 +847,7 @@ def main():
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(result, f, indent=2, ensure_ascii=False)
 
-    print(f"\n[INFO] 配置结果已保存到 {output_path}")
+    print(f"\n[INFO] Configuration result saved to {output_path}")
 
 if __name__ == "__main__":
     main()

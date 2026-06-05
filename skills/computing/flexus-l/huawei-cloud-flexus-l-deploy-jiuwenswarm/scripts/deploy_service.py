@@ -42,31 +42,37 @@ except ImportError as e:
 SCRIPT_DIR = Path(__file__).parent.parent / "assets"
 SCRIPT_PATH = SCRIPT_DIR / "deploy_script_template.sh"
 
-EXECUTION_TIMEOUT = 1799  # 华为云COC API限制：必须小于1800秒
+EXECUTION_TIMEOUT = 1799  # Huawei Cloud COC API limit: must be less than 1800 seconds
 EXECUTION_INTERVAL = 30
 MAX_RETRIES = 3
 
-# 全局变量
+# Global variables
 AK = None
 SK = None
 REGION = None
+SECURITY_TOKEN = None
 
 def get_credentials():
     """Lazy credential retrieval"""
-    global AK, SK, REGION
+    global AK, SK, REGION, SECURITY_TOKEN
     if AK is None or SK is None:
-        AK, SK, REGION = get_huaweicloud_credentials()
-    return AK, SK, REGION
+        AK, SK, REGION, SECURITY_TOKEN = get_huaweicloud_credentials()
+    return AK, SK, REGION, SECURITY_TOKEN
 
 def query_instance_by_ip(public_ip):
-    from huaweicloudsdkcore.auth.credentials import GlobalCredentials
+    from huaweicloudsdkcore.auth.credentials import GlobalCredentials, BasicCredentials
     from huaweicloudsdkrms.v1 import RmsClient
     from huaweicloudsdkrms.v1.region.rms_region import RmsRegion
 
-    # 获取凭证
-    ak, sk, region = get_credentials()
+    # Get credentials
+    ak, sk, region, security_token = get_credentials()
     
-    credentials = GlobalCredentials(ak, sk)
+    # RMS requires GlobalCredentials
+    if security_token:
+        credentials = GlobalCredentials(ak, sk).with_security_token(security_token)
+    else:
+        credentials = GlobalCredentials(ak, sk)
+    
     client = RmsClient.new_builder() \
         .with_credentials(credentials) \
         .with_region(RmsRegion.value_of(region)) \
@@ -140,7 +146,7 @@ def execute_script_via_coc(client, instance_id, ecs_instance_id, script_content)
     from huaweicloudsdkcoc.v1.model.script_execute_param import ScriptExecuteParam
 
     try:
-        log.info("创建COC脚本...")
+        log.info("Creating COC script...")
         properties = ScriptPropertiesModel(risk_level="LOW", version="1.0.0")
         script_name = f"jiuwenswarm_deploy_{datetime.now().strftime('%Y%m%d%H%M%S')}"
         create_request = CreateScriptRequest()
@@ -154,16 +160,16 @@ def execute_script_via_coc(client, instance_id, ecs_instance_id, script_content)
 
         create_response = client.create_script(create_request)
         script_uuid = create_response.data if hasattr(create_response, 'data') else str(create_response)
-        log.info(f"脚本创建成功: {script_uuid}")
+        log.info(f"Script created successfully: {script_uuid}")
 
-        log.info("在目标实例上执行脚本...")
+        log.info("Executing script on target instance...")
         execute_request = ExecuteScriptRequest()
         execute_request.script_uuid = script_uuid
 
         execute_param = ScriptExecuteParam(timeout=1799, success_rate=100, execute_user="root")
 
-        # 获取凭证
-        _, _, region = get_credentials()
+        # Get credentials
+        _, _, region, _ = get_credentials()
         
         instance = ExecuteResourceInstance(
             resource_id=instance_id,
@@ -183,24 +189,24 @@ def execute_script_via_coc(client, instance_id, ecs_instance_id, script_content)
 
         execute_response = client.execute_script(execute_request)
         
-        # 检查响应状态码，200或202代表任务提交成功
+        # Check response status code, 200 or 202 indicates successful task submission
         status_code = execute_response.status_code if hasattr(execute_response, 'status_code') else 200
         
         if status_code not in [200, 202]:
-            log.error(f"任务提交失败，响应状态码: {status_code}")
+            log.error(f"Task submission failed, response status code: {status_code}")
             return None
         
         execute_uuid = execute_response.data if hasattr(execute_response, 'data') else str(execute_response)
-        log.info(f"执行提交成功: {execute_uuid}")
+        log.info(f"Execution submitted successfully: {execute_uuid}")
 
         return execute_response
 
     except Exception as e:
-        log.error(f"COC脚本执行失败: {e}")
+        log.error(f"COC script execution failed: {e}")
         return None
 
 def get_script_job_status(client, execute_uuid):
-    """获取脚本作业状态 - 使用华为云COC GetScriptJobInfo API"""
+    """Get script job status - using Huawei Cloud COC GetScriptJobInfo API"""
     result = coc_query_execution(execute_uuid)
     if result.get("ok"):
         job_info = result.get("result", {})

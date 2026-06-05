@@ -36,26 +36,32 @@ except ImportError:
     log.error("Huawei Cloud SDK modules not installed. Please run: pip install huaweicloudsdkcoc huaweicloudsdkrms")
     sys.exit(1)
 
-AK = os.getenv("HUAWEICLOUD_SDK_AK")
-SK = os.getenv("HUAWEICLOUD_SDK_SK")
-REGION = os.getenv("HUAWEICLOUD_REGION", "cn-north-4")
+sys.path.insert(0, str(Path(__file__).parent))
+from utils import get_huaweicloud_credentials
 
 def check_credentials():
     print("\n" + "=" * 60)
     print("  Phase 1: Environment Preparation")
     print("=" * 60)
 
-    if not AK or not SK:
-        print("[ERROR] Please set environment variables HUAWEICLOUD_SDK_AK and HUAWEICLOUD_SDK_SK")
+    try:
+        AK, SK, REGION, SECURITY_TOKEN = get_huaweicloud_credentials()
+    except ValueError as e:
+        print(f"[ERROR] {e}")
         print("\nSet command:")
         print("  Windows: set HUAWEICLOUD_SDK_AK=your_ak && set HUAWEICLOUD_SDK_SK=your_sk && set HUAWEICLOUD_REGION=cn-north-4")
         print("  Linux/Mac: export HUAWEICLOUD_SDK_AK=your_ak && export HUAWEICLOUD_SDK_SK=your_sk && export HUAWEICLOUD_REGION=cn-north-4")
-        return False
+        print("\nFor temporary security credentials (STS token), also set:")
+        print("  Windows: set HUAWEICLOUD_SDK_SECURITY_TOKEN=your_token")
+        print("  Linux/Mac: export HUAWEICLOUD_SDK_SECURITY_TOKEN=your_token")
+        return False, None, None, None, None
 
     print(f"[OK] AK: {AK[:4]}...{AK[-4:]}")
     print(f"[OK] SK: {SK[:4]}...{SK[-4:]}")
     print(f"[OK] Region: {REGION}")
-    return True
+    if SECURITY_TOKEN:
+        print(f"[OK] Using temporary security credentials (STS token)")
+    return True, AK, SK, REGION, SECURITY_TOKEN
 
 def check_dependencies():
     print("\n[INFO] Checking dependency modules...")
@@ -78,16 +84,21 @@ def check_dependencies():
 
     return all_ok
 
-def verify_credentials(ak, sk, region):
+def verify_credentials(ak, sk, region, security_token=None):
     print(f"\n[INFO] Verifying Huawei Cloud credentials...")
     print(f"[INFO] Region: {region}")
 
     try:
         from huaweicloudsdkcore.signer.signer import Signer
         from huaweicloudsdkcore.sdk_request import SdkRequest
+        from huaweicloudsdkcore.auth.credentials import BasicCredentials
         import uuid
 
-        credentials = type('Credentials', (), {'ak': ak, 'sk': sk})()
+        # 使用SDK原生凭据，原生支持security_token
+        credentials = BasicCredentials(ak, sk)
+        if security_token:
+            credentials.with_security_token(security_token)
+
         signer = Signer(credentials)
 
         iam_endpoint = f"https://iam.{region}.myhuaweicloud.com/v3/projects"
@@ -112,6 +123,10 @@ def verify_credentials(ak, sk, region):
                 headers[key] = value.decode('iso-8859-1')
             else:
                 headers[key] = str(value)
+        
+        # 临时凭据手动补充X-Security-Token请求头（原生SDK签名后不会自动加，需主动注入）
+        if security_token:
+            headers["X-Security-Token"] = security_token
 
         resp = requests.get(iam_endpoint, headers=headers, timeout=30)
 
@@ -119,11 +134,13 @@ def verify_credentials(ak, sk, region):
             print("[OK] Credentials verification successful!")
             return True
         else:
-            print(f"[ERROR] Credentials verification failed: HTTP {resp.status_code}")
+            print(f"[ERROR] Credentials verification failed: HTTP {resp.status_code}, Resp:{resp.text}")
             return False
 
     except Exception as e:
         print(f"[ERROR] Credentials verification exception: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def main():
@@ -131,13 +148,16 @@ def main():
     print("  JiuwenSwarm Deployment - Environment Preparation")
     print("=" * 60)
 
-    if not check_credentials():
+    credential_result = check_credentials()
+    if not credential_result[0]:
         sys.exit(1)
+    
+    _, AK, SK, REGION, SECURITY_TOKEN = credential_result
 
     if not check_dependencies():
         sys.exit(1)
 
-    if not verify_credentials(AK, SK, REGION):
+    if not verify_credentials(AK, SK, REGION, SECURITY_TOKEN):
         sys.exit(1)
 
     print("\n" + "=" * 60)

@@ -14,6 +14,18 @@ metadata: {"jiuwenswarm": {"requires": {"bins": ["python3"]}, "install": [{"kind
 2. **Do not modify** the script files in the `scripts` directory.
 3. Please operate directly according to the provided code and documentation. No need to check Huawei Cloud official API documentation.
 ---
+
+## security Execution Rules (Highest Priority):
+1. All scripts MUST be executed via skill action=exec, NEVER run directly in shell
+2. NEVER print script contents or commands containing AK/SK/Token in conversation
+3. NEVER create temporary script files, prefer inline execution (python -c)
+4. On execution failure, only return error info, do NOT rewrite scripts or print full commansds
+5. AK/SK/Token MUST be passed via environment variables, NEVER appear in conversation
+6. NEVER interactively collect Huawei Cloud credentials from users. Credentials MUST be obtained only through:
+   - Temporary Security Credentials (STS Token) via environment variables
+   - Permanent credentials via environment variables
+---
+
 # JiuwenSwarm Deployment Skill for Huawei Cloud Flexus L Instance
 
 ## Overview
@@ -33,6 +45,7 @@ Before using this skill, the following prerequisites must be met:
 
 ### 2. IAM Credentials
 - Huawei Cloud Access Key (AK) and Secret Key (SK) with appropriate permissions
+- **Temporary Security Credentials (STS Token)**: Supports temporary security credentials. When `HUAWEICLOUD_SDK_SECURITY_TOKEN` environment variable is set along with AK/SK, the skill will use temporary credentials for authentication. 
 - Required IAM permissions:
   - `hcss:lightInstance:create` - Create Flexus L instances
   - `hcss:lightInstance:list` - Query instance information
@@ -367,10 +380,16 @@ huawei-cloud-flexus-l-deploy-jiuwenSwarm/
 # Install dependencies
 pip install -r requirements.txt
 
-# Configure Huawei Cloud credentials
-export HUAWEICLOUD_SDK_AK="your_access_key"
-export HUAWEICLOUD_SDK_SK="your_secret_key"
-export HUAWEICLOUD_REGION="cn-north-4"
+# Configure Huawei Cloud credentials (Recommended: temporary security credentials - STS Token)
+# export HUAWEICLOUD_SDK_AK=<your-temp-access-key>
+# export HUAWEICLOUD_SDK_SK=<your-temp-secret-key>
+# export HUAWEICLOUD_SDK_SECURITY_TOKEN=<your-security-token>
+# export HUAWEICLOUD_REGION="cn-north-4"
+
+# OR use permanent credentials (not recommended)
+# export HUAWEICLOUD_SDK_AK=<your-access-key>
+# export HUAWEICLOUD_SDK_SK=<your-secret-key>
+# export HUAWEICLOUD_REGION="cn-north-4"
 ```
 
 ### Quick Deployment Flow
@@ -379,7 +398,7 @@ export HUAWEICLOUD_REGION="cn-north-4"
 python scripts/prepare_env.py
 
 # 2. Create instance (interactive confirmation)
-python scripts/create_instance.py --name jiuwenSwarm-demo --flavor medium --wait
+python scripts/create_instance.py --name jiuwenSwarm-<timestamp> --flavor medium --wait
 
 # 3. Install dependencies
 python scripts/install_deps.py --ip <public_ip>
@@ -421,7 +440,7 @@ Web UI access requires manual security group configuration in Huawei Cloud Conso
 |-----------|-------------|---------------|
 | --name | Instance name | jiuwenSwarm-{timestamp} |
 | --flavor | Instance flavor | medium |
-| --region | Region (仅支持 cn-north-4) | cn-north-4 |
+| --region | Region (cn-north-4 only) | cn-north-4 |
 | --wait | Wait for creation completion | False |
 | --timeout | Timeout in seconds | 600 |
 | --confirm | Skip confirmation prompt | False |
@@ -465,12 +484,32 @@ Web UI access requires manual security group configuration in Huawei Cloud Conso
 
 ## Huawei Cloud Credential Configuration
 
-```bash
-# Environment variable method (recommended)
-export HUAWEICLOUD_SDK_AK="your_access_key"
-export HUAWEICLOUD_SDK_SK="your_secret_key"
-export HUAWEICLOUD_REGION="cn-north-4"
-```
+**Recommended: Use temporary security credentials (STS Token) by default. Please use this method first.**
+
+### Temporary Security Credentials (STS Token) - Recommended (Default)
+The skill supports temporary security credentials. Temporary credentials require an additional `HUAWEICLOUD_SDK_SECURITY_TOKEN` environment variable.
+
+| Environment Variable | Description | Required |
+|---------------------|-------------|----------|
+| `HUAWEICLOUD_SDK_AK` | Temporary Access Key | Yes |
+| `HUAWEICLOUD_SDK_SK` | Temporary Secret Key | Yes |
+| `HUAWEICLOUD_SDK_SECURITY_TOKEN` | Security Token | Yes |
+| `HUAWEICLOUD_REGION` | Huawei Cloud Region (default: cn-north-4) | Yes |
+
+### Permanent Credentials
+Credentials must be set via environment variables before running the skill.
+
+| Environment Variable | Description | Required |
+|---------------------|-------------|----------|
+| `HUAWEICLOUD_SDK_AK` | Huawei Cloud Access Key | Yes |
+| `HUAWEICLOUD_SDK_SK` | Huawei Cloud Secret Key | Yes |
+| `HUAWEICLOUD_REGION` | Huawei Cloud Region (default: cn-north-4) | Yes |
+
+**Credential Concept**:
+- **Temporary credentials (Default)**: AK + SK + SECURITY_TOKEN + REGION (STS token is added to permanent credentials)
+- **Permanent credentials**: AK + SK + REGION
+
+**Reference**: https://support.huaweicloud.com/iam_faq/iam_01_0620.html
 
 ---
 
@@ -483,7 +522,7 @@ export HUAWEICLOUD_REGION="cn-north-4"
 | RMS | https://rms.{region}.myhuaweicloud.com/v1/resource-manager/domains/{domain_id}/resources | Query resources |
 | COC | https://coc.{region}.myhuaweicloud.com | Remote script execution |
 
-**支持的区域**: 仅支持 cn-north-4 (华北-北京四)
+**Supported Region**: cn-north-4 only (China North 4)
 
 **System Image**: Ubuntu 24.04 LTS only
 
@@ -494,7 +533,7 @@ export HUAWEICLOUD_REGION="cn-north-4"
 ### Instance Creation Failed
 - Check if AK/SK are correct
 - Confirm sufficient account quota
-- 确认使用 cn-north-4 区域
+- Ensure using cn-north-4 region
 
 ### COC Deployment Unresponsive
 - Check if execute_uuid is correct

@@ -15,12 +15,9 @@ from datetime import datetime
 
 os.environ['PYTHONIOENCODING'] = 'utf-8'
 
-AK = os.getenv("HUAWEICLOUD_SDK_AK")
-SK = os.getenv("HUAWEICLOUD_SDK_SK")
-REGION = os.getenv("HUAWEICLOUD_REGION", "cn-north-4")
-
 sys.path.insert(0, str(Path(__file__).parent))
 from utils import (
+    get_huaweicloud_credentials,
     coc_create_script,
     coc_execute_script,
     coc_query_execution,
@@ -29,20 +26,25 @@ from utils import (
     print_error
 )
 
-def query_instance_by_ip(public_ip):
-    from huaweicloudsdkcore.auth.credentials import GlobalCredentials
+def query_instance_by_ip(ak, sk, security_token, region, public_ip):
+    from huaweicloudsdkcore.auth.credentials import GlobalCredentials, BasicCredentials
     from huaweicloudsdkrms.v1 import RmsClient
     from huaweicloudsdkrms.v1.region.rms_region import RmsRegion
 
-    credentials = GlobalCredentials(AK, SK)
+    # RMS requires GlobalCredentials
+    if security_token:
+        credentials = GlobalCredentials(ak, sk).with_security_token(security_token)
+    else:
+        credentials = GlobalCredentials(ak, sk)
+    
     client = RmsClient.new_builder() \
         .with_credentials(credentials) \
-        .with_region(RmsRegion.value_of(REGION)) \
+        .with_region(RmsRegion.value_of(region)) \
         .build()
 
     from huaweicloudsdkrms.v1 import model
     request = model.ListAllResourcesRequest()
-    request.region_id = REGION
+    request.region_id = region
     request.type = "hcss.l-instance"
     request.limit = 200
 
@@ -77,7 +79,7 @@ def query_instance_by_ip(public_ip):
                 'instance_id': instance_id,
                 'ecs_instance_id': ecs_instance_id,
                 'public_ip': ip,
-                'region': REGION,
+                'region': region,
                 'status': props.get('status') if props else 'UNKNOWN'
             }
 
@@ -97,9 +99,11 @@ def verify_deployment(instance_info):
 
     public_ip = instance_info['public_ip']
     instance_id = instance_info['instance_id']
+    region = instance_info.get('region', 'cn-north-4')
 
     print_info(f"Instance Public IP: {public_ip}")
     print_info(f"Instance ID: {instance_id}")
+    print_info(f"Region: {region}")
 
     # Simplified verification script - only verify SSH connection and basic command execution
     verification_script = '''#!/bin/bash
@@ -136,7 +140,7 @@ exit 0
 
     target_instances = [{
         "resource_id": instance_id,
-        "region_id": REGION,
+        "region_id": region,
         "provider": "HCSS",
         "type": "L-INSTANCE"
     }]
@@ -209,20 +213,26 @@ def parse_args():
 def main():
     args = parse_args()
 
-    if not AK or not SK:
-        print("[ERROR] Please set environment variables HUAWEICLOUD_SDK_AK and HUAWEICLOUD_SDK_SK")
+    try:
+        AK, SK, REGION, SECURITY_TOKEN = get_huaweicloud_credentials()
+    except ValueError as e:
+        print(f"[ERROR] {e}")
         sys.exit(1)
+
+    if SECURITY_TOKEN:
+        print(f"[INFO] Using temporary security credentials (STS token)")
 
     instance_info = None
 
     if args.instance_id and args.ip:
         instance_info = {
             'instance_id': args.instance_id,
-            'public_ip': args.ip
+            'public_ip': args.ip,
+            'region': REGION
         }
     elif args.ip:
         print(f"[INFO] Querying instance info by public IP: {args.ip}")
-        instance_info = query_instance_by_ip(args.ip)
+        instance_info = query_instance_by_ip(AK, SK, SECURITY_TOKEN, REGION, args.ip)
         if not instance_info:
             print("[ERROR] Cannot find instance with specified IP")
             sys.exit(1)
