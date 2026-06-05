@@ -1,320 +1,151 @@
 #!/usr/bin/env python3
 # coding: utf-8
-"""
-Huawei Cloud Flexus L Password Reset Tool (Unified Version)
-Supports batch reset of Flexus L instance passwords
-Only supports AK/SK authentication (using Huawei Cloud SDK)
-"""
+"""Flexus L instance password reset tool"""
 
 import os
 import sys
-from typing import Dict, List, Optional
+
+from huaweicloudsdkecs.v2 import (
+    ListServersDetailsRequest, ShowServerRequest,
+    BatchResetServersPasswordRequest, BatchResetServersPasswordRequestBody, ServerId
+)
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from auth import AuthManager
 
 
-class HuaweiFlexusLAPI:
-    """Huawei Cloud Flexus L API Client - AK/SK authentication only"""
+class FlexusLClient:
+    """Flexus L instance client"""
     
-    def __init__(self, ak: str, sk: str, region: str = "cn-north-4"):
-        """
-        Initialize Huawei Cloud Flexus L API client
-        
-        Args:
-            ak: Access Key ID (AK/SK authentication)
-            sk: Secret Access Key (AK/SK authentication)
-            region: Region, default cn-north-4
-        """
-        if not ak or not sk:
-            raise ValueError("AK and SK credentials must be provided")
-        
-        self.ak = ak
-        self.sk = sk
+    def __init__(self, auth: AuthManager = None, region: str = "cn-north-4"):
+        """Initialize client"""
+        self.auth = auth or AuthManager()
+        if not self.auth.is_configured():
+            raise ValueError("Please provide AK/SK/Security_Token")
         self.region = region
-        
-        # Check if Huawei Cloud SDK is installed
-        try:
-            from huaweicloudsdkcore.auth.credentials import BasicCredentials
-            from huaweicloudsdkecs.v2.region.ecs_region import EcsRegion
-            from huaweicloudsdkecs.v2 import EcsClient
-            self.has_sdk = True
-        except ImportError:
-            self.has_sdk = False
-            print("❌ Huawei Cloud SDK not installed")
-            print("Please install Huawei Cloud SDK with the following command:")
-            print("   pip install -i https://mirrors.huaweicloud.com/repository/pypi/simple huaweicloudsdkcore huaweicloudsdkecs")
-            raise
-        
-        print(f"✅ Using Huawei Cloud SDK (AK/SK authentication)")
-        print(f"   Region: {region}")
     
-    def _get_client(self):
-        """Get Huawei Cloud SDK client"""
-        if not self.has_sdk:
-            raise ImportError("Huawei Cloud SDK not installed, please install dependencies first")
-        
-        from huaweicloudsdkcore.auth.credentials import BasicCredentials
-        from huaweicloudsdkecs.v2.region.ecs_region import EcsRegion
-        from huaweicloudsdkecs.v2 import EcsClient
-        
-        credentials = BasicCredentials(self.ak, self.sk)
-        client = EcsClient.new_builder() \
-            .with_credentials(credentials) \
-            .with_region(EcsRegion.value_of(self.region)) \
-            .build()
-        
-        return client
+    def list_servers(self, limit: int = 100):
+        """List servers"""
+        client = self.auth.get_ecs_client(self.region)
+        return client.list_servers_details(ListServersDetailsRequest(limit=limit)).to_dict()
     
-    def list_flexusl_servers(self, limit: int = 100, status: str = None) -> Dict:
-        """Get Flexus L server list"""
-        if not self.has_sdk:
-            raise ImportError("Huawei Cloud SDK not installed, please install dependencies first")
-        
-        from huaweicloudsdkecs.v2 import ListServersDetailsRequest
-        
-        client = self._get_client()
-        
-        try:
-            request = ListServersDetailsRequest()
-            request.limit = limit
-            if status:
-                request.status = status
-            
-            response = client.list_servers_details(request)
-            return response.to_dict()
-        except Exception as e:
-            raise Exception(f"Failed to get server list: {e}")
+    def get_server(self, server_id: str):
+        """Get server details"""
+        client = self.auth.get_ecs_client(self.region)
+        return client.show_server(ShowServerRequest(server_id=server_id)).to_dict()
     
-    def get_flexusl_server_detail(self, server_id: str) -> Dict:
-        """Get Flexus L server details"""
-        if not self.has_sdk:
-            raise ImportError("Huawei Cloud SDK not installed, please install dependencies first")
-        
-        from huaweicloudsdkecs.v2 import ShowServerRequest
-        
-        client = self._get_client()
-        
-        try:
-            request = ShowServerRequest()
-            request.server_id = server_id
-            
-            response = client.show_server(request)
-            return response.to_dict()
-        except Exception as e:
-            print(f"⚠️  Failed to get server details: {e}")
-            return {}
-    
-    def reset_flexusl_password(self, server_ids: List[str], new_password: str) -> bool:
-        """Reset Flexus L server password"""
-        if not self.has_sdk:
-            raise ImportError("Huawei Cloud SDK not installed, please install dependencies first")
-        
-        from huaweicloudsdkecs.v2 import BatchResetServersPasswordRequest, ServerId, BatchResetServersPasswordRequestBody
-        
-        client = self._get_client()
-        
-        try:
-            # Build server ID list
-            list_servers_body = [ServerId(id=server_id) for server_id in server_ids]
-            
-            request = BatchResetServersPasswordRequest()
-            request.body = BatchResetServersPasswordRequestBody(
-                servers=list_servers_body,
-                new_password=new_password
-            )
-            
-            print(f"Resetting password for {len(server_ids)} server(s)...")
-            response = client.batch_reset_servers_password(request)
-            
-            # Check response
-            if response:
-                print(f"✅ Password reset request submitted")
-                
-                # Try to get job ID
-                try:
-                    response_dict = response.to_dict()
-                    if 'job_id' in response_dict:
-                        print(f"   Job ID: {response_dict['job_id']}")
-                    elif 'response' in response_dict:
-                        print(f"   Response: Operation successful")
-                except Exception as e:
-                    print(f"   Response parsed successfully, but unable to get job ID: {e}")
-                
-                return True
-            else:
-                print("⚠️  Password reset request sent, but no valid response received")
-                return False
-                
-        except Exception as e:
-            error_msg = str(e)
-            if "Invalid AK/SK" in error_msg or "authentication" in error_msg.lower():
-                raise Exception(f"Authentication failed: {error_msg}\nPlease check if AK/SK is correct and if the account has Flexus L operation permissions")
-            elif "not active" in error_msg.lower():
-                raise Exception(f"Server status incorrect: {error_msg}\nOnly ACTIVE status servers can reset password")
-            elif "complexity" in error_msg.lower() or "password" in error_msg.lower():
-                raise Exception(f"Password does not meet Huawei Cloud complexity requirements: {error_msg}")
-            else:
-                raise Exception(f"Password reset failed: {error_msg}")
+    def reset_password(self, server_ids: list, new_password: str):
+        """Reset instance login password"""
+        client = self.auth.get_ecs_client(self.region)
+        request = BatchResetServersPasswordRequest(body=BatchResetServersPasswordRequestBody(
+            servers=[ServerId(id=sid) for sid in server_ids], new_password=new_password))
+        response = client.batch_reset_servers_password(request)
+        return True
 
 
-def validate_password_complexity(password: str) -> bool:
-    """
-    Validate password complexity
-    
-    Huawei Cloud password requirements:
-    1. Length 8-26 characters
-    2. Must contain at least 3 of: uppercase letters, lowercase letters, numbers, special characters
-    3. Cannot contain username or reversed username
-    4. Cannot contain 3 or more consecutive identical characters
-    """
-    # Check length
-    if len(password) < 8 or len(password) > 26:
-        print(f"❌ Password length must be between 8-26 characters (current: {len(password)})")
+def validate_password(password: str) -> bool:
+    """Validate password complexity (8-26 chars, at least 3 character types, no weak passwords)"""
+    if not 8 <= len(password) <= 26:
+        print(f"ERROR: Password length must be 8-26 characters (current: {len(password)})")
         return False
     
-    # Check character types
     has_upper = any(c.isupper() for c in password)
     has_lower = any(c.islower() for c in password)
     has_digit = any(c.isdigit() for c in password)
     has_special = any(not c.isalnum() for c in password)
-    
-    # Must contain at least 3 character types
-    char_types = sum([has_upper, has_lower, has_digit, has_special])
-    if char_types < 3:
-        print(f"❌ Password must contain at least 3 of: uppercase letters, lowercase letters, numbers, special characters")
-        print(f"   Current contains: {'uppercase ' if has_upper else ''}{'lowercase ' if has_lower else ''}{'numbers ' if has_digit else ''}{'special characters ' if has_special else ''}")
-        print(f"   Suggested format: 8-26 chars, 3+ types (upper/lower/digit/special)")
+    if sum([has_upper, has_lower, has_digit, has_special]) < 3:
+        print("ERROR: Password must contain at least 3 character types (upper/lower/digit/special)")
         return False
     
-    # Check consecutive identical characters
     for i in range(len(password) - 2):
         if password[i] == password[i+1] == password[i+2]:
-            print(f"❌ Password cannot contain 3 or more consecutive identical characters")
+            print("ERROR: Password cannot contain 3 consecutive identical characters")
             return False
     
-    # Check if contains common usernames (simplified check)
     common_usernames = ["admin", "root", "user", "test", "password"]
     for username in common_usernames:
         if username in password.lower() or username[::-1] in password.lower():
-            print(f"❌ Password cannot contain common username: {username}")
+            print(f"ERROR: Password cannot contain common username: {username}")
             return False
     
-    # Check if contains simple patterns
     if password.lower() in ["password", "12345678", "qwertyui", "abcdefgh"]:
-        print(f"❌ Password cannot use common weak passwords")
+        print("ERROR: Cannot use common weak passwords")
         return False
     
     return True
 
 
 def main():
-    """Command line entry point"""
+    """Command line entry: parse arguments and execute password operations"""
     if len(sys.argv) < 2:
-        print("Usage: python password_unified.py <command> [args]")
-        print("\nCommands:")
-        print("  test                           - Test connection")
-        print("  list                           - List Flexus L servers")
-        print("  reset <server_id> <password>   - Reset server password")
-        print("\nExamples:")
-        print("  python password_unified.py test")
-        print("  python password_unified.py list")
-        print("  python password_unified.py reset 1d8c397c-xxx '<YOUR_PASSWORD>'")
-        print("\nEnvironment variables:")
-        print("  CLOUD_SDK_AK or HUAWEICLOUD_SDK_AK  - Access Key")
-        print("  CLOUD_SDK_SK or HUAWEICLOUD_SDK_SK  - Secret Key")
-        print("  CLOUD_SDK_REGION or HUAWEICLOUD_SDK_REGION - Region (default: cn-north-4)")
+        print("Usage: python password_unified.py <command> [args] [--ak <AK>] [--sk <SK>] [--security-token <TOKEN>]")
+        print("Commands: test (test connection) / list (list servers) / reset --instance-id <ID> --password <PWD> (reset password)")
         sys.exit(1)
     
-    # Get credentials from environment variables
-    ak = os.environ.get("CLOUD_SDK_AK") or os.environ.get("HUAWEICLOUD_SDK_AK")
-    sk = os.environ.get("CLOUD_SDK_SK") or os.environ.get("HUAWEICLOUD_SDK_SK")
     region = os.environ.get("CLOUD_SDK_REGION") or os.environ.get("HUAWEICLOUD_SDK_REGION") or "cn-north-4"
+    ak, sk, security_token = None, None, None
+    cmd = None
+    i = 1
     
-    if not ak or not sk:
-        print("❌ Please set environment variables CLOUD_SDK_AK and CLOUD_SDK_SK")
+    while i < len(sys.argv):
+        arg = sys.argv[i]
+        if arg == "--ak" and i + 1 < len(sys.argv):
+            ak, i = sys.argv[i + 1], i + 2
+        elif arg == "--sk" and i + 1 < len(sys.argv):
+            sk, i = sys.argv[i + 1], i + 2
+        elif arg == "--security-token" and i + 1 < len(sys.argv):
+            security_token, i = sys.argv[i + 1], i + 2
+        elif arg == "--region" and i + 1 < len(sys.argv):
+            region, i = sys.argv[i + 1], i + 2
+        elif not arg.startswith("--"):
+            if cmd is None:
+                cmd = arg.lower()
+            i += 1
+        else:
+            i += 1
+    
+    if cmd is None:
+        print("ERROR: No command specified")
         sys.exit(1)
     
-    command = sys.argv[1].lower()
+    auth = AuthManager(ak=ak, sk=sk, security_token=security_token)
+    client = FlexusLClient(auth=auth, region=region)
     
     try:
-        # Create API client
-        api = HuaweiFlexusLAPI(ak=ak, sk=sk, region=region)
-        
-        if command == "test":
-            # Test connection
-            print("\n🔍 Testing connection...")
-            servers = api.list_flexusl_servers(limit=1)
-            print("✅ Connection successful!")
-            
-        elif command == "list":
-            # List servers
-            print("\n📋 Listing Flexus L servers...")
-            servers = api.list_flexusl_servers(limit=100)
-            
-            if servers and 'servers' in servers:
-                server_list = servers['servers']
-                print(f"\nFound {len(server_list)} servers:\n")
-                print(f"{'No.':<6} {'Name':<30} {'ID':<40} {'Status':<15}")
-                print("-" * 91)
-                
-                for i, server in enumerate(server_list, 1):
-                    name = server.get('name', 'N/A')
-                    server_id = server.get('id', 'N/A')
-                    status = server.get('status', 'N/A')
-                    print(f"{i:<6} {name:<30} {server_id:<40} {status:<15}")
-            else:
-                print("No servers found")
-                
-        elif command == "reset":
-            # Reset password
-            if len(sys.argv) < 4:
-                print("❌ Usage: python password_unified.py reset <server_id> <password>")
+        if cmd == "test":
+            client.list_servers(limit=1)
+            print("SUCCESS: Connection successful")
+        elif cmd == "list":
+            servers = client.list_servers().get('servers', [])
+            print(f"\nFound {len(servers)} server(s):\n")
+            for i, s in enumerate(servers, 1):
+                print(f"{i}. {s.get('name', 'N/A'):<30} {s.get('id', 'N/A'):<40} {s.get('status', 'N/A')}")
+        elif cmd == "reset":
+            # Get --instance-id and --password from args
+            server_id, password = None, None
+            j = 1
+            while j < len(sys.argv):
+                if sys.argv[j] == "--instance-id" and j + 1 < len(sys.argv):
+                    server_id = sys.argv[j + 1]
+                    j += 2
+                elif sys.argv[j] == "--password" and j + 1 < len(sys.argv):
+                    password = sys.argv[j + 1]
+                    j += 2
+                else:
+                    j += 1
+            if not server_id or not password:
+                print("ERROR: Usage: python password_unified.py reset --instance-id <ID> --password <PWD>")
                 sys.exit(1)
-            
-            server_id = sys.argv[2]
-            new_password = sys.argv[3]
-            
-            # Validate password complexity
-            print("\n🔍 Validating password complexity...")
-            if not validate_password_complexity(new_password):
+            if not validate_password(password):
                 sys.exit(1)
-            
-            print("✅ Password complexity validation passed")
-            
-            # Get server detail
-            print(f"\n🔍 Getting server detail: {server_id}")
-            server_detail = api.get_flexusl_server_detail(server_id)
-            
-            if server_detail and 'server' in server_detail:
-                server = server_detail['server']
-                server_name = server.get('name', 'N/A')
-                server_status = server.get('status', 'N/A')
-                print(f"   Name: {server_name}")
-                print(f"   Status: {server_status}")
-                
-                if server_status != 'ACTIVE':
-                    print(f"\n⚠️  Warning: Server status is {server_status}, not ACTIVE")
-                    print("   Password reset may fail for non-ACTIVE servers")
-            
-            # Reset password
-            print(f"\n🔑 Resetting password...")
-            success = api.reset_flexusl_password([server_id], new_password)
-            
-            if success:
-                print("\n" + "=" * 50)
-                print("✅ Password reset successful!")
-                print("=" * 50)
-                print(f"Server ID: {server_id}")
-                print(f"New password: {new_password}")
-                print("\n⚠️  Please save the new password securely!")
-            else:
-                print("\n❌ Password reset failed")
-                sys.exit(1)
-                
+            print(f"Resetting password for: {server_id}")
+            client.reset_password([server_id], password)
+            print(f"SUCCESS: Password reset successful")
         else:
-            print(f"❌ Unknown command: {command}")
+            print(f"ERROR: Unknown command: {cmd}")
             sys.exit(1)
-            
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        print(f"ERROR: {e}")
         sys.exit(1)
 
 
