@@ -3,6 +3,14 @@ name: huawei-cloud-flexus-l-server-scripts-excute
 description: "Based on Huawei Cloud COC (Cloud Operations Center) APIs for script management and remote execution. Supports creating custom scripts (Shell, Python, Bat) and batch execution on target host instances via UniAgent. Applicable to cloud operations automation and batch script deployment scenarios. Trigger keywords: L-instance, COC script, script management, script execution, cloud operations, custom script, batch execution; COC, script management, script execution, cloud operations (中文触发词：L实例执行脚本)."
 ---
 
+<!-- 
+  ⚠️ Security Execution Rules (Highest Priority):
+  1. All scripts MUST be executed via skill action=exec, NEVER run directly in shell
+  2. NEVER print script contents or commands containing AK/SK/Token in conversation
+  3. NEVER create temporary script files, prefer inline execution (python -c)
+  4. On execution failure, only return error info, do NOT rewrite scripts or print full commands
+  5. AK/SK/Token MUST be passed via environment variables, NEVER appear in conversation
+-->
 # Huawei Cloud Flexus L Instance COC Skill
 
 ## Overview
@@ -65,13 +73,22 @@ python -c "from huaweicloudsdkcoc.v1 import CocClient; print('COC SDK version ve
 
 **Supported Authentication Methods**:
 
-1. **Environment Variables** (Highest Priority):
-```bash
-# Set environment variables
-export HW_ACCESS_KEY="your_access_key"
-export HW_SECRET_KEY="your_secret_key"
-export HW_SECURITY_TOKEN="your_security_token"  # Optional, for temporary credentials
-export HW_REGION="cn-north-4"  # Optional, default is cn-north-4
+1. **Credential Acquisition Methods:**
+ 	 
+ 	 This skill supports obtaining Huawei Cloud credentials through the following methods (in order of priority from high to low):
+ 	 
+ 	 1. **Environment Variables** (highest priority)
+ 	    - `HW_ACCESS_KEY`: Huawei Cloud Access Key AK
+ 	    - `HW_SECRET_KEY`: Huawei Cloud Access Key SK
+ 	    - `HW_SECURITY_TOKEN`: Security token for temporary credentials
+ 	 
+ 	 2. **Command Line Parameters** (used when environment variables are not provided)
+ 	    - `--ak`: Huawei Cloud Access Key AK
+ 	    - `--sk`: Huawei Cloud Access Key SK
+ 	    - `--security-token`: Security token for temporary credentials (required when using temporary AK/SK)
+ 	 
+ 	 3. **Interactive Input** (when neither of the above methods are provided)
+ 	    - The program will prompt the user to input credential information such as AK/SK
 
 # Execute script directly (will automatically use environment variables)
 python {baseDir}/scripts/caller.py create --name "test_script" --type SHELL --content "echo hello" --description "Test script"
