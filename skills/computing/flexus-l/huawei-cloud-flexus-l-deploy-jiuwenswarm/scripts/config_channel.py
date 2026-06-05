@@ -723,44 +723,6 @@ def main():
     if SECURITY_TOKEN:
         print(f"[INFO] Using temporary security credentials (STS token)")
 
-    # Get configuration
-    config_result = None
-    if args.interactive:
-        config_result = configure_channel_interactive()
-    else:
-        channel_type = args.channel
-        config = None
-
-        if channel_type == 'xiaoyi':
-            if args.xiaoyi_ak and args.xiaoyi_sk and args.xiaoyi_agent_id:
-                config = (args.xiaoyi_ak, args.xiaoyi_sk, args.xiaoyi_agent_id)
-        elif channel_type == 'feishu':
-            if args.feishu_app_id and args.feishu_app_secret:
-                config = (args.feishu_app_id, args.feishu_app_secret)
-        elif channel_type == 'dingtalk':
-            if args.dingtalk_client_id and args.dingtalk_client_secret and args.dingtalk_allow_from:
-                config = (args.dingtalk_client_id, args.dingtalk_client_secret, args.dingtalk_allow_from)
-
-        if config:
-            config_result = {
-                'channel_type': channel_type,
-                'config': config
-            }
-
-    if not config_result:
-        print("[ERROR] Invalid configuration parameters")
-        sys.exit(1)
-
-    channel_type = config_result['channel_type']
-    channel_config = config_result['config']
-
-    # Get instance info
-    instance_info = None
-    if args.instance_id:
-        instance_info = {'instance_id': args.instance_id, 'public_ip': args.ip, 'instance_name': 'Unknown'}
-    elif args.ip:
-        print(f"[INFO] Querying instance info by public IP: {args.ip}")
-        instance_info = query_instance_by_ip(args.ip, AK, SK, REGION, SECURITY_TOKEN)
         if not instance_info:
             print(f"[ERROR] Cannot find instance with public IP: {args.ip}")
             return

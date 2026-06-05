@@ -127,32 +127,12 @@ def verify_credentials(ak, sk, region, security_token=None):
         # 临时凭据手动补充X-Security-Token请求头（原生SDK签名后不会自动加，需主动注入）
         if security_token:
             headers["X-Security-Token"] = security_token
-
-        resp = requests.get(iam_endpoint, headers=headers, timeout=30)
-
-        if resp.status_code == 200:
-            print("[OK] Credentials verification successful!")
-            return True
-        else:
-            print(f"[ERROR] Credentials verification failed: HTTP {resp.status_code}, Resp:{resp.text}")
             return False
 
     except Exception as e:
         print(f"[ERROR] Credentials verification exception: {e}")
         import traceback
         traceback.print_exc()
-        return False
-
-def main():
-    print("=" * 60)
-    print("  JiuwenSwarm Deployment - Environment Preparation")
-    print("=" * 60)
-
-    credential_result = check_credentials()
-    if not credential_result[0]:
-        sys.exit(1)
-    
-    _, AK, SK, REGION, SECURITY_TOKEN = credential_result
 
     if not check_dependencies():
         sys.exit(1)

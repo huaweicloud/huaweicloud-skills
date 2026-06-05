@@ -1,0 +1,18 @@
+# YOLO Training Platform Terraform Variable Overrides
+
+# Region (only cn-north-4 is supported)
+region_id = "cn-north-4"
+
+# GPU instance flavor
+ecs_flavor = "p2s.2xlarge.8"
+
+# Disk sizes
+system_disk_size = 100
+data_disk_size = 500
+
+# Bandwidth
+bandwidth_size = 300
+
+# Billing
+charging_unit  = "month"
+charging_period = 1

@@ -1,0 +1,15 @@
+{
+  "example": "Example input for deploying the YOLO training platform",
+  "product": "YOLO",
+  "product_domain": "solutions",
+  "function": "deploy",
+  "skill_name": "huawei-cloud-sac-yolo",
+  "region": "cn-north-4",
+  "ecs_flavor": "p2s.2xlarge.8",
+  "system_disk_size": 100,
+  "data_disk_size": 500,
+  "bandwidth_size": 300,
+  "charging_unit": "month",
+  "charging_period": 1,
+  "trigger_words": ["YOLO deployment", "YOLO training platform", "deploy YOLO on Huawei Cloud"]
+}

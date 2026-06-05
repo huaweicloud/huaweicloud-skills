@@ -1,0 +1,263 @@
+name: BillingOntology
+type: semantic_ontology
+description: 事实、粒度、金额口径、只读 source_operations；查证流与答复纪律见 SKILL.md。
+default_scope:
+  account: 当前 KooCLI profile
+  method: oneself
+  time_window: 最小可答范围
+money_basis:
+  billed: [consume_amount, official_amount, discount_amount]
+  paid: [cash_amount, credit_amount, coupon_amount, stored_value_card_amount]
+  outstanding: [debt_amount]
+  amortized: [amortized_cost]
+protected_identifiers:
+  - account_id
+  - customer_id
+  - sub_customer_id
+  - indirect_partner_id
+  - resource_id
+  - order_id
+  - trade_id
+  - coupon_id
+  - quota_id
+  - card_id
+entities:
+  - name: AccountBalance
+    kind: fact
+    domain: customer_billing
+    source_operations: [BSS/ShowCustomerAccountBalances]
+    grain: 账户×时点
+    summary: 余额、欠费、账户构成
+    dimensions: [account_type, currency]
+    measures: [amount, debt_amount]
+    evidence_boundary: 时点快照；非扣因归因
+
+  - name: MonthlyBillSummary
+    kind: fact
+    domain: customer_billing
+    source_operations: [BSS/ShowCustomerMonthlySum]
+    grain: 账期×服务×资源类型×计费模式
+    summary: 月/上月花费、服务或项目汇总
+    required_context: [bill_cycle]
+    dimensions: [bill_cycle, service_type_code, resource_type_code, charging_mode, bill_type]
+    measures: [consume_amount, cash_amount, coupon_amount, debt_amount]
+    evidence_boundary: 账期汇总；非详单/订单
+
+  - name: BillingStatement
+    kind: fact
+    domain: customer_billing
+    source_operations: [BSS/ListCustomerBillsFeeRecords]
+    grain: 账期流水行
+    summary: 账单、交易、支付、对账差异
+    required_context: [bill_cycle]
+    dimensions: [bill_cycle, bill_date, service_type_code, resource_type_code, trade_id, status]
+    measures: [official_amount, consume_amount, cash_amount]
+    evidence_boundary: 流水证据；非资源存续
+
+  - name: ResourceBillRecord
+    kind: fact
+    domain: customer_billing
+    source_operations: [BSS/ListCustomerselfResourceRecords]
+    grain: 资源消费记录
+    summary: 持续扣费资源定位
+    required_context: [cycle]
+    dimensions: [cycle, bill_date, cloud_service_type, resource_type, resource_id, region, enterprise_project_id, charge_mode]
+    measures: [amount, usage, free_resource_usage]
+    evidence_boundary: 资源级扣费；非日级详单
+
+  - name: ResourceBillDetail
+    kind: fact
+    domain: customer_billing
+    source_operations: [BSS/ListCustomerselfResourceRecordDetails]
+    grain: 资源详单行
+    summary: 日级/用量级下钻
+    required_context: [cycle]
+    dimensions: [cycle, bill_date, res_instance_id, cloud_service_type, region, enterprise_project_id, resource_type_code, charge_mode, bill_type]
+    measures: [consume_amount, cash_amount, coupon_amount, debt_amount]
+    evidence_boundary: 账单行解释；行合计可与汇总有精度差
+
+  - name: AccountChangeRecord
+    kind: fact
+    domain: customer_billing
+    source_operations: [BSS/ListCustomerAccountChangeRecords]
+    grain: 现金/授信/储值交易
+    summary: 账户收支流水
+    required_context: [balance_type]
+    dimensions: [balance_type, trade_time, trade_type, revenue_expense_type, trade_id]
+    measures: [amount]
+    evidence_boundary: 结算流水；非资源消费归因
+
+  - name: StoredValueCard
+    kind: fact
+    domain: customer_billing
+    source_operations: [BSS/ListStoredValueCards]
+    grain: 储值卡
+    summary: 卡状态、有效期、面额
+    dimensions: [card_id, status, effective_time, expire_time]
+    measures: [amount]
+    evidence_boundary: 卡状态；非单笔消费来源
+
+  - name: CostAnalysis
+    kind: fact
+    domain: cost_and_usage
+    source_operations: [BSS/ListCosts]
+    grain: 时间桶×分组维度
+    summary: 成本 TopN、趋势、聚合归因
+    required_context:
+      - amount_type
+      - cost_type
+      - time_condition.begin_time
+      - time_condition.end_time
+      - time_condition.time_measure_id
+      - groupby.1.key
+      - groupby.1.type
+    dimensions: [time_condition, amount_type, cost_type, groupby]
+    measures: [cost]
+    evidence_boundary: 聚合视图；非流水/详单
+
+  - name: AmortizedCost
+    kind: fact
+    domain: cost_and_usage
+    source_operations: [BSS/ListCustomerBillsMonthlyBreakDown]
+    grain: 摊销月×服务/资源/账号
+    summary: 摊销 vs 现金扣费
+    required_context: [shared_month]
+    dimensions: [shared_month, service_type_code, resource_type_code, resource_id, enterprise_project_id]
+    measures: [amortized_cost, cash_amount]
+    evidence_boundary: 摊销口径；非当月现金流水
+
+  - name: ResourceUsage
+    kind: fact
+    domain: cost_and_usage
+    source_operations: [BSS/ListResourceUsageSummary, BSS/ListResourceUsage]
+    grain: 用量汇总或明细行
+    summary: CDN/OBS/IEC/VPC 流量带宽与 95 计费
+    required_context:
+      summary: [bill_cycle, service_type_code, resource_type_code, usage_type]
+      detail: [bill_cycle, service_type_code, resource_type_code, usage_type, resource_id]
+    dimensions: [bill_cycle, service_type_code, resource_type_code, usage_type, resource_id]
+    measures: [usage, measure_id]
+    evidence_boundary: 用量非费用；金额回账单/成本/详单
+
+  - name: FreeResourcePackage
+    kind: fact
+    domain: discount_entitlement
+    source_operations:
+      - BSS/ListFreeResourceInfos
+      - BSS/ListFreeResourceUsages
+      - BSS/ListFreeResourcesUsageRecords
+    grain: 资源包/余量/抵扣记录
+    summary: 资源包库存、余量、抵扣
+    dimensions: [product_id, product_name, status, effective_time, expire_time, free_resource_id]
+    measures: [amount, original_amount]
+    evidence_boundary: 包可抵扣性；账单需连详单/流水
+
+  - name: CouponChangeRecord
+    kind: fact
+    domain: discount_entitlement
+    source_operations: [BSS/ListCustomerCouponChangeRecords]
+    grain: 代金券交易
+    summary: 券消费/回收/过期
+    required_context: [balance_type]
+    dimensions: [balance_type, coupon_id, trade_time, trade_type, revenue_expense_type, trade_id]
+    measures: [amount]
+    evidence_boundary: 券流水；非订单折扣/资源包
+
+  - name: CouponQuota
+    kind: fact
+    domain: discount_entitlement
+    source_operations:
+      - BSS/ListQuotaCoupons
+      - BSS/ListIssuedCouponQuotas
+      - BSS/ListCouponQuotasRecords
+      - BSS/ListIssuedPartnerCoupons
+      - BSS/ListPartnerCouponsRecord
+      - BSS/ListSubCustomerCoupons
+    grain: 券额度/发放/操作记录
+    summary: 伙伴券额度、发放、客户券
+    dimensions: [coupon_id, quota_id, customer_id, status, operation_time]
+    measures: [quota_amount, coupon_amount]
+    evidence_boundary: 只读额度记录；不发放/回收/抵扣
+
+  - name: OrderEvidence
+    kind: fact
+    domain: order_evidence
+    source_operations:
+      - BSS/ListCustomerOrders
+      - BSS/ShowCustomerOrderDetails
+      - BSS/ShowRefundOrderDetails
+      - BSS/ListOrderCouponsByOrderId
+      - BSS/ListOrderDiscounts
+    grain: 订单/退款/券/折扣证据
+    summary: 订单、退款、降配、订单侧折扣
+    dimensions: [order_id, customer_id, service_type_code, status]
+    measures: [order_amount, refund_amount, discount_amount]
+    evidence_boundary: 交易来源；消费归因回账单
+
+  - name: EnterpriseAndPartnerContext
+    kind: scope
+    domain: account_scope
+    summary: 企业/伙伴/代售范围与授权边界
+    subentities: [EnterpriseAccountContext, EnterpriseBilling, PartnerAccountContext, PartnerBilling]
+    evidence_boundary: 权限失败≠账务不存在；仅范围/授权不足
+
+  - name: EnterpriseAccountContext
+    kind: scope_fact
+    domain: account_scope
+    source_operations:
+      - BSS/ListEnterpriseOrganizations
+      - BSS/ListEnterpriseSubCustomers
+      - BSS/ListEnterpriseMultiAccount
+      - BSS/ShowMultiAccountTransferAmount
+      - BSS/ListMultiAccountTransferCoupons
+      - BSS/ListMultiAccountRetrieveCoupons
+    grain: 组织/子客户/拨款/可回收券
+    summary: 企业主可查组织与子账号范围
+
+  - name: EnterpriseBilling
+    kind: scope_fact
+    domain: account_scope
+    source_operations:
+      - BSS/ListConsumeSubCustomers
+      - BSS/ListSubcustomerMonthlyBills
+      - BSS/ListSubCustomerBillDetail
+    grain: 子客户账单汇总或明细
+    summary: 企业子账号账单与分摊
+
+  - name: PartnerAccountContext
+    kind: scope_fact
+    domain: account_scope
+    source_operations:
+      - BSS/ListSubCustomers
+      - BSS/ListSubCustomerNewTag
+      - BSS/ListIndirectPartners
+      - BSS/ListCustomerOnDemandResources
+      - BSS/ListPayPerUseCustomerResources
+      - BSS/ListCustomersBalancesDetail
+      - BSS/ListPartnerBalances
+    grain: 伙伴客户/经销商/标签/资源/余额
+    summary: 伙伴/代售可查询对象
+
+  - name: PartnerBilling
+    kind: scope_fact
+    domain: account_scope
+    source_operations: [BSS/ListPartnerAccountChangeRecords, BSS/ListPartnerAdjustRecords]
+    grain: 伙伴流水或调账
+    summary: 伙伴流水、调账、客户侧收支
+
+  - name: ReferenceDimensions
+    kind: dimension_catalog
+    domain: reference_dimensions
+    source_operations:
+      - BSS/ListServiceTypes
+      - BSS/ListResourceTypes
+      - BSS/ListUsageTypes
+      - BSS/ListMeasureUnits
+      - BSS/ListConversions
+      - BSS/ListServiceResources
+      - BSS/ListProvinces
+      - BSS/ListCities
+      - BSS/ListCounties
+    summary: code/单位/地理翻译
+    dimensions: [ServiceType, ResourceType, UsageType, MeasureUnit, ServiceResourceRelation, Geography]
+    evidence_boundary: 字典补上下文；非扣费事实

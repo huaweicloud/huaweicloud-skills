@@ -1,0 +1,61 @@
+name: HuaweiCloudBillingSemanticCatalog
+type: semantic_catalog
+description: 薄路由；scope/time/money_basis → ontology_entities。provider_gate、workflow、拒答、触发词补全归 SKILL.md。
+coverage:
+  expected_query_operations: 53
+  source_version: KooCLI 7.2.2
+entry_points:
+  balance_and_debt:
+    required_context:
+      scope: [current_profile]
+      time: [point_in_time]
+      money_basis: [outstanding, billed]
+    triggers: [华为云余额, 华为云欠费]
+    ontology_entities: [AccountBalance, AccountChangeRecord, StoredValueCard]
+  monthly_spend:
+    required_context:
+      scope: [current_profile]
+      time: [bill_cycle]
+      money_basis: [billed, amortized]
+    triggers: [华为云本月花费, 华为云月度汇总]
+    ontology_entities: [MonthlyBillSummary, CostAnalysis, AmortizedCost]
+  charge_attribution:
+    required_context:
+      scope: [current_profile]
+      time: [bill_cycle, date_range]
+      money_basis: [billed]
+    triggers: [华为云扣费原因, 华为云哪个资源在扣费]
+    ontology_entities: [ResourceBillRecord, ResourceBillDetail, OrderEvidence]
+  reconciliation:
+    required_context:
+      scope: [current_profile]
+      time: [bill_cycle]
+      money_basis: [billed, paid]
+    triggers: [华为云账单对账, 华为云汇总和明细不一致]
+    ontology_entities: [BillingStatement, MonthlyBillSummary, ResourceBillDetail, OrderEvidence]
+  entitlement_and_deduction:
+    required_context:
+      scope: [current_profile]
+      time: [bill_cycle, point_in_time]
+      money_basis: [billed, paid]
+    triggers: [华为云资源包, 华为云优惠券]
+    ontology_entities: [FreeResourcePackage, CouponChangeRecord, CouponQuota, StoredValueCard]
+  account_scope:
+    required_context:
+      scope: [enterprise, partner, sub_customer]
+      time: [bill_cycle, point_in_time]
+      money_basis: [billed, outstanding]
+    triggers: [华为云企业主账号, 华为云伙伴账务]
+    ontology_entities:
+      - EnterpriseAndPartnerContext
+      - EnterpriseAccountContext
+      - EnterpriseBilling
+      - PartnerAccountContext
+      - PartnerBilling
+  reference_dimensions:
+    required_context:
+      scope: [current_profile]
+      time: [not_applicable]
+      money_basis: [not_applicable]
+    triggers: [华为云服务编码, 华为云计量单位]
+    ontology_entities: [ReferenceDimensions]
