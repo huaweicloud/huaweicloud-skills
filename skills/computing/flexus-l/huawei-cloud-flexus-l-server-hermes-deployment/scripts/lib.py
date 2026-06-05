@@ -7,6 +7,9 @@ Includes:
 2. COC script management (create script, execute script, query script)
 3. ModelArts large model configuration
 4. Bot channel configuration
+
+Note: This module only supports temporary credentials (temporary AK/SK + security_token).
+      Permanent AK/SK credentials are not supported.
 """
 
 import json
@@ -42,9 +45,11 @@ DEFAULT_CONFIG_PATH = "/home/hermes/.hermes/config.yaml"
 DEFAULT_ENV_PATH = "/home/hermes/.hermes/.env"
 
 class Credentials:
-    def __init__(self, ak, sk):
+    """Credentials for Huawei Cloud temporary access"""
+    def __init__(self, ak, sk, security_token):
         self.ak = ak
         self.sk = sk
+        self.security_token = security_token
 
 
 def get_credentials(ak, sk, region=None):
@@ -56,20 +61,20 @@ def get_credentials(ak, sk, region=None):
     return ak, sk, region
 
 
-def get_project_id_by_region(ak: str, sk: str, region: str, security_token: str = None) -> Optional[str]:
+def get_project_id_by_region(ak: str, sk: str, security_token: str, region: str) -> Optional[str]:
     """
     Get Project ID for specified region via AK/SK
     
     Args:
+        ak: Huawei Cloud temporary AK
+        sk: Huawei Cloud temporary SK
+        security_token: Security token for temporary credentials (required)
         region: Target region, e.g. cn-north-4, cn-southwest-2
-        ak: Huawei Cloud AK (can be temporary AK)
-        sk: Huawei Cloud SK (can be temporary SK)
-        security_token: Security token for temporary credentials (optional)
     
     Returns:
         Project ID string, or None if failed
     """
-    if not ak or not sk:
+    if not ak or not sk or not security_token:
         print("Error: Credentials not configured")
         return None
     
@@ -90,11 +95,9 @@ def get_project_id_by_region(ak: str, sk: str, region: str, security_token: str 
         request.body = ""
         request.header_params = {
             "Content-Type": "application/json",
-            "Client-Request-Id": str(uuid.uuid4())
+            "Client-Request-Id": str(uuid.uuid4()),
+            "X-Security-Token": security_token
         }
-        
-        if security_token:
-            request.header_params["X-Security-Token"] = security_token
         
         request.query_params = []
         
@@ -135,34 +138,34 @@ def get_project_id_by_region(ak: str, sk: str, region: str, security_token: str 
         return None
 
 
-def create_hermes_instance(ak, sk, instance_name=None, region=None, security_token=None):
+def create_hermes_instance(ak, sk, security_token, instance_name=None, region=None):
     """
     Create Huawei Cloud Flexus L Instance dedicated for Hermes
     
     Parameters:
-        ak: Huawei Cloud AK (can be temporary AK)
-        sk: Huawei Cloud SK (can be temporary SK)
+        ak: Huawei Cloud temporary AK
+        sk: Huawei Cloud temporary SK
+        security_token: Security token for temporary credentials (required)
         instance_name: Instance name, optional, auto-generated as hermes-timestamp if not specified
         region: Target region, optional, default cn-north-4 if not specified
-        security_token: Security token for temporary credentials (optional)
     
     Returns:
         dict: Result dictionary containing ok, text, result, error fields
     """
-    if not ak or not sk:
+    if not ak or not sk or not security_token:
         return {
             "ok": False,
             "text": "Credentials not configured",
             "result": None,
             "error": {
                 "code": "CONFIG_ERROR",
-                "message": "ak and sk are required parameters"
+                "message": "ak, sk and security_token are required parameters"
             }
         }
     
     target_region = region if region else "cn-north-4"
     
-    project_id = get_project_id_by_region(ak, sk, target_region, security_token)
+    project_id = get_project_id_by_region(ak, sk, security_token, target_region)
     if not project_id:
         return {
             "ok": False,
@@ -827,14 +830,18 @@ def get_config(ak, sk, region=None) -> tuple[str, str, str]:
     return ak, sk, region
 
 
-def get_client(ak, sk, region=None, security_token=None) -> CocClient:
-    """Create and return COC client (parameter passing)"""
+def get_client(ak, sk, security_token, region=None) -> CocClient:
+    """Create and return COC client (parameter passing)
+    
+    Args:
+        ak: Huawei Cloud temporary AK
+        sk: Huawei Cloud temporary SK
+        security_token: Security token for temporary credentials (required)
+        region: COC region (optional, default cn-north-4)
+    """
     _, _, coc_region = get_config(ak, sk, region)
     
-    if security_token is None:
-        credentials = GlobalCredentials(ak, sk)
-    else:
-        credentials = GlobalCredentials(ak, sk).with_security_token(security_token)
+    credentials = GlobalCredentials(ak, sk).with_security_token(security_token)
 
     client = CocClient.new_builder() \
         .with_credentials(credentials) \
@@ -851,8 +858,8 @@ def create_script(
     description: str,
     ak: str,
     sk: str,
-    region: str = None,
     security_token: str = None,
+    region: str = None,
     risk_level: str = "LOW",
     version: str = "1.0.0",
     script_params: Optional[List[Dict[str, Any]]] = None,
@@ -872,7 +879,7 @@ def create_script(
         return _error("CONFIG_ERROR", "ak and sk are required")
 
     try:
-        client = get_client(ak, sk, region, security_token)
+        client = get_client(ak, sk, security_token, region)
     except ValueError as e:
         return _error("CONFIG_ERROR", str(e))
 
@@ -925,8 +932,8 @@ def execute_script(
     target_instances: List[Dict[str, str]],
     ak: str,
     sk: str,
-    region: str = None,
     security_token: str = None,
+    region: str = None,
     rotation_strategy: str = "CONTINUE",
     wait_for_completion: bool = False,
 ) -> dict[str, Any]:
@@ -945,8 +952,8 @@ def execute_script(
             - type: Resource type (not required for ECS, default "L-INSTANCE" for L Instance)
         ak: Huawei Cloud AK (can be temporary AK)
         sk: Huawei Cloud SK (can be temporary SK)
-        region: COC region (optional, default cn-north-4)
         security_token: Security token for temporary credentials (optional)
+        region: COC region (optional, default cn-north-4)
         rotation_strategy: Rotation strategy (CONTINUE/STOP), default CONTINUE
         wait_for_completion: Whether to wait for completion and get logs, default True
 
@@ -979,7 +986,7 @@ def execute_script(
         return _error("CONFIG_ERROR", "ak and sk are required")
 
     try:
-        client = get_client(ak, sk, region, security_token)
+        client = get_client(ak, sk, security_token, region)
     except ValueError as e:
         return _error("CONFIG_ERROR", str(e))
 
@@ -1055,7 +1062,7 @@ def execute_script(
         last_status = ""
         
         while elapsed_time < max_wait_time:
-            query_result = coc_query_execution(execute_uuid, ak, sk, region)
+            query_result = coc_query_execution(execute_uuid, ak, sk, security_token, region)
             
             data = query_result.get("data", {})
             if not data:
@@ -1197,7 +1204,7 @@ def coc_query_execution(execute_uuid: str, ak: str = None, sk: str = None, secur
         region = "cn-north-4"
 
     try:
-        client = get_client(ak, sk, region, security_token)
+        client = get_client(ak, sk, security_token, region)
     except ValueError as e:
         return _error("CONFIG_ERROR", str(e))
 
@@ -1296,7 +1303,7 @@ def coc_query_execution(execute_uuid: str, ak: str = None, sk: str = None, secur
         return _error("UNKNOWN_ERROR", str(e))
 
 
-def get_script_detail(script_uuid: str, ak: str, sk: str, region: str = None) -> dict[str, Any]:
+def get_script_detail(script_uuid: str, ak: str, sk: str, security_token: str = None, region: str = None) -> dict[str, Any]:
     """Get script details"""
     if not script_uuid:
         return _error("INPUT_ERROR", "script_uuid is required")
@@ -1304,7 +1311,7 @@ def get_script_detail(script_uuid: str, ak: str, sk: str, region: str = None) ->
         return _error("CONFIG_ERROR", "ak and sk are required")
 
     try:
-        client = get_client(ak, sk, region)
+        client = get_client(ak, sk, security_token, region)
     except ValueError as e:
         return _error("CONFIG_ERROR", str(e))
 
@@ -1341,13 +1348,13 @@ def get_script_detail(script_uuid: str, ak: str, sk: str, region: str = None) ->
         return _error("UNKNOWN_ERROR", str(e))
 
 
-def list_scripts(ak: str, sk: str, region: str = None, page: int = 1, limit: int = 10) -> dict[str, Any]:
+def list_scripts(ak: str, sk: str, security_token: str = None, region: str = None, page: int = 1, limit: int = 10) -> dict[str, Any]:
     """List scripts"""
     if not ak or not sk:
         return _error("CONFIG_ERROR", "ak and sk are required")
     
     try:
-        client = get_client(ak, sk, region)
+        client = get_client(ak, sk, security_token, region)
     except ValueError as e:
         return _error("CONFIG_ERROR", str(e))
 
@@ -1680,3 +1687,117 @@ def _error(code: str, message: str) -> dict:
         "result": None,
         "error": {"code": code, "message": message},
     }
+
+
+def query_uniagent_status(
+    resource_id: str,
+    ak: str,
+    sk: str,
+    security_token: str = None
+) -> dict[str, Any]:
+    """
+    Query L instance UniAgent status via COC API
+
+    Args:
+        resource_id: L instance resource ID
+        ak: Huawei Cloud AK (can be temporary AK)
+        sk: Huawei Cloud SK (can be temporary SK)
+        security_token: Security token for temporary credentials (optional)
+
+    Returns:
+        {
+            "ok": True,
+            "text": "Query successful",
+            "result": {...},
+            "error": None
+        }
+    """
+    if not resource_id:
+        return _error("INPUT_ERROR", "resource_id parameter is required")
+    
+    if not ak or not sk:
+        return _error("CONFIG_ERROR", "Please provide AK and SK parameters")
+    
+    region = os.environ.get("HUAWEICLOUD_REGION", "cn-north-4")
+    
+    try:
+        from huaweicloudsdkcore.auth.credentials import GlobalCredentials
+        from huaweicloudsdkcore.signer.signer import Signer
+        from huaweicloudsdkcore.sdk_request import SdkRequest
+        from urllib.parse import urlparse
+        
+        credentials = Credentials(ak, sk, security_token)
+        signer = Signer(credentials)
+        
+        endpoint = "https://coc.myhuaweicloud.com/v1/resources"
+        
+        query_params = {
+            "resource_id_list": resource_id,
+            "limit": "100",
+            "provider": "hcss",
+            "type": "l-instance"
+        }
+        
+        url_with_params = endpoint + "?" + "&".join([f"{k}={v}" for k, v in query_params.items()])
+        parsed_url = urlparse(url_with_params)
+        
+        request = SdkRequest()
+        request.method = "GET"
+        request.schema = parsed_url.scheme
+        request.host = parsed_url.hostname
+        request.resource_path = parsed_url.path
+        request.query_params = [[k, v] for k, v in query_params.items()]
+        request.header_params = {
+            "Content-Type": "application/json",
+            "Client-Request-Id": str(uuid.uuid4())
+        }
+        
+        if security_token:
+            request.header_params["X-Security-Token"] = security_token
+        
+        signed_request = signer.sign(request)
+        
+        headers = {}
+        for key, value in signed_request.header_params.items():
+            if isinstance(value, bytes):
+                headers[key] = value.decode('iso-8859-1')
+            else:
+                headers[key] = str(value)
+        
+        print(f"Request URL: {url_with_params}")
+        print(f"Request headers: {headers}")
+        
+        resp = requests.request(
+            "GET",
+            url_with_params,
+            headers=headers,
+            verify=True
+        )
+        
+        print(f"Response status code: {resp.status_code}")
+        print(f"Response content: {resp.text}")
+        
+        if resp.status_code in [200, 202]:
+            response_data = resp.json()
+            return {
+                "ok": True,
+                "text": "UniAgent status query successful",
+                "result": response_data,
+                "error": None
+            }
+        else:
+            return {
+                "ok": False,
+                "text": f"Query failed: {resp.reason}",
+                "result": None,
+                "error": {
+                    "code": str(resp.status_code),
+                    "message": resp.text
+                }
+            }
+    
+    except ImportError as e:
+        return _error("SDK_ERROR", f"Please install huaweicloudsdkcore: {str(e)}")
+    except Exception as e:
+        error_msg = str(e)
+        return _error("UNKNOWN_ERROR", error_msg)

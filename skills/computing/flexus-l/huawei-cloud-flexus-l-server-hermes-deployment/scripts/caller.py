@@ -5,15 +5,18 @@ Huawei Cloud Flexus L Instance One-Click Hermes Deployment Command Line Tool
 
 Use Huawei Cloud SDK for Hermes deployment and configuration management.
 
+Note: This tool only supports temporary credentials (temporary AK/SK + security_token).
+      Permanent AK/SK credentials are not supported.
+
 Commands:
     deploy  - One-click deploy Hermes to Huawei Cloud Flexus L Instance
     maas    - Configure ModelArts large model based on deployed Hermes instance
     channel - Configure bot channels based on deployed Hermes instance
     
 Parameters:
-    --ak: Huawei Cloud Access Key (required)
-    --sk: Huawei Cloud Secret Key (required)
-    --security-token: Security token for temporary credentials (optional)
+    --ak: Huawei Cloud Temporary Access Key (required)
+    --sk: Huawei Cloud Temporary Secret Key (required)
+    --security-token: Security token for temporary credentials (required)
 """
 
 import argparse
@@ -26,6 +29,7 @@ from scripts.deploy import do_deploy_hermes
 from scripts.models import do_install_maas
 from scripts.channels import do_install_channel
 from scripts.gateway import do_restart_gateway
+from scripts.uniagent import do_check_uniagent
 from scripts.lib import coc_query_execution
 
 
@@ -41,18 +45,19 @@ def show_main_menu():
     print("  3. Configure bot channels on deployed Hermes instance")
     print("  4. Restart Hermes Gateway")
     print("  5. Query COC script execution result")
+    print("  6. Query UniAgent status")
     print("  0. Exit")
     print("")
     print("=" * 60)
     
     while True:
         try:
-            choice = input("Please enter your choice (0-5): ")
+            choice = input("Please enter your choice (0-6): ")
             choice = int(choice)
-            if choice in [0, 1, 2, 3, 4, 5]:
+            if choice in [0, 1, 2, 3, 4, 5, 6]:
                 return choice
             else:
-                print("Invalid input, please enter a number between 0-5")
+                print("Invalid input, please enter a number between 0-6")
         except ValueError:
             print("Invalid input, please enter a number")
 
@@ -66,28 +71,19 @@ Examples:
   # Interactive mode (shows menu)
   python scripts/caller.py
 
-  # One-click deploy Hermes to Flexus L Instance using permanent AK/SK
-  python scripts/caller.py deploy --ak <your_ak> --sk <your_sk> --name my-hermes --region cn-north-4
+  # One-click deploy Hermes to Flexus L Instance using temporary credentials
+  python scripts/caller.py deploy --ak <temp_ak> --sk <temp_sk> --security-token <security_token> --name hermes-{timestamp} --region cn-north-4
 
-  # One-click deploy using temporary AK/SK and security-token
-  python scripts/caller.py deploy --ak <temp_ak> --sk <temp_sk> --security-token <security_token> --name my-hermes --region cn-north-4
-
-  # Configure ModelArts large model using permanent AK/SK
-  python scripts/caller.py maas --ak <your_ak> --sk <your_sk> --resource-id <instance_id> --region-id cn-north-4 --api-key <your_api_key> --model-name deepseek-v3.2
-
-  # Configure ModelArts model using temporary credentials
+  # Configure ModelArts large model using temporary credentials
   python scripts/caller.py maas --ak <temp_ak> --sk <temp_sk> --security-token <security_token> --resource-id <instance_id> --region-id cn-north-4 --api-key <your_api_key> --model-name deepseek-v3.2
 
-  # Configure Feishu bot channel using permanent AK/SK
-  python scripts/caller.py channel --ak <your_ak> --sk <your_sk> --resource-id <instance_id> --region-id cn-north-4 --bot-platform feishu --feishu-app-id <app_id> --feishu-app-secret <app_secret>
+  # Configure Feishu bot channel using temporary credentials
+  python scripts/caller.py channel --ak <temp_ak> --sk <temp_sk> --security-token <security_token> --resource-id <instance_id> --region-id cn-north-4 --bot-platform feishu --feishu-app-id <app_id> --feishu-app-secret <app_secret>
 
   # Configure WeCom bot channel using temporary credentials
   python scripts/caller.py channel --ak <temp_ak> --sk <temp_sk> --security-token <security_token> --resource-id <instance_id> --region-id cn-north-4 --bot-platform wecom --wecom-bot-id <bot_id> --wecom-secret <secret>
 
-  # Query COC script execution result using permanent AK/SK
-  python scripts/caller.py query --ak <your_ak> --sk <your_sk> --execute-uuid <execute_uuid>
-
-  # Query execution result using temporary credentials
+  # Query COC script execution result using temporary credentials
   python scripts/caller.py query --ak <temp_ak> --sk <temp_sk> --security-token <security_token> --execute-uuid <execute_uuid>
         """,
     )
@@ -95,17 +91,17 @@ Examples:
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
 
     deploy_parser = subparsers.add_parser('deploy', help='One-click deploy Hermes to Flexus L Instance')
-    deploy_parser.add_argument('--ak', required=True, help='Huawei Cloud AK (required)')
-    deploy_parser.add_argument('--sk', required=True, help='Huawei Cloud SK (required)')
-    deploy_parser.add_argument('--security-token', help='Security token for temporary credentials (optional)')
+    deploy_parser.add_argument('--ak', required=True, help='Huawei Cloud Temporary AK (required)')
+    deploy_parser.add_argument('--sk', required=True, help='Huawei Cloud Temporary SK (required)')
+    deploy_parser.add_argument('--security-token', required=True, help='Security token for temporary credentials (required)')
     deploy_parser.add_argument('--name', help='Instance name (optional, auto-generated by default)')
     deploy_parser.add_argument('--region', choices=REGION_IDS, help='Region ID (optional, default cn-north-4)')
     deploy_parser.add_argument('--non-interactive', action='store_true', help='Non-interactive mode, execute without confirmation')
 
     maas_parser = subparsers.add_parser('maas', help='Configure ModelArts large model on deployed Hermes instance')
-    maas_parser.add_argument('--ak', required=True, help='Huawei Cloud AK (required)')
-    maas_parser.add_argument('--sk', required=True, help='Huawei Cloud SK (required)')
-    maas_parser.add_argument('--security-token', help='Security token for temporary credentials (optional)')
+    maas_parser.add_argument('--ak', required=True, help='Huawei Cloud Temporary AK (required)')
+    maas_parser.add_argument('--sk', required=True, help='Huawei Cloud Temporary SK (required)')
+    maas_parser.add_argument('--security-token', required=True, help='Security token for temporary credentials (required)')
     maas_parser.add_argument('--resource-id', required=True, help='L Instance resource ID (required)')
     maas_parser.add_argument('--region-id', choices=REGION_IDS, help='Region ID (optional, default cn-north-4)')
     maas_parser.add_argument('--api-key', required=True, help='ModelArts API Key (required)')
@@ -116,9 +112,9 @@ Examples:
     maas_parser.add_argument('--non-interactive', action='store_true', help='Non-interactive mode, execute without confirmation')
 
     channel_parser = subparsers.add_parser('channel', help='Configure bot channels on deployed Hermes instance')
-    channel_parser.add_argument('--ak', required=True, help='Huawei Cloud AK (required)')
-    channel_parser.add_argument('--sk', required=True, help='Huawei Cloud SK (required)')
-    channel_parser.add_argument('--security-token', help='Security token for temporary credentials (optional)')
+    channel_parser.add_argument('--ak', required=True, help='Huawei Cloud Temporary AK (required)')
+    channel_parser.add_argument('--sk', required=True, help='Huawei Cloud Temporary SK (required)')
+    channel_parser.add_argument('--security-token', required=True, help='Security token for temporary credentials (required)')
     channel_parser.add_argument('--resource-id', required=True, help='L Instance resource ID (required)')
     channel_parser.add_argument('--region-id', choices=REGION_IDS, help='Region ID (optional, default cn-north-4)')
     channel_parser.add_argument('--bot-platform', choices=['feishu', 'wecom'], required=True, help='Bot platform: feishu or wecom (required)')
@@ -131,9 +127,9 @@ Examples:
     channel_parser.add_argument('--non-interactive', action='store_true', help='Non-interactive mode, execute without confirmation')
 
     gateway_parser = subparsers.add_parser('gateway', help='Restart Hermes Gateway')
-    gateway_parser.add_argument('--ak', required=True, help='Huawei Cloud AK (required)')
-    gateway_parser.add_argument('--sk', required=True, help='Huawei Cloud SK (required)')
-    gateway_parser.add_argument('--security-token', help='Security token for temporary credentials (optional)')
+    gateway_parser.add_argument('--ak', required=True, help='Huawei Cloud Temporary AK (required)')
+    gateway_parser.add_argument('--sk', required=True, help='Huawei Cloud Temporary SK (required)')
+    gateway_parser.add_argument('--security-token', required=True, help='Security token for temporary credentials (required)')
     gateway_parser.add_argument('--resource-id', required=True, help='L Instance resource ID (required)')
     gateway_parser.add_argument('--region-id', choices=REGION_IDS, help='Region ID (optional, default cn-north-4)')
     gateway_parser.add_argument('--timeout', type=int, help='Timeout in seconds (optional, default 120)')
@@ -141,18 +137,25 @@ Examples:
     gateway_parser.add_argument('--non-interactive', action='store_true', help='Non-interactive mode, execute without confirmation')
 
     query_parser = subparsers.add_parser('query', help='Query COC script execution result')
-    query_parser.add_argument('--ak', required=True, help='Huawei Cloud AK (required)')
-    query_parser.add_argument('--sk', required=True, help='Huawei Cloud SK (required)')
-    query_parser.add_argument('--security-token', help='Security token for temporary credentials (optional)')
+    query_parser.add_argument('--ak', required=True, help='Huawei Cloud Temporary AK (required)')
+    query_parser.add_argument('--sk', required=True, help='Huawei Cloud Temporary SK (required)')
+    query_parser.add_argument('--security-token', required=True, help='Security token for temporary credentials (required)')
     query_parser.add_argument('--execute-uuid', required=True, help='Script execution UUID (e.g.: SCT2023083109562601af694bf)')
+
+    uniagent_parser = subparsers.add_parser('uniagent', help='Query UniAgent status')
+    uniagent_parser.add_argument('--ak', required=True, help='Huawei Cloud Temporary AK (required)')
+    uniagent_parser.add_argument('--sk', required=True, help='Huawei Cloud Temporary SK (required)')
+    uniagent_parser.add_argument('--security-token', required=True, help='Security token for temporary credentials (required)')
+    uniagent_parser.add_argument('--resource-id', required=True, help='L Instance resource ID (required)')
 
     args = parser.parse_args()
 
     try:
         if args.command == 'query':
             security_token = args.security_token if hasattr(args, 'security_token') else None
+            region = args.region if hasattr(args, 'region') else None
             print(f"Querying script execution result: {args.execute_uuid}")
-            result = coc_query_execution(args.execute_uuid, args.ak, args.sk, security_token)
+            result = coc_query_execution(args.execute_uuid, args.ak, args.sk, security_token, region)
             data = result.get('data', {})
             if data:
                 print("=" * 60)
@@ -183,6 +186,8 @@ Examples:
                 print("=" * 60)
             else:
                 print(f"Query failed: {result.get('error', {}).get('message', 'Unknown error')}")
+        elif args.command == 'uniagent':
+            do_check_uniagent(args)
         elif args.command == 'maas':
             do_install_maas(args)
         elif args.command == 'channel':
@@ -209,11 +214,13 @@ Examples:
                 args.command = 'gateway'
                 do_restart_gateway(args)
             elif choice == 5:
-                ak = input("Please enter Huawei Cloud AK: ")
-                sk = input("Please enter Huawei Cloud SK: ")
+                ak = input("Please enter Huawei Cloud Temporary AK: ")
+                sk = input("Please enter Huawei Cloud Temporary SK: ")
+                security_token = input("Please enter Security Token: ")
                 execute_uuid = input("Please enter script execution UUID: ")
+                region = input("Please enter COC region (default: cn-north-4): ") or "cn-north-4"
                 print(f"Querying script execution result: {execute_uuid}")
-                result = coc_query_execution(execute_uuid, ak, sk)
+                result = coc_query_execution(execute_uuid, ak, sk, security_token, region)
                 data = result.get('data', {})
                 if data:
                     print("=" * 60)
@@ -244,6 +251,9 @@ Examples:
                     print("=" * 60)
                 else:
                     print(f"Query failed: {result.get('error', {}).get('message', 'Unknown error')}")
+            elif choice == 6:
+                args.command = 'uniagent'
+                do_check_uniagent(args)
     except KeyboardInterrupt:
         print("\n\nUser interrupted operation")
         sys.exit(0)
