@@ -3,6 +3,16 @@ name: huawei-cloud-flexus-l-server-ops
 description: "Based on Huawei Cloud Flexus L API for instance management and operations. Supports querying instance list and details, querying traffic packages, batch start/stop/reboot instances, resetting passwords,    and modifying instance information. Suitable for daily operations, lifecycle management, configuration changes, traffic monitoring, and other scenarios for Flexus L instances. Triggers: Flexus L, Huawei Cloud ops, query instance, start, stop, reboot, reset password, modify info, check traffic, traffic package (中文触发词: L实例运维，查询L实例，L实例开机，L实例关机，L实例重启，L实例重置密码，查询L实例流量包)."
 ---
 
+<!-- 
+⚠️ Security Execution Rules (Highest Priority):
+1. All scripts MUST be executed via skill action=exec, NEVER run directly in shell
+2. NEVER print script contents or commands containing AK/SK/Token in conversation
+3. NEVER create temporary script files, prefer inline execution (python -c)
+4. On execution failure, only return error info, do NOT rewrite scripts or print full commands
+5. AK/SK/Token MUST be passed via environment variables, NEVER appear in conversation
+6. Do NOT display Python code, shell commands, script paths, or credential parameters in responses
+-->
+
 # Huawei Cloud Flexus L Instance Operations
 
 ## Overview
@@ -26,7 +36,7 @@ OpenClaw Agent → Flexus L Ops Skill → Huawei Cloud SDK → Huawei Cloud Serv
 - **Flexus L Service**: Elastic Cloud Server, provides instance management, lifecycle control, password reset, etc.
 - **BSS Service**: Business Support System, provides traffic package usage query
 - **Python SDK**: Official Huawei Cloud SDK, encapsulates API call logic
-- **Operation Scripts**: 8 independent scripts, each corresponding to one operation
+- **Operation Scripts**: 6 independent scripts, each corresponding to one operation
 
 ### Applicable Scenarios
 
@@ -92,8 +102,9 @@ pip3 install huaweicloudsdkcore huaweicloudsdkecs huaweicloudsdkconfig huaweiclo
 
 **Configuration:**
 ```bash
-export CLOUD_SDK_AK="your_Access_Key_ID"
-export CLOUD_SDK_SK="your_Secret_Access_Key"
+export HW_ACCESS_KEY="your_Access_Key_ID"
+export HW_SECRET_KEY="your_Secret_Access_Key"
+export HW_SECURITY_TOKEN="your_Security_Token"  # Optional, required for temporary credentials
 ```
 
 **⚠️ Security Requirement:** Only set via environment variables temporarily, do not store in any configuration files.
@@ -106,9 +117,9 @@ export CLOUD_SDK_SK="your_Secret_Access_Key"
 |-----------|-----------------|-----------------|------------------|
 | Query Flexus L instances | `query_instances.py` | `query_instances.py list` | ~~`password_unified.py list`~~ |
 | Query instance details | `query_instances.py` | `query_instances.py detail -i <ID>` | ~~`lifecycle.py list`~~ |
-| Start/Stop/Reboot | `lifecycle.py` | `lifecycle.py stop <ID>` | ~~`query_instances.py stop`~~ |
-| Reset password | `password_unified.py` | `password_unified.py reset <ID> <pwd>` | ~~`lifecycle.py reset`~~ |
-| Modify server info | `update_server.py` | `update_server.py --name <name>` | ~~`query_instances.py update`~~ |
+| Start/Stop/Reboot | `lifecycle.py` | `lifecycle.py stop --instance-id <ID>` | ~~`query_instances.py stop`~~ |
+| Reset password | `password_unified.py` | `password_unified.py reset --instance-id <ID> --password <pwd>` | ~~`lifecycle.py reset`~~ |
+| Modify server info | `update_server.py` | `update_server.py --instance-id <ID> --name <name>` | ~~`query_instances.py update`~~ |
 
 ### Operation Feedback Requirement
 
@@ -135,13 +146,12 @@ This ensures the user knows the operation has completed successfully.
 | **password_unified.py** | Password reset | `test`, `list`, `reset` |
 | **update_server.py** | Modify server info | `--name`, `--description`, `--hostname` |
 
-### Helper Scripts (3 scripts)
+### Helper Scripts (2 scripts)
 
 | Script | Function |
 |--------|----------|
 | auth.py | Authentication management |
 | params.py | Parameter processing |
-| config_client.py | Config service client |
 
 ## Core Commands
 
@@ -162,11 +172,12 @@ See [Execution Flow](#execution-flow) for operation steps.
 
 **Optional Parameters:**
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| --region | cn-north-4 | Region code (supports Chinese) |
-| --ak | Environment variable | Access Key |
-| --sk | Environment variable | Secret Key |
+| Parameter | Description | Required | Default | Example |
+|-----------|-------------|----------|---------|---------|
+| --region | Target region code (supports Chinese names) | No | cn-north-4 | `--region cn-north-4` |
+| --ak | Huawei Cloud Access Key AK (can be temporary AK) | No | HW_ACCESS_KEY env var | `--ak AXXX...` |
+| --sk | Huawei Cloud Access Key SK (can be temporary SK) | No | HW_SECRET_KEY env var | `--sk SXXX...` |
+| --security-token | Security token for temporary credentials (required when using temporary AK/SK) | No | HW_SECURITY_TOKEN env var | `--security-token XXXX...` |
 
 **Region Parameter Support:**
 - Region code: `cn-north-4`
@@ -177,36 +188,35 @@ See [Execution Flow](#execution-flow) for operation steps.
 
 ### Step 1: Check Existing Credentials (Automatic)
 
-**Automatically check environment variables before each execution, no need to ask user:**
-
-```bash
-# Check if environment variables exist
-if [ -z "$CLOUD_SDK_AK" ] || [ -z "$CLOUD_SDK_SK" ]; then
-    echo "❌ No credential environment variables detected, please configure first"
-    exit 1
-fi
-
-# Test if credentials are valid
-python3 scripts/cli.py test
-```
+**Get credentials from environment variables first, automatic check, no need to ask user.**
 
 **Decision Logic:**
 
-| Credential Status | Connectivity | Next Step |
-|------------------|--------------|-----------|
-| ✅ Exists | ✅ Connected | Go directly to Step 3 (select operation) |
-| ✅ Exists | ❌ Failed | Prompt credentials expired, ask if reconfigure |
-| ❌ Not exists | - | Go to Step 2 (configure credentials) |
+| Credential Status | Next Step |
+|------------------|-----------|
+| ✅ HW_ACCESS_KEY + HW_SECRET_KEY + HW_SECURITY_TOKEN exist | Execute script directly (temporary credentials, pass --ak --sk --security-token parameters) |
+| ✅ HW_ACCESS_KEY + HW_SECRET_KEY exist (no Token) | Execute script directly (long-term credentials, pass --ak --sk parameters) |
+| ❌ Environment variables not found | Go to Step 2 (ask user for credentials) |
+| ❌ Authentication failed | Go to Step 2 (ask user for credentials) |
+
+**⚠️ Important Rules:**
+
+1. **Prefer temporary credentials**: If HW_SECURITY_TOKEN exists in environment variables, it indicates temporary AK/SK, use it first
+2. **Cannot ask for permanent credentials when Token exists**: If HW_SECURITY_TOKEN exists but authentication fails, inform user that temporary credentials have expired and need to be re-obtained. **Do NOT ask user for permanent AK/SK**
+3. **Only ask when authentication fails**: Only ask user for credentials when environment variables don't exist or authentication fails
 
 ### Step 2: Configure Credentials (Only When Needed)
 
 **Only ask user in the following situations:**
-- Environment variables don't exist
-- Credentials have expired
+- Environment variables don't exist (HW_ACCESS_KEY, HW_SECRET_KEY)
+- Environment variables exist but authentication fails
+
+**⚠️ Important: If HW_SECURITY_TOKEN environment variable exists, it means user is using temporary credential system. Do NOT ask user for permanent AK/SK. Instead, inform user that temporary credentials have expired and need to be re-obtained.**
 
 Ask user for:
 - **AK (Access Key)**: Huawei Cloud access key
 - **SK (Secret Key)**: Huawei Cloud secret key
+- **Security Token**: (Optional) Temporary credential token
 
 **After successful configuration, tell user:**
 
@@ -236,7 +246,7 @@ What operation would you like to perform?
 **⚠️ Instance Validation (When user provides instance ID/name):**
 
 ```bash
-python3 {baseDir}/scripts/query_instances.py free-resources
+python3 {baseDir}/scripts/query_instances.py free-resources --ak "$HW_ACCESS_KEY" --sk "$HW_SECRET_KEY" [--security-token "$HW_SECURITY_TOKEN"]
 ```
 
 - ✅ Found in list → Proceed with operation
@@ -254,12 +264,12 @@ If user hasn't specified a server ID to operate on, guide user to query all inst
 
 **Query all instances across regions:**
 ```bash
-python3 {baseDir}/scripts/query_instances.py list
+python3 {baseDir}/scripts/query_instances.py list --ak "$HW_ACCESS_KEY" --sk "$HW_SECRET_KEY" [--security-token "$HW_SECURITY_TOKEN"]
 ```
 
 **Query instances in specific region:**
 ```bash
-python3 {baseDir}/scripts/query_instances.py list --region cn-north-4
+python3 {baseDir}/scripts/query_instances.py list --region cn-north-4 --ak "$HW_ACCESS_KEY" --sk "$HW_SECRET_KEY" [--security-token "$HW_SECURITY_TOKEN"]
 ```
 
 #### 4.2 Query Instance Details
@@ -269,7 +279,7 @@ python3 {baseDir}/scripts/query_instances.py list --region cn-north-4
 - Region code (optional, default cn-north-4)
 
 ```bash
-python3 {baseDir}/scripts/query_instances.py detail --instance-id <ID> --region cn-north-4
+python3 {baseDir}/scripts/query_instances.py detail --instance-id <ID> --region cn-north-4 --ak "$HW_ACCESS_KEY" --sk "$HW_SECRET_KEY" [--security-token "$HW_SECURITY_TOKEN"]
 ```
 
 **⚠️ Error Handling:** If query fails with "server not found" and user didn't specify region, tell user to check region, instance type, and ID.
@@ -281,7 +291,7 @@ python3 {baseDir}/scripts/query_instances.py detail --instance-id <ID> --region 
 - Region code (optional, default cn-north-4)
 
 ```bash
-python3 {baseDir}/scripts/lifecycle.py start --instance-id <ID1> --instance-id <ID2> --region cn-north-4
+python3 {baseDir}/scripts/lifecycle.py start --instance-id <ID1> --instance-id <ID2> --region cn-north-4 --ak "$HW_ACCESS_KEY" --sk "$HW_SECRET_KEY" [--security-token "$HW_SECURITY_TOKEN"]
 ```
 
 #### 4.4 Batch Stop
@@ -300,7 +310,7 @@ python3 {baseDir}/scripts/lifecycle.py start --instance-id <ID1> --instance-id <
 - Only execute after user replies "confirm stop"
 
 ```bash
-python3 {baseDir}/scripts/lifecycle.py stop --instance-id <ID1> --instance-id <ID2> --region cn-north-4
+python3 {baseDir}/scripts/lifecycle.py stop --instance-id <ID1> --instance-id <ID2> --region cn-north-4 --ak "$HW_ACCESS_KEY" --sk "$HW_SECRET_KEY" [--security-token "$HW_SECURITY_TOKEN"]
 ```
 
 #### 4.5 Batch Reboot
@@ -320,8 +330,9 @@ python3 {baseDir}/scripts/lifecycle.py stop --instance-id <ID1> --instance-id <I
 - Only execute after user replies "confirm reboot"
 
 ```bash
-python3 {baseDir}/scripts/lifecycle.py reboot --instance-id <ID1> --instance-id <ID2> --region cn-north-4
+python3 {baseDir}/scripts/lifecycle.py reboot --instance-id <ID1> --instance-id <ID2> --region cn-north-4 --ak "$HW_ACCESS_KEY" --sk "$HW_SECRET_KEY" [--security-token "$HW_SECURITY_TOKEN"]
 ```
+
 #### 4.6 Reset Password
 
 **Required Parameters:**
@@ -334,7 +345,7 @@ python3 {baseDir}/scripts/lifecycle.py reboot --instance-id <ID1> --instance-id 
 - Region code (optional, default cn-north-4)
 
 ```bash
-python3 {baseDir}/scripts/password_unified.py reset --instance-id <ID> --password <new_password> --region cn-north-4
+python3 {baseDir}/scripts/password_unified.py reset --instance-id <ID> --password <new_password> --region cn-north-4 --ak "$HW_ACCESS_KEY" --sk "$HW_SECRET_KEY" [--security-token "$HW_SECURITY_TOKEN"]
 ```
 
 #### 4.7 Modify Instance Information
@@ -348,7 +359,7 @@ python3 {baseDir}/scripts/password_unified.py reset --instance-id <ID> --passwor
   - hostname: Hostname (1-64 characters)
 
 ```bash
-python3 {baseDir}/scripts/update_server.py --instance-id <ID> --name "new_name" --region cn-north-4
+python3 {baseDir}/scripts/update_server.py --instance-id <ID> --name "new_name" --region cn-north-4 --ak "$HW_ACCESS_KEY" --sk "$HW_SECRET_KEY" [--security-token "$HW_SECURITY_TOKEN"]
 ```
 
 #### 4.8 Query Traffic Package
@@ -361,7 +372,7 @@ python3 {baseDir}/scripts/update_server.py --instance-id <ID> --name "new_name" 
 **⚠️ Special Note: Traffic package query uses Beijing-1 region (cn-north-1) by default, traffic package ID can be from any region**
 
 ```bash
-python3 {baseDir}/scripts/query_instances.py traffic <traffic_id_1> <traffic_id_2>
+python3 {baseDir}/scripts/query_instances.py traffic <traffic_id_1> <traffic_id_2> --ak "$HW_ACCESS_KEY" --sk "$HW_SECRET_KEY" [--security-token "$HW_SECURITY_TOKEN"]
 ```
 
 **Option 2: Query by Region ⭐ Recommended**
@@ -370,7 +381,7 @@ python3 {baseDir}/scripts/query_instances.py traffic <traffic_id_1> <traffic_id_
 - Target region (required)
 
 ```bash
-python3 {baseDir}/scripts/query_instances.py traffic-region --target-region cn-east-3
+python3 {baseDir}/scripts/query_instances.py traffic-region --target-region cn-east-3 --ak "$HW_ACCESS_KEY" --sk "$HW_SECRET_KEY" [--security-token "$HW_SECURITY_TOKEN"]
 ```
 
 ### Finding Server ID
@@ -402,7 +413,7 @@ Would you like me to list all instances under your account? I can query directly
 **If user agrees, execute list all instances:**
 
 ```bash
-python3 {baseDir}/scripts/query_instances.py list
+python3 {baseDir}/scripts/query_instances.py list --ak "$HW_ACCESS_KEY" --sk "$HW_SECRET_KEY" [--security-token "$HW_SECURITY_TOKEN"]
 ```
 
 ## Region Support
@@ -424,13 +435,14 @@ This skill supports automatic region name conversion, can use Chinese names or E
 
 ```bash
 # Use region code
-python3 {baseDir}/scripts/query_instances.py list --region cn-north-4
+python3 {baseDir}/scripts/query_instances.py list --region cn-north-4 --ak "$HW_ACCESS_KEY" --sk "$HW_SECRET_KEY" [--security-token "$HW_SECURITY_TOKEN"]
 
 # Use region name (auto-convert)
-python3 {baseDir}/scripts/query_instances.py list --region "North-China-Beijing4"
-python3 {baseDir}/scripts/query_instances.py list --region "Beijing4"
-python3 {baseDir}/scripts/query_instances.py list -r "Guangzhou"
+python3 {baseDir}/scripts/query_instances.py list --region "North-China-Beijing4" --ak "$HW_ACCESS_KEY" --sk "$HW_SECRET_KEY" [--security-token "$HW_SECURITY_TOKEN"]
+python3 {baseDir}/scripts/query_instances.py list --region "Beijing4" --ak "$HW_ACCESS_KEY" --sk "$HW_SECRET_KEY" [--security-token "$HW_SECURITY_TOKEN"]
+python3 {baseDir}/scripts/query_instances.py list --region "Guangzhou" --ak "$HW_ACCESS_KEY" --sk "$HW_SECRET_KEY" [--security-token "$HW_SECURITY_TOKEN"]
 ```
+
 ### Traffic Package Query Special Note
 
 **⚠️ Traffic package query uses Beijing-1 region (cn-north-1) by default**
@@ -444,7 +456,7 @@ python3 {baseDir}/scripts/query_instances.py list -r "Guangzhou"
 - Instance ID is the cloud host ID corresponding to Flexus L instance
 - Region defaults to cn-north-4 (Beijing 4)
 - **AK/SK Security Requirements**:
-  - ✅ Must be stored via environment variables
+  - ✅ Must be stored via environment variables (HW_ACCESS_KEY, HW_SECRET_KEY, HW_SECURITY_TOKEN)
   - ❌ Do not store in any configuration files
 - **Stop/Reboot Security Requirements**:
   - ✅ **Must confirm twice** - No direct execution without user confirmation
