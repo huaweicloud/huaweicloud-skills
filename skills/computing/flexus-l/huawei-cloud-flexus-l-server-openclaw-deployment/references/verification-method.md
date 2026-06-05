@@ -73,7 +73,7 @@ python scripts/caller.py maas --resource-id <instance_id> --region-id cn-north-4
 **Verification Commands:**
 ```bash
 # Install channel
-python scripts/caller.py channel --resource-id <instance_id> --region-id cn-north-4 --channel-list '[{"channel":"wecom","account_id":"bot-xxx","bot_name":"bot-xxx","id":"xxx","secret":"xxx"}]' --ak <AK> --sk <SK> --non-interactive
+python scripts/caller.py channel --resource-id <instance_id> --region-id cn-north-4 --channel-list '[{"channel":"wecom","id":"xxx","secret":"xxx"}]' --ak <AK> --sk <SK> --non-interactive
 ```
 
 **Expected Results:**
