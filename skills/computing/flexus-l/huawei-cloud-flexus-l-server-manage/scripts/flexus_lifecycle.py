@@ -290,6 +290,8 @@ def get_project_id_by_region(ak: str, sk: str, security_token: Optional[str], re
             "Content-Type": "application/json",
             "Client-Request-Id": str(uuid.uuid4())
         }
+        if security_token:
+            request.header_params["X-Security-Token"] = security_token
         request.query_params = []
         
         signed_request = signer.sign(request)
@@ -435,17 +437,21 @@ def create_flexus_l_instance(
         
         body_json = json.dumps(request_body, ensure_ascii=False)
         
+        header_params = {
+            "X-Project-Id": project_id,
+            "Content-Type": "application/json",
+            "Client-Request-Id": str(uuid.uuid4())
+        }
+        if security_token:
+            header_params["X-Security-Token"] = security_token
+        
         request = SdkRequest(
             method="POST",
             schema=parsed_url.scheme,
             host=parsed_url.netloc,
             resource_path=parsed_url.path,
             query_params=[],
-            header_params={
-                "X-Project-Id": project_id,
-                "Content-Type": "application/json",
-                "Client-Request-Id": str(uuid.uuid4())
-            },
+            header_params=header_params,
             body=body_json
         )
         
@@ -778,8 +784,9 @@ def main():
             sk = args.sk or os.environ.get("HW_SECRET_KEY")
             security_token = args.security_token or os.environ.get("HW_SECURITY_TOKEN")
             
-            if not ak or not sk or not security_token:
-                print("Error: --ak, --sk, and --security-token are required (or set HW_ACCESS_KEY, HW_SECRET_KEY, and HW_SECURITY_TOKEN env vars)")
+            if not ak or not sk:
+                print("Error: --ak and --sk are required (or set HW_ACCESS_KEY and HW_SECRET_KEY env vars)")
+                print("Note: --security-token is recommended for temporary credentials")
                 return
             
             supported, reason = is_region_supported(args.region)
@@ -858,8 +865,9 @@ def main():
             sk = args.sk or os.environ.get("HW_SECRET_KEY")
             security_token = args.security_token or os.environ.get("HW_SECURITY_TOKEN")
             
-            if not ak or not sk or not security_token:
-                print("Error: --ak, --sk, and --security-token are required (or set HW_ACCESS_KEY, HW_SECRET_KEY, and HW_SECURITY_TOKEN env vars)")
+            if not ak or not sk:
+                print("Error: --ak and --sk are required (or set HW_ACCESS_KEY and HW_SECRET_KEY env vars)")
+                print("Note: --security-token is recommended for temporary credentials")
                 return
             
             resource_ids = [rid.strip() for rid in args.resource_ids.split(",")]
@@ -895,8 +903,9 @@ def main():
             sk = args.sk or os.environ.get("HW_SECRET_KEY")
             security_token = args.security_token or os.environ.get("HW_SECURITY_TOKEN")
             
-            if not ak or not sk or not security_token:
-                print("Error: --ak, --sk, and --security-token are required (or set HW_ACCESS_KEY, HW_SECRET_KEY, and HW_SECURITY_TOKEN env vars)")
+            if not ak or not sk:
+                print("Error: --ak and --sk are required (or set HW_ACCESS_KEY and HW_SECRET_KEY env vars)")
+                print("Note: --security-token is recommended for temporary credentials")
                 return
             
             resource_ids = [rid.strip() for rid in args.resource_ids.split(",")]
