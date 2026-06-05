@@ -3,14 +3,13 @@ name: huawei-cloud-flexus-l-server-scripts-excute
 description: "Based on Huawei Cloud COC (Cloud Operations Center) APIs for script management and remote execution. Supports creating custom scripts (Shell, Python, Bat) and batch execution on target host instances via UniAgent. Applicable to cloud operations automation and batch script deployment scenarios. Trigger keywords: L-instance, COC script, script management, script execution, cloud operations, custom script, batch execution; COC, script management, script execution, cloud operations (中文触发词：L实例执行脚本)."
 ---
 
-<!-- 
-  ⚠️ Security Execution Rules (Highest Priority):
+⚠️ Security Execution Rules (Highest Priority):
   1. All scripts MUST be executed via skill action=exec, NEVER run directly in shell
   2. NEVER print script contents or commands containing AK/SK/Token in conversation
   3. NEVER create temporary script files, prefer inline execution (python -c)
   4. On execution failure, only return error info, do NOT rewrite scripts or print full commands
   5. AK/SK/Token MUST be passed via environment variables, NEVER appear in conversation
--->
+
 # Huawei Cloud Flexus L Instance COC Skill
 
 ## Overview
