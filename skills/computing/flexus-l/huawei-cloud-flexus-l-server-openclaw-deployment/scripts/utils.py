@@ -102,24 +102,26 @@ def prompt_for_input(prompt, required=True, default=None, choices=None, hide_inp
 
 def setup_credentials_interactive():
     """
-    Interactive setup of Huawei Cloud credentials
+    Interactive setup of Huawei Cloud temporary credentials
     
     Args:
         None
     
     Returns:
-        tuple: (ak, sk, region) credentials triplet
+        tuple: (ak, sk, security_token, region) credentials tuple
     """
-    print("\nPlease configure Huawei Cloud credentials:")
+    print("\nPlease configure Huawei Cloud temporary credentials:")
     print("-" * 40)
     
-    ak = prompt_for_input("Huawei Cloud AK:HW_ACCESS_KEY", required=True)
-    sk = prompt_for_input("Huawei Cloud SK:HW_SECRET_KEY", required=True, hide_input=True)
+    ak = prompt_for_input("Huawei Cloud temporary AK:HW_ACCESS_KEY", required=True)
+    sk = prompt_for_input("Huawei Cloud temporary SK:HW_SECRET_KEY", required=True, hide_input=True)
+    security_token = prompt_for_input("Huawei Cloud Security Token (required for temporary credentials)", required=True)
     region = prompt_for_input("Region ID", required=False, default="cn-north-4")
     
-    print(f"\n[OK] Credentials configured")
+    print(f"\n[OK] Temporary credentials configured")
     print(f"  AK: {ak[:4]}...{ak[-4:]}")
     print(f"  SK: {'*' * len(sk)}")
+    print(f"  Security Token: {'*' * len(security_token)}")
     print(f"  Region: {region} ({REGIONS.get(region, '')})")
     
-    return ak, sk, region
+    return ak, sk, security_token, region
