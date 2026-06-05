@@ -1,0 +1,11 @@
+[project]
+name = "huawei-cloud-flexus-l-server-scripts-excute"
+version = "1.0.0"
+dependencies = [
+    "huaweicloudsdkcore>=3.1.0",
+    "huaweicloudsdkcoc>=3.1.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

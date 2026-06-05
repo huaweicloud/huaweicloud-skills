@@ -1,0 +1,22 @@
+apiversion: modelslim_v1
+
+spec:
+  process:
+    - type: "linear_quant"
+      qconfig:
+        act:
+          scope: "per_tensor"   # static
+          dtype: "int8"
+          symmetric: False
+          method: "minmax"
+        weight:
+          scope: "per_channel"
+          dtype: "int8"
+          symmetric: True
+          method: "minmax"
+      include: ["*"]            # allModelQuantization
+      exclude: []               # notFallback
+
+  save:
+    - type: "ascendv1_saver"
+      part_file_size: 4

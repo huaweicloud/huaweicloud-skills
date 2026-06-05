@@ -1,0 +1,24 @@
+# Python dependencies for skill-cloud-native-compliance
+# Target: Python 3.6 (compatible with 3.7/3.8/3.9+)
+#
+# ─── Install ─────────────────────────────────────────────
+# Python 3.6 用户必读：先升级 pip（旧 pip 不识别新版 manylinux wheel 标签）
+#
+#   pip3 install --user --upgrade 'pip<22'
+#   python3 -m pip install --user -r requirements.txt
+#
+# Python 3.8+ 用户直接：
+#
+#   pip3 install -r requirements.txt
+#
+# ─── 依赖清单（最小集） ───────────────────────────────────
+# 当前 scripts/ 只用到 2 个第三方包：
+#   - openpyxl: 读 references/cloud-native-checklist.xlsx + 写 artifacts/cloud-native-summary.xlsx
+#   - huaweicloudsdkcore: 华为云 API AK/SK 签名（collect_all.py）
+#
+# 图表与报告均由纯 stdlib 实现：
+#   - make_charts.py     → 纯 Python 字符串拼 SVG，无 matplotlib/numpy/Pillow
+#   - make_report_html.py → 内联 SVG + CSS font-family，无 ReportLab，无 TTF 依赖
+
+openpyxl>=3.0,<4
+huaweicloudsdkcore>=3.1

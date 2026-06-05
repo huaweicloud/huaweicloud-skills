@@ -378,14 +378,15 @@ huawei-cloud-flexus-l-deploy-jiuwenSwarm/
 pip install -r requirements.txt
 
 # Configure Huawei Cloud credentials (permanent credentials)
-export HUAWEICLOUD_SDK_AK="your_access_key"
-export HUAWEICLOUD_SDK_SK="your_secret_key"
-export HUAWEICLOUD_REGION="cn-north-4"
+# Credentials must be set via environment variables before running the skill
+# export HUAWEICLOUD_SDK_AK=<your-access-key>
+# export HUAWEICLOUD_SDK_SK=<your-secret-key>
+# export HUAWEICLOUD_REGION="cn-north-4"
 
 # OR use temporary security credentials (STS token) - add SECURITY_TOKEN
-# export HUAWEICLOUD_SDK_AK="your_temp_access_key"
-# export HUAWEICLOUD_SDK_SK="your_temp_secret_key"
-# export HUAWEICLOUD_SDK_SECURITY_TOKEN="your_security_token"
+# export HUAWEICLOUD_SDK_AK=<your-temp-access-key>
+# export HUAWEICLOUD_SDK_SK=<your-temp-secret-key>
+# export HUAWEICLOUD_SDK_SECURITY_TOKEN=<your-security-token>
 # export HUAWEICLOUD_REGION="cn-north-4"
 ```
 
@@ -482,23 +483,23 @@ Web UI access requires manual security group configuration in Huawei Cloud Conso
 ## Huawei Cloud Credential Configuration
 
 ### Permanent Credentials
-```bash
-# Environment variable method (recommended)
-export HUAWEICLOUD_SDK_AK="your_access_key"
-export HUAWEICLOUD_SDK_SK="your_secret_key"
-export HUAWEICLOUD_REGION="cn-north-4"
-```
+Credentials must be set via environment variables before running the skill.
+
+| Environment Variable | Description | Required |
+|---------------------|-------------|----------|
+| `HUAWEICLOUD_SDK_AK` | Huawei Cloud Access Key | Yes |
+| `HUAWEICLOUD_SDK_SK` | Huawei Cloud Secret Key | Yes |
+| `HUAWEICLOUD_REGION` | Huawei Cloud Region (default: cn-north-4) | Yes |
 
 ### Temporary Security Credentials (STS Token)
-The skill supports temporary security credentials. Temporary credentials are permanent credentials with an additional `HUAWEICLOUD_SDK_SECURITY_TOKEN`.
+The skill supports temporary security credentials. Temporary credentials require an additional `HUAWEICLOUD_SDK_SECURITY_TOKEN` environment variable.
 
-```bash
-# Temporary security credentials (STS token)
-export HUAWEICLOUD_SDK_AK="your_temp_access_key"
-export HUAWEICLOUD_SDK_SK="your_temp_secret_key"
-export HUAWEICLOUD_SDK_SECURITY_TOKEN="your_security_token"
-export HUAWEICLOUD_REGION="cn-north-4"
-```
+| Environment Variable | Description | Required |
+|---------------------|-------------|----------|
+| `HUAWEICLOUD_SDK_AK` | Temporary Access Key | Yes |
+| `HUAWEICLOUD_SDK_SK` | Temporary Secret Key | Yes |
+| `HUAWEICLOUD_SDK_SECURITY_TOKEN` | Security Token | Yes |
+| `HUAWEICLOUD_REGION` | Huawei Cloud Region (default: cn-north-4) | Yes |
 
 **Credential Concept**:
 - **Permanent credentials**: AK + SK + REGION
