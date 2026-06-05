@@ -2,6 +2,9 @@
 # coding: utf-8
 """
 Huawei Cloud Flexus L Instance One-Click Hermes Deployment - Channel Installation Module
+
+Note: This module only supports temporary credentials (temporary AK/SK + security_token).
+      Permanent AK/SK credentials are not supported.
 """
 
 import os
