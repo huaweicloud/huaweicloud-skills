@@ -103,13 +103,28 @@ def do_install_channel(args):
     
     if not channel_list:
         print("\nChannel list format example:")
-        print('  [{"channel":"wecom","account_id":"xxx"},{"channel":"feishu","app_id":"yyy"}]')
+        print('  [{"channel":"wecom","id":"xxx","secret":"xxx"}]')
+        print("\nChannel JSON object fields:")
+        print("  - channel: Channel type (required): 'wecom', 'feishu', 'dingtalk', 'qqbot'")
+        print("  - id: Bot ID/APP ID/Client ID (required)")
+        print("  - secret: Bot secret/APP secret/Client secret (required)")
+        print("  - account_id: Bot account ID (optional, auto-generated as 'bot-{timestamp}' if not provided)")
+        print("  - bot_name: Bot name (optional, auto-generated as 'bot-{4-random-letters}' if not provided)")
         channel_list = prompt_for_input("Channel configuration JSON (optional, press Enter to skip)", required=False)
     
     def normalize_json_string(input_str):
         """
         Automatically convert non-standard JSON (no quotes/single quotes) to standard double-quoted JSON
-        Supports array format: [{key:val}, {key:val}]
+        
+        Args:
+            input_str: Input JSON string, can be non-standard format without quotes
+        
+        Returns:
+            str: Standard JSON string with double quotes
+        
+        Examples:
+            Input: [{key:val}, {key:val}]
+            Output: [{"key":"val"}, {"key":"val"}]
         """
         if not input_str or input_str.strip() == "":
             return ""

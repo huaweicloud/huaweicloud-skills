@@ -107,8 +107,16 @@ def do_install_maas(args):
     def normalize_json_string(input_str):
         """
         Convert non-standard JSON string (no quotes/single quotes) to standard double-quoted JSON format
-        Input example: {provider:huawei,api_key:your_maas_api_key,model_ids:[deepseek-v3.2]}
-        Output example: {"provider":"huawei","api_key":"your_maas_api_key","model_ids":["deepseek-v3.2"]}
+        
+        Args:
+            input_str: Input JSON string, can be non-standard format without quotes
+        
+        Returns:
+            str: Standard JSON string with double quotes
+        
+        Examples:
+            Input: {provider:huawei,api_key:your_maas_api_key,model_ids:[deepseek-v3.2]}
+            Output: {"provider":"huawei","api_key":"your_maas_api_key","model_ids":["deepseek-v3.2"]}
         """
         if not input_str or input_str.strip() == "":
             return ""
