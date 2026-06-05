@@ -4,7 +4,7 @@
 Huawei Cloud COC Script Management Library
 
 Manages COC scripts using Huawei Cloud SDK, supporting script creation and execution.
-AK/SK are passed as parameters: ak, sk, region
+AK/SK/Security Token are passed as parameters: ak, sk, security_token, region
 """
 
 import logging
@@ -23,7 +23,7 @@ from huaweicloudsdkcoc.v1.model.add_script_model import AddScriptModel
 
 logger = logging.getLogger(__name__)
 
-# 常量定义
+# Constants
 VALID_SCRIPT_TYPES = ["SHELL", "PYTHON", "BAT"]
 VALID_RISK_LEVELS = ["LOW", "MEDIUM", "HIGH"]
 VALID_ROTATION_STRATEGIES = ["CONTINUE", "STOP"]
@@ -40,13 +40,14 @@ def get_valid_coc_regions() -> list[str]:
     return list(CocRegion.static_fields.keys())
 
 
-def get_client(ak: str, sk: str, region: str = "cn-north-4") -> CocClient:
+def get_client(ak: str, sk: str, security_token: str, region: str = "cn-north-4") -> CocClient:
     """
     Create and return a COC client.
 
     Args:
         ak: Huawei Cloud Access Key
         sk: Huawei Cloud Secret Key
+        security_token: Temporary security token for STS authentication (optional)
         region: COC service region, default cn-north-4
 
     Returns:
@@ -64,7 +65,11 @@ def get_client(ak: str, sk: str, region: str = "cn-north-4") -> CocClient:
     if region not in valid_regions:
         raise ValueError(f"region must be one of {valid_regions}")
 
-    credentials = GlobalCredentials(ak, sk)
+    # Determine authentication method based on security_token presence
+    if security_token:
+        credentials = GlobalCredentials(ak, sk).with_security_token(security_token)
+    else:
+        credentials = GlobalCredentials(ak, sk)
 
     client = CocClient.new_builder() \
         .with_credentials(credentials) \
@@ -81,6 +86,7 @@ def create_script(
     description: str,
     ak: str,
     sk: str,
+    security_token: str,
     region: str = "cn-north-4",
     risk_level: str = "LOW",
     version: str = "1.0.0",
@@ -96,6 +102,7 @@ def create_script(
         description: Script description
         ak: Huawei Cloud Access Key
         sk: Huawei Cloud Secret Key
+        security_token: Temporary security token for STS authentication
         region: COC service region, default cn-north-4
         risk_level: Risk level (LOW/MEDIUM/HIGH), default LOW
         version: Script version, default 1.0.0
@@ -122,7 +129,7 @@ def create_script(
         return _error("INPUT_ERROR", f"risk_level must be one of {VALID_RISK_LEVELS}")
 
     try:
-        client = get_client(ak, sk, region)
+        client = get_client(ak, sk, security_token, region)
     except ValueError as e:
         return _error("CONFIG_ERROR", str(e))
 
@@ -164,6 +171,7 @@ def execute_script(
     target_instances: List[Dict[str, str]],
     ak: str,
     sk: str,
+    security_token: str,
     region: str = "cn-north-4",
     rotation_strategy: str = "CONTINUE",
 ) -> dict[str, Any]:
@@ -182,6 +190,7 @@ def execute_script(
             - type: Resource type (not required for ECS instances, default "L-INSTANCE" for L instances)
         ak: Huawei Cloud Access Key
         sk: Huawei Cloud Secret Key
+        security_token: Temporary security token for STS authentication
         region: COC service region, default cn-north-4
         rotation_strategy: Rotation strategy (CONTINUE/PAUSE), default CONTINUE
 
@@ -208,7 +217,7 @@ def execute_script(
         return _error("INPUT_ERROR", f"rotation_strategy must be one of {VALID_ROTATION_STRATEGIES}")
 
     try:
-        client = get_client(ak, sk, region)
+        client = get_client(ak, sk, security_token, region)
     except ValueError as e:
         return _error("CONFIG_ERROR", str(e))
 
@@ -274,7 +283,7 @@ def execute_script(
         return _error("UNKNOWN_ERROR", str(e))
 
 
-def get_script_detail(script_uuid: str, ak: str, sk: str, region: str = "cn-north-4") -> dict[str, Any]:
+def get_script_detail(script_uuid: str, ak: str, sk: str, security_token: str, region: str = "cn-north-4") -> dict[str, Any]:
     """
     Get script details.
 
@@ -282,6 +291,7 @@ def get_script_detail(script_uuid: str, ak: str, sk: str, region: str = "cn-nort
         script_uuid: Script UUID
         ak: Huawei Cloud Access Key
         sk: Huawei Cloud Secret Key
+        security_token: Temporary security token for STS authentication
         region: COC service region, default cn-north-4
 
     Returns:
@@ -305,7 +315,7 @@ def get_script_detail(script_uuid: str, ak: str, sk: str, region: str = "cn-nort
         return _error("INPUT_ERROR", "script_uuid is required")
 
     try:
-        client = get_client(ak, sk, region)
+        client = get_client(ak, sk, security_token, region)
     except ValueError as e:
         return _error("CONFIG_ERROR", str(e))
 
@@ -343,13 +353,14 @@ def get_script_detail(script_uuid: str, ak: str, sk: str, region: str = "cn-nort
         return _error("UNKNOWN_ERROR", str(e))
 
 
-def list_scripts(ak: str, sk: str, region: str = "cn-north-4", page: int = 1, limit: int = 10) -> dict[str, Any]:
+def list_scripts(ak: str, sk: str, security_token: str, region: str = "cn-north-4", page: int = 1, limit: int = 10) -> dict[str, Any]:
     """
     List scripts.
 
     Args:
         ak: Huawei Cloud Access Key
         sk: Huawei Cloud Secret Key
+        security_token: Temporary security token for STS authentication
         region: COC service region, default cn-north-4
         page: Page number (starting from 1)
         limit: Page size
@@ -366,7 +377,7 @@ def list_scripts(ak: str, sk: str, region: str = "cn-north-4", page: int = 1, li
         }
     """
     try:
-        client = get_client(ak, sk, region)
+        client = get_client(ak, sk, security_token, region)
     except ValueError as e:
         return _error("CONFIG_ERROR", str(e))
 
@@ -423,6 +434,7 @@ def get_script_job_batch(
     execute_uuid: str,
     ak: str,
     sk: str,
+    security_token: str
 ) -> dict[str, Any]:
     """
     Query script execution result by execute UUID.
@@ -433,6 +445,7 @@ def get_script_job_batch(
         execute_uuid: Execution UUID (format: SCTxxxxxxxxxxxxxxxbf)
         ak: Huawei Cloud Access Key
         sk: Huawei Cloud Secret Key
+        security_token: Temporary security token for STS authentication
 
     Returns:
         {
@@ -476,13 +489,13 @@ def get_script_job_batch(
     if not execute_uuid:
         return _error("INPUT_ERROR", "execute_uuid is required")
 
-    # 固定参数
+    # Fixed parameters
     region = "cn-north-4"
     batch_index = 1
     limit = 50
 
     try:
-        client = get_client(ak, sk, region)
+        client = get_client(ak, sk, security_token, region)
     except ValueError as e:
         return _error("CONFIG_ERROR", str(e))
 
@@ -580,7 +593,7 @@ def get_script_job_batch(
 
 
 def _error(code: str, message: str) -> dict:
-    """创建错误响应。"""
+    """Create error response."""
     return {
         "ok": False,
         "text": "",

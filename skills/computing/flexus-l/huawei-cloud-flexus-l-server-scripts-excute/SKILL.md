@@ -42,6 +42,10 @@ User/Agent    │──────▶│   COC API   │──────▶�
 
 **Routing Keywords**: COC script, script management, script execution, cloud operations, custom script, batch execution; COC, script management, script execution, cloud operations.
 
+### Important Notes
+
+**All scripts and environment check scripts are inside the skill package. You must use skill action=exec to execute them; do not run them directly in the shell.**
+
 ## Prerequisites
 
 ### CLI Version Requirements and Verification Commands
@@ -61,16 +65,49 @@ python -c "from huaweicloudsdkcoc.v1 import CocClient; print('COC SDK version ve
 
 **Supported Authentication Methods**:
 
-1. **Command Line Parameters** (Recommended):
+1. **Environment Variables** (Highest Priority):
 ```bash
-python {baseDir}/scripts/caller.py create --ak "your_access_key" --sk "your_secret_key" --region "cn-north-4"
+# Set environment variables
+export HW_ACCESS_KEY="your_access_key"
+export HW_SECRET_KEY="your_secret_key"
+export HW_SECURITY_TOKEN="your_security_token"  # Optional, for temporary credentials
+export HW_REGION="cn-north-4"  # Optional, default is cn-north-4
+
+# Execute script directly (will automatically use environment variables)
+python {baseDir}/scripts/caller.py create --name "test_script" --type SHELL --content "echo hello" --description "Test script"
 ```
 
-2. **Interactive Input** (Testing):
+2. **Command Line Parameters**:
+```bash
+# Using permanent AK/SK
+python {baseDir}/scripts/caller.py create --ak "your_access_key" --sk "your_secret_key" --region "cn-north-4" --name "test_script" --type SHELL --content "echo hello" --description "Test script"
+
+# Using temporary AK/SK with security-token
+python {baseDir}/scripts/caller.py create --ak "temporary_ak" --sk "temporary_sk" --security-token "your_security_token" --region "cn-north-4" --name "test_script" --type SHELL --content "echo hello" --description "Test script"
+```
+
+3. **Interactive Input** (Testing):
 ```bash
 python {baseDir}/scripts/caller.py create
 # Will prompt for AK/SK/region
 ```
+
+**Authentication Parameter Description**:
+
+| Parameter | Description | Required | Default | Example |
+|-----------|-------------|----------|---------|---------|
+| --ak | Huawei Cloud Access Key AK (can be temporary AK) | Yes* | Prompted | `--ak AXXX...` |
+| --sk | Huawei Cloud Access Key SK (can be temporary SK) | Yes* | Prompted | `--sk SXXX...` |
+| --security-token | Security token for temporary credentials (required when using temporary AK/SK) | No | Prompted | `--security-token XXXX...` |
+| --region | COC Service Region | No | cn-north-4 | `--region cn-north-4` |
+
+**Note**: Parameters marked with * can be provided via environment variables (`HW_ACCESS_KEY`, `HW_SECRET_KEY`, `HW_SECURITY_TOKEN`, `HW_REGION`). If environment variables are set, they take priority over command line parameters.
+
+**Authentication Priority**:
+1. First check environment variables: `HW_ACCESS_KEY`, `HW_SECRET_KEY`, `HW_SECURITY_TOKEN`, `HW_REGION`
+2. If all required environment variables are set, use them directly
+3. If environment variables are not set, use command line parameters
+4. If neither is provided, prompt for interactive input
 
 **Security Rules**:
 - **No Hardcoded Credentials**: Never embed AK/SK directly in code or configuration files
@@ -126,29 +163,73 @@ python {baseDir}/scripts/caller.py list
 
 ### Script Management Commands
 
-**Create Script**: `python {baseDir}/scripts/caller.py create --ak "your_ak" --sk "your_sk" --name "backup_script" --type SHELL --content "echo 'Backup completed'" --description "Data backup script"`
+**Create Script**:
+```bash
+# Using permanent AK/SK
+python {baseDir}/scripts/caller.py create --ak "your_ak" --sk "your_sk" --name "backup_script" --type SHELL --content "echo 'Backup completed'" --description "Data backup script"
 
-**View Script Details**: `python {baseDir}/scripts/caller.py show --ak "your_ak" --sk "your_sk" --script-uuid "SC202xxxxxxxx13701c4a8a62"`
+# Using temporary AK/SK with security-token
+python {baseDir}/scripts/caller.py create --ak "temporary_ak" --sk "temporary_sk" --security-token "your_security_token" --name "backup_script" --type SHELL --content "echo 'Backup completed'" --description "Data backup script"
+```
 
-**List Scripts**: `python {baseDir}/scripts/caller.py list --ak "your_ak" --sk "your_sk" --page 1 --size 10`
+**View Script Details**:
+```bash
+# Using permanent AK/SK
+python {baseDir}/scripts/caller.py show --ak "your_ak" --sk "your_sk" --script-uuid "SC202xxxxxxxx13701c4a8a62"
+
+# Using temporary AK/SK with security-token
+python {baseDir}/scripts/caller.py show --ak "temporary_ak" --sk "temporary_sk" --security-token "your_security_token" --script-uuid "SC202xxxxxxxx13701c4a8a62"
+```
+
+**List Scripts**:
+```bash
+# Using permanent AK/SK
+python {baseDir}/scripts/caller.py list --ak "your_ak" --sk "your_sk" --page 1 --size 10
+
+# Using temporary AK/SK with security-token
+python {baseDir}/scripts/caller.py list --ak "temporary_ak" --sk "temporary_sk" --security-token "your_security_token" --page 1 --size 10
+```
 
 ### Script Execution Commands
 
-**Execute Script**: `python {baseDir}/scripts/caller.py execute --ak "your_ak" --sk "your_sk" --script-uuid "SC202xxxxxxxx13701c4a8a62" --execute-user root --timeout 300`
+**Execute Script**:
+```bash
+# Using permanent AK/SK
+python {baseDir}/scripts/caller.py execute --ak "your_ak" --sk "your_sk" --script-uuid "SC202xxxxxxxx13701c4a8a62" --execute-user root --timeout 300
+
+# Using temporary AK/SK with security-token
+python {baseDir}/scripts/caller.py execute --ak "temporary_ak" --sk "temporary_sk" --security-token "your_security_token" --script-uuid "SC202xxxxxxxx13701c4a8a62" --execute-user root --timeout 300
+```
 
 **Interactive Execution**: `python {baseDir}/scripts/caller.py execute --ak "your_ak" --sk "your_sk"`
 
-**Query Execution Result**: `python {baseDir}/scripts/caller.py query --ak "your_ak" --sk "your_sk" --execute-uuid "SCT202xxxxxxxx01af694bf"`
+**Query Execution Result**:
+```bash
+# Using permanent AK/SK
+python {baseDir}/scripts/caller.py query --ak "your_ak" --sk "your_sk" --execute-uuid "SCT202xxxxxxxx01af694bf"
+
+# Using temporary AK/SK with security-token
+python {baseDir}/scripts/caller.py query --ak "temporary_ak" --sk "temporary_sk" --security-token "your_security_token" --execute-uuid "SCT202xxxxxxxx01af694bf"
+```
 
 ## Parameter Reference
 
 ### Global Parameters (All Commands)
 
-| Parameter | Description | Required | Default |
-|-----------|-------------|----------|---------|
-| --ak | Huawei Cloud Access Key | Yes | - |
-| --sk | Huawei Cloud Secret Key | Yes | - |
-| --region | COC Service Region | No | cn-north-4 |
+| Parameter | Description | Required | Default | Example |
+|-----------|-------------|----------|---------|---------|
+| --ak | Huawei Cloud Access Key AK (can be temporary AK) | Yes* | Prompted | `--ak AXXX...` |
+| --sk | Huawei Cloud Access Key SK (can be temporary SK) | Yes* | Prompted | `--sk SXXX...` |
+| --security-token | Security token for temporary credentials (required when using temporary AK/SK) | No | Prompted | `--security-token XXXX...` |
+| --region | COC Service Region | No | cn-north-4 | `--region cn-north-4` |
+
+**Note**: Parameters marked with * can be provided via environment variables:
+- `HW_ACCESS_KEY` - Huawei Cloud Access Key
+- `HW_SECRET_KEY` - Huawei Cloud Secret Key
+- `HW_SECURITY_TOKEN` - Temporary security token (optional)
+- `HW_REGION` - COC Service Region
+
+If environment variables are set, they take priority over command line parameters.
 
 ### create Command Parameters
 
@@ -219,7 +300,18 @@ python -c "from huaweicloudsdkcoc.v1 import CocClient; print('SDK installed succ
 
 ### Basic Workflow
 
-1. **Create a script**:
+1. **Create a script** (using environment variables):
+```bash
+# Set environment variables first
+export HW_ACCESS_KEY="your_ak"
+export HW_SECRET_KEY="your_sk"
+export HW_SECURITY_TOKEN="your_token"  # Optional
+
+# Execute command (will automatically use environment variables)
+python {baseDir}/scripts/caller.py create --name "test_script" --type SHELL --content "echo hello" --description "Test script"
+```
+
+Or using command line parameters:
 ```bash
 python {baseDir}/scripts/caller.py create --ak "your_ak" --sk "your_sk" --name "test_script" --type SHELL --content "echo hello" --description "Test script"
 ```

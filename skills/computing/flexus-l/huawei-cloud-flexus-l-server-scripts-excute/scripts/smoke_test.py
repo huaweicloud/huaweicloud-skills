@@ -4,7 +4,7 @@
 Huawei Cloud COC Skill Smoke Test
 
 Usage:
-    python smoke_test.py --ak "your_ak" --sk "your_sk" [--region "cn-north-4"]
+    python smoke_test.py --ak "your_ak" --sk "your_sk" --security_token "your_security_token" [--region "cn-north-4"]
 """
 
 import os
@@ -16,20 +16,21 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scripts.lib import create_script, execute_script, list_scripts, get_script_detail
 
 
-def test_credentials(ak, sk, region):
+def test_credentials(ak, sk, security_token, region):
     """Test credential configuration."""
     print(f"AK: {'✓' if ak else '✗'}")
     print(f"SK: {'✓' if sk else '✗'}")
+    print(f"Security Token: {'✓' if security_token else '✗'}")
     print(f"Region: {region}")
 
-    if not ak or not sk:
-        print("\nError: Please provide --ak and --sk parameters")
+    if not ak or not sk or not security_token:
+        print("\nError: Please provide --ak, --sk, and --security_token parameters")
         return False
 
     return True
 
 
-def test_create_script(ak, sk, region):
+def test_create_script(ak, sk, security_token, region):
     """Test script creation functionality."""
     print("\nTest: Create Script")
     print("-" * 40)
@@ -43,6 +44,7 @@ def test_create_script(ak, sk, region):
         description="Test script",
         ak=ak,
         sk=sk,
+        security_token=security_token,
         region=region,
         risk_level="LOW",
         version="1.0.0"
@@ -57,12 +59,12 @@ def test_create_script(ak, sk, region):
         return None
 
 
-def test_list_scripts(ak, sk, region):
+def test_list_scripts(ak, sk, security_token, region):
     """Test script listing functionality."""
     print("\nTest: List Scripts")
     print("-" * 40)
 
-    result = list_scripts(ak, sk, region, page=1, limit=5)
+    result = list_scripts(ak, sk, security_token, region, page=1, limit=5)
 
     if result.get("ok"):
         data = result.get("result", {})
@@ -77,7 +79,7 @@ def test_list_scripts(ak, sk, region):
         return False
 
 
-def test_execute_script(ak, sk, region, script_uuid):
+def test_execute_script(ak, sk, security_token, region, script_uuid):
     """Test script execution functionality."""
     print("\nTest: Execute Script")
     print("-" * 40)
@@ -99,6 +101,7 @@ def test_execute_script(ak, sk, region, script_uuid):
         target_instances=target_instances,
         ak=ak,
         sk=sk,
+        security_token=security_token,
         region=region
     )
 
@@ -115,6 +118,7 @@ def main():
     parser = argparse.ArgumentParser(description="Huawei Cloud COC Skill Smoke Test")
     parser.add_argument('--ak', required=True, help='Huawei Cloud Access Key')
     parser.add_argument('--sk', required=True, help='Huawei Cloud Secret Key')
+    parser.add_argument('--security_token', required=True, help='Temporary security token for STS authentication')
     parser.add_argument('--region', default='cn-north-4', help='COC service region')
     args = parser.parse_args()
 
@@ -124,22 +128,23 @@ def main():
 
     ak = args.ak
     sk = args.sk
+    security_token = args.security_token
     region = args.region
 
     # Test credentials
-    if not test_credentials(ak, sk, region):
+    if not test_credentials(ak, sk, security_token, region):
         return
 
     # Test list scripts
-    test_list_scripts(ak, sk, region)
+    test_list_scripts(ak, sk, security_token, region)
 
     # Test create script
-    script_uuid = test_create_script(ak, sk, region)
+    script_uuid = test_create_script(ak, sk, security_token, region)
     if not script_uuid:
         return
 
     # Test execute script (requires real instance, skipped by default)
-    # test_execute_script(ak, sk, region, script_uuid)
+    # test_execute_script(ak, sk, security_token, region, script_uuid)
 
     print("\n" + "=" * 60)
     print("Test completed!")

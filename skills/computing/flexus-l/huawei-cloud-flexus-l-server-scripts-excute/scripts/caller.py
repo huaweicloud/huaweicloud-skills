@@ -8,6 +8,7 @@ Manages COC scripts using Huawei Cloud SDK, supporting script creation and execu
 Parameters:
     --ak: Huawei Cloud Access Key (required)
     --sk: Huawei Cloud Secret Key (required)
+    --security_token: Temporary security token (optional, for temporary credentials)
     --region: Region (default: cn-north-4)
 
 Commands:
@@ -212,24 +213,26 @@ def prompt_for_input(prompt, required=True, default=None, choices=None, hide_inp
 
 def setup_credentials_interactive():
     """
-    Interactively set up AK/SK credentials (called only when needed)
+    Interactively set up AK/SK/Security Token credentials (called only when needed)
     
     Returns:
-        tuple: (ak, sk, region)
+        tuple: (ak, sk, security_token, region)
     """
     print("\nPlease configure Huawei Cloud credentials:")
     print("-" * 40)
     
     ak = prompt_for_input("Huawei Cloud AK", required=True)
     sk = prompt_for_input("Huawei Cloud SK", required=True, hide_input=True)
+    security_token = prompt_for_input("Huawei Cloud Security Token", required=False, hide_input=True)
     region = prompt_for_region("Enter COC service region ID", required=False, default="cn-north-4", is_coc_service=True)
     
     print(f"\n✓ Credentials configured successfully")
     print(f"  AK: {ak[:4]}...{ak[-4:]}")
     print(f"  SK: {'*' * len(sk)}")
+    print(f"  Security Token: {'*' * len(security_token)}")
     print(f"  Region: {region} ({get_coc_service_regions().get(region, REGIONS.get(region, ''))})")
     
-    return ak, sk, region
+    return ak, sk, security_token, region
 
 
 def do_create_script(args):
@@ -243,15 +246,16 @@ def do_create_script(args):
     # Get credential parameters
     ak = args.ak
     sk = args.sk
+    security_token = args.security_token
     region = args.region or "cn-north-4"
-    
+
     # If credentials not provided, prompt interactively
     if not ak or not sk:
         print("\nPlease provide Huawei Cloud credentials:")
-        ak, sk, region = setup_credentials_interactive()
-    
+        ak, sk, security_token, region = setup_credentials_interactive()
+
     print("\nPlease provide script information:")
-    
+
     # Get parameters for script creation
     name = args.name or prompt_for_input("Script name", required=True)
     script_type = args.type or prompt_for_input(
@@ -275,6 +279,7 @@ def do_create_script(args):
             description=description,
             ak=ak,
             sk=sk,
+            security_token=security_token,
             region=region,
             risk_level=risk_level,
             version=version
@@ -315,13 +320,14 @@ def do_execute_script(args):
     # Get credential parameters
     ak = args.ak
     sk = args.sk
+    security_token = args.security_token
     region = args.region or "cn-north-4"
-    
+
     # If credentials not provided, prompt interactively
     if not ak or not sk:
         print("\nPlease provide Huawei Cloud credentials:")
-        ak, sk, region = setup_credentials_interactive()
-    
+        ak, sk, security_token, region = setup_credentials_interactive()
+
     # Get target instance information (L instance only, required)
     print("\nPlease provide target L instance information (required):")
     
@@ -338,7 +344,7 @@ def do_execute_script(args):
     if not script_uuid:
         print("\nGetting most recently created script...")
         try:
-            list_result = list_scripts(ak, sk, region, limit=1)
+            list_result = list_scripts(ak, sk, security_token, region, limit=1)
             if list_result.get("ok") and list_result.get("result"):
                 scripts = list_result.get("result", {}).get("scripts", [])
                 if scripts:
@@ -381,6 +387,7 @@ def do_execute_script(args):
             target_instances=target_instances,
             ak=ak,
             sk=sk,
+            security_token=security_token,
             region=region,
             rotation_strategy=rotation_strategy
         )
@@ -408,22 +415,23 @@ def do_show_script(args):
     # Get credential parameters
     ak = args.ak
     sk = args.sk
+    security_token = args.security_token
     region = args.region or "cn-north-4"
     
     # If credentials not provided, prompt interactively
     if not ak or not sk:
         print("\nPlease provide Huawei Cloud credentials:")
-        ak, sk, region = setup_credentials_interactive()
-    
+        ak, sk, security_token, region = setup_credentials_interactive()
+
     print("\nPlease provide script information:")
-    
+
     script_uuid = args.script_uuid or prompt_for_input("Script UUID", required=True)
     
     print("\n" + "=" * 60)
     print("Getting script details...")
     
     try:
-        result = get_script_detail(script_uuid, ak, sk, region)
+        result = get_script_detail(script_uuid, ak, sk, security_token, region)
         
         if result.get("ok"):
             print("\n✓ Script details retrieved successfully!")
@@ -459,13 +467,14 @@ def do_list_scripts(args):
     # Get credential parameters
     ak = args.ak
     sk = args.sk
+    security_token = args.security_token
     region = args.region or "cn-north-4"
     
     # If credentials not provided, prompt interactively
     if not ak or not sk:
         print("\nPlease provide Huawei Cloud credentials:")
-        ak, sk, region = setup_credentials_interactive()
-    
+        ak, sk, security_token, region = setup_credentials_interactive()
+
     page = args.page if args.page else int(prompt_for_input("Page number", required=False, default='1'))
     size = args.size if args.size else int(prompt_for_input("Page size", required=False, default='10'))
     
@@ -473,7 +482,7 @@ def do_list_scripts(args):
     print("Getting script list...")
     
     try:
-        result = list_scripts(ak, sk, region, page, size)
+        result = list_scripts(ak, sk, security_token, region, page, size)
         
         if result.get("ok"):
             print(f"\n✓ Script list retrieved successfully!")
@@ -508,22 +517,23 @@ def do_query_execution(args):
     # Get credential parameters
     ak = args.ak
     sk = args.sk
+    security_token = args.security_token
     region = args.region or "cn-north-4"
     
     # If credentials not provided, prompt interactively
     if not ak or not sk:
         print("\nPlease provide Huawei Cloud credentials:")
-        ak, sk, region = setup_credentials_interactive()
-    
+        ak, sk, security_token, region = setup_credentials_interactive()
+
     print("\nPlease provide execution information:")
-    
+
     execute_uuid = args.execute_uuid or prompt_for_input("Execute UUID (format: SCTxxxxxxxxxxxxxxx)", required=True)
     
     print("\n" + "=" * 60)
     print("Querying execution result...")
     
     try:
-        result = get_script_job_batch(execute_uuid, ak, sk)
+        result = get_script_job_batch(execute_uuid, ak, sk, security_token)
         
         data = result.get("data", {})
         if data:
@@ -585,22 +595,22 @@ def main():
         epilog="""
 Examples:
   # Create script
-  python {baseDir}/scripts/caller.py create --ak "your_ak" --sk "your_sk" --name "test_script" --type SHELL --content "echo 'Hello'" --description "test"
+  python {baseDir}/scripts/caller.py create --ak "your_ak" --sk "your_sk" --security-token "your_security_token" --name "test_script" --type SHELL --content "echo 'Hello'" --description "test"
 
   # Execute script
-  python {baseDir}/scripts/caller.py execute --ak "your_ak" --sk "your_sk" --script-uuid "SC20231025..." --execute-user root
+  python {baseDir}/scripts/caller.py execute --ak "your_ak" --sk "your_sk" --security-token "your_security_token" --script-uuid "SC20231025..." --execute-user root
 
   # View script details
-  python {baseDir}/scripts/caller.py show --ak "your_ak" --sk "your_sk" --script-uuid "SC20231025..."
+  python {baseDir}/scripts/caller.py show --ak "your_ak" --sk "your_sk" --security-token "your_security_token" --script-uuid "SC20231025..."
 
   # List scripts
-  python {baseDir}/scripts/caller.py list --ak "your_ak" --sk "your_sk" --page 1 --size 10
+  python {baseDir}/scripts/caller.py list --ak "your_ak" --sk "your_sk" --security-token "your_security_token" --page 1 --size 10
 
   # Query execution result
-  python {baseDir}/scripts/caller.py query --ak "your_ak" --sk "your_sk" --execute-uuid "SCT20231025..."
+  python {baseDir}/scripts/caller.py query --ak "your_ak" --sk "your_sk" --security-token "your_security_token" --execute-uuid "SCT20231025..."
 
 Configuration:
-  Use --ak and --sk parameters to pass Huawei Cloud credentials
+  Use --ak and --sk --security-token parameters to pass Huawei Cloud credentials
   If not provided, will prompt interactively when needed
         """,
     )
@@ -608,6 +618,7 @@ Configuration:
     # Global parameters (shared by all commands)
     parser.add_argument('--ak', help='Huawei Cloud Access Key')
     parser.add_argument('--sk', help='Huawei Cloud Secret Key')
+    parser.add_argument('--security-token', help='Huawei Cloud Security Token')
     parser.add_argument('--region', default='cn-north-4', help='COC service region (default: cn-north-4)')
     
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
