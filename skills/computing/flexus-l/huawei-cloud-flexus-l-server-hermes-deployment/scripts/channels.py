@@ -23,6 +23,7 @@ def do_install_channel(args):
     # Get credentials (from command line parameters)
     ak = args.ak if hasattr(args, 'ak') and args.ak else None
     sk = args.sk if hasattr(args, 'sk') and args.sk else None
+    security_token = args.security_token if hasattr(args, 'security_token') and args.security_token else None
     
     # Get parameters
     resource_id = args.resource_id if hasattr(args, 'resource_id') and args.resource_id else None
@@ -106,7 +107,7 @@ def do_install_channel(args):
         resource_id, region_id, bot_platform,
         feishu_app_id, feishu_app_secret,
         wecom_bot_id, wecom_secret,
-        timeout, ak=ak, sk=sk, coc_region=region_id
+        timeout, ak=ak, sk=sk, security_token=security_token, coc_region=region_id
     )
     
     if result.get("ok"):
