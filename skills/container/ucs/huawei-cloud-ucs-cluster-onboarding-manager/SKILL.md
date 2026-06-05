@@ -1,6 +1,6 @@
 ---
-id: ucs-cluster-onboarding-manager
-name: ucs-cluster-onboarding-manager
+id: huawei-cloud-ucs-cluster-onboarding-manager
+name: huawei-cloud-ucs-cluster-onboarding-manager
 description: |
   Huawei Cloud UCS (Universal Cloud Service) cluster onboarding, lifecycle, and fleet grouping management skill using hcloud CLI.
   Use this skill when the user wants to: (1) register self-managed or CCE clusters to UCS - register/query/remove, (2) manage cluster lifecycle - update/query/list clusters, (3) manage fleet groups - create/delete/query cluster groups, (4) obtain cluster access information and kubeconfig, (5) download federation kubeconfig for multi-cluster access, (6) check UCS resource quotas.
@@ -17,7 +17,7 @@ This skill provides cluster onboarding, lifecycle, and fleet grouping management
 **Architecture**: hcloud CLI → UCS Service API → Cluster/ClusterGroup/AccessConfig/KubeConfig resources
 
 **Related Skills**:
-- `ucs-policy-governor` - UCS policy governance, compliance, and audit management
+- `huawei-cloud-ucs-policy-governor` - UCS policy governance, compliance, and audit management
 
 **Capabilities**:
 - Register self-managed or CCE clusters to UCS for unified management

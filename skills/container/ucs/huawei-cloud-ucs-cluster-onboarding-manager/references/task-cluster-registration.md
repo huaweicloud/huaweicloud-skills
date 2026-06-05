@@ -94,7 +94,7 @@ Expected: Cluster status transitions from stalled state toward `Available`.
 ⚠️ **CAUTION**: Deregistration is irreversible. The cluster will lose all UCS management capabilities, including policy governance, fleet grouping, and federation access. You must re-register to restore management.
 
 **Pre-deregistration Checklist**:
-1. Verify no active policy instances depend on this cluster (use `ucs-policy-governor` skill)
+1. Verify no active policy instances depend on this cluster (use `huawei-cloud-ucs-policy-governor` skill)
 2. Remove the cluster from any fleet groups
 3. Confirm with the user that deregistration is intended
 

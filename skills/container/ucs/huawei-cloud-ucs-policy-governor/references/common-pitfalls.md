@@ -47,7 +47,7 @@ hcloud UCS CreatePolicyInstance --name=my-policy --policy_definition_id=<def-id>
 
 **Solution**:
 
-1. Register the cluster to UCS first (use `ucs-cluster-onboarding-manager` skill):
+1. Register the cluster to UCS first (use `huawei-cloud-ucs-cluster-onboarding-manager` skill):
 ```bash
 hcloud UCS RegisterCluster --name=my-cluster --cluster_type=CCE --cluster_id=<cce-cluster-id> --cli-region=cn-north-4
 ```
@@ -67,7 +67,7 @@ hcloud UCS EnableClusterPolicy --clusterid=<cce-cluster-id> --cli-region=cn-nort
 
 **Root Cause**: The fleet group has no member clusters assigned. Policy governance applies to clusters that are part of the fleet group.
 
-**Solution**: Ensure clusters are registered and assigned to the fleet group before applying group-level policies. Use the `ucs-cluster-onboarding-manager` skill to register clusters and create fleet groups.
+**Solution**: Ensure clusters are registered and assigned to the fleet group before applying group-level policies. Use the `huawei-cloud-ucs-cluster-onboarding-manager` skill to register clusters and create fleet groups.
 
 ## Pitfall 5: Cannot Change Target Scope After Creation
 
@@ -114,7 +114,7 @@ hcloud UCS CreateClusterGroupPolicyInstance --clustergroupid=<new-group-id> --co
 
 **Root Cause**: UCS has limits on the number of policy instances that can be created
 
-**Solution**: Check quotas (using `ucs-cluster-onboarding-manager` skill):
+**Solution**: Check quotas (using `huawei-cloud-ucs-cluster-onboarding-manager` skill):
 
 ```bash
 hcloud UCS ShowQuota --cli-region=cn-north-4

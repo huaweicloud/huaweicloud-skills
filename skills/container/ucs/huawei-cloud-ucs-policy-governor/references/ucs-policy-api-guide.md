@@ -365,7 +365,7 @@ UCS API returns Kubernetes-style objects. Based on verified responses, `ShowPoli
 | `InvalidAccessKeyId`    | Invalid AK/SK               | Check credential configuration via `hcloud configure list` |
 | `PolicyDefinitionNotFound` | Template ID invalid      | Use `ListPolicyDefinitions` to find valid ID    |
 | `PolicyInstanceNotFound` | Instance ID invalid        | Use `ListPolicyInstances` to verify ID          |
-| `ClusterNotRegistered`  | Cluster not in UCS         | Register cluster with `ucs-cluster-onboarding-manager` |
+| `ClusterNotRegistered`  | Cluster not in UCS         | Register cluster with `huawei-cloud-ucs-cluster-onboarding-manager` |
 | `GroupNotFound`         | Fleet group doesn't exist   | Verify group ID with `ShowClusterGroup`         |
 | `QuotaExceeded`         | Policy instance limit       | Delete unused instances or request quota increase |
 | `OperationNotFound`     | Wrong operation name        | Use correct scope-specific operation (e.g., CreateClusterPolicyInstance vs CreateClusterGroupPolicyInstance) |

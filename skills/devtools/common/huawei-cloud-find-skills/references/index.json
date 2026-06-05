@@ -502,7 +502,7 @@
                        "has_description":  true
                    },
                    {
-                       "name":  "ucs-cluster-onboarding-manager",
+                       "name":  "huawei-cloud-ucs-cluster-onboarding-manager",
                        "category":  "container",
                        "service":  "ucs",
                        "description":  "Huawei Cloud UCS (Universal Cloud Service) cluster onboarding, lifecycle, and fleet grouping management skill using hcloud CLI.\nUse this skill when the user wants to: (1) register self-managed or CCE clusters to UCS - register/query/remove, (2) manage cluster lifecycle - update/query/list clusters, (3) manage fleet groups - create/delete/query cluster groups, (4) obtain cluster access information and kubeconfig, (5) download federation kubeconfig for multi-cluster access, (6) check UCS resource quotas.\nTrigger: user mentions \"UCS cluster onboarding\", \"UCS 集群纳管\", \"UCS cluster registration\", \"UCS 注册集群\", \"UCS fleet\", \"UCS 舰队\", \"UCS 集群组\", \"cluster group\", \"fleet grouping\", \"UCS kubeconfig\", \"UCS 集群接入\", \"UCS federation\", \"UCS 联邦\", \"UCS 配额\", \"cluster lifecycle\", \"集群生命周期\", \"managed clusters\", \"纳管集群\", \"集群管理\"",
@@ -530,7 +530,7 @@
                        "has_description":  true
                    },
                    {
-                       "name":  "ucs-policy-governor",
+                       "name":  "huawei-cloud-ucs-policy-governor",
                        "category":  "container",
                        "service":  "ucs",
                        "description":  "Huawei Cloud UCS (Universal Cloud Service) policy governance and compliance management skill using hcloud CLI.\nUse this skill when the user wants to: (1) manage UCS policy instances - create/update/query/delete, (2) manage UCS policy definitions - query/list, (3) enable/disable policies on clusters or fleet groups, (4) check policy enforcement job status, (5) audit fleet compliance and review policy enforcement status.\nTrigger: user mentions \"UCS policy\", \"UCS 策略\", \"UCS governance\", \"UCS 治理\", \"UCS compliance\", \"UCS 合规\", \"policy instance\", \"策略实例\", \"policy definition\", \"策略定义\", \"enable policy\", \"启用策略\", \"disable policy\", \"禁用策略\", \"fleet compliance\", \"舰队合规\", \"policy audit\", \"策略审计\", \"UCS 策略管理\", \"UCS 合规治理\", \"policy governance\", \"策略治理\"",
