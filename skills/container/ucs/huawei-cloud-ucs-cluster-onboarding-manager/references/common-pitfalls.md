@@ -84,7 +84,7 @@ If the cluster exists, either use the existing registration or deregister first.
 **Root Cause**: UCS policy governance depends on the cluster being registered. Deregistration removes all management capabilities including policy enforcement.
 
 **Solution**: Before deregistering a cluster:
-1. Review active policy instances on the cluster (use `ucs-policy-governor` skill)
+1. Review active policy instances on the cluster (use `huawei-cloud-ucs-policy-governor` skill)
 2. Document current policy configurations
 3. Consider disabling specific policies rather than deregistering the entire cluster if only policy reduction is needed
 

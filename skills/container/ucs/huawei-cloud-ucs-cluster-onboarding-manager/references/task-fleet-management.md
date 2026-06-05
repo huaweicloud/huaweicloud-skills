@@ -105,7 +105,7 @@ hcloud UCS UpdateClusterGroup --clustergroupid=<group-id> --description="Updated
 ⚠️ **CAUTION**: Deleting a fleet group removes the organizational grouping. Clusters that were part of the group remain individually managed by UCS but lose the group-level policy governance association.
 
 **Pre-deletion Checklist**:
-1. Verify no policy instances are bound to this group (use `ucs-policy-governor` skill)
+1. Verify no policy instances are bound to this group (use `huawei-cloud-ucs-policy-governor` skill)
 2. Confirm with the user that deletion is intended
 
 ```bash
@@ -122,7 +122,7 @@ Expected: Group not found error (404).
 
 ### W8: Organize Clusters into Fleet Groups
 
-Fleet groups are used for organizational grouping. Policy instances in the `ucs-policy-governor` skill can be bound to fleet groups for unified governance across all member clusters.
+Fleet groups are used for organizational grouping. Policy instances in the `huawei-cloud-ucs-policy-governor` skill can be bound to fleet groups for unified governance across all member clusters.
 
 **Best Practices for Fleet Group Design**:
 
@@ -177,10 +177,10 @@ hcloud UCS ShowClusterGroup --clustergroupid=<group-id> --cli-region=cn-north-4
 
 ## Fleet Group & Policy Governance Integration
 
-Fleet groups serve as the organizational foundation for UCS policy governance. When creating policy instances (see `ucs-policy-governor` skill), you can bind them to fleet groups for consistent enforcement across all member clusters.
+Fleet groups serve as the organizational foundation for UCS policy governance. When creating policy instances (see `huawei-cloud-ucs-policy-governor` skill), you can bind them to fleet groups for consistent enforcement across all member clusters.
 
 **Typical Workflow**:
 1. Create fleet groups for organizational grouping
 2. Register clusters and assign them to fleet groups
-3. Create policy instances bound to fleet groups (via `ucs-policy-governor`)
+3. Create policy instances bound to fleet groups (via `huawei-cloud-ucs-policy-governor`)
 4. Monitor compliance across all member clusters
