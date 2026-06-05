@@ -146,6 +146,7 @@ python scripts/caller.py deploy --name openclaw-1780689482000 --region cn-north-
 **Execution Result and Status Code Description**:
 - On success, returns order ID and instance ID (resource ID, used for subsequent model and channel installation)
 - Instance creation takes approximately 2 minutes, progress can be viewed in Huawei Cloud console. During instance creation, the installation of models and channels will not be affected, and subsequent commands can be executed directly.
+- After the instance creation command is successfully issued (with status codes "200", "201", or "202"), automatically check whether the preconditions are met (status of the gateway and UniAgent). If they are met, you can immediately proceed to the next steps!
 *Status Code Description*: Status codes "200", "201", "202" all indicate successful instance creation.
 ---
 
@@ -237,8 +238,6 @@ python scripts/caller.py channel --resource-id <Instance Resource ID> --region-i
 | channel | Channel type: `wecom` (WeCom), `feishu` (Feishu), `dingtalk` (DingTalk), `qqbot` (QQ) | Yes |
 | id | Bot ID/APP ID/Client ID | Yes |
 | secret | Bot secret/APP secret/Client secret | Yes |
-| account_id | Bot enterprise account ID | No (if not provided, code will randomly generate bot-{timestamp}) |
-| bot_name | Bot name | No (if not provided, code will randomly generate bot-{4 random lowercase letters}) |
 
 
 
@@ -317,8 +316,6 @@ scripts/
   - `channel`: Channel type: `wecom` (WeCom), `feishu` (Feishu), `dingtalk` (DingTalk), `qqbot` (QQ), required
   - `id`: Bot ID, required
   - `secret`: Bot secret, required
-  - `account_id`: Bot enterprise account ID, optional (auto-generated as `bot-{timestamp}` if not provided)
-  - `bot_name`: Bot name, optional (auto-generated as `bot-{4-random-lowercase-letters}` if not provided)
 - **--ak**: Huawei Cloud Access Key AK (can be temporary AK), required parameter
 - **--sk**: Huawei Cloud Access Key SK (can be temporary SK), required parameter
 - **--security-token**: Security token for temporary credentials (required when using temporary AK/SK), optional parameter
