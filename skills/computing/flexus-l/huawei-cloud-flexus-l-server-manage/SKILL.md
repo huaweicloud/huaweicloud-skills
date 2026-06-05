@@ -7,6 +7,15 @@ description: >-
 tags: [Flexus L, lifecycle management, create, renewal, unsubscribe]
 ---
 
+<!-- 
+⚠️ Security Execution Rules (Highest Priority):
+1. All scripts MUST be executed via skill action=exec, NEVER run directly in shell
+2. NEVER print script contents or commands containing AK/SK/Token in conversation
+3. NEVER create temporary script files, prefer inline execution (python -c)
+4. On execution failure, only return error info, do NOT rewrite scripts or print full commands
+5. AK/SK/Token MUST be passed via environment variables, NEVER appear in conversation
+-->
+
 # Huawei Cloud Flexus L Instance Lifecycle Management Skill
 
 ## Overview
@@ -99,27 +108,31 @@ Before using this skill, ensure the following conditions are met:
 | -------- | ------------- | ---------- |
 | **Command-line Parameters** | `--ak`, `--sk`, `--security-token` | Highest |
 | **Environment Variables** | `HW_ACCESS_KEY`, `HW_SECRET_KEY`, `HW_SECURITY_TOKEN` | Lower |
-| **Default** | AK/SK required, Security Token optional | - |
 
-**Credential Types:**
+**Credential Types (by recommendation order):**
 
-| Type | Parameters | Description |
-| ---- | ---------- | ----------- |
-| **Permanent AK/SK** | `--ak <AK> --sk <SK>` | Long-term access keys from Huawei Cloud console |
-| **Temporary AK/SK** | `--ak <AK> --sk <SK> --security-token <TOKEN>` | Temporary credentials with security token |
+| Priority | Type | Parameters | Description |
+| ------ | ---- | ---------- | ----------- |
+| **Primary** | **Temporary AK/SK** | `--ak <AK> --sk <SK> --security-token <TOKEN>` | Temporary credentials with security token, higher security |
+| **Secondary** | Permanent AK/SK | `--ak <AK> --sk <SK>` | Long-term access keys from Huawei Cloud console |
 
-**Environment Variables:**
+**Environment Variables (Recommended):**
 
 ```bash
-export HW_ACCESS_KEY="your-access-key-id"
-export HW_SECRET_KEY="your-secret-access-key"
-export HW_SECURITY_TOKEN="your-security-token"  # Optional, only for temporary credentials
+# Temporary credentials (Primary)
+export HW_ACCESS_KEY="temporary-access-key-id"
+export HW_SECRET_KEY="temporary-secret-access-key"
+export HW_SECURITY_TOKEN="your-security-token"  # Required
+
+# Permanent credentials (Secondary)
+export HW_ACCESS_KEY="permanent-access-key-id"
+export HW_SECRET_KEY="permanent-secret-access-key"
+# Do not set HW_SECURITY_TOKEN
 ```
 
-**Security Token Usage:**
-- **Permanent AK/SK**: Only need `--ak` and `--sk`, no security token required
-- **Temporary AK/SK**: Need `--ak`, `--sk`, and `--security-token` (required for temporary credentials)
-- **Optional**: Security token is only needed when using temporary AK/SK credentials
+**Security Token Notes:**
+- **Temporary AK/SK (Primary)**: Requires `--ak`, `--sk`, and `--security-token`, higher security, recommended
+- **Permanent AK/SK (Secondary)**: Only needs `--ak` and `--sk`, no security token needed, lower security
 
 ### 3. IAM Permissions
 
@@ -195,15 +208,15 @@ Activate this skill when users mention:
 - **Environment Variables (Recommended)**: `HW_ACCESS_KEY`, `HW_SECRET_KEY`, `HW_SECURITY_TOKEN`
 - **Command-line Parameters**: `--ak`, `--sk`, `--security-token`
 - **Priority**: Command-line parameters > Environment variables
-- **Security Token**: Optional - only needed for temporary credentials
+- **Security Token**: Recommended - Temporary credentials have higher security
 
-**Credential Usage:**
+**Credential Usage (by recommendation order):**
 
 ```python
-# With security token (temporary credentials)
+# Primary: With security token (temporary credentials, higher security)
 BasicCredentials(ak, sk).with_security_token(security_token)
 
-# Without security token (permanent credentials)
+# Secondary: Without security token (permanent credentials)
 BasicCredentials(ak, sk)
 ```
 
@@ -216,9 +229,9 @@ BasicCredentials(ak, sk)
 | `show-regions` | Show available regions | None | None |
 | `show-images` | Show available images | None | `--region` |
 | `show-specs` | Show available specs | `--image` | `--region` |
-| `create-instance` | Create instance | `--ak`, `--sk` | `--security-token`, `--region`, `--image`, `--plan-spec`, `--cpu`, `--memory`, `--period-num`, `--period-type`, `--instance-name`, `--auto-renew`, `--auto-pay`, `--dry-run`, `--confirm` |
-| `renewal` | Renew instance | `--ak`, `--sk`, `--resource-ids` | `--security-token`, `--period-num`, `--period-type`, `--auto-pay`, `--dry-run`, `--confirm` |
-| `unsubscribe` | Unsubscribe instance | `--ak`, `--sk`, `--resource-ids` | `--security-token`, `--type`, `--reason`, `--dry-run`, `--confirm` |
+| `create-instance` | Create instance | `--ak`, `--sk`, `--security-token` (recommended) | `--region`, `--image`, `--plan-spec`, `--cpu`, `--memory`, `--period-num`, `--period-type`, `--instance-name`, `--auto-renew`, `--auto-pay`, `--dry-run`, `--confirm` |
+| `renewal` | Renew instance | `--ak`, `--sk`, `--security-token` (recommended), `--resource-ids` | `--period-num`, `--period-type`, `--auto-pay`, `--dry-run`, `--confirm` |
+| `unsubscribe` | Unsubscribe instance | `--ak`, `--sk`, `--security-token` (recommended), `--resource-ids` | `--type`, `--reason`, `--dry-run`, `--confirm` |
 
 ---
 
@@ -228,9 +241,9 @@ BasicCredentials(ak, sk)
 
 | Parameter | Description | Validation Rule |
 |-----------|-------------|-----------------|
-| `--ak` | Huawei Cloud Access Key ID | Non-empty, 20 characters (or set `HW_ACCESS_KEY` env var) |
-| `--sk` | Huawei Cloud Secret Access Key | Non-empty, 40 characters (or set `HW_SECRET_KEY` env var) |
-| `--security-token` | Security Token | Optional (or set `HW_SECURITY_TOKEN` env var) |
+| `--ak` | Huawei Cloud Access Key ID | Non-empty (or set `HW_ACCESS_KEY` env var) |
+| `--sk` | Huawei Cloud Secret Access Key | Non-empty (or set `HW_SECRET_KEY` env var) |
+| `--security-token` | Security Token | **Recommended** (or set `HW_SECURITY_TOKEN` env var) |
 | `--resource-ids` | Resource IDs | Non-empty, comma-separated for multiple |
 | `--image` | Image name | Format: `name:version`, e.g. `Ubuntu:22.04` |
 | `--region` | Region ID | Must be in supported regions list |
@@ -290,35 +303,17 @@ python scripts/flexus_lifecycle.py <command> [options] --ak <AK> --sk <SK>
 | ----------- | ------------- | ---------- | --------------------- |
 | `--ak` | Huawei Cloud Access Key ID | Yes | `HW_ACCESS_KEY` |
 | `--sk` | Huawei Cloud Secret Access Key | Yes | `HW_SECRET_KEY` |
-| `--security-token` | Security Token | No | `HW_SECURITY_TOKEN` |
+| `--security-token` | Security Token | **Recommended** | `HW_SECURITY_TOKEN` |
 | `--region` | Region ID (default: cn-north-4) | No | - |
 | `--dry-run` | Dry run, don't actually execute | No | - |
 | `--confirm` | Force confirmation, skip interactive | No | - |
 
 ### Credential Configuration Examples
 
-**Method 1: Using Permanent AK/SK (Recommended for automation)**
+**Method 1: Using Temporary AK/SK with Security Token (Primary, Recommended)**
 
 ```bash
-# Using environment variables
-export HW_ACCESS_KEY="your-access-key-id"
-export HW_SECRET_KEY="your-secret-access-key"
-
-python scripts/flexus_lifecycle.py create-instance --image Ubuntu --cpu 2 --memory 4
-
-# Or using command-line parameters
-python scripts/flexus_lifecycle.py create-instance \
-  --ak your-access-key-id \
-  --sk your-secret-access-key \
-  --image Ubuntu \
-  --cpu 2 \
-  --memory 4
-```
-
-**Method 2: Using Temporary AK/SK with Security Token**
-
-```bash
-# Using environment variables
+# Using environment variables (recommended)
 export HW_ACCESS_KEY="temporary-access-key-id"
 export HW_SECRET_KEY="temporary-secret-access-key"
 export HW_SECURITY_TOKEN="your-security-token"
@@ -335,17 +330,22 @@ python scripts/flexus_lifecycle.py create-instance \
   --memory 4
 ```
 
-**Method 3: Mixed (Command-line overrides environment)**
+**Method 2: Using Permanent AK/SK (Secondary)**
 
 ```bash
-export HW_ACCESS_KEY="default-ak"
-export HW_SECRET_KEY="default-sk"
+# Using environment variables
+export HW_ACCESS_KEY="permanent-access-key-id"
+export HW_SECRET_KEY="permanent-secret-access-key"
 
-# Override with command-line parameters
+python scripts/flexus_lifecycle.py create-instance --image Ubuntu --cpu 2 --memory 4
+
+# Or using command-line parameters
 python scripts/flexus_lifecycle.py create-instance \
-  --ak different-ak \
-  --sk different-sk \
-  --image Ubuntu
+  --ak permanent-access-key-id \
+  --sk permanent-secret-access-key \
+  --image Ubuntu \
+  --cpu 2 \
+  --memory 4
 ```
 
 ---
@@ -381,26 +381,28 @@ Purchase new Flexus L instances, supports Windows/Linux.
 #### Method 1: Auto-match Spec (Recommended)
 
 ```bash
-# Using permanent AK/SK with environment variables
-export HW_ACCESS_KEY="your-ak"
-export HW_SECRET_KEY="your-sk"
+# Using temporary AK/SK with security token (Primary)
+export HW_ACCESS_KEY="temporary-ak"
+export HW_SECRET_KEY="temporary-sk"
+export HW_SECURITY_TOKEN="your-token"
 python scripts/flexus_lifecycle.py create-instance \
   --region cn-north-4 \
   --image Ubuntu \
   --cpu 2 \
   --memory 4
 
-# Using permanent AK/SK with command-line parameters
-python scripts/flexus_lifecycle.py create-instance \
-  --ak <AK> --sk <SK> \
-  --region cn-north-4 \
-  --image Ubuntu \
-  --cpu 2 \
-  --memory 4
-
-# Using temporary AK/SK with security token
+# Or using command-line parameters
 python scripts/flexus_lifecycle.py create-instance \
   --ak <Temporary-AK> --sk <Temporary-SK> --security-token <TOKEN> \
+  --region cn-north-4 \
+  --image Ubuntu \
+  --cpu 2 \
+  --memory 4
+
+# Using permanent AK/SK (Secondary)
+export HW_ACCESS_KEY="permanent-ak"
+export HW_SECRET_KEY="permanent-sk"
+python scripts/flexus_lifecycle.py create-instance \
   --region cn-north-4 \
   --image Ubuntu \
   --cpu 2 \
@@ -410,6 +412,14 @@ python scripts/flexus_lifecycle.py create-instance \
 #### Method 2: Specify Spec
 
 ```bash
+# Using temporary credentials (Primary)
+python scripts/flexus_lifecycle.py create-instance \
+  --ak <Temporary-AK> --sk <Temporary-SK> --security-token <TOKEN> \
+  --region cn-north-4 \
+  --image Ubuntu \
+  --plan-spec hf.medium.1.linux
+
+# Using permanent credentials (Secondary)
 python scripts/flexus_lifecycle.py create-instance \
   --ak <AK> --sk <SK> \
   --region cn-north-4 \
@@ -420,33 +430,20 @@ python scripts/flexus_lifecycle.py create-instance \
 #### Method 3: Use Default Spec
 
 ```bash
-# Use first available spec from config
-python scripts/flexus_lifecycle.py create-instance \
-  --ak <AK> --sk <SK> \
-  --region cn-north-4 \
-  --image Ubuntu
-```
-
-#### Method 4: With Security Token
-
-```bash
-# Using environment variables
-export HW_ACCESS_KEY="your-ak"
-export HW_SECRET_KEY="your-sk"
+# Using temporary credentials (Primary)
+export HW_ACCESS_KEY="temporary-ak"
+export HW_SECRET_KEY="temporary-sk"
 export HW_SECURITY_TOKEN="your-token"
 python scripts/flexus_lifecycle.py create-instance \
   --region cn-north-4 \
-  --image Ubuntu \
-  --cpu 2 \
-  --memory 4
+  --image Ubuntu
 
-# Or using command-line parameter
+# Using permanent credentials (Secondary)
+export HW_ACCESS_KEY="permanent-ak"
+export HW_SECRET_KEY="permanent-sk"
 python scripts/flexus_lifecycle.py create-instance \
-  --ak <AK> --sk <SK> --security-token <TOKEN> \
   --region cn-north-4 \
-  --image Ubuntu \
-  --cpu 2 \
-  --memory 4
+  --image Ubuntu
 ```
 
 **Create Parameters:**
@@ -474,9 +471,10 @@ See [references/image-specs-guide.md](references/image-specs-guide.md) for detai
 Renew existing Flexus L instances.
 
 ```bash
-# Using permanent AK/SK with environment variables (recommended)
-export HW_ACCESS_KEY="your-ak"
-export HW_SECRET_KEY="your-sk"
+# Using temporary AK/SK with security token (Primary)
+export HW_ACCESS_KEY="temporary-ak"
+export HW_SECRET_KEY="temporary-sk"
+export HW_SECURITY_TOKEN="your-token"
 
 # Preview renewal (recommended)
 python scripts/flexus_lifecycle.py renewal \
@@ -492,29 +490,22 @@ python scripts/flexus_lifecycle.py renewal \
   --period-type month \
   --confirm
 
-# Using permanent AK/SK with command-line parameters
-python scripts/flexus_lifecycle.py renewal \
-  --resource-ids <resource-id> \
-  --period-num 1 \
-  --period-type month \
-  --dry-run \
-  --ak <AK> --sk <SK>
+# Using permanent AK/SK (Secondary)
+export HW_ACCESS_KEY="permanent-ak"
+export HW_SECRET_KEY="permanent-sk"
 
-# Using temporary AK/SK with security token
 python scripts/flexus_lifecycle.py renewal \
   --resource-ids <resource-id> \
   --period-num 1 \
   --period-type month \
-  --confirm \
-  --ak <Temporary-AK> --sk <Temporary-SK> --security-token <TOKEN>
+  --confirm
 
 # Renew multiple instances
 python scripts/flexus_lifecycle.py renewal \
   --resource-ids id1,id2,id3 \
   --period-num 1 \
   --period-type year \
-  --confirm \
-  --ak <AK> --sk <SK>
+  --confirm
 ```
 
 **Renewal Parameters:**
@@ -533,9 +524,10 @@ python scripts/flexus_lifecycle.py renewal \
 Cancel Flexus L instance subscription.
 
 ```bash
-# Using permanent AK/SK with environment variables (recommended)
-export HW_ACCESS_KEY="your-ak"
-export HW_SECRET_KEY="your-sk"
+# Using temporary AK/SK with security token (Primary)
+export HW_ACCESS_KEY="temporary-ak"
+export HW_SECRET_KEY="temporary-sk"
+export HW_SECURITY_TOKEN="your-token"
 
 # Preview unsubscribe (recommended)
 python scripts/flexus_lifecycle.py unsubscribe \
@@ -548,34 +540,27 @@ python scripts/flexus_lifecycle.py unsubscribe \
   --type 1 \
   --confirm
 
-# Using permanent AK/SK with command-line parameters
-python scripts/flexus_lifecycle.py unsubscribe \
-  --resource-ids <resource-id> \
-  --type 1 \
-  --confirm \
-  --ak <AK> --sk <SK>
+# Using permanent AK/SK (Secondary)
+export HW_ACCESS_KEY="permanent-ak"
+export HW_SECRET_KEY="permanent-sk"
 
-# Using temporary AK/SK with security token
 python scripts/flexus_lifecycle.py unsubscribe \
   --resource-ids <resource-id> \
   --type 1 \
-  --confirm \
-  --ak <Temporary-AK> --sk <Temporary-SK> --security-token <TOKEN>
+  --confirm
 
 # Expiry unsubscribe (type 2)
 python scripts/flexus_lifecycle.py unsubscribe \
   --resource-ids <resource-id> \
   --type 2 \
-  --confirm \
-  --ak <AK> --sk <SK>
+  --confirm
 
 # Batch unsubscribe
 python scripts/flexus_lifecycle.py unsubscribe \
   --resource-ids id1,id2,id3 \
   --type 1 \
   --reason "Project ended" \
-  --confirm \
-  --ak <AK> --sk <SK>
+  --confirm
 ```
 
 **Unsubscribe Parameters:**
