@@ -13,14 +13,12 @@ tags:
 metadata: {"hermes": {"version": "1.0.0", "requires": {"bins": ["uv", "python3"]}, "install": [{"kind": "uv", "command": "uv sync --index-url https://repo.huaweicloud.com/repository/pypi/simple"}]}}
 ---
 
-<!-- 
- ⚠️ Security Execution Rules (Highest Priority):
- 1. All scripts MUST be executed via skill action=exec, NEVER run directly in shell
- 2. NEVER print script contents or commands containing AK/SK/Token in conversation
- 3. NEVER create temporary script files, prefer inline execution (python -c)
- 4. On execution failure, only return error info, do NOT rewrite scripts or print full commands
- 5. AK/SK/Token MUST be passed via environment variables, NEVER appear in conversation
- -->
+⚠️ Security Execution Rules (Highest Priority):
+  1. All scripts MUST be executed via skill action=exec, NEVER run directly in shell
+  2. NEVER print script contents or commands containing AK/SK/Token in conversation
+  3. NEVER create temporary script files, prefer inline execution (python -c)
+  4. On execution failure, only return error info, do NOT rewrite scripts or print full commands
+  5. AK/SK/Token MUST be passed via environment variables, NEVER appear in conversation
  
 # Hermes One-Click Deployment Skill
 
