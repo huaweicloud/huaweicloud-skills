@@ -19,7 +19,7 @@
 
 ## 概述
 
-本仓库包含了华为云官方维护的 Agent Skills，skill目按照产品域放在不同目录下，每个 Skill 目录包含运行该技能所需的全部文件，开发者可以安全、高效使用这些skill。
+本仓库包含了华为云官方维护的 Agent Skills，skill包按照产品域或功能域放在不同目录下，每个 Skill 目录包含运行该技能所需的全部文件，所有的skill均经过测试与验证、且兼容主流AI Agent。开发者可以安全、高效使用这些skill。
 
 ## Skills 列表
 
@@ -36,7 +36,6 @@ skill-name/        # 技能包根目录
 ├── scripts/        # 可执行脚本（可选） 
 ├── templates/      # 模板文件（可选）
 └── demo/           # 演示样例（可选）
-
 ```
 
 
@@ -46,7 +45,10 @@ skill-name/        # 技能包根目录
 
 ```bash
 # 安装单个 Skill
-npx skills add https://github.com/huaweicloud/huaweicloud-skills --skill <skill-name>
+npx skills add huaweicloud/huaweicloud-skills --skill <skill-name>
+
+# 安装全部 Skills
+npx skills add huaweicloud/huaweicloud-skills
 ```
 
 ### 手动安装
@@ -57,7 +59,6 @@ git clone https://github.com/huaweicloud/huaweicloud-skills
 
 # 进入 Skills 目录
 npx skills add <path>/huaweicloud-skills/skills/<skill-name>
-
 ```
 
 ## 认证与配置

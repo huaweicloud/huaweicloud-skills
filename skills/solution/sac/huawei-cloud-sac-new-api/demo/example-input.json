@@ -1,0 +1,6 @@
+{
+  "region": "cn-north-4",
+  "access_key": "<YOUR_ACCESS_KEY>",
+  "secret_key": "<YOUR_SECRET_KEY>",
+  "ecs_password": "<YOUR_ECS_PASSWORD>"
+}
