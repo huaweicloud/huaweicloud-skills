@@ -134,6 +134,27 @@ python scripts/caller.py query --ak <temp_ak> --sk <temp_sk> --security-token <s
 - `ABNORMAL`: Execution failed
 - `RUNNING`: Executing
 
+### UniAgent Status Query Commands
+
+```bash
+# Query UniAgent status using temporary AK/SK and security-token
+python scripts/caller.py uniagent --ak <temp_ak> --sk <temp_sk> --security-token <security_token> --resource-id <instance_id>
+
+# Query UniAgent status in interactive mode
+python scripts/caller.py uniagent
+```
+
+**UniAgent Status Description**:
+- `ONLINE`: UniAgent is running normally, can execute COC scripts
+- `OFFLINE`: UniAgent is not running, cannot execute COC scripts
+- `UNKNOWN`: Status cannot be determined
+
+**When to Use**:
+- Before configuring models or channels, ensure UniAgent is ONLINE
+- Troubleshoot COC script execution failures
+- Verify instance operational status after deployment
+- After the instance creation command is successfully issued (with status codes "200", "201", or "202"), automatically check whether the preconditions are met (status of the gateway and UniAgent). If they are met, you can immediately proceed to the next steps!
+
 ## Parameter Reference
 
 ### Global Parameters
@@ -186,6 +207,12 @@ python scripts/caller.py query --ak <temp_ak> --sk <temp_sk> --security-token <s
 | `--region-id` | COC service region | No | cn-north-4 |
 | `--timeout` | Execution timeout (seconds) | No | 120 |
 | `--execute-user` | Execution user | No | root |
+
+### UniAgent Command Parameters
+
+| Parameter | Description | Required | Default Value |
+|-----------|-------------|----------|---------------|
+| `--resource-id` | L instance resource ID | Yes | - |
 
 ## Workflow
 
