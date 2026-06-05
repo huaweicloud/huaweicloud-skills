@@ -19,7 +19,12 @@ CONSOLE_URL = "https://console.huaweicloud.com/smb/?/resource/list"
 
 
 def show_main_menu():
-    """Display main menu for user to select operation type"""
+    """
+    Display main menu for user to select operation type
+    
+    Returns:
+        int: User's choice (0-4), where 0=Exit, 1=Deploy, 2=Models, 3=Channels, 4=WebUI
+    """
     print("=" * 60)
     print("          OpenClaw One-Click Deployment Tool (Simplified)")
     print("=" * 60)
@@ -46,7 +51,12 @@ def show_main_menu():
 
 
 def show_webui_info():
-    """Display Web UI access instructions"""
+    """
+    Display Web UI access instructions
+    
+    Returns:
+        None
+    """
     print("=" * 60)
     print("          OpenClaw Web UI Access Instructions")
     print("=" * 60)
@@ -73,6 +83,12 @@ def show_webui_info():
 
 
 def main():
+    """
+    Main entry point for OpenClaw deployment tool
+    
+    Returns:
+        None
+    """
     parser = argparse.ArgumentParser(
         description="Huawei Cloud Flexus L Instance One-Click OpenClaw Deployment (Simplified Version)",
         formatter_class=argparse.RawDescriptionHelpFormatter,

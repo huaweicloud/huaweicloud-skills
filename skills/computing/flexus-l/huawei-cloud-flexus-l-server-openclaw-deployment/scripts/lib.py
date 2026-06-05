@@ -995,7 +995,13 @@ def install_channel_remote(
     Args:
         resource_id: L instance resource ID
         region_id: L instance region
-        channel_list: Channel configuration JSON array string, format: [{"channel":"wecom","account_id":"xxx",...}]
+        channel_list: Channel configuration JSON array string, format: [{"channel":"wecom","id":"xxx","secret":"xxx",...}]
+            Channel JSON object fields:
+            - channel: Channel type (required): 'wecom' (WeCom), 'feishu' (Feishu), 'dingtalk' (DingTalk), 'qqbot' (QQ)
+            - id: Bot ID/APP ID/Client ID (required)
+            - secret: Bot secret/APP secret/Client secret (required)
+            - account_id: Bot enterprise account ID (optional, auto-generated as 'bot-{timestamp}' if not provided)
+            - bot_name: Bot name (optional, auto-generated as 'bot-{4-random-lowercase-letters}' if not provided)
         timeout: Execution timeout (seconds), default 600
         execute_user: Execute user, default root
         ak: Huawei Cloud AK (can be temporary AK)
@@ -1011,6 +1017,30 @@ def install_channel_remote(
         }
     """
     import time
+    import random
+    import string
+    
+    # Parse channel_list and auto-generate missing account_id and bot_name
+    if channel_list:
+        try:
+            channels = json.loads(channel_list)
+            for channel in channels:
+                # Generate account_id if not provided
+                if "account_id" not in channel or not channel["account_id"]:
+                    timestamp = int(time.time() * 1000)
+                    channel["account_id"] = f"bot-{timestamp}"
+                
+                # Generate bot_name if not provided
+                if "bot_name" not in channel or not channel["bot_name"]:
+                    random_chars = ''.join(random.choices(string.ascii_lowercase, k=4))
+                    channel["bot_name"] = f"bot-{random_chars}"
+            
+            # Convert back to JSON string
+            channel_list = json.dumps(channels, ensure_ascii=False)
+        except json.JSONDecodeError as e:
+            print(f"Warning: Failed to parse channel_list JSON: {e}")
+            # Keep original channel_list if parsing fails
+    
     script_info = SCRIPT_TEMPLATES["install_channel"]
     
     content = script_info["content"].replace("${channelList}", channel_list)

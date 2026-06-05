@@ -17,7 +17,12 @@ REGION_IDS = list(REGIONS.keys())
 
 
 def print_region_list():
-    """Print region list"""
+    """
+    Print region list
+    
+    Returns:
+        None
+    """
     print("\nHuawei Cloud Flexus L instance supported regions:")
     print("-" * 50)
     print(f"{'Region ID':<20} {'Region Name':<25}")
@@ -98,6 +103,9 @@ def prompt_for_input(prompt, required=True, default=None, choices=None, hide_inp
 def setup_credentials_interactive():
     """
     Interactive setup of Huawei Cloud credentials
+    
+    Args:
+        None
     
     Returns:
         tuple: (ak, sk, region) credentials triplet

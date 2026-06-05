@@ -9,3 +9,18 @@ dependencies = [
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py_modules = [
+    "caller",
+    "lib",
+    "utils",
+    "deploy",
+    "models",
+    "channels",
+    "gateway",
+    "uniagent"
+]
+
+[tool.setuptools.package-data]
+"*" = ["*"]
