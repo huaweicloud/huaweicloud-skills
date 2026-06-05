@@ -2,10 +2,10 @@
     "repo":  "developer-skill/huaweicloud-skills",
     "platform":  "gitcode",
     "branch":  "master",
-    "generated_at":  "2026-06-02T12:47:30Z",
-    "total_skills":  37,
-    "skills_with_descriptions":  37,
-    "skills_with_triggers":  20,
+    "generated_at":  "2026-06-05T00:58:06Z",
+    "total_skills":  46,
+    "skills_with_descriptions":  46,
+    "skills_with_triggers":  27,
     "categories":  [
                        "ai",
                        "bss",
@@ -61,6 +61,165 @@
                                         "请求次数",
                                         "MaaS监控",
                                         "华为云MaaS"
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-ascend-command",
+                       "category":  "ai",
+                       "service":  "modelarts",
+                       "description":  "Huawei Ascend NPU natural language management skill, supporting both local direct connection and SSH remote modes. Provides comprehensive npu-smi command capabilities including device queries, configuration management, firmware upgrade, vNPU virtualization, certificate management, and compute power testing (FLOPS). Enables remote management and monitoring of Ascend NPU devices with real-time metrics tracking.\nUse this skill when the user wants to: (1) query NPU device status and health, (2) monitor temperature, power, memory/HBM utilization, (3) configure ECC settings and fan modes, (4) perform firmware upgrades, (5) manage vNPU virtualization, (6) run compute power tests, (7) check certificate information.\nTrigger: user mentionsnpu\u0027, \u0027ascend\u0027, \u0027NPU\u0027, \u0027Ascend\u0027, \u0027temperature\u0027, \u0027power\u0027, \u0027HBM\u0027, \u0027firmware\u0027, \u0027upgrade\u0027, \u0027vNPU\u0027, \u0027virtualization\u0027, \u0027certificate\u0027, \u0027FLOPS\u0027, \u0027compute\u0027, \u0027health\u0027, \u0027memory\u0027, \u0027utilization\u0027, \u0027ECC\u0027, \u0027fan\u0027, \u0027昇腾\u0027, \u0027昇腾卡\u0027, \u0027昇腾状态\u0027, \u0027显存\u0027, \u0027算力\u0027, \u0027设备查询\u0027, \u0027NPU监控\u0027\"",
+                       "triggers":  [
+                                        "user mentionsnpu",
+                                        "ascend",
+                                        "NPU",
+                                        "Ascend",
+                                        "temperature",
+                                        "power",
+                                        "HBM",
+                                        "firmware",
+                                        "upgrade",
+                                        "vNPU",
+                                        "virtualization",
+                                        "certificate",
+                                        "FLOPS",
+                                        "compute",
+                                        "health",
+                                        "memory",
+                                        "utilization",
+                                        "ECC",
+                                        "fan",
+                                        "昇腾",
+                                        "昇腾卡",
+                                        "昇腾状态",
+                                        "显存",
+                                        "算力",
+                                        "设备查询",
+                                        "NPU监控"
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-ascend-models-deploy",
+                       "category":  "ai",
+                       "service":  "modelarts",
+                       "description":  "Huawei Cloud Ascend model deployment and testing skill for large language models on Ascend DevServer (910B series). Supports single-machine and dual-machine deployment for LLM, VL (vision-language), Embedding, and Rerank models. Provides model inference testing, deployment log viewing, and status monitoring with automated model matching and deployment script generation.\nUse this skill when the user wants to: (1) deploy a model on Ascend DevServer, (2) test model inference, (3) view deployment logs or status, (4) list supported models, (5) check deployment prerequisites.\nTrigger: deploy, test, model list, deployment log, Ascend, DevServer, 910B, ModelArts, LLM, VL, Embedding, Rerank, multimodal, inference, model catalog, 昇腾, 部署模型, 测试模型, 模型列表, 部署日志, 模型部署, 推理测试",
+                       "triggers":  [
+                                        "deploy",
+                                        "test",
+                                        "model list",
+                                        "deployment log",
+                                        "Ascend",
+                                        "DevServer",
+                                        "910B",
+                                        "ModelArts",
+                                        "LLM",
+                                        "VL",
+                                        "Embedding",
+                                        "Rerank",
+                                        "multimodal",
+                                        "inference",
+                                        "model catalog",
+                                        "昇腾",
+                                        "部署模型",
+                                        "测试模型",
+                                        "模型列表",
+                                        "部署日志",
+                                        "模型部署",
+                                        "推理测试"
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-ascend-remote-connect",
+                       "category":  "ai",
+                       "service":  "modelarts",
+                       "description":  "Provides temporary SSH remote connection for Huawei Cloud Ascend devices with dynamic host/port/user/password input (in-memory only), disk management, NPU monitoring, container management, security auditing and log analysis; sensitive operations require user confirmation before execution\nUse this skillthis skill to remotely connect to Ascend servers, monitor NPU health, manage disks/LVM, or troubleshoot Ascend devices.\nTriggerer words: SSH, remote, Ascend, NPU, 远程连接, 昇腾, NPU监控",
+                       "triggers":  [
+
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-ascend-small-model-migrate",
+                       "category":  "ai",
+                       "service":  "modelarts",
+                       "description":  "Migrate vision/detection/segmentation small models to Ascend NPU, covering the full workflow: model structure analysis, migration verification, performance profiling, and optimization. Based on torch_npu and msprof\nUse this skill when the user wants to: (1) migrate encoder-only models like ResNet, YOLO, UNet to Ascend NPU, (2) analyze model structure for migration feasibility, (3) verify model inference on NPU, (4) identify performance bottlenecks and get optimization suggestions\nTrigger: user mentions \"migrate\", \"migration\", \"Ascend\", \"NPU\", \"YOLO\", \"ResNet\", \"encoder-only\", \"detection\", \"segmentation\", \"adaptation\", \"adapt\", \"迁移\", \"昇腾迁移\", \"小模型\", \"适配\", \"昇腾适配\", \"GPU迁移\", \"NPU适配\", \"适配NPU\", \"适配昇腾\"",
+                       "triggers":  [
+                                        "user mentions \"migrate",
+                                        "migration",
+                                        "Ascend",
+                                        "NPU",
+                                        "YOLO",
+                                        "ResNet",
+                                        "encoder-only",
+                                        "detection",
+                                        "segmentation",
+                                        "adaptation",
+                                        "adapt",
+                                        "迁移",
+                                        "昇腾迁移",
+                                        "小模型",
+                                        "适配",
+                                        "昇腾适配",
+                                        "GPU迁移",
+                                        "NPU适配",
+                                        "适配NPU",
+                                        "适配昇腾"
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-ascendc-operator-performance-optim",
+                       "category":  "ai",
+                       "service":  "modelarts",
+                       "description":  "Develop and optimize custom operators using AscendC programming language. Analyze operator performance bottlenecks and conduct optimization validation. Based on AscendC and CANN toolkit\nUse this skill when the user wants to: (1) optimize performance-critical operators on Ascend NPU, (2) develop custom operators for specific workloads, (3) improve model inference performance through operator optimization\nTrigger: user mentions \"AscendC\", \"operator optimization\", \"custom operator\", \"performance\", \"NPU optimization\", \"Ascend operator\", \"算子优化\", \"自定义算子\", \"算子开发\", \"AscendC算子\", \"性能优化\"",
+                       "triggers":  [
+                                        "user mentions \"AscendC",
+                                        "operator optimization",
+                                        "custom operator",
+                                        "performance",
+                                        "NPU optimization",
+                                        "Ascend operator",
+                                        "算子优化",
+                                        "自定义算子",
+                                        "算子开发",
+                                        "AscendC算子",
+                                        "性能优化"
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-msmodelslim-model-adapt",
+                       "category":  "ai",
+                       "service":  "modelarts",
+                       "description":  "Create basic Transformers model adapters for msModelSlim. Implements required interfaces and completes a four-step verification workflow:\ngenerate test model -\u003e full fallback quantization -\u003e weight verification -\u003e quantization description validation. Use this skill when the user wants to: (1) create msModelSlim adapters for decoder-only LLM, (2) adapt understanding VLM text backbones for quantization, (3) implement W8A8/W4A16 quantization workflow for new models. Trigger: user mentions \"msModelSlim\", \"adapter\", \"model adapter\",\"quantization\", \"W8A8\",\"W4A16\", \"transformers\", \"LLM\", \"VLM\", \"adapter creation\", \"适配器\",\"模型适配\", \"量化\", \"模型适配器\", \"LLM量化\"",
+                       "triggers":  [
+                                        "user mentions \"msModelSlim",
+                                        "adapter",
+                                        "model adapter",
+                                        "quantization",
+                                        "W8A8",
+                                        "W4A16",
+                                        "transformers",
+                                        "LLM",
+                                        "VLM",
+                                        "adapter creation",
+                                        "适配器",
+                                        "模型适配",
+                                        "量化",
+                                        "模型适配器",
+                                        "LLM量化"
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-msmodelslim-model-analysis",
+                       "category":  "ai",
+                       "service":  "modelarts",
+                       "description":  "Analyze candidate models before adapter implementation. Determine model\nimplementation source (transformers or model-local), structural features,\nlayer-by-layer loading requirements, and MoE fused weight risks. Use this\nskill when the user wants to: (1) assess model adaptation feasibility before\ncreating msModelSlim adapters, (2) analyze model structure and type\nclassification, (3) evaluate MoE compatibility for quantization. Trigger:\nuser mentions \"model analysis\", \"msModelSlim\", \"adapter\", \"transformers\",\n\"MoE\", \"layer-by-layer\", \"model assessment\", \"feasibility\", \"模型分析\",\n\"适配可行性\", \"模型评估\", \"MoE分析\"",
+                       "triggers":  [
+
                                     ],
                        "has_description":  true
                    },
@@ -412,6 +571,30 @@
                        "has_description":  true
                    },
                    {
+                       "name":  "huawei-cloud-find-skills",
+                       "category":  "devtools",
+                       "service":  "common",
+                       "description":  "Invoke this skill to search, discover, browse, find and install any Huawei Cloud (华为云) agent skill.Triggers include: \"华为云\",\"华为云有什么skill\",\"华为云相关skill\",\"华为云agent skill 市场\",\"华为云skill类目\",\"explore Huawei Cloud skills\",\"show Huawei Cloud skill categories\",\"does a Huawei Cloud skill exist for...\",\"which Huawei Cloud skills exist\",\"搜索华为云技能\",\"有没有管理ECS/OBS/RDS的skill\",\"帮我找 XX 华为云skill\",\"介绍 XX Skill 内容\",\"华为云 XX Skill 具体做什么\",\"安装华为云Skill\".",
+                       "triggers":  [
+                                        "华为云",
+                                        "华为云有什么skill",
+                                        "华为云相关skill",
+                                        "华为云agent skill 市场",
+                                        "华为云skill类目",
+                                        "explore Huawei Cloud skills",
+                                        "show Huawei Cloud skill categories",
+                                        "does a Huawei Cloud skill exist for...",
+                                        "which Huawei Cloud skills exist",
+                                        "搜索华为云技能",
+                                        "有没有管理ECS/OBS/RDS的skill",
+                                        "帮我找 XX 华为云skill",
+                                        "介绍 XX Skill 内容",
+                                        "华为云 XX Skill 具体做什么",
+                                        "安装华为云Skill\"."
+                                    ],
+                       "has_description":  true
+                   },
+                   {
                        "name":  "huawei-cloud-terraform-generator",
                        "category":  "devtools",
                        "service":  "terraform",
@@ -533,6 +716,21 @@
                        "description":  "A skill for huawei cloud container(CCE) assessment. \nIt automatically collects metrics and configurations from containerized application environments on Huawei Cloud to generate a comprehensive assessment report. \nUse this when users want to evaluate if their Huawei Cloud applications align with cloud-native best practices and identify areas for improvement.",
                        "triggers":  [
 
+                                    ],
+                       "has_description":  true
+                   },
+                   {
+                       "name":  "huawei-cloud-sac-new-api",
+                       "category":  "solution",
+                       "service":  "sac",
+                       "description":  "Deploy NewAPI LLM Gateway on Huawei Cloud via Terraform.\nUse when deploying a unified LLM API gateway for multi-model management,\nload balancing, and key rotation.\nTrigger: deploy NewAPI, NewAPI gateway, LLM gateway, 部署NewAPI, NewAPI网关, LLM网关",
+                       "triggers":  [
+                                        "deploy NewAPI",
+                                        "NewAPI gateway",
+                                        "LLM gateway",
+                                        "部署NewAPI",
+                                        "NewAPI网关",
+                                        "LLM网关"
                                     ],
                        "has_description":  true
                    },
