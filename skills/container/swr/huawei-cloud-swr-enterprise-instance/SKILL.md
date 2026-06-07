@@ -54,28 +54,24 @@ This skill provides lifecycle management capabilities for Huawei Cloud SWR (Soft
 
 ### 2. Credential Configuration
 
-- Valid Huawei Cloud credentials (AK/SK mode)
-- **Security Rules**:
-  - 🚫 Never expose AK/SK values in code, conversation, or commands
-  - 🚫 Never use `echo $HUAWEI_CLOUD_AK` or `echo $HUAWEI_CLOUD_SK` to check credentials
-  - ✅ Use environment variables: `HUAWEI_CLOUD_AK`, `HUAWEI_CLOUD_SK`, `HUAWEI_CLOUD_REGION`
-  - ✅ Prefer IAM users over root account for cloud operations
-  - ✅ Enable MFA for sensitive operations
+hcloud CLI supports two credential modes. See [references/credential-configuration.md](references/credential-configuration.md) for full details.
 
-**Configuration Method** (Environment Variables Only):
+**Quick setup** (choose one):
 
 ```bash
+# Mode A — Long-term AK/SK
 export HUAWEI_CLOUD_AK=<your-ak>
 export HUAWEI_CLOUD_SK=<your-sk>
 export HUAWEI_CLOUD_REGION=cn-north-4
+
+# Mode B — Temporary AK/SK + SecurityToken
+export HUAWEI_CLOUD_AK=<your-temp-ak>
+export HUAWEI_CLOUD_SK=<your-temp-sk>
+export HUAWEI_CLOUD_SECURITY_TOKEN=<your-security-token>
+export HUAWEI_CLOUD_REGION=cn-north-4
 ```
 
-**⚠️ Important Security Notes**:
-
-- Never commit credentials to version control
-- Use IAM users with minimal required permissions
-- Enable MFA for sensitive operations
-- Rotate AK/SK regularly
+- **Security rules**: Never expose AK/SK/SecurityToken values. Use `hcloud configure list` to check presence only.
 
 ### 3. IAM Permission Requirements
 
@@ -460,6 +456,7 @@ See [Verification Method](references/verification-method.md) for step-by-step ve
 | ------------------------------------------------------ | ---------------------------------------- |
 | [SWR Instance API Guide](references/swr-instance-api-guide.md) | hcloud SWR instance API reference |
 | [Output Format](references/output-format.md)          | Response format examples (Instance, Namespace, Endpoint, Domain, Credential) |
+| [Credential Configuration](references/credential-configuration.md) | Credential setup (long-term AK/SK & temporary AK/SK+SecurityToken) |
 | [IAM Permission Policies](references/iam-policies.md)  | Required permissions and policy JSON     |
 | [Verification Method](references/verification-method.md) | Step-by-step verification              |
 | [Common Pitfalls](references/common-pitfalls.md)       | Troubleshooting guides                   |

@@ -56,21 +56,31 @@ This skill provides cluster onboarding, lifecycle, and fleet grouping management
 
 ### 2. Credential Configuration
 
-- Valid Huawei Cloud credentials (AK/SK mode)
-- **Security Rules**:
-  - 🚫 Never expose AK/SK values in code, conversation, or commands
-  - 🚫 Never use `echo $HUAWEI_CLOUD_AK` or `echo $HUAWEI_CLOUD_SK` to check credentials
-  - ✅ Use environment variables: `HUAWEI_CLOUD_AK`, `HUAWEI_CLOUD_SK`, `HUAWEI_CLOUD_REGION`
-  - ✅ Prefer IAM users over root account for cloud operations
-  - ✅ Enable MFA for sensitive operations
+hcloud CLI supports two credential modes via environment variables, automatically detected at runtime:
 
-**Configuration Method** (Environment Variables Only):
-
+**Mode A — Long-term AK/SK** (permanent access):
 ```bash
 export HUAWEI_CLOUD_AK=<your-ak>
 export HUAWEI_CLOUD_SK=<your-sk>
 export HUAWEI_CLOUD_REGION=cn-north-4
 ```
+
+**Mode B — Temporary AK/SK + SecurityToken** (recommended for temporary or delegated access):
+```bash
+export HUAWEI_CLOUD_AK=<your-temp-ak>
+export HUAWEI_CLOUD_SK=<your-temp-sk>
+export HUAWEI_CLOUD_SECURITY_TOKEN=<your-security-token>
+export HUAWEI_CLOUD_REGION=cn-north-4
+```
+
+> When `HUAWEI_CLOUD_SECURITY_TOKEN` is present, hcloud CLI automatically uses temporary credential authentication. When only AK/SK are set, it uses long-term credential authentication.
+
+- **Security Rules**:
+  - 🚫 Never expose AK/SK/SecurityToken values in code, conversation, or commands
+  - 🚫 Never use `echo $HUAWEI_CLOUD_AK` or `echo $HUAWEI_CLOUD_SK` to check credentials
+  - ✅ Use environment variables: `HUAWEI_CLOUD_AK`, `HUAWEI_CLOUD_SK`, `HUAWEI_CLOUD_REGION`, `HUAWEI_CLOUD_SECURITY_TOKEN`
+  - ✅ Prefer IAM users over root account for cloud operations
+  - ✅ Enable MFA for sensitive operations
 
 **⚠️ Important Security Notes**:
 
