@@ -51,21 +51,31 @@ This skill provides image automation capabilities for Huawei Cloud SWR (Software
 
 ### 2. Credential Configuration
 
-- Valid Huawei Cloud credentials (AK/SK mode)
-- **Security Rules**:
-  - 🚫 Never expose AK/SK values in code, conversation, or commands
-  - 🚫 Never use `echo $HUAWEI_CLOUD_AK` or `echo $HUAWEI_CLOUD_SK` to check credentials
-  - ✅ Use environment variables: `HUAWEI_CLOUD_AK`, `HUAWEI_CLOUD_SK`, `HUAWEI_CLOUD_REGION`
-  - ✅ Prefer IAM users over root account for cloud operations
-  - ✅ Enable MFA for sensitive operations
+hcloud CLI supports two credential modes via environment variables, automatically detected at runtime:
 
-**Configuration Method** (Environment Variables Only):
-
+**Mode A — Long-term AK/SK** (permanent access):
 ```bash
 export HUAWEI_CLOUD_AK=<your-ak>
 export HUAWEI_CLOUD_SK=<your-sk>
 export HUAWEI_CLOUD_REGION=cn-north-4
 ```
+
+**Mode B — Temporary AK/SK + SecurityToken** (recommended for temporary or delegated access):
+```bash
+export HUAWEI_CLOUD_AK=<your-temp-ak>
+export HUAWEI_CLOUD_SK=<your-temp-sk>
+export HUAWEI_CLOUD_SECURITY_TOKEN=<your-security-token>
+export HUAWEI_CLOUD_REGION=cn-north-4
+```
+
+> When `HUAWEI_CLOUD_SECURITY_TOKEN` is present, hcloud CLI automatically uses temporary credential authentication. When only AK/SK are set, it uses long-term credential authentication.
+
+- **Security Rules**:
+  - 🚫 Never expose AK/SK/SecurityToken values in code, conversation, or commands
+  - 🚫 Never use `echo $HUAWEI_CLOUD_AK` or `echo $HUAWEI_CLOUD_SK` to check credentials
+  - ✅ Use environment variables: `HUAWEI_CLOUD_AK`, `HUAWEI_CLOUD_SK`, `HUAWEI_CLOUD_REGION`, `HUAWEI_CLOUD_SECURITY_TOKEN`
+  - ✅ Prefer IAM users over root account for cloud operations
+  - ✅ Enable MFA for sensitive operations
 
 **⚠️ Important Security Notes**:
 
@@ -154,11 +164,13 @@ Returns all regions where you can sync images. Use the `regionID` field value as
 ### 4. Sync Job Status
 
 ```bash
-# Check sync job status
-hcloud SWR ShowSyncJob --namespace=group-dev --repository=my-app --cli-region=cn-north-4
+# Check sync job status (--filter is REQUIRED with limit and offset)
+hcloud SWR ShowSyncJob --namespace=group-dev --repository=my-app --filter="limit::10|offset::0" --cli-region=cn-north-4
 ```
 
-Response format to be verified. Use `--help` for parameter details.
+**⚠️ Important**: `--filter` is required and must include both `limit::N` and `offset::N` (e.g., `"limit::10|offset::0"`). Without it, the command returns a missing parameter error.
+
+**Response format** (verified against actual API): Returns a flat JSON array. Returns `[]` when no sync jobs exist.
 
 ### 5. Trigger Management (Auto-deploy to CCE/CCI)
 
@@ -270,9 +282,15 @@ Response format to be verified — returns list of trigger objects when they exi
 
 Response format to be verified. Use `--namespace`, `--repository`, `--trigger` (trigger name) as parameters.
 
-### ShowSyncJob
+### ShowSyncJob (verified)
 
-Response format to be verified. Use `--namespace`, `--repository` as primary parameters.
+Response is a flat JSON array. Returns `[]` when no sync jobs exist:
+
+```json
+[]
+```
+
+**Note**: Requires `--filter="limit::N|offset::N"` parameter. See [Sync Job Status](#4-sync-job-status) for usage.
 
 ## Verification
 
@@ -326,7 +344,7 @@ See [Verification Method](references/verification-method.md) for step-by-step ve
 - **AK/SK must never be hardcoded** — credentials should only be obtained via environment variables
 - **hcloud CLI is the only supported method** — all operations use `hcloud SWR <Operation>` format
 - **Trigger requires CCE/CCI cluster** — triggers only work with existing CCE clusters or CCI instances
-- **Response formats pending verification** — ListImageAutoSyncReposDetails, ListTriggersDetails, ShowTrigger, ShowSyncJob response formats need live verification
+- **Response formats pending verification** — ListImageAutoSyncReposDetails, ListTriggersDetails, ShowTrigger response formats need live verification
 
 ## Common Pitfalls
 

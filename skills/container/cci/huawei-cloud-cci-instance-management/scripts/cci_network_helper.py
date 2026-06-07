@@ -37,6 +37,11 @@ Environment variables (required):
     HW_ACCESS_KEY  - Huawei Cloud AK
     HW_SECRET_KEY  - Huawei Cloud SK
 
+Environment variables (optional for temporary credential mode):
+    HW_SECURITY_TOKEN  - Huawei Cloud SecurityToken (temporary credential mode)
+                         Falls back to HUAWEI_CLOUD_SECURITY_TOKEN if HW_SECURITY_TOKEN not set.
+                         When set, the script uses temporary STS credential authentication.
+
 Note: subnet-id must be the neutron_subnet_id (not the VPC subnet ID).
       network-id must be the neutron_network_id (not the VPC subnet ID).
       Both can be obtained from: hcloud VPC ShowSubnet --subnet_id=<id> --cli-region=<region>
@@ -64,7 +69,11 @@ def get_credentials():
     if not ak or not sk:
         print("ERROR: HW_ACCESS_KEY and HW_SECRET_KEY environment variables must be set")
         sys.exit(1)
-    return ak, sk
+
+    # Support SecurityToken for temporary credential mode
+    # Check HW_SECURITY_TOKEN first, then fall back to HUAWEI_CLOUD_SECURITY_TOKEN
+    security_token = os.environ.get("HW_SECURITY_TOKEN") or os.environ.get("HUAWEI_CLOUD_SECURITY_TOKEN")
+    return ak, sk, security_token
 
 
 def get_project_id(region):
@@ -88,8 +97,10 @@ def get_project_id(region):
     sys.exit(1)
 
 
-def sign_request(method, host, resource_path, body, ak, sk, project_id):
+def sign_request(method, host, resource_path, body, ak, sk, security_token, project_id):
     creds = BasicCredentials(ak=ak, sk=sk, project_id=project_id)
+    if security_token:
+        creds = creds.with_security_token(security_token)
     signer = Signer(creds)
 
     req = SdkRequest(
@@ -110,7 +121,7 @@ def sign_request(method, host, resource_path, body, ak, sk, project_id):
 
 
 def create_network(namespace, name, vpc_id, subnet_id, network_id, security_group_id, region, project_id=None):
-    ak, sk = get_credentials()
+    ak, sk, security_token = get_credentials()
     if not project_id:
         project_id = get_project_id(region)
 
@@ -138,7 +149,7 @@ def create_network(namespace, name, vpc_id, subnet_id, network_id, security_grou
     )
     url = f"https://{host}{resource_path}"
 
-    headers = sign_request("POST", host, resource_path, body, ak, sk, project_id)
+    headers = sign_request("POST", host, resource_path, body, ak, sk, security_token, project_id)
 
     resp = requests.post(url, data=body.encode("utf-8"), headers=headers)
     result = json.loads(resp.text)
@@ -157,7 +168,7 @@ def create_network(namespace, name, vpc_id, subnet_id, network_id, security_grou
 
 
 def delete_network(namespace, name, region, project_id=None):
-    ak, sk = get_credentials()
+    ak, sk, security_token = get_credentials()
     if not project_id:
         project_id = get_project_id(region)
 
@@ -167,7 +178,7 @@ def delete_network(namespace, name, region, project_id=None):
     )
     url = f"https://{host}{resource_path}"
 
-    headers = sign_request("DELETE", host, resource_path, "", ak, sk, project_id)
+    headers = sign_request("DELETE", host, resource_path, "", ak, sk, security_token, project_id)
 
     resp = requests.delete(url, headers=headers)
     if resp.status_code in (200, 204):
@@ -184,7 +195,7 @@ def delete_network(namespace, name, region, project_id=None):
 
 
 def check_status(namespace, name, region, project_id=None):
-    ak, sk = get_credentials()
+    ak, sk, security_token = get_credentials()
     if not project_id:
         project_id = get_project_id(region)
 
@@ -194,7 +205,7 @@ def check_status(namespace, name, region, project_id=None):
     )
     url = f"https://{host}{resource_path}"
 
-    headers = sign_request("GET", host, resource_path, "", ak, sk, project_id)
+    headers = sign_request("GET", host, resource_path, "", ak, sk, security_token, project_id)
 
     resp = requests.get(url, headers=headers)
     result = json.loads(resp.text)

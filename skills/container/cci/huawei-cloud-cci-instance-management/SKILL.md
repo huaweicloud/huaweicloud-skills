@@ -53,9 +53,36 @@ Manage Huawei Cloud CCI (Cloud Container Instance) full lifecycle using hcloud C
 
 ## Prerequisites
 
-> **Prerequisite check: hcloud (KooCLI) >= 7.2.2 required**
-> Run `hcloud version` to verify version >= 7.2.2, and `hcloud configure list` to check profile exists.
-> If not installed or version is too low, refer to the `huawei-cloud-cli-guidance` skill for installation guide.
+### 1. hcloud CLI Requirements (MANDATORY)
+
+- hcloud CLI installed (version >= 7.2.2)
+- Run `hcloud version` to verify installation
+- First-time usage: `printf "y\n" | hcloud version` to accept privacy statement
+
+### 2. Credential Configuration
+
+hcloud CLI supports two credential modes. See [references/credential-configuration.md](references/credential-configuration.md) for full details.
+
+**Quick setup** (choose one):
+
+```bash
+# Mode A — Long-term AK/SK
+export HUAWEI_CLOUD_AK=<your-ak>
+export HUAWEI_CLOUD_SK=<your-sk>
+export HUAWEI_CLOUD_REGION=cn-north-4
+
+# Mode B — Temporary AK/SK + SecurityToken
+export HUAWEI_CLOUD_AK=<your-temp-ak>
+export HUAWEI_CLOUD_SK=<your-temp-sk>
+export HUAWEI_CLOUD_SECURITY_TOKEN=<your-security-token>
+export HUAWEI_CLOUD_REGION=cn-north-4
+```
+
+- **Security rules**: Never expose AK/SK/SecurityToken values. Use `hcloud configure list` to check presence only.
+
+> ⚠️ **Known limitation — Python helper script credentials are independent of hcloud CLI**: The Python helper script (`scripts/cci_network_helper.py`) uses `HW_ACCESS_KEY` / `HW_SECRET_KEY` (and optionally `HW_SECURITY_TOKEN`) environment variables for authentication, which are **separate from** hcloud CLI's credential source (profile or `HUAWEI_CLOUD_AK`/`HUAWEI_CLOUD_SK`). If the credentials in `HW_ACCESS_KEY`/`HW_SECRET_KEY` lack the necessary IAM permissions for CCI Network creation, the script will fail with a 403 error. Ensure these variables contain credentials with sufficient CCI permissions (e.g., `CCI FullAccess`). The hcloud CLI continues using its own credential source independently — running the helper script does not affect subsequent hcloud CLI commands.
+
+### 3. Validation Check
 
 ```bash
 hcloud version
@@ -87,8 +114,8 @@ All destructive operations require explicit user confirmation before execution. 
 
 ### Credential Security
 
-- **Never expose AK/SK values** in conversation, commands, or output
-- **Never ask user to input AK/SK directly** in conversation
+- **Never expose AK/SK/SecurityToken values** in conversation, commands, or output
+- **Never ask user to input AK/SK/SecurityToken directly** in conversation
 - **Only use** `hcloud configure list` to check credential status (presence only, not values)
 - **Prefer** profile mode or environment variables over explicit AK/SK parameters
 
@@ -160,6 +187,8 @@ hcloud CCI deleteCoreV1Namespace --name=<ns-name> --cli-region=<region>
 ### Network
 
 > **⚠️ hcloud CLI limitation**: Network creation requires a Python helper script because hcloud CLI cannot pass the annotation key `network.alpha.kubernetes.io/default-security-group` (contains dots that hcloud treats as nested levels). The `--cli-jsonInput` approach also doesn't work due to an hcloud bug where annotations show in `--dryrun` but aren't transmitted in actual requests. See [hcloud CLI Limitations](#hcloud-cli-limitations) below.
+>
+> **⚠️ Credential requirement**: The Python helper script uses `HW_ACCESS_KEY`/`HW_SECRET_KEY` (and optionally `HW_SECURITY_TOKEN`) environment variables for authentication. This is **independent** from hcloud CLI's credential source (which reads from `HUAWEI_CLOUD_AK`/`HUAWEI_CLOUD_SK` or its profile). If the credentials in `HW_ACCESS_KEY`/`HW_SECRET_KEY` lack CCI Network creation permissions, the script will fail with 403. Ensure they have sufficient IAM permissions (e.g., `CCI FullAccess`). After the script runs, hcloud CLI commands continue using their own credential source unaffected.
 
 ```bash
 # Step 1: Get VPC subnet details (including neutron_network_id)
@@ -338,8 +367,6 @@ hcloud VPC ShowSubnet --vpc_id=<vpc-id> --subnet_id=<subnet-id> --cli-region=<re
 | `general-computing` | General computing type | Standard workloads, web services, microservices |
 | `gpu-accelerated` | GPU accelerated type | AI, ML, high-performance computing |
 
-> **This annotation is mandatory** when creating a namespace. Without it, namespace creation will fail.
-
 ## Resource Quota and Limits
 
 CCI enforces resource quotas per namespace. Common defaults:
@@ -354,10 +381,7 @@ CCI enforces resource quotas per namespace. Common defaults:
 Query current quotas:
 
 ```bash
-hcloud CCI listCoreV1NamespacedResourceQuota \
-  --namespace=<ns-name> \
-  --cli-region=<region> \
-  --cli-output=json
+hcloud CCI listCoreV1NamespacedResourceQuota --namespace=<ns-name> --cli-region=<region> --cli-output=json
 ```
 
 ## Output Format
@@ -374,15 +398,12 @@ hcloud CCI <Operation> --cli-region=<region> --cli-output=table
 
 ### JMESPath Filtering
 ```bash
-# Filter deployment replicas and status
-hcloud CCI readAppsV1NamespacedDeploymentStatus \
-  --name=<deploy-name> --namespace=<ns-name> \
-  --cli-region=<region> --cli-output=json \
-  --cli-query="{replicas:status.replicas,ready:status.readyReplicas,available:status.availableReplicas}"
+# Filter deployment status
+hcloud CCI readAppsV1NamespacedDeploymentStatus --name=<deploy> --namespace=<ns> --cli-region=<region> --cli-output=json --cli-query="{replicas:status.replicas,ready:status.readyReplicas,available:status.availableReplicas}"
 
 # Filter pod phase
-hcloud CCI readCoreV1NamespacedPodStatus \
-  --name=<pod-name> --namespace=<ns-name> \
+hcloud CCI readCoreV1NamespacedPodStatus --name=<pod> --namespace=<ns> --cli-region=<region> --cli-output=json --cli-query="status.phase"
+```
   --cli-region=<region> --cli-output=json \
   --cli-query="status.phase"
 ```
@@ -397,18 +418,18 @@ hcloud CCI <Operation> --cli-debug=true --cli-region=<region>
 
 ## Parameter Confirmation
 
-Before executing any CCI operation, confirm the following parameters:
+Before executing any CCI operation, confirm these parameters:
 
 | Parameter | Required | Description | Source |
 |---|---|---|---|
 | `--namespace` | Yes | CCI namespace name | Existing or newly created |
 | `--cli-region` | Yes | Huawei Cloud region ID | `HUAWEI_CLOUD_REGION` or config |
-| `--metadata.name` | Yes | Resource name (Pod/Deployment/Network etc.) | User specified |
-| `--metadata.annotations.namespace-kubernetes-io/flavor` | Yes (Namespace) | Flavor type: `general-computing` or `gpu-accelerated` | User choice |
+| `--metadata.name` | Yes | Resource name | User specified |
+| Flavor annotation | Yes (Namespace) | `general-computing` or `gpu-accelerated` | User choice |
 | VPC/Subnet ID | Yes (Network) | From `VPC ListVpcs` / `VPC ShowSubnet` | Query existing resources |
-| neutron_network_id | Yes (Network) | From `VPC ShowSubnet` response `neutron_network_id` field | Query result |
+| neutron_network_id | Yes (Network) | From `VPC ShowSubnet` response | Query result |
 
-> **⚠️ Recommended: run `hcloud CCI <Operation> --help` before any CCI command to verify parameter names, then cross-reference the table above to confirm parameter value sources.**
+> Run `hcloud CCI <Operation> --help` before any CCI command to verify parameter names, then cross-reference the table above.
 
 ## Precautions
 
@@ -419,26 +440,26 @@ See [references/troubleshooting.md](references/troubleshooting.md) for detailed 
 | Issue | Cause | Quick Fix |
 |---|---|---|
 | Namespace creation fails | Missing flavor annotation | Add `--metadata.annotations.namespace-kubernetes-io/flavor=general-computing` |
-| Network creation fails | Missing VPC/subnet, CIDR conflict, or missing annotation/networkID | Verify subnet ID, neutron network ID, security group ID; ensure CIDR != `10.247.0.0/16`; use Python helper script |
+| Network creation fails (400/403) | Missing VPC/subnet/annotation/networkID, or credential scope insufficient | Verify subnet/neutron IDs, security group; use Python helper; use **long-term AK/SK** (Mode A) |
 | Pod stays Pending | No Network in namespace | Create Network first |
 | 403 permission error | Insufficient IAM | Check [references/iam-policies.md](references/iam-policies.md) |
 | Deep nested param errors | Wrong dot notation | Use `--help` to verify exact parameter path |
-| Annotation with dots not passed | hcloud CLI treats dots as nested levels | Use Python helper script for Network creation |
-| EIPPool creation fails (400/422) | Missing `--apiVersion=crd.yangtse.cni/v1` or `--kind=EIPPool` or `networkType` | Add all required fields (see EIPPool section) |
-| Deployment "limit and request doesn't equal" error | CCI requires limits == requests | Set requests to same values as limits (e.g., both `500m/1Gi`) |
+| Annotation with dots not passed | hcloud CLI limitation | Use Python helper script for Network creation |
+| EIPPool creation fails (400/422) | Missing apiVersion/kind/networkType | Add all required fields (see EIPPool section) |
+| limit/request mismatch | CCI requires limits == requests | Set requests same as limits (e.g., both `500m/1Gi`) |
 
 ## Verification Method
 
 See [references/verification-method.md](references/verification-method.md) for complete verification steps.
 
-**Quick verification checklist**:
+**Quick checklist**:
 
 | Step | Command | Expected Result |
 |---|---|---|
-| Namespace creation | `hcloud CCI readCoreV1Namespace --name=<ns> --cli-region=<region>` | status.phase=Active |
-| Network creation | `hcloud CCI readNetworkingCciIoV1beta1NamespacedNetworkStatus --name=<net> --namespace=<ns>` | status.phase=Active |
-| Deployment creation | `hcloud CCI readAppsV1NamespacedDeploymentStatus --name=<deploy> --namespace=<ns>` | readyReplicas >= 1 |
-| Pod creation | `hcloud CCI readCoreV1NamespacedPodStatus --name=<pod> --namespace=<ns>` | status.phase=Running |
+| Namespace | `hcloud CCI readCoreV1Namespace --name=<ns> --cli-region=<region>` | status.phase=Active |
+| Network | `hcloud CCI readNetworkingCciIoV1beta1NamespacedNetworkStatus --name=<net> --namespace=<ns>` | status.phase=Active |
+| Deployment | `hcloud CCI readAppsV1NamespacedDeploymentStatus --name=<deploy> --namespace=<ns>` | readyReplicas >= 1 |
+| Pod | `hcloud CCI readCoreV1NamespacedPodStatus --name=<pod> --namespace=<ns>` | status.phase=Running |
 
 ## Best Practices
 
@@ -456,7 +477,7 @@ See [references/verification-method.md](references/verification-method.md) for c
 | **`--cli-jsonInput` requires ASCII encoding** | UTF-8 BOM causes JSON parsing failure | Ensure JSON input files are saved as plain ASCII (no BOM) |
 | **Namespace annotation works with hyphen replacement** | Keys like `namespace.kubernetes.io/flavor` can use hyphens (`namespace-kubernetes-io/flavor`) and CCI auto-normalizes them back | This workaround only works for Namespace, NOT for Network |
 
-**Why Network needs a Python helper**: The Network annotation key `network.alpha.kubernetes.io/default-security-group` cannot be passed via hcloud CLI (neither dot notation nor `--cli-jsonInput`). Unlike Namespace annotations, CCI does NOT auto-normalize hyphen-replaced keys for Network resources. The Python helper script (`scripts/cci_network_helper.py`) constructs the correct API request body directly, bypassing these hcloud CLI limitations.
+**Why Network needs a Python helper**: The Network annotation key `network.alpha.kubernetes.io/default-security-group` cannot be passed via hcloud CLI (neither dot notation nor `--cli-jsonInput`). Unlike Namespace annotations, CCI does NOT normalize hyphen-replaced keys for Network resources. The Python helper script (`scripts/cci_network_helper.py`) constructs the correct API request body directly.
 
 ## References
 
@@ -472,6 +493,7 @@ See [references/verification-method.md](references/verification-method.md) for c
 | [cci-operation-catalog.md](references/cci-operation-catalog.md) | Full CCI operation quick reference |
 | [parameter-format.md](references/parameter-format.md) | CCI parameter format rules and examples |
 | [common-workflows.md](references/common-workflows.md) | Complete workflow sequences |
+| [credential-configuration.md](references/credential-configuration.md) | Credential setup (long-term AK/SK & temporary AK/SK+SecurityToken) |
 | [iam-policies.md](references/iam-policies.md) | IAM permission policies |
 | [troubleshooting.md](references/troubleshooting.md) | Error troubleshooting |
 | [verification-method.md](references/verification-method.md) | Verification steps |
