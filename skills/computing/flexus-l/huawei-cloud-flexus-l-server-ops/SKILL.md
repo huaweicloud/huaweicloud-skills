@@ -9,9 +9,7 @@ description: "Based on Huawei Cloud Flexus L API for instance management and ope
   3. NEVER create temporary script files, prefer inline execution (python -c)
   4. On execution failure, only return error info, do NOT rewrite scripts or print full commands
   5. AK/SK/Token MUST be passed via environment variables, NEVER appear in conversation
-  6. NEVER interactively collect Huawei Cloud credentials from users. Credentials MUST be obtained only through:
-   - Temporary Security Credentials (STS Token) via environment variables
-   - Permanent credentials via environment variables
+  6. ⚠️ ABSOLUTELY NEVER expose, log, or print AK/SK/Token values in any form - this is a critical security requirement
 
 # Huawei Cloud Flexus L Instance Operations
 
@@ -160,50 +158,43 @@ See [Execution Flow](#execution-flow) for operation steps.
 
 ### Step 1: Check Existing Credentials (Automatic)
 
-**⚠️ Important Statement: AK/SK MUST be obtained only through environment variables. STRICTLY PROHIBITED, NOT ALLOWED, ABSOLUTELY CANNOT ask user for AK/SK information!**
-
-**System will automatically get credentials from environment variables, no user intervention required.**
+**Get credentials from environment variables first, automatic check, no need to ask user.**
 
 **Decision Logic:**
 
 | Credential Status | Next Step |
 |------------------|-----------|
-| ✅ HW_ACCESS_KEY + HW_SECRET_KEY + HW_SECURITY_TOKEN exist | Execute script directly (temporary credentials, pass --ak --sk --security-token parameters) |
-| ✅ HW_ACCESS_KEY + HW_SECRET_KEY exist (no Token) | Execute script directly (long-term credentials, pass --ak --sk parameters) |
-| ❌ Environment variables not found | Prompt user to configure environment variables in backend, terminate operation |
-| ❌ Authentication failed (Token expired) | Prompt user that temporary credentials have expired, need to re-obtain Security Token and update environment variable |
-| ❌ Authentication failed (AK/SK invalid/expired) | Prompt user to check environment variable configuration or reconfigure, terminate operation |
+| ✅ HW_ACCESS_KEY + HW_SECRET_KEY + HW_SECURITY_TOKEN exist | Execute script directly (**Recommended**: Temporary AK/SK authentication, higher security level, pass --ak --sk --security-token parameters) |
+| ✅ HW_ACCESS_KEY + HW_SECRET_KEY exist (no Token) | Execute script directly (Permanent AK/SK authentication, pass --ak --sk parameters) |
+| ❌ Environment variables not found | Prompt user to configure credentials (prefer environment variables, do NOT ask directly) |
+| ❌ Authentication failed | Prompt user to check or reconfigure credentials (prefer environment variables, do NOT ask directly) |
 
-**⚠️ Strict Rules (Must Follow):**
+**⚠️ Security Recommendations:**
 
-1. **Obtain only from environment variables**: AK/SK/Token MUST be obtained through environment variables, interactive input is NOT supported
-2. **Forbidden to ask user**: STRICTLY PROHIBITED, NOT ALLOWED, NEVER ask user for AK/SK information
-3. **Credential failure handling**: When environment variables don't exist or authentication fails, guide user to configure environment variables in backend
-4. **Security protection**: AK/SK are sensitive information, must NEVER be displayed or transmitted in conversation
-5. **Expiration validation**: Distinguish between Token expiration and AK/SK expiration when authentication fails, provide targeted prompts
+1. **Prefer temporary credentials**: Strongly recommend using temporary AK/SK + Security Token method for higher security, credentials expire automatically
+2. **Environment variable configuration**: Credentials should be configured via environment variables (HW_ACCESS_KEY, HW_SECRET_KEY, HW_SECURITY_TOKEN)
+3. **Sensitive information protection**: AK/SK are sensitive information, do NOT input or disclose in conversation
 
-### Step 2: Credential Missing or Authentication Failure Handling
-
-**When the following situations are detected, terminate operation immediately and prompt user:**
+**Credential Missing or Authentication Failed Message:**
 
 ```
 ❌ Credentials not configured or authentication failed
 
-Please go to the backend to configure environment variables:
+Please configure Huawei Cloud credentials. For security, we recommend using temporary AK/SK + Security Token method via environment variables:
+- HW_ACCESS_KEY: Access Key AK
+- HW_SECRET_KEY: Secret Key SK
+- HW_SECURITY_TOKEN: Security Token (Recommended)
 
-Environment variables to configure:
-- HW_ACCESS_KEY: Huawei Cloud Access Key AK
-- HW_SECRET_KEY: Huawei Cloud Secret Access Key SK
-- HW_SECURITY_TOKEN: (Optional) Temporary credential token
-
-⚠️ Important: AK/SK are sensitive information, DO NOT disclose in conversation!
+⚠️ Security Note: Temporary credentials are more secure, please prefer using them!
 ```
 
-### Step 3: Select Operation
+**Note:** We prioritize obtaining credentials from environment variables and NEVER ask users to input AK/SK directly. However, we still support parsing credentials if user voluntarily provides them via other methods (e.g., conversation input, config file).
+
+### Step 2: Select Operation
 
 **After credentials are verified, ask user what operation to perform:**
 
-### Step 4: Execute Operation
+### Step 3: Execute Operation
 
 **⚠️ Instance Validation (When user provides instance ID/name):**
 
