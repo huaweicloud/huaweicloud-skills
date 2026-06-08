@@ -48,7 +48,7 @@ User Request → Huawei Cloud CLI (hcloud) → Cloud Eye Service (CES) → ECS I
 ### User Scenario Examples
 
 1. **Basic monitoring request**: "Check my ECS instance performance"
-2. **Specific metric query**: "Show CPU and memory usage for instance i-12345678"
+2. **Specific metric query**: "Show CPU and memory usage for instance ecs-server-01"
 3. **Historical data analysis**: "Show disk IO trends for the last 7 days"
 4. **Troubleshooting**: "My ECS instance is slow, check all metrics"
 
@@ -108,26 +108,18 @@ hcloud configure list
 
 ### IAM Permission Requirements
 
-This skill requires the following IAM permissions:
+This skill requires the following minimum IAM permissions:
 
 - `ecs:cloudServers:list` - List ECS instances
 - `ecs:cloudServers:get` - Get ECS instance details
 - `ces:metrics:list` - List available metrics
 - `ces:metricData:get` - Get metric data
-- `ces:alarms:list` - List alarms (optional)
-- `ces:alarmTemplates:list` - List alarm templates (optional)
 
-Detailed permission policies and configuration instructions: `references/iam-policies.md`
+Additional optional permissions (e.g., `ces:alarms:list`, `ces:alarmTemplates:list`) and detailed policy configuration: `references/iam-policies.md`
 
 ### Permission Failure Handling
 
-When any operation encounters a permission error failure, MUST follow this process:
-
-1. **Identify permission error** - Check if error message contains keywords like "Access denied", "Insufficient permissions", "User does not have permission"
-2. **Refer to permission documentation** - Immediately guide user to view `references/iam-policies.md` file
-3. **Display permission list** - Show user the required permission list and corresponding JSON policy
-4. **Guide permission configuration** - Guide user to create custom policy in Huawei Cloud IAM console
-5. **Pause execution and wait for confirmation** - Pause current operation execution, wait for user to confirm permission configuration is complete
+When any operation encounters a permission error (e.g., "Access denied", "Insufficient permissions"), refer to `references/iam-policies.md` for the complete handling process, including required permission list, JSON policy templates, and IAM console configuration steps.
 
 ## 3. KooCLI Command Format Standards
 
@@ -157,7 +149,7 @@ hcloud ECS NovaListServers --cli-region=<region-id> --limit=50
 
 Based on user requirements, query relevant monitoring metrics. If no specific metrics are requested, show common metrics:
 
-**Common ECS Metrics (Default Display):**
+**Common ECS Metrics (Default Display) - SYS.ECS Namespace:**
 
 1. **CPU Utilization** (`cpu_util`)
 2. **Memory Utilization** (`mem_util`)
@@ -165,9 +157,27 @@ Based on user requirements, query relevant monitoring metrics. If no specific me
 4. **Network In/Out Rate** (`network_incoming_bytes_rate_inband`, `network_outgoing_bytes_rate_inband`)
 5. **Disk Utilization** (`disk_util_inband`)
 
+> **Note**: The above are SYS.ECS (base monitoring) metrics available without an agent.
+> For OS-level monitoring (AGT.ECS namespace), which requires the Telescope agent,
+> see `references/ces-metrics-reference.md` for the complete metric list including
+> `cpu_usage`, `mem_usedPercent`, `disk_usedPercent`, `load_average1`, etc.
+
 > Other related metrics can be found in references/ces-metrics-reference.md.
 
-**Correct command format (verified through testing):**
+**Namespace Selection and Fallback Strategy:**
+
+When querying ECS metrics, follow this namespace selection logic:
+
+1. **Default**: Query SYS.ECS metrics first (no agent required, available for all instances)
+2. **Fallback to AGT.ECS**: If any individual SYS.ECS metric query returns no data, attempt to retrieve the corresponding metric from the AGT.ECS namespace (e.g., `cpu_util` → `cpu_usage`). See `references/ces-metrics-reference.md` for the complete fallback mapping table.
+3. **AGT.ECS only metrics**: Some metrics only exist in AGT.ECS namespace (e.g., `load_average1`, `net_tcp_total`, `disk_readTime`, `disk_inodesUsedPercent`). Query these directly with `--metrics.N.namespace="AGT.ECS"` and `--period=60`.
+
+**Common reasons for SYS.ECS metrics returning no data:**
+- The instance image does not have UVP VMTools installed (affects `mem_util`, `disk_util_inband`, `network_*_inband`)
+- The instance was recently created and metrics have not yet been generated (wait 5-10 minutes)
+- The instance is not in ACTIVE state
+
+**Command example - SYS.ECS query:**
 
 ```bash
 hcloud CES BatchListMetricData \
@@ -179,10 +189,39 @@ hcloud CES BatchListMetricData \
   --to=$(date +%s)000 \
   --period=300 \
   --filter="average" \
-  --cli-region=cn-north-4
+  --cli-region=<region-id>
+```
+
+**Command example - AGT.ECS query (when SYS.ECS has no data, or for AGT.ECS-only metrics):**
+
+```bash
+hcloud CES BatchListMetricData \
+  --metrics.1.namespace="AGT.ECS" \
+  --metrics.1.metric_name="cpu_usage" \
+  --metrics.1.dimensions.1.name="instance_id" \
+  --metrics.1.dimensions.1.value="<instance-id>" \
+  --from=$(date -d '-1 hour' +%s)000 \
+  --to=$(date +%s)000 \
+  --period=60 \
+  --filter="average" \
+  --cli-region=<region-id>
 ```
 
 > Other relevant commands are documented in references/related-commands.md.
+
+### Step 3: Analyze and Compare Metrics
+
+Based on the monitoring data returned:
+
+- Compare current values against recommended thresholds
+- Identify metrics approaching or exceeding thresholds
+- For AGT.ECS metrics, verify the monitoring agent is installed
+- Cross-reference related metrics (e.g., CPU usage with load average)
+- **[MUST] Handle empty data**: If SYS.ECS metric query returns no data points:
+  1. Check if the instance is in ACTIVE state
+  2. Try the corresponding AGT.ECS metric (see fallback mapping in Step 2)
+  3. If AGT.ECS also returns no data, check if the Telescope agent is installed
+  4. Inform the user about possible reasons (UVP VMTools missing, instance too new, agent not installed)
 
 ### Step 4: Format and Present Results
 
@@ -216,10 +255,10 @@ refer to '../references/related-commands.md'
 | Parameter | Description | Example Value | Default Value |
 |-----------|-------------|---------------|---------------|
 | `--cli-region` | Region ID | `cn-north-4` | None, must be specified |
-| `--metrics.1.namespace` | Namespace for metric 1 | `SYS.ECS` | None, must be specified |
+| `--metrics.1.namespace` | Namespace for metric 1 (`SYS.ECS` or `AGT.ECS`) | `SYS.ECS` | None, must be specified |
 | `--metrics.1.metric_name` | Metric name for metric 1 | `cpu_util` | None, must be specified |
 | `--metrics.1.dimensions.1.name` | Dimension name | `instance_id` | None, must be specified |
-| `--metrics.1.dimensions.1.value` | Dimension value | `i-12345678` | None, must be specified |
+| `--metrics.1.dimensions.1.value` | Dimension value | `3d65c1ac-9a9f-4c5f-a054-35184a087bb2` | None, must be specified |
 
 ### Optional Parameters
 
@@ -239,13 +278,14 @@ refer to '../references/related-commands.md'
 - **Last 7 days**
 - **Custom range** (user specified)
 
+> **Note**: period=60 (1-minute granularity) is only available for AGT.ECS metrics. SYS.ECS metrics have a minimum period of 300 (5 minutes).
+
 ### Namespace
 
-- **SYS.ECS**
-  Basic monitoring metrics for Elastic Cloud Server (ECS).
-- **AGT.ECS**
-  OS monitoring metrics and process monitoring metrics for Elastic Cloud Server (ECS).
-  *Requires installing the monitoring Agent.*
+- **SYS.ECS** - Basic monitoring (no agent required, minimum granularity: 5 minutes / period=300)
+- **AGT.ECS** - OS monitoring (*Telescope Agent required*, minimum granularity: 1 minute / period=60)
+
+For detailed namespace descriptions and metric availability, see `references/ces-metrics-reference.md`.
 
 ### filter
 
@@ -307,30 +347,13 @@ Skill verification and testing methods: `references/verification-method.md`
 
 ## 9. Best Practices
 
-Please refer to `references/best-practices.md`for best practices.
+Please refer to `references/best-practices.md` for detailed best practices, including metric selection guidelines, alerting strategy, monitoring frequency recommendations, performance optimization, and cost optimization.
 
-### Monitoring Best Practices
+### Core Principles
 
 1. **Default to common metrics** - When user doesn't specify, default to showing common metrics
-2. **Use appropriate time ranges** - Select suitable time ranges based on monitoring needs
-3. **Provide actionable insights** - Not just raw data, provide analysis and recommendations
-4. **Suggest optimization opportunities** - Provide optimization suggestions when metrics exceed thresholds
-5. **Recommend alarm setup** - Suggest alarm configurations for critical metrics
-6. **Compare with historical data** - Perform trend analysis when historical data is available
-
-### Performance Optimization Suggestions
-
-- For long-term monitoring, use longer statistical periods (e.g., 300 seconds)
-- Batch query related metrics to reduce API call frequency
-- Cache frequently used query results to improve response speed
-- Use appropriate filter conditions to reduce data transfer volume
-
-### Resource Management Suggestions
-
-- Regularly clean up unnecessary monitoring data
-- Set appropriate monitoring data retention policies
-- Use tags to categorize and manage instances
-- Set different monitoring strategies for different environments (development, testing, production)
+2. **Provide actionable insights** - Not just raw data, provide analysis and recommendations
+3. **Batch query related metrics** - Reduce API call frequency by querying multiple metrics in a single request
 
 ## 10. Reference Documents
 
@@ -351,34 +374,24 @@ Refer to documents in the `references/` directory for more information:
 
 - **Credential security**: Never expose AK/SK in code, logs, or conversations
 - **Principle of least privilege**: Grant only necessary IAM permissions
-- **Regular rotation**: Regularly rotate access keys
-- **Monitor access**: Enable Cloud Trace Service to monitor API calls
+
+For more security best practices (key rotation, IAM conditions, account separation), see `references/iam-policies.md`.
 
 ### Limitations
 
 - **API limits**: Be aware of Huawei Cloud API rate limits
 - **Data retention**: Monitoring data has limited retention time
-- **Regional restrictions**: Some metrics may only be available in specific regions
-- **Instance types**: Different instance types may support different metrics
+
+For specific limits (max data points, query frequency, batch limits), see `references/ces-metrics-reference.md`.
 
 ### Known Issues
 
-1. **Timezone issues**: All timestamps use UTC timezone
-2. **Data latency**: Monitoring data may have 1-2 minutes delay
-3. **Metric availability**: Newly created instances may take several minutes to start reporting metrics
-4. **API version**: Ensure compatible API version is used
+1. **Data latency**: Monitoring data may have 1-2 minutes delay
+2. **Metric availability**: Newly created instances may take several minutes to start reporting metrics
 
 ### Troubleshooting
 
-Common errors and solutions:
-
-1. **Invalid credentials**: Guide user to configure Huawei Cloud CLI
-2. **Instance not found**: Suggest checking instance ID and region
-3. **No metric data**: Check time range and metric availability
-4. **Permission denied**: Guide user to check IAM permissions
-5. **Network errors**: Suggest retrying or checking network connectivity
-
-Please refer to `references/troubleshooting-guide.md` for other known issues.
+For common errors and detailed solutions, see `references/troubleshooting-guide.md`.
 
 ### Support and Feedback
 
