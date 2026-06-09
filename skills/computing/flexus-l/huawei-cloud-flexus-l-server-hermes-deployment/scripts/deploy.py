@@ -3,8 +3,9 @@
 """
 Huawei Cloud Flexus L Instance One-Click Hermes Deployment - Deployment Module
 
-Note: This module only supports temporary credentials (temporary AK/SK + security_token).
-      Permanent AK/SK credentials are not supported.
+Note: This module supports both long-term and temporary credentials.
+      - Long-term AK/SK: No security_token required
+      - Temporary AK/SK: Security token required
 """
 
 import os
@@ -16,7 +17,20 @@ from scripts.utils import print_region_list, prompt_for_input, REGION_IDS, get_r
 
 
 def do_deploy_hermes(args):
-    """Execute Hermes instance deployment"""
+    """Execute Hermes instance deployment
+    
+    Args:
+        args: Command line argument object with the following attributes:
+            - name: Instance name (command line arg --name)
+            - region: Region ID (command line arg --region)
+            - ak: Huawei Cloud AK (supports both long-term and temporary AK) (command line arg --ak)
+            - sk: Huawei Cloud SK (supports both long-term and temporary SK) (command line arg --sk)
+            - security_token: Security token for temporary credentials (optional, only required for temporary AK/SK) (command line arg --security-token)
+            - non_interactive: Whether non-interactive mode (command line arg --non-interactive)
+
+    Returns:
+        None
+    """
     print("=" * 60)
     print("        Hermes Instance One-Click Deployment")
     print("=" * 60)
@@ -31,6 +45,17 @@ def do_deploy_hermes(args):
     # Get parameters
     instance_name = getattr(args, 'name', None)
     region = getattr(args, 'region', None)
+
+    # If credentials not provided, prompt interactively (skip in non-interactive mode)
+    if not ak or not sk:
+        print("\nHuawei Cloud credentials not configured, entering interactive configuration...")
+        print("Please configure Huawei Cloud credentials:")
+        print("  - Long-term AK/SK: No security_token required")
+        print("  - Temporary AK/SK: Security token required")
+        print("-" * 40)
+        ak = prompt_for_input("Huawei Cloud AK (HW_ACCESS_KEY)", required=True)
+        sk = prompt_for_input("Huawei Cloud SK (HW_SECRET_KEY)", required=True, hide_input=True)
+        security_token = prompt_for_input("Security Token (optional, only for temporary credentials)", required=False)
 
     # If instance_name not provided via CLI, prompt interactively (skip in non-interactive mode)
     # Note: If still None after this block, lib.py will auto-generate timestamp format (hermes-YYYYMMDDHHMMSS)

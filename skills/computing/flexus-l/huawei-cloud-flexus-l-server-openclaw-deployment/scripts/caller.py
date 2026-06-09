@@ -97,8 +97,11 @@ Examples:
   # Interactive mode (show menu for selection)
   python scripts/caller.py
 
-  # Create OpenClaw instance
+  # Create OpenClaw instance with long-term AK/SK
   python scripts/caller.py deploy --name my-openclaw --region cn-north-4 --ak <AK> --sk <SK>
+
+  # Create OpenClaw instance with temporary AK/SK (requires security-token)
+  python scripts/caller.py deploy --name my-openclaw --region cn-north-4 --ak <Temporary-AK> --sk <Temporary-SK> --security-token <Security-Token>
 
   # Install models on remote L instance via COC
   python scripts/caller.py maas --resource-id <instance_id> --region-id cn-north-4 --model-params <json> --ak <AK> --sk <SK>
@@ -113,9 +116,9 @@ Examples:
     deploy_parser = subparsers.add_parser('deploy', help='Deploy OpenClaw instance')
     deploy_parser.add_argument('--name', help='Instance name (optional, auto-generated if not provided)')
     deploy_parser.add_argument('--region', choices=REGION_IDS, help='Region ID (optional, default cn-north-4)')
-    deploy_parser.add_argument('--ak', help='Huawei Cloud temporary AK (optional, will prompt for input if not provided)')
-    deploy_parser.add_argument('--sk', help='Huawei Cloud temporary SK (optional, will prompt for input if not provided)')
-    deploy_parser.add_argument('--security-token', help='Huawei Cloud Security Token (required for temporary credentials, will prompt for input if not provided)')
+    deploy_parser.add_argument('--ak', help='Huawei Cloud AK (supports both long-term and temporary AK, optional, will prompt for input if not provided)')
+    deploy_parser.add_argument('--sk', help='Huawei Cloud SK (supports both long-term and temporary SK, optional, will prompt for input if not provided)')
+    deploy_parser.add_argument('--security-token', help='Huawei Cloud Security Token (optional, only required for temporary AK/SK, will prompt for input if not provided)')
     deploy_parser.add_argument('--non-interactive', action='store_true', help='Non-interactive mode, execute without confirmation')
 
     maas_parser = subparsers.add_parser('maas', help='Install models on remote L instance via COC')
@@ -124,9 +127,9 @@ Examples:
     maas_parser.add_argument('--model-params', help='Model parameters JSON (optional)')
     maas_parser.add_argument('--timeout', type=int, help='Timeout in seconds (optional, default 600)')
     maas_parser.add_argument('--execute-user', default='root', help='Execute user (optional, default root)')
-    maas_parser.add_argument('--ak', help='Huawei Cloud temporary AK (optional, will prompt for input if not provided)')
-    maas_parser.add_argument('--sk', help='Huawei Cloud temporary SK (optional, will prompt for input if not provided)')
-    maas_parser.add_argument('--security-token', help='Huawei Cloud Security Token (required for temporary credentials, will prompt for input if not provided)')
+    maas_parser.add_argument('--ak', help='Huawei Cloud AK (supports both long-term and temporary AK, optional, will prompt for input if not provided)')
+    maas_parser.add_argument('--sk', help='Huawei Cloud SK (supports both long-term and temporary SK, optional, will prompt for input if not provided)')
+    maas_parser.add_argument('--security-token', help='Huawei Cloud Security Token (optional, only required for temporary AK/SK, will prompt for input if not provided)')
     maas_parser.add_argument('--non-interactive', action='store_true', help='Non-interactive mode, execute without confirmation')
 
     channel_parser = subparsers.add_parser('channel', help='Install channels on remote L instance via COC')
@@ -135,9 +138,9 @@ Examples:
     channel_parser.add_argument('--channel-list', help='Channel list JSON (optional)')
     channel_parser.add_argument('--timeout', type=int, help='Timeout in seconds (optional, default 600)')
     channel_parser.add_argument('--execute-user', default='root', help='Execute user (optional, default root)')
-    channel_parser.add_argument('--ak', help='Huawei Cloud temporary AK (optional, will prompt for input if not provided)')
-    channel_parser.add_argument('--sk', help='Huawei Cloud temporary SK (optional, will prompt for input if not provided)')
-    channel_parser.add_argument('--security-token', help='Huawei Cloud Security Token (required for temporary credentials, will prompt for input if not provided)')
+    channel_parser.add_argument('--ak', help='Huawei Cloud AK (supports both long-term and temporary AK, optional, will prompt for input if not provided)')
+    channel_parser.add_argument('--sk', help='Huawei Cloud SK (supports both long-term and temporary SK, optional, will prompt for input if not provided)')
+    channel_parser.add_argument('--security-token', help='Huawei Cloud Security Token (optional, only required for temporary AK/SK, will prompt for input if not provided)')
     channel_parser.add_argument('--non-interactive', action='store_true', help='Non-interactive mode, execute without confirmation')
 
     args = parser.parse_args()

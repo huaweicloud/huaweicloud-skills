@@ -20,9 +20,9 @@ def do_check_gateway(args):
         args: Command line argument object with the following attributes:
             - resource_id: L instance resource ID
             - region_id: Region ID
-            - ak: Huawei Cloud temporary AK
-            - sk: Huawei Cloud temporary SK
-            - security_token: Security token for temporary credentials (required)
+            - ak: Huawei Cloud AK (supports both long-term and temporary AK)
+            - sk: Huawei Cloud SK (supports both long-term and temporary SK)
+            - security_token: Security token for temporary credentials (optional, only required for temporary AK/SK)
     
     Returns:
         None
@@ -36,12 +36,14 @@ def do_check_gateway(args):
     security_token = getattr(args, 'security_token', None)
     
     if not ak or not sk:
-        print("\nHuawei Cloud temporary credentials not configured, entering interactive configuration...")
-        print("Please configure Huawei Cloud temporary credentials:")
+        print("\nHuawei Cloud credentials not configured, entering interactive configuration...")
+        print("Please configure Huawei Cloud credentials:")
+        print("  - Long-term AK/SK: No security_token required")
+        print("  - Temporary AK/SK: Security token required")
         print("-" * 40)
-        ak = prompt_for_input("Huawei Cloud temporary AK", required=True)
-        sk = prompt_for_input("Huawei Cloud temporary SK", required=True, hide_input=True)
-        security_token = prompt_for_input("Huawei Cloud Security Token (required for temporary credentials)", required=True)
+        ak = prompt_for_input("Huawei Cloud AK (HW_ACCESS_KEY)", required=True)
+        sk = prompt_for_input("Huawei Cloud SK (HW_SECRET_KEY)", required=True, hide_input=True)
+        security_token = prompt_for_input("Security Token (optional, only for temporary credentials)", required=False)
     
     resource_id = args.resource_id if hasattr(args, 'resource_id') and args.resource_id else None
     region_id = args.region_id if hasattr(args, 'region_id') and args.region_id else None
