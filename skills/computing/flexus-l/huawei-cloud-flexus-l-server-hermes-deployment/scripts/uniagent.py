@@ -19,10 +19,10 @@ def do_check_uniagent(args):
     Args:
         args: Command line argument object with the following attributes:
             - resource_id: L instance resource ID
-            - ak: Huawei Cloud AK (can be temporary AK)
-            - sk: Huawei Cloud SK (can be temporary SK)
-            - security_token: Security token for temporary credentials (optional)
-    
+            - ak: Huawei Cloud AK (supports both long-term and temporary AK)
+            - sk: Huawei Cloud SK (supports both long-term and temporary SK)
+            - security_token: Security token for temporary credentials (optional, only required for temporary AK/SK)
+
     Returns:
         None
     """
@@ -33,13 +33,17 @@ def do_check_uniagent(args):
     ak = getattr(args, 'ak', None)
     sk = getattr(args, 'sk', None)
     security_token = getattr(args, 'security_token', None)
-    
+
+    # If credentials not provided, prompt interactively
     if not ak or not sk:
         print("\nHuawei Cloud credentials not configured, entering interactive configuration...")
         print("Please configure Huawei Cloud credentials:")
+        print("  - Long-term AK/SK: No security_token required")
+        print("  - Temporary AK/SK: Security token required")
         print("-" * 40)
-        ak = prompt_for_input("Huawei Cloud AK", required=True)
-        sk = prompt_for_input("Huawei Cloud SK", required=True, hide_input=True)
+        ak = prompt_for_input("Huawei Cloud AK (HW_ACCESS_KEY)", required=True)
+        sk = prompt_for_input("Huawei Cloud SK (HW_SECRET_KEY)", required=True, hide_input=True)
+        security_token = prompt_for_input("Security Token (optional, only for temporary credentials)", required=False)
     
     resource_id = args.resource_id if hasattr(args, 'resource_id') and args.resource_id else None
     
