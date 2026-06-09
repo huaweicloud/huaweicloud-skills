@@ -157,7 +157,7 @@ def create_openclaw_instance(instance_name = None, region = None, ak = None, sk 
     if not ak or not sk:
         return {
             "ok": False,
-            "text": "Authentication credentials not configured",
+            "text": "Authentication temporary credentials not configured",
             "result": None,
             "error": {
                 "code": "CONFIG_ERROR",

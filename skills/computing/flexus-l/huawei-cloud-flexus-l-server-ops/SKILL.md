@@ -9,7 +9,7 @@ description: "Based on Huawei Cloud Flexus L API for instance management and ope
   3. NEVER create temporary script files, prefer inline execution (python -c)
   4. On execution failure, only return error info, do NOT rewrite scripts or print full commands
   5. AK/SK/Token MUST be passed via environment variables, NEVER appear in conversation
-  6. Do NOT display Python code, shell commands, script paths, or credential parameters in responses
+  6. ⚠️ ABSOLUTELY NEVER expose, log, or print AK/SK/Token values in any form - this is a critical security requirement
 
 # Huawei Cloud Flexus L Instance Operations
 
@@ -78,34 +78,6 @@ OpenClaw Agent → Flexus L Ops Skill → Huawei Cloud SDK → Huawei Cloud Serv
 pip3 install huaweicloudsdkcore huaweicloudsdkecs huaweicloudsdkconfig huaweicloudsdkbss \
   -i https://repo.huaweicloud.com/repository/pypi/simple
 ```
-
-### 3. Configure AK/SK
-
-**How to Obtain:**
-
-1. Login to Huawei Cloud Console: https://console.huaweicloud.com
-2. Click your username in the top right, select "My Credentials"
-3. Select "Access Keys" in the left navigation
-4. Click "Add Access Key" button
-5. Enter verification code to confirm identity
-6. System will automatically download a CSV file containing AK/SK
-   - **Access Key ID (AK)**: Access key ID, used to identify user
-   - **Secret Access Key (SK)**: Secret access key, used to sign requests
-
-**⚠️ Important Notes:**
-- SK is only shown once when created, please keep it safe
-- If you forget SK, you need to delete the old access key and create a new one
-- Each user can create up to 2 access keys
-- Regularly rotate access keys for better security
-
-**Configuration:**
-```bash
-export HW_ACCESS_KEY="your_Access_Key_ID"
-export HW_SECRET_KEY="your_Secret_Access_Key"
-export HW_SECURITY_TOKEN="your_Security_Token"  # Optional, required for temporary credentials
-```
-
-**⚠️ Security Requirement:** Only set via environment variables temporarily, do not store in any configuration files.
 
 ## ⚠️ Important: Script Usage Rules
 
@@ -192,54 +164,37 @@ See [Execution Flow](#execution-flow) for operation steps.
 
 | Credential Status | Next Step |
 |------------------|-----------|
-| ✅ HW_ACCESS_KEY + HW_SECRET_KEY + HW_SECURITY_TOKEN exist | Execute script directly (temporary credentials, pass --ak --sk --security-token parameters) |
-| ✅ HW_ACCESS_KEY + HW_SECRET_KEY exist (no Token) | Execute script directly (long-term credentials, pass --ak --sk parameters) |
-| ❌ Environment variables not found | Go to Step 2 (ask user for credentials) |
-| ❌ Authentication failed | Go to Step 2 (ask user for credentials) |
+| ✅ HW_ACCESS_KEY + HW_SECRET_KEY + HW_SECURITY_TOKEN exist | Execute script directly (**Recommended**: Temporary AK/SK authentication, higher security level, pass --ak --sk --security-token parameters) |
+| ✅ HW_ACCESS_KEY + HW_SECRET_KEY exist (no Token) | Execute script directly (Permanent AK/SK authentication, pass --ak --sk parameters) |
+| ❌ Environment variables not found | Prompt user to configure credentials (prefer environment variables, do NOT ask directly) |
+| ❌ Authentication failed | Prompt user to check or reconfigure credentials (prefer environment variables, do NOT ask directly) |
 
-**⚠️ Important Rules:**
+**⚠️ Security Recommendations:**
 
-1. **Prefer temporary credentials**: If HW_SECURITY_TOKEN exists in environment variables, it indicates temporary AK/SK, use it first
-2. **Cannot ask for permanent credentials when Token exists**: If HW_SECURITY_TOKEN exists but authentication fails, inform user that temporary credentials have expired and need to be re-obtained. **Do NOT ask user for permanent AK/SK**
-3. **Only ask when authentication fails**: Only ask user for credentials when environment variables don't exist or authentication fails
+1. **Prefer temporary credentials**: Strongly recommend using temporary AK/SK + Security Token method for higher security, credentials expire automatically
+2. **Environment variable configuration**: Credentials should be configured via environment variables (HW_ACCESS_KEY, HW_SECRET_KEY, HW_SECURITY_TOKEN)
+3. **Sensitive information protection**: AK/SK are sensitive information, do NOT input or disclose in conversation
 
-### Step 2: Configure Credentials (Only When Needed)
-
-**Only ask user in the following situations:**
-- Environment variables don't exist (HW_ACCESS_KEY, HW_SECRET_KEY)
-- Environment variables exist but authentication fails
-
-**⚠️ Important: If HW_SECURITY_TOKEN environment variable exists, it means user is using temporary credential system. Do NOT ask user for permanent AK/SK. Instead, inform user that temporary credentials have expired and need to be re-obtained.**
-
-Ask user for:
-- **AK (Access Key)**: Huawei Cloud access key
-- **SK (Secret Key)**: Huawei Cloud secret key
-- **Security Token**: (Optional) Temporary credential token
-
-**After successful configuration, tell user:**
+**Credential Missing or Authentication Failed Message:**
 
 ```
-✅ Credentials configured successfully!
+❌ Credentials not configured or authentication failed
 
-You can now use the following operations:
+Please configure Huawei Cloud credentials. For security, we recommend using temporary AK/SK + Security Token method via environment variables:
+- HW_ACCESS_KEY: Access Key AK
+- HW_SECRET_KEY: Secret Key SK
+- HW_SECURITY_TOKEN: Security Token (Recommended)
 
-1. List Instances - List all Flexus L instances
-2. Query Instance Details - View server configuration, status, etc.
-3. Traffic Package Query - View traffic package remaining and usage
-4. Batch Start - Start multiple servers
-5. Batch Stop - Stop multiple servers
-6. Batch Reboot - Reboot multiple servers
-7. Reset Password - Reset login password
-8. Modify Instance Information - Modify instance name, description, hostname
-
-What operation would you like to perform?
+⚠️ Security Note: Temporary credentials are more secure, please prefer using them!
 ```
 
-### Step 3: Select Operation
+**Note:** We prioritize obtaining credentials from environment variables and NEVER ask users to input AK/SK directly. However, we still support parsing credentials if user voluntarily provides them via other methods (e.g., conversation input, config file).
+
+### Step 2: Select Operation
 
 **After credentials are verified, ask user what operation to perform:**
 
-### Step 4: Execute Operation
+### Step 3: Execute Operation
 
 **⚠️ Instance Validation (When user provides instance ID/name):**
 
@@ -342,8 +297,20 @@ python3 {baseDir}/scripts/lifecycle.py reboot --instance-id <ID1> --instance-id 
   - Cannot contain 3 or more consecutive identical characters
 - Region code (optional, default cn-north-4)
 
+**⚠️ Important: After resetting password, the instance MUST be rebooted for the new password to take effect.**
+
+**Must confirm with user before reboot:**
+- Inform user that password reset is successful
+- Warn user about consequences: brief service interruption, memory data loss
+- If rebooting the server currently running OpenClaw, must warn additionally (brief conversation interruption, auto recovery)
+- Only execute reboot after user replies "confirm reboot"
+
 ```bash
 python3 {baseDir}/scripts/password_unified.py reset --instance-id <ID> --password <new_password> --region cn-north-4 --ak "$HW_ACCESS_KEY" --sk "$HW_SECRET_KEY" [--security-token "$HW_SECURITY_TOKEN"]
+```
+**Reboot Command:**
+```bash
+python3 {baseDir}/scripts/lifecycle.py reboot --instance-id <ID> --region cn-north-4 --ak "$HW_ACCESS_KEY" --sk "$HW_SECRET_KEY" [--security-token "$HW_SECURITY_TOKEN"]
 ```
 
 #### 4.7 Modify Instance Information

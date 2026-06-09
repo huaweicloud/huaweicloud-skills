@@ -32,7 +32,7 @@ and user expectations before being considered complete and ready for use.
 
 **AC-004**: The skill must retrieve detailed ECS instance information.
 
-- **Criteria**: `hcloud ECS ShowServerDetails <instance-id> --cli-region=<region-id>` returns complete instance details
+- **Criteria**: `hcloud ECS NovaShowServer --server_id=<instance-uuid> --cli-region=<region-id>` returns complete instance details
 - **Validation**: Verify all instance attributes are accessible (flavor, image, addresses, etc.)
 - **Success Metric**: Complete instance metadata retrieval
 
@@ -60,13 +60,13 @@ and user expectations before being considered complete and ready for use.
 
 **AC-008**: The skill must monitor CPU utilization.
 
-- **Criteria**: Query `cpu_usage` metric with proper dimensions and formatting
+- **Criteria**: Query `cpu_util` (SYS.ECS) or `cpu_usage` (AGT.ECS) metric with proper dimensions and formatting
 - **Validation**: Verify CPU percentage values are within 0-100% range
 - **Success Metric**: Accurate CPU monitoring with trend analysis
 
 **AC-009**: The skill must monitor memory utilization.
 
-- **Criteria**: Query `mem_usage` metric with proper dimensions
+- **Criteria**: Query `mem_util` (SYS.ECS) or `mem_usedPercent` (AGT.ECS) metric with proper dimensions
 - **Validation**: Verify memory percentage values are within 0-100% range
 - **Success Metric**: Accurate memory monitoring
 
@@ -108,7 +108,7 @@ and user expectations before being considered complete and ready for use.
 
 **AC-101**: Response time for single metric query must be under 5 seconds.
 
-- **Criteria**: `hcloud CES ShowMetricData` completes within 5 seconds for single metric
+- **Criteria**: `hcloud CES BatchListMetricData` completes within 5 seconds for single metric
 - **Validation**: Measure response time across 100 queries, calculate 95th percentile
 - **Success Metric**: 95% of queries complete within 5 seconds
 
@@ -120,7 +120,7 @@ and user expectations before being considered complete and ready for use.
 
 **AC-103**: Instance listing must complete within 3 seconds.
 
-- **Criteria**: `hcloud ECS NovaListServers` returns results within 3 seconds
+- **Criteria**: `hcloud ECS NovaListServers --cli-region=<region-id>` returns results within 3 seconds
 - **Validation**: Test with varying numbers of instances (1-100)
 - **Success Metric**: 99% of instance listings complete within 3 seconds
 
@@ -407,6 +407,33 @@ if hcloud configure list &> /dev/null; then
 else
     echo "✗ Credential configuration error"
     echo "FAIL" > "$TEST_OUTPUT_DIR/test-02-credentials.result"
+fi
+
+echo "Test 3: Verifying ECS instance listing..."
+if hcloud ECS NovaListServers --cli-region="$HUAWEICLOUD_REGION" &> /dev/null; then
+    echo "✓ ECS instance listing works"
+    echo "PASS" > "$TEST_OUTPUT_DIR/test-03-ecs-list.result"
+else
+    echo "✗ ECS instance listing failed"
+    echo "FAIL" > "$TEST_OUTPUT_DIR/test-03-ecs-list.result"
+fi
+
+echo "Test 4: Verifying CES metric query..."
+if hcloud CES BatchListMetricData \
+  --metrics.1.namespace="SYS.ECS" \
+  --metrics.1.metric_name="cpu_util" \
+  --metrics.1.dimensions.1.name="instance_id" \
+  --metrics.1.dimensions.1.value="$TEST_INSTANCE_ID" \
+  --from=$(date -d '1 hour ago' +%s)000 \
+  --to=$(date +%s)000 \
+  --period=300 \
+  --filter="average" \
+  --cli-region="$HUAWEICLOUD_REGION" &> /dev/null; then
+    echo "✓ CES metric query works"
+    echo "PASS" > "$TEST_OUTPUT_DIR/test-04-ces-query.result"
+else
+    echo "✗ CES metric query failed"
+    echo "FAIL" > "$TEST_OUTPUT_DIR/test-04-ces-query.result"
 fi
 
 # 3. Generate acceptance report

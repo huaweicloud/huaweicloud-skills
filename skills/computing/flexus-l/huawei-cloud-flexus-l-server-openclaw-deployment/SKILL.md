@@ -196,7 +196,7 @@ python scripts/caller.py maas \
   --resource-id 0e1234567890abcdef \
   --region-id cn-north-4 \
   --model-params '{"provider":"huawei","api_key":"your_maas_api_key","model_ids":["deepseek-v3.2","qwen3-235b-a22b"]}' \
-  --ak <AK> --sk <SK> --non-interactive
+  --ak <Temporary AK> --sk <Temporary SK> --security-token <Security Token> --non-interactive
 
 # Example 2: Install Huawei Cloud MaaS platform models with temporary AK/SK
 python scripts/caller.py maas \
@@ -210,7 +210,7 @@ python scripts/caller.py maas \
   --resource-id 0e1234567890abcdef \
   --region-id cn-north-4 \
   --model-params '{"provider":"https://api.openai.com/v1","api_key":"your_openai_key","model_ids":["gpt-4"]}' \
-  --ak <AK> --sk <SK> --non-interactive
+  --ak <Temporary AK> --sk <Temporary SK> --security-token <Security Token> --non-interactive
 ```
 
 **Status Code Description**: Status codes "200", "201", "202" all indicate successful model installation.

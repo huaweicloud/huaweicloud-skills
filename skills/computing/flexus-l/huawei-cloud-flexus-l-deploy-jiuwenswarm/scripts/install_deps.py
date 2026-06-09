@@ -209,7 +209,7 @@ def check_job_status(execute_uuid):
 def query_instance_by_ip(public_ip):
     """Query Flexus L instance information by public IP"""
     try:
-        from huaweicloudsdkcore.auth.credentials import GlobalCredentials
+        from huaweicloudsdkcore.auth.credentials import GlobalCredentials, BasicCredentials
         from huaweicloudsdkrms.v1 import RmsClient
         from huaweicloudsdkrms.v1.region.rms_region import RmsRegion
         from huaweicloudsdkrms.v1 import model
@@ -218,9 +218,13 @@ def query_instance_by_ip(public_ip):
         return None
 
     # Get credentials
-    AK, SK, REGION = get_huaweicloud_credentials()
+    AK, SK, REGION, SECURITY_TOKEN = get_huaweicloud_credentials()
     
-    credentials = GlobalCredentials(AK, SK)
+    # RMS requires GlobalCredentials
+    if SECURITY_TOKEN:
+        credentials = GlobalCredentials(AK, SK).with_security_token(SECURITY_TOKEN)
+    else:
+        credentials = GlobalCredentials(AK, SK)
     client = RmsClient.new_builder() \
         .with_credentials(credentials) \
         .with_region(RmsRegion.value_of(REGION)) \
@@ -613,9 +617,11 @@ def install_dependencies(instance_info):
     
     # Get credentials
     try:
-        AK, SK, REGION = get_huaweicloud_credentials()
+        AK, SK, REGION, SECURITY_TOKEN = get_huaweicloud_credentials()
         print_info(f"Using Region: {REGION}")
         print_info(f"AK: {AK[:4]}...{AK[-4:]}")
+        if SECURITY_TOKEN:
+            print_info(f"[INFO] Using temporary security credentials (STS token)")
     except ValueError as e:
         print_error(f"Failed to get credentials: {e}")
         return None
@@ -872,14 +878,15 @@ def main():
 
     # Check environment variables
     try:
-        AK, SK, REGION = get_huaweicloud_credentials()
+        AK, SK, REGION, SECURITY_TOKEN = get_huaweicloud_credentials()
     except ValueError as e:
         print_error(str(e))
         print("\nSet command:")
-        print("  Windows: set COC_AK=your_ak && set COC_SK=your_sk && set COC_REGION=cn-north-4")
-        print("  Linux/Mac: export COC_AK=your_ak && export COC_SK=your_sk && export COC_REGION=cn-north-4")
-        print("\nOr use legacy environment variables:")
-        print("  HUAWEICLOUD_SDK_AK and HUAWEICLOUD_SDK_SK")
+        print("  Windows: set HUAWEICLOUD_SDK_AK=your_ak && set HUAWEICLOUD_SDK_SK=your_sk && set HUAWEICLOUD_REGION=cn-north-4")
+        print("  Linux/Mac: export HUAWEICLOUD_SDK_AK=your_ak && export HUAWEICLOUD_SDK_SK=your_sk && export HUAWEICLOUD_REGION=cn-north-4")
+        print("\nFor temporary security credentials (STS token), also set:")
+        print("  Windows: set HUAWEICLOUD_SDK_SECURITY_TOKEN=your_token")
+        print("  Linux/Mac: export HUAWEICLOUD_SDK_SECURITY_TOKEN=your_token")
         sys.exit(1)
 
     # Get instance information

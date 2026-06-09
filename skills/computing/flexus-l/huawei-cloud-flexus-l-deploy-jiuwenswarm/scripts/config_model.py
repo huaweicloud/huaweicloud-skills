@@ -38,12 +38,17 @@ except ImportError as e:
     log.error("Please ensure utils.py exists")
     sys.exit(1)
 
-def query_instance_by_ip(public_ip, ak, sk, region):
-    from huaweicloudsdkcore.auth.credentials import GlobalCredentials
+def query_instance_by_ip(public_ip, ak, sk, region, security_token=None):
+    from huaweicloudsdkcore.auth.credentials import GlobalCredentials, BasicCredentials
     from huaweicloudsdkrms.v1 import RmsClient
     from huaweicloudsdkrms.v1.region.rms_region import RmsRegion
 
-    credentials = GlobalCredentials(ak, sk)
+    # RMS requires GlobalCredentials
+    if security_token:
+        credentials = GlobalCredentials(ak, sk).with_security_token(security_token)
+    else:
+        credentials = GlobalCredentials(ak, sk)
+    
     client = RmsClient.new_builder() \
         .with_credentials(credentials) \
         .with_region(RmsRegion.value_of(region)) \
@@ -180,7 +185,7 @@ def wait_for_completion(client, execute_uuid, timeout=300, interval=10):
             return False
 
         try:
-            # 使用华为云COC GetScriptJobInfo API查询状态
+            # Query status using Huawei Cloud COC GetScriptJobInfo API
             result = coc_query_execution(execute_uuid)
             
             if not result.get("ok"):
@@ -204,7 +209,7 @@ def wait_for_completion(client, execute_uuid, timeout=300, interval=10):
             
             print(f"  Status: {status} ({status_display}) (Elapsed: {int(elapsed)}s)", end='\r')
 
-            # According to Huawei Cloud COC API, when status becomes ABNORMAL, CANCELED, or FINISHED, script execution has ended
+            # According to Huawei Cloud COC API, script execution ends when status is ABNORMAL, CANCELED, or FINISHED
             if status == 'FINISHED':
                 success_count = job_info.get('success_count', 0)
                 fail_count = job_info.get('fail_count', 0)
@@ -268,11 +273,11 @@ update_param() {
     local env_file="$3"
     
     if grep -q "^[[:space:]]*$key=" "$env_file"; then
-        # 参数已存在，更新其值
-        sed -i "s|^\\s*$key=.*|$key=\"$value\"|" "$env_file"
+        # Parameter exists, update its value
+        sed -i "s|^\s*$key=.*|$key=\"$value\"|" "$env_file"
         echo "[INFO] Updated $key"
     else
-        # 参数不存在，添加到文件末尾
+        # Parameter doesn't exist, add to end of file
         echo "$key=\"$value\"" >> "$env_file"
         echo "[INFO] Added $key"
     fi
@@ -398,10 +403,13 @@ def main():
     args = parse_args()
 
     try:
-        AK, SK, REGION = get_huaweicloud_credentials()
+        AK, SK, REGION, SECURITY_TOKEN = get_huaweicloud_credentials()
     except ValueError as e:
         print(f"[ERROR] {e}")
         sys.exit(1)
+
+    if SECURITY_TOKEN:
+        print(f"[INFO] Using temporary security credentials (STS token)")
 
     config = None
     if args.config:
@@ -427,7 +435,7 @@ def main():
         instance_info = {'instance_id': args.instance_id, 'public_ip': args.ip, 'instance_name': 'Unknown'}
     elif args.ip:
         print(f"[INFO] Querying instance info by public IP: {args.ip}")
-        instance_info = query_instance_by_ip(args.ip, AK, SK, REGION)
+        instance_info = query_instance_by_ip(args.ip, AK, SK, REGION, SECURITY_TOKEN)
         if not instance_info:
             print(f"[ERROR] Cannot find instance with public IP: {args.ip}")
             return
