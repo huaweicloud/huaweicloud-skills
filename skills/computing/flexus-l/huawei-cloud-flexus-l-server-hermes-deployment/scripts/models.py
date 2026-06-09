@@ -3,8 +3,9 @@
 """
 Huawei Cloud Flexus L Instance One-Click Hermes Deployment - Model Installation Module
 
-Note: This module only supports temporary credentials (temporary AK/SK + security_token).
-      Permanent AK/SK credentials are not supported.
+Note: This module supports both long-term and temporary credentials.
+      - Long-term AK/SK: No security_token required
+      - Temporary AK/SK: Security token required
 """
 
 import os
@@ -16,7 +17,25 @@ from scripts.utils import prompt_for_input, REGION_IDS
 
 
 def do_install_maas(args):
-    """Execute ModelArts large model configuration"""
+    """Execute ModelArts large model configuration
+    
+    Args:
+        args: Command line argument object with the following attributes:
+            - resource_id: L instance resource ID (command line arg --resource-id)
+            - region_id: Region ID (command line arg --region-id)
+            - api_key: ModelArts API Key (command line arg --api-key)
+            - model_name: Large model name (command line arg --model-name)
+            - api_base_url: API Base URL (command line arg --api-base-url)
+            - timeout: Timeout duration (command line arg --timeout)
+            - execute_user: Execute user (command line arg --execute-user)
+            - ak: Huawei Cloud AK (supports both long-term and temporary AK) (command line arg --ak)
+            - sk: Huawei Cloud SK (supports both long-term and temporary SK) (command line arg --sk)
+            - security_token: Security token for temporary credentials (optional, only required for temporary AK/SK) (command line arg --security-token)
+            - non_interactive: Whether non-interactive mode (command line arg --non-interactive)
+
+    Returns:
+        None
+    """
     print("=" * 60)
     print("        Hermes ModelArts Large Model Configuration")
     print("=" * 60)
@@ -27,6 +46,17 @@ def do_install_maas(args):
     ak = args.ak if hasattr(args, 'ak') and args.ak else None
     sk = args.sk if hasattr(args, 'sk') and args.sk else None
     security_token = args.security_token if hasattr(args, 'security_token') and args.security_token else None
+
+    # If credentials not provided, prompt interactively (skip in non-interactive mode)
+    if not ak or not sk:
+        print("\nHuawei Cloud credentials not configured, entering interactive configuration...")
+        print("Please configure Huawei Cloud credentials:")
+        print("  - Long-term AK/SK: No security_token required")
+        print("  - Temporary AK/SK: Security token required")
+        print("-" * 40)
+        ak = prompt_for_input("Huawei Cloud AK (HW_ACCESS_KEY)", required=True)
+        sk = prompt_for_input("Huawei Cloud SK (HW_SECRET_KEY)", required=True, hide_input=True)
+        security_token = prompt_for_input("Security Token (optional, only for temporary credentials)", required=False)
     
     # Get parameters
     resource_id = args.resource_id if hasattr(args, 'resource_id') and args.resource_id else None

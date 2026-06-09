@@ -8,8 +8,9 @@ Includes:
 3. ModelArts large model configuration
 4. Bot channel configuration
 
-Note: This module only supports temporary credentials (temporary AK/SK + security_token).
-      Permanent AK/SK credentials are not supported.
+Note: This module supports both long-term and temporary credentials.
+      - Long-term AK/SK: No security_token required
+      - Temporary AK/SK: Security token required
 """
 
 import json
@@ -528,9 +529,9 @@ def install_maas_models_remote(
         api_base_url: API Base URL, default: https://api.modelarts-maas.com/v2
         timeout: Execution timeout in seconds, default 600
         execute_user: Execute user, default root
-        ak: Huawei Cloud AK (can be temporary AK)
-        sk: Huawei Cloud SK (can be temporary SK)
-        security_token: Security token for temporary credentials (optional)
+        ak: Huawei Cloud AK (supports both long-term and temporary AK)
+        sk: Huawei Cloud SK (supports both long-term and temporary SK)
+        security_token: Security token for temporary credentials (optional, only required for temporary AK/SK)
         coc_region: COC region (optional, default cn-north-4)
     
     Returns:
@@ -635,9 +636,9 @@ def install_channel_remote(
         wecom_secret: WeCom Secret (required when wecom platform is selected)
         timeout: Execution timeout in seconds, default 600
         execute_user: Execute user, default root
-        ak: Huawei Cloud AK (can be temporary AK)
-        sk: Huawei Cloud SK (can be temporary SK)
-        security_token: Security token for temporary credentials (optional)
+        ak: Huawei Cloud AK (supports both long-term and temporary AK)
+        sk: Huawei Cloud SK (supports both long-term and temporary SK)
+        security_token: Security token for temporary credentials (optional, only required for temporary AK/SK)
         coc_region: COC region (optional, default cn-north-4)
     
     Returns:
@@ -734,9 +735,9 @@ def restart_gateway_remote(
         region_id: L Instance region
         timeout: Execution timeout in seconds, default 120
         execute_user: Execute user, default root
-        ak: Huawei Cloud AK (can be temporary AK)
-        sk: Huawei Cloud SK (can be temporary SK)
-        security_token: Security token for temporary credentials (optional)
+        ak: Huawei Cloud AK (supports both long-term and temporary AK)
+        sk: Huawei Cloud SK (supports both long-term and temporary SK)
+        security_token: Security token for temporary credentials (optional, only required for temporary AK/SK)
         coc_region: COC region (optional, default cn-north-4)
     
     Returns:
@@ -950,9 +951,9 @@ def execute_script(
             - region_id: Server region (required)
             - provider: Resource provider (not required for ECS, default "HCSS" for L Instance)
             - type: Resource type (not required for ECS, default "L-INSTANCE" for L Instance)
-        ak: Huawei Cloud AK (can be temporary AK)
-        sk: Huawei Cloud SK (can be temporary SK)
-        security_token: Security token for temporary credentials (optional)
+        ak: Huawei Cloud AK (supports both long-term and temporary AK)
+        sk: Huawei Cloud SK (supports both long-term and temporary SK)
+        security_token: Security token for temporary credentials (optional, only required for temporary AK/SK)
         region: COC region (optional, default cn-north-4)
         rotation_strategy: Rotation strategy (CONTINUE/STOP), default CONTINUE
         wait_for_completion: Whether to wait for completion and get logs, default True
@@ -1148,9 +1149,9 @@ def coc_query_execution(execute_uuid: str, ak: str = None, sk: str = None, secur
     
     Parameters:
         execute_uuid: Execution UUID (format: SCT2023083109562601af694bf)
-        ak: Huawei Cloud AK (can be temporary AK)
-        sk: Huawei Cloud SK (can be temporary SK)
-        security_token: Security token for temporary credentials (optional)
+        ak: Huawei Cloud AK (supports both long-term and temporary AK)
+        sk: Huawei Cloud SK (supports both long-term and temporary SK)
+        security_token: Security token for temporary credentials (optional, only required for temporary AK/SK)
         region: COC region (optional, default cn-north-4)
     
     Returns:
@@ -1700,9 +1701,9 @@ def query_uniagent_status(
 
     Args:
         resource_id: L instance resource ID
-        ak: Huawei Cloud AK (can be temporary AK)
-        sk: Huawei Cloud SK (can be temporary SK)
-        security_token: Security token for temporary credentials (optional)
+        ak: Huawei Cloud AK (supports both long-term and temporary AK)
+        sk: Huawei Cloud SK (supports both long-term and temporary SK)
+        security_token: Security token for temporary credentials (optional, only required for temporary AK/SK)
 
     Returns:
         {
@@ -1716,7 +1717,7 @@ def query_uniagent_status(
         return _error("INPUT_ERROR", "resource_id parameter is required")
     
     if not ak or not sk:
-        return _error("CONFIG_ERROR", "Please provide AK and SK parameters")
+        return _error("CONFIG_ERROR", "Please provide AK and SK parameters. For temporary credentials, also provide security_token.")
     
     region = os.environ.get("HUAWEICLOUD_REGION", "cn-north-4")
     
