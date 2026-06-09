@@ -20,9 +20,9 @@ def do_deploy_openclaw(args):
         args: Command line argument object with the following attributes:
             - name: Instance name (command line arg --name)
             - region: Region ID (command line arg --region)
-            - ak: Huawei Cloud temporary AK (command line arg --ak)
-            - sk: Huawei Cloud temporary SK (command line arg --sk)
-            - security_token: Security token for temporary credentials (required) (command line arg --security-token)
+            - ak: Huawei Cloud AK (supports both long-term and temporary AK) (command line arg --ak)
+            - sk: Huawei Cloud SK (supports both long-term and temporary SK) (command line arg --sk)
+            - security_token: Security token for temporary credentials (optional, only required for temporary AK/SK) (command line arg --security-token)
             - non_interactive: Whether non-interactive mode (command line arg --non-interactive)
     
     Returns:
@@ -37,12 +37,14 @@ def do_deploy_openclaw(args):
     security_token = getattr(args, 'security_token', None)
 
     if not ak or not sk:
-        print("\nHuawei Cloud temporary credentials not configured, entering interactive configuration...")
-        print("Please configure Huawei Cloud temporary credentials:")
+        print("\nHuawei Cloud credentials not configured, entering interactive configuration...")
+        print("Please configure Huawei Cloud credentials:")
+        print("  - Long-term AK/SK: No security_token required")
+        print("  - Temporary AK/SK: Security token required")
         print("-" * 40)
-        ak = prompt_for_input("Huawei Cloud temporary AK:HW_ACCESS_KEY", required=True)
-        sk = prompt_for_input("Huawei Cloud temporary SK:HW_SECRET_KEY", required=True, hide_input=True)
-        security_token = prompt_for_input("Huawei Cloud Security Token (required for temporary credentials)", required=True)
+        ak = prompt_for_input("Huawei Cloud AK (HW_ACCESS_KEY)", required=True)
+        sk = prompt_for_input("Huawei Cloud SK (HW_SECRET_KEY)", required=True, hide_input=True)
+        security_token = prompt_for_input("Security Token (optional, only for temporary credentials)", required=False)
     
     instance_name = args.name if hasattr(args, 'name') and args.name else None
     region = args.region if hasattr(args, 'region') and args.region else None

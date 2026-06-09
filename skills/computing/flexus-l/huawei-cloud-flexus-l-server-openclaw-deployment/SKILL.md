@@ -19,6 +19,7 @@ metadata: {"openclaw": {"version": "1.0.0", "requires": {"bins": ["uv", "python3
  3. NEVER create temporary script files, prefer inline execution (python -c)
  4. On execution failure, only return error info, do NOT rewrite scripts or print full commands
  5. AK/SK/Token MUST be passed via environment variables, NEVER appear in conversation
+ 6. ABSOLUTELY NEVER expose, log, or print AK/SK/Token values in any form - this is a critical security requirement
 
 # huawei-cloud-flexus-l-server-openclaw-deployment
 ## Overview
@@ -57,22 +58,26 @@ User may say:
 
 This skill supports obtaining Huawei Cloud credentials through the following methods (in order of priority from high to low):
 
-1. **Environment Variables** (highest priority)
-   - `HW_ACCESS_KEY`: Huawei Cloud temporary Access Key AK
-   - `HW_SECRET_KEY`: Huawei Cloud temporary Access Key SK
-   - `HW_SECURITY_TOKEN`: Security token for temporary credentials (**required**)
+**Credential Types:**
+- **Long-term AK/SK**: Permanent credentials, no security_token required
+- **Temporary AK/SK**: Temporary credentials with limited validity period, security_token required
 
-2. **Command Line Parameters** (used when environment variables are not provided)
-   - `--ak`: Huawei Cloud temporary Access Key AK
-   - `--sk`: Huawei Cloud temporary Access Key SK
-   - `--security-token`: Security token for temporary credentials (**required**)
+1. **Environment Variables (Default)** (highest priority)
+   - `HW_ACCESS_KEY`: Huawei Cloud Access Key AK
+   - `HW_SECRET_KEY`: Huawei Cloud Access Key SK
+   - `HW_SECURITY_TOKEN`: Security token (optional, only required for temporary credentials)
+
+2. **User-specified Configuration File or Other Environment Variables** (used when default environment variables are not available)
+   - Configuration file path or other environment variables specified by user during interaction
 
 3. **Interactive Input** (when neither of the above methods is provided)
    - The program will prompt the user to enter AK/SK and other credential information
 
+
+
 **Important Notes:**
-- AK/SK should use temporary credentials obtained through IAM interfaces, which have limited validity periods
-- When using temporary AK/SK, security-token is a required parameter
+- Long-term AK/SK: Permanent credentials that never expire, no security_token needed
+- Temporary AK/SK: Obtained through IAM interface with limited validity period, must provide security_token
 
 ### Architecture Diagram
 
@@ -105,7 +110,10 @@ python scripts/caller.py deploy
 
 **Command 2: Non-Interactive Mode**
 ```bash
-# Using temporary AK/SK with security-token
+# Using long-term AK/SK (no security-token needed)
+python scripts/caller.py deploy --name openclaw-{timestamp} --region cn-north-4 --ak <AK> --sk <SK> --non-interactive
+
+# Using temporary AK/SK (security-token required)
 python scripts/caller.py deploy --name openclaw-{timestamp} --region cn-north-4 --ak <Temporary AK> --sk <Temporary SK> --security-token <Security Token> --non-interactive
 ```
 
@@ -114,9 +122,9 @@ python scripts/caller.py deploy --name openclaw-{timestamp} --region cn-north-4 
 |-----------|-------------|----------------------------|-----------------------|---------|
 | --name | OpenClaw instance name | No | openclaw-{timestamp} | `--name openclaw-1780689482000` |
 | --region | Target region ID where L instance (OpenClaw deployed server) is located | No | cn-north-4 | `--region cn-north-4` |
-| --ak | Huawei Cloud temporary Access Key AK | Yes | Prompted | `--ak AXXX...` |
-| --sk | Huawei Cloud temporary Access Key SK | Yes | Prompted | `--sk SXXX...` |
-| --security-token | Security token for temporary credentials (**required**) | Yes | Prompted | `--security-token XXXX...` |
+| --ak | Huawei Cloud Access Key AK (supports both long-term and temporary) | Yes | Prompted | `--ak AXXX...` |
+| --sk | Huawei Cloud Access Key SK (supports both long-term and temporary) | Yes | Prompted | `--sk SXXX...` |
+| --security-token | Security token for temporary credentials (optional, only required for temporary AK/SK) | No | Prompted | `--security-token XXXX...` |
 | --non-interactive | Enable non-interactive mode | No | false | `--non-interactive` |
 
 Note: OpenClaw only supports deployment in the following regions before June 2026 (before deploying to other regions, you can remind users to check the official website for the latest supported regions): China North-Beijing-4 (cn-north-4), China East-Shanghai-1 (cn-east-3), China South-Guangzhou (cn-south-1), China Southwest-Guiyang-1 (cn-southwest-2)
@@ -155,7 +163,10 @@ python scripts/caller.py maas
 ```
 **Command 2: Non-Interactive Mode**
 ```bash
-# Using temporary AK/SK with security-token
+# Using long-term AK/SK (no security-token needed)
+python scripts/caller.py maas --resource-id <Instance Resource ID> --region-id cn-north-4 --model-params '<Model configuration parameters>' --ak <AK> --sk <SK> --non-interactive
+
+# Using temporary AK/SK (security-token required)
 python scripts/caller.py maas --resource-id <Instance Resource ID> --region-id cn-north-4 --model-params '<Model configuration parameters>' --ak <Temporary AK> --sk <Temporary SK> --security-token <Security Token> --non-interactive
 ```
 **Parameter Description**:
@@ -164,9 +175,9 @@ python scripts/caller.py maas --resource-id <Instance Resource ID> --region-id c
 | --resource-id | L instance resource ID (instance ID returned after deploying OpenClaw instance) | Yes | Prompted | `--resource-id 0e1234567890abcdef` |
 | --region-id | Region ID where L instance is located, consistent with the region selected when deploying the instance | Yes | Prompted | `--region-id cn-north-4` |
 | --model-params | Model configuration parameters (JSON format), note: parameters must use valid JSON format, keys and values must be wrapped in double quotes | Yes | Prompted | --model-params '{"provider":"huawei","api_key":"your_maas_api_key","model_ids":["deepseek-v3.2"]}' |
-| --ak | Huawei Cloud temporary Access Key AK | Yes | Prompted | `--ak AXXX...` |
-| --sk | Huawei Cloud temporary Access Key SK | Yes | Prompted | `--sk SXXX...` |
-| --security-token | Security token for temporary credentials (**required**) | Yes | Prompted | `--security-token XXXX...` |
+| --ak | Huawei Cloud Access Key AK (supports both long-term and temporary) | Yes | Prompted | `--ak AXXX...` |
+| --sk | Huawei Cloud Access Key SK (supports both long-term and temporary) | Yes | Prompted | `--sk SXXX...` |
+| --security-token | Security token for temporary credentials (optional, only required for temporary AK/SK) | No | Prompted | `--security-token XXXX...` |
 | --timeout | Script execution timeout (seconds) | No | 600 | `--timeout 900` |
 | --non-interactive | Enable non-interactive mode | No | false | `--non-interactive` |
 
@@ -180,14 +191,21 @@ python scripts/caller.py maas --resource-id <Instance Resource ID> --region-id c
 **Command Examples**:
 
 ```bash
-# Example 1: Install Huawei Cloud MaaS platform models
+# Example 1: Install Huawei Cloud MaaS platform models with long-term AK/SK
 python scripts/caller.py maas \
   --resource-id 0e1234567890abcdef \
   --region-id cn-north-4 \
   --model-params '{"provider":"huawei","api_key":"your_maas_api_key","model_ids":["deepseek-v3.2","qwen3-235b-a22b"]}' \
   --ak <Temporary AK> --sk <Temporary SK> --security-token <Security Token> --non-interactive
 
-# Example 2: Install custom OpenAI compatible models
+# Example 2: Install Huawei Cloud MaaS platform models with temporary AK/SK
+python scripts/caller.py maas \
+  --resource-id 0e1234567890abcdef \
+  --region-id cn-north-4 \
+  --model-params '{"provider":"huawei","api_key":"your_maas_api_key","model_ids":["deepseek-v3.2","qwen3-235b-a22b"]}' \
+  --ak <Temporary AK> --sk <Temporary SK> --security-token <Security Token> --non-interactive
+
+# Example 3: Install custom OpenAI compatible models with long-term AK/SK
 python scripts/caller.py maas \
   --resource-id 0e1234567890abcdef \
   --region-id cn-north-4 \
@@ -206,7 +224,10 @@ python scripts/caller.py channel
 
 **Command 2: Non-Interactive Mode**
 ```bash
-# Using temporary AK/SK with security-token
+# Using long-term AK/SK (no security-token needed)
+python scripts/caller.py channel --resource-id <Instance Resource ID> --region-id cn-north-4 --channel-list '<JSON array>' --ak <AK> --sk <SK> --non-interactive
+
+# Using temporary AK/SK (security-token required)
 python scripts/caller.py channel --resource-id <Instance Resource ID> --region-id cn-north-4 --channel-list '<JSON array>' --ak <Temporary AK> --sk <Temporary SK> --security-token <Security Token> --non-interactive
 ```
 
@@ -216,9 +237,9 @@ python scripts/caller.py channel --resource-id <Instance Resource ID> --region-i
 | --resource-id | L instance resource ID (instance ID returned after deploying OpenClaw instance) | Yes | Prompted | `--resource-id 0e1234567890abcdef` |
 | --region-id | Region ID where instance is located, consistent with the region selected when deploying the instance | Yes | Prompted | `--region-id cn-north-4` |
 | --channel-list | Channel configuration (JSON array format) | Yes | Prompted | '[{"channel":"wecom","id":"xxx","secret":"xxx"},{"channel":"feishu","id":"yyy","secret":"yyy"}]' |
-| --ak | Huawei Cloud temporary Access Key AK | Yes | Prompted | `--ak AXXX...` |
-| --sk | Huawei Cloud temporary Access Key SK | Yes | Prompted | `--sk SXXX...` |
-| --security-token | Security token for temporary credentials (**required**) | Yes | Prompted | `--security-token XXXX...` |
+| --ak | Huawei Cloud Access Key AK (supports both long-term and temporary) | Yes | Prompted | `--ak AXXX...` |
+| --sk | Huawei Cloud Access Key SK (supports both long-term and temporary) | Yes | Prompted | `--sk SXXX...` |
+| --security-token | Security token for temporary credentials (optional, only required for temporary AK/SK) | No | Prompted | `--security-token XXXX...` |
 | --timeout | Script execution timeout (seconds) | No | 600 | `--timeout 900` |
 | --non-interactive | Enable non-interactive mode | No | false | `--non-interactive` |
 
@@ -233,7 +254,14 @@ python scripts/caller.py channel --resource-id <Instance Resource ID> --region-i
 
 **Command Examples**:
 ```bash
-# Example: Install multiple channels (WeCom + Feishu) using temporary AK/SK with security-token
+# Example 1: Install multiple channels (WeCom + Feishu) using long-term AK/SK
+python scripts/caller.py channel \
+  --resource-id 0e1234567890abcdef \
+  --region-id cn-north-4 \
+  --channel-list '[{"channel":"wecom","id":"xxx","secret":"xxx"},{"channel":"feishu","id":"yyy","secret":"yyy"}]' \
+  --ak <AK> --sk <SK> --non-interactive
+
+# Example 2: Install multiple channels (WeCom + Feishu) using temporary AK/SK
 python scripts/caller.py channel \
   --resource-id 0e1234567890abcdef \
   --region-id cn-north-4 \

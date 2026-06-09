@@ -19,6 +19,7 @@ metadata: {"hermes": {"version": "1.0.0", "requires": {"bins": ["uv", "python3"]
  3. NEVER create temporary script files, prefer inline execution (python -c)
  4. On execution failure, only return error info, do NOT rewrite scripts or print full commands
  5. AK/SK/Token MUST be passed via environment variables, NEVER appear in conversation
+  6. ABSOLUTELY NEVER expose, log, or print AK/SK/Token values in any form - this is a critical security requirement
 
 # Hermes One-Click Deployment Skill
 
@@ -38,18 +39,22 @@ This skill supports both interactive mode (step-by-step prompts) and non-interac
 ### Account Requirements
 
 - Valid Huawei Cloud account with sufficient permissions
-- Huawei Cloud temporary credentials: Temporary AK/SK + security_token
+- Huawei Cloud credentials: Long-term AK/SK OR Temporary AK/SK + security_token
 - Required permissions:
   - Creating Flexus L instances
   - Accessing COC (Cloud Operations Center) services
 
 **Credential Acquisition Methods:**
 
-This skill supports obtaining Huawei Cloud temporary credentials through the following methods:
-1. **Environment Variables**
-   - `HW_ACCESS_KEY`: Temporary Access Key AK
-   - `HW_SECRET_KEY`: Temporary Access Key SK
-   - `HW_SECURITY_TOKEN`: Security token for temporary credentials
+This skill supports both long-term and temporary Huawei Cloud credentials:
+
+1. **Long-term AK/SK**: No security_token required
+2. **Temporary AK/SK**: Security token required
+
+**Environment Variables** (optional):
+   - `HW_ACCESS_KEY`: Access Key AK (long-term or temporary)
+   - `HW_SECRET_KEY`: Secret Key SK (long-term or temporary)
+   - `HW_SECURITY_TOKEN`: Security token for temporary credentials (only required for temporary AK/SK)
 
 ### Architecture Diagram
 
@@ -75,7 +80,10 @@ User/Agent      ──────▶│   Flexus L Instance   │────�
 ### Deployment Commands
 
 ```bash
-# Deploy using temporary AK/SK and security-token (custom name, if not specified, auto-generates timestamp format: hermes-20260605143022)
+# Deploy using long-term AK/SK
+python scripts/caller.py deploy --ak <AK> --sk <SK> --name hermes-{timestamp} --region cn-north-4
+
+# Deploy using temporary AK/SK (requires security-token)
 python scripts/caller.py deploy --ak <temp_ak> --sk <temp_sk> --security-token <security_token> --name hermes-{timestamp} --region cn-north-4
 
 # Deploy in interactive mode (if not specified, auto-generates timestamp format: hermes-20260605143022)
@@ -89,7 +97,10 @@ python scripts/caller.py deploy
 ### Model Configuration Commands
 
 ```bash
-# Configure model using temporary AK/SK and security-token
+# Configure model using long-term AK/SK
+python scripts/caller.py maas --ak <AK> --sk <SK> --resource-id <instance_id> --region-id cn-north-4 --api-key <api_key> --model-name deepseek-v3.2
+
+# Configure model using temporary AK/SK
 python scripts/caller.py maas --ak <temp_ak> --sk <temp_sk> --security-token <security_token> --resource-id <instance_id> --region-id cn-north-4 --api-key <api_key> --model-name deepseek-v3.2
 
 # Configure model in interactive mode
@@ -99,10 +110,16 @@ python scripts/caller.py maas
 ### Channel Configuration Commands
 
 ```bash
-# Configure Feishu channel using temporary AK/SK and security-token
+# Configure Feishu channel using long-term AK/SK
+python scripts/caller.py channel --ak <AK> --sk <SK> --resource-id <instance_id> --region-id cn-north-4 --bot-platform feishu --feishu-app-id <app_id> --feishu-app-secret <app_secret>
+
+# Configure Feishu channel using temporary AK/SK
 python scripts/caller.py channel --ak <temp_ak> --sk <temp_sk> --security-token <security_token> --resource-id <instance_id> --region-id cn-north-4 --bot-platform feishu --feishu-app-id <app_id> --feishu-app-secret <app_secret>
 
-# Configure WeCom channel using temporary AK/SK and security-token
+# Configure WeCom channel using long-term AK/SK
+python scripts/caller.py channel --ak <AK> --sk <SK> --resource-id <instance_id> --region-id cn-north-4 --bot-platform wecom --wecom-bot-id <bot_id> --wecom-secret <secret>
+
+# Configure WeCom channel using temporary AK/SK
 python scripts/caller.py channel --ak <temp_ak> --sk <temp_sk> --security-token <security_token> --resource-id <instance_id> --region-id cn-north-4 --bot-platform wecom --wecom-bot-id <bot_id> --wecom-secret <secret>
 
 # Configure channel in interactive mode
@@ -112,7 +129,10 @@ python scripts/caller.py channel
 ### Gateway Management Commands
 
 ```bash
-# Restart gateway using temporary AK/SK and security-token
+# Restart gateway using long-term AK/SK
+python scripts/caller.py gateway --ak <AK> --sk <SK> --resource-id <instance_id> --region-id cn-north-4
+
+# Restart gateway using temporary AK/SK
 python scripts/caller.py gateway --ak <temp_ak> --sk <temp_sk> --security-token <security_token> --resource-id <instance_id> --region-id cn-north-4
 
 # Restart gateway in interactive mode
@@ -122,7 +142,10 @@ python scripts/caller.py gateway
 ### Query Execution Result Commands
 
 ```bash
-# Query execution result using temporary AK/SK and security-token
+# Query execution result using long-term AK/SK
+python scripts/caller.py query --ak <AK> --sk <SK> --execute-uuid SCT2023083109562601af694bf
+
+# Query execution result using temporary AK/SK
 python scripts/caller.py query --ak <temp_ak> --sk <temp_sk> --security-token <security_token> --execute-uuid SCT2023083109562601af694bf
 ```
 
@@ -137,7 +160,10 @@ python scripts/caller.py query --ak <temp_ak> --sk <temp_sk> --security-token <s
 ### UniAgent Status Query Commands
 
 ```bash
-# Query UniAgent status using temporary AK/SK and security-token
+# Query UniAgent status using long-term AK/SK
+python scripts/caller.py uniagent --ak <AK> --sk <SK> --resource-id <instance_id>
+
+# Query UniAgent status using temporary AK/SK
 python scripts/caller.py uniagent --ak <temp_ak> --sk <temp_sk> --security-token <security_token> --resource-id <instance_id>
 
 # Query UniAgent status in interactive mode
@@ -161,9 +187,9 @@ python scripts/caller.py uniagent
 
 | Parameter | Description | Required | Default Value |
 |-----------|-------------|----------|---------------|
-| `--ak` | Temporary Access Key AK | Yes | - |
-| `--sk` | Temporary Access Key SK | Yes | - |
-| `--security-token` | Security token for temporary credentials | Yes | - |
+| `--ak` | Huawei Cloud Access Key AK (supports both long-term and temporary) | No | Prompted |
+| `--sk` | Huawei Cloud Access Key SK (supports both long-term and temporary) | No | Prompted |
+| `--security-token` | Security token for temporary credentials (optional, only required for temporary AK/SK) | No | Prompted |
 | `--non-interactive` | Run in non-interactive mode | No | false |
 
 ### Deploy Command Parameters
