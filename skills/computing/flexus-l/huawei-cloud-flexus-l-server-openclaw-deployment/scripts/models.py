@@ -20,9 +20,9 @@ def _check_prerequisites(resource_id, region_id, ak, sk, security_token):
     Args:
         resource_id: L instance resource ID
         region_id: Region ID
-        ak: Huawei Cloud temporary AK
-        sk: Huawei Cloud temporary SK
-        security_token: Security token for temporary credentials (required)
+        ak: Huawei Cloud AK (supports both long-term and temporary AK)
+        sk: Huawei Cloud SK (supports both long-term and temporary SK)
+        security_token: Security token for temporary credentials (optional, only required for temporary AK/SK)
     
     Returns:
         bool: True if check passed, False if check failed
@@ -64,9 +64,9 @@ def do_install_maas(args):
             - model_params: Model parameters JSON (command line arg --model-params), must use valid JSON format with double quotes for keys and values
             - timeout: Timeout duration (command line arg --timeout)
             - execute_user: Execute user (command line arg --execute-user)
-            - ak: Huawei Cloud temporary AK (command line arg --ak)
-            - sk: Huawei Cloud temporary SK (command line arg --sk)
-            - security_token: Security token for temporary credentials (required) (command line arg --security-token)
+            - ak: Huawei Cloud AK (supports both long-term and temporary AK) (command line arg --ak)
+            - sk: Huawei Cloud SK (supports both long-term and temporary SK) (command line arg --sk)
+            - security_token: Security token for temporary credentials (optional, only required for temporary AK/SK) (command line arg --security-token)
             - non_interactive: Whether non-interactive mode (command line arg --non-interactive)
     
     Returns:
@@ -81,12 +81,14 @@ def do_install_maas(args):
     security_token = getattr(args, 'security_token', None)
     
     if not ak or not sk:
-        print("\nHuawei Cloud temporary credentials not configured, entering interactive configuration...")
-        print("Please configure Huawei Cloud temporary credentials:")
+        print("\nHuawei Cloud credentials not configured, entering interactive configuration...")
+        print("Please configure Huawei Cloud credentials:")
+        print("  - Long-term AK/SK: No security_token required")
+        print("  - Temporary AK/SK: Security token required")
         print("-" * 40)
-        ak = prompt_for_input("Huawei Cloud temporary AK:HW_ACCESS_KEY", required=True)
-        sk = prompt_for_input("Huawei Cloud temporary SK:HW_SECRET_KEY", required=True, hide_input=True)
-        security_token = prompt_for_input("Huawei Cloud Security Token (required for temporary credentials)", required=True)
+        ak = prompt_for_input("Huawei Cloud AK (HW_ACCESS_KEY)", required=True)
+        sk = prompt_for_input("Huawei Cloud SK (HW_SECRET_KEY)", required=True, hide_input=True)
+        security_token = prompt_for_input("Security Token (optional, only for temporary credentials)", required=False)
     
     resource_id = args.resource_id if hasattr(args, 'resource_id') and args.resource_id else None
     region_id = args.region_id if hasattr(args, 'region_id') and args.region_id else None
