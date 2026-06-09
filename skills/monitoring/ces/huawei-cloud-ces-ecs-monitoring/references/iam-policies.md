@@ -242,7 +242,9 @@ When any operation encounters a permission error failure, MUST follow this proce
 
 ## IAM Policy Examples
 
-### 1. Read-Only Policy (Minimum)
+### 1. Read-Only Policy (Minimum, Project-Scoped)
+
+This is the minimum required permissions (see above) with an additional `Condition` block to restrict access to a specific project. Use this for production environments where project-level isolation is needed.
 
 ```json
 {
@@ -408,31 +410,36 @@ output = json
 
 ```bash
 # List ECS instances (requires ecs:cloudServers:list)
-hcloud ecs list-servers --region <region>
+hcloud ECS NovaListServers --cli-region <region-id>
 
 # Get specific instance (requires ecs:cloudServers:get)
-hcloud ECS ShowServerDetails <instance-id> --cli-region <region>
+hcloud ECS NovaShowServer --server_id <instance-uuid> --cli-region <region-id>
 ```
 
 ### Test CES Access
 
 ```bash
 # List available metrics (requires ces:metrics:list)
-hcloud CES ListMetrics --namespace "SYS.ECS" --cli-region <region>
+hcloud CES ListMetrics --namespace "SYS.ECS" --cli-region <region-id>
 
 # Get metric data (requires ces:metricData:get)
-hcloud CES ShowMetricData \
-  --namespace "SYS.ECS" \
-  --metric_name "cpu_usage" \
-  --dim.0 "instance_id,<instance-id>" \
-  --cli-region <region>
+hcloud CES BatchListMetricData \
+  --metrics.1.namespace="SYS.ECS" \
+  --metrics.1.metric_name="cpu_util" \
+  --metrics.1.dimensions.1.name="instance_id" \
+  --metrics.1.dimensions.1.value="<instance-uuid>" \
+  --from=$(date -d '1 hour ago' +%s)000 \
+  --to=$(date +%s)000 \
+  --period=300 \
+  --filter="average" \
+  --cli-region <region-id>
 ```
 
 ### Test IAM Access (Optional)
 
 ```bash
 # Get user info (requires iam:users:getUser)
-hcloud iam show-user
+hcloud IAM ShowUser
 ```
 
 ## Troubleshooting Permission Issues
@@ -465,7 +472,7 @@ hcloud iam show-user
 
 ```bash
 # Check if resource exists
-hcloud ecs list-servers --region <region>
+hcloud ECS NovaListServers --cli-region <region-id>
 
 # Verify resource ID
 # Check project ID in policy conditions
@@ -474,11 +481,9 @@ hcloud ecs list-servers --region <region>
 ### 4. "Invalid Region"
 
 ```bash
-# List available regions
-hcloud ecs list-regions
-
 # Verify region format
-# Common regions: cn-north-1, cn-east-2, ap-southeast-1
+# Common regions: cn-north-1, cn-north-4, cn-east-2, ap-southeast-1
+# Ensure the region matches where the resource was created
 ```
 
 ## Security Best Practices
