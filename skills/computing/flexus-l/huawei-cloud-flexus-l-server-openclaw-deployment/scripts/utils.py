@@ -108,18 +108,25 @@ def setup_credentials_interactive():
         None
     
     Returns:
-        tuple: (ak, sk, region) credentials triplet
+        tuple: (ak, sk, security_token, region) credentials tuple
     """
     print("\nPlease configure Huawei Cloud credentials:")
+    print("  - Long-term AK/SK: No security_token required")
+    print("  - Temporary AK/SK: Security token required")
     print("-" * 40)
     
-    ak = prompt_for_input("Huawei Cloud AK:HW_ACCESS_KEY", required=True)
-    sk = prompt_for_input("Huawei Cloud SK:HW_SECRET_KEY", required=True, hide_input=True)
+    ak = prompt_for_input("Huawei Cloud AK (HW_ACCESS_KEY)", required=True)
+    sk = prompt_for_input("Huawei Cloud SK (HW_SECRET_KEY)", required=True, hide_input=True)
+    security_token = prompt_for_input("Security Token (optional, only for temporary credentials)", required=False)
     region = prompt_for_input("Region ID", required=False, default="cn-north-4")
     
     print(f"\n[OK] Credentials configured")
     print(f"  AK: {ak[:4]}...{ak[-4:]}")
     print(f"  SK: {'*' * len(sk)}")
+    if security_token:
+        print(f"  Security Token: {'*' * len(security_token)}")
+    else:
+        print(f"  Security Token: None (using long-term credentials)")
     print(f"  Region: {region} ({REGIONS.get(region, '')})")
     
-    return ak, sk, region
+    return ak, sk, security_token, region
