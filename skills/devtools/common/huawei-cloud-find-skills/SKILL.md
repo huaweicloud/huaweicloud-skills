@@ -21,7 +21,7 @@ This skill enables users to:
 - **Search Skills**: Find skills by keyword, category, or both (matched against name, description, and triggers)
 - **Browse Categories**: Explore available skill categories
 - **View Skill Details**: Fetch full SKILL.md content from GitHub for specific skills
-- **Install Skills**: Guide users through skill installation via `npx skills add`
+- **Install Skills**: Guide users through skill installation via `npx skills add`,`npx clawhub install`, or fallback GitCode method
 
 **Architecture**: Pre-built index (`references/index.json`) → Script-based search → GitHub raw fetch for details → Install
 
@@ -90,17 +90,20 @@ The agent can fetch this URL using `curl` or its web-fetch tool, then present th
 
 ### Step 3: Install Skill
 
-> **MANDATORY**: Use ONLY one of the two commands below.
+> **MANDATORY**: Use one of the commands below. Option A is the default; Option C is a fallback when Option A is unavailable.
 
 ```bash
-# Option A: npx skills add (default)
+# Option A: npx skills add from GitHub (default)
 npx skills add huaweicloud/huaweicloud-skills --skill <skill-name>
 
 # Option B: npx clawhub install (OpenClaw ecosystem)
 npx clawhub install <skill-name>
+
+# Option C (fallback): npx skills add from GitCode
+npx skills add https://gitcode.com/huaweicloud/huaweicloud-skills.git#master --skill <skill-name>
 ```
 
-If installation fails, report the error message to the user. Do NOT attempt any method outside the two commands above.
+If all installation attempts fail, report the error message to the user. Do NOT attempt any method outside the commands above.
 
 ## Parameters
 
@@ -114,7 +117,7 @@ If installation fails, report the error message to the user. Do NOT attempt any 
 
 | Document | Description |
 |----------|-------------|
-| [references/index.json](references/index.json) | Pre-built skill index with 37 entries (name, description, triggers, category, service) |
+| [references/index.json](references/index.json) | Pre-built skill index with 49 entries (name, description, triggers, category, service) |
 | [references/cn-en-map.json](references/cn-en-map.json) | Chinese-English keyword mapping for search expansion (bidirectional) |
 | [scripts/search-skills.ps1](scripts/search-skills.ps1) | Step 1 search script (PowerShell) — reads index.json, expands keywords, scores, sorts |
 | [scripts/search-skills.sh](scripts/search-skills.sh) | Step 1 search script (Bash) — reads index.json, expands keywords, scores, sorts |
