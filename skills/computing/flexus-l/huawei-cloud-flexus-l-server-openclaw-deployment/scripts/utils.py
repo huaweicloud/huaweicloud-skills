@@ -102,7 +102,7 @@ def prompt_for_input(prompt, required=True, default=None, choices=None, hide_inp
 
 def setup_credentials_interactive():
     """
-    Interactive setup of Huawei Cloud credentials
+    Interactive setup of Huawei Cloud temporary credentials
     
     Args:
         None
@@ -120,7 +120,7 @@ def setup_credentials_interactive():
     security_token = prompt_for_input("Security Token (optional, only for temporary credentials)", required=False)
     region = prompt_for_input("Region ID", required=False, default="cn-north-4")
     
-    print(f"\n[OK] Credentials configured")
+    print(f"\n[OK] Temporary credentials configured")
     print(f"  AK: {ak[:4]}...{ak[-4:]}")
     print(f"  SK: {'*' * len(sk)}")
     if security_token:
