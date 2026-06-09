@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 # Constants
 VALID_SCRIPT_TYPES = ["SHELL", "PYTHON", "BAT"]
 VALID_RISK_LEVELS = ["LOW", "MEDIUM", "HIGH"]
-VALID_ROTATION_STRATEGIES = ["CONTINUE", "STOP"]
+VALID_ROTATION_STRATEGIES = ["CONTINUE", "PAUSE"]
 
 
 def get_valid_coc_regions() -> list[str]:
@@ -207,7 +207,7 @@ def execute_script(
         return _error("INPUT_ERROR", "script_uuid is required")
     if not execute_user:
         return _error("INPUT_ERROR", "execute_user is required")
-    if timeout <= 5 or timeout >= 1800:
+    if timeout <= 5 or timeout > 1800:
         return _error("INPUT_ERROR", "timeout must be between 5 and 1800 seconds")
     if success_rate < 0 or success_rate > 100:
         return _error("INPUT_ERROR", "success_rate must be between 0 and 100")
