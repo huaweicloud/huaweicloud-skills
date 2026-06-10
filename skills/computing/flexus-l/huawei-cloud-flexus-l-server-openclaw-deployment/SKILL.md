@@ -20,6 +20,7 @@ metadata: {"openclaw": {"version": "1.0.0", "requires": {"bins": ["uv", "python3
  4. On execution failure, only return error info, do NOT rewrite scripts or print full commands
  5. AK/SK/Token MUST be passed via environment variables, NEVER appear in conversation
  6. ABSOLUTELY NEVER expose, log, or print AK/SK/Token values in any form - this is a critical security requirement
+ 7. When using skill action=exec, credentials are automatically inherited from environment variables (HW_ACCESS_KEY, HW_SECRET_KEY, HW_SECURITY_TOKEN), no need to pass them as command line arguments
 
 # huawei-cloud-flexus-l-server-openclaw-deployment
 ## Overview
