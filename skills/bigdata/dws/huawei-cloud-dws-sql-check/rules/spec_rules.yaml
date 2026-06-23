@@ -1,0 +1,432 @@
+# DWS SQL 规范检查规则
+
+spec_rules:
+  # ---- 对象设计规范 ----
+  - id: SPEC001
+    name: "CREATE TABLE 缺少 DISTRIBUTE BY"
+    level: ERROR
+    category: "对象设计规范"
+    description: "创建表时必须指定分布策略，否则默认使用 ROUNDROBIN 可能导致性能问题"
+    applies_to: ["CREATE TABLE"]
+    check_type: "ast_pattern"
+    pattern: "CreateStmt without distribute_type"
+    source: "规则2.9"
+    fix_suggestion: "添加 DISTRIBUTE BY HASH(分布键) / REPLICATION / ROUNDROBIN"
+
+  - id: SPEC002
+    name: "CREATE TABLE 缺少主键"
+    level: INFO
+    category: "对象设计规范"
+    description: "表建议定义主键约束以确保数据唯一性"
+    applies_to: ["CREATE TABLE"]
+    check_type: "ast_pattern"
+    pattern: "CreateStmt without has_primary_key"
+    fix_suggestion: "添加 PRIMARY KEY 约束"
+
+  - id: SPEC003
+    name: "禁止使用 SELECT *"
+    level: ERROR
+    category: "数据操作规范"
+    description: "查询语句必须明确指定字段列表，SELECT * 会导致不必要的 I/O 和网络传输"
+    applies_to: ["SELECT"]
+    check_type: "ast_pattern"
+    pattern: "SelectStmt with has_select_star"
+    source: "建议3.14"
+    fix_suggestion: "将 SELECT * 替换为具体的字段列表"
+
+  - id: SPEC004
+    name: "DELETE/UPDATE 缺少 WHERE 条件"
+    level: ERROR
+    category: "数据操作规范"
+    description: "DELETE/UPDATE 语句必须包含 WHERE 条件，否则将影响全表数据"
+    applies_to: ["DELETE", "UPDATE"]
+    check_type: "ast_pattern"
+    pattern: "DeleteStmt/UpdateStmt with missing_where"
+    fix_suggestion: "添加 WHERE 条件限制操作范围"
+
+  - id: SPEC005
+    name: "NOT IN 子查询性能风险"
+    level: WARNING
+    category: "数据操作规范"
+    description: "NOT IN 子查询可能导致性能问题，建议改用 NOT EXISTS 或 LEFT JOIN"
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    check_type: "token_pattern"
+    pattern: "NOT IN (SELECT ...)"
+    fix_suggestion: "将 NOT IN (SELECT ...) 改写为 NOT EXISTS (SELECT ...) 或 LEFT JOIN ... IS NULL"
+
+  - id: SPEC006
+    name: "DISTINCT 可能影响性能"
+    level: INFO
+    category: "数据操作规范"
+    description: "使用 DISTINCT 会导致排序去重，大数据量下可能影响性能"
+    applies_to: ["SELECT"]
+    check_type: "ast_pattern"
+    pattern: "SelectStmt with distinct"
+    fix_suggestion: "考虑使用 GROUP BY 替代 DISTINCT，或确保查询结果本身已唯一"
+
+  - id: SPEC007
+    name: "隐式类型转换风险"
+    level: WARNING
+    category: "数据操作规范"
+    description: "WHERE 条件中可能存在隐式类型转换，导致索引失效"
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    check_type: "token_pattern"
+    pattern: "WHERE column = 'number' (string-number mismatch)"
+    fix_suggestion: "确保比较操作两侧的数据类型一致，使用显式类型转换"
+
+  - id: SPEC008
+    name: "LIKE 前缀通配符导致全表扫描"
+    level: WARNING
+    category: "数据操作规范"
+    description: "LIKE '%...' 模式无法使用索引，将导致全表扫描"
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    check_type: "token_pattern"
+    pattern: "LIKE '%...'"
+    fix_suggestion: "避免使用前缀通配符，或考虑全文检索"
+
+  - id: SPEC009
+    name: "OR 条件可能导致性能问题"
+    level: INFO
+    category: "数据操作规范"
+    description: "OR 条件可能导致查询优化器无法选择最优执行计划"
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    check_type: "token_pattern"
+    pattern: "WHERE ... OR ..."
+    fix_suggestion: "考虑将 OR 改写为 UNION ALL，或使用 IN 子句"
+
+  - id: SPEC010
+    name: "IN 列表过长"
+    level: WARNING
+    category: "数据操作规范"
+    description: "IN 列表包含过多值（>100），可能影响性能"
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    check_type: "token_pattern"
+    pattern: "IN (val1, val2, ...) with >100 values"
+    fix_suggestion: "将 IN 列表改写为临时表 JOIN 或子查询"
+
+  - id: SPEC011
+    name: "FROM 子句中的子查询"
+    level: INFO
+    category: "数据操作规范"
+    description: "FROM 子句中使用子查询可能影响优化器生成最优计划"
+    applies_to: ["SELECT"]
+    check_type: "ast_pattern"
+    pattern: "SelectStmt with subquery in from_clause"
+    fix_suggestion: "考虑将子查询改写为 CTE (WITH 子句) 或临时表"
+
+  - id: SPEC012
+    name: "笛卡尔积风险"
+    level: ERROR
+    category: "数据操作规范"
+    description: "多表查询缺少 JOIN 条件，可能产生笛卡尔积"
+    applies_to: ["SELECT"]
+    check_type: "ast_pattern"
+    pattern: "SelectStmt with multiple from_tables and no join/where"
+    source: "规则3.8"
+    fix_suggestion: "使用显式 JOIN 语法并指定 ON 条件"
+
+  - id: SPEC013
+    name: "Oracle 外连接语法"
+    level: INFO
+    category: "数据操作规范"
+    description: "使用了 Oracle 风格的外连接运算符 (+)，建议使用标准 SQL JOIN 语法"
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    check_type: "token_pattern"
+    pattern: "ORA_JOINOP token"
+    fix_suggestion: "将 t1.id = t2.id(+) 改写为 t1 LEFT JOIN t2 ON t1.id = t2.id"
+
+  - id: SPEC014
+    name: "INSERT 缺少列列表"
+    level: WARNING
+    category: "数据操作规范"
+    description: "INSERT 语句未指定列列表，依赖列的默认顺序，可能导致兼容性问题"
+    applies_to: ["INSERT"]
+    check_type: "ast_pattern"
+    pattern: "InsertStmt without columns"
+    fix_suggestion: "添加列列表 INSERT INTO table (col1, col2, ...) VALUES ..."
+
+  - id: SPEC015
+    name: "CREATE TABLE 缺少表注释"
+    level: INFO
+    category: "对象设计规范"
+    description: "表未添加注释，不利于后续维护"
+    applies_to: ["CREATE TABLE"]
+    check_type: "ast_pattern"
+    pattern: "CreateStmt without comment"
+    fix_suggestion: "添加 COMMENT '表用途说明'"
+
+  # ---- 命名规范 ----
+  - id: SPEC016
+    name: "表名不符合命名规范"
+    level: WARNING
+    category: "命名规范"
+    description: "表名应使用小写字母、数字和下划线，且以字母开头"
+    applies_to: ["CREATE TABLE", "ALTER TABLE"]
+    check_type: "identifier_pattern"
+    pattern: "table_name not matching ^[a-z][a-z0-9_]*$"
+    fix_suggestion: "使用小写字母、数字和下划线命名表，如 user_order_detail"
+
+  - id: SPEC017
+    name: "列名不符合命名规范"
+    level: WARNING
+    category: "命名规范"
+    description: "列名应使用小写字母、数字和下划线，且以字母开头"
+    applies_to: ["CREATE TABLE", "ALTER TABLE"]
+    check_type: "identifier_pattern"
+    pattern: "column_name not matching ^[a-z][a-z0-9_]*$"
+    fix_suggestion: "使用小写字母、数字和下划线命名列，如 order_id"
+
+  - id: SPEC018
+    name: "使用保留关键字作标识符"
+    level: ERROR
+    category: "命名规范"
+    description: "使用保留关键字作为表名/列名可能导致语法歧义"
+    applies_to: ["ALL"]
+    check_type: "reserved_keyword_check"
+    pattern: "identifier matching RESERVED_KEYWORD"
+    fix_suggestion: "更换标识符名称或使用双引号引用"
+
+  # ---- DWS 特有规范 ----
+  - id: SPEC019
+    name: "DISTRIBUTE BY HASH 列建议为列定义中出现"
+    level: WARNING
+    category: "对象设计规范"
+    description: "DISTRIBUTE BY HASH 的分布键应为表中实际存在的列"
+    applies_to: ["CREATE TABLE"]
+    check_type: "ast_pattern"
+    pattern: "distribute column not in column definitions"
+    fix_suggestion: "确保分布键列在表定义中存在"
+
+  - id: SPEC020
+    name: "分区键建议与分布键不同"
+    level: INFO
+    category: "对象设计规范"
+    description: "分区键和分布键使用相同列可能导致数据倾斜"
+    applies_to: ["CREATE TABLE"]
+    check_type: "ast_pattern"
+    pattern: "partition_key == distribute_key"
+    fix_suggestion: "考虑使用不同列作为分区键和分布键"
+
+  - id: SPEC021
+    name: "REPLICATION 表不宜过大"
+    level: WARNING
+    category: "对象设计规范"
+    description: "使用 REPLICATION 分布策略的表会在每个 DN 上存储完整副本，大表不宜使用"
+    applies_to: ["CREATE TABLE"]
+    check_type: "ast_pattern"
+    pattern: "distribute_type == REPLICATION"
+    fix_suggestion: "大表建议使用 DISTRIBUTE BY HASH(col)，小维度表适合 REPLICATION"
+
+  - id: SPEC022
+    name: "ROUNDROBIN 分布可能导致性能问题"
+    level: INFO
+    category: "对象设计规范"
+    description: "ROUNDROBIN 分布不支持本地关联，可能导致大量网络重分布"
+    applies_to: ["CREATE TABLE"]
+    check_type: "ast_pattern"
+    pattern: "distribute_type == ROUNDROBIN"
+    source: "规则2.9"
+    fix_suggestion: "如果表需要与其他表关联，建议使用 DISTRIBUTE BY HASH(col)"
+
+  # ---- 来自《DWS开发设计规范》的新增规则 ----
+
+  - id: SPEC023
+    name: "自定义 TABLESPACE 需确认场景"
+    level: WARNING
+    category: "对象设计规范"
+    description: "分布式场景建表使用自定义表空间，导致表数据无法按照各 DN 分布式存储，出现存储倾斜。列存v3表(orientation=column, colversion=3.0)除外"
+    applies_to: ["CREATE TABLE"]
+    check_type: "token_ast_pattern"
+    pattern: "CREATE TABLE ... TABLESPACE ... 且非列存v3表"
+    source: "规则2.8"
+    fix_suggestion: "创建表对象使用内置默认表空间，列存v3表指定TABLESPACE除外"
+
+  - id: SPEC024
+    name: "创建表建议显式指定存储方式"
+    level: WARNING
+    category: "对象设计规范"
+    description: "创建表时通过 orientation 参数显式指定表的存储类型（row/column），避免使用默认值"
+    applies_to: ["CREATE TABLE"]
+    check_type: "ast_pattern"
+    pattern: "CreateStmt without orientation in with_options"
+    source: "规则2.10"
+    fix_suggestion: "添加 WITH (orientation=row) 或 WITH (orientation=column)"
+
+  - id: SPEC025
+    name: "行存表禁止指定 compress 属性"
+    level: ERROR
+    category: "对象设计规范"
+    description: "创建行存表（orientation = row）时，禁止指定 compress 属性，禁止使用行存压缩表"
+    applies_to: ["CREATE TABLE"]
+    check_type: "token_ast_pattern"
+    pattern: "orientation=row + COMPRESS"
+    source: "规则2.10"
+    fix_suggestion: "行存表不要指定 COMPRESS 属性，如需压缩请使用列存表"
+
+  - id: SPEC026
+    name: "大表建议设计分区"
+    level: INFO
+    category: "对象设计规范"
+    description: "针对包含时间类型字段的表建议设计分区，改善查询性能和提升数据治理效率"
+    applies_to: ["CREATE TABLE"]
+    check_type: "ast_pattern"
+    pattern: "CreateStmt without partition_by"
+    source: "规则2.11"
+    fix_suggestion: "添加 PARTITION BY RANGE(时间字段) 或 PARTITION BY LIST(枚举字段)"
+
+  - id: SPEC027
+    name: "字段建议添加 NOT NULL 约束"
+    level: INFO
+    category: "对象设计规范"
+    description: "明确不存在 NULL 值的字段加上 NOT NULL 约束，优化器会在特定场景下对其进行自动优化"
+    applies_to: ["CREATE TABLE"]
+    check_type: "ast_pattern"
+    pattern: "column without NOT NULL constraint"
+    source: "建议2.12"
+    fix_suggestion: "对明确不存在 NULL 值的字段添加 NOT NULL 约束"
+
+  - id: SPEC028
+    name: "避免使用自增列或自增数据类型"
+    level: WARNING
+    category: "对象设计规范"
+    description: "自增序列或自增数据类型在大量使用时，会造成 GTM 压力过大及序列生成速度慢"
+    applies_to: ["CREATE TABLE"]
+    check_type: "token_pattern"
+    pattern: "SERIAL / BIGSERIAL / SMALLSERIAL column type"
+    source: "建议2.13"
+    fix_suggestion: "使用 UUID 替代自增列，或必须使用时设置 CACHE（如 1000）降低 GTM 压力"
+
+  - id: SPEC029
+    name: "单表索引个数不宜超过5个"
+    level: WARNING
+    category: "对象设计规范"
+    description: "冗余索引浪费空间，索引多影响入库效率"
+    applies_to: ["CREATE INDEX", "ALTER TABLE"]
+    check_type: "catalog_query"
+    pattern: "pg_indexes count > 5 for same table"
+    source: "规则2.14"
+    requires_mcp: true
+    fix_suggestion: "通过组合索引控制索引个数，单表索引控制在 5 个以内"
+
+  - id: SPEC030
+    name: "DROP 操作建议使用 IF EXISTS"
+    level: WARNING
+    category: "SQL开发规范"
+    description: "DROP 删除对象操作存在数据丢失风险，建议使用 IF EXISTS 防止对象不存在时报错"
+    applies_to: ["DROP"]
+    check_type: "token_pattern"
+    pattern: "DROP without IF EXISTS"
+    source: "规则3.2"
+    fix_suggestion: "使用 DROP ... IF EXISTS 避免对象不存在时报错"
+
+  - id: SPEC031
+    name: "INSERT 多 VALUES 建议使用 COPY 替代"
+    level: WARNING
+    category: "SQL开发规范"
+    description: "多 VALUES 批插场景解析耗时、耗资源，入库效率低，建议使用 COPY 替代"
+    applies_to: ["INSERT"]
+    check_type: "token_pattern"
+    pattern: "INSERT with multiple VALUES groups (>3)"
+    source: "规则3.3"
+    fix_suggestion: "使用 COPY 类接口（如 JDBC 的 CopyManager）代替 INSERT VALUES"
+
+  - id: SPEC032
+    name: "禁止对普通列存表进行实时小批量 INSERT"
+    level: WARNING
+    category: "SQL开发规范"
+    description: "针对普通列存表实时小批量入库会导致小 CU 膨胀严重，影响存储空间和查询性能"
+    applies_to: ["INSERT"]
+    check_type: "token_ast_pattern"
+    pattern: "INSERT into column-store table (orientation=column without hstore)"
+    source: "建议3.4"
+    fix_suggestion: "实时INSERT场景使用行存表，或前端攒批保证单次单DN入库量接近6W，或使用Hstore列存表"
+
+  - id: SPEC033
+    name: "避免对列存表频繁 UPDATE/DELETE"
+    level: WARNING
+    category: "SQL开发规范"
+    description: "针对列存表频繁执行 UPDATE/DELETE 造成 CU 膨胀，导致空间膨胀和访问性能下降"
+    applies_to: ["UPDATE", "DELETE"]
+    check_type: "token_ast_pattern"
+    pattern: "UPDATE/DELETE on column-store table"
+    source: "建议3.6"
+    fix_suggestion: "频繁执行 UPDATE/DELETE 操作的表需设计为行存表"
+
+  - id: SPEC034
+    name: "禁止执行不下推的 SQL"
+    level: ERROR
+    category: "SQL开发规范"
+    description: "DWS 为分布式架构，SQL 语句必须下推才能充分利用分布式的计算资源"
+    applies_to: ["SELECT", "INSERT", "UPDATE", "DELETE"]
+    check_type: "explain_plan"
+    pattern: "EXPLAIN output contains coordinator-only execution"
+    source: "规则3.7"
+    requires_mcp: true
+    fix_suggestion: "不使用不下推的语法和不下推的函数，参考语句下推调优文档"
+
+  - id: SPEC035
+    name: "避免对过滤条件字段使用函数运算"
+    level: WARNING
+    category: "SQL开发规范"
+    description: "对关联条件字段和过滤条件字段进行函数运算，导致优化器无法获取准确的字段统计信息"
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    check_type: "token_pattern"
+    pattern: "WHERE func(col) = const or col.func() = const"
+    source: "建议3.10"
+    fix_suggestion: "只对常量列进行函数运算，字段列不进行函数运算。如 NVL(col,'x')='y' 改为 (col='y' OR col IS NULL)"
+
+  - id: SPEC036
+    name: "禁止对行存大表频繁 COUNT"
+    level: WARNING
+    category: "SQL开发规范"
+    description: "行存表的 COUNT 需要扫描全表，大表场景频繁 COUNT 会消耗大量 I/O"
+    applies_to: ["SELECT"]
+    check_type: "token_pattern"
+    pattern: "COUNT(*) on row-store table"
+    source: "规则3.12"
+    fix_suggestion: "降低 COUNT 频率、使用结果缓存、分区级统计等方式"
+
+  - id: SPEC037
+    name: "查询建议使用 LIMIT 限制结果集"
+    level: INFO
+    category: "SQL开发规范"
+    description: "在实际不需要查看所有结果的场景，查询超大结果集会浪费大量资源"
+    applies_to: ["SELECT"]
+    check_type: "ast_pattern"
+    pattern: "SelectStmt without limit"
+    source: "建议3.13"
+    fix_suggestion: "添加 LIMIT 限制返回行数，或使用游标分段获取"
+
+  - id: SPEC038
+    name: "谨慎使用 WITH RECURSIVE"
+    level: WARNING
+    category: "SQL开发规范"
+    description: "无明确终止条件递归陷入死循环，重复数据过多占用大量资源"
+    applies_to: ["SELECT"]
+    check_type: "token_pattern"
+    pattern: "WITH RECURSIVE"
+    source: "建议3.15"
+    fix_suggestion: "根据业务表数据量和数据特征设计合理的递归终止条件"
+
+  - id: SPEC039
+    name: "访问对象建议带上 SCHEMA 名称"
+    level: INFO
+    category: "SQL开发规范"
+    description: "不指定 SCHEMA 名称前缀可能因 search_path 切换导致访问到非预期的表"
+    applies_to: ["SELECT", "INSERT", "UPDATE", "DELETE"]
+    check_type: "ast_pattern"
+    pattern: "table reference without schema prefix (no dot in name)"
+    source: "建议3.16"
+    fix_suggestion: "访问表和函数对象时显式指定 schema.table 格式"
+
+  - id: SPEC040
+    name: "视图嵌套不超过三层"
+    level: INFO
+    category: "对象设计规范"
+    description: "视图嵌套过深导致执行计划不稳定、耗时不稳定，视图依赖的对象重建风险高"
+    applies_to: ["CREATE VIEW"]
+    check_type: "catalog_query"
+    pattern: "view dependency depth > 3"
+    source: "建议2.16"
+    requires_mcp: true
+    fix_suggestion: "创建视图直接基于物理表查询，不建议嵌套视图"
