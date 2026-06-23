@@ -1,0 +1,122 @@
+# DWS SQL 性能检查规则
+# 需要 MCP 工具支持（EXPLAIN ANALYZE、系统视图查询）
+
+perf_rules:
+  # ---- 执行计划检查 ----
+  - id: PERF001
+    name: "全表扫描"
+    level: WARNING
+    category: "执行计划检查"
+    description: "查询计划中存在全表扫描（Seq Scan），大表全表扫描严重影响性能"
+    check_type: "explain_plan"
+    check_logic: "在 EXPLAIN 输出中检测 Seq Scan 节点且行数 > 阈值"
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    requires_mcp: true
+    fix_suggestion: "为过滤条件创建合适的索引，或检查 WHERE 条件是否可以使用现有索引"
+
+  - id: PERF002
+    name: "嵌套循环连接"
+    level: WARNING
+    category: "执行计划检查"
+    description: "查询计划中存在 Nested Loop Join，大表嵌套循环性能较差"
+    check_type: "explain_plan"
+    check_logic: "在 EXPLAIN 输出中检测 Nested Loop 节点且行数 > 阈值"
+    applies_to: ["SELECT"]
+    requires_mcp: true
+    fix_suggestion: "检查关联条件是否有索引，或使用 Hint 指定 Hash Join / Merge Join"
+
+  - id: PERF003
+    name: "数据重分布"
+    level: INFO
+    category: "执行计划检查"
+    description: "查询计划中存在大量数据重分布（Redistribute），可能影响性能"
+    check_type: "explain_plan"
+    check_logic: "在 EXPLAIN 输出中检测 Streaming(type: REDISTRIBUTE) 节点且数据量 > 阈值"
+    applies_to: ["SELECT"]
+    requires_mcp: true
+    fix_suggestion: "检查关联表的分布键是否一致，调整分布策略减少重分布"
+
+  - id: PERF004
+    name: "排序操作过多"
+    level: WARNING
+    category: "执行计划检查"
+    description: "查询计划中存在多个 Sort 节点，排序操作消耗大量内存和 CPU"
+    check_type: "explain_plan"
+    check_logic: "在 EXPLAIN 输出中统计 Sort 节点数量"
+    applies_to: ["SELECT"]
+    requires_mcp: true
+    fix_suggestion: "检查 ORDER BY / GROUP BY / DISTINCT 是否可以利用索引避免排序"
+
+  - id: PERF005
+    name: "估算行数偏差大"
+    level: WARNING
+    category: "执行计划检查"
+    description: "优化器估算行数与实际行数偏差超过 10 倍，可能导致计划选择不当"
+    check_type: "explain_analyze"
+    check_logic: "比较 EXPLAIN ANALYZE 输出中 estimated rows vs actual rows"
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    requires_mcp: true
+    fix_suggestion: "执行 ANALYZE 收集统计信息，或检查过滤条件的选择性"
+
+  # ---- 统计信息检查 ----
+  - id: PERF006
+    name: "统计信息过期"
+    level: WARNING
+    category: "统计信息检查"
+    description: "表的统计信息可能已过期，导致优化器选择次优计划"
+    check_type: "catalog_query"
+    check_logic: "查询 pg_statistic 对比 last_analyze 时间与数据修改量"
+    requires_mcp: true
+    fix_suggestion: "执行 ANALYZE table_name 更新统计信息"
+
+  - id: PERF007
+    name: "缺少统计信息"
+    level: WARNING
+    category: "统计信息检查"
+    description: "表从未执行过 ANALYZE，优化器缺少统计信息"
+    check_type: "catalog_query"
+    check_logic: "查询 pg_statistic 检查 last_analyze 是否为 NULL"
+    requires_mcp: true
+    fix_suggestion: "执行 ANALYZE table_name 收集统计信息"
+
+  # ---- 索引检查 ----
+  - id: PERF008
+    name: "缺少索引"
+    level: WARNING
+    category: "索引检查"
+    description: "WHERE 条件中的列没有合适的索引"
+    check_type: "catalog_query"
+    check_logic: "对比 WHERE 条件中的列与表上的索引列"
+    requires_mcp: true
+    fix_suggestion: "为高频查询条件创建 B-tree 索引"
+
+  - id: PERF009
+    name: "冗余索引"
+    level: INFO
+    category: "索引检查"
+    description: "表上存在冗余索引，浪费存储空间并降低写入性能"
+    check_type: "catalog_query"
+    check_logic: "检查索引列是否是其他索引的前缀"
+    requires_mcp: true
+    fix_suggestion: "删除冗余索引"
+
+  # ---- 数据分布检查 ----
+  - id: PERF010
+    name: "数据倾斜"
+    level: WARNING
+    category: "数据分布检查"
+    description: "表数据在 DN 间分布不均匀，可能导致某些 DN 负载过高"
+    check_type: "catalog_query"
+    check_logic: "查询 pg_catalog.pg_table_distribution 检查各 DN 行数偏差"
+    requires_mcp: true
+    fix_suggestion: "调整分布键选择数据分布更均匀的列"
+
+  - id: PERF011
+    name: "膨胀率过高"
+    level: WARNING
+    category: "数据分布检查"
+    description: "表膨胀率过高，浪费存储空间并降低扫描性能"
+    check_type: "catalog_query"
+    check_logic: "查询 pg_stat_user_tables 对比 n_live_tup 和表大小"
+    requires_mcp: true
+    fix_suggestion: "执行 VACUUM FULL 回收空间"

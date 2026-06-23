@@ -1,0 +1,221 @@
+# DWS SQL 语法检查规则
+# 基于 gram.y 语法定义提取
+
+syntax_rules:
+  # ---- 词法级检查 ----
+  - id: SYN-ERR
+    name: "词法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "SQL 文本中存在无法识别的字符或格式错误"
+    check_type: "tokenizer_error"
+    fix_suggestion: "检查 SQL 文本中是否存在非法字符、未闭合的引号或注释"
+
+  - id: SYN001
+    name: "无效关键字使用"
+    level: ERROR
+    category: "语法检查"
+    description: "使用了 DWS 不支持的关键字"
+    check_type: "keyword_validation"
+    check_logic: "Token 类型为关键字时，验证其存在于 DWS 关键字表（594个）中"
+    fix_suggestion: "查阅 DWS SQL 参考手册确认支持的关键字"
+
+  - id: SYN002
+    name: "保留关键字用作标识符"
+    level: ERROR
+    category: "语法检查"
+    description: "保留关键字（91个）不能用作表名/列名等标识符，除非用双引号引用"
+    check_type: "reserved_keyword_check"
+    check_logic: "标识符 Token 匹配 RESERVED_KEYWORD 列表时报错"
+    reserved_keywords_count: 91
+    fix_suggestion: "使用双引号引用保留关键字，如 \"USER\" 或更换标识符名称"
+
+  - id: SYN003
+    name: "语法结构错误"
+    level: ERROR
+    category: "语法检查"
+    description: "SQL 语句结构不符合语法规范，缺少必选子句或关键字"
+    check_type: "structure_validation"
+    check_logic: "根据语句类型的 required_clauses 验证完整性"
+    fix_suggestion: "检查语句是否缺少必选关键字或子句"
+
+  # ---- 子句级检查 ----
+  - id: SYN004
+    name: "子句顺序错误"
+    level: ERROR
+    category: "语法检查"
+    description: "SQL 子句顺序不符合语法规范"
+    check_logic: "验证子句出现顺序：SELECT → FROM → WHERE → GROUP BY → HAVING → WINDOW → ORDER BY → LIMIT → OFFSET → FOR UPDATE"
+    correct_order:
+      - SELECT
+      - FROM
+      - WHERE
+      - GROUP BY
+      - HAVING
+      - WINDOW
+      - ORDER BY
+      - LIMIT
+      - OFFSET
+      - FOR UPDATE
+    fix_suggestion: "按照正确顺序重排 SQL 子句"
+
+  - id: SYN005
+    name: "DISTRIBUTE BY 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "DISTRIBUTE BY 分布策略不合法"
+    check_logic: "验证分布类型为 HASH/MODULO/REPLICATION/ROUNDROBIN 之一"
+    valid_strategies:
+      - HASH
+      - MODULO
+      - REPLICATION
+      - ROUNDROBIN
+    applies_to: ["CREATE TABLE", "CREATE MATERIALIZED VIEW", "CREATE FOREIGN TABLE"]
+    fix_suggestion: "使用 DISTRIBUTE BY HASH(col) / MODULO(col) / REPLICATION / ROUNDROBIN"
+
+  - id: SYN006
+    name: "PARTITION 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "分区定义语法不合法"
+    check_logic: "验证 PARTITION BY RANGE/LIST 语法结构"
+    valid_partition_types:
+      - RANGE
+      - LIST
+      - INTERVAL
+    applies_to: ["CREATE TABLE", "ALTER TABLE"]
+    fix_suggestion: "使用 PARTITION BY RANGE(col) 或 PARTITION BY LIST(col)"
+
+  - id: SYN007
+    name: "MERGE 语句语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "MERGE INTO 语句结构不完整"
+    check_logic: "验证 MERGE INTO...USING...ON...WHEN MATCHED/NOT MATCHED 结构"
+    required_structure:
+      - "MERGE INTO target_table"
+      - "USING source_table_or_subquery"
+      - "ON join_condition"
+      - "WHEN MATCHED THEN UPDATE/DELETE"
+      - "WHEN NOT MATCHED THEN INSERT"
+    applies_to: ["MERGE"]
+    fix_suggestion: "确保 MERGE 语句包含 INTO、USING、ON 和至少一个 WHEN 子句"
+
+  - id: SYN008
+    name: "EXPLAIN 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "EXPLAIN 选项不合法"
+    check_logic: "验证 EXPLAIN [ANALYZE|VERBOSE|PERFORMANCE|WARMUP|PLAN] 语法"
+    valid_options:
+      - ANALYZE
+      - VERBOSE
+      - PERFORMANCE
+      - WARMUP
+      - PLAN
+      - COSTS
+      - BUFFERS
+      - TIMING
+      - SUMMARY
+    applies_to: ["EXPLAIN"]
+    fix_suggestion: "使用 EXPLAIN [ANALYZE|VERBOSE|PERFORMANCE] statement"
+
+  # ---- DWS 特有语法检查 ----
+  - id: SYN009
+    name: "COMPRESS 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "COMPRESS 选项不合法"
+    check_logic: "验证 COMPRESS [YES|NO] 语法"
+    applies_to: ["CREATE TABLE"]
+    fix_suggestion: "使用 COMPRESS YES 或 COMPRESS NO"
+
+  - id: SYN010
+    name: "TIMECAPSULE 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "TIMECAPSULE TABLE 语句结构不合法"
+    check_logic: "验证 TIMECAPSULE TABLE name TO BEFORE {DROP|TRUNCATE} 语法"
+    applies_to: ["TIMECAPSULE"]
+    fix_suggestion: "使用 TIMECAPSULE TABLE table_name TO BEFORE DROP/TRUNCATE"
+
+  - id: SYN011
+    name: "CREATE RESOURCE POOL 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "CREATE RESOURCE POOL 语句结构不合法"
+    check_logic: "验证 CREATE RESOURCE POOL name [WITH (options)] 语法"
+    applies_to: ["CREATE RESOURCE POOL"]
+    fix_suggestion: "使用 CREATE RESOURCE POOL pool_name WITH (mem_percent=xx, cpu_affinity=xx)"
+
+  - id: SYN012
+    name: "CREATE WORKLOAD GROUP 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "CREATE WORKLOAD GROUP 语句结构不合法"
+    check_logic: "验证 CREATE WORKLOAD GROUP name USING RESOURCE POOL pool [WITH (options)] 语法"
+    applies_to: ["CREATE WORKLOAD GROUP"]
+    fix_suggestion: "使用 CREATE WORKLOAD GROUP group_name USING RESOURCE POOL pool_name"
+
+  - id: SYN013
+    name: "CREATE REDACTION POLICY 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "CREATE REDACTION POLICY 语句结构不合法"
+    check_logic: "验证 CREATE REDACTION POLICY name ON table ADD COLUMN col WITH func 语法"
+    applies_to: ["CREATE REDACTION POLICY"]
+    fix_suggestion: "使用 CREATE REDACTION POLICY policy_name ON table_name ADD COLUMN col_name WITH redaction_function"
+
+  - id: SYN014
+    name: "CREATE OUTLINE 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "CREATE OUTLINE 语句结构不合法"
+    check_logic: "验证 CREATE OUTLINE name FOR sql_hash USING outline_text 语法"
+    applies_to: ["CREATE OUTLINE"]
+    fix_suggestion: "使用 CREATE OUTLINE outline_name FOR sql_hash USING outline_sql"
+
+  - id: SYN015
+    name: "TO NODE/GROUP 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "TO NODE/GROUP 子句语法不合法"
+    check_logic: "验证 TO {NODE (node_list) | GROUP group_name} 语法"
+    applies_to: ["CREATE TABLE", "ALTER TABLE"]
+    fix_suggestion: "使用 TO NODE (node1, node2) 或 TO GROUP group_name"
+
+  - id: SYN016
+    name: "INSERT OVERWRITE 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "INSERT OVERWRITE 语句结构不合法"
+    check_logic: "验证 INSERT OVERWRITE INTO table 语法"
+    applies_to: ["INSERT"]
+    fix_suggestion: "使用 INSERT OVERWRITE INTO table_name SELECT ..."
+
+  - id: SYN017
+    name: "ON DUPLICATE KEY UPDATE 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "ON DUPLICATE KEY UPDATE 子句语法不合法"
+    check_logic: "验证 ON DUPLICATE KEY UPDATE col=val 语法"
+    applies_to: ["INSERT"]
+    fix_suggestion: "使用 INSERT INTO table (...) VALUES (...) ON DUPLICATE KEY UPDATE col = val"
+
+  - id: SYN018
+    name: "Oracle (+) 外连接语法错误"
+    level: WARNING
+    category: "语法检查"
+    description: "Oracle 风格外连接运算符 (+) 使用不当"
+    check_logic: "验证 (+) 出现在比较运算符的一侧且不与 JOIN 语法混用"
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    fix_suggestion: "建议使用标准 SQL JOIN 语法替代 (+) 运算符"
+
+  - id: SYN019
+    name: "Optimizer Hint 语法错误"
+    level: WARNING
+    category: "语法检查"
+    description: "Optimizer Hint 格式不合法"
+    check_logic: "验证 /*+ hint_name(params) */ 格式"
+    applies_to: ["SELECT", "INSERT", "UPDATE", "DELETE", "MERGE"]
+    fix_suggestion: "使用 /*+ hint_name(table_name) */ 格式，如 /*+ hashjoin(t1 t2) */"
