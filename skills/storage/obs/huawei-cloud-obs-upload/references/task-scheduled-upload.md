@@ -38,7 +38,7 @@ Create the upload script `$HOME/obs-scheduled-upload-<BucketName>.sh`:
 LOG_FILE="$HOME/obs-scheduled-upload-<BucketName>.log"
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting scheduled upload" >> "$LOG_FILE"
 
-obsutil cp <LocalDirPath> obs://<BucketName>/<Prefix> -r -f >> "$LOG_FILE" 2>&1
+obsutil cp <LocalDirPath> obs://<BucketName>/<Prefix> -r -f -u >> "$LOG_FILE" 2>&1
 
 RESULT=$?
 if [ $RESULT -eq 0 ]; then
@@ -51,7 +51,7 @@ fi
 > **⚠️ Key: Do NOT use `-flat` for directory uploads**
 >
 > The user specified a directory to upload, so the entire directory structure should be preserved.
-> - Default command: `obsutil cp <LocalDirPath> obs://<BucketName>/<Prefix> -r -f` (preserves directory structure)
+> - Default command: `obsutil cp <LocalDirPath> obs://<BucketName>/<Prefix> -r -f -u` (preserves directory structure, `-u` enables incremental upload)
 > - Only add `-flat` if the user **explicitly requests** flattening (e.g., "upload all files without directory structure")
 
 **Step 2: Set crontab scheduled task**
@@ -77,13 +77,13 @@ crontab -l
 
 ```powershell
 # Create a scheduled task (run daily at 8:00)
-schtasks /create /tn "OBS-ScheduledUpload-<BucketName>" /tr "obsutil cp <LocalDirPath> obs://<BucketName>/<Prefix> -r" /sc daily /st 08:00 /f
+schtasks /create /tn "OBS-ScheduledUpload-<BucketName>" /tr "obsutil cp <LocalDirPath> obs://<BucketName>/<Prefix> -r -u" /sc daily /st 08:00 /f
 ```
 
 > **⚠️ Important: Notes on scheduled uploads**
 >
-> 1. **Idempotency**: obsutil cp skips objects that already exist and are identical (via MD5 comparison); repeated uploads do not create duplicates
-> 2. **Incremental upload**: Only newly added or modified local files are uploaded; existing unchanged files are not re-uploaded
+> 1. **Incremental upload (-u)**: The `-u` flag enables incremental upload mode — obsutil compares each local file's size and last-modified time against the remote object, and skips files that are already up-to-date. Combined with `-f` (auto-overwrite without prompting), this ensures that only new or modified files are actually transferred.
+> 2. **Idempotency**: With `-u`, repeated executions of the scheduled task do not create duplicates or re-upload unchanged files
 > 3. **Logs**: Upload logs are recorded in `$HOME/obs-scheduled-upload-<BucketName>.log`
 > 4. **Deletes are not synced**: Scheduled upload only syncs new/modified files; **objects deleted locally will not be deleted from the bucket** (user must clean up manually)
 > 5. **Crontab environment**: The crontab execution environment differs from an interactive shell; ensure obsutil is in PATH, and recommend using the full path to obsutil in the script
