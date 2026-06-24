@@ -38,7 +38,7 @@ hcloud DNS CreateRecordSet \
   --zone_id="<zone_id>" \
   --name="<custom_domain>." \
   --type="CNAME" \
-  --records.1="<bucket_name>.obs-website.<region>.myhuaweicloud.com." \
+  --records.1="<bucket_name>.obs.<region>.myhuaweicloud.com." \
   --cli-region=<region> \
   --ttl=300
 ```
@@ -49,7 +49,7 @@ hcloud DNS CreateRecordSet \
 | `--zone_id` | Zone UUID | The ID of your DNS zone from step 1 |
 | `--name` | `custom_domain.` | Full domain name **with trailing dot** |
 | `--type` | `CNAME` | Record type for domain alias |
-| `--records.1` | OBS website endpoint | Target URL **with trailing dot**, e.g. `my-bucket.obs-website.cn-north-4.myhuaweicloud.com.` |
+| `--records.1` | OBS website endpoint | Target URL **with trailing dot**, e.g. `my-bucket.obs.cn-north-4.myhuaweicloud.com.` |
 | `--cli-region` | Region | Region where the DNS API is called |
 | `--ttl` | `300` (recommended) | Time-to-live in seconds |
 
@@ -60,7 +60,7 @@ hcloud DNS CreateRecordSet \
   --zone_id="ff8080828fb6d17b018fbd5a2fac1d7f" \
   --name="www.example.com." \
   --type="CNAME" \
-  --records.1="my-bucket.obs-website.cn-north-4.myhuaweicloud.com." \
+  --records.1="my-bucket.obs.cn-north-4.myhuaweicloud.com." \
   --cli-region=cn-north-4 \
   --ttl=300
 ```
@@ -75,7 +75,7 @@ dig +short <custom_domain> CNAME
 
 Expected output:
 ```
-<bucket_name>.obs-website.<region>.myhuaweicloud.com.
+<bucket_name>.obs.<region>.myhuaweicloud.com.
 ```
 
 ## Important Notes

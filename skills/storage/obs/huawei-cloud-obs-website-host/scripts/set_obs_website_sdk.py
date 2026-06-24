@@ -15,8 +15,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--error-document", default="", help="Error document key (optional)")
     p.add_argument(
         "--custom-domain",
-        default="",
-        help="Custom domain to register on the bucket (optional)",
+        required=True,
+        help="Custom domain to register on the bucket (required)",
     )
     p.add_argument(
         "--access-key",
@@ -74,6 +74,9 @@ def pick_credential(cli_val: str, env_val: str, cfg: dict[str, str], cfg_keys: t
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+    custom_domain = args.custom_domain.strip()
+    if not custom_domain:
+        parser.error("--custom-domain must not be blank")
 
     cfg = read_obsutil_config(args.obsutil_config)
     access_key = pick_credential(
@@ -127,8 +130,6 @@ def main() -> int:
         server=args.endpoint,
     )
 
-    custom_domain = args.custom_domain.strip()
-
     try:
         # NOTE: esdk-obs-python >= 3.x requires WebsiteConfiguration model objects.
         # setBucketWebsite(bucketName, website, extensionHeaders=None)
@@ -141,9 +142,7 @@ def main() -> int:
             website = WebsiteConfiguration(indexDocument=index_doc)
         website_resp = client.setBucketWebsite(args.bucket_name, website)
 
-        custom_domain_resp = None
-        if custom_domain:
-            custom_domain_resp = client.setBucketCustomDomain(args.bucket_name, custom_domain)
+        custom_domain_resp = client.setBucketCustomDomain(args.bucket_name, custom_domain)
     except Exception as exc:  # noqa: BLE001
         print(f"OBS configuration failed: {exc}", file=sys.stderr)
         return 1
@@ -155,14 +154,13 @@ def main() -> int:
         print(f"setBucketWebsite unexpected status: {website_status}", file=sys.stderr)
         return 1
 
-    if custom_domain:
-        custom_domain_status = getattr(custom_domain_resp, "status", None)
-        if custom_domain_status is None or not (200 <= int(custom_domain_status) < 300):
-            print(
-                f"setBucketCustomDomain unexpected status: {custom_domain_status}",
-                file=sys.stderr,
-            )
-            return 1
+    custom_domain_status = getattr(custom_domain_resp, "status", None)
+    if custom_domain_status is None or not (200 <= int(custom_domain_status) < 300):
+        print(
+            f"setBucketCustomDomain unexpected status: {custom_domain_status}",
+            file=sys.stderr,
+        )
+        return 1
 
     print("ok")
     return 0
