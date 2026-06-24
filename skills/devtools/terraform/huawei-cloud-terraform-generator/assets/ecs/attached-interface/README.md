@@ -23,6 +23,8 @@ The following variables need to be configured:
 
 #### Required Variables
 
+- `keypair_name` - The name of the SSH keypair
+- `keypair_public_key` - The public key for the SSH keypair (default: null)
 - `vpc_name` - The name of the VPC
 - `subnet_configurations` - The list of subnet configurations for ECS instance
   - `subnet_name` - The name of the subnet
@@ -30,7 +32,6 @@ The following variables need to be configured:
   - `subnet_gateway_ip` - The gateway IP address of the subnet (optional)
 - `security_group_name` - The name of the security group
 - `instance_name` - The name of the ECS instance
-- `instance_admin_password` - The login password of the ECS instance
 
 #### Optional Variables
 
@@ -40,8 +41,7 @@ The following variables need to be configured:
 - `instance_cpu_core_count` - The number of CPU cores of the ECS instance (default: 2)
 - `instance_memory_size` - The memory size in GB of the ECS instance (default: 4)
 - `instance_image_id` - The image ID of the ECS instance (default: "")
-- `instance_image_visibility` - The visibility of the ECS instance image (default: "public")
-- `instance_image_os` - The operating system of the ECS instance image (default: "Ubuntu")
+- `instance_image_name` - The name of the ECS instance image (default: "Ubuntu 22.04 server 64bit")
 - `vpc_cidr` - The CIDR block of the VPC (default: "192.168.0.0/16")
 - `attached_network_id` - The ID of the network to which the ECS instance to be attached (default: "")
 - `attached_interface_fixed_ip` - The fixed IP address of the ECS instance to be attached (default: null)
@@ -104,7 +104,6 @@ subnet_configurations = [
   ]
   security_group_name     = "your_security_group_name"
   instance_name           = "your_instance_name"
-  instance_admin_password = "your_instance_password"
   ```
 
 - Initialize Terraform:

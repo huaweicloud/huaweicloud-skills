@@ -30,12 +30,11 @@ resource "huaweicloud_networking_secgroup" "test" {
   delete_default_rules = true
 }
 
-data "huaweicloud_images_images" "test" {
+data "huaweicloud_images_image" "test" {
   count = var.instance_image_id == "" ? 1 : 0
 
-  flavor_id  = var.instance_flavor_id == "" ? try(data.huaweicloud_compute_flavors.test[0].flavors[0].id, null) : var.instance_flavor_id
-  visibility = var.instance_image_visibility
-  os         = var.instance_image_os
+  name        = var.instance_image_name
+  most_recent = true
 }
 
 resource "huaweicloud_kps_keypair" "test" {
@@ -45,7 +44,7 @@ resource "huaweicloud_kps_keypair" "test" {
 
 resource "huaweicloud_compute_instance" "test" {
   name               = var.instance_name
-  image_id           = var.instance_image_id == "" ? try(data.huaweicloud_images_images.test[0].images[0].id, null) : var.instance_image_id
+  image_id           = var.instance_image_id == "" ? try(data.huaweicloud_images_image.test[0].id, null) : var.instance_image_id
   flavor_id          = var.instance_flavor_id == "" ? try(data.huaweicloud_compute_flavors.test[0].ids[0], null) : var.instance_flavor_id
   security_group_ids = length(var.security_group_ids) == 0 ? huaweicloud_networking_secgroup.test[*].id : var.security_group_ids
   key_pair           = huaweicloud_kps_keypair.test.name

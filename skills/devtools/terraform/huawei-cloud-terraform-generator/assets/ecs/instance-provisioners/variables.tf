@@ -53,16 +53,11 @@ variable "instance_image_id" {
   default     = ""
 }
 
-variable "instance_image_visibility" {
-  description = "The visibility of the ECS instance image"
-  type        = string
-  default     = "public"
-}
 
-variable "instance_image_os" {
+variable "instance_image_name" {
   description = "The operating system of the ECS instance image"
   type        = string
-  default     = "Ubuntu"
+  default     = "Ubuntu 22.04 server 64bit"
 }
 
 variable "keypair_name" {

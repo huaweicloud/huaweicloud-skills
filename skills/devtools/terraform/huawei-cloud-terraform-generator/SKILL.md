@@ -13,10 +13,11 @@ This skill turns user infrastructure goals into Terraform configurations for Hua
 2. determine which resources should be created
 3. determine whether existing resources should be reused
 4. confirm key specifications and dependencies
-5. ensure Terraform is installed
-6. generate Terraform configuration files
-7. run validation steps and fix generation issues until `terraform plan` succeeds
-8. ask user for confirmation and execute `terraform apply` if approved
+5. **verify every resource specification against the target region's available resources — query first, write later**
+6. ensure Terraform is installed
+7. generate Terraform configuration files
+8. run validation steps and fix generation issues until `terraform plan` succeeds
+9. ask user for confirmation and execute `terraform apply` if approved
 
 This skill provides an interactive workflow where the agent guides the user through credential configuration, validates the plan, and executes apply upon explicit user confirmation.
 
@@ -76,7 +77,68 @@ Before generating Terraform, propose a concrete resource plan for the user to co
 
 See `reference/guardrails.md` for rules about handling sensitive information.
 
-### 4.4 Generate Terraform after confirmation
+### 4.3.1 Confirm security group rules with user (CRITICAL)
+
+**Required workflow:**
+
+1. Infer likely ports from user's goal (Web server → 80, 443; SSH → 22; Database → 3306, 5432)
+2. Ask user to confirm ports: "需要开放哪些端口？推荐：80、443、22"
+3. Generate rules based on confirmed ports, NOT default rules
+
+**Terraform generation:**
+```hcl
+# User confirmed: 80, 443, 22
+
+resource "huaweicloud_networking_secgroup_rule" "http" {
+  security_group_id = huaweicloud_networking_secgroup.main.id
+  direction         = "ingress"
+  ethertype         = "IPv4"
+  port_range_min    = 80
+  port_range_max    = 80
+  protocol          = "tcp"
+  remote_ip_prefix  = "0.0.0.0/0"
+}
+
+# ... similar for 443, 22 (always include ethertype = "IPv4")
+
+# Always include egress
+resource "huaweicloud_networking_secgroup_rule" "egress" {
+  security_group_id = huaweicloud_networking_secgroup.main.id
+  direction         = "egress"
+  ethertype         = "IPv4"
+  remote_ip_prefix  = "0.0.0.0/0"
+}
+```
+
+**Forbidden:**
+- ❌ Using only egress rule without ingress rules
+- ❌ Using hardcoded default ports without asking user
+- ❌ Generating rules that don't match user confirmation
+
+### 4.4 Verify resource availability BEFORE generating any code
+
+**This step is mandatory and must never be skipped. A failed query is not a license to proceed — it is a blocker that must be resolved.**
+
+Before writing a single line of Terraform, you MUST verify every resource specification in the confirmed plan against the target region. The target region is already known from the confirmed plan in step 4.3 — lacking the region means step 4.3 was incomplete and must be revisited. There is no excuse for not knowing which region you are deploying to.
+
+1. **Every resource specification must be verified in the target region** — invoke the `huawei-cloud-computing-query` skill, explicitly passing the target region, to confirm that each resource specification in the confirmed plan actually exists and is available in the target region. Any specification that cannot be confirmed MUST NOT appear in any .tf file.
+2. **Cross-region assumptions are forbidden** — a resource available in region A does NOT imply availability in region B. Always re-query for the target region.
+
+**If the query fails (environment error, network issue, SDK crash):**
+
+- You MUST NOT proceed to generate Terraform. Stop immediately.
+- Diagnose and fix the issue: invoke the `huawei-cloud-computing-query` skill's environment check, verify credentials, check network.
+- Retry the query. If it fails again, fix and retry again.
+- There is no "graceful degradation" — an unverified specification is a broken deployment waiting to happen.
+- The only acceptable outcomes from this step are: (a) all specs confirmed available, or (b) a spec is confirmed unavailable and the user is asked to choose a different one.
+
+**Why this matters:** Writing an unavailable flavor into `main.tf` produces a configuration that passes `terraform validate` but fails at `terraform apply` — the worst kind of error because it surfaces only after minutes of waiting.
+
+**When modifying existing Terraform** (user asks to change a flavor, switch regions, use a different instance type, etc.): re-run the availability query for the new specification in the new region BEFORE editing any .tf file. Do not assume the previously-queried results still apply.
+
+### 4.5 Generate Terraform after confirmation
+
+**CRITICAL: Before generating, MUST read relevant reference documents from Section 8.1 mapping table.**
 
 Once the user confirms the resource plan, generate the Terraform files following the required structure and style rules.
 
@@ -84,13 +146,36 @@ See `reference/terraform-generation-guide.md` for detailed file structure and co
 
 **Critical:** Generate all required files (providers.tf, variables.tf, main.tf, terraform.tfvars, README.md) and verify they exist before proceeding.
 
-### 4.5 Verify credentials configuration
+### 4.6 Verify credentials configuration
 
 Before proceeding to validation, verify that Huawei Cloud credentials are configured via environment variables.
 
 See `reference/guardrails.md` for rules about AK/SK handling.
 
-### 4.6 Validate and fix the generated configuration
+### 4.6.1 Configure Huawei Cloud mirror for provider download
+
+**Before running terraform init, configure the Huawei Cloud mirror to avoid slow downloads from the official Terraform registry.**
+**Do NOT attempt to download from official registry first. Always use Huawei Cloud mirror.**
+
+**Steps:**
+1. Check if local provider cache exists (see validation-workflow.md for locations)
+2. If cache exists and version >= 1.90.0, skip download
+3. If download needed, create `.tfrc` file in the project directory:
+   ```hcl
+   provider_installation {
+     network_mirror {
+       url = "https://mirrors.huaweicloud.com/terraform/"
+       include = ["registry.terraform.io/huaweicloud/*"]
+     }
+   }
+   ```
+4. Set `TF_CLI_CONFIG_FILE` environment variable to the `.tfrc` file path
+5. **Every `terraform init` command MUST include `TF_CLI_CONFIG_FILE` in the same command line. Bare `terraform init` without the env var is FORBIDDEN.** Example:
+   ```bash
+   export TF_CLI_CONFIG_FILE="/path/to/project/.tfrc" && terraform init -upgrade
+   ```
+
+### 4.7 Validate and fix the generated configuration
 
 Run validation in order: `terraform fmt -recursive` → `terraform init` → `terraform validate` → `terraform plan`
 
@@ -98,17 +183,40 @@ If any step fails, inspect the error, fix the configuration, and retry until `te
 
 See `reference/validation-workflow.md` for detailed validation steps.
 
-### 4.7 Execute terraform apply with user confirmation
+### 4.8 Execute terraform apply with user confirmation
 
-After `terraform plan` succeeds, show the plan output to user and popup a confirmation dialog before executing `terraform apply`.
+After `terraform plan` succeeds, **display cost estimation before asking for confirmation**:
+
+**Cost display format (fill with actual resources from the plan):**
+```
+💰 费用预估
+
+即将创建的资源：
+- [资源类型] ([规格]): [预估费用]
+- [资源类型] ([规格]): [预估费用]
+- ...
+
+预估合计: [总费用]
+
+📌 华为云价格计算器: https://www.huaweicloud.com/pricing.html#/calculator
+
+确认部署？
+```
+
+**Required elements:**
+- Resource list with specifications (from confirmed plan)
+- Estimated monthly cost per resource (range is acceptable)
+- Total estimated cost
+- Link to Huawei Cloud pricing calculator (fixed URL)
+- User confirmation prompt
 
 See `reference/guardrails.md` for rules about user confirmation workflow.
 
-### 4.8 Apply error repair loop
+### 4.9 Apply error repair loop
 
 If `terraform apply` fails, inspect the error, fix the configuration, re-run `terraform plan`, and re-execute `terraform apply`. Repeat until successful.
 
-### 4.9 Post-apply resource verification
+### 4.10 Post-apply resource verification
 
 After `terraform apply` succeeds, verify that deployed resources match the confirmed plan. If discrepancies found, report and fix them.
 
@@ -143,7 +251,15 @@ Use the reference materials, templates, examples, and helper utilities in the sk
 
 ### 8.1 Use existing references when relevant
 
-Consult service-specific reference documents (VPC, ECS, RDS, CCE, ELB, OBS, etc.) when the user's request involves that service.
+**MUST consult these references before generating:**
+
+| Resource | Reference Document | Key Pattern |
+|----------|-------------------|-------------|
+| **通用规则** | `reference/guardrails.md` + `reference/terraform-generation-guide.md` | 密码自动生成、不向用户要敏感信息 |
+| Security Group | `reference/VPC-best-practices/VPC-best-practices.md` → "Deploy Security Group" | `ethertype` is required |
+| ECS with EIP | `reference/ECS-best-practices/Deploy-Instance-with-EIP-best-practices.md` | Use `huaweicloud_compute_eip_associate`, `public_ip = .address` |
+| VPC/Subnet | `reference/VPC-best-practices/VPC-best-practices.md` → "Deploy Basic Network" | VPC/subnet structure |
+| RDS | `reference/RDS-best-practices/RDS-best-practices.md` | Database + network config |
 
 ### 8.2 Use existing examples and templates as a starting point
 

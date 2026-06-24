@@ -87,12 +87,6 @@ variable "instance_flavor_group_type" {
   default     = "general"
 }
 
-variable "instance_flavor_vcpus" {
-  description = "The CPU core numbers for the RDS instance flavor"
-  type        = number
-  default     = 4
-}
-
 variable "instance_flavor_memory" {
   description = "The memory size for the RDS instance flavor"
   type        = number

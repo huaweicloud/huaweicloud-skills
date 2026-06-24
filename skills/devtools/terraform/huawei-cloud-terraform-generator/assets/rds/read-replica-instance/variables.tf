@@ -64,7 +64,6 @@ variable "instance_flavors_filter" {
     db_version    = optional(string, "8.0")
     instance_mode = optional(string, "ha")
     group_type    = optional(string, "general")
-    vcpus         = optional(number, 4)
     memory        = optional(number, 8)
   }))
 

@@ -11,12 +11,11 @@ data "huaweicloud_compute_flavors" "test" {
   memory_size       = var.instance_memory_size
 }
 
-data "huaweicloud_images_images" "test" {
+data "huaweicloud_images_image" "test" {
   count = var.instance_image_id == "" ? 1 : 0
 
-  flavor_id  = var.instance_flavor_id == "" ? try(data.huaweicloud_compute_flavors.test[0].flavors[0].id, null) : var.instance_flavor_id
-  visibility = var.instance_image_visibility
-  os         = var.instance_image_os
+  name        = var.instance_image_name
+  most_recent = true
 }
 
 resource "huaweicloud_kps_keypair" "test" {
@@ -78,7 +77,7 @@ resource "huaweicloud_vpc_eip" "test" {
 
 resource "huaweicloud_compute_instance" "test" {
   name               = var.instance_name
-  image_id           = var.instance_image_id == "" ? try(data.huaweicloud_images_images.test[0].images[0].id, null) : var.instance_image_id
+  image_id           = var.instance_image_id == "" ? try(data.huaweicloud_images_image.test[0].id, null) : var.instance_image_id
   flavor_id          = var.instance_flavor_id == "" ? try(data.huaweicloud_compute_flavors.test[0].flavors[0].id, null) : var.instance_flavor_id
   availability_zone  = var.availability_zone == "" ? try(data.huaweicloud_availability_zones.test[0].names[0], null) : var.availability_zone
   key_pair           = huaweicloud_kps_keypair.test.name
