@@ -46,7 +46,6 @@ The following variables need to be configured:
 - `account_password` - The password for the database account (default: "")
 - `instance_mode` - The instance mode for the RDS instance flavor (default: "single")
 - `instance_flavor_group_type` - The group type for the RDS instance flavor (default: "general")
-- `instance_flavor_vcpus` - The number of the RDS instance CPU cores for the RDS instance flavor (default: 2)
 - `instance_volume_type` - The storage volume type (default: "CLOUDSSD")
 - `instance_volume_size` - The storage volume size in GB (default: 40)
 - `character_set` - The character set of the database (default: "utf8")

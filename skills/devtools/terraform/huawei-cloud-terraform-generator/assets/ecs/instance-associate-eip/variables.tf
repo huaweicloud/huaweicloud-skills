@@ -53,16 +53,11 @@ variable "instance_image_id" {
   default     = ""
 }
 
-variable "instance_image_visibility" {
-  description = "The visibility of the ECS instance image"
-  type        = string
-  default     = "public"
-}
 
-variable "instance_image_os" {
-  description = "The OS of the ECS instance image"
+variable "instance_image_name" {
+  description = "The name of the ECS instance image (e.g., Ubuntu 22.04 server 64bit)"
   type        = string
-  default     = "Ubuntu"
+  default     = "Ubuntu 22.04 server 64bit"
 }
 
 variable "vpc_name" {

@@ -81,12 +81,6 @@ variable "instance_flavor_group_type" {
   default     = "general"
 }
 
-variable "instance_flavor_vcpus" {
-  description = "The number of the RDS instance CPU cores for the RDS instance flavor"
-  type        = number
-  default     = 2
-}
-
 variable "security_group_name" {
   description = "The security group name"
   type        = string

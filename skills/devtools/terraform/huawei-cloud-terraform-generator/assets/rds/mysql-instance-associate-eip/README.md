@@ -44,7 +44,6 @@ The following variables need to be configured:
 - `instance_password` - The password for the RDS instance (default: "")
 - `instance_mode` - The instance mode for the RDS instance flavor (default: "single")
 - `instance_flavor_group_type` - The group type for the RDS instance flavor (default: "general")
-- `instance_flavor_vcpus` - The number of the RDS instance CPU cores for the RDS instance flavor (default: 2)
 - `instance_volume_type` - The storage volume type (default: "CLOUDSSD")
 - `instance_volume_size` - The storage volume size in GB (default: 40)
 - `associate_eip_address` - The EIP address to associate with the RDS instance (default: "")

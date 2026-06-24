@@ -102,7 +102,6 @@ variable "instance_flavors_filter" {
     db_version    = optional(string, "8.0")
     instance_mode = optional(string, "ha")
     group_type    = optional(string, "general")
-    vcpus         = optional(number, 4)
     memory        = optional(number, 8)
   }))
 
@@ -129,7 +128,6 @@ data "huaweicloud_rds_flavors" "test" {
   db_version        = lookup(var.instance_flavors_filter[count.index], "db_version")
   instance_mode     = lookup(var.instance_flavors_filter[count.index], "instance_mode")
   group_type        = lookup(var.instance_flavors_filter[count.index], "group_type")
-  vcpus             = lookup(var.instance_flavors_filter[count.index], "vcpus")
   memory            = lookup(var.instance_flavors_filter[count.index], "memory")
   availability_zone = length(var.availability_zones) > 0 ? element(var.availability_zones, 0) : try(data.huaweicloud_availability_zones.test[0].names[0], null)
 }
@@ -142,7 +140,6 @@ data "huaweicloud_rds_flavors" "test" {
 - **db\_version**: Database version, assigned by referencing the `db_version` in the input variable `instance_flavors_filter`
 - **instance\_mode**: Instance mode, assigned by referencing the `instance_mode` in the input variable `instance_flavors_filter`
 - **group\_type**: Flavor group type, assigned by referencing the `group_type` in the input variable `instance_flavors_filter`
-- **vcpus**: Number of CPU cores, assigned by referencing the `vcpus` in the input variable `instance_flavors_filter`
 - **memory**: Memory size, assigned by referencing the `memory` in the input variable `instance_flavors_filter`
 - **availability\_zone**: Availability zone, assigned based on the return results of the availability zone list query data source (data.huaweicloud\_availability\_zones)
 

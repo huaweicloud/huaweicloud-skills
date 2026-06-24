@@ -22,7 +22,6 @@ data "huaweicloud_rds_flavors" "test" {
   db_version        = var.instance_db_version
   instance_mode     = var.instance_mode
   group_type        = var.instance_flavor_group_type
-  vcpus             = var.instance_flavor_vcpus
   availability_zone = var.availability_zone == "" ? try(data.huaweicloud_availability_zones.test[0].names[0], null) : var.availability_zone
 }
 

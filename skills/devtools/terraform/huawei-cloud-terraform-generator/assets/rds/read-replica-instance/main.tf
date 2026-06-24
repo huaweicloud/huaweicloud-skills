@@ -22,7 +22,6 @@ data "huaweicloud_rds_flavors" "test" {
   db_version        = lookup(var.instance_flavors_filter[count.index], "db_version")
   instance_mode     = lookup(var.instance_flavors_filter[count.index], "instance_mode")
   group_type        = lookup(var.instance_flavors_filter[count.index], "group_type")
-  vcpus             = lookup(var.instance_flavors_filter[count.index], "vcpus")
   memory            = lookup(var.instance_flavors_filter[count.index], "memory")
   availability_zone = length(var.availability_zones) > 0 ? element(var.availability_zones, 0) : try(data.huaweicloud_availability_zones.test[0].names[0], null)
 }

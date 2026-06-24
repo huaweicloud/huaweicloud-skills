@@ -56,18 +56,24 @@ variable "instance_image_id" {
   nullable    = false
 }
 
-variable "instance_image_visibility" {
-  description = "The visibility of the ECS instance image"
-  type        = string
-  default     = "public"
-}
 
-variable "instance_image_os" {
+variable "instance_image_name" {
   description = "The operating system of the ECS instance image"
   type        = string
-  default     = "Ubuntu"
+  default     = "Ubuntu 22.04 server 64bit"
 }
 
+
+variable "keypair_name" {
+  description = "The name of the SSH keypair"
+  type        = string
+}
+
+variable "keypair_public_key" {
+  description = "The public key for the SSH keypair"
+  type        = string
+  default     = null
+}
 variable "vpc_name" {
   description = "The name of the VPC"
   type        = string
@@ -96,12 +102,6 @@ variable "security_group_name" {
 variable "instance_name" {
   description = "The name of the ECS instance"
   type        = string
-}
-
-variable "instance_admin_password" {
-  description = "The login password of the ECS instance"
-  type        = string
-  sensitive   = true
 }
 
 variable "attached_network_id" {

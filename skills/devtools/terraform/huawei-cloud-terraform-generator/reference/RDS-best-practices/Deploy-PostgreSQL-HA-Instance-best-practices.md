@@ -210,12 +210,6 @@ variable "instance_flavor_group_type" {
   default     = "general"
 }
 
-variable "instance_flavor_vcpus" {
-  description = "The CPU core numbers for the RDS instance flavor"
-  type        = number
-  default     = 4
-}
-
 variable "instance_flavor_memory" {
   description = "The memory size for the RDS instance flavor"
   type        = number
@@ -230,7 +224,6 @@ data "huaweicloud_rds_flavors" "test" {
   db_version        = var.instance_db_version
   instance_mode     = var.instance_mode
   group_type        = var.instance_flavor_group_type
-  vcpus             = var.instance_flavor_vcpus
   memory            = var.instance_flavor_memory
   availability_zone = length(var.availability_zones) > 0 ? element(var.availability_zones, 0) : try(data.huaweicloud_availability_zones.test[0].names[0], null)
 }
@@ -243,7 +236,6 @@ data "huaweicloud_rds_flavors" "test" {
 - **db\_version**: Database engine version, assigned by referencing the input variable instance\_db\_version, default value is "16"
 - **instance\_mode**: Instance mode, assigned by referencing the input variable instance\_mode, default value is "ha" (HA mode)
 - **group\_type**: Flavor group type, assigned by referencing the input variable instance\_flavor\_group\_type, default value is "general"
-- **vcpus**: Number of CPU cores, assigned by referencing the input variable instance\_flavor\_vcpus, default value is 4
 - **memory**: Memory size, assigned by referencing the input variable instance\_flavor\_memory, default value is 8
 - **availability\_zone**: Availability zone, prioritizes using the first element of availability\_zones variable, otherwise uses the first queried availability zone
 
