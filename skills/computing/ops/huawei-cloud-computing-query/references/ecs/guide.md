@@ -30,6 +30,8 @@ Usage: python scripts/ecs/list_cloud_servers.py -h
 Purpose: Query the list of ECS flavors, including flavor name, vCPU, memory(GiB).
 Usage: python scripts/ecs/list_flavors.py -h
 
+**Important:** By default only available flavors are returned (deprecated and sold-out flavors filtered out via sell policies cross-reference). Use `--only_available false` to see all flavor definitions including deprecated ones. The flag accepts `true` (default) or `false`; omitting it or passing `--only_available` alone both default to `true`.
+
 ---
 
 ### list_flavor_sell_policies.py — Query Flavor Sell Policies
