@@ -45,6 +45,6 @@
 
 ## Notes
 
-- If you run `verify_obs_website.py` with `--bucket-name/--obs-endpoint`, `obs:bucket:HeadBucket` and `obs:bucket:GetBucketLocation` are required.
+- If you run `verify_obs_website.py` with `--bucket-name/--region`, `obs:bucket:HeadBucket` and `obs:bucket:GetBucketLocation` are required.
 - If you only configure bucket-level static website hosting and do not use a custom domain, DNS permissions are optional.
 - If you use a custom domain, both OBS and DNS permissions above are required.

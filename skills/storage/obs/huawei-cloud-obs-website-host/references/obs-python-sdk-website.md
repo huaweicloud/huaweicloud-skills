@@ -61,7 +61,7 @@ resp = client.deleteBucketCustomDomain('bucket-name', 'www.example.com')
 ## Common failures
 
 - `setBucketWebsite` with `unexpected keyword argument 'indexDocumentSuffix'` → use the new `WebsiteConfiguration` object style
-- `403`: missing policy/ACL for anonymous read or missing permissions for website config.
+- `403`: two common causes must both be considered and reported to the user: missing policy/ACL for anonymous public read, or insufficient AK/SK IAM permissions for website configuration / verification APIs.
 - `404`: wrong index document key or file not uploaded.
 - DNS mismatch: custom domain CNAME does not point to OBS website endpoint.
 - Custom domain not reachable: `setBucketCustomDomain` not called on the bucket (DNS alone is insufficient).
