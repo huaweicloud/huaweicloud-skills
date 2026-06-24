@@ -14,15 +14,27 @@ This skill requires two CLI tools: hcloud (KooCLI) and obsutil.
 
 ## hcloud (KooCLI) Installation
 
+### One-Click Installation (Linux / macOS, recommended)
+
+```bash
+curl -sSL https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/hcloud_install.sh -o ./hcloud_install.sh && bash ./hcloud_install.sh -y
+```
+
+> The script auto-detects your OS and architecture, downloads the correct package,
+> verifies its integrity (SHA256), and installs `hcloud` to `/usr/local/bin/`.
+
 ### macOS
 
 ```bash
-# Install via Homebrew
-brew install hcloudcli
+# Download directly (AMD64 / Intel)
+curl -LO https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-mac-amd64.tar.gz
+tar -zxvf huaweicloud-cli-mac-amd64.tar.gz
+chmod +x hcloud
+sudo mv hcloud /usr/local/bin/
 
-# Or download directly
-curl -O https://obs-community-tool.obs.cn-north-1.myhuaweicloud.com/hcloudcli/latest/hcloudcli-macos-amd64.tar.gz
-tar -xzf hcloudcli-macos-amd64.tar.gz
+# Or for ARM64 (Apple Silicon)
+curl -LO https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-mac-arm64.tar.gz
+tar -zxvf huaweicloud-cli-mac-arm64.tar.gz
 chmod +x hcloud
 sudo mv hcloud /usr/local/bin/
 ```
@@ -30,8 +42,8 @@ sudo mv hcloud /usr/local/bin/
 ### Linux (x86_64)
 
 ```bash
-curl -O https://obs-community-tool.obs.cn-north-1.myhuaweicloud.com/hcloudcli/latest/hcloudcli-linux-amd64.tar.gz
-tar -xzf hcloudcli-linux-amd64.tar.gz
+curl -LO https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-linux-amd64.tar.gz
+tar -zxvf huaweicloud-cli-linux-amd64.tar.gz
 chmod +x hcloud
 sudo mv hcloud /usr/local/bin/
 ```
@@ -39,8 +51,8 @@ sudo mv hcloud /usr/local/bin/
 ### Linux (ARM64)
 
 ```bash
-curl -O https://obs-community-tool.obs.cn-north-1.myhuaweicloud.com/hcloudcli/latest/hcloudcli-linux-arm64.tar.gz
-tar -xzf hcloudcli-linux-arm64.tar.gz
+curl -LO https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-linux-arm64.tar.gz
+tar -zxvf huaweicloud-cli-linux-arm64.tar.gz
 chmod +x hcloud
 sudo mv hcloud /usr/local/bin/
 ```
@@ -49,7 +61,7 @@ sudo mv hcloud /usr/local/bin/
 
 ```powershell
 # Download and extract
-Invoke-WebRequest -Uri "https://obs-community-tool.obs.cn-north-1.myhuaweicloud.com/hcloudcli/latest/hcloudcli-windows-amd64.zip" -OutFile "hcloudcli.zip"
+Invoke-WebRequest -Uri "https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-windows-amd64.zip" -OutFile "hcloudcli.zip"
 Expand-Archive hcloudcli.zip
 # Add hcloud.exe to PATH
 ```
@@ -61,7 +73,7 @@ Expand-Archive hcloudcli.zip
 ### macOS
 
 ```bash
-curl -O https://obs-community-tool.obs.cn-north-1.myhuaweicloud.com/obsutil/current/obsutil_darwin_amd64.tar.gz
+curl -O https://obs-community.obs.cn-north-1.myhuaweicloud.com/obsutil/current/obsutil_darwin_amd64.tar.gz
 tar -xzf obsutil_darwin_amd64.tar.gz
 chmod +x obsutil_darwin_amd64_*
 sudo mv obsutil_darwin_amd64_*/obsutil /usr/local/bin/
@@ -79,7 +91,7 @@ sudo mv obsutil_linux_amd64_*/obsutil /usr/local/bin/
 ### Linux (ARM64)
 
 ```bash
-curl -O https://obs-community-tool.obs.cn-north-1.myhuaweicloud.com/obsutil/current/obsutil_linux_arm64.tar.gz
+curl -O https://obs-community.obs.cn-north-1.myhuaweicloud.com/obsutil/current/obsutil_linux_arm64.tar.gz
 tar -xzf obsutil_linux_arm64.tar.gz
 chmod +x obsutil_linux_arm64_*
 sudo mv obsutil_linux_arm64_*/obsutil /usr/local/bin/
@@ -88,7 +100,7 @@ sudo mv obsutil_linux_arm64_*/obsutil /usr/local/bin/
 ### Windows
 
 ```powershell
-Invoke-WebRequest -Uri "https://obs-community-tool.obs.cn-north-1.myhuaweicloud.com/obsutil/current/obsutil_windows_amd64.zip" -OutFile "obsutil.zip"
+Invoke-WebRequest -Uri "https://obs-community.obs.cn-north-1.myhuaweicloud.com/obsutil/current/obsutil_windows_amd64.zip" -OutFile "obsutil.zip"
 Expand-Archive obsutil.zip
 # Add obsutil.exe to PATH
 ```
@@ -208,5 +220,7 @@ obsutil ls -limit=1
 
 ## Official Documentation
 
+- [KooCLI Quick Start](https://support.huaweicloud.com/qs-hcli/hcli_02_003.html)
+- [KooCLI Installation Overview](https://support.huaweicloud.com/qs-hcli/hcli_02_003_01.html)
 - [obsutil Installation Guide](https://support.huaweicloud.com/utiltg-obs/obs_11_0003.html)
 - [obsutil Configuration Guide](https://support.huaweicloud.com/utiltg-obs/obs_11_0005.html)
