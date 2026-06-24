@@ -4,7 +4,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from config import load_credentials, build_http_config
+from config import load_credentials, build_http_config, get_project_id
 from huaweicloudsdkcore.auth.credentials import BasicCredentials
 from huaweicloudsdkecs.v2 import EcsClient
 from huaweicloudsdkecs.v2.model import ListScheduledEventsRequest
@@ -19,8 +19,8 @@ AK, SK, Region, SecurityToken = load_credentials()
 
 # 参数
 parser = argparse.ArgumentParser(description="查询 ECS 计划事件列表")
-parser.add_argument("--project_id", type=str, required=True, help="项目 ID，可通过 ../iam/get_project_id.py 获取")
-parser.add_argument("--region", type=str, help="区域，默认 cn-north-4")
+parser.add_argument("--project_id", type=str, help="项目 ID，不传则通过 IAM API 根据 --region 自动获取")
+parser.add_argument("--region", type=str, required=True, help="区域，例如 cn-north-4、cn-east-3")
 parser.add_argument("--id", type=str, help="事件 ID")
 parser.add_argument("--instance_id", type=str, nargs="+", help="实例 ID，可指定多个")
 parser.add_argument("--type", type=str, nargs="+", help="事件类型，可指定多个")
@@ -30,8 +30,7 @@ parser.add_argument("--publish_until", type=str, help="事件发布截至时间�
 parser.add_argument("--marker", type=str, help="分页标记，从上次查询结果的 next_marker 获取")
 args = parser.parse_args()
 
-if args.region is not None:
-    Region = args.region
+Region = args.region
 
 
 # 渲染
@@ -76,6 +75,13 @@ def render(events, total_count=None, has_more=False, next_marker=None):
 # 使用 sdk
 try:
     http_config = build_http_config()
+    # 未指定 project_id 则自动获取
+    if not args.project_id:
+        args.project_id = get_project_id(Region, AK, SK, SecurityToken)
+        if not args.project_id:
+            print(f"无法获取项目 ID (region={Region})，请检查凭据或手动指定 --project_id")
+            exit(-1)
+
 
     client = EcsClient.new_builder().with_http_config(http_config).with_credentials(
         BasicCredentials(AK, SK, args.project_id) if not SecurityToken else BasicCredentials(AK, SK, args.project_id).with_security_token(SecurityToken)).with_region(EcsRegion.value_of(Region)).build()

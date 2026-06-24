@@ -94,6 +94,13 @@ echo "=================================================="
 
 if [ "${EXIT_CODE}" -eq 0 ]; then
     echo "✓ 环境检查通过"
+    
+    # 读取自动获取的 project_id 并导出
+    PROJECT_ID_FILE="${PROJECT_ROOT}/.project_id"
+    if [ -f "$PROJECT_ID_FILE" ]; then
+        export HW_PROJECT_ID=$(cat "$PROJECT_ID_FILE")
+        echo "HW_PROJECT_ID 已设置: $HW_PROJECT_ID"
+    fi
     exit 0
 else
     echo "✗ 环境未就绪，请按提示修复"
