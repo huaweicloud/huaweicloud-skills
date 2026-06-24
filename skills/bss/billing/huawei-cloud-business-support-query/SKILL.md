@@ -64,6 +64,7 @@ Important: Script paths executed within this skill are all relative to the skill
 9. Cache output when it is large
 10. Must execute -h to view usage before each script execution
 11. Do not invent script names; execute according to script names in guide.md. If a script name is not in guide.md, it means it is not supported
+12. **For time-sensitive queries (bills, costs), use script defaults or verify current date first; do not hardcode time parameters based on assumption**
 
 ---
 
