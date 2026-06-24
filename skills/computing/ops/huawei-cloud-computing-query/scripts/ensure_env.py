@@ -522,6 +522,17 @@ def main():
     if all(results):
         print("  环境确保完成，所有检查项均通过（含 API 验证）")
         print("  可以正常使用查询脚本")
+        
+        # 自动获取 project_id 并导出到环境变量
+        region = os.getenv("HW_REGION_NAME", "cn-north-4")
+        project_id = get_project_id(region)
+        if project_id:
+            os.environ["HW_PROJECT_ID"] = project_id
+            print(f"  HW_PROJECT_ID 已自动获取: {project_id}")
+            # 写入到临时文件供 shell 读取
+            project_id_file = os.path.join(get_project_root(), ".project_id")
+            with open(project_id_file, "w") as f:
+                f.write(project_id)
     else:
         print("  环境确保未完成，请按上述提示修复后重新运行")
     print("=" * 50)
