@@ -1,6 +1,7 @@
 import argparse
 import sys
 import os
+from datetime import datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
@@ -14,7 +15,7 @@ AK, SK, Region, SecurityToken = load_credentials()
 
 parser = argparse.ArgumentParser(description="查询客户月汇总账单")
 parser.add_argument("--region", type=str, default="cn-north-4", help="区域，默认 cn-north-4")
-parser.add_argument("--bill_cycle", type=str, required=True, help="查询消费汇总数据所在的账期，东八区时间，格式为YYYY-MM")
+parser.add_argument("--bill_cycle", type=str, required=False, help="查询消费汇总数据所在的账期，东八区时间，格式为YYYY-MM。不指定则默认使用当前月份")
 parser.add_argument("--service_type_code", type=str, help="云服务类型编码，例如OBS的云服务类型编码为hws.service.type.obs。此参数不携带或携带值为空时，不作为筛选条件")
 parser.add_argument("--enterprise_project_id", type=str, help="企业项目ID。default项目对应ID：0；未归集项目对应ID：-1。此参数不携带或携带值为空时，不作为筛选条件，可通过 ../eps/list_enterprise_projects.py 获取")
 parser.add_argument("--offset", type=int, default=0, help="偏移量，从0开始，默认0")
@@ -26,12 +27,19 @@ args = parser.parse_args()
 if args.method == "sub_customer" and not args.sub_customer_id:
     parser.error("当 method=sub_customer 时，必须指定 sub_customer_id")
 
+# 如果未指定 bill_cycle，使用当前年月
+bill_cycle = args.bill_cycle
+if not bill_cycle:
+    now = datetime.now()
+    bill_cycle = now.strftime("%Y-%m")
+    print(f"[提示] 未指定账期，使用当前月份: {bill_cycle}\n")
+
 if args.region is not None:
     Region = args.region
 
 try:
     request = ShowCustomerMonthlySumRequest()
-    request.bill_cycle = args.bill_cycle
+    request.bill_cycle = bill_cycle
     if args.service_type_code:
         request.service_type_code = args.service_type_code
     if args.enterprise_project_id:
