@@ -3,7 +3,6 @@ import argparse
 import json
 import os
 from pathlib import Path
-import re
 import socket
 import sys
 from datetime import datetime, timezone
@@ -41,7 +40,13 @@ def remediation_for_check(name: str, status: int | None, error: str) -> str:
             "or front OBS with CDN/ELB and terminate TLS there."
         )
     if status == 403:
-        return "Enable anonymous read for website objects and verify bucket policy/public ACL."
+        return (
+            "HTTP 403 has two common causes in this workflow: "
+            "the bucket/object policy does not allow anonymous public read for website access, "
+            "or the AK/SK used for OBS SDK checks/configuration lacks required IAM permissions. "
+            "Verify both the website public-read policy/ACL and IAM actions such as "
+            "obs:bucket:HeadBucket, obs:bucket:GetBucketLocation, and obs:bucket:PutBucketWebsite."
+        )
     if status == 404:
         if name in {"root_path", "index_document"}:
             return "Verify index document key/path and confirm website configuration points to the right index."
@@ -153,20 +158,28 @@ def run_bucket_region_check(
         client.close()
 
 
-def infer_region_from_site_url(site_url: str) -> str:
-    host = urllib.parse.urlparse(site_url if "://" in site_url else f"http://{site_url}").hostname or ""
-    # Typical OBS website endpoint: <bucket>.obs-website.<region>.myhuaweicloud.com
-    m = re.search(r"\.obs-website\.([a-z0-9-]+)\.myhuaweicloud\.com$", host)
-    if not m:
-        return ""
-    return m.group(1)
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Verify Huawei OBS static website endpoint"
     )
-    parser.add_argument("site_url", help="OBS website endpoint URL")
+    parser.add_argument(
+        "--bucket-name",
+        required=True,
+        help="OBS bucket name",
+    )
+    parser.add_argument(
+        "--region",
+        required=True,
+        help="OBS region, for example cn-north-4",
+    )
+    parser.add_argument(
+        "--domain",
+        default="",
+        help=(
+            "Custom domain to verify instead of the default OBS website endpoint "
+            "(optional; host or URL)"
+        ),
+    )
     parser.add_argument(
         "--index-document",
         default="index.html",
@@ -176,16 +189,6 @@ def main() -> int:
         "--json",
         action="store_true",
         help="Output machine-readable JSON report",
-    )
-    parser.add_argument(
-        "--bucket-name",
-        default="",
-        help="OBS bucket name for read-only bucket existence/region check (optional)",
-    )
-    parser.add_argument(
-        "--expected-region",
-        default="",
-        help="Expected OBS region for bucket location check (optional)",
     )
     parser.add_argument(
         "--access-key",
@@ -208,14 +211,17 @@ def main() -> int:
         help="obsutil config file path for optional bucket SDK check (default: ~/.obsutilconfig)",
     )
     args = parser.parse_args()
-    if args.expected_region and not args.bucket_name:
-        parser.error("--expected-region requires --bucket-name")
 
-    raw_site = args.site_url.strip()
-    if "://" in raw_site:
-        parsed = urllib.parse.urlparse(raw_site)
+    raw_domain = args.domain.strip()
+    if raw_domain:
+        if "://" in raw_domain:
+            parsed = urllib.parse.urlparse(raw_domain)
+        else:
+            parsed = urllib.parse.urlparse(f"http://{raw_domain}")
     else:
-        parsed = urllib.parse.urlparse(f"http://{raw_site}")
+        parsed = urllib.parse.urlparse(
+            f"http://{args.bucket_name}.obs.{args.region}.myhuaweicloud.com"
+        )
 
     if not parsed.netloc and parsed.path:
         # Handle plain host input like "example.com" parsed into path.
@@ -223,13 +229,15 @@ def main() -> int:
 
     host_port = parsed.netloc
     if not host_port:
-        print(f"invalid site_url: {args.site_url}", file=sys.stderr)
+        print(f"invalid domain: {args.domain}", file=sys.stderr)
         return 2
 
     path_prefix = parsed.path.rstrip("/")
     scheme_bases = [("http", f"http://{host_port}{path_prefix}")]
+    raw_site = scheme_bases[0][1]
 
     checks: list[dict[str, object]] = []
+    verification_target = "custom_domain" if raw_domain else "default_obs_domain"
     for scheme, base in scheme_bases:
         checks.extend(
             [
@@ -275,52 +283,52 @@ def main() -> int:
         )
 
     actions_performed = ["DNS resolution check for endpoint domain"]
-    if args.bucket_name:
-        region = args.expected_region.strip()
-        if not region:
-            region = infer_region_from_site_url(raw_site)
-        if not region:
-            parser.error(
-                "bucket check requires --expected-region or a parseable OBS website site_url "
-                "(<bucket>.obs-website.<region>.myhuaweicloud.com)"
+    obs_endpoint = f"https://obs.{args.region}.myhuaweicloud.com"
+    cfg = read_obsutil_config(args.obsutil_config)
+    access_key = pick_credential(
+        args.access_key,
+        os.getenv("HW_ACCESS_KEY", ""),
+        cfg,
+        ("ak", "access_key_id"),
+    )
+    secret_key = pick_credential(
+        args.secret_key,
+        os.getenv("HW_SECRET_KEY", ""),
+        cfg,
+        ("sk", "secret_access_key"),
+    )
+    security_token = pick_credential(
+        args.security_token,
+        os.getenv("HW_SECURITY_TOKEN", ""),
+        cfg,
+        ("securitytoken", "security_token", "token"),
+    )
+    bucket_check = run_bucket_region_check(
+        bucket_name=args.bucket_name,
+        obs_endpoint=obs_endpoint,
+        expected_region=args.region,
+        access_key=access_key,
+        secret_key=secret_key,
+        security_token=security_token,
+    )
+    actions_performed.append("OBS SDK read-only check: headBucket + getBucketLocation")
+    if not bool(bucket_check.get("passed", False)):
+        all_passed = False
+        error = str(bucket_check.get("error", "") or "bucket/region check failed")
+        if "403" in error:
+            remediation = (
+                f"Bucket/region check failed: {error}. "
+                "When troubleshooting 403, tell the user both common possibilities: "
+                "the bucket/object is not public-read for website access, or the AK/SK lacks "
+                "required IAM permissions. Verify bucket public-read policy/ACL and IAM actions "
+                "such as obs:bucket:HeadBucket and obs:bucket:GetBucketLocation."
             )
-        obs_endpoint = f"https://obs.{region}.myhuaweicloud.com"
-        cfg = read_obsutil_config(args.obsutil_config)
-        access_key = pick_credential(
-            args.access_key,
-            os.getenv("HW_ACCESS_KEY", ""),
-            cfg,
-            ("ak", "access_key_id"),
-        )
-        secret_key = pick_credential(
-            args.secret_key,
-            os.getenv("HW_SECRET_KEY", ""),
-            cfg,
-            ("sk", "secret_access_key"),
-        )
-        security_token = pick_credential(
-            args.security_token,
-            os.getenv("HW_SECURITY_TOKEN", ""),
-            cfg,
-            ("securitytoken", "security_token", "token"),
-        )
-        bucket_check = run_bucket_region_check(
-            bucket_name=args.bucket_name,
-            obs_endpoint=obs_endpoint,
-            expected_region=region,
-            access_key=access_key,
-            secret_key=secret_key,
-            security_token=security_token,
-        )
-        actions_performed.append("OBS SDK read-only check: headBucket + getBucketLocation")
-        if not bool(bucket_check.get("passed", False)):
-            all_passed = False
-            error = str(bucket_check.get("error", "") or "bucket/region check failed")
+        else:
             remediation = (
                 f"Bucket/region check failed: {error}. "
                 "Verify bucket name, OBS endpoint, region, and IAM permissions."
             )
-            remediation_steps.append(remediation)
+        remediation_steps.append(remediation)
 
     for scheme, _base in scheme_bases:
         actions_performed.extend(
@@ -360,6 +368,10 @@ def main() -> int:
     report = {
         "input_summary": {
             "site_url": raw_site,
+            "bucket_name": args.bucket_name,
+            "region": args.region,
+            "domain_override": raw_domain,
+            "verification_target": verification_target,
             "target_host": host_port,
             "checked_schemes": [scheme for scheme, _base in scheme_bases],
             "index_document": args.index_document,
@@ -386,6 +398,10 @@ def main() -> int:
     else:
         print("Input summary:")
         print(f"- site_url: {report['input_summary']['site_url']}")
+        print(f"- bucket_name: {report['input_summary']['bucket_name']}")
+        print(f"- region: {report['input_summary']['region']}")
+        print(f"- domain_override: {report['input_summary']['domain_override'] or 'none'}")
+        print(f"- verification_target: {report['input_summary']['verification_target']}")
         print(f"- target_host: {report['input_summary']['target_host']}")
         print(f"- checked_schemes: {','.join(report['input_summary']['checked_schemes'])}")
         print(f"- index_document: {report['input_summary']['index_document']}")
