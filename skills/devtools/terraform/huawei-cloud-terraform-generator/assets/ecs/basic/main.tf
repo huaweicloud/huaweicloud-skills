@@ -9,12 +9,16 @@ data "huaweicloud_compute_flavors" "test" {
   memory_size       = var.instance_flavor_memory_size
 }
 
-data "huaweicloud_images_images" "test" {
+data "huaweicloud_images_image" "test" {
   count = var.instance_image_id == "" ? 1 : 0
 
-  flavor_id  = var.instance_flavor_id == "" ? try(data.huaweicloud_compute_flavors.test[0].flavors[0].id, null) : var.instance_flavor_id
-  visibility = var.instance_image_visibility
-  os         = var.instance_image_os
+  name        = var.instance_image_name
+  most_recent = true
+}
+
+resource "huaweicloud_kps_keypair" "test" {
+  name       = var.keypair_name
+  public_key = var.keypair_public_key
 }
 
 resource "huaweicloud_vpc" "test" {
@@ -46,7 +50,7 @@ resource "huaweicloud_compute_instance" "test" {
   name              = var.instance_name
   availability_zone = try(data.huaweicloud_availability_zones.test.names[0], null)
   flavor_id         = var.instance_flavor_id == "" ? try(data.huaweicloud_compute_flavors.test[0].flavors[0].id, "") : var.instance_flavor_id
-  image_id          = var.instance_image_id == "" ? try(data.huaweicloud_images_images.test[0].images[0].id, "") : var.instance_image_id
+  image_id          = var.instance_image_id == "" ? try(data.huaweicloud_images_image.test[0].id, "") : var.instance_image_id
   security_group_ids = [
     huaweicloud_networking_secgroup.test.id
   ]
@@ -55,14 +59,14 @@ resource "huaweicloud_compute_instance" "test" {
     uuid = huaweicloud_vpc_subnet.test.id
   }
 
-  admin_pass = var.administrator_password
+  key_pair = huaweicloud_kps_keypair.test.name
 
   lifecycle {
     ignore_changes = [
       availability_zone,
       flavor_id,
       image_id,
-      admin_pass,
+      key_pair,
     ]
   }
 }

@@ -194,6 +194,168 @@ This applies to values such as:
 
 Reliable query results are used to help determine and confirm the right resource plan before Terraform generation.
 
+## Query before using specifications (CRITICAL)
+
+**CRITICAL: Always query available specifications from the target region before using them in Terraform.**
+
+### Availability Zones
+
+**Problem:** Availability zone names vary by region. Using `names[0]` always picks the first zone, which may not be what the user wants.
+
+**Solution:** Query availability zones and let user confirm, then use as a variable.
+
+```
+Workflow:
+1. User selects region (e.g., cn-north-4)
+2. Query: data.huaweicloud_availability_zones or API
+3. Present available zones: cn-north-4a, cn-north-4b, cn-north-4c
+4. User confirms one (e.g., cn-north-4a)
+5. Use as variable in Terraform
+```
+
+**Terraform usage:**
+```hcl
+# ❌ Wrong: Always use first zone
+availability_zone = data.huaweicloud_availability_zones.test.names[0]
+
+# ✅ Correct: Use variable from user confirmation
+variable "availability_zone" {
+  description = "The availability zone for resources"
+  type        = string
+}
+
+resource "huaweicloud_compute_instance" "main" {
+  availability_zone = var.availability_zone
+}
+```
+
+### ECS Flavors
+
+**Problem:** Flavor availability varies by region. Using hardcoded flavor names will cause failures.
+
+**Solution:** Query flavors using `huawei-cloud-computing-query` skill before proposing to user.
+
+```
+Workflow:
+1. User selects region (e.g., cn-north-4)
+2. Query: list_flavors.py --region cn-north-4 --availability_zone cn-north-4a
+3. Select flavor from query results (NOT from hardcoded defaults)
+4. Use exact flavor name in Terraform
+```
+
+**Terraform usage:**
+```hcl
+# Option A: Use flavor_name directly (recommended for simplicity)
+resource "huaweicloud_compute_instance" "main" {
+  flavor_name = "s6.small.1"  # Must be from query result
+}
+
+# Option B: Use data source with filter criteria (e.g., performance_type, cpu_core_count, memory_size)
+data "huaweicloud_compute_flavors" "selected" {
+  availability_zone = var.availability_zone
+  performance_type  = "normal"
+  cpu_core_count    = 2
+  memory_size       = 4
+}
+```
+
+### Images
+
+**Problem 1:** Image names must match EXACTLY. User may say "EulerOS 2.0" but actual name is "Huawei Cloud EulerOS 2.0 Standard 64 bit".
+
+**Problem 2:** Image version mismatch. User may say "Ubuntu 22.04" but if only `os = "Ubuntu"` is used, any Ubuntu version (16.04, 18.04, 20.04, 22.04, 24.04) may be returned.
+
+**Solution:** Query images using `huawei-cloud-computing-query` skill and match user's intent to exact name with version.
+
+```
+Workflow:
+1. User says "use Ubuntu 22.04"
+2. Query: list_images.py --region cn-north-4 --imagetype gold --platform Ubuntu
+3. Find matching image with correct version from results:
+   - Ubuntu 24.04 server 64bit
+   - Ubuntu 22.04 server 64bit  ← Match this
+   - Ubuntu 20.04 server 64bit
+4. Use EXACT name in Terraform
+```
+
+**Image version mismatch example:**
+| User confirms | Template uses | Result returned | Actual installed |
+|--------------|---------------|-----------------|------------------|
+| Ubuntu 22.04 | `os = "Ubuntu"` | Ubuntu 24.04 | Ubuntu 24.04 ❌ |
+| Ubuntu 22.04 | `os_version = "Ubuntu 22.04 server 64bit"` | Ubuntu 22.04 | Ubuntu 22.04 ✅ |
+
+**Terraform usage:**
+```hcl
+# ❌ Wrong: No version specified, may return any Ubuntu version
+data "huaweicloud_images_images" "selected" {
+  os = "Ubuntu"  # Could return 16.04, 18.04, 20.04, 22.04, or 24.04
+}
+
+# ✅ Correct: Use exact image name
+data "huaweicloud_images_image" "selected" {
+  name        = "Ubuntu 22.04 server 64bit"  # EXACT match with version
+  most_recent = true
+}
+
+# ✅ Correct: Use os_version field (more stable)
+data "huaweicloud_images_images" "selected" {
+  os_version = "Ubuntu 22.04 server 64bit"  # Version included
+  visibility = "public"
+  imagetype  = "gold"
+  most_recent = true
+}
+
+resource "huaweicloud_compute_instance" "main" {
+  image_id = data.huaweicloud_images_image.selected.id
+}
+```
+
+### Forbidden practices
+
+- ❌ Using `data.huaweicloud_availability_zones.test.names[0]` to always pick first zone
+- ❌ Using hardcoded flavor names like `s6.small.1` without querying
+- ❌ Using image names like "EulerOS 2.0" without exact match
+- ❌ Using `os = "Ubuntu"` without version (may return wrong version)
+- ❌ Guessing specifications based on other regions
+- ❌ Using user input directly without validation against query results
+- ❌ Proceeding if query returns empty results
+
+## Handle empty query results (CRITICAL)
+
+**If query returns empty results, immediately report error and ask user to change conditions.**
+
+```
+Workflow:
+1. Query specifications using API
+2. If empty: Stop, report error, suggest alternatives, ask user to change conditions
+3. If not empty: Proceed with recommendation
+```
+
+**Use exact names instead of data source queries:**
+```hcl
+# ❌ Wrong
+flavor_id = data.huaweicloud_compute_flavors.test[0].flavors[0].id
+
+# ✅ Correct
+flavor_name = var.flavor_name  # "s6.small.1" from pre-validated query
+```
+
+## Security group rules (CRITICAL)
+
+**Generate rules based on user-confirmed ports, NOT hardcoded defaults.**
+
+```
+Workflow:
+1. Infer ports from user's goal (Web → 80, 443; SSH → 22; DB → 3306, 5432)
+2. Ask user to confirm: "需要开放哪些端口？推荐：80、443、22"
+3. Generate rules for confirmed ports only
+```
+
+**Forbidden:**
+- ❌ Using only egress rule without ingress rules
+- ❌ Using hardcoded default ports without asking user
+- ❌ Generating rules that don't match user confirmation
+
 ## Use Terraform data sources in generated code when supported
 
 When the Terraform provider supports resolving specifications or existing resources through data

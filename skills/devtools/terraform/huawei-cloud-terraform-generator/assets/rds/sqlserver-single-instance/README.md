@@ -38,7 +38,6 @@ The following variables need to be configured:
 - `instance_db_version` - The database engine version (default: "2019_SE")
 - `instance_mode` - The instance mode for the RDS instance flavor (default: "single")
 - `instance_flavor_group_type` - The group type for the RDS instance flavor (default: "general")
-- `instance_flavor_vcpus` - The CPU core numbers for the RDS instance flavor (default: 2)
 - `instance_flavor_memory` - The memory size for the RDS instance flavor (default: 4)
 - `instance_db_port` - The database port (default: 1433)
 - `instance_password` - The password for the RDS instance (default: "")

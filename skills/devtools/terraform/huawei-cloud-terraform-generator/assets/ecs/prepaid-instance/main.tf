@@ -11,12 +11,16 @@ data "huaweicloud_compute_flavors" "test" {
   memory_size       = var.instance_memory_size
 }
 
-data "huaweicloud_images_images" "test" {
+data "huaweicloud_images_image" "test" {
   count = var.instance_image_id == "" ? 1 : 0
 
-  flavor_id  = var.instance_flavor_id != "" ? var.instance_flavor_id : try(data.huaweicloud_compute_flavors.test[0].flavors[0].id, null)
-  visibility = var.instance_image_visibility
-  os         = var.instance_image_os
+  name        = var.instance_image_name
+  most_recent = true
+}
+
+resource "huaweicloud_kps_keypair" "test" {
+  name       = var.keypair_name
+  public_key = var.keypair_public_key
 }
 
 resource "huaweicloud_vpc" "test" {
@@ -40,11 +44,11 @@ resource "huaweicloud_networking_secgroup" "test" {
 
 resource "huaweicloud_compute_instance" "test" {
   name                    = var.instance_name
-  image_id                = var.instance_image_id != "" ? var.instance_image_id : try(data.huaweicloud_images_images.test[0].images[0].id, null)
+  image_id                = var.instance_image_id != "" ? var.instance_image_id : try(data.huaweicloud_images_image.test[0].id, null)
   flavor_id               = var.instance_flavor_id != "" ? var.instance_flavor_id : try(data.huaweicloud_compute_flavors.test[0].flavors[0].id, null)
   security_group_ids      = length(var.security_group_ids) != 0 ? var.security_group_ids : huaweicloud_networking_secgroup.test[*].id
   availability_zone       = var.availability_zone != "" ? var.availability_zone : try(data.huaweicloud_availability_zones.test[0].names[0], null)
-  admin_pass              = var.instance_admin_password
+  key_pair                = huaweicloud_kps_keypair.test.name
   description             = var.instance_description
   system_disk_type        = var.instance_system_disk_type
   system_disk_size        = var.instance_system_disk_size

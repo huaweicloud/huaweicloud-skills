@@ -41,8 +41,7 @@ The following variables need to be configured:
 - `security_group_ids` - The list of security group IDs for the ECS instance (default: [])
 - `security_group_names` - The name of the security groups to which the ECS instance belongs (default: [])
 - `instance_image_id` - The image ID of the ECS instance (default: "")
-- `instance_image_visibility` - The visibility of the image (default: "public")
-- `instance_image_os` - The operating system of the image (default: "Ubuntu")
+- `instance_image_name` - The name of the ECS instance image (default: "Ubuntu 22.04 server 64bit")
 - `keypair_public_key` - The public key for the keypair (default: null)
 
 -> You must provide either `security_group_ids` or `security_group_names`. If both are provided, `security_group_ids` will

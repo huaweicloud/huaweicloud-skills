@@ -201,12 +201,6 @@ variable "instance_flavor_group_type" {
   default     = "general"
 }
 
-variable "instance_flavor_vcpus" {
-  description = "The number of the RDS instance CPU cores for the RDS instance flavor"
-  type        = number
-  default     = 2
-}
-
 # Get all RDS flavor information under the specified region (if the region parameter is omitted, it defaults to the region specified in the current provider block) that meets specific conditions, used to create RDS instances
 data "huaweicloud_rds_flavors" "test" {
   count = var.instance_flavor_id == "" ? 1 : 0
@@ -215,7 +209,6 @@ data "huaweicloud_rds_flavors" "test" {
   db_version        = var.instance_db_version
   instance_mode     = var.instance_mode
   group_type        = var.instance_flavor_group_type
-  vcpus             = var.instance_flavor_vcpus
   availability_zone = var.availability_zone == "" ? try(data.huaweicloud_availability_zones.test[0].names[0], null) : var.availability_zone
 }
 ```
@@ -227,7 +220,6 @@ data "huaweicloud_rds_flavors" "test" {
 - **db\_version**: Database engine version, assigned by referencing the input variable instance\_db\_version, default value is "8.0"
 - **instance\_mode**: Instance mode, assigned by referencing the input variable instance\_mode, default value is "single"
 - **group\_type**: Flavor group type, assigned by referencing the input variable instance\_flavor\_group\_type, default value is "general"
-- **vcpus**: Number of CPU cores, assigned by referencing the input variable instance\_flavor\_vcpus, default value is 2
 - **availability\_zone**: Availability zone, prioritizes using availability\_zone variable, uses the first queried availability zone if empty
 
 ### 6. Create Security Group

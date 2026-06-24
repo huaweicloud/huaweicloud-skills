@@ -22,12 +22,13 @@ The following variables need to be configured:
 
 #### Required Variables
 
+- `keypair_name` - The name of the SSH keypair
+- `keypair_public_key` - The public key for the SSH keypair (default: null)
 - `vpc_name` - The name of the VPC
 - `vpc_cidr` - The CIDR block of the VPC
 - `subnet_name` - The name of the VPC subnet
 - `security_group_name` - The name of the security group
 - `instance_name` - The name of the ECS instance
-- `administrator_password` - The password of the administrator
 
 #### Optional Variables
 
@@ -36,8 +37,7 @@ The following variables need to be configured:
 - `instance_flavor_cpu_core_count` - The CPU core count of the ECS instance flavor (default: 2)
 - `instance_flavor_memory_size` - The memory size of the ECS instance flavor (default: 4)
 - `instance_image_id` - The ID of the ECS instance image (default: "")
-- `instance_image_visibility` - The visibility of the ECS instance image (default: "public")
-- `instance_image_os` - The OS of the ECS instance image (default: "Ubuntu")
+- `instance_image_name` - The name of the ECS instance image (default: "Ubuntu 22.04 server 64bit")
 - `subnet_cidr` - The CIDR block of the VPC subnet (default: "")
 - `subnet_gateway_ip` - The gateway IP of the VPC subnet (default: "")
 
