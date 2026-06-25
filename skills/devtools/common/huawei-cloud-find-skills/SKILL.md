@@ -12,7 +12,7 @@ description: |
 
 # Huawei Cloud Agent Skills Search and Discovery
 
-This skill enables users to efficiently search, discover, and install Huawei Cloud skills hosted on GitHub.
+This skill enables users to efficiently search, discover, and install Huawei Cloud skills hosted on GitCode.
 
 ## Scenario Description
 
@@ -20,10 +20,10 @@ This skill enables users to:
 
 - **Search Skills**: Find skills by keyword, category, or both (matched against name, description, and triggers)
 - **Browse Categories**: Explore available skill categories
-- **View Skill Details**: Fetch full SKILL.md content from GitHub for specific skills
+- **View Skill Details**: Fetch full SKILL.md content from GitCode for specific skills
 - **Install Skills**: Guide users through skill installation via `npx skills add`,`npx clawhub install`, or fallback GitCode method
 
-**Architecture**: Pre-built index (`references/index.json`) → Script-based search → GitHub raw fetch for details → Install
+**Architecture**: GitCode API v5 (`index.json` + `cn-en-map.json`) → HTTP GET (base64 decode) → In-memory search → GitCode raw fetch for details → Install
 
 ### Use Cases
 
@@ -34,42 +34,80 @@ This skill enables users to:
 - "Install a skill for RDS management"
 - "帮我找一个华为云网络相关的skill"
 
+## Prerequisites
+
+- **Python 3.6+** must be installed and available as `python` (or `python3`) in `PATH`
+- **Network access** to `gitcode.com` (API v5 endpoint)
+
+### Step 0: Check Python Environment
+
+> **MANDATORY**: Before running any script command, verify Python is available.
+
+```bash
+# Check Python availability
+python --version   # or: python3 --version
+```
+
+If the command fails or returns Python 2.x:
+
+1. **Install Python 3**: Download from [python.org](https://www.python.org/downloads/) or use a package manager:
+   ```bash
+   # macOS
+   brew install python3
+   # Ubuntu/Debian
+   sudo apt-get install python3
+   # Windows — download installer from python.org, check "Add Python to PATH"
+   ```
+2. **Verify after install**: Run `python --version` again to confirm Python 3.6+ is available
+3. **If `python` points to Python 2**: Use `python3` instead of `python` in all commands below
+
 ## Repository Info
 
 ```
-REPO=huaweicloud/huaweicloud-skills
-BRANCH=master
-RAW_BASE=https://raw.githubusercontent.com/$REPO/$BRANCH
-INDEX=references/index.json
+INDEX_REPO=2501_91318609/skills-for-index
+INDEX_BRANCH=main
+SKILLS_REPO=huaweicloud/huaweicloud-skills
+SKILLS_BRANCH=master
+RAW_BASE=https://raw.githubusercontent.com/$SKILLS_REPO/$SKILLS_BRANCH
 ```
+
+## Index Source
+
+The search script fetches the skill index from GitCode API v5 via HTTP GET (base64 auto-decoded):
+
+```
+SKILLS_INDEX_URL=https://gitcode.com/api/v5/repos/2501_91318609/skills-for-index/contents/skills-index/index.json?ref=main
+SKILLS_CN_EN_MAP_URL=https://gitcode.com/api/v5/repos/2501_91318609/skills-for-index/contents/skills-index/cn-en-map.json?ref=main
+```
+
 
 ## Core Workflow
 
 ### Step 1: Search Skills
 
-> **MANDATORY**: The agent MUST execute the search script to read `references/index.json`. Do NOT read the JSON file directly — always use the script.
+> **MANDATORY**: The agent MUST execute the search script to search the skill index. Do NOT read the JSON file directly — always use the script.
 
 Given `keyword` (from AI-understood user intent) and optional `category`, run the search script:
 
 ```powershell
-# PowerShell
-.\scripts\search-skills.ps1 -Keyword "<keyword>"
-.\scripts\search-skills.ps1 -Keyword "<keyword>" -Category "<category>"
-.\scripts\search-skills.ps1 -Category "<category>"
+# PowerShell (optional: override URLs via env vars)
+python scripts/search-skills.py -k "<keyword>"
+python scripts/search-skills.py -k "<keyword>" -c "<category>"
+python scripts/search-skills.py -c "<category>"
 ```
 
 ```bash
-# Bash
-./scripts/search-skills.sh "<keyword>"
-./scripts/search-skills.sh "<keyword>" "<category>"
-./scripts/search-skills.sh "" "<category>"
+# Bash (optional: override URLs via env vars)
+python scripts/search-skills.py -k "<keyword>"
+python scripts/search-skills.py -k "<keyword>" -c "<category>"
+python scripts/search-skills.py -c "<category>"
 ```
 
-→ [scripts/search-skills.ps1](scripts/search-skills.ps1) (PowerShell) · [scripts/search-skills.sh](scripts/search-skills.sh) (Bash)
+→ [scripts/search-skills.py](scripts/search-skills.py) (Python — cross-platform)
 
 **What the script does**:
-1. Reads `references/index.json` and parses the `skills` array
-2. Expands keywords via `references/cn-en-map.json` (bidirectional CN↔EN, e.g., "ECS" → "ECS, 弹性云服务器, 云服务器")
+1. Fetches `index.json` and `cn-en-map.json` via HTTP GET from GitCode API v5 (env vars `SKILLS_INDEX_URL` / `SKILLS_CN_EN_MAP_URL`, with built-in defaults; auto-decodes base64 content)
+2. Expands keywords via `cn-en-map.json` (bidirectional CN↔EN, e.g., "ECS" → "ECS, 弹性云服务器, 云服务器")
 3. Scores each skill: name match **+10**, trigger match **+8**, description match **+5**, service match **+3**
 4. Sorts by score descending, outputs formatted results with matched keywords
 
@@ -113,14 +151,14 @@ If all installation attempts fail, report the error message to the user. Do NOT 
 | `Category` | Optional | Category code for filtering (e.g., "computing", "storage", "network") | None |
 | `skill-name` | Required (Step 3) | Exact skill name for installing | None |
 
+
 ## Reference Documentation
 
 | Document | Description |
 |----------|-------------|
-| [references/index.json](references/index.json) | Pre-built skill index with 49 entries (name, description, triggers, category, service) |
-| [references/cn-en-map.json](references/cn-en-map.json) | Chinese-English keyword mapping for search expansion (bidirectional) |
-| [scripts/search-skills.ps1](scripts/search-skills.ps1) | Step 1 search script (PowerShell) — reads index.json, expands keywords, scores, sorts |
-| [scripts/search-skills.sh](scripts/search-skills.sh) | Step 1 search script (Bash) — reads index.json, expands keywords, scores, sorts |
+| GitCode API v5 `index.json` | Skill index fetched via HTTP GET (base64 decoded) |
+| GitCode API v5 `cn-en-map.json` | Chinese-English keyword mapping fetched via HTTP GET (base64 decoded) |
+| [scripts/search-skills.py](scripts/search-skills.py) | Search script (Python) — fetches from GitCode API v5, expands keywords, scores, sorts |
 
 ## Search Heuristics
 
@@ -132,14 +170,24 @@ If all installation attempts fail, report the error message to the user. Do NOT 
 
 ## Troubleshooting
 
-### Issue: Script fails with "index.json not found"
+### Issue: `python` is not recognized as a command
 
-**Cause**: Script cannot locate `references/index.json` relative to its own path
-**Solution**: Ensure the skill directory structure is intact: `scripts/search-skills.ps1` and `references/index.json` must both exist
+**Cause**: Python 3 is not installed or not in `PATH`
+**Solution**: Install Python 3.6+ and ensure it is added to `PATH`. On Windows, re-run the installer and check "Add Python to PATH". Alternatively, use `python3` if available.
 
-### Issue: raw.githubusercontent.com returns 404
+### Issue: Script fails with `SyntaxError: invalid syntax`
 
-**Cause**: File path incorrect or default branch is not `master`
+**Cause**: System `python` points to Python 2.x (the script requires Python 3.6+)
+**Solution**: Run with `python3` explicitly: `python3 scripts/search-skills.py -k "<keyword>"`
+
+### Issue: Script fails with "Failed to fetch index.json"
+
+**Cause**: GitCode API v5 URL unreachable or URL incorrect
+**Solution**: Verify network connectivity and check `SKILLS_INDEX_URL` / `SKILLS_CN_EN_MAP_URL` environment variables
+
+### Issue: GitCode API v5 returns 404
+
+**Cause**: File path incorrect or default branch is not `main`
 **Solution**: Verify the skill's `category`, `service`, and `name` from search results
 
 ### Issue: Search returns no results
@@ -148,12 +196,13 @@ If all installation attempts fail, report the error message to the user. Do NOT 
 **Solution**:
 1. Try broader keywords
 2. Switch between Chinese and English keywords (e.g., "对象存储" → "obs")
-3. List all skills: `.\scripts\search-skills.ps1 -Category "computing"`
+3. List all skills: `python scripts/search-skills.py -c "computing"`
 
 ## Notes
 
 - This skill is **read-only** and does not create any cloud resources
-- **No cache management needed** — index is pre-built and shipped with the skill
-- **Offline search** — index is local, only Step 2 requires network
+- **No cache management needed** — index is fetched fresh from GitCode API v5 each run
+- **Network required** — index data is hosted on GitCode, fetched via HTTP GET (base64 decoded)
 - **MUST use script to search** — do not read index.json directly
-- Repo: `https://github.com/huaweicloud/huaweicloud-skills` (branch: `master`)
+- Index repo: `https://gitcode.com/2501_91318609/skills-for-index` (branch: `main`)
+- Skills repo: `https://github.com/huaweicloud/huaweicloud-skills` (branch: `master`)
