@@ -39,7 +39,7 @@ KooCLI has built-in obsutil tool, if KooCLI version check passes, obsutil check 
 
 ```bash
 # View configuration
-hcloud OBS config
+hcloud obs ls -s
 
 # Configuration file location ~/.obsutilconfig
 ```
