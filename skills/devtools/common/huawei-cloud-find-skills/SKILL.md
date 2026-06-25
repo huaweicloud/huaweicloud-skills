@@ -12,7 +12,7 @@ description: |
 
 # Huawei Cloud Agent Skills Search and Discovery
 
-This skill enables users to efficiently search, discover, and install Huawei Cloud skills hosted on GitCode.
+This skill enables users to efficiently search, discover, and install Huawei Cloud skills. 
 
 ## Scenario Description
 
@@ -20,10 +20,10 @@ This skill enables users to:
 
 - **Search Skills**: Find skills by keyword, category, or both (matched against name, description, and triggers)
 - **Browse Categories**: Explore available skill categories
-- **View Skill Details**: Fetch full SKILL.md content from GitCode for specific skills
-- **Install Skills**: Guide users through skill installation via `npx skills add`,`npx clawhub install`, or fallback GitCode method
+- **View Skill Details**: Fetch full SKILL.md content from GitHub for specific skills
+- **Install Skills**: Guide users through skill installation via `npx skills add` (GitCode default), `npx clawhub install`, or fallback GitHub method
 
-**Architecture**: GitCode API v5 (`index.json` + `cn-en-map.json`) → HTTP GET (base64 decode) → In-memory search → GitCode raw fetch for details → Install
+**Architecture**: GitCode API v5 (`index.json` + `cn-en-map.json`) → HTTP GET (base64 decode) → In-memory search → GitHub raw fetch for details → Install
 
 ### Use Cases
 
@@ -37,7 +37,7 @@ This skill enables users to:
 ## Prerequisites
 
 - **Python 3.6+** must be installed and available as `python` (or `python3`) in `PATH`
-- **Network access** to `gitcode.com` (API v5 endpoint)
+- **Network access** to `gitcode.com` (API v5 for index) and `github.com` / `raw.githubusercontent.com` (for skill details)
 
 ### Step 0: Check Python Environment
 
@@ -90,14 +90,14 @@ SKILLS_CN_EN_MAP_URL=https://gitcode.com/api/v5/repos/2501_91318609/skills-for-i
 Given `keyword` (from AI-understood user intent) and optional `category`, run the search script:
 
 ```powershell
-# PowerShell (optional: override URLs via env vars)
+# PowerShell
 python scripts/search-skills.py -k "<keyword>"
 python scripts/search-skills.py -k "<keyword>" -c "<category>"
 python scripts/search-skills.py -c "<category>"
 ```
 
 ```bash
-# Bash (optional: override URLs via env vars)
+# Bash
 python scripts/search-skills.py -k "<keyword>"
 python scripts/search-skills.py -k "<keyword>" -c "<category>"
 python scripts/search-skills.py -c "<category>"
@@ -106,7 +106,7 @@ python scripts/search-skills.py -c "<category>"
 → [scripts/search-skills.py](scripts/search-skills.py) (Python — cross-platform)
 
 **What the script does**:
-1. Fetches `index.json` and `cn-en-map.json` via HTTP GET from GitCode API v5 (env vars `SKILLS_INDEX_URL` / `SKILLS_CN_EN_MAP_URL`, with built-in defaults; auto-decodes base64 content)
+1. Fetches `index.json` and `cn-en-map.json` via HTTP GET from GitCode API v5 (auto-decodes base64 content)
 2. Expands keywords via `cn-en-map.json` (bidirectional CN↔EN, e.g., "ECS" → "ECS, 弹性云服务器, 云服务器")
 3. Scores each skill: name match **+10**, trigger match **+8**, description match **+5**, service match **+3**
 4. Sorts by score descending, outputs formatted results with matched keywords
@@ -131,14 +131,15 @@ The agent can fetch this URL using `curl` or its web-fetch tool, then present th
 > **MANDATORY**: Use one of the commands below. Option A is the default; Option C is a fallback when Option A is unavailable.
 
 ```bash
-# Option A: npx skills add from GitHub (default)
-npx skills add huaweicloud/huaweicloud-skills --skill <skill-name>
+# Option A: npx skills add from GitCode (default)
+npx skills add https://gitcode.com/huaweicloud/huaweicloud-skills.git#master --skill <skill-name>
 
 # Option B: npx clawhub install (OpenClaw ecosystem)
 npx clawhub install <skill-name>
 
-# Option C (fallback): npx skills add from GitCode
-npx skills add https://gitcode.com/huaweicloud/huaweicloud-skills.git#master --skill <skill-name>
+# Option C (fallback): npx skills add from GitHub
+npx skills add huaweicloud/huaweicloud-skills --skill <skill-name>
+
 ```
 
 If all installation attempts fail, report the error message to the user. Do NOT attempt any method outside the commands above.
@@ -182,8 +183,8 @@ If all installation attempts fail, report the error message to the user. Do NOT 
 
 ### Issue: Script fails with "Failed to fetch index.json"
 
-**Cause**: GitCode API v5 URL unreachable or URL incorrect
-**Solution**: Verify network connectivity and check `SKILLS_INDEX_URL` / `SKILLS_CN_EN_MAP_URL` environment variables
+**Cause**: GitCode API v5 URL unreachable
+**Solution**: Verify network connectivity to `gitcode.com`
 
 ### Issue: GitCode API v5 returns 404
 
