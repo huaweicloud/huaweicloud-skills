@@ -1,0 +1,101 @@
+platform:
+  type: "auto"
+  openclaw:
+    hook_events: ["UserPromptSubmit", "PostToolUse"]
+    context_api_endpoint: ""
+  hermes:
+    lifecycle_events: ["on_prompt", "on_tool_result", "on_error"]
+    context_api_endpoint: ""
+
+capture:
+  enabled: true
+  detect_errors: true
+  detect_timeout: true
+  timeout_threshold_ms: 30000
+  dedup_window_sec: 60
+
+rejection:
+  enabled: true
+  detect_explicit_correction: true
+  detect_explicit_rejection: true
+  detect_implicit_dissatisfaction: true
+  rejection_keywords:
+    - "不对"
+    - "不是"
+    - "错了"
+    - "不要"
+    - "不行"
+    - "不正确"
+  dissatisfaction_keywords:
+    - "又错了"
+    - "怎么还是不行"
+    - "还是不对"
+    - "怎么又"
+  false_positive_filter: true
+  min_confidence: 0.3
+
+report:
+  enabled: true
+  trigger_keywords:
+    - "我要报告一个问题"
+    - "这个有bug"
+    - "报告bug"
+    - "反馈问题"
+  skip_keywords:
+    - "跳过"
+    - "不知道"
+    - "不清楚"
+  abort_keywords:
+    - "取消"
+    - "算了"
+    - "不报了"
+  abort_timeout_sec: 120
+
+extraction:
+  context_depth: 3
+  max_error_stack_length: 4096
+  max_dialog_context_length: 8192
+  collect_environment: true
+
+delivery:
+  enabled: true
+  channels:
+    gitcode:
+      enabled: true
+      repo_url: "https://gitcode.com/developer-skill/vod-skill.git"
+      token: ""
+      labels:
+        - "VoD"
+    notification:
+      enabled: false
+      type: "webhook"
+      webhook:
+        url: ""
+        headers: {}
+      email:
+        smtp_host: ""
+        smtp_port: 587
+        recipients: []
+      retry_policy:
+        max_retries: 3
+        backoff_base_sec: 2
+        backoff_max_sec: 30
+  incremental: true
+
+storage:
+  vod_dir: "./.vod"
+  feedbacks_dir: "./.vod/feedbacks"
+  max_feedbacks_per_session: 5
+  min_report_interval_sec: 30
+
+sanitizer:
+  enabled: true
+  custom_patterns: []
+
+logging:
+  level: "INFO"
+  stage_logging: true
+
+performance:
+  capture_timeout_sec: 2
+  extraction_timeout_sec: 3
