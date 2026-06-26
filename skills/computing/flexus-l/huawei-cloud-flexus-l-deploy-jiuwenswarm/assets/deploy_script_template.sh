@@ -121,11 +121,23 @@ pip install jiuwenswarm -i https://mirrors.aliyun.com/pypi/simple/ --no-cache-di
 # Initialize JiuwenSwarm
 log_info "Starting JiuwenSwarm initialization..."
 
-# Use expect or printf to send all responses sequentially
-# First try expect, use printf if unavailable
-if command -v expect &> /dev/null; then
-    log_info "Using expect to auto-answer interactive prompts..."
-    expect << 'EOF'
+init_result=1
+
+# Method 1: First try direct run (non-interactive mode)
+# jiuwenswarm-init detects non-tty input and auto-enters non-interactive mode
+log_info "Method 1: Trying direct run (non-interactive mode)..."
+jiuwenswarm-init --config /root/.jiuwenswarm/config/config.yaml < /dev/null
+init_result=$?
+
+if [[ $init_result -eq 0 ]]; then
+    log_success "JiuwenSwarm initialization completed (non-interactive mode)"
+else
+    log_info "Method 1 failed, trying interactive methods..."
+    
+    # Method 2: Use expect for interactive prompts
+    if command -v expect &> /dev/null; then
+        log_info "Method 2: Using expect to auto-answer interactive prompts..."
+        expect << 'EOF'
 set timeout 60
 spawn jiuwenswarm-init --config /root/.jiuwenswarm/config/config.yaml
 expect {
@@ -151,39 +163,35 @@ expect {
     }
 }
 EOF
-    init_result=$?
-else
-    log_info "Using printf to auto-answer interactive prompts..."
-    # Use printf to send all responses with sufficient delay
-    {
-        echo "yes"
-        sleep 2
-        echo "1"
-        sleep 2
-    } | jiuwenswarm-init --config /root/.jiuwenswarm/config/config.yaml
-    init_result=$?
+        init_result=$?
+    fi
+    
+    # Method 3: Use printf with proper handling for broken pipe
+    if [[ $init_result -ne 0 ]]; then
+        log_info "Method 3: Using printf with pipe..."
+        {
+            printf "yes\n1\n"
+        } | jiuwenswarm-init --config /root/.jiuwenswarm/config/config.yaml 2>&1 | tail -100
+        init_result=${PIPESTATUS[1]}
+    fi
+    
+    # Method 4: Try with --yes and --lang parameters if available
+    if [[ $init_result -ne 0 ]]; then
+        if jiuwenswarm-init --help 2>&1 | grep -q "--yes"; then
+            log_info "Method 4: Trying --yes and --lang parameters..."
+            jiuwenswarm-init --config /root/.jiuwenswarm/config/config.yaml --yes --lang zh
+            init_result=$?
+            if [[ $init_result -eq 0 ]]; then
+                log_success "JiuwenSwarm initialization completed (--yes method)"
+            fi
+        fi
+    fi
 fi
 
-if [[ $init_result -eq 0 ]]; then
-    log_success "JiuwenSwarm initialization completed"
-else
-    log_error "JiuwenSwarm initialization failed (exit code: $init_result)"
-    log_info "Attempting alternative initialization method..."
-    
-    # Alternative: Use --yes and --lang parameters
-    if jiuwenswarm-init --help 2>&1 | grep -q "--yes"; then
-        log_info "Trying --yes and --lang parameters..."
-        jiuwenswarm-init --config /root/.jiuwenswarm/config/config.yaml --yes --lang zh
-        if [[ $? -eq 0 ]]; then
-            log_success "JiuwenSwarm initialization completed (alternative method)"
-            init_result=0
-        else
-            log_error "Alternative method also failed, please run initialization manually"
-        fi
-    else
-        log_error "Cannot complete initialization automatically, please execute manually: jiuwenswarm-init --config /root/.jiuwenswarm/config/config.yaml"
-        exit 1
-    fi
+if [[ $init_result -ne 0 ]]; then
+    log_error "All initialization methods failed"
+    log_error "Please execute manually: jiuwenswarm-init --config /root/.jiuwenswarm/config/config.yaml"
+    exit 1
 fi
 
 log_info "Creating systemd service..."
