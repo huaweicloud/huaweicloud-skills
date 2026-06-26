@@ -1,0 +1,37 @@
+hooks:
+  - name: vod-on-tool-error
+    event: PostToolUse
+    condition:
+      - field: tool_result.exit_code
+        operator: ne
+        value: 0
+      - or:
+          - field: tool_result.stderr
+            operator: contains
+            value: "error"
+          - field: tool_result.status_code
+            operator: in
+            value: [400, 401, 403, 404, 500, 502, 503]
+    action: activate_skill
+    skill: agent-vod-collector
+    priority: high
+
+  - name: vod-on-user-rejection
+    event: UserPromptSubmit
+    condition:
+      - field: user_input
+        operator: matches_any
+        value_from_config: rejection.rejection_keywords
+    action: activate_skill
+    skill: agent-vod-collector
+    priority: normal
+
+  - name: vod-on-user-report
+    event: UserPromptSubmit
+    condition:
+      - field: user_input
+        operator: matches_any
+        value_from_config: report.trigger_keywords
+    action: activate_skill
+    skill: agent-vod-collector
+    priority: high
