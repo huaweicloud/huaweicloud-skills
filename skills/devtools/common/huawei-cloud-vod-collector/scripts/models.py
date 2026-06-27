@@ -123,6 +123,7 @@ class FeedbackRecord:
     error_stack: str | None = None
     user_intent: str | None = None
     agent_action: str | None = None
+    user_expected: str | None = None
     dialog_context: list[DialogTurn] | None = None
     environment: dict[str, str] | None = None
     confidence: float = 0.0
@@ -135,6 +136,7 @@ class FeedbackRecord:
     expected_behavior: str | None = None
     actual_behavior: str | None = None
     product_name: str | None = None
+    more_details: dict[str, str] | None = None
 
 
 @dataclass

@@ -1,7 +1,7 @@
 ---
 name: huawei-cloud-vod-collector
 description: |
-  Invoke this skill to capture poor Agent experiences and distill them into high-value requirements (Voice of Developer).Triggers include: "Agent体验差","Agent报错了","我要反馈问题","这个有bug","Agent拒绝了我的请求","报告问题","反馈体验","Agent执行失败","report a problem","Agent error","bug report","poor Agent experience","user rejection","voice of developer","VoD"
+  Invoke this skill to capture poor experiences and distill them into high-value requirements (Voice of Developer). Use when user encounters any Huawei Cloud related issues, like user expresses dissatisfaction, encounters errors, or wants to report issues/suggestions.Triggers include: "体验差","反馈问题","反馈建议","这个有bug","拒绝了请求","报告问题","反馈体验","report a problem","report a suggestion","bug report","poor experience","voice of developer"
 ---
 
 # VoD (Voice of Developer) Collector Skill
@@ -12,17 +12,17 @@ description: |
 
 ## Overview
 
-This Skill captures poor experiences during Agent usage and distills them into high-value requirements, enabling automated collection, intelligent analysis, and structured delivery of user experience feedback.
+This Skill captures poor experiences during usage and distills them into high-value requirements, enabling automated collection, intelligent analysis, and structured delivery of user experience feedback.
 
-**VoD = Voice of Developer**. This Skill transforms problems, rejections, and dissatisfaction encountered by users during Agent usage into actionable high-value requirements and feeds them back to developers.
+**VoD = Voice of Developer**. This Skill transforms problems, rejections, and dissatisfaction encountered by users into actionable high-value requirements and feeds them back to developers.
 
 ## Trigger Conditions
 
-This Skill is activated by the host Agent under the following conditions:
+This Skill is activated under the following conditions:
 
-1. **Exception Event Trigger**: PostToolUse Hook event detects command execution failure, API call error, or response timeout
-2. **User Rejection Trigger**: UserPromptSubmit Hook event detects user correction, rejection, or dissatisfaction expression
-3. **Proactive Report Trigger**: User input contains problem report intent (e.g., "I want to report a problem", "this has a bug")
+1. **Exception Event Trigger**: Hook event detects command execution failure, API call error, service exception, or response timeout
+2. **User Rejection Trigger**: Hook event detects user correction, rejection, or dissatisfaction expression
+3. **Proactive Report Trigger**: User input contains problem report intent (e.g., "I want to report a problem", "this has a bug", "service error", "configuration issue")
 
 ## Workflow
 
@@ -32,14 +32,14 @@ When a Hook event triggers, execute the following steps:
 
 #### Step 1.1: Identify Exception Signals
 
-- Check whether tool_result contains error information
-- Check whether exit_code is non-zero
+- Check whether tool_result or service response contains error information
+- Check whether exit_code or API status is non-zero/non-success
 - Check whether execution duration exceeds `capture.timeout_threshold_ms` in config.yaml
 - If an exception is detected, generate an ExceptionSignal record
 
 #### Step 1.2: Detect User Rejection
 
-- **Explicit Correction Detection**: Compare the semantic difference between the current user input and the previous intent; if the user re-describes the intent and it differs from the Agent's response direction, it is judged as a correction (confidence 0.7)
+- **Explicit Correction Detection**: Compare the semantic difference between the current user input and the previous intent; if the user re-describes the intent and it differs from the expected outcome, it is judged as a correction (confidence 0.7)
 - **Explicit Rejection Detection**: Check whether user input contains keywords from `rejection.rejection_keywords` in config.yaml (confidence 0.9)
 - **Implicit Dissatisfaction Detection**: Check whether user input contains keywords from `rejection.dissatisfaction_keywords` in config.yaml (confidence 0.5)
 - **False Positive Filtering**: Perform a secondary validation on detected rejection signals, excluding normal follow-up questions (supplementary information without negative expressions); low-confidence results are annotated as "low confidence"
@@ -52,13 +52,29 @@ When a Hook event triggers, execute the following steps:
 #### Step 1.4: Generate Raw Feedback Record
 
 - Call `python scripts/vod_sanitize.py text --value "<raw_content>"` to sanitize the raw content
-- Generate a feedback record in the format defined by `assets/VOD_FEEDBACKS.md`
-- Write to the `.vod/feedbacks/` directory, file name format: `VOD-YYYYMMDD-NNNN.md`
+- Generate a feedback ID: `python scripts/md_io.py generate-id --prefix VOD --feedbacks-dir .vod/feedbacks`
+- Collect environment: `python scripts/vod_context.py collect-env` to get `session_id` etc.
+- **MUST** write the feedback file using `python scripts/md_io.py write-feedback` with the collected fields. **Manual file writing is PROHIBITED** — this guarantees the file format conforms to `assets/VOD_FEEDBACKS.md`
+- Example command:
+  ```
+  python scripts/md_io.py write-feedback \
+    --feedback-id <id> --feedback-type error --timestamp <ISO8601> \
+    --session-id <session_id> --platform generic --confidence 0.9 \
+    --product-name <product_name> \
+    --error-type <error_type> --error-message <message> --error-stack <stack> \
+    --user-intent <intent> --agent-action <action> \
+    --user-expected <what_user_expected> \
+    --recurrence-count 1 --dedup-key <key> \
+    --annotations skill:<name> category:<cat> severity:<level> \
+    --output .vod/feedbacks/<id>.md
+  ```
 - **Mandatory Constraints**:
   - Feedback ID must be generated via `python scripts/md_io.py generate-id --prefix VOD --feedbacks-dir .vod/feedbacks`, manual concatenation is prohibited
   - Timestamp must use the current system real time (ISO 8601 format), fabrication or hardcoded values are prohibited
   - Session ID must be obtained via `python scripts/vod_context.py collect-env` to get the `session_id` field, using placeholders like "current-session" is prohibited
-  - `product_name` must be inferred from context as the product/skill name to which the problem belongs (see Step 2.3), leaving it empty is prohibited
+  - `product_name` must be inferred from context as the product/skill name to which the problem belongs (see Step 2.4), leaving it empty is prohibited
+  - **Writing feedback files by any means other than `md_io.py write-feedback` is prohibited** (e.g., directly writing markdown, using echo/cat/heredoc, or LLM free-form generation)
+  - `error_stack` must be written in code block format via `md_io.py write-feedback --error-stack`, which wraps multi-line content with triple backticks; inline format is prohibited to ensure complete multi-line stack traces are preserved
 
 #### Step 1.5: Exception Deduplication
 
@@ -86,31 +102,39 @@ Enhance the raw feedback with context:
 
 - Infer the user's true intent before the exception/rejection occurred from the dialog context
 - Use the host Agent's built-in LLM capability for intent inference
+- **`user_intent` must only describe WHAT the user wanted to do** (e.g., "创建OBS", "部署应用"), NOT how the user expected it to be done. Descriptions of expected execution behavior (e.g., "按skill流程执行", "自动下载obsutil") belong in `expected_behavior`, not `user_intent`
 
-#### Step 2.3: Infer Problem-Attributed Product
+#### Step 2.3: Infer User's Expected Outcome
+
+- Infer what the user expected to happen from the dialog context (e.g., user corrections, explicit expectations, or implicit goal descriptions)
+- Write the inferred expectation to the `user_expected` field; this requires reading the existing feedback record, updating the `user_expected` field, and re-writing the file via `python scripts/md_io.py write-feedback` with all fields populated (in-place update per Feedback Record Update constraints)
+- **`user_expected` vs `expected_behavior`**: `user_expected` is extracted/inferred from the raw dialog (placed in `## Context`), while `expected_behavior` is explicitly provided by the user during the guided report flow (placed in `## User Report`). When both exist, `expected_behavior` takes priority; `user_expected` serves as a fallback when `expected_behavior` is empty
+- **`expected_behavior` describes HOW the user expected things to behave** (e.g., "按skill流程执行，没检测到obsutil就下载"), as opposed to `user_intent` which only describes WHAT the user wanted to do. When inferring `expected_behavior`, extract the user's expectation about the execution approach from corrections, rejections, or explicit statements in the dialog
+
+#### Step 2.4: Infer Problem-Attributed Product
 
 - Infer the product/skill name to which the problem belongs from the feedback context, and write it to the `product_name` field
 - Inference priority: `skill:` annotation in annotations > "call xxx skill" pattern in agent_action > hyphenated product name in error_message
 - Example: agent_action is "called huawei-cloud-business-support-query skill's script", infer `product_name: huawei-cloud-business-support-query`
 - This field is used for Issue title generation, format: `【Product Name】Problem description summary`
 
-#### Step 2.4: Extract Agent's Actual Behavior
+#### Step 2.5: Extract Execution Behavior
 
 - Call `python scripts/vod_context.py extract-agent-action --dialog <path> --anchor-turn <n>` to assist extraction
-- Record the Agent's execution actions, tool calls, and generated content when the exception/rejection occurred
+- Record the execution actions, tool calls, API invocations, and generated content when the exception/rejection occurred
 
-#### Step 2.5: Collect Runtime Environment Information
+#### Step 2.6: Collect Runtime Environment Information
 
 - Call `python scripts/vod_context.py collect-env` to assist collection
 - Automatically collect platform type, platform version, session ID, and operating system information
 
-#### Step 2.6: Extract Dialog Context
+#### Step 2.7: Extract Dialog Context
 
 - Call `python scripts/vod_context.py extract-dialog --dialog <path> --session-id <id> --anchor-turn <n> --depth 3` to assist extraction
 - Extract N rounds of dialog before and after the exception/rejection (N determined by `extraction.context_depth` in config.yaml)
 - **Only extract dialog context within the current session, cross-session retrieval is prohibited**
 - **Truncating dialog content is prohibited**: The complete content of each turn must be recorded as-is; ellipsis or summaries are not allowed
-- **AI thinking process must be recorded**: When role is assistant, the thinking field of that turn must also be recorded (i.e., the AI's chain-of-thought reasoning process), which is crucial for analyzing Agent behavior issues
+- **AI thinking process must be recorded**: When role is assistant, the thinking field of that turn must also be recorded (i.e., the AI's chain-of-thought reasoning process), which is crucial for analyzing behavior issues
 - **Translating original content is prohibited**: All dialog content and thinking processes must be recorded in their original language as-is; translation, rewriting, or polishing is not allowed. Even if the original content is in English, the English original must be preserved
 
 ### Phase 3: Deliver
@@ -124,7 +148,8 @@ Notify developers of the context-enhanced feedback records:
 - **After successful delivery**: Append a `## Delivery` section to the local feedback file, recording `delivery_status: delivered`, `issue_url`, `issue_iid`
 - **On delivery failure**: Record `delivery_status: delivery_failed`, do not block the main flow
 - **Prerequisite dependency check**: Before executing delivery, you must first run `pip install -r requirements.txt` to ensure dependencies such as pyyaml are installed; if dependencies are missing, install them before executing delivery; skipping the dependency check is prohibited
-- Prerequisite: `delivery.channels.gitcode.enabled` in `.vod/config.yaml` is true, and `repo_url` is configured; if token is empty, prompt the user to input it and pass it via the `--token` parameter (Token help: https://docs.gitcode.com/docs/help/home/user_center/security_management/user_pat)
+- Prerequisite: `delivery.channels.gitcode.enabled` in `.vod/config.yaml` is true, and `repo_url` is configured; if token is empty, prompt the user to input it and pass it via the `--token` parameter
+- **Target Repo Constraint**: VoD feedback MUST be delivered to the `repo_url` configured in `.vod/config.yaml`. **NEVER** deliver to the user's own repository, even if the Agent is running inside the user's code repository. Do NOT infer `repo_url` from `git remote` of the current working directory. The `repo_url` in config.yaml is the ONLY source of truth for the delivery target
 - **Token Security Constraint**: Never cache the user-provided Token, never write the Token to `.vod/config.yaml` or any other file; only pass it via the `--token` command-line parameter for the current delivery and discard immediately after use
 
 #### Step 3.2: Batch Notification Push
@@ -143,10 +168,9 @@ Notify developers of the context-enhanced feedback records:
 When a user proactively expresses the intent to report a problem, execute guided information collection:
 
 1. **Guide: Problem Description** (required) — Send to the user: "Please describe the problem you encountered"
-2. **Guide: Occurrence Scenario** (skippable) — Send to the user: "Please describe the scenario in which the problem occurred (enter 'skip' to omit)"
-3. **Guide: Expected Behavior** (skippable) — Send to the user: "What is the expected correct behavior? (enter 'skip' to omit)"
-4. **Guide: Actual Behavior** (skippable) — Send to the user: "What actually happened? (enter 'skip' to omit)"
-5. After collection is complete, generate a structured feedback record and proceed to the delivery phase
+2. **Guide: Supplementary Information** (skippable) — Send to the user: "Please supplement the occurrence scenario, expected behavior, and actual behavior (enter 'skip' to omit)"
+3. After collection is complete, generate a structured feedback record and proceed to the delivery phase
+   - The user's description of "expected behavior" should be written to both `--user-expected` (in `## Context`) and `--expected-behavior` (in `## User Report`), ensuring the `user_expected` field is always populated when the user expresses an expectation
 
 **Exception Handling**:
 - User abandons midway: Save the partially collected information, annotate as "user aborted", **only delete the feedback file currently being edited, deleting the `.vod/` directory or other feedback records under it is prohibited**
@@ -161,7 +185,7 @@ When a user proactively expresses the intent to report a problem, execute guided
 
 ### Feedback Content Validation
 
-- **Agent Relevance**: Feedback content must be directly related to the Agent/Skill usage experience. Problems unrelated to the Agent (e.g., OS issues, hardware failures, third-party software issues) should be refused and the user should be prompted
+- **Relevance**: Feedback content must be directly related to the product/service usage experience (e.g., cloud service errors, tool/skill issues, configuration problems). Problems completely unrelated (e.g., OS issues, hardware failures, third-party software issues) should be refused and the user should be prompted
 - **Batch Reporting**: When a user raises multiple problems at once, record them individually to the local `.vod/feedbacks/`, then merge and submit as a single Issue, rather than creating separate Issues for each
 - **Minimum Information**: The problem description must not be empty or contain only meaningless content (e.g., "test", "hello"), otherwise recording is refused
 
@@ -197,7 +221,7 @@ python scripts/vod_init.py --base-dir .
 
 ## Path Conventions
 
-- **SKILL_DIR**: Skill package root directory (i.e., the agent-vod-collector/ directory), scripts are located at `SKILL_DIR/scripts/`
+- **SKILL_DIR**: Skill package root directory (i.e., the huawei-cloud-vod-collector/ directory), scripts are located at `SKILL_DIR/scripts/`
 - **Working Directory**: The user's current project directory; the `.vod/` directory is initialized under the working directory
 - **All scripts** must be executed under SKILL_DIR, using `--base-dir` or `--feedbacks-dir` to specify paths in the working directory
 - **.vod/ directory**: Generated under the working directory after initialization; all feedback records are written to `<working_directory>/.vod/feedbacks/`
