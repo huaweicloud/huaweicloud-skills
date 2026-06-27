@@ -57,22 +57,6 @@ def _load_config(config_path: Path) -> dict:
         return {}
 
 
-def _extract_section_text(text: str, section_header: str) -> str:
-    result_lines = []
-    in_section = False
-    for line in text.split("\n"):
-        stripped = line.strip()
-        if stripped == section_header:
-            in_section = True
-            continue
-        if in_section:
-            if stripped.startswith("## "):
-                break
-            result_lines.append(line)
-    content = "\n".join(result_lines).strip()
-    return content
-
-
 def _infer_product_name(feedback) -> str:
     if feedback.product_name:
         return feedback.product_name
@@ -96,7 +80,10 @@ def _build_issue_title(feedback, feedback_file: Path | None = None, product_name
     desc = feedback.problem_description or feedback.error_message or feedback.user_intent or ""
     if not desc:
         desc = feedback.error_type or "VoD反馈"
-    desc = desc[:60]
+    if len(desc) > 60:
+        desc = desc[:57] + "..."
+    else:
+        desc = desc[:60]
     name = product_name or _infer_product_name(feedback)
     if name:
         return f"【{name}】{desc}"
@@ -113,7 +100,7 @@ def _build_issue_body(feedback, feedback_file: Path) -> str:
 
     occurrence_scenario = feedback.occurrence_scenario or ""
 
-    expected_behavior = feedback.expected_behavior or ""
+    expected_behavior = feedback.expected_behavior or feedback.user_expected or ""
 
     actual_behavior = feedback.actual_behavior or ""
 
@@ -168,6 +155,14 @@ def _build_issue_body(feedback, feedback_file: Path) -> str:
         ])
         for k, v in feedback.environment.items():
             lines.append(f"- {k}: {v}")
+        lines.append("")
+
+    if feedback.more_details:
+        lines.extend([
+            "### 更多详情 (More Details)",
+        ])
+        for k, v in feedback.more_details.items():
+            lines.append(f"- **{k}**: {v}")
         lines.append("")
 
     return "\n".join(lines)
@@ -283,10 +278,13 @@ def deliver_feedback(
         return {"success": False, "error": "GitCode交付未启用"}
 
     repo_url = gitcode_cfg.get("repo_url", "")
-    token = token_override or gitcode_cfg.get("token", "")
+    token = token_override
 
-    if not repo_url or not token:
-        return {"success": False, "error": "GitCode仓库地址或Token未配置"}
+    if not repo_url:
+        return {"success": False, "error": "GitCode仓库地址未配置"}
+
+    if not token:
+        return {"success": False, "error": "GitCodeToken未配置"}
 
     feedback_file = feedbacks_dir / f"{feedback_id}.md"
     if not feedback_file.exists():
@@ -339,7 +337,7 @@ def _build_merged_issue_body(feedbacks: list, feedbacks_dir: Path) -> str:
     for i, fb in enumerate(feedbacks, 1):
         desc = fb.problem_description or fb.error_message or fb.user_intent or ""
         scenario = fb.occurrence_scenario or ""
-        expected = fb.expected_behavior or ""
+        expected = fb.expected_behavior or fb.user_expected or ""
         actual = fb.actual_behavior or ""
 
         parts.append(f"### {i}. {desc or fb.feedback_id}")
@@ -352,6 +350,11 @@ def _build_merged_issue_body(feedbacks: list, feedbacks_dir: Path) -> str:
             parts.extend(["**实际行为**", actual, ""])
         if fb.error_stack:
             parts.extend(["```", fb.error_stack, "```", ""])
+        if fb.more_details:
+            parts.append("**更多详情 (More Details)**")
+            for k, v in fb.more_details.items():
+                parts.append(f"- **{k}**: {v}")
+            parts.append("")
         parts.append("---")
         parts.append("")
 
@@ -366,7 +369,7 @@ def notify(feedbacks_dir: Path, config_path: Path, token_override: str = "") -> 
         return []
 
     repo_url = gitcode_cfg.get("repo_url", "")
-    token = token_override or gitcode_cfg.get("token", "")
+    token = token_override
 
     if not repo_url or not token:
         return [{"success": False, "error": "GitCode仓库地址或Token未配置"}]

@@ -142,11 +142,30 @@ def write_feedback_md(feedback: FeedbackRecord, file_path: Path) -> None:
         "## Error Information",
         f"- **error_type**: {feedback.error_type or ''}",
         f"- **error_message**: {feedback.error_message or ''}",
-        f"- **error_stack**: {feedback.error_stack or ''}",
+        "- **error_stack**:",
+    ])
+    if feedback.error_stack:
+        lines.append("  ```")
+        for stack_line in feedback.error_stack.split("\n"):
+            lines.append(f"  {stack_line}")
+        lines.append("  ```")
+    else:
+        lines.append("  (none)")
+    lines.extend([
         "",
         "## Context",
         f"- **user_intent**: {feedback.user_intent or ''}",
-        f"- **agent_action**: {feedback.agent_action or ''}",
+    ])
+    if feedback.agent_action:
+        lines.append("- **agent_action**:")
+        lines.append("  ```")
+        for action_line in feedback.agent_action.split("\n"):
+            lines.append(f"  {action_line}")
+        lines.append("  ```")
+    else:
+        lines.append("- **agent_action**: ")
+    lines.extend([
+        f"- **user_expected**: {feedback.user_expected or ''}",
     ])
 
     if feedback.dialog_context:
@@ -164,6 +183,12 @@ def write_feedback_md(feedback: FeedbackRecord, file_path: Path) -> None:
             lines.append(f"  - {k}: {v}")
     else:
         lines.append("- **environment**: ")
+
+    if feedback.more_details:
+        lines.append("")
+        lines.append("## More Details")
+        for k, v in feedback.more_details.items():
+            lines.append(f"- **{k}**: {v}")
 
     if feedback.problem_description is not None:
         lines.extend([
@@ -283,6 +308,8 @@ def read_feedback_md(file_path: Path) -> FeedbackRecord:
 
     error_stack = _extract_code_block_value(text, "Error Information", "error_stack") or error.get("error_stack") or None
 
+    agent_action = _extract_code_block_value(text, "Context", "agent_action") or ctx.get("agent_action") or None
+
     annotations = []
     in_ann = False
     for line in text.split("\n"):
@@ -345,6 +372,25 @@ def read_feedback_md(file_path: Path) -> FeedbackRecord:
     expected_behavior = user_report.get("expected_behavior") or None
     actual_behavior = user_report.get("actual_behavior") or None
 
+    more_details = None
+    in_md = False
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if stripped.startswith("## "):
+            h = _normalize_section_header(stripped[3:])
+            if h == "More Details":
+                in_md = True
+                more_details = {}
+                continue
+            elif in_md:
+                break
+        if in_md and stripped.startswith("- **"):
+            m = re.match(r"- \*\*(.+?)\*\*:\s*(.*)", stripped)
+            if m:
+                more_details[m.group(1)] = m.group(2).strip()
+    if more_details is not None and not more_details:
+        more_details = None
+
     return FeedbackRecord(
         feedback_id=meta.get("feedback_id", ""),
         feedback_type=FeedbackType(meta.get("feedback_type", "error")),
@@ -355,7 +401,8 @@ def read_feedback_md(file_path: Path) -> FeedbackRecord:
         error_message=error.get("error_message") or None,
         error_stack=error_stack,
         user_intent=ctx.get("user_intent") or None,
-        agent_action=ctx.get("agent_action") or None,
+        agent_action=agent_action,
+        user_expected=ctx.get("user_expected") or None,
         dialog_context=dialog_context,
         environment=environment,
         confidence=float(meta.get("confidence", 0.0)),
@@ -368,6 +415,7 @@ def read_feedback_md(file_path: Path) -> FeedbackRecord:
         expected_behavior=expected_behavior,
         actual_behavior=actual_behavior,
         product_name=meta.get("product_name") or None,
+        more_details=more_details,
     )
 
 
@@ -531,16 +579,41 @@ def read_all_requirements(requirements_dir: Path) -> list[RequirementRecord]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="VoD Markdown IO 工具")
+    parser = argparse.ArgumentParser(description="VoD Markdown IO")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    id_p = subparsers.add_parser("generate-id", help="生成反馈/需求ID")
-    id_p.add_argument("--prefix", required=True, help="ID前缀（VOD或REQ）")
-    id_p.add_argument("--feedbacks-dir", required=True, type=Path, help="反馈目录路径")
+    id_p = subparsers.add_parser("generate-id", help="generate feedback ID")
+    id_p.add_argument("--prefix", required=True, help="ID prefix (VOD or REQ)")
+    id_p.add_argument("--feedbacks-dir", required=True, type=Path, help="feedbacks directory")
 
-    dup_p = subparsers.add_parser("check-duplicate", help="检查是否存在相似反馈")
-    dup_p.add_argument("--feedbacks-dir", required=True, type=Path, help="反馈目录路径")
-    dup_p.add_argument("--text", required=True, help="待检查的问题描述")
+    dup_p = subparsers.add_parser("check-duplicate", help="check duplicate feedback")
+    dup_p.add_argument("--feedbacks-dir", required=True, type=Path, help="feedbacks directory")
+    dup_p.add_argument("--text", required=True, help="text to check for duplicates")
+
+    write_p = subparsers.add_parser("write-feedback", help="write feedback record to markdown file")
+    write_p.add_argument("--feedback-id", required=True, help="feedback ID")
+    write_p.add_argument("--feedback-type", required=True, choices=["error", "rejection", "user_report"], help="feedback type")
+    write_p.add_argument("--timestamp", required=True, help="ISO 8601 timestamp")
+    write_p.add_argument("--session-id", required=True, help="session ID")
+    write_p.add_argument("--platform", default="generic", help="platform type")
+    write_p.add_argument("--confidence", type=float, default=0.0, help="confidence score 0.0-1.0")
+    write_p.add_argument("--status", default="open", choices=["open", "promoted", "resolved", "discarded"], help="feedback status")
+    write_p.add_argument("--product-name", default="", help="product/skill name")
+    write_p.add_argument("--error-type", default="", help="error type")
+    write_p.add_argument("--error-message", default="", help="error message")
+    write_p.add_argument("--error-stack", default="", help="error stack trace")
+    write_p.add_argument("--user-intent", default="", help="inferred user intent")
+    write_p.add_argument("--agent-action", default="", help="agent behavior description")
+    write_p.add_argument("--user-expected", default="", help="what user expected to happen")
+    write_p.add_argument("--problem-description", default="", help="problem description (for user_report)")
+    write_p.add_argument("--occurrence-scenario", default="", help="occurrence scenario")
+    write_p.add_argument("--expected-behavior", default="", help="expected behavior")
+    write_p.add_argument("--actual-behavior", default="", help="actual behavior")
+    write_p.add_argument("--recurrence-count", type=int, default=1, help="recurrence count")
+    write_p.add_argument("--dedup-key", default="", help="dedup key")
+    write_p.add_argument("--annotations", nargs="*", default=[], help="annotation labels (e.g. skill:xxx category:yyy severity:high)")
+    write_p.add_argument("--more-details", nargs="*", default=[], help="more details key:value pairs (e.g. summary:xxx additional_info:yyy)")
+    write_p.add_argument("--output", required=True, type=Path, help="output file path")
 
     args = parser.parse_args()
 
@@ -551,6 +624,34 @@ def main() -> None:
         import json
         results = check_duplicate(args.feedbacks_dir, args.text)
         print(json.dumps(results, ensure_ascii=False))
+    elif args.command == "write-feedback":
+        feedback = FeedbackRecord(
+            feedback_id=args.feedback_id,
+            feedback_type=FeedbackType(args.feedback_type),
+            timestamp=_parse_iso_timestamp(args.timestamp) if args.timestamp else datetime.now(),
+            session_id=args.session_id,
+            platform=args.platform,
+            confidence=args.confidence,
+            status=FeedbackStatus(args.status),
+            product_name=args.product_name or None,
+            error_type=args.error_type or None,
+            error_message=args.error_message or None,
+            error_stack=args.error_stack or None,
+            user_intent=args.user_intent or None,
+            agent_action=args.agent_action or None,
+            user_expected=args.user_expected or None,
+            problem_description=args.problem_description or None,
+            occurrence_scenario=args.occurrence_scenario or None,
+            expected_behavior=args.expected_behavior or None,
+            actual_behavior=args.actual_behavior or None,
+            recurrence_count=args.recurrence_count,
+            dedup_key=args.dedup_key or None,
+            annotations=args.annotations,
+            more_details=dict(pair.split(":", 1) for pair in args.more_details if ":" in pair) or None,
+        )
+        write_feedback_md(feedback, args.output)
+        import json as _json
+        print(_json.dumps({"feedback_id": feedback.feedback_id, "file": str(args.output)}, ensure_ascii=False))
 
 
 if __name__ == "__main__":
