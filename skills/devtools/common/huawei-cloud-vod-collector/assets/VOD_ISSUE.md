@@ -8,45 +8,28 @@
 
 ### 描述问题 (Description)
 
-<!-- 清晰简洁地描述这个问题是什么 -->
+<!-- 从 Context.user_intent 或 Error Information.error_message 提取，长度尽量精简 -->
 
 ### 复现步骤 (To Reproduce)
 
-<!-- 1. 用户意图: ... -->
-<!-- 2. Agent执行: ... -->
-<!-- 3. 触发错误: ... -->
+<!-- 从 Context.dialog_context 提取 -->
 
 ### 预期行为 (Expected behavior)
 
-<!-- 1. 期望发生什么？ -->
-<!-- 2. 期望完成时间？ -->
-
-### 实际行为 (Actual behavior)
-
-<!-- 实际发生了什么？ -->
+<!-- 从 User Report.expected_behavior 提取，无则为 "(待补充)" -->
 
 ### 错误堆栈 (Stack Trace)
 
 <!--
 ```
-错误堆栈信息
+从 Error Information.error_stack 的代码块中提取
 ```
 -->
 
 ### 环境信息 (Environment)
 
-<!-- - key: value -->
+<!-- 从 Context.environment 提取 key: value 列表 -->
 
----
+### 更多详情 (More Details)
 
-<details><summary>VoD 元数据</summary>
-
-<!-- - 反馈ID: VOD-YYYYMMDD-NNNN -->
-<!-- - 反馈类型: error | rejection | user_report -->
-<!-- - 时间: ISO 8601 -->
-<!-- - 会话ID: ... -->
-<!-- - 平台: ... -->
-<!-- - 置信度: 0.0-1.0 -->
-<!-- - 复发次数: ... -->
-
-</details>
+<!-- 从 More Details 提取，包含总结性内容等补充信息 -->

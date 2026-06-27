@@ -12,11 +12,18 @@
 ## Error Information (feedback_type=error)
 - **error_type**: command_failure | api_error | timeout
 - **error_message**: <message>
-- **error_stack**: <stack_trace>
+- **error_stack**:
+  ```
+  <stack_trace>
+  ```
 
 ## Context (extracted)
 - **user_intent**: <inferred intent>
-- **agent_action**: <agent behavior>
+- **agent_action**:
+  ```
+  <agent behavior>
+  ```
+- **user_expected**: <what user expected to happen>
 - **dialog_context**: <conversation turns>
   - [N] role: <full content, never truncate>
   - [N] role: <content>
@@ -26,6 +33,9 @@
 ## Dedup
 - **recurrence_count**: <count>
 - **dedup_key**: <session_id + command + error_type>
+
+## More Details (optional)
+- <key>: <value> (e.g. summary, additional_info, etc.)
 
 ## Annotations
 - <annotation labels>
