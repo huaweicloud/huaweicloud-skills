@@ -120,6 +120,26 @@ def check_duplicate(feedbacks_dir: Path, text: str) -> list[dict]:
     return results
 
 
+def _build_error_stack(feedback: FeedbackRecord) -> str | None:
+    parts = []
+    if feedback.problem_description:
+        parts.append(f"【问题描述】\n{feedback.problem_description}")
+    if feedback.occurrence_scenario:
+        parts.append(f"【复现场景】\n{feedback.occurrence_scenario}")
+    if feedback.expected_behavior:
+        parts.append(f"【预期行为】\n{feedback.expected_behavior}")
+    if feedback.actual_behavior:
+        parts.append(f"【实际行为】\n{feedback.actual_behavior}")
+    if feedback.error_stack:
+        if parts:
+            parts.append(f"【错误堆栈】\n{feedback.error_stack}")
+        else:
+            return feedback.error_stack
+    if not parts:
+        return feedback.error_stack
+    return "\n\n".join(parts)
+
+
 def write_feedback_md(feedback: FeedbackRecord, file_path: Path) -> None:
     file_path.parent.mkdir(parents=True, exist_ok=True)
     lines = [
@@ -137,6 +157,7 @@ def write_feedback_md(feedback: FeedbackRecord, file_path: Path) -> None:
     if feedback.product_name:
         lines.append(f"- **product_name**: {feedback.product_name}")
 
+    error_stack_content = _build_error_stack(feedback)
     lines.extend([
         "",
         "## Error Information",
@@ -144,9 +165,9 @@ def write_feedback_md(feedback: FeedbackRecord, file_path: Path) -> None:
         f"- **error_message**: {feedback.error_message or ''}",
         "- **error_stack**:",
     ])
-    if feedback.error_stack:
+    if error_stack_content:
         lines.append("  ```")
-        for stack_line in feedback.error_stack.split("\n"):
+        for stack_line in error_stack_content.split("\n"):
             lines.append(f"  {stack_line}")
         lines.append("  ```")
     else:
@@ -189,19 +210,6 @@ def write_feedback_md(feedback: FeedbackRecord, file_path: Path) -> None:
         lines.append("## More Details")
         for k, v in feedback.more_details.items():
             lines.append(f"- **{k}**: {v}")
-
-    if feedback.problem_description is not None:
-        lines.extend([
-            "",
-            "## User Report",
-            f"- **problem_description**: {feedback.problem_description}",
-        ])
-        if feedback.occurrence_scenario is not None:
-            lines.append(f"- **scenario**: {feedback.occurrence_scenario}")
-        if feedback.expected_behavior is not None:
-            lines.append(f"- **expected_behavior**: {feedback.expected_behavior}")
-        if feedback.actual_behavior is not None:
-            lines.append(f"- **actual_behavior**: {feedback.actual_behavior}")
 
     lines.extend([
         "",
@@ -371,6 +379,33 @@ def read_feedback_md(file_path: Path) -> FeedbackRecord:
     occurrence_scenario = user_report.get("scenario") or None
     expected_behavior = user_report.get("expected_behavior") or None
     actual_behavior = user_report.get("actual_behavior") or None
+
+    if error_stack and any(marker in error_stack for marker in ["【问题描述】", "【复现场景】", "【预期行为】", "【实际行为】", "【错误堆栈】"]):
+        sections = {"问题描述": None, "复现场景": None, "预期行为": None, "实际行为": None, "错误堆栈": None}
+        current_key = None
+        current_lines = []
+        for line in error_stack.split("\n"):
+            m = re.match(r"^【(.+?)】$", line.strip())
+            if m and m.group(1) in sections:
+                if current_key is not None:
+                    sections[current_key] = "\n".join(current_lines).strip() or None
+                current_key = m.group(1)
+                current_lines = []
+                continue
+            if current_key is not None:
+                current_lines.append(line)
+        if current_key is not None:
+            sections[current_key] = "\n".join(current_lines).strip() or None
+        if sections["问题描述"]:
+            problem_description = sections["问题描述"]
+        if sections["复现场景"]:
+            occurrence_scenario = sections["复现场景"]
+        if sections["预期行为"]:
+            expected_behavior = sections["预期行为"]
+        if sections["实际行为"]:
+            actual_behavior = sections["实际行为"]
+        if sections["错误堆栈"]:
+            error_stack = sections["错误堆栈"]
 
     more_details = None
     in_md = False
@@ -592,7 +627,7 @@ def main() -> None:
 
     write_p = subparsers.add_parser("write-feedback", help="write feedback record to markdown file")
     write_p.add_argument("--feedback-id", required=True, help="feedback ID")
-    write_p.add_argument("--feedback-type", required=True, choices=["error", "rejection", "user_report"], help="feedback type")
+    write_p.add_argument("--feedback-type", required=True, choices=["error", "rejection", "user_report", "suggestion"], help="feedback type")
     write_p.add_argument("--timestamp", required=True, help="ISO 8601 timestamp")
     write_p.add_argument("--session-id", required=True, help="session ID")
     write_p.add_argument("--platform", default="generic", help="platform type")

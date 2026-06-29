@@ -22,7 +22,8 @@ This Skill is activated under the following conditions:
 
 1. **Exception Event Trigger**: Hook event detects command execution failure, API call error, service exception, or response timeout
 2. **User Rejection Trigger**: Hook event detects user correction, rejection, or dissatisfaction expression
-3. **Proactive Report Trigger**: User input contains problem report intent (e.g., "I want to report a problem", "this has a bug", "service error", "configuration issue")
+3. **Proactive Report Trigger**: User input contains problem report intent or suggestion intent (e.g., "I want to report a problem", "this has a bug", "service error", "configuration issue", "I have a suggestion")
+4. **Suggestion Trigger**: User input contains improvement or feature suggestion intent (e.g., "I want to suggest", "it would be better if", "建议", "希望增加")
 
 ## Workflow
 
@@ -64,6 +65,7 @@ When a Hook event triggers, execute the following steps:
     --error-type <error_type> --error-message <message> --error-stack <stack> \
     --user-intent <intent> --agent-action <action> \
     --user-expected <what_user_expected> \
+    --problem-description <description> --expected-behavior <expected> --actual-behavior <actual> \
     --recurrence-count 1 --dedup-key <key> \
     --annotations skill:<name> category:<cat> severity:<level> \
     --output .vod/feedbacks/<id>.md
@@ -75,6 +77,7 @@ When a Hook event triggers, execute the following steps:
   - `product_name` must be inferred from context as the product/skill name to which the problem belongs (see Step 2.4), leaving it empty is prohibited
   - **Writing feedback files by any means other than `md_io.py write-feedback` is prohibited** (e.g., directly writing markdown, using echo/cat/heredoc, or LLM free-form generation)
   - `error_stack` must be written in code block format via `md_io.py write-feedback --error-stack`, which wraps multi-line content with triple backticks; inline format is prohibited to ensure complete multi-line stack traces are preserved
+  - `problem_description`, `expected_behavior`, `actual_behavior`, and `occurrence_scenario` are automatically merged into `error_stack` with structured markers (`【问题描述】`, `【预期行为】`, etc.) when writing the feedback file, per the format defined in `assets/VOD_FEEDBACKS.md`
 
 #### Step 1.5: Exception Deduplication
 
@@ -163,14 +166,17 @@ Notify developers of the context-enhanced feedback records:
 
 - Call `python scripts/vod_deliver.py update-status --feedback-id <id> --status delivered --feedbacks-dir .vod/feedbacks` to update the delivery status and time of the feedback record
 
-### Proactive Problem Report Guidance
+### Proactive Report and Suggestion Guidance
 
-When a user proactively expresses the intent to report a problem, execute guided information collection:
+When a user proactively expresses the intent to report a problem or submit a suggestion, execute guided information collection:
 
-1. **Guide: Problem Description** (required) — Send to the user: "Please describe the problem you encountered"
+- If the user reports a **problem**, use `--feedback-type error` or `--feedback-type user_report`
+- If the user submits a **suggestion**, use `--feedback-type suggestion`
+
+1. **Guide: Problem/Suggestion Description** (required) — Send to the user: "Please describe the problem or suggestion you have"
 2. **Guide: Supplementary Information** (skippable) — Send to the user: "Please supplement the occurrence scenario, expected behavior, and actual behavior (enter 'skip' to omit)"
 3. After collection is complete, generate a structured feedback record and proceed to the delivery phase
-   - The user's description of "expected behavior" should be written to both `--user-expected` (in `## Context`) and `--expected-behavior` (in `## User Report`), ensuring the `user_expected` field is always populated when the user expresses an expectation
+   - The user's description of "expected behavior" should be written to both `--user-expected` (in `## Context`) and `--expected-behavior` (merged into `error_stack` as `【预期行为】`), ensuring the `user_expected` field is always populated when the user expresses an expectation
 
 **Exception Handling**:
 - User abandons midway: Save the partially collected information, annotate as "user aborted", **only delete the feedback file currently being edited, deleting the `.vod/` directory or other feedback records under it is prohibited**

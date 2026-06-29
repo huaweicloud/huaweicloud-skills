@@ -8,21 +8,25 @@
 
 ### 描述问题 (Description)
 
-<!-- 从 Context.user_intent 或 Error Information.error_message 提取，长度尽量精简 -->
+<!-- 从 FeedbackRecord.problem_description（error_stack 中【问题描述】）或 error_message 或 user_intent 提取 -->
 
 ### 复现步骤 (To Reproduce)
 
-<!-- 从 Context.dialog_context 提取 -->
+<!-- 从 FeedbackRecord.occurrence_scenario（error_stack 中【复现场景】）或 Context.dialog_context 提取 -->
 
 ### 预期行为 (Expected behavior)
 
-<!-- 从 User Report.expected_behavior 提取，无则为 "(待补充)" -->
+<!-- 从 FeedbackRecord.expected_behavior（error_stack 中【预期行为】）提取，无则为 "(待补充)" -->
+
+### 实际行为 (Actual behavior)
+
+<!-- 从 FeedbackRecord.actual_behavior（error_stack 中【实际行为】）提取 -->
 
 ### 错误堆栈 (Stack Trace)
 
 <!--
 ```
-从 Error Information.error_stack 的代码块中提取
+从 error_stack 中【错误堆栈】部分提取
 ```
 -->
 

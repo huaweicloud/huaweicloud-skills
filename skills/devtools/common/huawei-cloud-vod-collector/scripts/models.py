@@ -9,6 +9,7 @@ class FeedbackType(Enum):
     ERROR = "error"
     REJECTION = "rejection"
     USER_REPORT = "user_report"
+    SUGGESTION = "suggestion"
 
 
 class FeedbackStatus(Enum):
