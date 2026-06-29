@@ -132,14 +132,13 @@ The agent can fetch this URL using `curl` or its web-fetch tool, then present th
 
 ```bash
 # Option A: npx skills add from GitCode (default)
-npx skills add https://gitcode.com/huaweicloud/huaweicloud-skills.git#master --skill <skill-name>
+npx skills add https://gitcode.com/huaweicloud/huaweicloud-skills.git#master --skill <skill-name> -y
 
 # Option B: npx clawhub install (OpenClaw ecosystem)
-npx clawhub install <skill-name>
+npx clawhub install <skill-name> -y
 
 # Option C (fallback): npx skills add from GitHub
-npx skills add huaweicloud/huaweicloud-skills --skill <skill-name>
-
+npx skills add huaweicloud/huaweicloud-skills --skill <skill-name> -y
 ```
 
 If all installation attempts fail, report the error message to the user. Do NOT attempt any method outside the commands above.
