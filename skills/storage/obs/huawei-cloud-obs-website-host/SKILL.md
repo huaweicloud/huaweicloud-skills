@@ -22,20 +22,32 @@ Use this skill when the user wants to:
 - The bucket can serve `index.html` from the website endpoint.
 - Anonymous users can read the website content.
 - A missing path returns the configured error page or a clean 404.
-- A custom domain resolves to the OBS website endpoint through DNS.
+- A custom domain is registered and resolves to the OBS website endpoint through DNS. A custom domain is **mandatory** — the default OBS bucket domain is not permitted for online object preview per security compliance requirements.
 - The setup is not considered complete until the custom domain is registered on the bucket and resolves correctly.
 - The OBS website endpoint is used, not the regular bucket API endpoint.
 - A 403 usually has two common causes: anonymous/public read is not enabled on the bucket or objects, or the AK/SK used for OBS operations lacks required IAM permissions.
 - A 404 usually means the index document name or upload path is wrong.
+
+## Security Compliance: Custom Domain Requirement
+
+Based on Huawei Cloud security compliance requirements, the OBS bucket default domain name (`<bucket_name>.obs.<region>.myhuaweicloud.com`) is **prohibited** from being used for online preview of objects within the bucket. A custom domain is therefore **mandatory** for static website hosting.
+
+If the user does not have a custom domain prepared:
+
+1. Direct the user to register a domain through the [Huawei Cloud Domain Registration Service](https://www.huaweicloud.com/product/domain.html), or other common domain registration sites.
+2. For users in mainland China, the domain must also complete **ICP filing (网站备案)** before it can be used for website hosting.
+3. Only after the domain is registered (and filed, if applicable) should the static website hosting configuration continue.
+
+> **Important:** Do not proceed with static website hosting configuration until the custom domain prerequisite is confirmed. The default OBS domain is not a valid alternative for website access even in the testing environment.
 
 ## Required Inputs
 
 Collect these before making changes:
 - `region`
 - `bucket_name`
+- `custom_domain` (**required** — see Security Compliance section above)
 - `index_document` (optional, default: `index.html`)
 - `error_document` (optional)
-- `custom_domain`
 - `dns_zone` or DNS account context (optional; required only if the user wants Huawei Cloud DNS changes in this run)
 
 Assume static website files are already uploaded by the user.
@@ -153,8 +165,9 @@ Use the bundled scripts by default for the tasks they were built for:
 ## Workflow
 
 1. Verify Python runtime and OBS SDK are available (`pip install esdk-obs-python` if missing).
-2. Verify the required custom-domain path before making changes:
-   - Confirm `custom_domain` is provided.
+2. Verify the custom domain prerequisite (see **Security Compliance** section):
+   - Confirm `custom_domain` is provided by the user.
+   - If the user does not have a domain, guide them to register one at [Huawei Cloud Domain Registration](https://www.huaweicloud.com/product/domain.html) and complete **ICP filing (网站备案)** for mainland China regions. Stop here and wait for the user to complete this step.
    - Check whether the user manages DNS in Huawei Cloud DNS or with an external provider.
    - If Huawei Cloud DNS changes are part of this run, verify `hcloud` is installed and authenticated.
    - If DNS is managed outside Huawei Cloud or outside this run, collect that constraint explicitly before proceeding.
