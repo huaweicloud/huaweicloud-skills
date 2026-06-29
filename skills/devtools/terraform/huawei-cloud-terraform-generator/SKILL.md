@@ -52,6 +52,12 @@ Users should mainly confirm a proposed solution, not build the full parameter se
 
 This skill works in nine phases:
 
+### 4.0 Credential handling (MUST READ)                                                                                                                                                                                                                                           
+
+AK/SK credentials are read from environment variables `HW_ACCESS_KEY` and `HW_SECRET_KEY`
+Before any step that depends on credentials (resource queries, `terraform plan`, etc.), read the complete rules in `reference/guardrails.md`.
+If an API or Terraform call fails with an authentication error: tell the user the specific error, ask them to confirm when the issue is resolved, then retry. Do not guide the user on how to configure credentials.
+
 ### 4.1 Understand the user's real goal
 
 The user may describe a resource directly, such as creating an ECS instance, or describe a business goal, such as deploying a website or launching an application.  
@@ -121,8 +127,15 @@ resource "huaweicloud_networking_secgroup_rule" "egress" {
 
 Before writing a single line of Terraform, you MUST verify every resource specification in the confirmed plan against the target region. The target region is already known from the confirmed plan in step 4.3 — lacking the region means step 4.3 was incomplete and must be revisited. There is no excuse for not knowing which region you are deploying to.
 
-1. **Every resource specification must be verified in the target region** — invoke the `huawei-cloud-computing-query` skill, explicitly passing the target region, to confirm that each resource specification in the confirmed plan actually exists and is available in the target region. Any specification that cannot be confirmed MUST NOT appear in any .tf file.
-2. **Cross-region assumptions are forbidden** — a resource available in region A does NOT imply availability in region B. Always re-query for the target region.
+1. **Step 1 — Read the target skill's SKILL.md first (DO NOT skip):** You MUST read the file `../huawei-cloud-computing-query/SKILL.md` before invoking the skill. This tells you the exact invocation format, required parameters, parameter format, and how to pass the target region. You cannot correctly invoke a skill you haven't read.
+2. **Step 2 — Invoke the skill with confirmed parameters:** Only after reading the skill definition, invoke the `huawei-cloud-computing-query` skill with the exact parameters it requires, passing the target region from the confirmed plan in step 4.3. Confirm that each resource specification in the confirmed plan actually exists and is available in the target region. Any specification that cannot be confirmed MUST NOT appear in any .tf file.
+3. **Cross-region assumptions are forbidden** — a resource available in region A does NOT imply availability in region B. Always re-query for the target region.
+
+**Forbidden:**
+- ❌ Invoking the `huawei-cloud-computing-query` skill without first reading its SKILL.md
+- ❌ Guessing or fabricating parameters for skill invocation
+- ❌ Proceeding to generate Terraform when a resource specification cannot be confirmed available
+- ❌ Assuming resource availability carries over across regions
 
 **If the query fails (environment error, network issue, SDK crash):**
 
@@ -183,9 +196,9 @@ If any step fails, inspect the error, fix the configuration, and retry until `te
 
 See `reference/validation-workflow.md` for detailed validation steps.
 
-### 4.8 Execute terraform apply with user confirmation
+### 4.8 Display cost estimation (CRITICAL — MUST NOT SKIP)
 
-After `terraform plan` succeeds, **display cost estimation before asking for confirmation**:
+**This step is MANDATORY and MUST be executed immediately after `terraform plan` succeeds, BEFORE any confirmation dialog or `terraform apply`. Skipping this step is a CRITICAL violation.**
 
 **Cost display format (fill with actual resources from the plan):**
 ```
@@ -199,24 +212,29 @@ After `terraform plan` succeeds, **display cost estimation before asking for con
 预估合计: [总费用]
 
 📌 华为云价格计算器: https://www.huaweicloud.com/pricing.html#/calculator
-
-确认部署？
 ```
 
-**Required elements:**
+**Required elements (ALL must be present):**
 - Resource list with specifications (from confirmed plan)
 - Estimated monthly cost per resource (range is acceptable)
 - Total estimated cost
 - Link to Huawei Cloud pricing calculator (fixed URL)
-- User confirmation prompt
+
+**If you cannot estimate a cost:** still list the resource with "费用请参考价格计算器" — do NOT omit the resource from the list.
+
+**Verification:** Before proceeding to step 4.9, confirm that you have output ALL required elements above. If any element is missing, stop and add it.
+
+### 4.9 Execute terraform apply with user confirmation
+
+After cost estimation is displayed, popup a confirmation dialog for user confirmation before executing apply.
 
 See `reference/guardrails.md` for rules about user confirmation workflow.
 
-### 4.9 Apply error repair loop
+### 4.10 Apply error repair loop
 
 If `terraform apply` fails, inspect the error, fix the configuration, re-run `terraform plan`, and re-execute `terraform apply`. Repeat until successful.
 
-### 4.10 Post-apply resource verification
+### 4.11 Post-apply resource verification
 
 After `terraform apply` succeeds, verify that deployed resources match the confirmed plan. If discrepancies found, report and fix them.
 
@@ -228,6 +246,7 @@ Key principles:
 - Do not fabricate specifications, prices, or resource facts
 - Execute terraform apply with explicit user confirmation
 - Do not request sensitive information
+- Do not invoke any referenced skill without first reading that skill's SKILL.md file
 
 ## 6. Terraform Generation Rules
 
@@ -285,5 +304,7 @@ Before finalizing, ensure:
 - [ ] All 5 required files were generated and verified (providers.tf, variables.tf, main.tf, terraform.tfvars, README.md)
 - [ ] No sensitive information was requested from user
 - [ ] Validation reached `terraform plan`, or the blocker was clearly explained
+- [ ] Cost estimation was displayed BEFORE user confirmation (step 4.8 — MUST NOT skip)
+- [ ] Cost estimation includes ALL required elements: resource list, specifications, estimated cost per resource, total cost, pricing calculator link
 - [ ] User was asked for confirmation via confirmation dialog before terraform apply
 - [ ] `terraform apply` was executed only after explicit user confirmation (or user declined)
