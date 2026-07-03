@@ -24,12 +24,14 @@
   【预期行为】
   <expected_behavior>
 
-  【实际行为】
-  <actual_behavior>
-
   【错误堆栈】
   <stack_trace>
   ```
+
+## User Report
+- **problem_description**: <description>
+- **scenario**: <occurrence scenario>
+- **expected_behavior**: <expected behavior>
 
 ## Context (extracted)
 - **user_intent**: <inferred intent>
@@ -47,9 +49,6 @@
 ## Dedup
 - **recurrence_count**: <count>
 - **dedup_key**: <session_id + command + error_type>
-
-## More Details (optional)
-- <key>: <value> (e.g. summary, additional_info, etc.)
 
 ## Annotations
 - <annotation labels>
