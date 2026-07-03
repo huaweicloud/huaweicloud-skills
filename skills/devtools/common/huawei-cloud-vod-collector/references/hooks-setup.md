@@ -90,7 +90,7 @@ hooks:
         operator: eq
         value: false
     action: activate_skill
-    skill: agent-vod-collector
+    skill: huawei-cloud-vod-collector
     priority: high
 ```
 
@@ -99,7 +99,7 @@ hooks:
 部署后可通过以下方式验证Hook是否生效：
 
 1. **OpenClaw**：`openclaw hooks list` 查看已注册的Hook
-2. **Hermes**：检查Hermes配置中是否包含agent-vod-collector的Hook引用
+2. **Hermes**：检查Hermes配置中是否包含huawei-cloud-vod-collector的Hook引用
 
 触发测试：
 - 执行一个会失败的命令，观察是否生成反馈记录
