@@ -6,7 +6,7 @@ hooks:
         operator: eq
         value: false
     action: activate_skill
-    skill: agent-vod-collector
+    skill: huawei-cloud-vod-collector
     priority: high
 
   - name: vod-on-prompt
@@ -16,7 +16,7 @@ hooks:
         operator: matches_any
         value_from_config: rejection.rejection_keywords
     action: activate_skill
-    skill: agent-vod-collector
+    skill: huawei-cloud-vod-collector
     priority: normal
 
   - name: vod-on-user-report
@@ -26,5 +26,5 @@ hooks:
         operator: matches_any
         value_from_config: report.trigger_keywords
     action: activate_skill
-    skill: agent-vod-collector
+    skill: huawei-cloud-vod-collector
     priority: high

@@ -6,248 +6,147 @@ description: |
 
 # VoD (Voice of Developer) Collector Skill
 
-> - All scripts and environment check scripts are inside the skill package, **must be executed using `skill action=exec`, do not run them directly in the shell**
-> - **Never cache the user-provided Token, never write the Token to `.vod/config.yaml` or any other file**
-> - **All paths are relative to the skill directory, which is the directory where this SKILL.md resides**
+> **Script execution**: All scripts are located in `<SKILL_DIR>/scripts/`. You **must** use `skill action=exec` to execute them. Do not run them directly in a shell. `<SKILL_DIR>` = directory containing this SKILL.md. `.vod/` is relative to CWD (project working directory).
 
-## Overview
+---
 
-This Skill captures poor experiences during usage and distills them into high-value requirements, enabling automated collection, intelligent analysis, and structured delivery of user experience feedback.
+## Prerequisites
 
-**VoD = Voice of Developer**. This Skill transforms problems, rejections, and dissatisfaction encountered by users into actionable high-value requirements and feeds them back to developers.
+### Python dependencies
 
-## Trigger Conditions
+Install required Python packages before running any scripts:
 
-This Skill is activated under the following conditions:
+```bash
+pip install -r <SKILL_DIR>/requirements.txt
+```
 
-1. **Exception Event Trigger**: Hook event detects command execution failure, API call error, service exception, or response timeout
-2. **User Rejection Trigger**: Hook event detects user correction, rejection, or dissatisfaction expression
-3. **Proactive Report Trigger**: User input contains problem report intent or suggestion intent (e.g., "I want to report a problem", "this has a bug", "service error", "configuration issue", "I have a suggestion")
-4. **Suggestion Trigger**: User input contains improvement or feature suggestion intent (e.g., "I want to suggest", "it would be better if", "建议", "希望增加")
+---
 
 ## Workflow
 
 ### Phase 1: Capture
 
-When a Hook event triggers, execute the following steps:
+Triggered by hooks (tool errors, user rejection, proactive reports). Generates raw feedback.
 
-#### Step 1.1: Identify Exception Signals
+#### 1.1 Generate Raw Feedback
 
-- Check whether tool_result or service response contains error information
-- Check whether exit_code or API status is non-zero/non-success
-- Check whether execution duration exceeds `capture.timeout_threshold_ms` in config.yaml
-- If an exception is detected, generate an ExceptionSignal record
+- **Write the feedback file** — `python <SKILL_DIR>/scripts/md_io.py write-feedback --output .vod/feedbacks/` (see `--help` for all params)  
+- **Sanitize** — secrets are redacted automatically by `write-feedback`. To manually sanitize an existing file: `python <SKILL_DIR>/scripts/vod_sanitize.py file --path <file>`
 
-#### Step 1.2: Detect User Rejection
+#### 1.2 Deduplication
 
-- **Explicit Correction Detection**: Compare the semantic difference between the current user input and the previous intent; if the user re-describes the intent and it differs from the expected outcome, it is judged as a correction (confidence 0.7)
-- **Explicit Rejection Detection**: Check whether user input contains keywords from `rejection.rejection_keywords` in config.yaml (confidence 0.9)
-- **Implicit Dissatisfaction Detection**: Check whether user input contains keywords from `rejection.dissatisfaction_keywords` in config.yaml (confidence 0.5)
-- **False Positive Filtering**: Perform a secondary validation on detected rejection signals, excluding normal follow-up questions (supplementary information without negative expressions); low-confidence results are annotated as "low confidence"
+- **In-session** (during write): Same `session_id + command + error_type` within `capture.dedup_window_sec` → increment `recurrence_count` instead of writing a new file.
+- **Cross-session** (before Phase 3 delivery): Scan 10 recent feedbacks via LLM for duplicates.
 
-#### Step 1.3: Identify Proactive Report Intent
-
-- Check whether user input contains keywords from `report.trigger_keywords` in config.yaml
-- If matched, **first perform cross-session deduplication** (see Step 1.6), then enter the guided information collection flow (see "Proactive Problem Report Guidance" section)
-
-#### Step 1.4: Generate Raw Feedback Record
-
-- Call `python scripts/vod_sanitize.py text --value "<raw_content>"` to sanitize the raw content
-- Generate a feedback ID: `python scripts/md_io.py generate-id --prefix VOD --feedbacks-dir .vod/feedbacks`
-- Collect environment: `python scripts/vod_context.py collect-env` to get `session_id` etc.
-- **MUST** write the feedback file using `python scripts/md_io.py write-feedback` with the collected fields. **Manual file writing is PROHIBITED** — this guarantees the file format conforms to `assets/VOD_FEEDBACKS.md`
-- Example command:
-  ```
-  python scripts/md_io.py write-feedback \
-    --feedback-id <id> --feedback-type error --timestamp <ISO8601> \
-    --session-id <session_id> --platform generic --confidence 0.9 \
-    --product-name <product_name> \
-    --error-type <error_type> --error-message <message> --error-stack <stack> \
-    --user-intent <intent> --agent-action <action> \
-    --user-expected <what_user_expected> \
-    --problem-description <description> --expected-behavior <expected> --actual-behavior <actual> \
-    --recurrence-count 1 --dedup-key <key> \
-    --annotations skill:<name> category:<cat> severity:<level> \
-    --output .vod/feedbacks/<id>.md
-  ```
-- **Mandatory Constraints**:
-  - Feedback ID must be generated via `python scripts/md_io.py generate-id --prefix VOD --feedbacks-dir .vod/feedbacks`, manual concatenation is prohibited
-  - Timestamp must use the current system real time (ISO 8601 format), fabrication or hardcoded values are prohibited
-  - Session ID must be obtained via `python scripts/vod_context.py collect-env` to get the `session_id` field, using placeholders like "current-session" is prohibited
-  - `product_name` must be inferred from context as the product/skill name to which the problem belongs (see Step 2.4), leaving it empty is prohibited
-  - **Writing feedback files by any means other than `md_io.py write-feedback` is prohibited** (e.g., directly writing markdown, using echo/cat/heredoc, or LLM free-form generation)
-  - `error_stack` must be written in code block format via `md_io.py write-feedback --error-stack`, which wraps multi-line content with triple backticks; inline format is prohibited to ensure complete multi-line stack traces are preserved
-  - `problem_description`, `expected_behavior`, `actual_behavior`, and `occurrence_scenario` are automatically merged into `error_stack` with structured markers (`【问题描述】`, `【预期行为】`, etc.) when writing the feedback file, per the format defined in `assets/VOD_FEEDBACKS.md`
-
-#### Step 1.5: Exception Deduplication
-
-- For the same type of exception generated by the same command in the same session, merge into one record and accumulate the recurrence count
-- Dedup key = `session_id + command + error_type`
-- Identical exceptions within the dedup time window (config.yaml `capture.dedup_window_sec`) are merged
-
-#### Step 1.6: Cross-Session Deduplication
-
-- Before starting guided information collection, scan the 10 most recently modified feedback records in the `.vod/feedbacks/` directory
-- Call `python scripts/md_io.py check-duplicate --feedbacks-dir .vod/feedbacks --text "<problem_description>"` to check whether a similar problem already exists
-- If a similar problem is found, **before entering the guided flow**, prompt the user and provide options to "supplement existing record" or "create new record"
-- Avoid having the user complete the entire guided flow only to discover a duplicate
+---
 
 ### Phase 2: Extract
 
-Enhance the raw feedback with context:
+Enrich feedback with context using LLM, then write all fields directly into the feedback file.
 
-#### Step 2.1: Extract Error Stack
+Each field maps to a specific section in the markdown file:
 
-- Call `python scripts/vod_context.py extract-stack --text "<error_text>"` to assist extraction
-- Identify and extract complete error stack information from the raw feedback
+- **`error_stack`** — Extract traceback/exit code from error context → `## Error Information → error_stack`
+- **`user_intent`** — What the user wanted to do (e.g. "create OBS bucket"), NOT how → `## Context → user_intent`
+- **`scenario`** — Reconstruct what the user was doing → `## User Report → scenario`
+- **`expected_behavior`** — What the user expected. From dialog if explicit, otherwise infer from error → `## User Report → expected_behavior`
+- **`product_name`** — Priority: annotation > agent_action > error_message → Title prefix `【Product】`
+- **`environment`** — Platform, OS, session ID, Python version → `## Context → environment`
+- **`dialog_context`** — 3-5 key turns around the problem point, preserve original language → `## Context → dialog_context`
 
-#### Step 2.2: Infer User's True Intent
+Use `write-feedback` again to update fields, or edit the markdown file directly.
 
-- Infer the user's true intent before the exception/rejection occurred from the dialog context
-- Use the host Agent's built-in LLM capability for intent inference
-- **`user_intent` must only describe WHAT the user wanted to do** (e.g., "创建OBS", "部署应用"), NOT how the user expected it to be done. Descriptions of expected execution behavior (e.g., "按skill流程执行", "自动下载obsutil") belong in `expected_behavior`, not `user_intent`
-
-#### Step 2.3: Infer User's Expected Outcome
-
-- Infer what the user expected to happen from the dialog context (e.g., user corrections, explicit expectations, or implicit goal descriptions)
-- Write the inferred expectation to the `user_expected` field; this requires reading the existing feedback record, updating the `user_expected` field, and re-writing the file via `python scripts/md_io.py write-feedback` with all fields populated (in-place update per Feedback Record Update constraints)
-- **`user_expected` vs `expected_behavior`**: `user_expected` is extracted/inferred from the raw dialog (placed in `## Context`), while `expected_behavior` is explicitly provided by the user during the guided report flow (placed in `## User Report`). When both exist, `expected_behavior` takes priority; `user_expected` serves as a fallback when `expected_behavior` is empty
-- **`expected_behavior` describes HOW the user expected things to behave** (e.g., "按skill流程执行，没检测到obsutil就下载"), as opposed to `user_intent` which only describes WHAT the user wanted to do. When inferring `expected_behavior`, extract the user's expectation about the execution approach from corrections, rejections, or explicit statements in the dialog
-
-#### Step 2.4: Infer Problem-Attributed Product
-
-- Infer the product/skill name to which the problem belongs from the feedback context, and write it to the `product_name` field
-- Inference priority: `skill:` annotation in annotations > "call xxx skill" pattern in agent_action > hyphenated product name in error_message
-- Example: agent_action is "called huawei-cloud-business-support-query skill's script", infer `product_name: huawei-cloud-business-support-query`
-- This field is used for Issue title generation, format: `【Product Name】Problem description summary`
-
-#### Step 2.5: Extract Execution Behavior
-
-- Call `python scripts/vod_context.py extract-agent-action --dialog <path> --anchor-turn <n>` to assist extraction
-- Record the execution actions, tool calls, API invocations, and generated content when the exception/rejection occurred
-
-#### Step 2.6: Collect Runtime Environment Information
-
-- Call `python scripts/vod_context.py collect-env` to assist collection
-- Automatically collect platform type, platform version, session ID, and operating system information
-
-#### Step 2.7: Extract Dialog Context
-
-- Call `python scripts/vod_context.py extract-dialog --dialog <path> --session-id <id> --anchor-turn <n> --depth 3` to assist extraction
-- Extract N rounds of dialog before and after the exception/rejection (N determined by `extraction.context_depth` in config.yaml)
-- **Only extract dialog context within the current session, cross-session retrieval is prohibited**
-- **Truncating dialog content is prohibited**: The complete content of each turn must be recorded as-is; ellipsis or summaries are not allowed
-- **AI thinking process must be recorded**: When role is assistant, the thinking field of that turn must also be recorded (i.e., the AI's chain-of-thought reasoning process), which is crucial for analyzing behavior issues
-- **Translating original content is prohibited**: All dialog content and thinking processes must be recorded in their original language as-is; translation, rewriting, or polishing is not allowed. Even if the original content is in English, the English original must be preserved
+---
 
 ### Phase 3: Deliver
 
-Notify developers of the context-enhanced feedback records:
+#### 3.1 Sync to GitCode Issue
 
-#### Step 3.1: Sync to GitCode Issue
+> ⚠️ `repo_url` comes **only** from `assets/config.yaml.template` → `delivery.channels.gitcode.repo_url`. Never use `git remote`, never ask the user.
 
-- After the local feedback file is generated, **automatically call** `python scripts/vod_deliver.py deliver --feedback-id <id> --feedbacks-dir .vod/feedbacks --config .vod/config.yaml --token <user_token>` to sync the feedback as a GitCode Issue
-- Generate issue content in the format defined by `assets/VOD_ISSUE.md`
-- **After successful delivery**: Append a `## Delivery` section to the local feedback file, recording `delivery_status: delivered`, `issue_url`, `issue_iid`
-- **On delivery failure**: Record `delivery_status: delivery_failed`, do not block the main flow
-- **Prerequisite dependency check**: Before executing delivery, you must first run `pip install -r requirements.txt` to ensure dependencies such as pyyaml are installed; if dependencies are missing, install them before executing delivery; skipping the dependency check is prohibited
-- Prerequisite: `delivery.channels.gitcode.enabled` in `.vod/config.yaml` is true, and `repo_url` is configured; if token is empty, prompt the user to input it and pass it via the `--token` parameter
-- **Target Repo Constraint**: VoD feedback MUST be delivered to the `repo_url` configured in `.vod/config.yaml`. **NEVER** deliver to the user's own repository, even if the Agent is running inside the user's code repository. Do NOT infer `repo_url` from `git remote` of the current working directory. The `repo_url` in config.yaml is the ONLY source of truth for the delivery target
-- **Token Security Constraint**: Never cache the user-provided Token, never write the Token to `.vod/config.yaml` or any other file; only pass it via the `--token` command-line parameter for the current delivery and discard immediately after use
+**Single delivery** — submit one feedback as a GitCode Issue:
 
-#### Step 3.2: Batch Notification Push
+```bash
+python <SKILL_DIR>/scripts/vod_deliver.py deliver \
+  --feedback-id <id> \
+  --feedbacks-dir .vod/feedbacks
+```
 
-- If `delivery.channels.notification.enabled` in config.yaml is true
-- Call `python scripts/vod_deliver.py notify --feedbacks-dir .vod/feedbacks --config .vod/config.yaml --token <user_token>` to batch push undelivered feedback
-- **Mandatory HTTPS/TLS encrypted transmission**
-- **Incremental delivery**: Only deliver feedback that is new or updated since the last successful delivery
+**Batch notification** — scan undelivered feedbacks and submit as a single merged issue:
 
-#### Step 3.3: Update Delivery Status
+```bash
+python <SKILL_DIR>/scripts/vod_deliver.py notify \
+  --feedbacks-dir .vod/feedbacks
+```
 
-- Call `python scripts/vod_deliver.py update-status --feedback-id <id> --status delivered --feedbacks-dir .vod/feedbacks` to update the delivery status and time of the feedback record
+**Update status** — mark a feedback as delivered (or other status):
 
-### Proactive Report and Suggestion Guidance
+```bash
+python <SKILL_DIR>/scripts/vod_deliver.py update-status \
+  --feedback-id <id> --status delivered --feedbacks-dir .vod/feedbacks
+```
 
-When a user proactively expresses the intent to report a problem or submit a suggestion, execute guided information collection:
+---
 
-- If the user reports a **problem**, use `--feedback-type error` or `--feedback-type user_report`
-- If the user submits a **suggestion**, use `--feedback-type suggestion`
+**Auto-login** — when `deliver` or `notify` returns `"need_login": true`, perform the following:
 
-1. **Guide: Problem/Suggestion Description** (required) — Send to the user: "Please describe the problem or suggestion you have"
-2. **Guide: Supplementary Information** (skippable) — Send to the user: "Please supplement the occurrence scenario, expected behavior, and actual behavior (enter 'skip' to omit)"
-3. After collection is complete, generate a structured feedback record and proceed to the delivery phase
-   - The user's description of "expected behavior" should be written to both `--user-expected` (in `## Context`) and `--expected-behavior` (merged into `error_stack` as `【预期行为】`), ensuring the `user_expected` field is always populated when the user expresses an expectation
+**CRITICAL: Before installation, MUST tell the user:**
+- This login uses the open-source project **AtomGit-GO** (MIT license).
+- Source: https://gitcode.com/weixin_45218422/AtomGit-GO
 
-**Exception Handling**:
-- User abandons midway: Save the partially collected information, annotate as "user aborted", **only delete the feedback file currently being edited, deleting the `.vod/` directory or other feedback records under it is prohibited**
-- Duplicate with existing entry: Prompt the user "This problem already has a record; your information has been supplemented to the existing record", merge information and increment the recurrence count
+1. **Check & install**: Execute `bash <SKILL_DIR>/scripts/vod_install.sh` (Linux/macOS) or `powershell <SKILL_DIR>/scripts/vod_install.ps1` (Windows).  
+
+2. **Start server**: `python <SKILL_DIR>/scripts/vod_deliver.py server-start` → get `pid` from JSON output
+
+3. **Initiate QR login**: `curl -s -X POST http://localhost:8080/login/start` → get `login_url`, `qr_code`, `session_id` from JSON
+
+4. **Show QR to user**: Display the `login_url` and ASCII `qr_code`. Say: "🔐 First-time login requires AtomGit authorization. Scan the QR code or open the URL in your browser."
+
+5. **Wait for authorization**: `python <SKILL_DIR>/scripts/vod_deliver.py login-wait --session-id <session_id>` — blocks until scanned (up to 60s). Do NOT ask the user whether they scanned; just wait.
+
+6. On `SCAN_SUCCESS`, proceed to step 7.
+
+   **CRITICAL: After successful authorization, MUST output the Security Notice:**
+
+   - **Security Notice:** After authorization, the access token **will be saved** to `~/.atomcode/auth.toml` (owner-readable only, mode 0600). Anyone with file access can impersonate you — do not share this file.
+   - **Note:** Stored only in the local AI Shell environment. It will not be uploaded to any external server.
+   - **Deletion:** Manually delete the file, or it will be cleaned up when the environment resources are reclaimed.
+
+7. **Stop server**: `python <SKILL_DIR>/scripts/vod_deliver.py server-stop --pid <pid>`
+
+8. **Re-run** the original `deliver` or `notify` command.
+
+---
 
 ## Behavioral Constraints
 
-### Cancellation and Rejection Handling
+- **Cancel**: Clean up current file only. **Never** delete `.vod/` or other records.
+- **Decline**: Skip silently, do not suppress future triggers.
+- **Validation**: Only product/service issues. No empty/minimal content ("test", "hello").
+- **Session limit**: Max `storage.max_feedbacks_per_session` (default 5). Exceeded → inform user.
+- **Updates**: In-place only. ID immutable. State machine: `open → promoted → resolved` or `open → discarded`.
+- **Auto-init**: `.vod/` created on first use. Never overwritten.
 
-- **User cancels report**: Only clean up the feedback file currently being created (if any), **deleting the `.vod/` directory, `.vod/feedbacks/` directory, or any existing feedback records is prohibited**
-- **User declines report**: Skip this time, do not record feedback, **does not affect subsequent triggers**. The next time an exception/rejection signal is detected, the reporting flow is triggered normally; suppressing subsequent reports due to historical rejections is prohibited
+---
 
-### Feedback Content Validation
+## Storage
 
-- **Relevance**: Feedback content must be directly related to the product/service usage experience (e.g., cloud service errors, tool/skill issues, configuration problems). Problems completely unrelated (e.g., OS issues, hardware failures, third-party software issues) should be refused and the user should be prompted
-- **Batch Reporting**: When a user raises multiple problems at once, record them individually to the local `.vod/feedbacks/`, then merge and submit as a single Issue, rather than creating separate Issues for each
-- **Minimum Information**: The problem description must not be empty or contain only meaningless content (e.g., "test", "hello"), otherwise recording is refused
+- **Path**: `<CWD>/.vod/feedbacks/`
+- **Format**: `VOD-YYYYMMDD-NNNN.md`
 
-### Flow Control
+---
 
-- **Per-session reporting limit**: A maximum of `storage.max_feedbacks_per_session` feedback records (default 5) can be created in a single session; when exceeded, prompt the user "The number of feedback for this session has reached the limit"
-- **Deduplication first**: Regardless of the trigger method, deduplication must be performed before creating feedback to avoid multiple records for the same problem
+## CLI Reference
 
-### Feedback Record Updates
-
-- **In-place update**: When correcting an existing feedback record, the original file content must be modified directly (update the corresponding field values), **deleting the old file and creating a new one is prohibited**
-- **Changing feedback ID is prohibited**: The `feedback_id` of a feedback record cannot be changed; correction operations only update content and do not generate new IDs
-- **State transition**: The status of feedback records transitions according to the following state machine: `open → promoted → resolved`, or `open → discarded`. Each status change requires updating the `status` field in the record and appending an annotation explaining the reason for the change
-
-### Initialization
-
-- **Idempotency**: `vod_init.py` is an idempotent operation; when the directory and config.yaml already exist, they will not be overwritten, and it can be safely executed repeatedly
-- **Initialization timing**: Initialization is only needed when the `.vod/` directory does not exist; skip if the complete structure already exists
-
-## Storage Specification
-
-- All feedback records are written to the `.vod/feedbacks/` directory, file name format: `VOD-YYYYMMDD-NNNN.md`
-- The `.vod/feedbacks/` directory serves as the VoD report, which developers can directly review
-
-## Initialization
-
-Before first use, install dependencies and execute the initialization script:
-
-```bash
-pip install -r requirements.txt
-python scripts/vod_init.py --base-dir .
-```
-
-## Path Conventions
-
-- **SKILL_DIR**: Skill package root directory (i.e., the huawei-cloud-vod-collector/ directory), scripts are located at `SKILL_DIR/scripts/`
-- **Working Directory**: The user's current project directory; the `.vod/` directory is initialized under the working directory
-- **All scripts** must be executed under SKILL_DIR, using `--base-dir` or `--feedbacks-dir` to specify paths in the working directory
-- **.vod/ directory**: Generated under the working directory after initialization; all feedback records are written to `<working_directory>/.vod/feedbacks/`
-- **Config file**: `<working_directory>/.vod/config.yaml`
-- **Example**: `cd <SKILL_DIR> && python scripts/vod_deliver.py deliver --feedbacks-dir <working_directory>/.vod/feedbacks --config <working_directory>/.vod/config.yaml --token <token>`
-
-## Configuration
-
-All configuration parameters are managed through `.vod/config.yaml`, including:
-- Platform configuration (platform)
-- Exception capture configuration (capture)
-- User rejection detection configuration (rejection)
-- Proactive problem report configuration (report)
-- Context extraction configuration (extraction)
-- Feedback delivery configuration (delivery)
-- Storage configuration (storage)
-- Sanitization configuration (sanitizer)
-- Logging configuration (logging)
-- Performance constraints (performance)
+| Parameter | Description |
+|-----------|-------------|
+| `--atomgit-home <path>` | AtomGit-GO config dir (default: `~/.atomcode` or `$ATOMCODE_HOME`) |
+| `--feedback-id <id>` | Feedback ID to deliver/update |
+| `--feedbacks-dir <path>` | Path to `.vod/feedbacks/` |
 
 ### Token Configuration
 
-Delivering feedback to GitCode Issue requires configuring a Personal Access Token. When the user needs to obtain a Token, guide them to: https://docs.gitcode.com/docs/help/home/user_center/security_management/user_pat
+- Token from open-source [AtomGit-GO](https://gitcode.com/weixin_45218422/AtomGit-GO), saved **in plaintext** to `~/.atomcode/auth.toml` (mode `0600`)
+- Override: `--atomgit-home <path>`
+- Missing/expired → script returns `"need_login": true` → follow Phase 3.1 auto-login
+- **Never** write token to any file outside `~/.atomcode/auth.toml`
