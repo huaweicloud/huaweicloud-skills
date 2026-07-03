@@ -31,33 +31,11 @@ def _parse_iso_timestamp(ts: str) -> datetime:
 
 
 try:
-    from .models import (
-        FeedbackRecord,
-        FeedbackType,
-        FeedbackStatus,
-        RequirementRecord,
-        Priority,
-        ReqStatus,
-        DeliveryStatus,
-        StageReport,
-        Stage,
-        StageStatus,
-        DialogTurn,
-    )
+    from .models import FeedbackRecord, FeedbackType, FeedbackStatus, DialogTurn
+    from .vod_sanitize import sanitize_file
 except ImportError:
-    from models import (
-        FeedbackRecord,
-        FeedbackType,
-        FeedbackStatus,
-        RequirementRecord,
-        Priority,
-        ReqStatus,
-        DeliveryStatus,
-        StageReport,
-        Stage,
-        StageStatus,
-        DialogTurn,
-    )
+    from models import FeedbackRecord, FeedbackType, FeedbackStatus, DialogTurn
+    from vod_sanitize import sanitize_file
 
 
 def generate_id(prefix: str, directory: Path) -> str:
@@ -67,7 +45,7 @@ def generate_id(prefix: str, directory: Path) -> str:
     today = datetime.now().strftime("%Y%m%d")
     pattern = re.compile(rf"^{prefix}-{today}-(\d{{4}})\.md$")
     max_seq = 0
-    with open(lock_path, "w") as lock_file:
+    with open(lock_path, "wb") as lock_file:
         _lock_file(lock_file)
         try:
             for f in directory.iterdir():
@@ -82,42 +60,7 @@ def generate_id(prefix: str, directory: Path) -> str:
     return f"{prefix}-{today}-{next_seq:04d}"
 
 
-def check_duplicate(feedbacks_dir: Path, text: str) -> list[dict]:
-    if not feedbacks_dir.exists():
-        return []
-    results = []
-    text_lower = text.lower().strip()
-    text_chars = set(c for c in text_lower if c.strip())
-    for f in sorted(feedbacks_dir.glob("VOD-*.md")):
-        try:
-            content = f.read_text(encoding="utf-8")
-            meta = _parse_metadata_section(content, "Error Information")
-            ctx = _parse_metadata_section(content, "Context")
-            desc = meta.get("error_message", "") or ctx.get("user_intent", "")
-            if not desc or not text_lower:
-                continue
-            desc_lower = desc.lower()
-            if text_lower in desc_lower or desc_lower in text_lower:
-                fb_meta = _parse_metadata_section(content, "Metadata")
-                results.append({
-                    "feedback_id": fb_meta.get("feedback_id", f.stem),
-                    "description": desc[:100],
-                    "status": fb_meta.get("status", ""),
-                })
-                continue
-            desc_chars = set(c for c in desc_lower if c.strip())
-            if text_chars and desc_chars:
-                overlap = len(text_chars & desc_chars) / min(len(text_chars), len(desc_chars))
-                if overlap >= 0.6:
-                    fb_meta = _parse_metadata_section(content, "Metadata")
-                    results.append({
-                        "feedback_id": fb_meta.get("feedback_id", f.stem),
-                        "description": desc[:100],
-                        "status": fb_meta.get("status", ""),
-                    })
-        except Exception:
-            continue
-    return results
+
 
 
 def _build_error_stack(feedback: FeedbackRecord) -> str | None:
@@ -128,8 +71,6 @@ def _build_error_stack(feedback: FeedbackRecord) -> str | None:
         parts.append(f"【复现场景】\n{feedback.occurrence_scenario}")
     if feedback.expected_behavior:
         parts.append(f"【预期行为】\n{feedback.expected_behavior}")
-    if feedback.actual_behavior:
-        parts.append(f"【实际行为】\n{feedback.actual_behavior}")
     if feedback.error_stack:
         if parts:
             parts.append(f"【错误堆栈】\n{feedback.error_stack}")
@@ -172,6 +113,21 @@ def write_feedback_md(feedback: FeedbackRecord, file_path: Path) -> None:
         lines.append("  ```")
     else:
         lines.append("  (none)")
+
+    has_report = any([feedback.problem_description, feedback.occurrence_scenario,
+                      feedback.expected_behavior])
+    if has_report:
+        lines.extend([
+            "",
+            "## User Report",
+        ])
+        if feedback.problem_description:
+            lines.append(f"- **problem_description**: {feedback.problem_description}")
+        if feedback.occurrence_scenario:
+            lines.append(f"- **scenario**: {feedback.occurrence_scenario}")
+        if feedback.expected_behavior:
+            lines.append(f"- **expected_behavior**: {feedback.expected_behavior}")
+
     lines.extend([
         "",
         "## Context",
@@ -205,12 +161,6 @@ def write_feedback_md(feedback: FeedbackRecord, file_path: Path) -> None:
     else:
         lines.append("- **environment**: ")
 
-    if feedback.more_details:
-        lines.append("")
-        lines.append("## More Details")
-        for k, v in feedback.more_details.items():
-            lines.append(f"- **{k}**: {v}")
-
     lines.extend([
         "",
         "## Dedup",
@@ -234,20 +184,58 @@ def _normalize_section_header(header: str) -> str:
 def _parse_metadata_section(text: str, section: str) -> dict[str, str]:
     result: dict[str, str] = {}
     in_section = False
+    in_multiline = False
+    multiline_key = None
+    multiline_lines = []
     normalized = _normalize_section_header(section)
-    for line in text.split("\n"):
+    lines = text.split("\n")
+    for i, line in enumerate(lines):
         stripped = line.strip()
         if stripped.startswith("## "):
             header = _normalize_section_header(stripped[3:])
             if header == normalized:
                 in_section = True
+                in_multiline = False
                 continue
             elif in_section:
                 break
-        if in_section and stripped.startswith("- **"):
+        if not in_section:
+            continue
+
+        # 正在收集多行值
+        if in_multiline:
+            # 遇到新字段（以 - ** 开头）或下一行只有空白且再下一行是新字段 → 结束多行
+            if stripped.startswith("- **"):
+                result[multiline_key] = "\n".join(multiline_lines).strip()
+                in_multiline = False
+                # 继续处理当前行作为新字段（不 continue）
+            else:
+                # 检查空行是否是字段分隔：空行 + 下一行是 - **
+                if stripped == "" and i + 1 < len(lines):
+                    next_stripped = lines[i + 1].strip()
+                    if next_stripped.startswith("- **"):
+                        result[multiline_key] = "\n".join(multiline_lines).strip()
+                        in_multiline = False
+                        continue
+                if in_multiline:
+                    multiline_lines.append(line.rstrip("\n"))
+                    continue
+
+        if stripped.startswith("- **"):
             m = re.match(r"- \*\*(.+?)\*\*:\s*(.*)", stripped)
             if m:
-                result[m.group(1)] = m.group(2).strip()
+                key = m.group(1)
+                value = m.group(2).strip()
+                if value == "|":
+                    in_multiline = True
+                    multiline_key = key
+                    multiline_lines = []
+                else:
+                    result[key] = value
+
+    if in_multiline and multiline_lines:
+        result[multiline_key] = "\n".join(multiline_lines).strip()
+
     return result
 
 
@@ -333,31 +321,32 @@ def read_feedback_md(file_path: Path) -> FeedbackRecord:
             annotations.append(stripped[2:])
 
     dialog_context = None
-    if ctx.get("dialog_context") and ctx["dialog_context"] != "":
-        dialog_context = []
-        in_dc = False
-        current_thinking = None
-        for line in text.split("\n"):
-            stripped = line.strip()
-            if stripped.startswith("- **dialog_context**"):
-                in_dc = True
-                continue
-            if in_dc and stripped.startswith("- [thinking]:"):
-                thinking_match = re.match(r"- \[thinking\]: (.+)", stripped)
-                if thinking_match and dialog_context:
-                    dialog_context[-1].thinking = thinking_match.group(1)
-                continue
-            if in_dc and stripped.startswith("- ") and not stripped.startswith("- **"):
-                m = re.match(r"- \[(\d+)\] (\w+): (.+)", stripped)
-                if m:
-                    dialog_context.append(DialogTurn(
-                        turn_index=int(m.group(1)),
-                        role=m.group(2),
-                        content=m.group(3),
-                        timestamp=datetime.now(),
-                    ))
-            if in_dc and (stripped.startswith("- **") and "dialog_context" not in stripped):
-                in_dc = False
+    # 无论 metadata 解析是否捕获到 dialog_context 值，都尝试按列表格式解析
+    in_dc = False
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if stripped.startswith("- **dialog_context**"):
+            in_dc = True
+            dialog_context = []
+            continue
+        if in_dc and stripped.startswith("- [thinking]:"):
+            thinking_match = re.match(r"- \[thinking\]: (.+)", stripped)
+            if thinking_match and dialog_context:
+                dialog_context[-1].thinking = thinking_match.group(1)
+            continue
+        if in_dc and stripped.startswith("- ") and not stripped.startswith("- **"):
+            m = re.match(r"- \[(\d+)\] (\w+): (.+)", stripped)
+            if m:
+                dialog_context.append(DialogTurn(
+                    turn_index=int(m.group(1)),
+                    role=m.group(2),
+                    content=m.group(3),
+                    timestamp=datetime.now(),
+                ))
+        if in_dc and stripped.startswith("## "):
+            break
+        if in_dc and stripped.startswith("- **") and "dialog_context" not in stripped:
+            in_dc = False
 
     environment = None
     in_env = False
@@ -378,10 +367,9 @@ def read_feedback_md(file_path: Path) -> FeedbackRecord:
     problem_description = user_report.get("problem_description") or None
     occurrence_scenario = user_report.get("scenario") or None
     expected_behavior = user_report.get("expected_behavior") or None
-    actual_behavior = user_report.get("actual_behavior") or None
 
-    if error_stack and any(marker in error_stack for marker in ["【问题描述】", "【复现场景】", "【预期行为】", "【实际行为】", "【错误堆栈】"]):
-        sections = {"问题描述": None, "复现场景": None, "预期行为": None, "实际行为": None, "错误堆栈": None}
+    if error_stack and any(marker in error_stack for marker in ["【问题描述】", "【复现场景】", "【预期行为】", "【错误堆栈】"]):
+        sections = {"问题描述": None, "复现场景": None, "预期行为": None, "错误堆栈": None}
         current_key = None
         current_lines = []
         for line in error_stack.split("\n"):
@@ -402,8 +390,6 @@ def read_feedback_md(file_path: Path) -> FeedbackRecord:
             occurrence_scenario = sections["复现场景"]
         if sections["预期行为"]:
             expected_behavior = sections["预期行为"]
-        if sections["实际行为"]:
-            actual_behavior = sections["实际行为"]
         if sections["错误堆栈"]:
             error_stack = sections["错误堆栈"]
 
@@ -448,145 +434,9 @@ def read_feedback_md(file_path: Path) -> FeedbackRecord:
         problem_description=problem_description,
         occurrence_scenario=occurrence_scenario,
         expected_behavior=expected_behavior,
-        actual_behavior=actual_behavior,
         product_name=meta.get("product_name") or None,
         more_details=more_details,
     )
-
-
-def write_requirement_md(requirement: RequirementRecord, file_path: Path) -> None:
-    file_path.parent.mkdir(parents=True, exist_ok=True)
-    lines = [
-        "# VoD Requirement",
-        "",
-        "## Metadata",
-        f"- **requirement_id**: {requirement.requirement_id}",
-        f"- **title**: {requirement.title}",
-        f"- **priority**: {requirement.priority.value}",
-        f"- **domain**: {requirement.domain}",
-        f"- **status**: {requirement.status.value}",
-        "",
-        "## Description",
-        requirement.description,
-        "",
-        "## Suggested Action",
-        requirement.suggested_action or "",
-        "",
-        "## Source",
-        f"- **source_feedbacks**: {', '.join(requirement.source_feedbacks) if requirement.source_feedbacks else ''}",
-        f"- **recurrence_count**: {requirement.recurrence_count}",
-        f"- **see_also**: {', '.join(requirement.see_also) if requirement.see_also else ''}",
-        "",
-        "## Delivery",
-        f"- **delivery_status**: {requirement.delivery_status.value}",
-        f"- **delivered_at**: {requirement.delivered_at.isoformat() if requirement.delivered_at else ''}",
-        f"- **delivery_channel**: {requirement.delivery_channel or ''}",
-        "",
-        "## Timeline",
-        f"- **created_at**: {requirement.created_at.isoformat()}",
-        f"- **updated_at**: {requirement.updated_at.isoformat()}",
-        f"- **resolved_at**: {requirement.resolved_at.isoformat() if requirement.resolved_at else ''}",
-        "",
-        "## Annotations",
-    ]
-    for ann in requirement.annotations:
-        lines.append(f"- {ann}")
-    if not requirement.annotations:
-        lines.append("- (none)")
-
-    file_path.write_text("\n".join(lines), encoding="utf-8")
-
-
-def read_requirement_md(file_path: Path) -> RequirementRecord:
-    text = file_path.read_text(encoding="utf-8")
-    meta = _parse_metadata_section(text, "Metadata")
-    src = _parse_metadata_section(text, "Source")
-    dlv = _parse_metadata_section(text, "Delivery")
-    tl = _parse_metadata_section(text, "Timeline")
-
-    description = ""
-    in_desc = False
-    for line in text.split("\n"):
-        stripped = line.strip()
-        if stripped == "## Description":
-            in_desc = True
-            continue
-        if in_desc and stripped.startswith("## "):
-            in_desc = False
-        if in_desc:
-            description += line + "\n"
-    description = description.strip()
-
-    suggested_action = ""
-    in_sa = False
-    for line in text.split("\n"):
-        stripped = line.strip()
-        if stripped == "## Suggested Action":
-            in_sa = True
-            continue
-        if in_sa and stripped.startswith("## "):
-            in_sa = False
-        if in_sa:
-            suggested_action += line + "\n"
-    suggested_action = suggested_action.strip()
-
-    annotations = []
-    in_ann = False
-    for line in text.split("\n"):
-        stripped = line.strip()
-        if stripped == "## Annotations":
-            in_ann = True
-            continue
-        if in_ann and stripped.startswith("## "):
-            break
-        if in_ann and stripped.startswith("- ") and stripped != "- (none)":
-            annotations.append(stripped[2:])
-
-    source_feedbacks = [s.strip() for s in src.get("source_feedbacks", "").split(",") if s.strip()]
-    see_also = [s.strip() for s in src.get("see_also", "").split(",") if s.strip()]
-
-    return RequirementRecord(
-        requirement_id=meta.get("requirement_id", ""),
-        title=meta.get("title", ""),
-        description=description,
-        priority=Priority(meta.get("priority", "medium")),
-        domain=meta.get("domain", ""),
-        status=ReqStatus(meta.get("status", "open")),
-        suggested_action=suggested_action or None,
-        source_feedbacks=source_feedbacks,
-        recurrence_count=int(src.get("recurrence_count", 1)),
-        see_also=see_also,
-        created_at=datetime.fromisoformat(tl["created_at"]) if "created_at" in tl else datetime.now(),
-        updated_at=datetime.fromisoformat(tl["updated_at"]) if "updated_at" in tl else datetime.now(),
-        resolved_at=datetime.fromisoformat(tl["resolved_at"]) if tl.get("resolved_at") else None,
-        delivery_status=DeliveryStatus(dlv.get("delivery_status", "pending")),
-        delivered_at=datetime.fromisoformat(dlv["delivered_at"]) if dlv.get("delivered_at") else None,
-        delivery_channel=dlv.get("delivery_channel") or None,
-        annotations=annotations,
-    )
-
-
-def write_stage_report_md(report: StageReport, logs_dir: Path) -> None:
-    logs_dir.mkdir(parents=True, exist_ok=True)
-    ts = report.timestamp.strftime("%Y%m%d-%H%M%S")
-    file_path = logs_dir / f"stage-{ts}.md"
-    lines = [
-        "# 阶段报告",
-        "",
-        f"## {report.stage.value} 阶段",
-        "",
-        f"- **状态**: {report.stage_status.value}",
-        f"- **输入条目数**: {report.input_count}",
-        f"- **输出条目数**: {report.output_count}",
-        f"- **耗时**: {report.duration_ms}ms",
-        f"- **时间**: {report.timestamp.isoformat()}",
-    ]
-    if report.details:
-        lines.append("- **详情**:")
-        for k, v in report.details.items():
-            lines.append(f"  - {k}: {v}")
-    lines.append("")
-    file_path.write_text("\n".join(lines), encoding="utf-8")
 
 
 def read_all_feedbacks(feedbacks_dir: Path) -> list[FeedbackRecord]:
@@ -601,16 +451,20 @@ def read_all_feedbacks(feedbacks_dir: Path) -> list[FeedbackRecord]:
     return result
 
 
-def read_all_requirements(requirements_dir: Path) -> list[RequirementRecord]:
-    if not requirements_dir.exists():
-        return []
-    result = []
-    for f in sorted(requirements_dir.glob("REQ-*.md")):
+def _resolve_value(value: str) -> str:
+    """If value starts with '@', treat the rest as a file path and read its content.
+
+    This allows the Agent to safely pass multi-line or special-character content
+    without shell escaping issues: write content to a temp file, then pass @filepath.
+    """
+    if value.startswith("@"):
+        path = Path(value[1:])
         try:
-            result.append(read_requirement_md(f))
-        except Exception:
-            continue
-    return result
+            return path.read_text(encoding="utf-8").rstrip("\n")
+        except (OSError, UnicodeDecodeError) as e:
+            print(f"警告: 无法读取文件 {path}: {e}", file=sys.stderr)
+            return value
+    return value
 
 
 def main() -> None:
@@ -619,14 +473,10 @@ def main() -> None:
 
     id_p = subparsers.add_parser("generate-id", help="generate feedback ID")
     id_p.add_argument("--prefix", required=True, help="ID prefix (VOD or REQ)")
-    id_p.add_argument("--feedbacks-dir", required=True, type=Path, help="feedbacks directory")
-
-    dup_p = subparsers.add_parser("check-duplicate", help="check duplicate feedback")
-    dup_p.add_argument("--feedbacks-dir", required=True, type=Path, help="feedbacks directory")
-    dup_p.add_argument("--text", required=True, help="text to check for duplicates")
+    id_p.add_argument("--feedbacks-dir", "--feedback-dir", required=True, type=Path, dest="feedbacks_dir", help="feedbacks directory")
 
     write_p = subparsers.add_parser("write-feedback", help="write feedback record to markdown file")
-    write_p.add_argument("--feedback-id", required=True, help="feedback ID")
+    write_p.add_argument("--feedback-id", default="", help="feedback ID (auto-generated if omitted)")
     write_p.add_argument("--feedback-type", required=True, choices=["error", "rejection", "user_report", "suggestion"], help="feedback type")
     write_p.add_argument("--timestamp", required=True, help="ISO 8601 timestamp")
     write_p.add_argument("--session-id", required=True, help="session ID")
@@ -643,25 +493,29 @@ def main() -> None:
     write_p.add_argument("--problem-description", default="", help="problem description (for user_report)")
     write_p.add_argument("--occurrence-scenario", default="", help="occurrence scenario")
     write_p.add_argument("--expected-behavior", default="", help="expected behavior")
-    write_p.add_argument("--actual-behavior", default="", help="actual behavior")
     write_p.add_argument("--recurrence-count", type=int, default=1, help="recurrence count")
     write_p.add_argument("--dedup-key", default="", help="dedup key")
     write_p.add_argument("--annotations", nargs="*", default=[], help="annotation labels (e.g. skill:xxx category:yyy severity:high)")
-    write_p.add_argument("--more-details", nargs="*", default=[], help="more details key:value pairs (e.g. summary:xxx additional_info:yyy)")
-    write_p.add_argument("--output", required=True, type=Path, help="output file path")
+    write_p.add_argument("--output", required=True, type=Path, help="output file or directory (if directory, filename is auto-generated as {feedback_id}.md)")
 
     args = parser.parse_args()
 
     if args.command == "generate-id":
         feedback_id = generate_id(args.prefix, args.feedbacks_dir)
         print(feedback_id)
-    elif args.command == "check-duplicate":
-        import json
-        results = check_duplicate(args.feedbacks_dir, args.text)
-        print(json.dumps(results, ensure_ascii=False))
     elif args.command == "write-feedback":
+        if args.feedback_id:
+            feedback_id = args.feedback_id
+        else:
+            feedback_id = generate_id("VOD", args.output if args.output.is_dir() else args.output.parent)
+
+        # Resolve output path: if output is a directory, auto-generate filename
+        output_path = args.output
+        if output_path.is_dir() or (not output_path.suffix and not output_path.exists()):
+            output_path = output_path / f"{feedback_id}.md"
+
         feedback = FeedbackRecord(
-            feedback_id=args.feedback_id,
+            feedback_id=feedback_id,
             feedback_type=FeedbackType(args.feedback_type),
             timestamp=_parse_iso_timestamp(args.timestamp) if args.timestamp else datetime.now(),
             session_id=args.session_id,
@@ -669,24 +523,23 @@ def main() -> None:
             confidence=args.confidence,
             status=FeedbackStatus(args.status),
             product_name=args.product_name or None,
-            error_type=args.error_type or None,
-            error_message=args.error_message or None,
-            error_stack=args.error_stack or None,
-            user_intent=args.user_intent or None,
-            agent_action=args.agent_action or None,
-            user_expected=args.user_expected or None,
-            problem_description=args.problem_description or None,
-            occurrence_scenario=args.occurrence_scenario or None,
-            expected_behavior=args.expected_behavior or None,
-            actual_behavior=args.actual_behavior or None,
+            error_type=_resolve_value(args.error_type) or None,
+            error_message=_resolve_value(args.error_message) or None,
+            error_stack=_resolve_value(args.error_stack) or None,
+            user_intent=_resolve_value(args.user_intent) or None,
+            agent_action=_resolve_value(args.agent_action) or None,
+            user_expected=_resolve_value(args.user_expected) or None,
+            problem_description=_resolve_value(args.problem_description) or None,
+            occurrence_scenario=_resolve_value(args.occurrence_scenario) or None,
+            expected_behavior=_resolve_value(args.expected_behavior) or None,
             recurrence_count=args.recurrence_count,
             dedup_key=args.dedup_key or None,
             annotations=args.annotations,
-            more_details=dict(pair.split(":", 1) for pair in args.more_details if ":" in pair) or None,
         )
-        write_feedback_md(feedback, args.output)
+        write_feedback_md(feedback, output_path)
+        sanitize_file(output_path)
         import json as _json
-        print(_json.dumps({"feedback_id": feedback.feedback_id, "file": str(args.output)}, ensure_ascii=False))
+        print(_json.dumps({"feedback_id": feedback.feedback_id, "file": str(output_path)}, ensure_ascii=False))
 
 
 if __name__ == "__main__":
