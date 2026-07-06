@@ -1,0 +1,14 @@
+[project]
+name = "huawei-cloud-ecs-sqlbot-deploy"
+version = "1.0.0"
+description = "Huawei Cloud ECS SQLBot deployment (create X instance and deploy SQLBot)"
+dependencies = [
+    "requests>=2.31.0",
+    "huaweicloudsdkcore>=3.1.70",
+    "huaweicloudsdkecs>=3.1.70",
+    "huaweicloudsdkcoc>=3.1.70",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
