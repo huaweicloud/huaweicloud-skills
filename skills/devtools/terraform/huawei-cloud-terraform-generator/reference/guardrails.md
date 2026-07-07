@@ -210,6 +210,7 @@ Never ask the user to provide sensitive information directly in the conversation
 **AK/SK (Access Keys):**
 
 - Can only be configured via environment variables (HW_ACCESS_KEY, HW_SECRET_KEY)
+- For temporary/STS credentials, the agent **must** read `HW_SECURITY_TOKEN` (or `HUAWEICLOUD_SECURITY_TOKEN`) from environment variables and write it to `terraform.tfvars` as `security_token`. The provider does not reliably resolve `security_token` from env vars. If the env var is not set, omit it (permanent AK/SK scenario).
 - Never guide or prompt user to configure them
 - Assume user has already configured them appropriately
 

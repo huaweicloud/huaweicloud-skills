@@ -30,6 +30,8 @@ Use explicit provider version constraints. Always use the latest stable version 
 
 **Important:** Do NOT configure access_key and secret_key in the provider block. Credentials are read from environment variables (HW_ACCESS_KEY and HW_SECRET_KEY).
 
+**Important:** The provider does not reliably resolve `security_token` from environment variables. The agent **must** read `HW_SECURITY_TOKEN` (or `HUAWEICLOUD_SECURITY_TOKEN`) from environment variables and configure it in the provider block. If the env var is not set, omit `security_token` from the provider block (permanent AK/SK scenario).
+
 Example:
 
 ```hcl
@@ -43,7 +45,8 @@ terraform {
 }
 
 provider "huaweicloud" {
-  region = var.region
+  region         = var.region
+  security_token = var.security_token
 }
 ```
 
@@ -52,6 +55,7 @@ provider "huaweicloud" {
 `variables.tf` must include at least:
 
 - region
+- security_token
 
 **Note:** Do NOT define `access_key` and `secret_key` variables.
 
@@ -66,6 +70,12 @@ Example:
 variable "region" {
   description = "The region of Huawei Cloud"
   type        = string
+}
+variable "security_token" {
+  description = "The security token for temporary credentials (STS). Leave empty for permanent AK/SK."
+  type        = string
+  sensitive   = true
+  default     = ""
 }
 ```
 

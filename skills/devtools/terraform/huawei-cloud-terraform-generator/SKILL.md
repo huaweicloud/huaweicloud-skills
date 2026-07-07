@@ -54,7 +54,7 @@ This skill works in nine phases:
 
 ### 4.0 Credential handling (MUST READ)                                                                                                                                                                                                                                           
 
-AK/SK credentials are read from environment variables `HW_ACCESS_KEY` and `HW_SECRET_KEY`
+AK/SK credentials are read from environment variables `HW_ACCESS_KEY` and `HW_SECRET_KEY`. For temporary/STS credentials, the agent **must** read `HW_SECURITY_TOKEN` (or `HUAWEICLOUD_SECURITY_TOKEN`) from environment variables and write it to `terraform.tfvars` as `security_token`. The provider does not reliably resolve `security_token` from env vars. If the env var is not set, omit it (permanent AK/SK scenario).
 Before any step that depends on credentials (resource queries, `terraform plan`, etc.), read the complete rules in `reference/guardrails.md`.
 If an API or Terraform call fails with an authentication error: tell the user the specific error, ask them to confirm when the issue is resolved, then retry. Do not guide the user on how to configure credentials.
 
