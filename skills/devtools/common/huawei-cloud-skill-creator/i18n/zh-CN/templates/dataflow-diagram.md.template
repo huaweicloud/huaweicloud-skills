@@ -1,0 +1,58 @@
+# 数据流图 — {{SKILL_NAME}}
+
+> 由 `scripts/generate-dataflow-diagram.sh` 自动生成 | 版本：{{VERSION}}
+
+## 工作流数据流
+
+```mermaid
+flowchart TD
+  INPUT([/"用户请求 / 触发"/])
+  STEP1["{{STEP_1_TITLE}}"]
+  STEP2["{{STEP_2_TITLE}}"]
+  STEP3["{{STEP_3_TITLE}}"]
+  OUTPUT([/"Skill 输出 / 结果"/])
+
+  subgraph CLI_OPS["CLI 操作"]
+    CLI_OP1["hcloud {{SERVICE}} {{OPERATION_1}}"]
+    CLI_OP2["hcloud {{SERVICE}} {{OPERATION_2}}"]
+    CLI_OP3["hcloud {{SERVICE}} {{OPERATION_3}}"]
+  end
+
+  subgraph DATA["数据源"]
+    ENV[/"环境变量\nAK/SK, 区域"/]
+    REFS["references/\n文档与策略"]
+    SCRIPTS["scripts/\n自动化"]
+  end
+
+  INPUT --> STEP1
+  STEP1 --> STEP2
+  STEP2 --> STEP3
+  STEP3 --> OUTPUT
+
+  ENV -.-> STEP1
+  REFS -.-> STEP2
+  SCRIPTS -.-> STEP3
+
+  STEP1 --> CLI_OPS
+  CLI_OP1 -.-> STEP2
+  CLI_OP2 -.-> STEP3
+  CLI_OP3 -.-> OUTPUT
+```
+
+## 图例
+
+| 符号 | 含义 |
+|------|------|
+| `([/ /])` | 起始/终止（不对称矩形） |
+| `[ ]` | 处理步骤（矩形） |
+| `[/ /]` | 数据存储（平行四边形） |
+| `-->` | 主数据流 |
+| `-.->` | 辅助/引用数据流 |
+
+## 数据流描述
+
+| 步骤 | 输入 | 处理 | 输出 |
+|------|------|------|------|
+| 1. {{STEP_1_TITLE}} | 用户请求 + 环境配置 | {{STEP_1_PROCESS}} | {{STEP_1_OUTPUT}} |
+| 2. {{STEP_2_TITLE}} | 上一步输出 + CLI 结果 | {{STEP_2_PROCESS}} | {{STEP_2_OUTPUT}} |
+| 3. {{STEP_3_TITLE}} | 处理后数据 + 参考文档 | {{STEP_3_PROCESS}} | {{STEP_3_OUTPUT}} |

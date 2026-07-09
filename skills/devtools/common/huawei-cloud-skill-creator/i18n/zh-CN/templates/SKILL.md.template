@@ -1,0 +1,133 @@
+---
+name: {{SKILL_NAME}}
+description: |
+  {{FUNCTIONAL_POSITIONING}}. 触发条件包括：{{TRIGGER_CONDITIONS}}. {{PREREQUISITE}}.
+tags: [{{TAGS}}]
+version: 1.0.0
+---
+
+# {{TITLE}}
+
+## 概述 / Overview
+
+{{OVERVIEW}}
+
+## 前置条件 / Prerequisites
+
+> 首次使用前请阅读 [`references/cli-installation-guide.md`](references/cli-installation-guide.md)。
+
+- CLI 已安装并完成认证配置
+- AK/SK 通过环境变量 `HUAWEI_ACCESS_KEY` / `HUAWEI_SECRET_KEY` 获取
+- IAM 用户具备所需权限（见 [`references/iam-policies.md`](references/iam-policies.md)）
+- 默认区域已配置（如 `cn-north-4`）
+
+## 主要步骤
+
+### 1. {{STEP_1_TITLE}}
+
+```bash
+hcloud {{SERVICE}} {{OPERATION_1}} --region={region} {{PARAMS_1}}
+```
+
+**所需权限：** `{{ACTION_1}}`
+
+### 2. {{STEP_2_TITLE}}
+
+```bash
+hcloud {{SERVICE}} {{OPERATION_2}} --region={region} {{PARAMS_2}}
+```
+
+**所需权限：** `{{ACTION_2}}`
+
+### 3. {{STEP_3_TITLE}}
+
+```bash
+hcloud {{SERVICE}} {{OPERATION_3}} --region={region} {{PARAMS_3}}
+```
+
+**所需权限：** `{{ACTION_3}}`
+
+## 典型使用示例
+
+### 示例 1：{{EXAMPLE_1_TITLE}}
+
+```bash
+hcloud {{SERVICE}} {{EXAMPLE_1_OPERATION}} --region=cn-north-4 {{EXAMPLE_1_PARAMS}}
+```
+
+### 示例 2：{{EXAMPLE_2_TITLE}}
+
+```bash
+hcloud {{SERVICE}} {{EXAMPLE_2_OPERATION}} --region=cn-north-4 {{EXAMPLE_2_PARAMS}}
+```
+
+### 示例 3：{{EXAMPLE_3_TITLE}}
+
+```bash
+hcloud {{SERVICE}} {{EXAMPLE_3_OPERATION}} --region=cn-north-4 {{EXAMPLE_3_PARAMS}}
+```
+
+## 边界情况
+
+| 场景 | 处理方式 |
+|------|----------|
+| {{EDGE_CASE_1}} | {{EDGE_CASE_1_SOLUTION}} |
+| {{EDGE_CASE_2}} | {{EDGE_CASE_2_SOLUTION}} |
+| {{EDGE_CASE_3}} | {{EDGE_CASE_3_SOLUTION}} |
+
+## 验证方法
+
+详见 [`references/verification-method.md`](references/verification-method.md)。
+
+```bash
+hcloud {{SERVICE}} {{VERIFY_OPERATION}} --region={region} {{VERIFY_PARAMS}}
+```
+
+## 安全操作规范
+
+**必须遵守：**
+- 敏感信息（AK/SK）通过环境变量获取，而非明文参数
+- 创建/修改/删除操作前确认用户意图
+- 优先使用只读查询（List/Show/Get）验证环境状态
+- 高危操作前使用预览模式（`--dry-run`）
+
+**必须避免：**
+- 在命令中明文展示敏感凭证
+- 无确认执行破坏性操作
+- 使用过期的 API 版本
+- 忽略错误码和返回状态
+
+## 认证配置
+
+| 认证方式 | 适用场景 | 推荐做法 |
+|----------|----------|----------|
+| AK/SK 环境变量 | 开发环境 | 设置 `HUAWEI_ACCESS_KEY` / `HUAWEI_SECRET_KEY` 环境变量 |
+| 临时令牌 | 生产环境 | 使用 STS 临时 AK/SK + SecurityToken |
+| IAM 角色 | 云上运行 | 绑定 IAM 角色自动获取权限 |
+
+```bash
+# 通过环境变量设置默认区域
+export HUAWEI_REGION=cn-north-4
+```
+
+## User-Agent 标识
+
+```bash
+# CLI 调用中添加 User-Agent 标识
+hcloud {{SERVICE}} {{OPERATION_1}} --cli-region={region} --user-agent HuaweiCloud-Agent-Skills
+
+# 或通过环境变量
+export HCLOUD_USER_AGENT=HuaweiCloud-Agent-Skills
+```
+
+## 脚本使用
+
+{{SCRIPT_USAGE_SECTION}}
+
+## 参考文档 / References
+
+- [`references/cli-installation-guide.md`](references/cli-installation-guide.md) — CLI 安装配置
+- [`references/iam-policies.md`](references/iam-policies.md) — 权限策略
+- [`references/verification-method.md`](references/verification-method.md) — 验证方法
+- [`references/acceptance-criteria.md`](references/acceptance-criteria.md) — 验收标准
+- [`references/related-commands.md`](references/related-commands.md) — 命令速查

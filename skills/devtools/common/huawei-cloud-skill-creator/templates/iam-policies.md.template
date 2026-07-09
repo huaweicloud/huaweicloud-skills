@@ -1,0 +1,79 @@
+# Permission Policies - {{SERVICE_NAME}}
+
+> Read this file when confirming IAM permissions required by the Skill.
+
+## Query Operations
+
+| API Action | Description | Purpose |
+|------------|-------------|---------|
+| {{SERVICE_LOW}}:{{RESOURCE}}:get | Get {{RESOURCE_CN}} details | Skill main workflow |
+| {{SERVICE_LOW}}:{{RESOURCE}}:list | List {{RESOURCE_CN}} | Resource filtering/selection |
+
+## Mutation Operations
+
+| API Action | Description | Purpose | Risk Level |
+|------------|-------------|---------|------------|
+| {{SERVICE_LOW}}:{{RESOURCE}}:create | Create {{RESOURCE_CN}} | Resource creation | Medium |
+| {{SERVICE_LOW}}:{{RESOURCE}}:update | Update {{RESOURCE_CN}} | Resource modification | Medium |
+| {{SERVICE_LOW}}:{{RESOURCE}}:delete | Delete {{RESOURCE_CN}} | Resource deletion | High |
+
+## High-Risk Operations
+
+| API Action | Description | Must Confirm | Requires MFA |
+|------------|-------------|-------------|-------------|
+| {{SERVICE_LOW}}:{{RESOURCE}}:delete | Delete {{RESOURCE_CN}} | Yes, user confirmation required before execution | {{DELETE_REQUIRES_MFA}} |
+
+## MFA Requirements
+
+{{MFA_DESCRIPTION}}
+
+> If an operation requires MFA, the user must enable MFA in the Huawei Cloud console and complete secondary authentication before execution.
+
+## Minimum Privilege Policy JSON (Read-Only)
+
+```json
+{
+  "Version": "1.1",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "{{SERVICE_LOW}}:{{RESOURCE}}:get",
+        "{{SERVICE_LOW}}:{{RESOURCE}}:list"
+      ],
+      "Resource": ["*"]
+    }
+  ]
+}
+```
+
+## Minimum Privilege Policy JSON (With Mutations)
+
+```json
+{
+  "Version": "1.1",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "{{SERVICE_LOW}}:{{RESOURCE}}:get",
+        "{{SERVICE_LOW}}:{{RESOURCE}}:list",
+        "{{SERVICE_LOW}}:{{RESOURCE}}:create",
+        "{{SERVICE_LOW}}:{{RESOURCE}}:update"
+      ],
+      "Resource": ["*"]
+    }
+  ]
+}
+```
+
+## Configuration
+
+```bash
+# Create a custom policy in Huawei Cloud console IAM
+# Policy type: Custom policy
+# Policy content: Copy the JSON above
+
+# Or via CLI (requires admin permissions)
+hcloud IAM CreatePolicy --cli-region={region} --policy_name={{SKILL_NAME}}-policy --policy_document='{{POLICY_JSON}}'
+```
