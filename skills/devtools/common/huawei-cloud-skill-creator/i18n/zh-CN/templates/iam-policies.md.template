@@ -1,0 +1,79 @@
+# 权限策略 - {{SERVICE_NAME}}
+
+> 当需要确认 Skill 所需 IAM 权限时读取此文件。
+
+## 查询类操作
+
+| API Action | 说明 | 用途 |
+|------------|------|------|
+| {{SERVICE_LOW}}:{{RESOURCE}}:get | 查询{{RESOURCE_CN}}详情 | Skill 主流程 |
+| {{SERVICE_LOW}}:{{RESOURCE}}:list | 列举{{RESOURCE_CN}}列表 | 资源筛选选择 |
+
+## 操作类操作
+
+| API Action | 说明 | 用途 | 风险等级 |
+|------------|------|------|----------|
+| {{SERVICE_LOW}}:{{RESOURCE}}:create | 创建{{RESOURCE_CN}} | 资源创建 | 中 |
+| {{SERVICE_LOW}}:{{RESOURCE}}:update | 更新{{RESOURCE_CN}} | 资源修改 | 中 |
+| {{SERVICE_LOW}}:{{RESOURCE}}:delete | 删除{{RESOURCE_CN}} | 资源删除 | 高 |
+
+## 高危操作
+
+| API Action | 说明 | 必须确认 | 需要 MFA |
+|------------|------|----------|----------|
+| {{SERVICE_LOW}}:{{RESOURCE}}:delete | 删除{{RESOURCE_CN}} | 是，执行前需用户确认 | {{DELETE_REQUIRES_MFA}} |
+
+## MFA 要求
+
+{{MFA_DESCRIPTION}}
+
+> 如果操作需要 MFA，用户必须在华为云控制台启用 MFA 并在执行前完成二次认证。
+
+## 最小权限策略 JSON（只读）
+
+```json
+{
+  "Version": "1.1",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "{{SERVICE_LOW}}:{{RESOURCE}}:get",
+        "{{SERVICE_LOW}}:{{RESOURCE}}:list"
+      ],
+      "Resource": ["*"]
+    }
+  ]
+}
+```
+
+## 最小权限策略 JSON（含操作）
+
+```json
+{
+  "Version": "1.1",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "{{SERVICE_LOW}}:{{RESOURCE}}:get",
+        "{{SERVICE_LOW}}:{{RESOURCE}}:list",
+        "{{SERVICE_LOW}}:{{RESOURCE}}:create",
+        "{{SERVICE_LOW}}:{{RESOURCE}}:update"
+      ],
+      "Resource": ["*"]
+    }
+  ]
+}
+```
+
+## 配置方式
+
+```bash
+# 在华为云控制台 IAM 中创建自定义策略
+# 策略类型：自定义策略
+# 策略内容：复制上方 JSON
+
+# 或通过 CLI 配置（需管理员权限）
+hcloud IAM CreatePolicy --cli-region={region} --policy_name={{SKILL_NAME}}-policy --policy_document='{{POLICY_JSON}}'
+```
