@@ -1,0 +1,51 @@
+# Verification Method
+
+> Read this file when confirming whether Skill operations succeeded.
+
+## General Verification Patterns
+
+### 1. Resource Creation Verification
+
+```bash
+# Query after creation to confirm
+hcloud {{SERVICE}} Show{{Resource}} --{{resource}}_id={resource_id} --region={region}
+```
+
+**Success indicator:** Returns status code 200, resource status is the expected value.
+
+### 2. Resource Deletion Verification
+
+```bash
+# Query after deletion to confirm (should return 404 or empty)
+hcloud {{SERVICE}} Show{{Resource}} --{{resource}}_id={resource_id} --region={region}
+```
+
+**Success indicator:** Returns 404 or resource does not exist.
+
+### 3. Resource List Verification
+
+```bash
+# List resources to confirm existence
+hcloud {{SERVICE}} List{{Resources}} --region={region}
+```
+
+**Success indicator:** Target resource is in the returned list.
+
+## Verification Checklist
+
+| Verification Item | Method | Expected Result |
+|-------------------|--------|-----------------|
+| CLI connection OK | Run any List operation | Returns results without error |
+| Region available | `hcloud {{SERVICE}} List{{Resources}} --cli-region={region}` | Returns results without error |
+| Sufficient permissions | Execute target operation | No 403 error |
+| Resource exists | Show/List query | Returns target resource |
+| Operation complete | Query resource status | Status is expected terminal state |
+
+## Error Code Reference
+
+| Error Code | Meaning | Resolution |
+|------------|---------|------------|
+| 403 | Insufficient permissions | Check IAM policy |
+| 404 | Resource not found | Confirm resource ID |
+| 409 | Resource conflict | Wait or retry |
+| 500 | Internal service error | Retry or contact support |

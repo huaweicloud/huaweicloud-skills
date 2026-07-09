@@ -1,0 +1,161 @@
+---
+name: {{SKILL_NAME}}
+description: |
+  {{FUNCTIONAL_POSITIONING}}. Triggers include: {{TRIGGER_CONDITIONS}}. {{PREREQUISITE}}.
+tags: [{{TAGS}}]
+version: 1.0.0
+---
+
+# {{TITLE}}
+
+## Overview / 概述
+
+{{OVERVIEW}}
+
+## Prerequisites / 前置条件
+
+> First-time users should read [`references/cli-installation-guide.md`](references/cli-installation-guide.md).
+
+- CLI installed with authentication configured
+- AK/SK obtained via environment variables `HUAWEI_ACCESS_KEY` / `HUAWEI_SECRET_KEY`
+- IAM user has required permissions (see [`references/iam-policies.md`](references/iam-policies.md))
+- Default region configured (e.g., `cn-north-4`)
+
+## Main Steps
+
+### 1. {{STEP_1_TITLE}}
+
+```bash
+hcloud {{SERVICE}} {{OPERATION_1}} --region={region} {{PARAMS_1}}
+```
+
+**Required permission:** `{{ACTION_1}}`
+
+### 2. {{STEP_2_TITLE}}
+
+```bash
+hcloud {{SERVICE}} {{OPERATION_2}} --region={region} {{PARAMS_2}}
+```
+
+**Required permission:** `{{ACTION_2}}`
+
+### 3. {{STEP_3_TITLE}}
+
+```bash
+hcloud {{SERVICE}} {{OPERATION_3}} --region={region} {{PARAMS_3}}
+```
+
+**Required permission:** `{{ACTION_3}}`
+
+## Data Flow Diagram
+
+> See [`references/dataflow-diagram.md`](references/dataflow-diagram.md) for the full interactive diagram.
+
+```mermaid
+flowchart TD
+  INPUT([/"User Request"/]) --> STEP1["{{STEP_1_TITLE}}"]
+  STEP1 --> STEP2["{{STEP_2_TITLE}}"]
+  STEP2 --> STEP3["{{STEP_3_TITLE}}"]
+  STEP3 --> OUTPUT([/"Result"/])
+
+  subgraph CLI["CLI Operations"]
+    CLI1["hcloud {{SERVICE}} {{OPERATION_1}}"]
+    CLI2["hcloud {{SERVICE}} {{OPERATION_2}}"]
+    CLI3["hcloud {{SERVICE}} {{OPERATION_3}}"]
+  end
+
+  subgraph DATA["Data Sources"]
+    ENV[/"Environment Variables"/]
+    REFS["references/"]
+  end
+
+  ENV -.-> STEP1
+  REFS -.-> STEP2
+  STEP1 --> CLI
+```
+
+## Typical Usage Examples
+
+### Example 1: {{EXAMPLE_1_TITLE}}
+
+```bash
+hcloud {{SERVICE}} {{EXAMPLE_1_OPERATION}} --region=cn-north-4 {{EXAMPLE_1_PARAMS}}
+```
+
+### Example 2: {{EXAMPLE_2_TITLE}}
+
+```bash
+hcloud {{SERVICE}} {{EXAMPLE_2_OPERATION}} --region=cn-north-4 {{EXAMPLE_2_PARAMS}}
+```
+
+### Example 3: {{EXAMPLE_3_TITLE}}
+
+```bash
+hcloud {{SERVICE}} {{EXAMPLE_3_OPERATION}} --region=cn-north-4 {{EXAMPLE_3_PARAMS}}
+```
+
+## Edge Cases
+
+| Scenario | Resolution |
+|----------|------------|
+| {{EDGE_CASE_1}} | {{EDGE_CASE_1_SOLUTION}} |
+| {{EDGE_CASE_2}} | {{EDGE_CASE_2_SOLUTION}} |
+| {{EDGE_CASE_3}} | {{EDGE_CASE_3_SOLUTION}} |
+
+## Verification
+
+See [`references/verification-method.md`](references/verification-method.md) for details.
+
+```bash
+hcloud {{SERVICE}} {{VERIFY_OPERATION}} --region={region} {{VERIFY_PARAMS}}
+```
+
+## Security Operations
+
+**Must follow:**
+- Secrets (AK/SK) obtained via environment variables, never as plaintext parameters
+- Confirm user intent before create/update/delete operations
+- Prefer read-only queries (List/Show/Get) to verify environment state
+- Use dry-run mode (`--dry-run`) before high-risk operations
+
+**Must avoid:**
+- Exposing sensitive credentials in plaintext commands
+- Executing destructive operations without confirmation
+- Using deprecated API versions
+- Ignoring error codes and return status
+
+## Authentication Configuration
+
+| Method | Use Case | Recommended Approach |
+|--------|----------|---------------------|
+| AK/SK env vars | Development | Set `HUAWEI_ACCESS_KEY` / `HUAWEI_SECRET_KEY` env vars |
+| Temporary token | Production | Use STS temporary AK/SK + SecurityToken |
+| IAM role | Cloud runtime | Bind IAM role for automatic permission acquisition |
+
+```bash
+# Set default region via environment variable
+export HUAWEI_REGION=cn-north-4
+```
+
+## User-Agent Identification
+
+```bash
+# Add User-Agent identification in CLI calls
+hcloud {{SERVICE}} {{OPERATION_1}} --cli-region={region} --user-agent HuaweiCloud-Agent-Skills
+
+# Or via environment variable
+export HCLOUD_USER_AGENT=HuaweiCloud-Agent-Skills
+```
+
+## Script Usage
+
+{{SCRIPT_USAGE_SECTION}}
+
+## References / 参考文档
+
+- [`references/dataflow-diagram.md`](references/dataflow-diagram.md) — Data flow diagram
+- [`references/cli-installation-guide.md`](references/cli-installation-guide.md) — CLI install & config
+- [`references/iam-policies.md`](references/iam-policies.md) — Permission policies
+- [`references/verification-method.md`](references/verification-method.md) — Verification methods
+- [`references/acceptance-criteria.md`](references/acceptance-criteria.md) — Acceptance criteria
+- [`references/related-commands.md`](references/related-commands.md) — Command quick reference
