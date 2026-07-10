@@ -1,0 +1,370 @@
+name: ICPFilingRulesOntology
+type: semantic_ontology
+description: ICP备案8大分类的事实定义：核心规则、适用范围、证据边界。行为规则和约束归 SKILL.md。
+default_scope:
+  site: 中国站
+  platform: support.huaweicloud.com
+  filing_type: 非经营性ICP备案
+protected_identifiers: []
+entities:
+  - name: FilingRequirement
+    kind: rule
+    domain: need_filing
+    summary: 是否需要备案的判断规则
+    rules:
+      - 使用中国大陆节点服务器提供互联网信息服务，必须在服务器提供商处完成ICP备案，否则会被阻断
+      - 境外服务器不需要备案，也不能备案
+      - 备案是备案顶级域名，顶级域名备案成功后二级/三级域名可直接使用
+      - 未备案域名备案期间需关闭解析，管局审核通过后方可使用
+      - 域名在哪里注册购买不影响备案，关键看服务器在哪里
+    evidence_boundary: 通用规则；省份差异需查 ProvinceRule
+
+  - name: DomainFilingRelation
+    kind: rule
+    domain: need_filing
+    summary: 域名解析与备案的关系
+    rules:
+      - 在华为云备案成功后需将域名解析至华为云IP
+      - 备案成功后可将顶级域名、二级域名、三级域名解析至华为云
+      - 一级域名已在工信部有备案，二级域名解析华为云大陆内节点服务器，建议完成接入备案
+      - 企业和个人仅支持一级域名备案，子域名不支持单独备案
+      - 事业单位域名应当以".cn"或".公益"为后缀进行备案
+    evidence_boundary: 通用规则
+
+  - name: OverseasServerRule
+    kind: rule
+    domain: need_filing
+    summary: 境外服务器备案规则
+    rules:
+      - 境外服务器不需要备案，也不能完成备案
+      - APP海外版若上架国内应用市场且部署大陆内节点服务器则需备案
+      - 使用Cloudflare等境外CDN解析的域名，若服务器在境外则无需备案
+    evidence_boundary: 通用规则
+
+  - name: FilingProcess
+    kind: rule
+    domain: filing_process
+    summary: 备案流程核心规则
+    rules:
+      - 进入华为云备案系统填写备案信息
+      - 华为云初审1-2个工作日，管局审核7-20个工作日
+      - 一次只能提交一个正在备案中的订单
+      - 备案与域名和服务器在哪个账号下购买没有关系
+      - 备案需要提供绑定的弹性公网IP才行
+    evidence_boundary: 通用流程；省份材料差异需查 ProvinceRule
+
+  - name: FilingMaterial
+    kind: rule
+    domain: filing_process
+    summary: 备案材料要求
+    rules:
+      - 省份不同规则有所差异，根据省份确定所需材料
+      - 域名实名认证主体需与备案主体一致
+      - 上海电子营业执照不支持备案，需提供营业执照原件拍照或彩色扫描件
+      - 港澳居民提供的证件为：港澳居民来往内地通行证或港澳居民居住证
+      - 域名实名认证信息查询失败但已实名的，可忽略该警告
+    evidence_boundary: 通用规则；省份差异需查 ProvinceRule
+
+  - name: PreApproval
+    kind: rule
+    domain: filing_process
+    summary: 前置审批规则
+    rules:
+      - 涉及前置审批行业需准备前置审批文件或"不涉及行业前置审批承诺书"
+      - 已备案成功增加网站内容，若涉及前置审批内容需补充前置审批文件
+      - 不涉及前置审批内容可直接更改网站
+    evidence_boundary: 通用规则；具体行业类别参考前置审批文档
+
+  - name: ProvinceRule
+    kind: fact
+    domain: filing_process
+    summary: 各地区管局备案要求（省份差异）
+    rules:
+      - 部分省份要求负责人必须为法定代表人
+      - 通信地址若选择不了对应区域，可优先选择就近区域
+      - 个人主体备案成功的互联网信息只能5个
+    evidence_boundary: 需抓取各地区管局备案要求文档获取具体省份规则
+    source_urls:
+      - https://support.huaweicloud.com/prepare-icp/icp_02_0005.html
+
+  - name: AccessFiling
+    kind: rule
+    domain: access_filing
+    summary: 接入备案核心规则
+    rules:
+      - 在其他云商已备案，可在华为云做接入备案
+      - 接入备案不查看原接入商信息，可直接上传最新证件
+      - 新增接入不影响在其他接入商的备案信息
+      - 接入期间网站需能正常访问
+      - 一个网站或App可备案在多家接入商
+    evidence_boundary: 通用规则
+
+  - name: CancelAccess
+    kind: rule
+    domain: access_filing
+    summary: 取消接入的规则与影响
+    rules:
+      - 取消接入仅取消华为云侧的备案信息
+      - 若在其他接入商也有备案，网站或App不受影响
+      - 若没有在其他接入商备案，取消接入后网站会变成空壳，继而管局注销
+      - 管局清理期间在工信部系统查询还是有备案信息的
+    evidence_boundary: 通用规则
+
+  - name: AccessCondition
+    kind: rule
+    domain: access_filing
+    summary: 接入备案条件
+    rules:
+      - 原先在第三方备案了，现在使用华为云服务器，只能是新增接入的备案类型
+      - 接入时可直接上传最新的证件信息
+      - 接入备案审核时间：华为云初审1-2个工作日，管局审核7-20个工作日
+    evidence_boundary: 通用规则
+
+  - name: ChangeFiling
+    kind: rule
+    domain: change_filing
+    summary: 变更备案核心规则
+    rules:
+      - 法人/地址/证件信息变更，需提交变更备案
+      - 同一接入商更换IP不强制重新备案，但建议提交变更
+      - 变更期间不影响网站正常使用和访问
+      - 一次只能提交一个正在备案中的订单，需等待审核通过后再次提交
+    evidence_boundary: 通用规则
+
+  - name: SubjectChange
+    kind: rule
+    domain: change_filing
+    summary: 主体变更规则
+    rules:
+      - 公司主体变更（统一社会信用代码不同），属于不同主体，需先注销再重新备案或走网站迁移
+      - 同一主体跨省份变更，可提交变更主体
+      - 个人主体不支持直接变更为企业，需注销后使用企业材料重新备案
+      - 备案账户实名认证变更跟备案信息没有直接关系，若备案信息要更改则需提交变更备案
+    evidence_boundary: 通用规则
+
+  - name: CertificateChange
+    kind: rule
+    domain: change_filing
+    summary: 证件信息变更规则
+    rules:
+      - 法人身份证件信息有变更，可提交变更备案修改
+      - 只是地址变更一般不需要提供变更证明
+      - 若订单中其他资料文件时间有过期，建议重新填写到对应备案的资料文件签字盖章填写最新日期重新上传
+    evidence_boundary: 通用规则
+
+  - name: IPChange
+    kind: rule
+    domain: change_filing
+    summary: IP/服务器变更规则
+    rules:
+      - 更换服务器会影响备案，主要与更换的IP是否是同一个服务商有关
+      - 不涉及经营性备案可以不变更备案，但建议提交变更
+      - 有些管局会定期核查备案信息一致性，若排查与备案信息不一致会被取消接入
+      - 后续固定使用的IP地址可在填写备案订单时增加
+      - 备案成功后建议使用备案时服务器，若与实际使用不一致建议提交变更备案
+    evidence_boundary: 通用规则
+
+  - name: DomainTransferChange
+    kind: rule
+    domain: change_filing
+    summary: 域名过户/实名变更规则
+    rules:
+      - 域名实名认证的主体跟备案主体不一致时，建议更改域名实名认证的信息，更改为与备案主体一致
+    evidence_boundary: 通用规则
+
+  - name: CancelInternetInfo
+    kind: rule
+    domain: cancel_filing
+    summary: 注销互联网信息服务规则
+    rules:
+      - 仅删除某一个互联网信息在工信部的备案，其他不受影响
+      - 注销成功后该互联网信息服务将不可再对外提供服务
+      - 若域名不再开展业务使用，可将备案信息申请注销掉
+    evidence_boundary: 通用规则
+    source_urls:
+      - https://support.huaweicloud.com/pi-icp/icp_03_0003.html
+
+  - name: CancelSubject
+    kind: rule
+    domain: cancel_filing
+    summary: 注销主体规则
+    rules:
+      - 删除整个主体在工信部的备案信息，主体下所有互联网信息全部注销
+      - 注销成功后如需再使用，需重新申请ICP备案
+      - 注销备案需登录对应备案账号操作
+      - 只有在华为云有成功备案过的互联网信息才可申请注销主体
+      - ECS已备案5个域名或App，注销后将无法重复继续使用（备案服务器仅支持一次性备案）
+    evidence_boundary: 通用规则
+    source_urls:
+      - https://support.huaweicloud.com/pi-icp/icp_03_0009.html
+
+  - name: ReFilingAfterCancel
+    kind: rule
+    domain: cancel_filing
+    summary: 注销后重新备案规则
+    rules:
+      - 注销后登录备案系统根据提示填写信息即可重新备案
+      - 注销后备案信息在工信部系统查无，需重新走首次备案流程
+    evidence_boundary: 通用规则
+    source_urls:
+      - https://support.huaweicloud.com/usermanual-icp/zh-cn_topic_0000002581754184.html
+
+  - name: OneAccountOneSubject
+    kind: rule
+    domain: account_subject_limit
+    summary: 一账号一主体规则
+    rules:
+      - 一个华为云账号只能备案一个主体
+      - 若需要备案其他主体，需要使用其他华为云账号
+      - 已备案企业再增加个人备案，需使用其他华为云账号
+    evidence_boundary: 通用规则
+    source_urls:
+      - https://support.huaweicloud.com/icp_faq/icp_05_0829.html
+
+  - name: FilingAuthorizationCode
+    kind: rule
+    domain: account_subject_limit
+    summary: 备案授权码规则
+    rules:
+      - 跨账号可通过备案授权码授权
+      - 备案授权码不支持单独购买，需先购买可备案的服务器
+      - 服务器需满足：包月3个月及以上（含多次续费后累计时长），且有"包月/包月"计费模式
+      - ECS已备案5个域名或App，注销后将无法重复使用备案授权码
+    evidence_boundary: 通用规则
+    source_urls:
+      - https://support.huaweicloud.com/icp_faq/zh-cn_topic_0173231867.html
+
+  - name: ServerFilingLimit
+    kind: rule
+    domain: account_subject_limit
+    summary: 服务器备案数量限制
+    rules:
+      - 一台ECS或L实例服务器只能备案5个网站或APP
+      - 备案服务器仅支持一次性备案，注销后无法重复使用
+      - 弹性云服务器需满足条件才能生成备案授权码
+    evidence_boundary: 通用规则
+    source_urls:
+      - https://support.huaweicloud.com/prepare-icp/icp_02_0003.html
+
+  - name: IAMPPermission
+    kind: rule
+    domain: account_subject_limit
+    summary: IAM备案权限规则
+    rules:
+      - 备案IAM账号需授权"Beian Administrator"权限
+    evidence_boundary: 通用规则
+    source_urls:
+      - https://support.huaweicloud.com/icprb-icp/zh-cn_topic_0000002063728361.html
+
+  - name: AccountRealName
+    kind: rule
+    domain: account_subject_limit
+    summary: 账号实名与备案主体关系
+    rules:
+      - 备案与账号的实名认证是什么没有问题的
+      - 购买的域名实名认证与备案的主体保持一致，备案时使用对应主体的材料备案即可
+    evidence_boundary: 通用规则
+
+  - name: AppFilingRule
+    kind: rule
+    domain: app_filing
+    summary: APP备案核心规则
+    rules:
+      - APP备案需填写公网IP，只要是华为云大陆内节点的公网IP即可，不限账号
+      - APP不支持迁移，若要做迁移需注销原APP后用新主体重新备案
+      - 若APP需要上架国内应用市场且部署大陆内节点服务器则需备案
+      - 备案网站或者APP是根据实际业务需求完成，同时涉及网站和App则都需要
+      - 可变更备案增加APP的包名
+    evidence_boundary: 通用规则
+
+  - name: AppFeatureInfo
+    kind: rule
+    domain: app_filing
+    summary: APP特征信息获取规则
+    rules:
+      - 公钥和签名MD5值由APP开发技术人员获取后提供
+      - 鸿蒙平台公钥和签名MD5值获取方式参考APP特征信息文档
+    evidence_boundary: 通用规则
+    source_urls:
+      - https://support.huaweicloud.com/usermanual-icp/zh-cn_topic_0000002085120221.html
+
+  - name: AppNameRule
+    kind: rule
+    domain: app_filing
+    summary: APP名称规则
+    rules:
+      - APP备案名称需与实际应用名称一致
+    evidence_boundary: 通用规则
+
+  - name: AppMigration
+    kind: rule
+    domain: app_filing
+    summary: APP迁移规则
+    rules:
+      - APP不支持迁移
+      - 若要做迁移需注销原APP注销后用B主体重新备案
+    evidence_boundary: 通用规则
+
+  - name: TransferFiling
+    kind: rule
+    domain: migration_filing
+    summary: 转移备案（跨账号）规则
+    rules:
+      - 将备案信息从一个华为云账号转移到另一个账号
+      - 需登录备案账号完成备案，若无法找回账号则无法处理
+    evidence_boundary: 通用规则
+    source_urls:
+      - https://support.huaweicloud.com/pi-icp/icp_03_0016.html
+
+  - name: WebsiteMigration
+    kind: rule
+    domain: migration_filing
+    summary: 网站迁移（跨主体）规则
+    rules:
+      - 将备案信息从一个主体迁移到另一个主体
+      - 迁移条件：目标主体需独立华为云账号、域名实名认证需过户到目标主体、双方不能有正在备案中的订单
+      - 是否可以迁入其他主体需根据迁入主体所在省份是否支持
+      - 迁移期间域名在工信部有备案信息的情况下不影响域名使用
+    evidence_boundary: 通用规则
+    source_urls:
+      - https://support.huaweicloud.com/pi-icp/icp_03_0022.html
+
+  - name: MigrationCondition
+    kind: rule
+    domain: migration_filing
+    summary: 迁移条件详解
+    rules:
+      - 目标主体需有独立的华为云账号（A主体B主体要有独立的两个账号）
+      - 操作迁移前需将域名实名认证的信息过户到B公司名下
+      - A B主体不能有正在备案中的订单
+      - 迁移备案是把A单位备案的域名网站迁移至B单位名下，不是更换备案的云商
+    evidence_boundary: 通用规则
+
+  - name: NonFilingQuestion
+    kind: boundary
+    domain: boundary
+    summary: 非备案类问题判断
+    rules:
+      - 域名注册、DNS配置、服务器购买、实名认证等非备案问题 → 明确告知非ICP备案范畴
+      - 华为云账号实名认证非备案类问题
+      - 企业门户建站内容迁移非备案类问题
+      - 域名绑定咨询非备案类问题
+    evidence_boundary: 边界判断
+
+  - name: VagueQuestion
+    kind: boundary
+    domain: boundary
+    summary: 模糊问题处理
+    rules:
+      - 仅说备案、备案咨询 → 给出备案基本概念+流程入口，建议补充具体问题
+      - 备案被驳回但描述不完整 → 追问具体驳回原因
+    evidence_boundary: 边界判断
+
+  - name: NeedWorkOrder
+    kind: boundary
+    domain: boundary
+    summary: 需提工单处理
+    rules:
+      - 政务云备案 → 需提交工单处理
+      - 线下华为政务云HCSO平台 → 需提交工单处理
+    evidence_boundary: 边界判断
