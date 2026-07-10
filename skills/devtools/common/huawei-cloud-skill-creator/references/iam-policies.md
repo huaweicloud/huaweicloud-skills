@@ -18,7 +18,6 @@ Generated sub-Skills need to fill in based on the actual service:
 | `{{SERVICE_NAME}}` | Service full name | Elastic Cloud Server |
 | `{{SERVICE_LOW}}` | Service lowercase identifier | ecs |
 | `{{RESOURCE}}` | Resource identifier | servers |
-| `{{RESOURCE_CN}}` | Resource Chinese name | Cloud Server |
 
 ## MFA Requirements
 

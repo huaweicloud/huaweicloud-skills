@@ -6,22 +6,22 @@
 
 | API Action | Description | Purpose |
 |------------|-------------|---------|
-| {{SERVICE_LOW}}:{{RESOURCE}}:get | Get {{RESOURCE_CN}} details | Skill main workflow |
-| {{SERVICE_LOW}}:{{RESOURCE}}:list | List {{RESOURCE_CN}} | Resource filtering/selection |
+| {{SERVICE_LOW}}:{{RESOURCE}}:get | Get {{RESOURCE}} details | Skill main workflow |
+| {{SERVICE_LOW}}:{{RESOURCE}}:list | List {{RESOURCE}} | Resource filtering/selection |
 
 ## Mutation Operations
 
 | API Action | Description | Purpose | Risk Level |
 |------------|-------------|---------|------------|
-| {{SERVICE_LOW}}:{{RESOURCE}}:create | Create {{RESOURCE_CN}} | Resource creation | Medium |
-| {{SERVICE_LOW}}:{{RESOURCE}}:update | Update {{RESOURCE_CN}} | Resource modification | Medium |
-| {{SERVICE_LOW}}:{{RESOURCE}}:delete | Delete {{RESOURCE_CN}} | Resource deletion | High |
+| {{SERVICE_LOW}}:{{RESOURCE}}:create | Create {{RESOURCE}} | Resource creation | Medium |
+| {{SERVICE_LOW}}:{{RESOURCE}}:update | Update {{RESOURCE}} | Resource modification | Medium |
+| {{SERVICE_LOW}}:{{RESOURCE}}:delete | Delete {{RESOURCE}} | Resource deletion | High |
 
 ## High-Risk Operations
 
 | API Action | Description | Must Confirm | Requires MFA |
 |------------|-------------|-------------|-------------|
-| {{SERVICE_LOW}}:{{RESOURCE}}:delete | Delete {{RESOURCE_CN}} | Yes, user confirmation required before execution | {{DELETE_REQUIRES_MFA}} |
+| {{SERVICE_LOW}}:{{RESOURCE}}:delete | Delete {{RESOURCE}} | Yes, user confirmation required before execution | {{DELETE_REQUIRES_MFA}} |
 
 ## MFA Requirements
 

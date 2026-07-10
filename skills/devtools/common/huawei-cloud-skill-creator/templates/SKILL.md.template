@@ -8,11 +8,11 @@ version: 1.0.0
 
 # {{TITLE}}
 
-## Overview / 概述
+## Overview
 
 {{OVERVIEW}}
 
-## Prerequisites / 前置条件
+## Prerequisites
 
 > First-time users should read [`references/cli-installation-guide.md`](references/cli-installation-guide.md).
 
@@ -151,7 +151,7 @@ export HCLOUD_USER_AGENT=HuaweiCloud-Agent-Skills
 
 {{SCRIPT_USAGE_SECTION}}
 
-## References / 参考文档
+## References
 
 - [`references/dataflow-diagram.md`](references/dataflow-diagram.md) — Data flow diagram
 - [`references/cli-installation-guide.md`](references/cli-installation-guide.md) — CLI install & config
