@@ -1,0 +1,142 @@
+name: ICPFilingSemanticCatalog
+type: semantic_catalog
+description: 薄路由；意图分类 → entry_point → 核心文档URL + ontology_entities。行为规则、约束、边界判断归 SKILL.md。
+entry_points:
+  need_filing:
+    required_context:
+      server_location: [mainland_china, overseas]
+      service_type: [website, app, mini_program]
+      domain_status: [registered, not_registered]
+    triggers:
+      - 是否需要备案
+      - 要不要备案
+      - 境外服务器备案
+      - 海外服务器备案
+      - 未备案能否访问
+      - 不备案可以吗
+      - 二级域名备案
+      - 子域名备案
+      - 小程序备案
+      - 备案后能否访问
+      - 备案期间访问
+    ontology_entities: [FilingRequirement, DomainFilingRelation, OverseasServerRule]
+
+  filing_process:
+    required_context:
+      filing_type: [first_time, add_website]
+      province: [any]
+      industry: [general, pre_approval_required]
+    triggers:
+      - 备案流程
+      - 怎么备案
+      - 备案材料
+      - 前置审批
+      - 备案方式
+      - 审核时长
+      - 备案系统操作
+      - 通信地址
+      - 首页URL
+    ontology_entities: [FilingProcess, FilingMaterial, PreApproval, ProvinceRule]
+
+  access_filing:
+    required_context:
+      current_provider: [other_cloud, huawei_cloud]
+      domain_status: [filed_elsewhere, not_filed]
+    triggers:
+      - 接入备案
+      - 其他云备案转过来
+      - 已在别处备案
+      - 跨云商
+      - 取消接入
+      - 过白
+      - 加白
+      - ICP备案是否接入
+      - 阿里云备案
+      - 腾讯云备案
+    ontology_entities: [AccessFiling, CancelAccess, AccessCondition]
+
+  change_filing:
+    required_context:
+      change_type: [subject, certificate, ip_server, domain_transfer, business_impact]
+    triggers:
+      - 变更备案
+      - 修改备案
+      - 法人更换
+      - 地址变更
+      - 服务器迁移
+      - 主体变更
+      - 证件变更
+      - IP变更
+      - 变更期间影响
+    ontology_entities: [ChangeFiling, SubjectChange, CertificateChange, IPChange, DomainTransferChange]
+
+  cancel_filing:
+    required_context:
+      cancel_scope: [internet_info, subject]
+      re_filing: [yes, no]
+    triggers:
+      - 注销备案
+      - 取消备案
+      - 删除备案
+      - 注销主体
+      - 注销互联网信息
+      - 注销后重新备案
+    ontology_entities: [CancelInternetInfo, CancelSubject, ReFilingAfterCancel]
+
+  account_subject_limit:
+    required_context:
+      account_type: [single, multiple]
+      subject_type: [personal, enterprise]
+    triggers:
+      - 一个账号
+      - 多个主体
+      - 一账号一主体
+      - 备案授权码
+      - 服务器备案数量
+      - 个人备案数量
+      - IAM备案权限
+      - 账号实名
+      - 备案码
+    ontology_entities: [OneAccountOneSubject, FilingAuthorizationCode, ServerFilingLimit, IAMPPermission, AccountRealName]
+
+  app_filing:
+    required_context:
+      platform: [android, ios, harmony]
+      info_type: [public_key, signature_md5, name_rule, filing_method, migration]
+    triggers:
+      - APP备案
+      - 公钥
+      - 签名MD5
+      - 鸿蒙备案
+      - APP特征信息
+      - APP名称规则
+      - APP迁移
+      - APP备案方式
+    ontology_entities: [AppFilingRule, AppFeatureInfo, AppNameRule, AppMigration]
+
+  migration_filing:
+    required_context:
+      migration_type: [cross_account, cross_subject]
+      condition_met: [yes, no, unknown]
+    triggers:
+      - 转移备案
+      - 迁移备案
+      - 网站迁移
+      - 跨主体
+      - 备案转移
+      - 转移到另一个账号
+    ontology_entities: [TransferFiling, WebsiteMigration, MigrationCondition]
+
+  boundary:
+    required_context:
+      is_filing_related: [no, unclear]
+    triggers:
+      - 域名注册
+      - DNS配置
+      - 实名认证
+      - 服务器购买
+      - 人工服务
+      - 归属地
+      - 政务云备案
+      - 线下备案
+    ontology_entities: [NonFilingQuestion, VagueQuestion, NeedWorkOrder]
