@@ -9,13 +9,11 @@ tags: [huawei-cloud, skill-creator, skill-development, cli, devops]
 
 # Huawei Cloud Skill Creator
 
-> **Language / 语言:** English | [中文](i18n/zh-CN/SKILL.md)
-
 Create AI Agent Skills that comply with the Huawei Cloud specification, based on `skill-spec-generic.md`.
 
 > **Specification:** [`references/skill-spec-generic.md`](references/skill-spec-generic.md) — The complete specification that all Skills must follow.
 
-## Prerequisites / 前置条件
+## Prerequisites
 
 > First-time users should read [`references/cli-installation-guide.md`](references/cli-installation-guide.md).
 
@@ -24,7 +22,7 @@ Create AI Agent Skills that comply with the Huawei Cloud specification, based on
 - IAM user has required permissions (see [`references/iam-policies.md`](references/iam-policies.md))
 - Default region configured (e.g., `cn-north-4`)
 
-## Core Commands / 核心命令
+## Core Commands
 
 | Command | Description |
 |---------|-------------|
@@ -33,7 +31,7 @@ Create AI Agent Skills that comply with the Huawei Cloud specification, based on
 | `hcloud OBS ListBuckets --cli-region=cn-north-4` | List OBS buckets |
 | `hcloud IAM ListUsers --cli-region=cn-north-4` | List IAM users |
 
-## Parameters / 参数确认
+## Parameters
 
 | Parameter | Required | Description | Example |
 |-----------|----------|-------------|---------|
@@ -42,7 +40,7 @@ Create AI Agent Skills that comply with the Huawei Cloud specification, based on
 | `--limit` | No | Max items to return | `10` |
 | `--offset` | No | Page offset | `0` |
 
-## Overview / 概述
+## Overview
 
 A Skill is an AI Agent's "domain expertise package" — a structured instruction folder that gives the Agent specialized knowledge and workflows for specific tasks. This Skill creates other Skills that comply with Huawei Cloud standards, ensuring each generated Skill has a complete directory structure, a well-formed SKILL.md, thorough reference docs, and reusable scripts.
 
@@ -54,7 +52,7 @@ A Skill is an AI Agent's "domain expertise package" — a structured instruction
 
 **Principle 3**: Skill content and Agent capabilities are collaborative. The Skill provides domain knowledge and workflows; the Agent handles reasoning and execution.
 
-## Workflow / 工作流
+## Workflow
 
 When a user requests a new Skill, follow these steps:
 
@@ -91,11 +89,6 @@ When a user requests a new Skill, follow these steps:
 │   └── {script-name}
 ├── templates/                 # Optional: config/template files
 │   └── {template-name}
-├── i18n/                      # Optional: internationalization
-│   └── zh-CN/                 # Simplified Chinese
-│       ├── SKILL.md
-│       ├── references/
-│       └── templates/
 └── demo/                      # Optional: example data
     └── example.json
 ```
@@ -138,7 +131,7 @@ Use [`templates/SKILL.md.template`](templates/SKILL.md.template). Must include:
 | Verification | Recommended | Success criteria for operations |
 | References | Recommended | Links to references/ |
 
-**Writing requirements:** Each step has clear CLI commands; key parameters have config notes; each operation notes required permissions; provide 3-5 typical usage examples; link to detailed docs in references/. Default language is **English**; Chinese translations go under `i18n/zh-CN/`. CLI/scripts must **never embed AK/SK**; use env vars or placeholders like `{placeholder}`. Body should stay within 500 lines.
+**Writing requirements:** Each step has clear CLI commands; key parameters have config notes; each operation notes required permissions; provide 3-5 typical usage examples; link to detailed docs in references/. CLI/scripts must **never embed AK/SK**; use env vars or placeholders like `{placeholder}`. Body should stay within 500 lines.
 
 ### Step 6: Generate references/
 
@@ -380,8 +373,7 @@ flowchart TD
 ## Key Principles
 
 - **Spec-first** — All generated Skills must comply with `references/skill-spec-generic.md`
-- **Description drives triggers** — `description` must include a `"Triggers include:"` clause with all trigger phrases (English + Chinese) for accurate Agent routing
-- **English-first** — Default SKILL.md is in English; Chinese translations go under `i18n/zh-CN/`
+- **Description drives triggers** — `description` must include a `"Triggers include:"` clause with all trigger phrases for accurate Agent routing
 - **Security first** — Never hardcode AK/SK, confirm before write operations, dry-run for high-risk
 - **Domain completeness** — Complete full workflow within the Skill, minimal context switching
 - **Least privilege** — iam-policies.md provides minimum privilege policy JSON, query/mutation listed separately, MFA noted
@@ -390,14 +382,7 @@ flowchart TD
 - **Version management** — Follow SemVer, recorded in Frontmatter version field
 - **Data flow diagram** — Every Skill must include a Mermaid data flow diagram in `references/dataflow-diagram.md` showing the complete workflow
 
-## i18n
-
-| Language | Path |
-|----------|------|
-| English (default) | `SKILL.md` |
-| 简体中文 | [`i18n/zh-CN/SKILL.md`](i18n/zh-CN/SKILL.md) |
-
-## References / 参考文档
+## References
 
 - [`references/skill-spec-generic.md`](references/skill-spec-generic.md) — Complete specification
 - [`references/naming-conventions.md`](references/naming-conventions.md) — Naming conventions quick reference

@@ -1,6 +1,6 @@
 #!/bin/bash
-# validate-skill.sh — 验证华为云 Skill 是否符合规范
-# 用法: bash validate-skill.sh <skill-path>
+# validate-skill.sh — Validate Huawei Cloud Skill compliance
+# Usage: bash validate-skill.sh <skill-path>
 
 set -euo pipefail
 
@@ -19,10 +19,10 @@ echo " Target: $SKILL_PATH"
 echo "=========================================="
 echo ""
 
-# --- 必需项检查 ---
-echo "=== 必需项 ==="
+# --- Required Items ---
+echo "=== Required Items ==="
 
-# 1. SKILL.md 存在
+# 1. SKILL.md exists
 SKILL_MD="$SKILL_PATH/SKILL.md"
 if [[ -f "$SKILL_MD" ]]; then
   check_pass "SKILL.md exists"
@@ -39,7 +39,7 @@ else
   check_fail "YAML Frontmatter opening ---"
 fi
 
-# 3. name 字段
+# 3. name field
 if grep -q '^name:' "$SKILL_MD"; then
   NAME_VAL=$(grep '^name:' "$SKILL_MD" | head -1 | sed 's/^name:[[:space:]]*//' | tr -d '"' | tr -d "'")
   if [[ -n "$NAME_VAL" ]]; then
@@ -56,28 +56,28 @@ else
   check_fail "name field exists"
 fi
 
-# 4. description 字段
+# 4. description field
 if grep -q '^description:' "$SKILL_MD"; then
   check_pass "description field exists"
 else
   check_fail "description field exists"
 fi
 
-# 5. description 包含触发词 (Triggers include / 触发条件包括)
-if grep -qiE '(Triggers include|触发条件包括)' "$SKILL_MD"; then
-  check_pass "description contains trigger words (Triggers include / 触发条件包括)"
+# 5. description contains trigger words (Triggers include)
+if grep -qiE 'Triggers include' "$SKILL_MD"; then
+  check_pass "description contains trigger words (Triggers include)"
 else
-  check_fail "description missing trigger words — must include 'Triggers include:' or '触发条件包括：'"
+  check_fail "description missing trigger words — must include 'Triggers include:'"
 fi
 
-# 6. tags 字段
+# 6. tags field
 if grep -q '^tags:' "$SKILL_MD"; then
   check_pass "tags field exists"
 else
   check_warn "tags field missing (recommended)"
 fi
 
-# 7. version 字段必须存在且符合 SemVer
+# 7. version field must exist and follow SemVer
 if grep -q '^version:' "$SKILL_MD"; then
   VER=$(grep '^version:' "$SKILL_MD" | head -1 | sed 's/^version:[[:space:]]*//')
   if echo "$VER" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
@@ -89,81 +89,81 @@ else
   check_fail "version field missing (required)"
 fi
 
-# 8. AK/SK 安全检查
+# 8. AK/SK security check
 if grep -qiE '(AK[A-Z0-9]{16,}|SK[A-Z0-9]{16,}|access.key[[:space:]]*=[[:space:]]*[A-Z0-9]{20,}|secret.key[[:space:]]*=[[:space:]]*[A-Z0-9]{20,})' "$SKILL_MD" 2>/dev/null; then
   check_fail "Possible hardcoded AK/SK in SKILL.md"
 else
   check_pass "No hardcoded AK/SK in SKILL.md"
 fi
 
-# --- 正文结构检查 ---
+# --- Body Structure Check ---
 echo ""
-echo "=== 正文结构 ==="
+echo "=== Body Structure ==="
 
-# 9. 前置条件章节 (Prerequisites / 前置条件)
-if grep -qE '^## .*(Prerequisites|前置条件)' "$SKILL_MD"; then
-  check_pass "Prerequisites / 前置条件 chapter exists"
+# 9. Prerequisites chapter
+if grep -qE '^## .*Prerequisites' "$SKILL_MD"; then
+  check_pass "Prerequisites chapter exists"
 else
-  check_fail "Prerequisites / 前置条件 chapter missing (required)"
+  check_fail "Prerequisites chapter missing (required)"
 fi
 
-# 10. 核心命令章节 (Core Commands / 核心命令)
-if grep -qE '^## .*(Core Commands|核心命令)' "$SKILL_MD"; then
-  check_pass "Core Commands / 核心命令 chapter exists"
+# 10. Core Commands chapter
+if grep -qE '^## .*Core Commands' "$SKILL_MD"; then
+  check_pass "Core Commands chapter exists"
 else
-  check_fail "Core Commands / 核心命令 chapter missing (required)"
+  check_fail "Core Commands chapter missing (required)"
 fi
 
-# 11. 参数确认章节 (Parameters / 参数确认)
-if grep -qE '^## .*(Parameters|参数确认|参数)' "$SKILL_MD"; then
-  check_pass "Parameters / 参数确认 chapter exists"
+# 11. Parameters chapter
+if grep -qE '^## .*Parameters' "$SKILL_MD"; then
+  check_pass "Parameters chapter exists"
 else
-  check_fail "Parameters / 参数确认 chapter missing (required)"
+  check_fail "Parameters chapter missing (required)"
 fi
 
-# 12. 概述章节
-if grep -qE '^## .*(Overview|概述)' "$SKILL_MD"; then
-  check_pass "Overview / 概述 chapter exists"
+# 12. Overview chapter
+if grep -qE '^## .*Overview' "$SKILL_MD"; then
+  check_pass "Overview chapter exists"
 else
-  check_fail "Overview / 概述 chapter exists (required)"
+  check_fail "Overview chapter exists (required)"
 fi
 
-# 13. 安全操作规范章节
-if grep -qE '^## .*(Security Operations|安全操作规范)' "$SKILL_MD"; then
-  check_pass "Security Operations / 安全操作规范 chapter exists"
-  if grep -qE '(Must avoid|必须避免)' "$SKILL_MD"; then
-    check_pass "Security spec includes Must avoid / 必须避免 section"
+# 13. Security Operations chapter
+if grep -qE '^## .*Security Operations' "$SKILL_MD"; then
+  check_pass "Security Operations chapter exists"
+  if grep -qE 'Must avoid' "$SKILL_MD"; then
+    check_pass "Security spec includes Must avoid section"
   else
-    check_warn "Security spec missing Must avoid / 必须避免 section"
+    check_warn "Security spec missing Must avoid section"
   fi
 else
-  check_warn "Security Operations / 安全操作规范 chapter missing (recommended)"
+  check_warn "Security Operations chapter missing (recommended)"
 fi
 
-# 14. User-Agent 标识
+# 14. User-Agent identification
 if grep -qiE 'user.agent|User-Agent' "$SKILL_MD"; then
   check_pass "User-Agent identification mentioned"
 else
   check_warn "User-Agent identification not mentioned"
 fi
 
-# 15. 认证方式
-if grep -qE '^## .*(Authentication|认证)' "$SKILL_MD"; then
-  check_pass "Authentication / 认证 chapter exists"
+# 15. Authentication method
+if grep -qE '^## .*Authentication' "$SKILL_MD"; then
+  check_pass "Authentication chapter exists"
 else
-  check_warn "Authentication / 认证 chapter missing (recommended)"
+  check_warn "Authentication chapter missing (recommended)"
 fi
 
-# --- CLI 命令规范检查 ---
+# --- CLI Command Spec Check ---
 echo ""
-echo "=== CLI 命令规范 ==="
+echo "=== CLI Command Spec ==="
 
 # Helper: extract lines inside ```bash code blocks from a file
 extract_bash_blocks() {
   awk '/^```bash/{p=1;next} /^```/{p=0;next} p{print}' "$1" 2>/dev/null
 }
 
-# 16. 禁止通过CLI配置命令传入明文凭据
+# 16. No CLI config with plaintext credentials
 HCS_FAIL=0
 for f in "$SKILL_MD" "$SKILL_PATH/references/"*.md "$SKILL_PATH/templates/"*.template; do
   [[ -f "$f" ]] || continue
@@ -176,7 +176,7 @@ if [[ $HCS_FAIL -eq 0 ]]; then
   check_pass "No CLI config with plaintext credentials"
 fi
 
-# 17. 命令必须包含 --cli-region (only check code blocks)
+# 17. Commands must include --cli-region (only check code blocks)
 CLI_REGION_FAIL=0
 for f in "$SKILL_MD" "$SKILL_PATH/references/"*.md "$SKILL_PATH/templates/"*.template; do
   [[ -f "$f" ]] || continue
@@ -193,7 +193,7 @@ if [[ $CLI_REGION_FAIL -eq 0 ]]; then
   check_pass "All hcloud commands in code blocks include --cli-region"
 fi
 
-# 18. 服务名必须大写 (check code blocks only)
+# 18. Service name must be uppercase (check code blocks only)
 SVC_FAIL=0
 for f in "$SKILL_MD" "$SKILL_PATH/references/"*.md "$SKILL_PATH/templates/"*.template; do
   [[ -f "$f" ]] || continue
@@ -210,7 +210,7 @@ if [[ $SVC_FAIL -eq 0 ]]; then
   check_pass "All service names in code blocks are uppercase"
 fi
 
-# 19. 操作名必须 PascalCase (check code blocks only)
+# 19. Operation name must be PascalCase (check code blocks only)
 OP_FAIL=0
 for f in "$SKILL_MD" "$SKILL_PATH/references/"*.md "$SKILL_PATH/templates/"*.template; do
   [[ -f "$f" ]] || continue
@@ -227,9 +227,9 @@ if [[ $OP_FAIL -eq 0 ]]; then
   check_pass "All operation names in code blocks are PascalCase"
 fi
 
-# --- 参考文档检查 ---
+# --- Reference Docs Check ---
 echo ""
-echo "=== 参考文档 ==="
+echo "=== Reference Docs ==="
 REF_DIR="$SKILL_PATH/references"
 if [[ -d "$REF_DIR" ]]; then
   check_pass "references/ directory exists"
@@ -249,7 +249,7 @@ else
   check_fail "references/iam-policies.md exists (required)"
 fi
 
-# 21. SKILL.md 中引用的 references 文件检查
+# 21. SKILL.md referenced references file check
 if [[ -d "$REF_DIR" ]]; then
   REF_LINKS=$(grep -oE 'references/[a-zA-Z0-9_-]+\.md' "$SKILL_MD" 2>/dev/null | sort -u || true)
   for ref in $REF_LINKS; do
@@ -261,7 +261,7 @@ if [[ -d "$REF_DIR" ]]; then
   done
 fi
 
-# 22. 标准参考文件
+# 22. Standard reference files
 for ref_file in "cli-installation-guide.md" "verification-method.md" "acceptance-criteria.md" "related-commands.md"; do
   if [[ -f "$REF_DIR/$ref_file" ]]; then
     check_pass "references/$ref_file exists"
@@ -270,11 +270,11 @@ for ref_file in "cli-installation-guide.md" "verification-method.md" "acceptance
   fi
 done
 
-# --- 安全扫描 ---
+# --- Security Scan ---
 echo ""
-echo "=== 安全扫描 ==="
+echo "=== Security Scan ==="
 
-# 23. 扫描所有文件中的硬编码密钥
+# 23. Scan all files for hardcoded keys
 SEC_FAIL=0
 for f in "$SKILL_MD" "$SKILL_PATH/references/"*.md "$SKILL_PATH/templates/"*.template; do
   [[ -f "$f" ]] || continue
@@ -296,7 +296,7 @@ fi
 
 # --- Data Flow Diagram Check ---
 echo ""
-echo "=== 数据流图 ==="
+echo "=== Data Flow Diagram ==="
 
 # 26. dataflow-diagram.md exists
 DATAFLOW_FILE="$REF_DIR/dataflow-diagram.md"
@@ -321,7 +321,7 @@ if [[ -f "$DATAFLOW_FILE" ]]; then
     check_fail "dataflow-diagram.md missing primary data flow arrows (-->)"
   fi
   # 30. Contains legend or description table
-  if grep -qiE '(Legend|图例|Data Flow Description|数据流描述)' "$DATAFLOW_FILE"; then
+  if grep -qiE '(Legend|Data Flow Description)' "$DATAFLOW_FILE"; then
     check_pass "dataflow-diagram.md contains legend or description table"
   else
     check_warn "dataflow-diagram.md missing legend or description table (recommended)"
@@ -359,9 +359,9 @@ elif [[ $OPENING_TOTAL -gt 0 ]] && [[ $CODE_BLOCKS -lt $OPENING_TOTAL ]]; then
   check_warn "$UNANNOTATED code block(s) missing language annotation ($CODE_BLOCKS/$OPENING_TOTAL annotated)"
 fi
 
-# --- scripts/ 检查 ---
+# --- scripts/ Check ---
 echo ""
-echo "=== 脚本检查 ==="
+echo "=== Scripts Check ==="
 if [[ -d "$SKILL_PATH/scripts" ]]; then
   for script in "$SKILL_PATH/scripts"/*; do
     if [[ -f "$script" ]]; then
@@ -392,7 +392,7 @@ else
   check_warn "No scripts/ directory"
 fi
 
-# --- 结果 ---
+# --- Results ---
 echo ""
 echo "=========================================="
 echo " Results"
