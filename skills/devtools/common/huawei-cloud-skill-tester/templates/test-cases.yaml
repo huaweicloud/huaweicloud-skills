@@ -1,0 +1,114 @@
+# Test Cases Configuration Template
+# Copy this file and customize for your target skill
+
+skill_name: "{skill-name}"
+skill_version: "{version}"
+test_date: "{date}"
+
+# Phase 1: Installation Verification
+phase_1_installation:
+  install_command: "npx skills add {repo-url} --skill {skill-name}"
+  expected_structure:
+    - "SKILL.md"
+    - "references/"
+    - "scripts/"
+  expected_frontmatter:
+    name: "{skill-name}"
+    description_points: 5
+    version_pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    min_tags: 3
+
+  i18n:
+    directory: "i18n/"
+    required: false
+    locale_format: "BCP 47 (xx-XX)"
+    expected_structure: "skillname/i18n/{locale}/SKILL_{suffix}.md"
+    example_locales:
+      - "zh-CN/SKILL_CN.md"
+      - "en-US/SKILL_US.md"
+      - "ja-JP/SKILL_JP.md"
+
+# Phase 2: Basic Functionality Test
+phase_2_basic:
+  trigger_tests:
+    - trigger: "{positive-trigger-1}"
+      expect_skill_loaded: "{skill-name}"
+    - trigger: "{positive-trigger-2}"
+      expect_skill_loaded: "{skill-name}"
+    - trigger: "{positive-trigger-mixed-cn-en}"
+      expect_skill_loaded: "{skill-name}"
+    - trigger: "{negative-trigger-1}"
+      expect_skill_not_loaded: "{skill-name}"
+    - trigger: "{negative-trigger-2}"
+      expect_skill_not_loaded: "{skill-name}"
+    - trigger: "{negative-trigger-mixed-cn-en}"
+      expect_skill_not_loaded: "{skill-name}"
+
+  core_use_cases:
+    - id: "TC-BASIC-001"
+      trigger: "{trigger}"
+      expect_output_contains:
+        - "{expected-content-1}"
+        - "{expected-content-2}"
+      expect_output_not_contains:
+        - "{unexpected-content}"
+
+  boundary_cases:
+    - id: "TC-BOUNDARY-001"
+      trigger: "{invalid-trigger}"
+      expect_error_message: true
+      expect_no_fabrication: true
+
+  compare_test:
+    trigger: "{compare-trigger}"
+    with_skill_expect:
+      quality_score: 0.9
+    without_skill_expect:
+      quality_score: 0.3
+
+# Phase 3: Combination Compatibility Test
+phase_3_combination:
+  related_skills:
+    - "{related-skill-1}"
+    - "{related-skill-2}"
+
+  cross_skill_scenarios:
+    - name: "{scenario-name}"
+      steps:
+        - trigger: "{step-1-trigger}"
+          expect_skill: "{expected-skill-1}"
+        - trigger: "{step-2-trigger}"
+          expect_skill: "{expected-skill-2}"
+
+  competition_tests:
+    - trigger: "{ambiguous-trigger}"
+      expect_skill: "{expected-winner}"
+
+  isolation_tests:
+    - task_a:
+        trigger: "{task-a-trigger}"
+        expect_skill: "{skill-a}"
+      task_b:
+        trigger: "{task-b-trigger}"
+        expect_skill: "{skill-b}"
+        expect_not_contains:
+          - "{task-a-entity}"
+
+# Phase 4: Solution-Level Test
+phase_4_solution:
+  scenarios:
+    - name: "{scenario-name}"
+      description: "{scenario-description}"
+      steps:
+        - step: 1
+          action: "{action-1}"
+          verify: "{verification-1}"
+        - step: 2
+          action: "{action-2}"
+          verify: "{verification-2}"
+
+  performance_thresholds:
+    total_time_seconds: 300
+    total_tokens: 50000
+    accuracy_rate: 0.9
+    hallucination_rate: 0.05
