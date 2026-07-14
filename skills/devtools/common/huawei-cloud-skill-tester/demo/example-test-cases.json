@@ -1,0 +1,189 @@
+{
+  "skill_name": "huawei-cloud-skill-creator",
+  "test_cases": {
+    "phase_1": [
+      {
+        "id": "I-01",
+        "name": "npx install",
+        "command": "npx skills add https://gitcode.com/developer-skill/developer-skill.git --skill huawei-cloud-skill-creator",
+        "expect": { "return_code": 0 }
+      },
+      {
+        "id": "I-02",
+        "name": "directory structure",
+        "expect": {
+          "exists": ["SKILL.md", "references/", "scripts/", "templates/"]
+        }
+      },
+      {
+        "id": "I-03",
+        "name": "i18n directory structure",
+        "expect": {
+          "exists_optional": ["i18n/"],
+          "i18n_structure": {
+            "expected_format": "skillname/i18n/{locale}/SKILL_{suffix}.md",
+            "locale_pattern": "xx-XX (BCP 47)",
+            "example": "i18n/zh-CN/SKILL_CN.md"
+          }
+        }
+      }
+    ],
+    "phase_2": [
+      {
+        "id": "TC-BASIC-001",
+        "name": "trigger identification (English)",
+        "trigger": "Help me create a Huawei Cloud ECS management Skill",
+        "expect": {
+          "skill_loaded": "huawei-cloud-skill-creator",
+          "output_contains": ["huawei-cloud-ecs-manage", "SKILL.md", "references/"]
+        }
+      },
+      {
+        "id": "TC-BASIC-001-CN",
+        "name": "trigger identification (Chinese)",
+        "trigger": "帮我创建一个华为云ECS管理Skill",
+        "expect": {
+          "skill_loaded": "huawei-cloud-skill-creator",
+          "output_contains": ["huawei-cloud-ecs-manage", "SKILL.md", "references/"]
+        }
+      },
+      {
+        "id": "TC-BASIC-001-MIX",
+        "name": "trigger identification (Chinese-English mixed)",
+        "trigger": "创建华为云ECS管理的Skill",
+        "expect": {
+          "skill_loaded": "huawei-cloud-skill-creator",
+          "output_contains": ["huawei-cloud-ecs-manage", "SKILL.md", "references/"]
+        }
+      },
+      {
+        "id": "TC-BASIC-002",
+        "name": "core functionality (English)",
+        "trigger": "Create a Huawei Cloud VPC network management Skill",
+        "expect": {
+          "output_contains": ["huawei-cloud-vpc-manage", "YAML Frontmatter", "iam-policies.md"]
+        }
+      },
+      {
+        "id": "TC-BASIC-002-MIX",
+        "name": "core functionality (Chinese-English mixed)",
+        "trigger": "创建华为云VPC网络管理的Skill",
+        "expect": {
+          "output_contains": ["huawei-cloud-vpc-manage", "YAML Frontmatter", "iam-policies.md"]
+        }
+      },
+      {
+        "id": "TC-BASIC-003",
+        "name": "boundary - non-existent service (English)",
+        "trigger": "Create a Huawei Cloud XXXYYY service Skill",
+        "expect": {
+          "output_not_contains": ["huawei-cloud-xxxyyy"],
+          "output_contains": ["unrecognized"]
+        }
+      },
+      {
+        "id": "TC-BASIC-003-MIX",
+        "name": "boundary - non-existent service (Chinese-English mixed)",
+        "trigger": "创建华为云XXXYYY服务的Skill",
+        "expect": {
+          "output_not_contains": ["huawei-cloud-xxxyyy"],
+          "output_contains": ["unrecognized"]
+        }
+      },
+      {
+        "id": "TC-BASIC-004",
+        "name": "no false trigger (English)",
+        "trigger": "List my ECS instances",
+        "expect": {
+          "skill_not_loaded": "huawei-cloud-skill-creator"
+        }
+      },
+      {
+        "id": "TC-BASIC-004-MIX",
+        "name": "no false trigger (Chinese-English mixed)",
+        "trigger": "列出我的ECS实例",
+        "expect": {
+          "skill_not_loaded": "huawei-cloud-skill-creator"
+        }
+      }
+    ],
+    "phase_3": [
+      {
+        "id": "TC-COMB-001",
+        "name": "create + validate workflow (English)",
+        "steps": [
+          {
+            "trigger": "Create a Huawei Cloud RDS management Skill",
+            "expect_skill": "huawei-cloud-skill-creator"
+          },
+          {
+            "trigger": "Validate the created Skill for compliance",
+            "expect_output_contains": ["validate-skill.sh", "passed"]
+          }
+        ]
+      },
+      {
+        "id": "TC-COMB-001-MIX",
+        "name": "create + validate workflow (Chinese-English mixed)",
+        "steps": [
+          {
+            "trigger": "创建华为云RDS管理的Skill",
+            "expect_skill": "huawei-cloud-skill-creator"
+          },
+          {
+            "trigger": "验证创建的Skill是否符合规范",
+            "expect_output_contains": ["validate-skill.sh", "passed"]
+          }
+        ]
+      },
+      {
+        "id": "TC-COMB-003",
+        "name": "context isolation (English)",
+        "steps": [
+          {
+            "trigger": "Create a Huawei Cloud CCE deployment Skill",
+            "expect_skill": "huawei-cloud-skill-creator"
+          },
+          {
+            "trigger": "List my OBS buckets",
+            "expect_skill": "huawei-cloud-obs-manage",
+            "expect_not_contains": ["CCE", "create Skill"]
+          }
+        ]
+      },
+      {
+        "id": "TC-COMB-003-MIX",
+        "name": "context isolation (Chinese-English mixed)",
+        "steps": [
+          {
+            "trigger": "创建华为云CCE部署的Skill",
+            "expect_skill": "huawei-cloud-skill-creator"
+          },
+          {
+            "trigger": "列出我的OBS桶",
+            "expect_skill": "huawei-cloud-obs-manage",
+            "expect_not_contains": ["CCE", "create Skill"]
+          }
+        ]
+      }
+    ],
+    "phase_4": [
+      {
+        "id": "TC-SOL-001",
+        "name": "end-to-end create and publish",
+        "steps": [
+          { "action": "install hcloud CLI", "verify": "hcloud --version" },
+          { "action": "configure AK/SK", "verify": "hcloud configure list" },
+          { "action": "install skill-tester", "verify": "npx skills list" },
+          { "action": "create new skill", "verify": "directory created" },
+          { "action": "validate created skill", "verify": "validate-skill.sh pass" }
+        ],
+        "performance_metrics": {
+          "total_time_seconds": 300,
+          "total_tokens": 50000,
+          "accuracy_rate": 0.9
+        }
+      }
+    ]
+  }
+}
