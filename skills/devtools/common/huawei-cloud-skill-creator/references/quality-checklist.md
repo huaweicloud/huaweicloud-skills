@@ -82,11 +82,46 @@
 - [ ] Operation success verification methods are documented
 - [ ] Script usage documentation included (if scripts/ exists)
 
+### i18n (Internationalization)
+
+- [ ] `i18n/` directory exists
+- [ ] `i18n/zh-CN/` directory exists
+- [ ] `i18n/zh-CN/SKILL_CN.md` exists
+- [ ] SKILL_CN.md has YAML Frontmatter (name, description, tags, version)
+- [ ] SKILL_CN.md description is written in Chinese
+- [ ] SKILL_CN.md description includes Chinese trigger words (触发场景包括)
+- [ ] SKILL_CN.md CLI commands remain in English (not translated)
+- [ ] SKILL_CN.md version matches SKILL.md version
+
 ### Version Management
 
 - [ ] Version number follows SemVer
 - [ ] Branch strategy is documented (main / preview)
 - [ ] Deprecation strategy is documented
+
+### Functional Testing (CLI / API / SDK)
+
+- [ ] All CLI commands tested with `--help` (syntax verification)
+- [ ] CLI parameter names match actual CLI output
+- [ ] Read-only operations (List/Show/Get) executed live with `--limit=1`
+- [ ] Mutation operations (Create/Update/Delete) verified via `--help` only
+- [ ] API endpoint format validated (if SDK references exist)
+- [ ] SDK method signatures verified (if SDK references exist)
+- [ ] `references/test-report.md` generated with test results
+- [ ] Test report shows 100% PASS rate for CLI syntax checks
+- [ ] Credential/privacy notice issued before testing (if sensitive data involved)
+- [ ] User provided credentials (if required) or explicitly declined functional testing
+- [ ] **Automated script `scripts/test-cli-commands.sh` executed** (or `bash scripts/validate-skill.sh --phase functional-test`)
+- [ ] **`templates/test-report.md.template` used as reference for report format**
+
+### Semantic Validation (Financial / Usage / Metric Data)
+
+- [ ] Live query results inspected for field meaning vs Skill intent
+- [ ] Field names checked against API docs for correct semantics
+- [ ] Numeric values checked for plausibility (order of magnitude)
+- [ ] Ambiguous fields resolved (cross-referenced or user confirmed)
+- [ ] Correct field name used in generated Skill after confirmation
+- [ ] Semantic note added to SKILL.md for ambiguous fields
 
 ## Scoring
 

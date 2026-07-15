@@ -42,6 +42,9 @@ skills-repo/
 ```
 skill-name/
 ├── SKILL.md                   # Required: YAML Frontmatter + Markdown instructions
+├── i18n/                      # Recommended: internationalization
+│   └── zh-CN/                 # Recommended: Simplified Chinese (default)
+│       └── SKILL_CN.md        # Recommended: Chinese version of SKILL.md
 ├── references/                # Recommended: reference docs (loaded on demand)
 │   ├── dataflow-diagram.md    # Required: Mermaid data flow diagram
 │   ├── cli-installation-guide.md   # CLI install & config guide
@@ -309,9 +312,62 @@ Stores example data files:
 
 ---
 
-## 8. CLI Usage Specification
+## 8. Internationalization Specification (i18n/)
 
-### 7.1 General CLI Command Format
+### 8.1 Overview
+
+Every Skill **should** include an `i18n/` directory for internationalization support. The default locale is Simplified Chinese (`zh-CN`).
+
+### 8.2 Directory Structure
+
+```
+i18n/
+├── zh-CN/                 # Required: Simplified Chinese (default)
+│   └── SKILL_CN.md        # Required: Chinese version of SKILL.md
+├── en-US/                 # Optional: American English
+│   └── SKILL_EN.md
+├── ja-JP/                 # Optional: Japanese
+│   └── SKILL_JA.md
+└── {locale}/              # Optional: Other locales
+    └── SKILL_{LANG}.md
+```
+
+### 8.3 SKILL_CN.md Requirements
+
+| Requirement | Description |
+|-------------|-------------|
+| YAML Frontmatter | Same structure as SKILL.md (name, description, tags, version) |
+| description field | Must be written in Chinese, include Chinese trigger phrases (e.g., "触发场景包括:") |
+| Body content | Translated to Simplified Chinese |
+| CLI commands | Remain in English — do not translate commands, parameters, or code blocks |
+| Technical terms | May retain English in parentheses (e.g., "弹性云服务器 (ECS)") |
+| Line count | Body should stay within 500 lines (same as SKILL.md) |
+
+### 8.4 Locale Naming Convention
+
+| Locale | Directory | Filename | Language |
+|--------|-----------|----------|----------|
+| zh-CN | `i18n/zh-CN/` | `SKILL_CN.md` | Simplified Chinese |
+| en-US | `i18n/en-US/` | `SKILL_EN.md` | American English |
+| ja-JP | `i18n/ja-JP/` | `SKILL_JA.md` | Japanese |
+| ko-KR | `i18n/ko-KR/` | `SKILL_KR.md` | Korean |
+
+### 8.5 Quality Gates
+
+| Check | Required | Description |
+|-------|----------|-------------|
+| i18n/ directory exists | Recommended | Internationalization directory present |
+| zh-CN/ subdirectory exists | Recommended | Default Chinese locale present |
+| SKILL_CN.md exists | Recommended | Chinese version of SKILL.md |
+| SKILL_CN.md has YAML Frontmatter | Yes | Frontmatter structure matches SKILL.md |
+| SKILL_CN.md description in Chinese | Yes | Description field uses Chinese text |
+| SKILL_CN.md CLI commands in English | Recommended | Commands not translated |
+
+---
+
+## 9. CLI Usage Specification
+
+### 9.1 General CLI Command Format
 
 ```bash
 # General format
@@ -327,7 +383,7 @@ mytool ECS ShowServer --server_id={instance_id}
 mytool ECS StartInstance --os-start.servers.1.id={id1}
 ```
 
-#### 7.1.1 Common Patterns
+#### 9.1.1 Common Patterns
 
 | Feature | Description | Example |
 |---------|-------------|---------|
@@ -338,7 +394,7 @@ mytool ECS StartInstance --os-start.servers.1.id={id1}
 | Index param | `--key.1=value1` | `--servers.1.id=xxx` |
 | Nested param | `--key.sub_key=value` | `--config.protocol=vnc` |
 
-### 7.2 Security Operations
+### 9.2 Security Operations
 
 **Must follow:**
 - Secrets (AK/SK) obtained via environment variables, never as plaintext parameters
@@ -352,7 +408,41 @@ mytool ECS StartInstance --os-start.servers.1.id={id1}
 - Using deprecated API versions
 - Ignoring error codes and return status
 
-### 7.3 User-Agent Identification
+### 9.3 Cost Confirmation
+
+> **Important:** Skills that involve cloud resources (compute, storage, database, etc.) **must** include cost confirmation logic. Before executing any resource-mutating operation, the Agent must remind the user about potential costs and wait for explicit confirmation.
+
+**Mandatory confirmation flow:**
+
+1. Before executing any `Create*` / `Update*` / `Delete*` operation, display a cost reminder
+2. Wait for explicit user confirmation (yes/no)
+3. If the user declines or does not respond, **abort the operation immediately**
+4. If the user confirms, proceed with the operation
+
+**Cost reminder template:**
+
+```
+⚠️  Cost Notice: This operation will [create/update/delete] {RESOURCE_TYPE} resource(s)
+    which may incur charges on your Huawei Cloud account.
+    - Resource type: {RESOURCE_TYPE}
+    - Billing model: {BILLING_MODEL} (e.g., pay-per-use, monthly subscription)
+    - Estimated cost: {ESTIMATED_COST} (if known, otherwise "varies by specification")
+    
+    Do you want to proceed? (yes/no)
+```
+
+**Operations requiring cost confirmation:**
+- `Create*` — Creating new resources (ECS, VPC, OBS, RDS, CCE, etc.)
+- `Update*` — Modifying resource specifications (scale up, change flavor, etc.)
+- `Delete*` — Deleting resources (may affect billing cycles)
+
+**Operations exempt from cost confirmation:**
+- `List*` / `Show*` / `Get*` — Read-only queries (no cost impact)
+- `* --dry-run` — Dry-run mode (no actual resource change)
+
+**SKILL.md requirement:** Every Skill that involves resource-mutating operations must include a `## Cost Confirmation` section documenting this flow.
+
+### 9.4 User-Agent Identification
 
 Add User-Agent identification in CLI calls for platform usage tracking:
 
@@ -366,9 +456,9 @@ export CLI_USER_AGENT=Platform-Agent-Skills
 
 ---
 
-## 9. Authentication & Security
+## 10. Authentication & Security
 
-### 8.1 Authentication Methods
+### 10.1 Authentication Methods
 
 | Method | Use Case | Recommended Approach |
 |--------|----------|---------------------|
@@ -377,7 +467,7 @@ export CLI_USER_AGENT=Platform-Agent-Skills
 | Temporary token | Production | Use STS temporary AK/SK + SecurityToken |
 | IAM role | Cloud runtime | Bind IAM role for automatic permission acquisition |
 
-#### 8.1.1 CLI Configuration Flow
+#### 10.1.1 CLI Configuration Flow
 
 ```bash
 # View current config
@@ -394,7 +484,7 @@ mytool configure set --region=cn-north-4
 # mytool configure set --access-key=AK...  # ❌ Do not do this
 ```
 
-### 8.2 Permission Policy Documentation
+### 10.2 Permission Policy Documentation
 
 Each Skill's `references/` should contain a permission policy document (`iam-policies.md`):
 
@@ -442,9 +532,9 @@ Each Skill's `references/` should contain a permission policy document (`iam-pol
 
 ---
 
-## 10. Version Management
+## 11. Version Management
 
-### 9.1 Version Numbering
+### 11.1 Version Numbering
 
 Follow SemVer: `MAJOR.MINOR.PATCH`
 
@@ -456,7 +546,7 @@ Follow SemVer: `MAJOR.MINOR.PATCH`
 
 Version is recorded in the SKILL.md YAML Frontmatter `version` field.
 
-### 9.2 Branch Strategy
+### 11.2 Branch Strategy
 
 | Branch | Purpose | Description |
 |--------|---------|-------------|
@@ -465,7 +555,7 @@ Version is recorded in the SKILL.md YAML Frontmatter `version` field.
 | `{skill-name}-{version}` | Version release | Specific version snapshot |
 | `{skill-name}-{beta}` | Beta release | Beta version snapshot |
 
-### 9.3 Installation
+### 11.3 Installation
 
 #### Via Package Manager
 
@@ -492,9 +582,9 @@ npx skills add ./skills/skill-name
 
 ---
 
-## 11. Contributing Guide
+## 12. Contributing Guide
 
-### 10.1 Issue Specification
+### 12.1 Issue Specification
 
 | Label | Purpose | Description |
 |-------|---------|-------------|
@@ -526,33 +616,33 @@ npx skills add ./skills/skill-name
 [Actual behavior]
 ```
 
-### 10.2 Pull Request Specification
+### 12.2 Pull Request Specification
 
 - Each PR addresses one issue only
 - PR title format: `[type] description`
 - Run validation tool before submitting
 - Update the corresponding version number
 
-### 10.3 Code Review
+### 12.3 Code Review
 
 - Each submission needs at least one Reviewer
 - Review focus: SKILL.md structure, command accuracy, permission completeness
 
 ---
 
-## 12. Version Management Iteration
+## 13. Version Management Iteration
 
-### 11.1 Version History
+### 13.1 Version History
 
 Record change history in the repository root or SKILL.md.
 
-### 11.2 Release Process
+### 13.2 Release Process
 
 1. Merge code to `main` branch
 2. Update SKILL.md version number
 3. Tag and publish
 
-### 11.3 Deprecation Policy
+### 13.3 Deprecation Policy
 
 - Deprecated API operations are marked in SKILL.md
 - Deprecated Skills declare `deprecated` in description
@@ -560,9 +650,9 @@ Record change history in the repository root or SKILL.md.
 
 ---
 
-## 13. Development Workflow
+## 14. Development Workflow
 
-### 12.1 Full Development Process
+### 14.1 Full Development Process
 
 ```
 Requirements → Draft → Create test cases →
@@ -571,7 +661,7 @@ Compose assertions → Score →
 User reviews output → Improve based on feedback → Repeat iteration
 ```
 
-### 12.2 Iteration Principles
+### 14.2 Iteration Principles
 
 - Re-run all tests after each improvement
 - Track version evolution with iteration markers (iteration-N)
@@ -581,9 +671,9 @@ User reviews output → Improve based on feedback → Repeat iteration
 
 ---
 
-## 14. Testing & Evaluation
+## 15. Testing & Evaluation
 
-### 13.1 Test Types
+### 15.1 Test Types
 
 | Type | Method | Goal |
 |------|--------|------|
@@ -593,7 +683,7 @@ User reviews output → Improve based on feedback → Repeat iteration
 | Regression test | Cross-iteration comparison | Ensure improvements don't regress |
 | Trigger test | trigger eval set | Optimize description accuracy |
 
-### 13.2 Evaluation Metrics
+### 15.2 Evaluation Metrics
 
 | Metric | Description |
 |--------|-------------|
@@ -604,11 +694,12 @@ User reviews output → Improve based on feedback → Repeat iteration
 
 ---
 
-## 15. Quality Gates & Acceptance Criteria
+## 16. Quality Gates & Acceptance Criteria
 
 | Check | Required | Description |
 |-------|----------|-------------|
 | SKILL.md Frontmatter | Yes | name, description required |
+| i18n directory | Recommended | `i18n/zh-CN/SKILL_CN.md` exists with valid Frontmatter |
 | Data flow diagram | Yes | `references/dataflow-diagram.md` exists with valid Mermaid flowchart |
 | references/ links | Yes | Referenced files exist |
 | Examples executable | Recommended | Command syntax correct |
@@ -616,10 +707,11 @@ User reviews output → Improve based on feedback → Repeat iteration
 | Permission policy specified | Recommended | List required permissions |
 | Error handling complete | Recommended | Common errors have solutions |
 | Version number correct | Recommended | Follows SemVer |
+| Cost confirmation present | Recommended | `## Cost Confirmation` section for resource-mutating Skills |
 
 ---
 
-## 16. References
+## 17. References
 
 - [Codex Skill Creator](https://github.com/openai/codex)
 - [Skills Community Repo](https://github.com/openai/skills)
