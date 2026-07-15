@@ -1,0 +1,53 @@
+# 功能测试报告 — {skill-name}
+
+> 生成时间：{test-date}
+> 测试区域：{region}
+> CLI 版本：{cli-version}
+
+## 测试结果汇总
+
+| 指标 | 值 |
+|------|-----|
+| 总测试数 | {total} |
+| ✅ 通过 | {pass} |
+| ❌ 失败 | {fail} |
+| ⏭️ 跳过 | {skip} |
+| 测试者 | Skill Creator (huawei-cloud-skill-creator) |
+
+## 测试详情
+
+| 操作 | 测试类型 | 结果 | 备注 |
+|------|----------|------|------|
+| `hcloud {SERVICE} {Operation} --help` | CLI 语法 | ✅ 通过 | 命令语法正确，所有参数可用 |
+| `hcloud {SERVICE} List{Resources} --cli-region={region} --limit=1` | 只读实时 | ✅ 通过 | 返回 N 条结果 |
+| `hcloud {SERVICE} {CreateOperation} --help` | 变更操作(仅语法) | ⏭️ 安全跳过 | 已通过 --help 验证，不执行实际变更 |
+| ... | ... | ... | ... |
+
+## 测试类型说明
+
+| 类型 | 说明 | 副作用 |
+|------|------|--------|
+| CLI 语法 | `hcloud SERVICE OPERATION --help` | 无副作用 |
+| 只读实时 | `hcloud SERVICE List/Show/Get --cli-region=xxx --limit=1` | 安全只读 |
+| 变更操作(仅语法) | `hcloud SERVICE Create/Update/Delete --help` | 仅语法检查，不执行实际变更 |
+
+## 结论
+
+**✅ 全部 {total} 项测试通过 — 可进入用户验收**
+或
+**❌ {fail}/{total} 项测试失败 — 需要修复后重新测试**
+或
+**⏭️ 无实际测试执行 — 请检查 hcloud CLI 安装和认证状态**
+
+---
+
+## 资源生命周期测试（如适用）
+
+| 阶段 | 操作 | 结果 | 详情 |
+|------|------|------|------|
+| 凭证 | AKSK | ✅ ⏭️ 已确认/跳过 | {credential-note} |
+| 创建 | `hcloud {SERVICE} Create{Resource} ...` | ✅/❌ 通过/失败 | 资源 ID: {resource-id} |
+| 测试 | 验证功能 | ✅/❌ 通过/失败 | {test-note} |
+| 释放 | `hcloud {SERVICE} Delete{Resource} ...` | ✅/❌ 通过/失败 | {cleanup-note} |
+
+**生命周期状态：** ✅ 测试资源已全部释放 / ⚠️ 资源未释放（需手动清理） / ⏭️ 未执行资源测试

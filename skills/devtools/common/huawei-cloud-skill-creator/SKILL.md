@@ -1,200 +1,172 @@
 ---
 name: huawei-cloud-skill-creator
-version: 1.0.0
+version: 2.1.0
 description: |
-  Invoke this skill to create, build, scaffold and package Huawei Cloud (华为云) agent skills.Triggers include: "创建华为云Skill","新建华为云Skill","华为云skill创建器","创建 Skill","新建 Skill","skill 创建器","create skill","build skill","new skill","skill creator","scaffold a Huawei Cloud skill","wrap CLI or OpenAPI into a skill","package cloud operations into a skill","帮我创建华为云Skill","帮我新建一个Skill","封装华为云CLI为Skill","华为云Skill脚手架".
-trigger: create-skill, build-skill, new-skill, skill-creator, 创建-Skill, 新建-Skill, skill-创建器, scaffold-skill, huawei-cloud-skill
-tags: [huawei-cloud, skill-creator, skill-development, cli, devops]
+  1. Interactive requirements gathering via Socratic questioning — one question at a time, 4 service dimensions
+  2. Scaffolds complete Skill directory structure with references/, scripts/, templates/, i18n/
+  3. Guides through API research, dataflow diagram generation, and content creation steps
+  4. Validates quality with validate-skill.sh and CLI functional testing (test-cli-commands.sh)
+  5. Supports resource lifecycle testing for Skills with Create/Delete/Update operations
+  Triggers include: "创建华为云Skill","新建华为云Skill","华为云skill创建器","创建 Skill","新建 Skill","skill 创建器","create skill","build skill","new skill","skill creator","scaffold a Huawei Cloud skill","wrap CLI or OpenAPI into a skill","package cloud operations into a skill","帮我创建华为云Skill","帮我新建一个Skill","封装华为云CLI为Skill","华为云Skill脚手架","帮我创建一个skill","我需要一个skill".
+tags: [huawei-cloud, skill-creator, skill-development, cli, devops, interactive]
 ---
 
 # Huawei Cloud Skill Creator
 
-Create AI Agent Skills that comply with the Huawei Cloud specification, based on `skill-spec-generic.md`.
+> ⚠️ **MANDATORY RULE: You MUST follow the interactive questioning process before creating any files.**
+> Ask ONE question at a time. Wait for user response. Present summary every 5 questions.
+> See [`references/usage-guide.md`](references/usage-guide.md) for detailed questioning guide.
 
-> **Specification:** [`references/skill-spec-generic.md`](references/skill-spec-generic.md) — The complete specification that all Skills must follow.
+---
 
-## Prerequisites
+## 概述 / Overview
 
-> First-time users should read [`references/cli-installation-guide.md`](references/cli-installation-guide.md).
+Interactive Skill Creator for Huawei Cloud. Gathers requirements via Socratic questioning (4 dimensions: target service, functionality scope, CLI operations, trigger scenarios), then scaffolds the complete Skill directory with references, scripts, templates, i18n, and validation. Wraps Huawei Cloud CLI/OpenAPI into reusable AI Shell Skills, covering the full pipeline from requirements analysis to functional testing.
 
-- CLI installed with authentication configured
-- AK/SK obtained via environment variables `HUAWEI_ACCESS_KEY` / `HUAWEI_SECRET_KEY`
-- IAM user has required permissions (see [`references/iam-policies.md`](references/iam-policies.md))
-- Default region configured (e.g., `cn-north-4`)
+---
 
-## Core Commands
+## 前置条件 / Prerequisites
 
-| Command | Description |
-|---------|-------------|
-| `hcloud ECS ListServers --cli-region=cn-north-4` | List ECS instances |
-| `hcloud VPC ListVpcs --cli-region=cn-north-4` | List VPCs |
-| `hcloud OBS ListBuckets --cli-region=cn-north-4` | List OBS buckets |
-| `hcloud IAM ListUsers --cli-region=cn-north-4` | List IAM users |
+1. **hcloud CLI** installed and authenticated
+   ```bash
+   hcloud --version
+   hcloud configure list
+   ```
+2. **Node.js + npx** available
+3. Basic knowledge of the target Huawei Cloud service (ECS, VPC, OBS, etc.)
+4. Huawei Cloud AK/SK credentials (for resource lifecycle testing)
 
-## Parameters
+---
+
+## 工作流 / Workflow
+
+The creation process follows 4 high-level phases. See [`references/usage-guide.md`](references/usage-guide.md) for the full 11-step workflow.
+
+```
+Requirements (Interactive) → Scaffolding → Validation → Testing
+```
+
+### Phase 1: Requirements Analysis (MANDATORY — interactive)
+
+Socratic questioning covering 4 dimensions — one question at a time:
+1. **Target service** — Which Huawei Cloud service? (ECS, VPC, OBS, RDS, etc.)
+2. **Function scope** — What should the Skill do? (query, diagnose, deploy, monitor)
+3. **CLI operations** — Which operations? (List, Show, Create, Delete, etc.)
+4. **Trigger scenarios** — When will Agent use it? (daily inspection, troubleshooting, auto-scaling)
+
+After every 5 questions or when all dimensions covered → present summary table → wait for user confirmation.
+🛑 **Do NOT proceed until user explicitly confirms.**
+
+### Phase 2: Scaffolding
+
+1. Name the Skill: `{platform}-{product}-{function}` (e.g., `huawei-cloud-ecs-diagnosis-workflow`)
+2. Determine domain directory (compute / network / storage / database / security / monitoring / middleware / devtools / solution)
+3. Create directory structure with SKILL.md, references/, scripts/, templates/, i18n/
+4. Generate Mermaid dataflow diagram
+5. Write SKILL.md and references (iam-policies, quality-checklist, etc.)
+6. Generate scripts (validate-skill.sh, test-cli-commands.sh) and i18n translations
+
+### Phase 3: Validation
+
+```bash
+bash scripts/validate-skill.sh {skill-path} --phase all-install
+```
+Validates: SKILL.md structure, frontmatter, required sections, dependencies, i18n, security patterns.
+
+### Phase 4: Functional Testing (Mandatory: Actual Execution + CLI→SDK→API Fallback)
+
+每条写入 SKILL.md 的指令必须实际执行验证，按 **CLI → SDK → API** 三级降级：
+
+**CLI 执行示例：**
+```bash
+hcloud ECS ListFlavors --cli-region=cn-north-4 --limit=1
+```
+
+| 优先级 | 执行方式 | 失败降级条件 |
+|--------|----------|-------------|
+| 1st | **CLI** — hcloud 命令 | 命令不存在或参数错误 → 先检查语法修复；修复后仍失败 → 降级 |
+| 2nd | **SDK** — Python huaweicloudsdk | SDK 未安装或模块缺失 → 自动安装后重试；仍失败 → 降级 |
+| 3rd | **API** — curl + AK/SK v2 签名 | 网络错误或 endpoint 不可达 → 报错并建议手动验证 |
+
+执行流程：
+
+```
+写新指令 → 尝试 CLI 执行
+  ├── ✅ 成功 → 写入 SKILL.md，继续下一条
+  └── ❌ 失败 → 检查是否语法问题
+       ├── ✅ 语法问题 → 修复命令后重试 CLI
+       └── ❌ 非语法问题 → 降级到 SDK
+            ├── ✅ 成功 → 写入 SKILL.md + 备注 "(SDK verified)"
+            └── ❌ 失败 → 降级到 API
+                 ├── ✅ 成功 → 写入 SKILL.md + 备注 "(API verified)"
+                 └── ❌ 失败 → 标记为 "⛔ 需人工验证"，记录失败详情
+```
+
+只读命令（List/Show/Get/Describe/Query）直接对真实 API 执行 `--limit=1` 验证。
+变更命令（Create/Update/Delete）先做 `--help` 语法检查，然后再用 `--dry-run`（如果支持）或最小权限参数验证参数格式，**最终执行必须经用户确认**。
+
+### REST API 降级规则（强制性）
+
+**当降级到 3rd API（REST API）时，严禁 Agent 自行猜测/构造 API 路径。** REST API 的 endpoint、method、path、请求体必须由用户确认提供。
+
+```
+降级到 API → 用户确认
+  │
+  ├── Agent 询问：确认 API 端点 → 用户提供 {HTTP方法} {endpoint}{path}
+  │   示例：用户确认 "POST https://bss.cn-north-4.myhuaweicloud.com/v2/promotions/benefits/activate-coupons"
+  │
+  ├── Agent 使用用户提供的 API 执行验证 → 通过 → 写入 SKILL.md + 备注 "(API verified, endpoint confirmed by user)"
+  │
+  └── Agent 使用用户提供的 API 执行验证 → 失败 → 询问用户是否需要调整端点，否则标记 ⛔ 需人工验证
+```
+
+**执行细则：**
+
+| 场景 | Agent 行为 |
+|------|------------|
+| CLI/SDK 均失败，需降级到 API | **必须问用户**："请提供此操作的 REST API 端点（HTTP方法 + URL）" |
+| 用户提供了端点 | 使用用户提供的端点实际执行验证 |
+| 用户不确定/无法提供 | 标记为 `⛔ 需人工验证`，绝不自行构造虚构的 API 路径 |
+| SKILL.md 中已有 API 命令 | 标注 `⚠ 此 API 端点由用户提供，请确认其有效性` |
+
+```bash
+# CLI: 直接执行
+bash scripts/test-cli-commands.sh {skill-path} --executor cli
+
+# SDK: 降级到 Python SDK（自动安装依赖）
+bash scripts/test-cli-commands.sh {skill-path} --executor sdk
+
+# API: 降级到 curl + AK/SK 签名
+bash scripts/test-cli-commands.sh {skill-path} --executor api
+```
+
+---
+
+## 核心命令 / Core Commands
+
+| Command | Purpose |
+|---------|---------|
+| `bash scripts/validate-skill.sh {path} --phase all-install` | Full installation & structure validation |
+| `bash scripts/validate-skill.sh {path} --phase i18n` | i18n directory validation |
+| `bash scripts/test-cli-commands.sh {path} [--region <region>]` | CLI functional test + test report |
+| `bash scripts/generate-dataflow-diagram.sh {path} [--output <path>]` | Generate Mermaid dataflow diagram |
+
+---
+
+## 参数确认 / Parameters
 
 | Parameter | Required | Description | Example |
 |-----------|----------|-------------|---------|
-| `--cli-region` | Yes | Region ID | `cn-north-4` |
-| `--project_id` | No | Project ID | `0a2663967980d2962f94c0120b96c98b` |
-| `--limit` | No | Max items to return | `10` |
-| `--offset` | No | Page offset | `0` |
+| `{skill-path}` | Yes | Target Skill directory path | `./skills/compute/huawei-cloud-ecs-manage` |
+| `{region}` | No | Huawei Cloud region | `cn-north-4` (default) |
+| `--output` | No | Output path for generated files | `./references/dataflow-diagram.md` |
 
-## Overview
+---
 
-A Skill is an AI Agent's "domain expertise package" — a structured instruction folder that gives the Agent specialized knowledge and workflows for specific tasks. This Skill creates other Skills that comply with Huawei Cloud standards, ensuring each generated Skill has a complete directory structure, a well-formed SKILL.md, thorough reference docs, and reusable scripts.
-
-## Design Principles
-
-**Principle 1**: Each Skill should address a specific Agent use case. Aim for "usable when the Agent needs it", not for comprehensiveness.
-
-**Principle 2**: A Skill should provide domain completeness. When a user needs capabilities in that domain, the Agent can complete the full workflow within the Skill without frequent context switching.
-
-**Principle 3**: Skill content and Agent capabilities are collaborative. The Skill provides domain knowledge and workflows; the Agent handles reasoning and execution.
-
-## Workflow
-
-When a user requests a new Skill, follow these steps:
-
-### Step 1: Requirements Analysis
-
-1. Confirm the **Huawei Cloud service/product** to wrap (e.g., ECS, VPC, OBS, RDS)
-2. Confirm the **functional scope** (management, diagnosis, deployment, monitoring, etc.)
-3. Confirm the **CLI commands or API operations** involved
-4. Confirm the **trigger scenarios** (when would an Agent use this Skill)
-
-### Step 2: Naming & Directory
-
-1. Generate the Skill name using the `{platform}-{product}-{function}` formula
-   - platform is always `huawei-cloud`
-   - product is the service abbreviation (ecs, vpc, obs, rds, iam, cce, etc.)
-   - function is the capability description (manage, diagnosis-workflow, deploy, etc.)
-   - Example: `huawei-cloud-ecs-diagnosis-workflow`
-
-2. Determine the domain directory (compute / network / storage / database / security / monitoring / middleware / devtools / solution), see [`references/naming-conventions.md`](references/naming-conventions.md)
-
-3. Create the directory structure:
-
-```text
-{domain}/{skill-name}/
-├── SKILL.md                   # Required: YAML Frontmatter + Markdown instructions
-├── references/                # Recommended: reference docs (loaded on demand)
-│   ├── dataflow-diagram.md    # Required: Mermaid data flow diagram
-│   ├── cli-installation-guide.md
-│   ├── iam-policies.md
-│   ├── verification-method.md
-│   ├── acceptance-criteria.md
-│   └── related-commands.md
-├── scripts/                   # Recommended: executable scripts
-│   └── {script-name}
-├── templates/                 # Optional: config/template files
-│   └── {template-name}
-└── demo/                      # Optional: example data
-    └── example.json
-```
-
-### Step 3: API Research
-
-Use CLI help flags to discover available operations and parameter definitions (e.g., `ECS --help`, `ECS ListServers --help`).
+## KooCLI命令格式标准 / KooCLI Command Format
 
 ```bash
-# Test read-only operations (idempotent, safe to repeat)
-hcloud ECS ListServers --cli-region={region}
-```
-
-If the CLI does not register the corresponding API, consult Huawei Cloud OpenAPI documentation for methods, paths, parameters, and permissions.
-
-### Step 4: Generate Data Flow Diagram
-
-Each Skill **must** include a Mermaid `flowchart` diagram in `references/dataflow-diagram.md` showing the complete workflow.
-
-```bash
-bash scripts/generate-dataflow-diagram.sh {skill-path} --output={skill-path}/references/dataflow-diagram.md
-```
-
-Or use [`templates/dataflow-diagram.md.template`](templates/dataflow-diagram.md.template) manually. Requirements: Mermaid flowchart syntax, input-to-output workflow, CLI operations subgraph, data sources subgraph, primary (`-->`) vs secondary (`-.->`) flow, legend + data flow description table (Step | Input | Process | Output).
-
-### Step 5: Generate SKILL.md
-
-Use [`templates/SKILL.md.template`](templates/SKILL.md.template). Must include:
-
-**YAML Frontmatter:** `name` (required, follows naming formula), `description` (required, must include **"Triggers include:"** clause with all trigger scenarios for Agent routing), `tags` (3-8 items), `version` (SemVer).
-
-**Body sections:**
-
-| Section | Required | Content |
-|---------|----------|---------|
-| Overview | Yes | Background, Skill positioning |
-| Prerequisites | Recommended | CLI install, AK/SK config, IAM permissions |
-| Main Steps | Yes | Core workflow + code examples |
-| Edge Cases | Recommended | Common errors, exception handling |
-| Verification | Recommended | Success criteria for operations |
-| References | Recommended | Links to references/ |
-
-**Writing requirements:** Each step has clear CLI commands; key parameters have config notes; each operation notes required permissions; provide 3-5 typical usage examples; link to detailed docs in references/. CLI/scripts must **never embed AK/SK**; use env vars or placeholders like `{placeholder}`. Body should stay within 500 lines.
-
-### Step 6: Generate references/
-
-| File | Required | Content |
-|------|----------|---------|
-| `dataflow-diagram.md` | Yes | Mermaid data flow diagram |
-| `cli-installation-guide.md` | Recommended | CLI installation and initialization |
-| `iam-policies.md` | Yes | Required API Actions + minimum privilege policy JSON |
-| `verification-method.md` | Recommended | Operation verification methods |
-| `acceptance-criteria.md` | Recommended | Acceptance criteria |
-| `related-commands.md` | As needed | Command quick reference |
-
-Use [`templates/iam-policies.md.template`](templates/iam-policies.md.template) and [`templates/cli-installation-guide.md.template`](templates/cli-installation-guide.md.template) to generate. Each ref file focuses on one topic; add a brief header; large files (>300 lines) add a TOC; use `{placeholder}` for variables; code blocks must specify language type.
-
-### Step 7: Generate scripts/ (As Needed)
-
-**Script types:**
-
-| Type | Purpose | Example |
-|------|---------|---------|
-| Analysis | Parse CLI output for automated analysis | `analyze-ingress-offline.sh` |
-| Deployment | Orchestrate multi-step CLI operations | `deploy-folder.mjs` |
-| Data processing | Process CLI JSON output | `get_logs.py` |
-| Utility | Shared function reuse | `credentials.py`, `validation.py` |
-
-**Script writing requirements:**
-1. Use meaningful names, named by function
-2. Shell scripts start with `#!/bin/bash`, Python with `#!/usr/bin/env python3`
-3. Never hardcode AK/SK or secrets; use environment variables
-4. Scripts should be compatible with multiple CLI versions
-5. Provide parameter validation and error handling
-6. Python script directories need `__init__.py`
-7. Node.js scripts use `.mjs` extension with ES Modules
-
-### Step 8: Generate templates/ and demo/ (As Needed)
-
-- `templates/`: Config templates (IaC templates like Terraform/CloudFormation, API request JSON/YAML templates, report/notification Markdown templates)
-- `demo/`: Example data (sample requests/responses, sample config files, test data)
-
-### Step 9: Quality Validation
-
-Use [`scripts/validate-skill.sh`](scripts/validate-skill.sh) to validate:
-
-```bash
-bash scripts/validate-skill.sh {skill-path}
-```
-
-Validation items are detailed in [`references/quality-checklist.md`](references/quality-checklist.md) and [`references/acceptance-criteria.md`](references/acceptance-criteria.md).
-
-## Huawei Cloud CLI Command Format
-
-```bash
-# General format
-hcloud ECS ListServers --cli-region=cn-north-4 --param1=value1 --param2=value2
-
-# Concrete example
-hcloud ECS ListServers --cli-region=cn-north-4
-
-# Idempotent operations (safe to repeat)
-hcloud ECS ShowServer --cli-region=cn-north-4 --server_id={instance_id}
-
-# Nested parameters
-hcloud ECS CreateServers --cli-region=cn-north-4 --os-start.servers.1.id={id1}
+hcloud <Service> <Operation> --cli-region=<region> [--key=value ...]
 ```
 
 | Feature | Description | Example |
@@ -203,192 +175,108 @@ hcloud ECS CreateServers --cli-region=cn-north-4 --os-start.servers.1.id={id1}
 | Operation name | PascalCase | `ListServers`, `ShowServer` |
 | Region param | `--cli-region=<value>` | `--cli-region=cn-north-4` |
 | Simple param | `--key=value` | `--server_id=xxx` |
-| Index param | `--key.1=value1` | `--servers.1.id=xxx` |
+| Indexed param | `--key.1=value1` | `--servers.1.id=xxx` |
 | Nested param | `--key.sub_key=value` | `--config.protocol=vnc` |
 
-## Security Operations
+See [`references/cli-installation-guide.md`](references/cli-installation-guide.md) for full CLI setup guide.
 
-**Must follow:**
-- Secrets (AK/SK) obtained via environment variables, never as plaintext parameters
-- Confirm user intent before create/update/delete operations
-- Prefer read-only queries (List/Describe/Get) to verify environment state
-- Use dry-run mode (`--dry-run`) before high-risk operations
+---
+## 设计原则 / Design Principles
 
-**Must avoid:**
-- Exposing sensitive credentials in plaintext commands
-- Executing destructive operations without confirmation
-- Using deprecated API versions
-- Ignoring error codes and return status
+- **Concise SKILL.md, verbose in references** — SKILL.md body must be concise (< 250 lines). Detailed step-by-step instructions, edge-case tables, and long examples go into `references/` files. Link to them from SKILL.md.
+- **Spec-first** — All generated Skills must conform to `references/skill-spec-generic.md`
+- **Description-driven triggering** — description must include `"Triggers include:"` clause
+- **Security first** — No hardcoded AK/SK, confirm before write operations, dry-run for high-risk ops
+- **Cost transparency** — Generated Skills must include cost estimation logic
+- **Least privilege** — iam-policies.md provides minimum permission policy JSON
+- **Idempotent first** — Prefer List/Show/Get read-only operations
+- **i18n support** — Default `i18n/zh-CN/SKILL_CN.md` included
+- **Functional testing** — Structure validation → CLI command testing → resource lifecycle test
+- **每条指令必须实际执行验证** — Agent 写入 SKILL.md 的每一条 hcloud 命令，在写入过程中必须用 `CLI → SDK → API` 三级降级策略实际调用验证，不能只写不验
+- **写指令即时验证** — 每写完一条指令，立即尝试执行。执行成功 → 写入 SKILL.md；执行失败 → 先检查语法并修复，语法无问题则执行降级策略
+- **三级降级策略** — 尝试顺序：**CLI**（hcloud 命令）→ **SDK**（Python huaweicloudsdk）→ **API**（curl + AK/SK 签名）。上一级失败且非语法问题则降级到下一级
 
-## User-Agent Identification
+---
 
-Add User-Agent identification in CLI calls within generated Skills for platform usage tracking:
+## Edge Cases / 边界情况
+
+| Scenario | Handling |
+|----------|----------|
+| User says "create now" without answering questions | Remind: requirements must be gathered first. Start questioning. |
+| User answers vaguely | Use concrete examples: e.g., "Do you want a one-command list of all running servers?" |
+| API operation not found in CLI | Check Huawei Cloud OpenAPI docs for alternative endpoints |
+| Resource creation fails during test | Analyze error (permission/quota/param), fix and retry |
+| Resource release fails | Retry 3 times, if still failing tell user to clean up manually |
+| User refuses resource lifecycle test | Fall back to --help syntax validation only, note "resource test skipped" in report |
+
+---
+
+## 验证方法 / Verification Method
+
+### Phase 3: Quality Verification
+```bash
+bash scripts/validate-skill.sh {skill-path} --phase all-install
+# Expected: All required checks PASS
+```
+
+### Phase 4: CLI Functional Test (actual execution required)
+
+必须按 CLI → SDK → API 三级执行验证：
 
 ```bash
-# If CLI supports --user-agent parameter
-hcloud ECS ListServers --cli-region=cn-north-4 --user-agent HuaweiCloud-Agent-Skills
+# 1st: CLI 直接执行（必须有真实结果）
+bash scripts/test-cli-commands.sh {skill-path} --executor cli
 
-# If CLI supports environment variable
+# 2nd: SDK 降级（CLI 不可用时）
+bash scripts/test-cli-commands.sh {skill-path} --executor sdk
+
+# 3rd: API 降级（curl + 签名）
+bash scripts/test-cli-commands.sh {skill-path} --executor api
+```
+
+**验证规则：**
+- 每一条写入 SKILL.md 的指令都经过至少一级实际执行验证 ✅
+- CLI → SDK → API 依次降级，只有当前级失败且非语法问题才降级
+- 语法问题（如参数名错误）立即修复，不降级
+- 最终降级到 API 仍失败 → 标记 `⛔ 需人工验证`
+- 阅读只命令（List/Show/Get）必须有实时 API 返回数据
+- 变更命令需要用户明确确认后才执行
+- 报告生成在 `references/test-report.md`
+
+### Resource Lifecycle Test (if applicable)
+Flow: Plan → Credentials → Create → Test → Release → Report
+See [`references/usage-guide.md`](references/usage-guide.md) for details.
+
+---
+
+## 参考文档 / References
+
+- [`references/usage-guide.md`](references/usage-guide.md) — Complete 11-step workflow + resource lifecycle test
+- [`references/skill-spec-generic.md`](references/skill-spec-generic.md) — Full Skill specification
+- [`references/naming-conventions.md`](references/naming-conventions.md) — Naming conventions
+- [`references/quality-checklist.md`](references/quality-checklist.md) — Quality checklist
+- [`references/cli-installation-guide.md`](references/cli-installation-guide.md) — CLI install & setup
+- [`references/iam-policies.md`](references/iam-policies.md) — Least-privilege IAM policies
+- [`references/verification-method.md`](references/verification-method.md) — Verification methods
+- [`references/dataflow-diagram.md`](references/dataflow-diagram.md) — Mermaid dataflow diagram
+- [`references/acceptance-criteria.md`](references/acceptance-criteria.md) — Acceptance criteria
+- [`references/related-commands.md`](references/related-commands.md) — Command quick reference
+- [`templates/SKILL.md.template`](templates/SKILL.md.template) — SKILL.md template
+- [`templates/iam-policies.md.template`](templates/iam-policies.md.template) — IAM policy template
+- [`templates/dataflow-diagram.md.template`](templates/dataflow-diagram.md.template) — Dataflow diagram template
+- [`templates/test-report.md.template`](templates/test-report.md.template) — Test report template
+- [`scripts/test-cli-commands.sh`](scripts/test-cli-commands.sh) — CLI functional test script
+
+## Authentication
+
+| Method | Use Case | Best Practice |
+|--------|----------|---------------|
+| AK/SK env vars | Development | Set `HUAWEI_ACCESS_KEY` / `HUAWEI_SECRET_KEY` |
+| Temp credentials | Production | Use STS temp AK/SK + SecurityToken |
+| IAM role | Cloud env | Bind IAM role for automatic auth |
+
+### User-Agent
+
+```bash
 export HCLOUD_USER_AGENT=HuaweiCloud-Agent-Skills
 ```
-
-## Authentication & Security
-
-### Authentication Methods
-
-| Method | Use case | Recommended approach |
-|--------|----------|---------------------|
-| AK/SK env vars | Development | Set `HUAWEI_ACCESS_KEY` / `HUAWEI_SECRET_KEY` env vars |
-| Temporary token | Production | Use STS temporary AK/SK + SecurityToken |
-| IAM role | Cloud runtime | Bind IAM role for automatic permission acquisition |
-
-### CLI Configuration
-
-```bash
-# Set default region via environment variable
-export HUAWEI_REGION=cn-north-4
-```
-
-> **Security reminder:** Never hardcode AK/SK in scripts. Use environment variables or IAM roles. Do not pass plaintext credentials via CLI configuration commands.
-
-### Permission Policy Requirements
-
-Each generated Skill's `references/iam-policies.md` must:
-1. Define required permissions (list query and mutation operations separately)
-2. Provide minimum privilege policy JSON
-3. Mark operations requiring MFA or elevated security
-
-## Version Management
-
-Follow SemVer (`MAJOR.MINOR.PATCH`) in Frontmatter `version` field. Branch strategy: `main` (stable), `preview` (beta), `{skill-name}-{version}` (release snapshot).
-
-### Installation
-
-```bash
-npx skills add https://gitcode.com/developer-skill/developer-skill.git --skill {skill-name}
-```
-
-## Development Workflow
-
-**Process:** Requirements → Draft → Test cases → Run with/without-skill in parallel → Assertions → Score → User review → Improve → Repeat.
-
-**Iteration:** Re-run all tests after each improvement; track version with iteration markers; stop when feedback is satisfied; extract repetitive work into scripts/.
-
-**Release:** Merge to `main` → Update version → Run `validate-skill.sh` → Tag and publish.
-
-**Deprecation:** Mark deprecated APIs in SKILL.md; declare `deprecated` in description; provide migration guidance.
-
-## Testing & Evaluation
-
-| Type | Method | Goal |
-|------|--------|------|
-| Structural | Directory inspection | Frontmatter and directory structure |
-| Functional | Run test cases | Verify functional correctness |
-| Comparison | with/without-skill | Quantify Skill value-add |
-| Regression | Cross-iteration comparison | Ensure no regressions |
-| Trigger | trigger eval set | Optimize description accuracy |
-
-Metrics: pass_rate, time_seconds, tokens, delta (with/without difference).
-
-## Contributing Guide
-
-Each PR addresses one issue; title format: `[type] description`; run `validate-skill.sh` before submitting; update version number. Labels: `bug`, `feature`, `documentation`, `security`, `question`.
-
-## Data Flow Diagram
-
-This Skill's own data flow diagram, showing how a Skill creation request flows through the workflow:
-
-```mermaid
-flowchart TD
-  INPUT([/"User: Create a Huawei Cloud Skill"/])
-  STEP1["Step 1: Requirements Analysis"]
-  STEP2["Step 2: Naming & Directory"]
-  STEP3["Step 3: API Research"]
-  STEP4["Step 4: Data Flow Diagram"]
-  STEP5["Step 5: Generate SKILL.md"]
-  STEP6["Step 6: Generate references/"]
-  STEP7["Step 7: Generate scripts/"]
-  STEP8["Step 8: Generate templates/ & demo/"]
-  STEP9["Step 9: Quality Validation"]
-  OUTPUT([/"Complete Skill Package"/])
-
-  subgraph CLI_OPS["CLI Operations"]
-    CLI_OP1["hcloud ECS ListServers --cli-region={region}"]
-    CLI_OP2["hcloud ECS ShowServer --cli-region={region}"]
-    CLI_OP3["hcloud VPC ListVpcs --cli-region={region}"]
-  end
-
-  subgraph DATA["Data Sources"]
-    ENV[/"Environment Variables\nHUAWEI_ACCESS_KEY, HUAWEI_SECRET_KEY, HUAWEI_REGION"/]
-    REFS["references/\nskill-spec-generic.md, naming-conventions.md"]
-    TEMPLATES["templates/\nSKILL.md.template, iam-policies.md.template"]
-    SCRIPTS["scripts/\ngenerate-dataflow-diagram.sh, validate-skill.sh"]
-  end
-
-  INPUT --> STEP1
-  STEP1 --> STEP2
-  STEP2 --> STEP3
-  STEP3 --> STEP4
-  STEP4 --> STEP5
-  STEP5 --> STEP6
-  STEP6 --> STEP7
-  STEP7 --> STEP8
-  STEP8 --> STEP9
-  STEP9 --> OUTPUT
-
-  ENV -.-> STEP1
-  REFS -.-> STEP2
-  TEMPLATES -.-> STEP5
-  SCRIPTS -.-> STEP4
-  SCRIPTS -.-> STEP9
-
-  STEP3 --> CLI_OPS
-  CLI_OP1 -.-> STEP3
-  CLI_OP2 -.-> STEP3
-  CLI_OP3 -.-> STEP5
-```
-
-### Data Flow Description
-
-| Step | Input | Process | Output |
-|------|-------|---------|--------|
-| 1. Requirements Analysis | User request + env config | Confirm service, scope, triggers | Structured requirements |
-| 2. Naming & Directory | Requirements + naming conventions | Generate name, create directory structure | Skill directory path |
-| 3. API Research | Directory + CLI access | Discover operations, test read-only commands | API operation list |
-| 4. Data Flow Diagram | Workflow steps + CLI operations | Generate Mermaid diagram from template | `references/dataflow-diagram.md` |
-| 5. Generate SKILL.md | API list + templates | Fill SKILL.md.template with service data | `SKILL.md` |
-| 6. Generate references/ | SKILL.md + API data | Create iam-policies, cli-guide, etc. | `references/` directory |
-| 7. Generate scripts/ | Workflow requirements | Create analysis/deployment scripts | `scripts/` directory |
-| 8. Generate templates/ & demo/ | Config patterns | Create IaC/API templates + examples | `templates/` + `demo/` |
-| 9. Quality Validation | Complete skill directory | Run validate-skill.sh | Validation report |
-
-## Typical Use Cases
-
-**ECS Management Skill:** User requests ECS management → confirm scope (query, create, start/stop, delete) → name: `huawei-cloud-ecs-manage` → domain: `compute` → research CLI operations → generate data flow diagram → generate full directory → validate.
-
-**OBS Diagnosis Skill:** User requests OBS diagnosis → confirm scope (bucket status, access logs, capacity) → name: `huawei-cloud-obs-diagnosis-workflow` → domain: `storage` → research → generate → validate.
-
-**VPC Management Skill:** User requests VPC management → confirm scope (VPC/subnet/security group) → name: `huawei-cloud-vpc-manage` → domain: `network` → research → generate → validate.
-
-## Key Principles
-
-- **Spec-first** — All generated Skills must comply with `references/skill-spec-generic.md`
-- **Description drives triggers** — `description` must include a `"Triggers include:"` clause with all trigger phrases for accurate Agent routing
-- **Security first** — Never hardcode AK/SK, confirm before write operations, dry-run for high-risk
-- **Domain completeness** — Complete full workflow within the Skill, minimal context switching
-- **Least privilege** — iam-policies.md provides minimum privilege policy JSON, query/mutation listed separately, MFA noted
-- **Idempotent preferred** — Prefer List/Show/Get read-only operations for state verification
-- **User-Agent** — Add User-Agent identification in CLI calls for tracking
-- **Version management** — Follow SemVer, recorded in Frontmatter version field
-- **Data flow diagram** — Every Skill must include a Mermaid data flow diagram in `references/dataflow-diagram.md` showing the complete workflow
-
-## References
-
-- [`references/skill-spec-generic.md`](references/skill-spec-generic.md) — Complete specification
-- [`references/naming-conventions.md`](references/naming-conventions.md) — Naming conventions quick reference
-- [`references/quality-checklist.md`](references/quality-checklist.md) — Quality checklist
-- [`references/acceptance-criteria.md`](references/acceptance-criteria.md) — Acceptance criteria
-- [`references/verification-method.md`](references/verification-method.md) — Verification methods
-- [`references/related-commands.md`](references/related-commands.md) — Command quick reference
-- [`references/dataflow-diagram.md`](references/dataflow-diagram.md) — Data flow diagram (this Skill's own diagram)
-- [`templates/dataflow-diagram.md.template`](templates/dataflow-diagram.md.template) — Data flow diagram template
