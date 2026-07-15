@@ -1,0 +1,161 @@
+---
+name: {{SKILL_NAME}}
+description: |
+  {{FUNCTIONAL_POSITIONING_CN}}。触发场景包括：{{TRIGGER_CONDITIONS_CN}}。{{PREREQUISITE_CN}}。
+tags: [{{TAGS}}]
+version: 1.0.0
+---
+
+# {{TITLE_CN}}
+
+## 概述
+
+{{OVERVIEW_CN}}
+
+## 前置条件
+
+> 首次使用请阅读 [`references/cli-installation-guide.md`](../references/cli-installation-guide.md)。
+
+- 已安装 CLI 并完成认证配置
+- 通过环境变量 `HUAWEI_ACCESS_KEY` / `HUAWEI_SECRET_KEY` 获取 AK/SK
+- IAM 用户具备所需权限（参见 [`references/iam-policies.md`](../references/iam-policies.md)）
+- 已配置默认区域（如 `cn-north-4`）
+
+## 主要步骤
+
+### 1. {{STEP_1_TITLE_CN}}
+
+```bash
+hcloud {{SERVICE}} {{OPERATION_1}} --cli-region={region} {{PARAMS_1}}
+```
+
+**所需权限：** `{{ACTION_1}}`
+
+### 2. {{STEP_2_TITLE_CN}}
+
+```bash
+hcloud {{SERVICE}} {{OPERATION_2}} --cli-region={region} {{PARAMS_2}}
+```
+
+**所需权限：** `{{ACTION_2}}`
+
+### 3. {{STEP_3_TITLE_CN}}
+
+```bash
+hcloud {{SERVICE}} {{OPERATION_3}} --cli-region={region} {{PARAMS_3}}
+```
+
+**所需权限：** `{{ACTION_3}}`
+
+## 数据流图
+
+> 完整交互图见 [`references/dataflow-diagram.md`](../references/dataflow-diagram.md)。
+
+```mermaid
+flowchart TD
+  INPUT([/"用户请求"/]) --> STEP1["{{STEP_1_TITLE_CN}}"]
+  STEP1 --> STEP2["{{STEP_2_TITLE_CN}}"]
+  STEP2 --> STEP3["{{STEP_3_TITLE_CN}}"]
+  STEP3 --> OUTPUT([/"结果"/])
+
+  subgraph CLI["CLI 操作"]
+    CLI1["hcloud {{SERVICE}} {{OPERATION_1}}"]
+    CLI2["hcloud {{SERVICE}} {{OPERATION_2}}"]
+    CLI3["hcloud {{SERVICE}} {{OPERATION_3}}"]
+  end
+
+  subgraph DATA["数据来源"]
+    ENV[/"环境变量"/]
+    REFS["references/"]
+  end
+
+  ENV -.-> STEP1
+  REFS -.-> STEP2
+  STEP1 --> CLI
+```
+
+## 典型使用示例
+
+### 示例 1：{{EXAMPLE_1_TITLE_CN}}
+
+```bash
+hcloud {{SERVICE}} {{EXAMPLE_1_OPERATION}} --cli-region=cn-north-4 {{EXAMPLE_1_PARAMS}}
+```
+
+### 示例 2：{{EXAMPLE_2_TITLE_CN}}
+
+```bash
+hcloud {{SERVICE}} {{EXAMPLE_2_OPERATION}} --cli-region=cn-north-4 {{EXAMPLE_2_PARAMS}}
+```
+
+### 示例 3：{{EXAMPLE_3_TITLE_CN}}
+
+```bash
+hcloud {{SERVICE}} {{EXAMPLE_3_OPERATION}} --cli-region=cn-north-4 {{EXAMPLE_3_PARAMS}}
+```
+
+## 边界情况
+
+| 场景 | 解决方案 |
+|------|----------|
+| {{EDGE_CASE_1_CN}} | {{EDGE_CASE_1_SOLUTION_CN}} |
+| {{EDGE_CASE_2_CN}} | {{EDGE_CASE_2_SOLUTION_CN}} |
+| {{EDGE_CASE_3_CN}} | {{EDGE_CASE_3_SOLUTION_CN}} |
+
+## 验证方法
+
+详见 [`references/verification-method.md`](../references/verification-method.md)。
+
+```bash
+hcloud {{SERVICE}} {{VERIFY_OPERATION}} --cli-region={region} {{VERIFY_PARAMS}}
+```
+
+## 安全操作
+
+**必须遵循：**
+- 密钥 (AK/SK) 通过环境变量获取，绝不以明文参数传入
+- 执行创建/更新/删除操作前必须确认用户意图
+- 优先使用只读查询 (List/Show/Get) 验证环境状态
+- 高风险操作前使用预演模式 (`--dry-run`)
+
+**必须避免：**
+- 在明文命令中暴露敏感凭据
+- 未经确认执行破坏性操作
+- 使用已废弃的 API 版本
+- 忽略错误码和返回状态
+
+## 认证配置
+
+| 方式 | 使用场景 | 推荐做法 |
+|------|----------|----------|
+| AK/SK 环境变量 | 开发环境 | 设置 `HUAWEI_ACCESS_KEY` / `HUAWEI_SECRET_KEY` 环境变量 |
+| 临时令牌 | 生产环境 | 使用 STS 临时 AK/SK + SecurityToken |
+| IAM 角色 | 云上运行时 | 绑定 IAM 角色自动获取权限 |
+
+```bash
+# 通过环境变量设置默认区域
+export HUAWEI_REGION=cn-north-4
+```
+
+## User-Agent 标识
+
+```bash
+# 在 CLI 调用中添加 User-Agent 标识
+hcloud {{SERVICE}} {{OPERATION_1}} --cli-region={region} --user-agent HuaweiCloud-Agent-Skills
+
+# 或通过环境变量
+export HCLOUD_USER_AGENT=HuaweiCloud-Agent-Skills
+```
+
+## 脚本使用
+
+{{SCRIPT_USAGE_SECTION_CN}}
+
+## 参考文档
+
+- [`references/dataflow-diagram.md`](../references/dataflow-diagram.md) — 数据流图
+- [`references/cli-installation-guide.md`](../references/cli-installation-guide.md) — CLI 安装与配置
+- [`references/iam-policies.md`](../references/iam-policies.md) — 权限策略
+- [`references/verification-method.md`](../references/verification-method.md) — 验证方法
+- [`references/acceptance-criteria.md`](../references/acceptance-criteria.md) — 验收标准
+- [`references/related-commands.md`](../references/related-commands.md) — 命令速查

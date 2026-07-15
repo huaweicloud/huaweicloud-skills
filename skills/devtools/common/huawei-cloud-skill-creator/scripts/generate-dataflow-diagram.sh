@@ -47,7 +47,7 @@ SKILL_VERSION=$(extract_fm "version" || echo "0.0.0")
 # Look for ### Step N: or ### N. patterns
 STEPS=()
 while IFS= read -r line; do
-  step=$(echo "$line" | sed -E 's/^###[[:space:]]+(Step[[:space:]]+)?[0-9]+[.:]?[[:space:]]*//;s/^##[[:space:]]+[0-9]+[.:][[:space:]]*//')
+  step=$(printf '%s' "$line" | sed -E 's/^###[[:space:]]+(Step[[:space:]]+)?[0-9]+[.:]?[[:space:]]*//;s/^##[[:space:]]+[0-9]+[.:][[:space:]]*//')
   if [[ -n "$step" ]]; then
     STEPS+=("$step")
   fi
