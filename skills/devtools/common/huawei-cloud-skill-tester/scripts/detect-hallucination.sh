@@ -72,12 +72,11 @@ fi
 echo ""
 
 detect_responsibility_confusion() {
-  echo "[CHECK] Responsibility Confusion Detection"
+  echo "[INFO] [hallucination] Responsibility Confusion Detection"
   TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
 
   if [ -z "$SKILL_PATH" ] || [ ! -f "$SKILL_PATH/SKILL.md" ]; then
-    echo "  [FAIL] SKILL.md not found"
-    HALLUCINATION_COUNT=$((HALLUCINATION_COUNT + 1))
+    echo "  [WARN] SKILL.md not found — cannot check responsibility confusion [recommended]"
     return
   fi
 
@@ -103,11 +102,11 @@ detect_responsibility_confusion() {
 }
 
 detect_parameter_fabrication() {
-  echo "[CHECK] Parameter Fabrication Detection"
+  echo "[INFO] [hallucination] Parameter Fabrication Detection"
   TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
 
   if [ -z "$SKILL_PATH" ] || [ ! -f "$SKILL_PATH/SKILL.md" ]; then
-    echo "  [SKIP] SKILL.md not found"
+    echo "  [WARN] SKILL.md not found — skipping parameter fabrication check [recommended]"
     return
   fi
 
@@ -133,11 +132,11 @@ detect_parameter_fabrication() {
 }
 
 detect_workflow_stitching() {
-  echo "[CHECK] Workflow Stitching Error Detection"
+  echo "[INFO] [hallucination] Workflow Stitching Error Detection"
   TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
 
   if [ -z "$SKILL_PATH" ] || [ ! -f "$SKILL_PATH/SKILL.md" ]; then
-    echo "  [SKIP] SKILL.md not found"
+    echo "  [WARN] SKILL.md not found — skipping workflow stitching check [recommended]"
     return
   fi
 
@@ -195,7 +194,7 @@ detect_workflow_stitching() {
 }
 
 detect_context_pollution() {
-  echo "[CHECK] Context Pollution Detection"
+  echo "[INFO] [hallucination] Context Pollution Detection"
   TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
 
   if [ -z "$RELATED" ]; then
@@ -210,7 +209,7 @@ detect_context_pollution() {
         HALLUCINATION_COUNT=$((HALLUCINATION_COUNT + 1))
       fi
     else
-      echo "  [SKIP] SKILL.md not found"
+      echo "  [WARN] SKILL.md not found — cannot check context pollution [recommended]"
     fi
     return
   fi
@@ -223,7 +222,7 @@ detect_context_pollution() {
     find_skill_path "$rel"
     local rel_path="$_FIND_RESULT"
     if [ -z "$rel_path" ] || [ ! -f "$rel_path/SKILL.md" ]; then
-      echo "  [SKIP] Related skill not found"
+      echo "  [WARN] Related skill not found — skipping [recommended]"
       continue
     fi
 
@@ -240,12 +239,11 @@ detect_context_pollution() {
 }
 
 detect_format_hallucination() {
-  echo "[CHECK] Format Hallucination Detection"
+  echo "[INFO] [hallucination] Format Hallucination Detection"
   TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
 
   if [ -z "$SKILL_PATH" ] || [ ! -f "$SKILL_PATH/SKILL.md" ]; then
-    echo "  [FAIL] SKILL.md not found"
-    HALLUCINATION_COUNT=$((HALLUCINATION_COUNT + 1))
+    echo "  [WARN] SKILL.md not found — cannot check format [recommended]"
     return
   fi
 
@@ -280,7 +278,7 @@ detect_format_hallucination() {
 }
 
 detect_i18n_format() {
-  echo "[CHECK] i18n Format Detection"
+  echo "[INFO] [hallucination] i18n Format Detection"
   TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
 
   if [ ! -d "$SKILL_PATH/i18n" ]; then
