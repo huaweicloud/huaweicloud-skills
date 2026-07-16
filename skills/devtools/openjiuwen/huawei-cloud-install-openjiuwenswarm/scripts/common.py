@@ -103,7 +103,7 @@ def get_web_port():
         env_path = Path(ENV_FILE)
         if env_path.exists():
             for line in env_path.read_text().splitlines():
-                if line.startswith("WEB_PORT="):
+                if line.startswith("FRONTEND_PORT="):
                     return int(line.split("=", 1)[1].strip().strip('"'))
     except Exception:
         pass
@@ -146,14 +146,12 @@ def detect_ports_from_system():
             # agent_server: 18092 + n*1000 (18092-19092, excluding 19000/19001)
             elif port == 18092 or (18092 < port <= 19092 and port not in (19000, 19001)):
                 ports['agent_server'] = port
-            # web: 19000 + n*1000 (19000-20000, not 19001)
-            elif port == 19000 or 19000 < port <= 20000:
-                # Only add if this isn't the gateway port
-                if port != 19001:
-                    ports['web'] = port
-            # gateway: 19001 + n*1000 (19001-20001)
+            # gateway: 19001 + n*1000 (19001-20001) — MUST be checked before web
             elif port == 19001 or 19001 < port <= 20001:
                 ports['gateway'] = port
+            # web: 19000 + n*1000 (19000-20000, excluding gateway range)
+            elif port == 19000 or 19000 < port <= 20000:
+                ports['web'] = port
     except Exception:
         pass
 
