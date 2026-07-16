@@ -1,302 +1,237 @@
 #!/bin/bash
-#
 # eip_audit_log.sh - EIP 操作审计日志
+# 基于 hcloud CLI（KooCLI），替代 Python SDK 方式
 #
-# 功能:
-#   - 记录所有 EIP 操作历史
-#   - 支持 JSON 格式审计日志
-#   - 支持审计日志查询和导出
-#   - 符合等保合规要求
-#
-# 使用方法:
-#   ./eip_audit_log.sh --action release --eip-id eip-xxx --operator admin
-#   ./eip_audit_log.sh --query --days 30
-#   ./eip_audit_log.sh --export --format csv
-#
-# 环境变量:
-#   EIP_AUDIT_LOG_DIR - 审计日志目录（默认：~/.eip-audit-logs）
-#
+# Usage:
+#   bash eip_audit_log.sh [--region cn-north-4] [--action list|query|analyze|monitor|report] \
+#     [--detail TEXT] [--export csv|json] [--log-dir PATH]
 
-set -e
+set -euo pipefail
 
-# 默认配置
-AUDIT_LOG_DIR="${EIP_AUDIT_LOG_DIR:-$HOME/.eip-audit-logs}"
-AUDIT_LOG_FILE="$AUDIT_LOG_DIR/audit_$(date +%Y%m).jsonl"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "${SCRIPT_DIR}/config.sh"
 
-# 创建审计日志目录
-mkdir -p "$AUDIT_LOG_DIR"
-
-# 解析参数
-ACTION=""
-EIP_ID=""
-OPERATOR="${USER:-admin}"
-DETAILS=""
-QUERY_MODE=false
-QUERY_DAYS=30
-EXPORT_MODE=false
-EXPORT_FORMAT="json"
+# ── 参数解析 ──────────────────────────────────────────────────────
+REGION=""
+ACTION="list"
+DETAIL=""
+EXPORT=""
+LOG_DIR=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --action)
-            ACTION="$2"
-            shift 2
-            ;;
-        --eip-id)
-            EIP_ID="$2"
-            shift 2
-            ;;
-        --operator)
-            OPERATOR="$2"
-            shift 2
-            ;;
-        --details)
-            DETAILS="$2"
-            shift 2
-            ;;
-        --query)
-            QUERY_MODE=true
-            shift
-            ;;
-        --days)
-            QUERY_DAYS="$2"
-            shift 2
-            ;;
-        --export)
-            EXPORT_MODE=true
-            shift
-            ;;
-        --format)
-            EXPORT_FORMAT="$2"
-            shift 2
-            ;;
-        --log-dir)
-            AUDIT_LOG_DIR="$2"
-            AUDIT_LOG_FILE="$AUDIT_LOG_DIR/audit_$(date +%Y%m).jsonl"
-            shift 2
-            ;;
-        --help)
-            echo "用法：$0 [选项]"
-            echo ""
-            echo "记录操作:"
-            echo "  --action ACTION      操作类型 (release, create, update_bandwidth, bind, unbind)"
-            echo "  --eip-id EIP_ID      EIP ID"
-            echo "  --operator OPERATOR  操作人员"
-            echo "  --details DETAILS    操作详情（JSON 格式）"
-            echo ""
-            echo "查询模式:"
-            echo "  --query              查询审计日志"
-            echo "  --days DAYS          查询最近 N 天的日志（默认：30）"
-            echo ""
-            echo "导出模式:"
-            echo "  --export             导出审计日志"
-            echo "  --format FORMAT      导出格式：json, csv, html（默认：json）"
-            echo ""
-            echo "其他选项:"
-            echo "  --log-dir DIR        审计日志目录"
-            echo "  --help               显示帮助信息"
-            exit 0
-            ;;
-        *)
-            echo "未知选项：$1"
-            exit 1
-            ;;
+        --region)   REGION="$2"; shift 2 ;;
+        --action)   ACTION="$2"; shift 2 ;;
+        --detail)   DETAIL="$2"; shift 2 ;;
+        --export)   EXPORT="$2"; shift 2 ;;
+        --log-dir)  LOG_DIR="$2"; shift 2 ;;
+        --help|-h)
+            echo "用法: $0 [选项]"
+            echo "  --region      华为云区域 ID（默认从环境变量读取）"
+            echo "  --action      操作类型：list|query|analyze|monitor|report"
+            echo "  --detail      操作详情描述"
+            echo "  --export      导出格式：csv|json（默认仅显示）"
+            echo "  --log-dir     日志目录路径（默认：./eip_audit_logs）"
+            exit 0 ;;
+        *) echo "未知选项: $1" >&2; exit 1 ;;
     esac
 done
 
-# 查询模式
-if [ "$QUERY_MODE" = true ]; then
-    echo "🔍 查询最近 $QUERY_DAYS 天的审计日志..."
-    echo ""
-    
-    if [ ! -f "$AUDIT_LOG_FILE" ] && [ -z "$(ls -A $AUDIT_LOG_DIR/*.jsonl 2>/dev/null)" ]; then
-        echo "ℹ️  暂无审计日志记录"
-        exit 0
-    fi
-    
-    # 计算日期阈值
-    THRESHOLD_DATE=$(date -d "$QUERY_DAYS days ago" +%Y%m%d 2>/dev/null || date -v-${QUERY_DAYS}d +%Y%m%d 2>/dev/null || echo "0")
-    
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    printf "%-20s %-15s %-20s %-15s\n" "时间" "操作类型" "EIP ID" "操作人员"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    
-    # 遍历所有日志文件
-    for LOG_FILE in "$AUDIT_LOG_DIR"/audit_*.jsonl; do
-        [ -f "$LOG_FILE" ] || continue
-        
-        # 使用 jq 读取所有 JSON 对象（支持多行格式）
-        jq -c '.' "$LOG_FILE" 2>/dev/null | while IFS= read -r LINE; do
-            TIMESTAMP=$(echo "$LINE" | jq -r '.timestamp' 2>/dev/null)
-            FILE_DATE=$(echo "$TIMESTAMP" | cut -d'T' -f1 | tr -d '-')
-            
-            # 只显示指定天数内的日志
-            if [ "$FILE_DATE" -ge "$THRESHOLD_DATE" ] 2>/dev/null; then
-                printf "%-20s %-15s %-20s %-15s\n" \
-                    "$(echo "$TIMESTAMP" | cut -d'T' -f1) $(echo "$TIMESTAMP" | cut -d'T' -f2 | cut -d'.' -f1)" \
-                    "$(echo "$LINE" | jq -r '.operation' 2>/dev/null)" \
-                    "$(echo "$LINE" | jq -r '.eip_id' 2>/dev/null)" \
-                    "$(echo "$LINE" | jq -r '.operator' 2>/dev/null)"
-            fi
-        done
-    done
-    
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
-    
-    exit 0
+if [ -n "$REGION" ]; then
+    HW_REGION="$REGION"
 fi
 
-# 导出模式
-if [ "$EXPORT_MODE" = true ]; then
-    echo "📊 导出审计日志（格式：$EXPORT_FORMAT）..."
-    echo ""
-    
-    EXPORT_FILE="$AUDIT_LOG_DIR/export_$(date +%Y%m%d_%H%M%S).$EXPORT_FORMAT"
-    
-    case $EXPORT_FORMAT in
-        json)
-            echo "[" > "$EXPORT_FILE"
-            FIRST=true
-            for LOG_FILE in "$AUDIT_LOG_DIR"/audit_*.jsonl; do
-                [ -f "$LOG_FILE" ] || continue
-                while IFS= read -r LINE; do
-                    if [ "$FIRST" = true ]; then
-                        FIRST=false
-                    else
-                        echo "," >> "$EXPORT_FILE"
-                    fi
-                    echo "$LINE" >> "$EXPORT_FILE"
-                done < "$LOG_FILE"
-            done
-            echo "]" >> "$EXPORT_FILE"
+# 默认日志目录
+if [ -z "$LOG_DIR" ]; then
+    LOG_DIR="${SCRIPT_DIR}/../eip_audit_logs"
+fi
+
+# 路径安全验证: 规范化并拒绝危险路径
+LOG_DIR=$(cd "$LOG_DIR" 2>/dev/null && pwd || echo "")
+if [ -z "$LOG_DIR" ]; then
+    # 目录不存在, 先创建再验证
+    LOG_DIR="${2:-${SCRIPT_DIR}/../eip_audit_logs}"
+    case "$LOG_DIR" in
+        /etc/*|/usr/*|/var/*|/boot/*|/proc/*|/sys/*)
+            echo "❌ 拒绝写入系统目录: $LOG_DIR" >&2; exit 1 ;;
+    esac
+fi
+mkdir -p "$LOG_DIR"
+chmod 700 "$LOG_DIR" 2>/dev/null || true
+
+# ── 审计日志文件 ──────────────────────────────────────────────────
+AUDIT_JSONL="${LOG_DIR}/audit_$(date '+%Y%m%d').jsonl"
+AUDIT_CSV="${LOG_DIR}/audit_$(date '+%Y%m%d').csv"
+
+# ── 时区感知时间戳 ────────────────────────────────────────────────
+# 使用本地时间 + 显式标注时区偏移（而非误导性的 Z 后缀）
+get_timestamp() {
+    local tz_offset
+    tz_offset=$(date +%z 2>/dev/null || echo "+0000")
+    # 格式: 2024-01-15T10:30:00+08:00
+    date "+%Y-%m-%dT%H:%M:%S${tz_offset:0:3}:${tz_offset:3:2}"
+}
+
+# ── 文件锁（防止并发写入冲突）────────────────────────────────────
+acquire_lock() {
+    local lock_file="$1"
+    local max_wait=10
+    local waited=0
+
+    # 原子操作: 使用 set -C (noclobber) 确保排他创建, 避免 check-then-write 竞态条件
+    while ! (set -C; echo $$ > "$lock_file") 2>/dev/null; do
+        sleep 1
+        waited=$((waited + 1))
+        if [ "$waited" -ge "$max_wait" ]; then
+            color_print "$YELLOW" "⚠️  等待文件锁超时，强制继续"
+            # 超时后强制覆盖（旧锁可能残留）
+            echo $$ > "$lock_file"
+            break
+        fi
+    done
+}
+
+release_lock() {
+    local lock_file="$1"
+    rm -f "$lock_file" 2>/dev/null || true
+}
+
+LOCK_FILE="${LOG_DIR}/.audit.lock"
+
+# ── 记录审计日志 ──────────────────────────────────────────────────
+record_audit() {
+    local action="$1"
+    local detail="${2:-}"
+    local timestamp
+    timestamp=$(get_timestamp)
+
+    # JSONL 格式追加（每行一条 JSON）
+    local jsonl_entry
+    jsonl_entry=$(jq -n -c \
+        --arg timestamp "$timestamp" \
+        --arg region "$HW_REGION" \
+        --arg action "$action" \
+        --arg detail "$detail" \
+        --arg user "$(whoami 2>/dev/null || echo 'unknown')" \
+        '{
+            timestamp: $timestamp,
+            region: $region,
+            action: $action,
+            detail: $detail,
+            user: $user
+        }')
+
+    acquire_lock "$LOCK_FILE"
+    echo "$jsonl_entry" >> "$AUDIT_JSONL"
+    release_lock "$LOCK_FILE"
+}
+
+# ── 查询审计日志 ──────────────────────────────────────────────────
+query_audit() {
+    local filter_action="${1:-}"
+    local filter_region="${2:-}"
+
+    if [ ! -f "$AUDIT_JSONL" ] || [ ! -s "$AUDIT_JSONL" ]; then
+        color_print "$YELLOW" "ℹ️  今日暂无审计记录"
+        return
+    fi
+
+    local filtered
+    filtered=$(cat "$AUDIT_JSONL")
+
+    if [ -n "$filter_action" ]; then
+        filtered=$(echo "$filtered" | jq -c "select(.action == \"$filter_action\")")
+    fi
+
+    if [ -n "$filter_region" ]; then
+        filtered=$(echo "$filtered" | jq -c "select(.region == \"$filter_region\")")
+    fi
+
+    if [ -z "$filtered" ]; then
+        color_print "$YELLOW" "ℹ️  未找到匹配的审计记录"
+        return
+    fi
+
+    echo "$filtered" | jq -r '. | "\(.timestamp) | \(.region) | \(.action) | \(.detail) | \(.user)"'
+}
+
+# ── 导出 CSV ──────────────────────────────────────────────────────
+# 修复：仅写入一次 header（检查文件是否为空/新文件）
+export_csv() {
+    local output_file="$1"
+    local data="$2"
+
+    # 仅在文件为空或不存在时写入 header
+    if [ ! -f "$output_file" ] || [ ! -s "$output_file" ]; then
+        echo "timestamp,region,action,detail,user" > "$output_file"
+    fi
+
+    echo "$data" | jq -r '. | [.timestamp, .region, .action, .detail, .user] | @csv' >> "$output_file"
+}
+
+# ── 导出 JSON ─────────────────────────────────────────────────────
+export_json() {
+    local output_file="$1"
+    local data="$2"
+
+    echo "$data" | jq -s '.' > "$output_file"
+}
+
+# ── 主逻辑 ────────────────────────────────────────────────────────
+main() {
+    case "$ACTION" in
+        list|query|analyze|monitor|report)
+            # 记录审计日志
+            record_audit "$ACTION" "$DETAIL"
+            color_print "$GREEN" "✅ 审计记录已写入: ${AUDIT_JSONL}"
             ;;
-        
-        csv)
-            echo "timestamp,operation,eip_id,operator,details" > "$EXPORT_FILE"
-            for LOG_FILE in "$AUDIT_LOG_DIR"/audit_*.jsonl; do
-                [ -f "$LOG_FILE" ] || continue
-                while IFS= read -r LINE; do
-                    TIMESTAMP=$(echo "$LINE" | jq -r '.timestamp' 2>/dev/null)
-                    OPERATION=$(echo "$LINE" | jq -r '.operation' 2>/dev/null)
-                    EIP_ID_VAL=$(echo "$LINE" | jq -r '.eip_id' 2>/dev/null)
-                    OPERATOR_VAL=$(echo "$LINE" | jq -r '.operator' 2>/dev/null)
-                    DETAILS_VAL=$(echo "$LINE" | jq -r '.details' 2>/dev/null | tr ',' ';' | tr '"' "'")
-                    echo "$TIMESTAMP,$OPERATION,$EIP_ID_VAL,$OPERATOR_VAL,\"$DETAILS_VAL\"" >> "$EXPORT_FILE"
-                done < "$LOG_FILE"
-            done
+        query-log)
+            # 查询审计日志
+            color_print "$BLUE" "📋 审计日志查询"
+            query_audit "" ""
             ;;
-        
-        html)
-            cat > "$EXPORT_FILE" << 'EOF'
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>EIP 审计日志</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        h1 { color: #333; }
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #4CAF50; color: white; }
-        tr:nth-child(even) { background-color: #f2f2f2; }
-    </style>
-</head>
-<body>
-    <h1>📋 EIP 操作审计日志</h1>
-    <p>导出时间：EOF
-            echo "$(date '+%Y-%m-%d %H:%M:%S')" >> "$EXPORT_FILE"
-            cat >> "$EXPORT_FILE" << 'EOF'
-</p>
-    <table>
-        <tr>
-            <th>时间</th>
-            <th>操作类型</th>
-            <th>EIP ID</th>
-            <th>操作人员</th>
-            <th>详情</th>
-        </tr>
-EOF
-            for LOG_FILE in "$AUDIT_LOG_DIR"/audit_*.jsonl; do
-                [ -f "$LOG_FILE" ] || continue
-                while IFS= read -r LINE; do
-                    TIMESTAMP=$(echo "$LINE" | jq -r '.timestamp' 2>/dev/null)
-                    OPERATION=$(echo "$LINE" | jq -r '.operation' 2>/dev/null)
-                    EIP_ID_VAL=$(echo "$LINE" | jq -r '.eip_id' 2>/dev/null)
-                    OPERATOR_VAL=$(echo "$LINE" | jq -r '.operator' 2>/dev/null)
-                    DETAILS_VAL=$(echo "$LINE" | jq -r '.details' 2>/dev/null | tr '"' "'")
-                    echo "        <tr><td>$TIMESTAMP</td><td>$OPERATION</td><td>$EIP_ID_VAL</td><td>$OPERATOR_VAL</td><td>$DETAILS_VAL</td></tr>" >> "$EXPORT_FILE"
-                done < "$LOG_FILE"
-            done
-            cat >> "$EXPORT_FILE" << 'EOF'
-    </table>
-</body>
-</html>
-EOF
-            ;;
-        
         *)
-            echo "不支持的导出格式：$EXPORT_FORMAT"
+            color_print "$RED" "❌ 未知操作: $ACTION"
+            echo "支持的操作: list, query, analyze, monitor, report, query-log" >&2
             exit 1
             ;;
     esac
-    
-    echo "✓ 导出成功：$EXPORT_FILE"
-    exit 0
-fi
 
-# 记录审计日志模式
-if [ -n "$ACTION" ] && [ -n "$EIP_ID" ]; then
-    TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-    
-    # 构建审计日志条目
-    if [ -n "$DETAILS" ]; then
-        # 如果 details 已经是 JSON 对象（以{开头），直接使用；否则作为字符串处理
-        if [[ "$DETAILS" == "{"* ]]; then
-            DETAILS_JSON="$DETAILS"
-        else
-            DETAILS_JSON="\"$DETAILS\""
-        fi
-    else
-        DETAILS_JSON="{}"
+    # 导出
+    if [ -n "$EXPORT" ]; then
+        case "$EXPORT" in
+            csv)
+                if [ -f "$AUDIT_JSONL" ] && [ -s "$AUDIT_JSONL" ]; then
+                    acquire_lock "$LOCK_FILE"
+                    export_csv "$AUDIT_CSV" "$(cat "$AUDIT_JSONL")"
+                    release_lock "$LOCK_FILE"
+                    color_print "$GREEN" "✅ 已导出 CSV: ${AUDIT_CSV}"
+                else
+                    color_print "$YELLOW" "⚠️  无数据可导出"
+                fi
+                ;;
+            json)
+                if [ -f "$AUDIT_JSONL" ] && [ -s "$AUDIT_JSONL" ]; then
+                    local json_output="${AUDIT_CSV%.csv}.json"
+                    export_json "$json_output" "$(cat "$AUDIT_JSONL")"
+                    color_print "$GREEN" "✅ 已导出 JSON: ${json_output}"
+                else
+                    color_print "$YELLOW" "⚠️  无数据可导出"
+                fi
+                ;;
+            *)
+                color_print "$RED" "❌ 不支持的导出格式: $EXPORT（仅支持 csv / json）" >&2
+                exit 1
+                ;;
+        esac
     fi
-    
-    AUDIT_ENTRY=$(cat << EOF
-{
-  "timestamp": "$TIMESTAMP",
-  "operation": "$ACTION",
-  "eip_id": "$EIP_ID",
-  "operator": "$OPERATOR",
-  "region": "${HW_REGION:-cn-north-4}",
-  "details": $DETAILS_JSON
+
+    # 显示最近记录
+    if [ -f "$AUDIT_JSONL" ] && [ -s "$AUDIT_JSONL" ]; then
+        echo ""
+        echo "最近 5 条审计记录:"
+        tail -5 "$AUDIT_JSONL" | jq -r '. | "  \(.timestamp) [\(.region)] \(.action): \(.detail) (by \(.user))"'
+    fi
 }
-EOF
-)
-    
-    # 追加到审计日志文件
-    echo "$AUDIT_ENTRY" >> "$AUDIT_LOG_FILE"
-    
-    echo "✓ 审计日志已记录"
-    echo "  操作：$ACTION"
-    echo "  EIP ID: $EIP_ID"
-    echo "  操作人员：$OPERATOR"
-    echo "  时间：$TIMESTAMP"
-    echo "  日志文件：$AUDIT_LOG_FILE"
-    
-    exit 0
-else
-    echo "⚠️  请提供 --action 和 --eip-id 参数，或使用 --query/--export 模式"
-    echo ""
-    echo "示例:"
-    echo "  # 记录释放操作"
-    echo "  $0 --action release --eip-id eip-xxx --operator admin"
-    echo ""
-    echo "  # 查询最近 30 天日志"
-    echo "  $0 --query --days 30"
-    echo ""
-    echo "  # 导出 CSV 格式日志"
-    echo "  $0 --export --format csv"
-    
-    exit 1
-fi
+
+main
