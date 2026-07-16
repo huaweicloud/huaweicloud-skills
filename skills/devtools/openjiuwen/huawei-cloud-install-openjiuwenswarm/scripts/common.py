@@ -9,7 +9,7 @@ from pathlib import Path
 
 MAX_RETRY = 3
 RETRY_DELAY = 5
-DOWNLOAD_TIMEOUT = 600
+DOWNLOAD_TIMEOUT = 120
 STARTUP_TIMEOUT = 120
 
 MIRROR_FILE_NAME = "jiuwenswarm_runtime.tar.gz"
