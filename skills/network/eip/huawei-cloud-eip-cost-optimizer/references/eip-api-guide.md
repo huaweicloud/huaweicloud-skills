@@ -2,36 +2,37 @@
 
 ## Overview
 
-This document provides API reference information for Huawei Cloud Elastic Public IP (EIP) operations using Python SDK. All commands follow the standard format: `Python SDK <SERVICE> <Operation> --param=value --cli-region=<region>`.
+This document provides API reference information for Huawei Cloud Elastic Public IP (EIP) operations using hcloud CLI (KooCLI). All commands follow the standard format: `hcloud <Service> <Operation> --param=value --cli-region=<region>`.
 
 ## Authentication
 
 ### Method 1: Environment Variables
 
 ```bash
-export HUAWEICLOUD_SDK_AK=<your-ak>
-export HUAWEICLOUD_SDK_SK=<your-sk>
+export HW_ACCESS_KEY=<your-ak>
+export HW_SECRET_KEY=<your-sk>
+export HW_REGION_NAME=cn-north-4
 ```
 
-### Method 2: Python SDK Configuration
+### Method 2: hcloud CLI Configuration
 
 ```bash
-# Interactive configuration
-Python SDK configure
+# Interactive configuration (enter credentials via prompts, not command-line arguments)
+hcloud configure
 
 # Verify configuration (safe - does not expose values)
-Python SDK configure list
+hcloud configure list
 ```
 
-✅ **Correct**: Use `Python SDK configure list` to verify credentials
-❌ **Incorrect**: Never use `echo $HUAWEICLOUD_SDK_AK` to check credentials
+✅ **Correct**: Use `hcloud configure list` to verify credentials
+❌ **Incorrect**: Never use `echo $HW_ACCESS_KEY` to check credentials
 
-## EIP Commands (v3 API)
+## EIP Commands (v2 API)
 
 ### 1. List EIPs
 
 ```bash
-Python SDK EIP ListPublicips/v3 --cli-region=cn-north-4
+hcloud EIP ListPublicips/v2 --cli-region=cn-north-4
 ```
 
 **Parameters**:
@@ -45,46 +46,61 @@ Python SDK EIP ListPublicips/v3 --cli-region=cn-north-4
     {
       "id": "eip-xxx1",
       "public_ip_address": "123.45.67.89",
-      "bandwidth": { "size": 5, "name": "bw-001" },
-      "status": "ACTIVE",
-      "binding_status": "BOUND",
-      "associate_instance_type": "ECS",
-      "create_time": "2026-04-15T10:30:00Z"
-    },
-    {
-      "id": "eip-xxx2",
-      "public_ip_address": "98.76.54.32",
-      "bandwidth": { "size": 10, "name": "bw-002" },
-      "status": "ACTIVE",
-      "binding_status": "UNBOUND",
-      "create_time": "2026-03-20T14:20:00Z"
+      "bandwidth_id": "bw-xxx1",
+      "bandwidth_name": "bw-001",
+      "bandwidth_share_type": "PER",
+      "bandwidth_size": 5,
+      "status": "DOWN",
+      "tenant_id": "xxx",
+      "create_time": "2026-04-15 10:30:00",
+      "ip_version": 4,
+      "enterprise_project_id": "0"
     }
   ]
 }
 ```
 
+**Note**: API returns `bandwidth_*` fields at top level (not nested in `bandwidth` object). `status` values: `ACTIVE` (bound), `DOWN` (unbound/idle), `ERROR`.
+
 ### 2. Show EIP Details
 
 ```bash
-Python SDK EIP ShowPublicip/v3 --publicip_id=<eip-id> --cli-region=cn-north-4
+hcloud EIP ShowPublicip/v2 --publicip_id=<eip-id> --cli-region=cn-north-4
 ```
 
 **Parameters**:
 - `--publicip_id` (required): EIP ID
 - `--cli-region` (required): Region ID
 
+**Response Example**:
+
+```json
+{
+  "publicip": {
+    "id": "eip-xxx1",
+    "public_ip_address": "123.45.67.89",
+    "bandwidth_id": "bw-xxx1",
+    "bandwidth_name": "bw-001",
+    "bandwidth_share_type": "PER",
+    "bandwidth_size": 5,
+    "status": "DOWN",
+    "create_time": "2026-04-15 10:30:00"
+  }
+}
+```
+
 ### 3. Create EIP
 
 ```bash
-Python SDK EIP CreatePublicip/v3 \
-  --publicip.type=EIP \
+hcloud EIP CreatePublicip/v2 \
+  --publicip.type=5_bgp \
   --publicip.bandwidth.name=bw-001 \
   --publicip.bandwidth.size=5 \
   --cli-region=cn-north-4
 ```
 
 **Parameters**:
-- `--publicip.type` (required): Always `EIP`
+- `--publicip.type` (required): EIP type, e.g. `5_bgp` (dynamic BGP)
 - `--publicip.bandwidth.name` (required): Bandwidth name
 - `--publicip.bandwidth.size` (required): Bandwidth in Mbps
 - `--cli-region` (required): Region ID
@@ -92,7 +108,7 @@ Python SDK EIP CreatePublicip/v3 \
 ### 4. Delete EIP (Irreversible!)
 
 ```bash
-Python SDK EIP DeletePublicip/v3 --publicip_id=<eip-id> --cli-region=cn-north-4
+hcloud EIP DeletePublicip/v2 --publicip_id=<eip-id> --cli-region=cn-north-4
 ```
 
 ⚠️ **Warning**: This operation is irreversible. The public IP address will be reclaimed.
@@ -100,7 +116,7 @@ Python SDK EIP DeletePublicip/v3 --publicip_id=<eip-id> --cli-region=cn-north-4
 ### 5. Update EIP Bandwidth
 
 ```bash
-Python SDK EIP UpdatePublicip/v3 \
+hcloud EIP UpdatePublicip/v2 \
   --publicip_id=<eip-id> \
   --publicip.bandwidth.size=10 \
   --cli-region=cn-north-4
@@ -114,7 +130,7 @@ Python SDK EIP UpdatePublicip/v3 \
 ### 6. Associate EIP to Resource
 
 ```bash
-Python SDK EIP AssociatePublicip/v3 \
+hcloud EIP AssociatePublicip/v2 \
   --publicip_id=<eip-id> \
   --associate_instance_type=ECS \
   --associate_instance_id=<instance-id> \
@@ -124,40 +140,31 @@ Python SDK EIP AssociatePublicip/v3 \
 ### 7. Disassociate EIP from Resource
 
 ```bash
-Python SDK EIP DisassociatePublicip/v3 \
+hcloud EIP DisassociatePublicip/v2 \
   --publicip_id=<eip-id> \
   --cli-region=cn-north-4
 ```
 
-## Tag Management Commands
+## IAM Commands
 
-### Create Tags
+### List Projects (for multi-region discovery)
 
 ```bash
-Python SDK EIP CreatePublicipTags/v3 \
-  --publicip_id=<eip-id> \
-  --tag.1.key=env \
-  --tag.1.value=prod \
-  --tag.2.key=team \
-  --tag.2.value=devops \
-  --cli-region=cn-north-4
+hcloud IAM KeystoneListProjects --cli-region=cn-north-4
 ```
 
-### Delete Tags
+**Response Example**:
 
-```bash
-Python SDK EIP DeletePublicipTags/v3 \
-  --publicip_id=<eip-id> \
-  --tag.1.key=env \
-  --cli-region=cn-north-4
-```
-
-### List Tags
-
-```bash
-Python SDK EIP ShowPublicipTags/v3 \
-  --publicip_id=<eip-id> \
-  --cli-region=cn-north-4
+```json
+{
+  "projects": [
+    {
+      "id": "0xxx",
+      "name": "cn-north-4",
+      "enabled": true
+    }
+  ]
+}
 ```
 
 ## Common Region IDs
@@ -176,21 +183,13 @@ Python SDK EIP ShowPublicipTags/v3 \
 
 | Status | Description |
 |--------|-------------|
-| `ACTIVE` | Running normally |
-| `DOWN` | Deactivated |
+| `ACTIVE` | Bound to a resource |
+| `DOWN` | Unbound (idle) |
 | `ERROR` | Error state |
 | `FREEZED` | Frozen |
 | `BIND_ERROR` | Bind failed |
-| `ELB_DELETING` | ELB deleting |
 | `BINDING` | Binding in progress |
 | `UNBINDING` | Unbinding in progress |
-
-## Binding Status Reference
-
-| Binding Status | Description |
-|---------------|-------------|
-| `BOUND` | Bound to a resource |
-| `UNBOUND` | Not bound (idle) |
 
 ## Cost Estimation Reference
 
@@ -198,41 +197,39 @@ Python SDK EIP ShowPublicipTags/v3 \
 
 ### On-Demand Pricing (North China - Beijing 4)
 
-| Bandwidth (Mbps) | Monthly Cost (CNY) |
-|------------------|---------------------|
-| 1 | ¥2.00 |
-| 5 | ¥10.00 |
-| 10 | ¥20.00 |
-| 20 | ¥40.00 |
-| 50 | ¥100.00 |
+| Item | Price |
+|------|-------|
+| Bandwidth fee | ≈ ¥3/Mbps/month |
+| IP retain fee (unbound) | ≈ ¥0.02/hour |
 
 ### Formula
 
 ```
-Monthly Cost = Bandwidth (Mbps) × Unit Price (CNY/Mbps/Month)
+Monthly Cost = Bandwidth (Mbps) × ¥3/Mbps/month + IP Retain Fee
+IP Retain Fee = 0.02 CNY/hour × 720 hours/month (for unbound EIPs)
 ```
 
-Unit price varies by region, typically ¥2-4/Mbps/month.
+**Note**: API does not return `charge_mode` field. Scripts use bandwidth billing model for all estimates.
 
 ## Best Practices
 
-1. **Regular Cleanup**: Schedule weekly idle EIP scans
+1. **Regular Cleanup**: Schedule weekly idle EIP scans via `monitor_idle_eips.sh --setup-cron`
 2. **Tag Governance**: Use consistent tags (env, team, project) for all EIPs
 3. **Bandwidth Policy**: Set minimum bandwidth for idle EIPs
-4. **Always Confirm Before Release**: Use `--interactive` mode in production
+4. **Always Confirm Before Release**: This skill is READ-ONLY — release must be done manually in console
 
 ## Common Errors
 
 | Error | Cause | Solution |
 |-------|-------|----------|
-| `InvalidAccessKeyId` | Invalid AK/SK | Check credential configuration via `Python SDK configure list` |
-| `EipNotFound` | EIP does not exist | Verify EIP ID is correct |
-| `EipIsBound` | EIP is bound to a resource | Disassociate first, then release |
-| `BandwidthOutOfRange` | Bandwidth out of range | Valid range: 1-2000 Mbps |
-| `RequestLimitExceeded` | Too many requests | Add delay between requests |
+| `InvalidAccessKeyId` | Invalid AK/SK | Check credential configuration via `hcloud configure list` |
+| `VPC.0501` | EIP does not exist | Verify EIP ID is correct |
+| `VPC.0503` | EIP is bound to a resource | Disassociate first, then release |
+| `VPC.0504` | Bandwidth out of range | Valid range: 1-2000 Mbps |
+| `429` | Too many requests | Add delay between API calls |
 
 ## Related Documentation
 
 - [Huawei Cloud EIP Documentation](https://support.huaweicloud.com/eip/index.html)
-- [Python SDK Documentation](https://support.huaweicloud.com/cli/index.html)
+- [KooCLI Documentation](https://support.huaweicloud.com/cli/index.html)
 - [Huawei Cloud API Explorer](https://apiexplorer.developer.huaweicloud.com/)

@@ -1,0 +1,8 @@
+{
+  "id": "c85690db-dfef-4e76-9062-86362d6548e9",
+  "publicip_id": "c85690db-dfef-4e76-9062-86362d6548e9",
+  "region": "cn-north-4",
+  "expected_fields": ["publicips", "id", "public_ip_address", "status", "bandwidth_size"],
+  "expected_show_fields": ["id", "public_ip_address", "status", "bandwidth_size", "bandwidth_id"],
+  "error_patterns": ["not exist", "not found", "does not exist", "No data"]
+}

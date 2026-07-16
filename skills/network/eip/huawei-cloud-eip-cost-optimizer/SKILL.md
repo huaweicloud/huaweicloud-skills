@@ -1,10 +1,16 @@
 ---
 id: huawei-cloud-eip-cost-optimizer
 name: huawei-cloud-eip-cost-optimizer
+tags: [huawei-cloud, eip, cost-optimization, idle-analysis, audit, monitoring]
 description: |
-  Huawei Cloud EIP (Elastic IP) cost optimization skill using Python SDK v2.
-  Use this skill when the user wants to: (1) list and query EIPs across regions with detailed status, (2) identify idle/unbound EIPs and generate cost optimization reports, (3) set up idle EIP monitoring with webhook/email alerts, (4) generate HTML/JSON cost analysis reports, (5) maintain operation audit logs for compliance. **Read-only analysis only - NO bandwidth adjustment, tag management, or EIP release/deletion**.
-  Trigger: user mentions "EIP cost optimization", "idle EIP analysis", "EIP audit", "cost report", "EIP status query", "EIP list", "EIP monitoring", "EIP alert", "cost analysis", "idle monitoring", "operation audit", "EIP 成本优化", "闲置 EIP 分析", "EIP 审计", "成本报告", "EIP 状态查询", "EIP 查询", "EIP 列表", "EIP 监控", "EIP 告警", "成本分析", "闲置监控", "操作审计"
+  Huawei Cloud EIP (Elastic IP) cost optimization skill using hcloud CLI (KooCLI).
+  1. List and query EIPs across regions with detailed status
+  2. Identify idle/unbound EIPs and generate cost optimization reports
+  3. Set up idle EIP monitoring with webhook/email alerts
+  4. Generate HTML/JSON cost analysis reports
+  5. Maintain operation audit logs for compliance
+  **Read-only analysis only - NO bandwidth adjustment, tag management, or EIP release/deletion**.
+  Triggers include: "EIP cost optimization", "idle EIP analysis", "EIP audit", "cost report", "EIP status query", "EIP list", "EIP monitoring", "EIP alert", "cost analysis", "idle monitoring", "operation audit", "EIP 成本优化", "闲置 EIP 分析", "EIP 审计", "成本报告", "EIP 状态查询", "EIP 查询", "EIP 列表", "EIP 监控", "EIP 告警", "成本分析", "闲置监控", "操作审计"
 ---
 
 # Huawei Cloud EIP Cost Optimizer
@@ -13,9 +19,9 @@ description: |
 
 This skill provides batch management and cost optimization capabilities for Huawei Cloud Elastic Public IPs (EIPs).
 
-**Architecture**: Python SDK v2 → EIP Service API → VPC/Bandwidth/Tag resources
+**Architecture**: Shell + hcloud CLI (KooCLI) → EIP Service API → VPC/Bandwidth resources
 
-**Related Skills**: For broader cost optimization across all resource types (ECS, EVS, OBS, etc.), see the archived `huaweicloud-cost-optimizer` skill. This skill focuses exclusively on EIP optimization with deeper functionality and 100% Python SDK compliance.
+**Related Skills**: For broader cost optimization across all resource types (ECS, EVS, OBS, etc.), see the archived `huaweicloud-cost-optimizer` skill. This skill focuses exclusively on EIP optimization with deeper functionality and 100% hcloud CLI compliance.
 
 - Periodic cleanup of idle EIPs to reduce holding costs
 - Cost analysis and optimization recommendations
@@ -34,287 +40,325 @@ This skill provides batch management and cost optimization capabilities for Huaw
 
 ## Prerequisites
 
-### 1. Python Environment Requirements (MANDATORY)
+### 1. CLI Environment Requirements (MANDATORY)
 
-- Python 3.8+
-- Install SDKs: `pip install huaweicloudsdkeip huaweicloudsdkcore`
-- **All scripts use Python SDK v2 exclusively**
+- **hcloud CLI (KooCLI)** v7.0+ — Huawei Cloud command-line tool
+- **jq** — JSON processor for parsing API responses
+- **bc** — Arbitrary precision calculator for cost estimation
+- **curl** — HTTP client for webhook notifications
 
-**Available Python Scripts**:
+**Install hcloud CLI**:
 
-- `scripts/analyze_idle_eips.py` - Analyze idle EIPs and generate optimization reports (read-only, no release capability)
-- `scripts/monitor_idle_eips.py` - Monitor idle EIPs with webhook/email alerts and cron support
-- `scripts/eip_cost_report.py` - Generate EIP cost analysis reports (HTML/JSON formats)
-- `scripts/list_eips.py` - List all EIPs in a region (supports filtering and multi-region summary)
+```bash
+# Linux/macOS one-click install
+curl -sSL https://hwcloudcli.obs.cn-north-1.myhuaweicloud.com/cli/latest/hcloud_install.sh | bash
 
-**Available Shell Wrappers**:
+# Verify installation
+hcloud --version
+```
 
-- `scripts/eip_audit_log.sh` - Operation audit logging (standalone, no SDK dependency)
+**Install jq, bc, curl**:
+
+```bash
+# Ubuntu/Debian
+sudo apt install -y jq bc curl
+
+# CentOS/RHEL
+sudo yum install -y jq bc curl
+
+# macOS
+brew install jq bc curl
+```
+
+**Available Shell Scripts**:
+
+- `scripts/config.sh` - Shared configuration (credentials, regions, proxy)
+- `scripts/list_eips.sh` - List all EIPs in a region (supports filtering and summary)
+- `scripts/analyze_idle_eips.sh` - Analyze idle EIPs and generate optimization reports (read-only)
+- `scripts/eip_cost_report.sh` - Generate EIP cost analysis reports (text/HTML/JSON)
+- `scripts/monitor_idle_eips.sh` - Monitor idle EIPs with webhook/email alerts and cron support
+- `scripts/check_env.sh` - Environment check and validation (hcloud CLI + tools + API)
+- `scripts/eip_audit_log.sh` - Operation audit logging (JSONL + CSV/JSON export)
 
 **Note**: All scripts are READ-ONLY. This skill does NOT perform bandwidth adjustment, tag management, or EIP release/deletion.
 
-- Valid Huawei Cloud credentials (AK/SK mode)
-- **Security Rules**:
-  - 🚫 Never expose AK/SK values in code, conversation, or commands
-  - 🚫 Never use `echo $HUAWEI_CLOUD_AK` or `echo $HUAWEI_CLOUD_SK` to check credentials
-  - ✅ Use environment variables: `HUAWEI_CLOUD_AK`, `HUAWEI_CLOUD_SK`, `HUAWEI_CLOUD_REGION`
-  - ✅ Prefer IAM users over root account for cloud operations
-  - ✅ Enable MFA for sensitive operations
+### 2. Authentication Configuration
 
-**Configuration Method** (Environment Variables Only):
+This skill supports **one authentication path** via environment variables:
+
+#### Environment Variables
 
 ```bash
-export HUAWEI_CLOUD_AK=<your-ak>
-export HUAWEI_CLOUD_SK=<your-sk>
-export HUAWEI_CLOUD_REGION=cn-north-4
+export HW_ACCESS_KEY=<your-ak>
+export HW_SECRET_KEY=<your-sk>
+export HW_REGION_NAME=cn-north-4
 ```
 
-**⚠️ Important Security Notes**:
+> **Note**: If you have already configured `hcloud configure` interactively (entering credentials via prompts, not command-line arguments), the skill will also detect and use those credentials.
+
+**Environment Variables**:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `HW_ACCESS_KEY` | Optional | Huawei Cloud Access Key ID (required only if hcloud configure not set) |
+| `HW_SECRET_KEY` | Optional | Huawei Cloud Secret Access Key (required only if hcloud configure not set) |
+| `HW_REGION_NAME` | Optional | Default region (default: `cn-north-4`) |
+| `HW_SECURITY_TOKEN` | Optional | Security token for temporary credentials |
+
+**Security Notes**:
 
 - Never commit credentials to version control
+- Never expose AK/SK values in code, conversation, or commands
+- Never pass AK/SK values as command-line arguments (exposes credentials in shell history and `ps aux`)
 - Use IAM users with minimal required permissions
 - Enable MFA for sensitive operations
 - Rotate AK/SK regularly
+- Use `./scripts/check_env.sh` to validate credentials before running scripts
 
-### 2. IAM Permission Requirements
+### 3. Quick Start
 
-**Note**: This skill is READ-ONLY for EIP resources. It does NOT perform any write operations (update, delete, tag management).
+```bash
+# Step 1: Configure authentication via environment variables
+export HW_ACCESS_KEY=<your-ak>
+export HW_SECRET_KEY=<your-sk>
+export HW_REGION_NAME=cn-north-4
+
+# Step 2: Run environment check
+bash scripts/check_env.sh
+
+# Step 3: Run scripts
+bash scripts/list_eips.sh --region cn-north-4
+bash scripts/analyze_idle_eips.sh --idle-days 7
+bash scripts/eip_cost_report.sh --format html
+```
+
+### 4. IAM Permission Requirements
+
+**Note**: This skill is READ-ONLY for EIP resources. It does NOT perform any write operations.
 
 | API Action                    | Permission        | Purpose                          |
 | ----------------------------- | ----------------- | -------------------------------- |
 | `vpc:publicIps:list`          | List EIPs         | Query all EIPs and their status  |
 | `vpc:publicIps:get`           | Get EIP details   | View individual EIP information  |
 
-See [IAM Permission Policies](references/iam-policies.md) for complete policy JSON.
+## Workflow
 
-**Permission Failure Handling**:
+### Main Steps
+1. **Environment Check** → Verify hcloud CLI, jq, credentials
+2. **EIP Query** → List EIPs across regions via hcloud CLI
+3. **Idle Analysis** → Identify unbound EIPs exceeding idle threshold
+4. **Cost Report** → Generate HTML/JSON cost analysis report
+5. **Monitoring Setup** → Configure idle EIP alerts (webhook/email)
+6. **Audit Logging** → Record operations for compliance
 
-1. When any command fails due to permission errors, read `references/iam-policies.md`
-2. Display the required permission list and policy JSON to the user
-3. Guide the user to create a custom policy in the IAM console and grant authorization
-4. Pause execution and wait for user confirmation that permissions have been granted
+### EIP Query Workflow
+List EIPs across regions, filter by status, output as JSON/table.
 
-## Python SDK API Format Standard
+### Idle EIP Analysis Workflow
+Detect unbound EIPs idle beyond threshold, calculate holding costs, generate optimization report.
 
-All EIP operations use the Python SDK v2 format:
+### Cost Report Workflow
+Aggregate EIP cost data, render as HTML or JSON report with savings recommendations.
 
-### EIP Service API (v2 SDK)
+### Idle EIP Monitoring Workflow
+Periodically check for idle EIPs, send alerts via webhook or email when detected.
 
-```python
-from huaweicloudsdkeip.v2 import EipClient, ListPublicipsRequest, ShowPublicipRequest
-from huaweicloudsdkeip.v2.region.eip_region import EipRegion
-from huaweicloudsdkcore.auth.credentials import BasicCredentials
+### Audit Log Workflow
+Record all EIP operations (list/analyze/report/monitor) to audit log file for compliance.
 
-# Initialize client
-credentials = BasicCredentials(ak, sk)
-client = EipClient(credentials, EipRegion.value_of(region))
+All EIP operations use hcloud CLI commands:
 
-# List all EIPs
-request = ListPublicipsRequest()
-request.limit = 100
-response = client.list_publicips(request)
+| Python SDK Method | hcloud CLI Command | Description |
+|-------------------|-------------------|-------------|
+| `EipClient.list_publicips()` | `hcloud EIP ListPublicips/v2 --cli-region=<region>` | List all EIPs |
+| `EipClient.show_publicip()` | `hcloud EIP ShowPublicip/v2 --publicip_id=<id>` | Get EIP details |
+| `IamClient.keystone_list_projects()` | `hcloud IAM KeystoneListProjects` | List projects |
 
-# Show EIP details
-request = ShowPublicipRequest()
-request.publicip_id = "<eip-id>"
-response = client.show_publicip(request)
-```
-
-### Tag Management API
-
-```python
-from huaweicloudsdkeip.v2 import UpdatePublicipRequest, UpdatePublicipOption, UpdatePublicipRequestBody
-from huaweicloudsdkeip.v2.model.tag import Tag
-
-# Add tags to EIP
-option = UpdatePublicipOption()
-option.tags = [Tag(key="env", value="prod")]
-body = UpdatePublicipRequestBody()
-body.publicip = option
-
-request = UpdatePublicipRequest()
-request.publicip_id = "<eip-id>"
-request.body = body
-
-client.update_publicip(request)
-```
-
-### Special Rules
-
-| Rule             | Description                      | Example                            |
-| ---------------- | -------------------------------- | ---------------------------------- |
-| v2 SDK           | EIP operations use v2 SDK        | `huaweicloudsdkeip.v2`             |
-| Region parameter | Use `EipRegion.value_of(region)` | `EipRegion.value_of('cn-north-4')` |
-| Credentials      | Use `BasicCredentials(ak, sk)`   | Environment variables preferred    |
+**Output format**: All commands use `--cli-output=json` for machine-readable output, parsed by `jq`.
 
 ## Core Commands
 
+| Command | Description | Backend |
+|---------|-------------|---------|
+| `list_eips.sh` | List and query EIPs across regions | hcloud CLI |
+| `analyze_idle_eips.sh` | Identify idle/unbound EIPs with cost analysis | hcloud CLI |
+| `eip_cost_report.sh` | Generate HTML/JSON cost analysis reports | hcloud CLI |
+| `monitor_idle_eips.sh` | Set up idle EIP monitoring with alerts | hcloud CLI |
+| `eip_audit_log.sh` | Maintain operation audit logs | Shell |
+| `check_env.sh` | Verify environment prerequisites | Shell |
+| `config.sh` | Load configuration and credentials | Shell |
+
 ### EIP Query
 
-**Python SDK Method** (Recommended):
-
 ```bash
-# List all EIPs with bandwidth info
-python3 scripts/adjust_eip_bandwidth.py --list
+# List all EIPs in a region
+bash scripts/list_eips.sh --region cn-north-4
 
-# Analyze idle EIPs and generate report (read-only)
-python3 scripts/analyze_idle_eips.py
+# List EIPs with status filter
+bash scripts/list_eips.sh --region cn-north-4 --status DOWN
 
-# Adjust bandwidth for all EIPs
-python3 scripts/adjust_eip_bandwidth.py --all --bandwidth 5
-
-# Adjust bandwidth for idle EIPs only
-python3 scripts/adjust_eip_bandwidth.py --idle-only --bandwidth 1
+# List EIPs across multiple regions
+bash scripts/list_eips.sh --region cn-north-4,cn-east-3,cn-south-1
 ```
 
-### 2. jq Dependency (Shell Wrappers Only)
-
-**Required for**: `eip_audit_log.sh`
+### Idle EIP Analysis
 
 ```bash
-# Verify jq installation
-jq --version  # Should return "jq-1.x"
+# Analyze idle EIPs (default threshold: 0 days = all unbound)
+bash scripts/analyze_idle_eips.sh
 
-# If jq fails or shows "Not Found", diagnose:
-which jq
-cat $(which jq)  # If this shows text instead of binary, jq is broken
+# Custom idle threshold (14 days)
+bash scripts/analyze_idle_eips.sh --idle-days 14
 
-# Fix broken jq (common in WSL):
-sudo rm /usr/local/bin/jq  # Remove invalid PATH-prioritized jq
-which jq  # Should now show /usr/bin/jq
+# Analyze specific region with JSON output
+bash scripts/analyze_idle_eips.sh --region cn-north-4 --idle-days 7 --json
 ```
 
-**Note**: jq is only required for Shell wrapper scripts. All Python SDK scripts work without jq.
-
-**Python SDK Method** (Recommended for batch operations):
+### Cost Report
 
 ```bash
-# Adjust all EIPs to 5 Mbps
-python3 scripts/adjust_eip_bandwidth.py --all --bandwidth 5
+# Generate text cost report (default)
+bash scripts/eip_cost_report.sh
 
-# Adjust idle EIPs to 1 Mbps
-python3 scripts/adjust_eip_bandwidth.py --idle-only --bandwidth 1
+# Generate HTML report
+bash scripts/eip_cost_report.sh --format html
 
-# Adjust specific EIPs
-python3 scripts/adjust_eip_bandwidth.py --eip-ids "eip-id1,eip-id2" --bandwidth 10
+# Generate JSON report
+bash scripts/eip_cost_report.sh --format json
 
-# View current bandwidth configuration
-python3 scripts/adjust_eip_bandwidth.py --list
+# Custom region
+bash scripts/eip_cost_report.sh --region cn-east-3 --format html
 ```
 
-### Tag Management
+**Cost Model**: Bandwidth-based pricing (~3 CNY/Mbps/month for cn-north-4 on-demand) + IP retain fee (~0.02 CNY/hour for unbound EIPs). API does not return `charge_mode`, so all estimates use bandwidth billing model.
 
-**Python SDK Method**:
+### Idle EIP Monitoring
 
 ```bash
-# Add tags to EIP
-python3 scripts/manage_tags.py --action add --tags "env=prod,team=backend" --eip-ids <ID1,ID2>
+# Monitor idle EIPs (default threshold: 7 days)
+bash scripts/monitor_idle_eips.sh
 
-# Remove tags from EIP
-python3 scripts/manage_tags.py --action remove --tags "env" --eip-ids <ID1,ID2>
+# Custom threshold
+bash scripts/monitor_idle_eips.sh --idle-days 14
 
-# List tags for EIP
-python3 scripts/list_eips.py --region cn-north-4  # Shows tags in output
+# Monitor with webhook alert
+bash scripts/monitor_idle_eips.sh --idle-days 7 --webhook https://hooks.example.com/alert
+
+# Monitor with email alert
+bash scripts/monitor_idle_eips.sh --idle-days 7 --email admin@example.com
+
+# Set up daily cron job (9:00 AM)
+bash scripts/monitor_idle_eips.sh --setup-cron
+
+# Remove cron job
+bash scripts/monitor_idle_eips.sh --remove-cron
 ```
 
-### Multi-Region Management
-
-**Using Python Scripts** (Recommended):
+### Environment Check
 
 ```bash
-# List EIPs in multiple regions (manually specify regions)
-python3 scripts/list_eips.py --region cn-north-4
-python3 scripts/list_eips.py --region cn-east-3
-python3 scripts/list_eips.py --region cn-south-1
+# Full environment validation (CLI + tools + API)
+bash scripts/check_env.sh
 
-# Generate summary report for automation
-python3 scripts/list_eips.py --region cn-north-4 --summary
-# Output: CSV format (count,idle,bandwidth)
+# Verbose mode (show versions)
+bash scripts/check_env.sh --verbose
+
+# Auto-fix missing dependencies
+bash scripts/check_env.sh --fix
 ```
-
-**Note**: The `multi_region_manage.sh` wrapper was removed in v3.0.3. Users can achieve the same functionality by running `list_eips.py` for each region individually, or by scripting multiple calls in their own automation.
 
 ### Operation Audit Logging
 
-**Using Audit Script**:
-
 ```bash
-# Log an EIP release operation
-bash scripts/eip_audit_log.sh --action release --eip-id eip-xxx --operator admin
+# Log an EIP list operation
+bash scripts/eip_audit_log.sh --action list --detail "Queried all EIPs"
 
-# Log a bandwidth adjustment
-bash scripts/eip_audit_log.sh --action update_bandwidth --eip-id eip-xxx --details '{"old": 5, "new": 10}'
-
-# Query audit logs for last 30 days
-bash scripts/eip_audit_log.sh --query --days 30
+# Log an analyze operation
+bash scripts/eip_audit_log.sh --action analyze --detail "Idle EIP analysis for cn-north-4"
 
 # Export audit logs to CSV
-bash scripts/eip_audit_log.sh --export --format csv
+bash scripts/eip_audit_log.sh --action list --export csv
 
-# Export to HTML report
-bash scripts/eip_audit_log.sh --export --format html
+# Export audit logs to JSON
+bash scripts/eip_audit_log.sh --action list --export json
+
+# Custom log directory
+bash scripts/eip_audit_log.sh --action list --log-dir /var/log/eip_audit
 ```
 
-**Audit Log Entry Format** (JSONL):
+**Audit Log Entry Format** (JSONL, timezone-aware timestamps):
 
 ```json
 {
-  "timestamp": "2026-05-25T03:30:00Z",
-  "operation": "release",
-  "eip_id": "eip-xxx",
-  "operator": "admin",
+  "timestamp": "2026-07-16T10:30:00+08:00",
   "region": "cn-north-4",
-  "details": {"reason": "idle_cleanup", "cost_saved": "2.5"}
+  "action": "list",
+  "detail": "Queried all EIPs",
+  "user": "root"
 }
 ```
 
-## Parameter Confirmation
 
-### Python Script Parameters
+## KooCLI Command Format
 
-| Parameter       | Required/Optional         | Description                             | Default                               |
-| --------------- | ------------------------- | --------------------------------------- | ------------------------------------- |
-| `--region`      | Optional (Python scripts) | Huawei Cloud region ID                  | `HUAWEI_CLOUD_REGION` or `cn-north-4` |
-| `--eip-ids`     | Optional (scripts)        | Comma-separated EIP IDs                 | All EIPs                              |
-| `--bandwidth`   | Required (adjust script)  | Target bandwidth in Mbps                | N/A                                   |
-| `--all`         | Optional                  | Apply to all EIPs                       | `false`                               |
-| `--idle-only`   | Optional                  | Apply to idle EIPs only                 | `false`                               |
-| `--list`        | Optional                  | List EIPs with bandwidth info           | `false`                               |
-| `--summary`     | Optional (`list_eips.py`) | Output CSV stats (count,idle,bandwidth) | `false`                               |
-| `--idle-days`   | Optional (scripts)        | Idle threshold in days                  | `7`                                   |
-| `--interactive` | Optional (scripts)        | Interactive confirmation mode           | `false`                               |
-| `--confirm`     | Optional (release script) | Confirm release operation               | `false`                               |
+```bash
+# General format
+hcloud <Service> <Operation> --cli-region=<region> --param1=value1 --param2=value2
 
-### Shell Wrapper Parameters
+# EIP list example
+hcloud EIP ListPublicips/v2 --cli-region=cn-north-4
 
-| Script             | Parameter               | Description                             |
-| ------------------ | ----------------------- | --------------------------------------- |
-| `eip_audit_log.sh` | `--action ACTION`       | Log operation (release, create, update) |
-| `eip_audit_log.sh` | `--eip-id ID`           | EIP ID for audit log                    |
-| `eip_audit_log.sh` | `--query`               | Query audit logs                        |
-| `eip_audit_log.sh` | `--export --format csv` | Export audit logs                       |
+# EIP show detail
+hcloud EIP ShowPublicip/v2 --cli-region=cn-north-4 --publicip_id=<id>
+```
+
+| Feature | Description | Example |
+|---------|-------------|---------||
+| Service name | Uppercase PascalCase | `EIP`, `VPC`, `IAM` |
+| Operation name | PascalCase with version | `ListPublicips/v2`, `ShowPublicip/v2` |
+| Region param | `--cli-region=<value>` | `--cli-region=cn-north-4` |
+| Simple param | `--key=value` | `--publicip_id=xxx` |
+| Output format | `--cli-output=json` | JSON output for programmatic parsing |
+## Parameters
+
+### Shell Script Parameters
+
+| Script | Parameter | Required/Optional | Description | Default |
+|--------|-----------|-------------------|-------------|---------|
+| `list_eips.sh` | `--region` | Optional | Region(s), comma-separated | `HW_REGION_NAME` or `cn-north-4` |
+| `list_eips.sh` | `--status` | Optional | Filter by status (ACTIVE/DOWN/ERROR) | All |
+| `analyze_idle_eips.sh` | `--region` | Optional | Target region | `HW_REGION_NAME` or `cn-north-4` |
+| `analyze_idle_eips.sh` | `--idle-days` | Optional | Idle threshold in days | `0` (all unbound) |
+| `analyze_idle_eips.sh` | `--json` | Optional | Output JSON format report | `false` |
+| `eip_cost_report.sh` | `--region` | Optional | Target region | `HW_REGION_NAME` or `cn-north-4` |
+| `eip_cost_report.sh` | `--format` | Optional | Output format: text/html/json | `text` |
+| `monitor_idle_eips.sh` | `--region` | Optional | Target region | `HW_REGION_NAME` or `cn-north-4` |
+| `monitor_idle_eips.sh` | `--idle-days` | Optional | Idle threshold in days | `7` |
+| `monitor_idle_eips.sh` | `--webhook` | Optional | Webhook alert URL | - |
+| `monitor_idle_eips.sh` | `--email` | Optional | Alert email address | - |
+| `monitor_idle_eips.sh` | `--setup-cron` | Optional | Set up cron monitoring | - |
+| `monitor_idle_eips.sh` | `--remove-cron` | Optional | Remove cron monitoring | - |
+| `check_env.sh` | `--verbose` | Optional | Show detailed check info | `false` |
+| `check_env.sh` | `--fix` | Optional | Auto-fix missing dependencies | `false` |
+| `eip_audit_log.sh` | `--action` | Required | Operation type (list/query/analyze/monitor/report) | - |
+| `eip_audit_log.sh` | `--detail` | Optional | Operation detail description | - |
+| `eip_audit_log.sh` | `--export` | Optional | Export format: csv/json | - |
+| `eip_audit_log.sh` | `--log-dir` | Optional | Log directory path | `./eip_audit_logs` |
+
+### Environment Variables
+
+| Variable | Required | Description | Default |
+|----------|----------|-------------|---------|
+| `HW_ACCESS_KEY` | Optional* | Huawei Cloud AK (required only if hcloud configure not set) | - |
+| `HW_SECRET_KEY` | Optional* | Huawei Cloud SK (required only if hcloud configure not set) | - |
+| `HW_REGION_NAME` | Optional | Default region | `cn-north-4` |
+| `HW_SECURITY_TOKEN` | Optional | Temporary credential token | - |
+
+*\*When `hcloud configure` is already set up, `HW_ACCESS_KEY` and `HW_SECRET_KEY` are not needed. Environment variables take precedence when both are configured.*
 
 ## Output Format
 
-### EIP List Output (JSON)
-
-```json
-{
-  "publicips": [
-    {
-      "id": "eip-xxx1",
-      "public_ip_address": "123.45.67.89",
-      "bandwidth": { "size": 5 },
-      "status": "ACTIVE",
-      "binding_status": "BOUND",
-      "associate_instance_type": "ECS",
-      "create_time": "2026-04-15T10:30:00Z"
-    }
-  ]
-}
-```
-
-### Script Output (Formatted Text)
+### EIP List Output
 
 ```text
 ========================================
@@ -326,84 +370,72 @@ EIP ID: eip-xxx2, IP: 98.76.54.32, BW: 10 Mbps, Status: UNBOUND ⚠️
 Total: 2 EIPs, Idle: 1
 ```
 
-### Cost Report Output (HTML)
+### Cost Report Output
 
-Generated by `scripts/eip_cost_report.py` — includes statistics cards, idle EIP table, full EIP list, and optimization recommendations.
+Generated by `scripts/eip_cost_report.sh` — includes:
+- Summary statistics (total EIPs, idle, active, total bandwidth, costs)
+- Per-EIP detail table with cost estimates
+- Available in text, HTML, and JSON formats
+
+**Pricing Model**: Bandwidth-based (~3 CNY/Mbps/month + 0.02 CNY/hr IP retain fee for unbound EIPs)
 
 ## Verification
 
-See [Verification Method](references/verification-method.md)
-
-### Compliance Check Script
-
-Before any skill update or release, run the automated compliance check:
+### Environment Compliance Check
 
 ```bash
-# Run compliance check
-python3 scripts/compliance_check.py
+# Run full environment check (CLI + tools + API)
+bash scripts/check_env.sh
 
-# Verbose mode (show all findings)
-python3 scripts/compliance_check.py --verbose
+# Exit codes:
+#   0 - All checks passed
+#   1 - Missing dependencies or API errors
 ```
-
-**Checks performed**:
-
-1. All required Python SDK scripts exist
-2. No hardcoded credentials (AK/SK)
-3. No hardcoded local paths
-4. SKILL.md metadata correctness
-
-**Exit codes**:
-
-- `0` - All checks passed, skill is compliant
-- `1` - Compliance issues found, must fix before release
 
 ## Best Practices
 
-1. **Use Python SDK Scripts EXCLUSIVELY**: Always use `scripts/adjust_eip_bandwidth.py`, `scripts/analyze_idle_eips.py`, and `scripts/monitor_idle_eips.py`
-2. **Regular Monitoring**: Set up daily cron jobs with `monitor_idle_eips.py --setup-cron` to catch idle EIPs early
-3. **Tag Governance**: Use consistent tags (env, team, project) for all EIPs
-4. **Bandwidth Policy**: Set minimum bandwidth (1 Mbps) for idle EIPs to reduce costs before release
-5. **Interactive Mode**: Always use `--interactive` flag for release operations in production
-6. **Audit Logging**: Enable audit logging for all EIP operations using `scripts/eip_audit_log.sh --action <operation> --eip-id <id>`
-7. **Multi-Region Management**: Run `list_eips.py` for each region individually, or use `--summary` flag for programmatic access to EIP statistics
-8. **Bandwidth Policy**: Set minimum bandwidth (1 Mbps) for idle EIPs to reduce costs before release
-9. **Summary Mode for Automation**: Use `list_eips.py --summary` for programmatic access to EIP statistics (returns CSV: count,idle,bandwidth)
-10. **Documentation Synchronization**: When updating SKILL.md, ALWAYS update SKILL-CN.md simultaneously to maintain bilingual consistency. Both documents must have identical structure, parameters, and examples.
-11. **Shell Wrapper Audit**: After any migration or script deletion, audit ALL Shell wrappers for broken dependencies using `grep -r "<deleted-script>.sh" scripts/`. Test each wrapper before marking compliance complete.
-12. **jq Dependency Validation**: Before using audit log or multi-region scripts, verify jq is correctly installed: `jq --version` should return "jq-1.x". If it fails or shows "Not Found", check for broken PATH-prioritized installations at `/usr/local/bin/jq` and remove them.
-13. **Use Case Coverage Audit**: Before any skill release, verify typical use cases cover 100% of scripts. Run: `grep -A 20 "Typical Use Cases" SKILL.md | grep -c "^- \""` - should be 9+ for full coverage. Missing use cases indicate undocumented functionality.
+1. **Use Shell Scripts EXCLUSIVELY**: All scripts are Shell + hcloud CLI. No Python SDK dependency.
+2. **Regular Monitoring**: Set up daily cron jobs with `monitor_idle_eips.sh --setup-cron` to catch idle EIPs early
+3. **Cost Reports**: Generate weekly cost reports with `eip_cost_report.sh --format html` to track optimization progress
+4. **Audit Logging**: Enable audit logging for all EIP operations using `eip_audit_log.sh`
+5. **Multi-Region Management**: Use comma-separated regions `--region cn-north-4,cn-east-3` for cross-region analysis
+6. **Webhook Alerts**: Configure webhooks for real-time idle EIP notifications
+7. **Environment Validation**: Always run `check_env.sh` first to verify hcloud CLI and dependencies
+8. **Idle Days Consistency**: Both `analyze_idle_eips.sh` and `monitor_idle_eips.sh` use `--idle-days` parameter with consistent timezone handling
 
-## Reference Documents
+## References
 
-| Document                                                       | Description                                                                                                                 |
-| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| [IAM Permission Policies](references/iam-policies.md)          | Required permissions and policy JSON                                                                                        |
-| [EIP API Guide](references/eip-api-guide.md)                   | EIP API reference (Python SDK v2)                                                                                           |
-| [Verification Method](references/verification-method.md)       | Step-by-step verification                                                                                                   |
-| [Python SDK Usage Guide](references/python-sdk-usage-guide.md) | Python SDK patterns, common errors, and working examples. **See "Issue 4" for critical bandwidth adjustment API pitfalls.** |
+| Document | Description |
+|----------|-------------|
+| [IAM Permission Policies](references/iam-policies.md) | Required permissions and policy JSON |
+| [EIP API Guide](references/eip-api-guide.md) | EIP API reference (hcloud CLI) |
+| [CLI Installation Guide](references/cli-installation-guide.md) | hcloud CLI install, configure, troubleshoot |
+| [Verification Method](references/verification-method.md) | Step-by-step verification |
+| [Acceptance Criteria](references/acceptance-criteria.md) | Production readiness acceptance tests |
 
 ## Notes
 
-- **Cost estimates are for reference only** — based on cn-north-4 on-demand pricing (~¥2-4/Mbps/month). Actual costs may vary by region and billing mode.
+- **Cost estimates are for reference only** — based on cn-north-4 on-demand pricing (bandwidth model: ~3 CNY/Mbps/month + 0.02 CNY/hr IP retain fee). Actual costs may vary by region and billing mode.
+- **API does not return charge_mode** — scripts cannot distinguish bandwidth vs traffic billing; all estimates use bandwidth model.
 - **This skill is READ-ONLY** — it analyzes and reports idle EIPs but does NOT release or delete any resources. Manual action in the console is required to release EIPs.
-- **EIP release is irreversible** — if you choose to release idle EIPs based on the analysis report, the public IP address will be reclaimed and cannot be recovered. Always verify before releasing manually.
-- **AK/SK must never be hardcoded** — credentials should only be obtained via environment variables.
-- **Python SDK is the only supported method** — all scripts use Python SDK v2 natively.
-- **Bandwidth adjustment API**: Uses `BatchModifyBandwidth` API (NOT `UpdatePublicip` or `UpdateBandwidth`).
+- **EIP release is irreversible** — if you choose to release idle EIPs based on the analysis report, the public IP address will be reclaimed and cannot be recovered.
+- **AK/SK must never be hardcoded** — credentials should only be obtained via environment variables (`HW_ACCESS_KEY`, `HW_SECRET_KEY`) or `hcloud configure` interactive mode (entering via prompts, not command-line arguments).
+- **hcloud CLI is the only supported method** — all scripts use hcloud CLI (KooCLI) natively.
+- **Authentication**: Use environment variables (`HW_ACCESS_KEY`, `HW_SECRET_KEY`) as the primary method. If `hcloud configure` is already set up interactively, the skill will detect and use those credentials. Never pass credentials as command-line arguments.
+- **Temporary Credentials Supported**: This skill supports temporary AK/SK+Token obtained via IAM STS. Set `HW_SECURITY_TOKEN` when using temporary credentials.
+- **Environment Variable Standard**: Uses `HW_*` prefix for consistency with other Huawei Cloud skills.
+- **jq is required** for all scripts that parse hcloud CLI JSON output.
+- **Idle days calculation is timezone-consistent** — both analyze and monitor scripts use `date` command for epoch calculation, eliminating UTC offset issues.
+- **Audit log timestamps are timezone-aware** — format `YYYY-MM-DDTHH:MM:SS+HH:MM` (e.g., `+08:00`), not misleading `Z` suffix.
 
 ## Common Pitfalls
 
-See [Common Pitfalls & Solutions](references/common-pitfalls.md) for detailed troubleshooting guides.
-
-**Quick Reference**:
-
-| Pitfall              | Symptom                  | Quick Fix                            |
-| -------------------- | ------------------------ | ------------------------------------ |
-| jq path issues       | `eip_audit_log.sh` fails | `sudo rm /usr/local/bin/jq`          |
-| Wrong bandwidth API  | `VPC.0301` error         | Use `BatchModifyBandwidthRequest`    |
-| Missing bandwidth_id | Empty bandwidth ID       | Access `eip.bandwidth_size` directly |
-| v3 SDK import error  | No `EipRegion` attribute | Use v2 SDK                           |
-| Timestamp parsing    | Unknown idle days        | Handle ISO format                    |
-
-# 
+| Pitfall | Symptom | Quick Fix |
+|---------|---------|-----------|
+| hcloud not installed | `command not found: hcloud` | Install KooCLI |
+| jq not installed | JSON parse errors | `sudo apt install jq` |
+| bc not installed | Cost calculation errors | `sudo apt install bc` |
+| AK/SK not set | API 401 / credential error | Export `HW_ACCESS_KEY`/`HW_SECRET_KEY` or configure `hcloud` interactively |
+| Wrong region | `❌ API 返回异常` | Use valid region ID (e.g., `cn-north-4`) |
+| Invalid format | `❌ 不支持的格式` | Use text/html/json for `--format` |
+| API rate limit | `429 Too Many Requests` | Add delay between calls |
