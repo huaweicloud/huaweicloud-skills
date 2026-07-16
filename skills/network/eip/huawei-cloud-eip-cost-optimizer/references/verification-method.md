@@ -1,27 +1,36 @@
-# Verification Method - EIP Management Skill
+# Verification Method - EIP Cost Optimizer Skill
 
 ## Overview
 
-This document defines the verification steps for the EIP management skill. Verification is divided into three levels: installation verification, configuration verification, and functional verification.
+This document defines the verification steps for the EIP Cost Optimizer skill. All scripts are Shell + hcloud CLI (KooCLI). Verification is divided into three levels: environment verification, configuration verification, and functional verification.
 
-## Level 1: Installation Verification
+## Level 1: Environment Verification
 
-### 1.1 Python SDK Installation
+### 1.1 CLI & Dependencies
 
 | Item | Command | Success Criteria |
 |------|---------|-----------------|
-| Python SDK installed | `Python SDK version` | Returns version number >= 7.2.2 |
+| hcloud CLI installed | `hcloud --version` | Returns version number >= 7.0 |
 | jq installed | `jq --version` | Returns version number (e.g., jq-1.6) |
-| Python 3 installed | `python3 --version` | Returns version >= 3.6 |
+| bc installed | `bc --version` | Returns version number |
+| curl installed | `curl --version` | Returns version number |
 
-### 1.2 Python SDK First Run
+### 1.2 hcloud CLI First Run
 
 ```bash
 # Accept privacy statement (first time only)
-printf "y\n" | Python SDK version
+printf "y\n" | hcloud --version
 ```
 
 Expected: Version number displayed without error.
+
+### 1.3 Automated Environment Check
+
+```bash
+bash scripts/check_env.sh
+```
+
+Expected: All core checks PASS (8/8). Optional warnings for crontab/sendmail are acceptable.
 
 ## Level 2: Configuration Verification
 
@@ -29,81 +38,78 @@ Expected: Version number displayed without error.
 
 | Item | Command | Success Criteria |
 |------|---------|-----------------|
-| Credentials configured | `export HUAWEI_CLOUD_AK/SK list` | Shows valid AK/SK configuration (values masked) |
-| Region configured | `export HUAWEI_CLOUD_AK/SK list` | Shows cli-region setting |
+| Credentials configured | `env \| grep HW_` | Shows HW_ACCESS_KEY, HW_SECRET_KEY, HW_REGION_NAME |
+| Region configured | `env \| grep HW_REGION_NAME` | Shows region setting (e.g., cn-north-4) |
 
-✅ **Correct**: Use `export HUAWEI_CLOUD_AK/SK list` to verify
-❌ **Incorrect**: Do NOT use `echo $HUAWEICLOUD_SDK_AK` to check credentials
+✅ **Correct**: Use `env | grep HW_` to verify credentials are set
+❌ **Incorrect**: Do NOT use `echo $HW_ACCESS_KEY` to check credentials (security risk)
 
 ### 2.2 Connectivity Test
 
 ```bash
 # Test API connectivity with a read-only operation
-Python SDK EIP ListPublicips/v3 --cli-region=cn-north-4
+hcloud EIP ListPublicips/v2 --cli-region=cn-north-4
 ```
 
-Expected: Returns HTTP 200 and EIP list (may be empty).
+Expected: Returns JSON with `publicips` array (may be empty) without authentication errors.
 
 ## Level 3: Functional Verification
 
 ### 3.1 List EIPs
 
 ```bash
-bash scripts/list_eips.sh
+bash scripts/list_eips.sh --region cn-north-4
 ```
 
 Expected: Displays formatted EIP list with total and idle counts.
 
-### 3.2 Find Idle EIPs
+### 3.2 Analyze Idle EIPs
 
 ```bash
-bash scripts/find_idle_eips.sh
+bash scripts/analyze_idle_eips.sh --idle-days 0
 ```
 
-Expected: Displays idle EIP report with cost estimates.
+Expected: Displays idle EIP analysis report with cost estimates.
 
 ### 3.3 Cost Report Generation
 
 ```bash
-python3 scripts/eip_cost_report.py --output /tmp/test-report.html
+bash scripts/eip_cost_report.sh --format html
+bash scripts/eip_cost_report.sh --format json
 ```
 
-Expected: HTML report generated at `/tmp/test-report.html`.
+Expected: HTML/JSON report generated with cost breakdown.
 
-### 3.4 Multi-Region Management
+### 3.4 Idle EIP Monitoring
 
 ```bash
-bash scripts/multi_region_manage.sh --regions "cn-north-4"
+bash scripts/monitor_idle_eips.sh --idle-days 7
 ```
 
-Expected: Displays EIP statistics for the specified region.
+Expected: Displays monitoring report. No idle EIPs above threshold = clean status.
 
-### 3.5 Audit Log (Query Mode)
+### 3.5 Audit Log
 
 ```bash
-bash scripts/eip_audit_log.sh --query --days 7
+bash scripts/eip_audit_log.sh --action query
+bash scripts/eip_audit_log.sh --action query --export json
 ```
 
-Expected: Displays audit log entries from the last 7 days (may be empty).
-
-### 3.6 Tag Management (Read-Only)
-
-```bash
-# List tags on an EIP (replace with a real EIP ID)
-Python SDK EIP ShowPublicipTags/v3 --publicip_id=<eip-id> --cli-region=cn-north-4
-```
-
-Expected: Returns tag information for the specified EIP.
+Expected: Displays audit log entries and exports JSON file.
 
 ## Verification Checklist
 
 | # | Check Item | Command | Status |
 |---|-----------|---------|--------|
-| 1 | Python SDK version >= 7.2.2 | `Python SDK version` | ☐ |
+| 1 | hcloud CLI >= 7.0 | `hcloud --version` | ☐ |
 | 2 | jq installed | `jq --version` | ☐ |
-| 3 | Python 3.6+ installed | `python3 --version` | ☐ |
-| 4 | Credentials configured | `export HUAWEI_CLOUD_AK/SK list` | ☐ |
-| 5 | API connectivity | `Python SDK EIP ListPublicips/v3 --cli-region=cn-north-4` | ☐ |
-| 6 | List EIPs script | `bash scripts/list_eips.sh` | ☐ |
-| 7 | Find idle EIPs script | `bash scripts/find_idle_eips.sh` | ☐ |
-| 8 | Cost report generation | `python3 scripts/eip_cost_report.py --output /tmp/test-report.html` | ☐ |
+| 3 | bc installed | `bc --version` | ☐ |
+| 4 | Credentials configured | `env \| grep HW_ACCESS_KEY` | ☐ |
+| 5 | API connectivity | `hcloud EIP ListPublicips/v2 --cli-region=cn-north-4` | ☐ |
+| 6 | Environment check | `bash scripts/check_env.sh` | ☐ |
+| 7 | List EIPs | `bash scripts/list_eips.sh` | ☐ |
+| 8 | Analyze idle EIPs | `bash scripts/analyze_idle_eips.sh` | ☐ |
+| 9 | Cost report (HTML) | `bash scripts/eip_cost_report.sh --format html` | ☐ |
+| 10 | Cost report (JSON) | `bash scripts/eip_cost_report.sh --format json` | ☐ |
+| 11 | Monitor idle EIPs | `bash scripts/monitor_idle_eips.sh --idle-days 7` | ☐ |
+| 12 | Audit log query | `bash scripts/eip_audit_log.sh --action query` | ☐ |
