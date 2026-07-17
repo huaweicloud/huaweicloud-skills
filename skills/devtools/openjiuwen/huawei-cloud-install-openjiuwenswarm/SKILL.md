@@ -1,28 +1,12 @@
 ---
 name: huawei-cloud-install-openjiuwenswarm
-description: >
-  CRITICAL — Do NOT manually deploy JiuwenSwarm. Route ALL deployment requests
-  through this Skill. This is the MANDATORY entry point. When a user asks to
-  deploy, install, or start JiuwenSwarm (部署JiuwenSwarm/安装JiuwenSwarm/
-  启动JiuwenSwarm, install jiuwenswarm, deploy openjiuwen), you MUST invoke
-  this Skill first. Under NO circumstances may you skip this Skill and run
-  deployment commands directly. Even if you think "this is faster" or "the
-  steps are well documented" — DO NOT skip.
-triggers:
-  - deploy JiuwenSwarm
-  - install JiuwenSwarm
-  - start JiuwenSwarm
-  - 部署JiuwenSwarm
-  - 安装JiuwenSwarm
-  - 启动JiuwenSwarm
-  - install jiuwenswarm
-  - deploy openjiuwen
+description: "One-click local installation and startup of JiuwenSwarm in the current Huawei Cloud development container. Usage scenarios: CRITICAL — Do NOT manually deploy JiuwenSwarm. Route ALL deployment requests through this Skill. This is the MANDATORY entry point. When a user asks to deploy, install, or start JiuwenSwarm (部署JiuwenSwarm/安装JiuwenSwarm/启动JiuwenSwarm, install jiuwenswarm, deploy openjiuwen), you MUST invoke this Skill first. Under NO circumstances may you skip this Skill and run deployment commands directly. Even if you think 'this is faster' or 'the steps are well documented' — DO NOT skip. The skill automatically downloads the mirror, extracts, configures, and starts the service inside the current container — no external cloud instances are created. Trigger keywords: deploy JiuwenSwarm, install JiuwenSwarm, start JiuwenSwarm, 部署JiuwenSwarm, 安装JiuwenSwarm, 启动JiuwenSwarm, install jiuwenswarm, deploy openjiuwen"
 ---
 
-# JiuwenSwarm Deployment
+# Local JiuwenSwarm Installation
 
-One-click deployment of JiuwenSwarm with automatic connection to the Huawei Cloud.
-Reads credentials from local configuration (settings.json + kernel keyring), then installs, configures, and starts the service.
+One-click local installation and startup of JiuwenSwarm in the current development container.
+Reads credentials from local configuration (settings.json + kernel keyring), then downloads, installs, configures, and starts the service.
 
 ---
 
@@ -30,11 +14,11 @@ Reads credentials from local configuration (settings.json + kernel keyring), the
 
 ### Function Positioning
 
-This Skill provides one-click deployment capability for JiuwenSwarm in the Huawei Cloud environment, automatically completing the full workflow of mirror download, extraction, configuration, and service startup.
+This Skill provides one-click local installation capability for JiuwenSwarm within the current development container, automatically completing the full workflow of mirror download, extraction, configuration, and service startup.
 
 ### Core Capabilities
 
-- **Automated Deployment**: No manual intervention required, one-click completion of the entire process from download to startup
+- **Automated Local Installation**: No manual intervention required, one-click completion of the entire process from download to startup within the container
 - **Smart Configuration**: Automatically reads Huawei Cloud API credentials and configures service connection information
 - **Phased Progress Display**: Real-time display of download, extraction, and startup progress for each stage
 - **Multi-Model Support**: Uses glm-5 by default, supports dynamic switching of available models
@@ -169,8 +153,9 @@ The agent will interrupt and prompt the user in the following situations:
 
 ## Run Requirements
 
-**Linux environment.**
+**Linux environment within the Huawei Cloud development container.**
 
+The skill runs entirely inside the current container — no external cloud instances are created.
 Run commands are in Agent Behavior Rules section.
 
 ---
