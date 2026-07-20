@@ -1,0 +1,45 @@
+{
+  "scenarios": [
+    {
+      "name": "场景1: VPC+ECS 资源生命周期",
+      "skills_involved": ["huawei-cloud-vpc-manage", "huawei-cloud-ecs-manage"],
+      "description": "创建VPC → 在VPC内创建ECS → 查询资源 → 释放资源",
+      "steps": [
+        {"seq": 1, "skill": "huawei-cloud-vpc-manage", "action": "创建VPC", "expected_resource_type": "vpc"},
+        {"seq": 2, "skill": "huawei-cloud-ecs-manage", "action": "创建ECS(在VPC内)", "expected_resource_type": "ecs_instance"},
+        {"seq": 3, "skill": "huawei-cloud-ecs-manage", "action": "查询ECS", "expected_resource_type": "none"},
+        {"seq": 4, "skill": "huawei-cloud-ecs-manage", "action": "删除ECS", "expected_resource_type": "none"},
+        {"seq": 5, "skill": "huawei-cloud-vpc-manage", "action": "删除VPC", "expected_resource_type": "none"}
+      ]
+    },
+    {
+      "name": "场景2: EIP完整生命周期",
+      "skills_involved": ["huawei-cloud-eip-manage", "huawei-cloud-ecs-manage"],
+      "description": "创建ECS → 创建EIP → 绑定EIP → 查询 → 解绑 → 删除",
+      "steps": [
+        {"seq": 1, "skill": "huawei-cloud-ecs-manage", "action": "创建ECS", "expected_resource_type": "ecs_instance"},
+        {"seq": 2, "skill": "huawei-cloud-eip-manage", "action": "创建EIP", "expected_resource_type": "eip"},
+        {"seq": 3, "skill": "huawei-cloud-eip-manage", "action": "绑定EIP到ECS", "expected_resource_type": "none"},
+        {"seq": 4, "skill": "huawei-cloud-ecs-manage", "action": "查询ECS确认绑定", "expected_resource_type": "none"},
+        {"seq": 5, "skill": "huawei-cloud-eip-manage", "action": "解绑EIP", "expected_resource_type": "none"},
+        {"seq": 6, "skill": "huawei-cloud-eip-manage", "action": "删除EIP", "expected_resource_type": "none"}
+      ]
+    },
+    {
+      "name": "场景3: BSS代金券完整生命周期",
+      "skills_involved": ["huawei-cloud-bss-voucher-manage"],
+      "description": "单skill完整闭环：查询代金券 → 删除代金券 → 确认删除 → 统计",
+      "steps": [
+        {"seq": 1, "skill": "huawei-cloud-bss-voucher-manage", "action": "查询代金券列表", "expected_resource_type": "bss_voucher"},
+        {"seq": 2, "skill": "huawei-cloud-bss-voucher-manage", "action": "删除指定代金券", "expected_resource_type": "bss_voucher"},
+        {"seq": 3, "skill": "huawei-cloud-bss-voucher-manage", "action": "确认删除结果", "expected_resource_type": "none"},
+        {"seq": 4, "skill": "huawei-cloud-bss-voucher-manage", "action": "统计代金券概览", "expected_resource_type": "none"}
+      ]
+    }
+  ],
+  "derivation_metadata": {
+    "derived_automatically": true,
+    "source_phases": ["phase-1-summary.json"],
+    "skills_available_for_derivation": []
+  }
+}

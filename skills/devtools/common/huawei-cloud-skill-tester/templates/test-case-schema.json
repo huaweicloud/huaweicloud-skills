@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Test Case Schema",
+  "type": "object",
+  "required": ["id", "name", "type", "expected", "is_write", "risk_level", "executor"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^(TC-F|TC-A|OF|FF)-\\d{2,4}$",
+      "description": "TC-F: functional case, TC-A: API case, OF: orchestration flow, FF: full flow"
+    },
+    "name": {"type": "string", "description": "用例名称，如 '查询代金券列表-正向'"},
+    "type": {"type": "string", "enum": ["正向", "边界", "异常"]},
+    "command": {"type": "string", "description": "可执行的命令或代码"},
+    "expected": {"type": "string", "description": "预期结果描述"},
+    "is_write": {"type": "boolean", "description": "是否涉及资源变更"},
+    "risk_level": {"type": "string", "enum": ["low", "medium", "high"]},
+    "executor": {"type": "string", "enum": ["cli", "sdk", "api"]},
+    "prerequisites": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "前置依赖用例ID列表"
+    },
+    "verification_method": {"type": "string", "description": "验证方法描述"},
+    "dependencies": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "依赖的CMD-ID列表"
+    },
+    "endpoint": {
+      "type": "string",
+      "description": "API 模式下的 REST 路径"
+    },
+    "method": {
+      "type": "string",
+      "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"],
+      "description": "API 模式下的 HTTP 方法"
+    }
+  }
+}
