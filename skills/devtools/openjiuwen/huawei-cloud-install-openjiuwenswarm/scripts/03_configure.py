@@ -54,15 +54,12 @@ if not os.path.isfile(ENV_FILE):
 config = get_keyring_config()
 api_base = config.get("base_url", "")
 api_key = config.get("api_key", "")
-available_models = config.get("models", [])
 current_model_id = config.get("model_id", "")
 
-if "glm-5" in available_models:
-    model_id = "glm-5"
-elif current_model_id:
+if current_model_id:
     model_id = current_model_id
 else:
-    model_id = "glm-5"
+    model_id = "glm-5.2"
 
 update_env_file("API_BASE", f'"{api_base}"')
 update_env_file("API_KEY", f'"{api_key}"')
