@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Huawei Cloud Skill Tester Phase Report",
+  "type": "object",
+  "required": ["phase", "phase_name", "tier", "target", "timestamp", "execution_meta", "result", "summary"],
+  "properties": {
+    "phase": {"type": "integer", "minimum": 0, "maximum": 9},
+    "phase_name": {"type": "string"},
+    "tier": {"type": "integer", "enum": [1, 2, 3]},
+    "target": {
+      "type": "object",
+      "properties": {
+        "type": {"type": "string", "enum": ["single_skill", "multi_skill", "all"]},
+        "skills": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "timestamp": {"type": "string", "format": "date-time"},
+    "execution_meta": {
+      "type": "object",
+      "properties": {
+        "duration_s": {"type": "number"},
+        "retry_count": {"type": "integer"},
+        "user_confirmed": {"type": "boolean"}
+      }
+    },
+    "result": {"type": "object"},
+    "summary": {
+      "type": "object",
+      "properties": {
+        "verdict": {"type": "string", "enum": ["pass", "fail", "partial", "skipped", "downgraded"]},
+        "pass_checks": {"type": "integer"},
+        "fail_checks": {"type": "integer"},
+        "warn_checks": {"type": "integer"}
+      }
+    }
+  }
+}
