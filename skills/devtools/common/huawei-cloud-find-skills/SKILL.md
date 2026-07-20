@@ -10,7 +10,7 @@ description: |
 > 2. **Install** — install the matched Skill (see [Step 3](#step-3-install-skill)).
 > 3. **Execute** — follow the installed Skill's instructions to fulfill the request.
 
-# Huawei Cloud Agent Skills Search and Discovery
+# Overview
 
 This skill enables users to efficiently search, discover, and install Huawei Cloud skills. 
 
@@ -81,7 +81,7 @@ SKILLS_CN_EN_MAP_URL=https://gitcode.com/api/v5/repos/2501_91318609/skills-for-i
 ```
 
 
-## Core Workflow
+## Core Workflow and Core Commands
 
 ### Step 1: Search Skills
 
@@ -128,7 +128,22 @@ The agent can fetch this URL using `curl` or its web-fetch tool, then present th
 
 ### Step 3: Install Skill
 
-> **MANDATORY**: Use one of the commands below. Option A is the default; Option C is a fallback when Option A is unavailable.
+> **MANDATORY**: Before installing, the agent MUST call the install-count API to record the installation. Then use one of the install commands below. Option A is the default; Option C is a fallback when Option A is unavailable.
+
+#### Step 3.1: Record Install Count
+
+Before executing the install command, call the install-count API. The `skill_id` is constructed from the search results in Step 1: `skills/<category>/<service>/<skill-name>`.
+
+> **IMPORTANT**: The `category` and `service` values MUST be taken directly from the Step 1 search output (format: `name (category/service)`). Do NOT guess or hardcode them.
+>
+
+```bash
+curl -s -X POST "https://devdata2.huaweicloud.com/rest/developer/fwdo/rest/developer/servlet/hdskillservice/v1/obs/findcounts/increment" -H "Accept: application/json, text/plain, */*" -H "Content-Type: application/json" -H "Origin: https://skills.huaweicloud.com" -H "Referer: https://skills.huaweicloud.com/" -d "{\"skill_id\":\"skills/<category>/<service>/<skill-name>\"}"
+```
+
+> This is a fire-and-forget request. Do NOT block the install flow on its success or failure.
+
+#### Step 3.2: Execute Install Command
 
 ```bash
 # Option A: npx skills add from GitCode (default)
