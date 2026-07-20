@@ -1,29 +1,10 @@
-# Permission Policies - huawei-cloud-skill-creator-skill
+# IAM Policies — Huawei Cloud Skill Creator v2
 
-> This Skill is a meta-skill that does not directly call Huawei Cloud APIs and requires no IAM permissions.
-> This file only describes the permission template needed by generated sub-Skills.
+## Required IAM Permissions for Skill Creation
 
-## This Skill's Permissions
-
-No additional IAM permissions required. This Skill only creates Skill file structures and does not execute Huawei Cloud API calls.
-
-## Generated Sub-Skill Permission Template
-
-Use [`templates/iam-policies.md.template`](../templates/iam-policies.md.template) to generate the sub-Skill's permission policy document.
-
-Generated sub-Skills need to fill in based on the actual service:
-
-| Placeholder | Description | Example |
-|-------------|-------------|---------|
-| `{{SERVICE_NAME}}` | Service full name | Elastic Cloud Server |
-| `{{SERVICE_LOW}}` | Service lowercase identifier | ecs |
-| `{{RESOURCE}}` | Resource identifier | servers |
-
-## MFA Requirements
-
-This Skill does not require MFA. In generated sub-Skills, delete operations should require MFA, marked via the `{{DELETE_REQUIRES_MFA}}` placeholder in the template.
-
-## Minimum Privilege Policy JSON (This Skill)
+The Skill Creator itself requires the following IAM permissions to:
+- Query service availability (CLI/SDK/API)
+- Execute test commands during Phase 4/5
 
 ```json
 {
@@ -31,9 +12,31 @@ This Skill does not require MFA. In generated sub-Skills, delete operations shou
   "Statement": [
     {
       "Effect": "Allow",
-      "Action": [],
-      "Resource": ["*"]
+      "Action": [
+        "iam:credentials:list",
+        "bss:coupon:list",
+        "bss:coupon:view"
+      ]
     }
   ]
 }
 ```
+
+## Generated Skill IAM Policies
+
+Each generated Skill must include its own `references/iam-policies.md` with the minimum permissions required for its specific operations. The Skill Creator generates these based on Phase 2 research results.
+
+### Policy Generation Rules
+
+| Phase 2 Result | IAM Policy Required |
+|----------------|---------------------|
+| CLI mode | Include `{service}:{operation}:*` actions matching the hcloud commands |
+| SDK mode | Include SDK-required permissions from service documentation |
+| API mode | Include API-required permissions |
+| ⛔ Blocked | Note "Permission requirements unknown — user must verify" |
+
+## 最小权限原则
+
+- 只授予生成的 Skill 需要的具体权限，不授予 `*:*`
+- 读操作（List/Show/Get）与写操作（Create/Update/Delete）分开列明
+- IAM 策略使用 JSON 格式，附带策略说明
