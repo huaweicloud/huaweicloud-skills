@@ -1,0 +1,35 @@
+﻿name: huawei-cloud-cce-metric-analyzer
+level: L2
+domain: observability
+description: Query and analyze metrics for CCE clusters (Pod/Node) and cloud resources (ECS, ELB, EIP, NAT). Supports threshold-based anomaly detection and status classification.
+tools:
+  - huawei_get_cce_pod_metrics_topN
+  - huawei_get_cce_pod_metrics
+  - huawei_get_cce_node_metrics_topN
+  - huawei_get_cce_node_metrics
+  - huawei_get_cce_node_gpu_metrics
+  - huawei_get_cce_pod_gpu_metrics
+  - huawei_get_cce_coredns_metrics
+  - huawei_get_cce_nginx_ingress_metrics
+  - huawei_get_cce_autoscaler_metrics
+  - huawei_get_cce_apiserver_metrics
+  - huawei_get_cce_etcd_metrics
+  - huawei_get_cce_controller_manager_metrics
+  - huawei_get_cce_scheduler_metrics
+  - huawei_get_ecs_metrics
+  - huawei_get_elb_metrics
+  - huawei_get_eip_metrics
+  - huawei_get_nat_gateway_metrics
+  - huawei_cce_cluster_monitoring_aggregation
+references:
+  - references/workflow.md
+  - references/risk-rules.md
+  - references/output-schema.md
+dependencies:
+  - type: cli
+    name: hcloud
+    version: ">= 7.2.2"
+    required: true
+    configuration: local hcloud profile configured with `hcloud configure`
+guardrails:
+  max_auto_risk: R3
