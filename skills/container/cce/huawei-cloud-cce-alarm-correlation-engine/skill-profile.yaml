@@ -1,0 +1,34 @@
+﻿name: huawei-cloud-cce-alarm-correlation-engine
+level: L2
+domain: observability
+description: Correlate Huawei Cloud AOM active and historical alarms for CCE operations.
+dependencies:
+  - type: cli
+    name: hcloud
+    version: ">= 7.2.2"
+    required: true
+    configuration: local hcloud profile configured with `hcloud configure`
+tools:
+  - huawei_list_aom_alarms
+  - huawei_list_aom_current_alarms
+  - huawei_analyze_aom_alarms
+  - huawei_list_aom_alarm_rules
+  - huawei_create_aom_alarm_rule
+  - huawei_create_aom_event_alarm_rule
+  - huawei_configure_cce_aom_alarm_rules
+  - huawei_update_aom_alarm_rule
+  - huawei_delete_aom_alarm_rule
+  - huawei_disable_aom_alarm_rule
+  - huawei_enable_aom_alarm_rule
+  - huawei_list_aom_action_rules
+  - huawei_delete_aom_action_rule
+  - huawei_list_aom_mute_rules
+  - huawei_aom_alarm_inspection
+references:
+  - references/workflow.md
+  - references/risk-rules.md
+  - references/output-schema.md
+  - references/cce-event-list.md
+  - references/cce-prometheus-metric-alarms.md
+guardrails:
+  max_auto_risk: R1
