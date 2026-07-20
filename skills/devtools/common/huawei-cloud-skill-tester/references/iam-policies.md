@@ -1,37 +1,44 @@
-# IAM Permission Policies
+# IAM Policies — huawei-cloud-skill-tester
 
-> Required API permission policies for huawei-cloud-skill-tester.
+## Overview
 
-## Permission Overview
+The skill-tester framework itself does not require specific IAM permissions. However, it executes test cases against real Huawei Cloud environments for the skills under test. The IAM permissions required depend entirely on the APIs and operations invoked by the skill being tested.
 
-This Skill primarily executes Skill testing operations, involving the following permissions:
+## Required Permissions
 
-- Read Skill directories and files (local operation, no cloud API permission required)
-- Execute hcloud CLI read-only operations to verify dependencies (requires basic query permission)
-- Execute cloud API calls in test cases (depends on the tested Skill's permission requirements)
+### For the Skill Tester Framework
 
-## Query Operation Permissions
+| Permission | Description | Scope |
+|------------|-------------|-------|
+| None | The tester runs locally and orchestrates scripts; no direct Huawei Cloud API calls | N/A |
 
-| Service | Action | Description |
-|---------|--------|-------------|
-| IAM | iam:users:list | Verify authentication configuration |
-| BSS | bss:order:list | Verify account status |
+### For Skills Under Test
 
-## Operation Permissions
+Each skill under test may require different IAM permissions. Refer to the skill-specific `references/iam-policies.md` for details. Common permission categories include:
 
-This Skill itself does not require operation permissions. If test execution requires invoking the tested Skill's operations, permissions are defined by the tested Skill's `references/iam-policies.md`.
+| Category | Common Actions |
+|----------|---------------|
+| Read-Only | `Show*`, `List*`, `Get*`, `Describe*` |
+| Write | `Create*`, `Update*`, `Delete*`, `Attach*`, `Detach*` |
 
-## Minimum Permission Policy JSON
+## Policy Examples
+
+### Read-Only Test Policy
 
 ```json
 {
-  "Version": "1.1",
+  "Version": "1.0",
   "Statement": [
     {
       "Effect": "Allow",
       "Action": [
-        "iam:users:list",
-        "bss:order:list"
+        "ECS:List*",
+        "ECS:Show*",
+        "ECS:Get*",
+        "VPC:List*",
+        "VPC:Show*",
+        "OBS:List*",
+        "OBS:Get*"
       ],
       "Resource": ["*"]
     }
@@ -39,15 +46,35 @@ This Skill itself does not require operation permissions. If test execution requ
 }
 ```
 
-## MFA Requirements
+### Read-Write Test Policy (for full E2E testing)
 
-| Operation | MFA Required |
-|-----------|--------------|
-| Read operations | No |
-| Tested Skill operations | Per tested Skill definition |
+```json
+{
+  "Version": "1.0",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ECS:*",
+        "VPC:*",
+        "OBS:*",
+        "EVS:*",
+        "EIP:*"
+      ],
+      "Resource": ["*"]
+    }
+  ]
+}
+```
 
-## Notes
+## Credential Requirements
 
-- When testing Skills in production, use an independent test account
-- Ensure cleanup logic exists after tests involving create/delete resources
-- Sensitive operation tests should run in dry-run mode
+The tester reads credentials from environment variables:
+
+- `HUAWEI_ACCESS_KEY` / `HUAWEI_SECRET_KEY`
+- or `HWC_AK` / `HWC_SK`
+
+**Important:**
+- Use a dedicated IAM user with narrowly scoped permissions for testing
+- Never use the account-level access key
+- If AK/SK is missing, the tester will prompt the user to provide them before execution

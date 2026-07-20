@@ -1,71 +1,78 @@
-# Verification Method
+# Verification Method — huawei-cloud-skill-tester
 
-## Phase 1: Installation Verification
+## Overview
 
-```bash
-bash scripts/validate-skill.sh <skill-path> --phase all-install
-# Expected output: [PASS] All installation checks passed
-```
+This document describes how to verify the skill-tester framework is correctly installed, configured, and producing valid results.
 
-Pass criteria:
-- SKILL.md exists and is readable
-- YAML Frontmatter has valid name, description (5-point), version, tags
-- Recommended directories (references/, scripts/, templates/, demo/) present or warned
-- CLI dependency (hcloud) available and authenticated
+## Prerequisites Verification
 
-## Phase 2: Basic Functionality Testing
+### 1. Check Directory Structure
 
 ```bash
-bash scripts/test-skill.sh <skill-name> --skill-path <skill-path> --phase all-basic
-# Expected: pass_rate >= 0.9, trigger_accuracy >= 0.9
+ls $HOME/.hermes/skills/huawei-cloud-skill-tester/
+# Should contain: SKILL.md, scripts/, references/
 ```
 
-Pass criteria:
-- Trigger identification accuracy >= 90%
-- Core use case output structure complete
-- Boundary/exception cases handled without fabrication
-- No false triggers on unrelated requests
-- With/Without comparison shows quantified value delta > 0
-
-## Phase 3: Combination Compatibility Testing
+### 2. Verify Script Availability
 
 ```bash
-bash scripts/test-skill.sh <skill-name> --skill-path <skill-path> --phase all-combination --related <skill2>
-# Expected: hallucination_rate < 0.05, no conflict errors
+ls scripts/
+# Should contain: run-test-pipeline.sh, tier1/, tier2/, tier3/, lib/
 ```
 
-Pass criteria:
-- No responsibility confusion (invoked Skill == expected Skill)
-- No parameter fabrication (values within valid range)
-- No workflow stitching errors (actual steps == expected sequence)
-- No context pollution (Task B output independent of Task A)
-- No format hallucination (output matches specification)
-
-## Phase 4: Solution-Level Testing
+### 3. Check Required Dependencies
 
 ```bash
-bash scripts/test-skill.sh <skill-name> --skill-path <skill-path> --phase solution --scenario <name>
-# Expected: full pipeline passes, performance within thresholds
+python3 --version            # Python 3.8+
+hcloud version               # hcloud CLI installed
+jq --version                 # jq installed
+env | grep -E "HUAWEI_AK|HWC_AK"  # AK/SK configured
 ```
 
-Pass criteria:
-- End-to-end scenario completes successfully
-- Performance metrics within thresholds:
-  - total_time_seconds < 300s
-  - total_tokens < 50000
-  - accuracy_rate > 0.9
-  - hallucination_rate < 0.05
-  - trigger_accuracy > 0.9
+## Pipeline Verification
 
-## Full Pipeline Verification
+### Unit Test (Single Skill)
 
 ```bash
-bash scripts/test-skill.sh <skill-name> \
-  --skill-path <skill-path> \
-  --phase full \
-  --related <skill2,skill3> \
-  --scenario <scenario-name> \
-  --output ./test-report.yaml
+bash scripts/run-test-pipeline.sh --skills "huawei-cloud-bss-voucher-manage"
 ```
 
-All four phases must pass. A YAML test report is generated at the specified output path.
+Expected output:
+- Phase 0~5 complete with `pass` verdict
+- `phase-5-summary.json` generated
+
+### Integration Test (Multi-Skill)
+
+```bash
+bash scripts/run-test-pipeline.sh --skills "skill-a, skill-b"
+```
+
+Expected output:
+- Phase 6 generates orchestration scenarios
+- Phase 7 executes E2E flow
+- Phase 8 produces consolidated report
+
+## Output Validation
+
+Each phase produces a `phase-N-summary.json`. Validate using:
+
+```bash
+jq '.summary.verdict' phase-4-summary.json
+```
+
+Expected verdicts: `pass`, `fail`, `partial`, `skipped`, or `downgraded`.
+
+## Chain Integrity Verification
+
+Verify chain dependency between phases:
+
+```bash
+# Phase 2 requires Phase 1
+test -f phase-1-summary.json && echo "Chain OK" || echo "Chain broken"
+```
+
+## Error Recovery Verification
+
+1. Delete a phase JSON file
+2. Re-run the pipeline
+3. Confirm it detects the missing phase and restarts from that point
