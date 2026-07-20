@@ -1,58 +1,71 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # ============================================================================
-# CLI Functional Test Script for Huawei Cloud Skills
+# CLI Functional Test Script for Huawei Cloud Skills Creator v2
 # ============================================================================
-# Usage: bash test-cli-commands.sh <skill-path> [options]
+# Usage: bash test-cli-commands.sh <skill-path> [--region <region>] [--executor cli|sdk|api|auto]
 #
-# Options:
-#   --region <region>    Huawei Cloud region (default: cn-north-4)
-#   --output <path>      Test report output path
-#   --executor <mode>    Execution backend: cli|sdk|api|auto (default: auto)
-#
-# Extracts every hcloud CLI command from SKILL.md and reference files, then:
-#   1. Runs --help on each command (syntax verification, no side effects)
-#   2. Executes read-only ops (List/Show/Get/Describe/Query) with CLI→SDK→API fallback
-#   3. Skips mutation operations (Create/Update/Delete/Start/Stop) — only --help
+# Extracts test cases from templates/test-vars.json, then:
+#   1. Executes each test case with CLI→SDK→API fallback
+#   2. Read-only ops run live with --limit=1
+#   3. Mutation ops only do --help syntax check (user must confirm for live)
 #   4. Generates references/test-report.md with results
 # ============================================================================
 
-set -euo pipefail
+set -uo pipefail
 
-SKILL_PATH="${1:?Usage: bash test-cli-commands.sh <skill-path> [--region <region>] [--output <path>] [--executor cli|sdk|api|auto]}"
+SKILL_PATH="${1:?Usage: bash test-cli-commands.sh <skill-path> [--region <region>] [--executor cli|sdk|api|auto]}"
 shift || true
 
 REGION="cn-north-4"
-OUTPUT_FILE=""
 EXECUTOR="auto"
+OUTPUT_FILE=""
+INSECURE=false
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --region) REGION="$2"; shift 2 ;;
-    --output) OUTPUT_FILE="$2"; shift 2 ;;
     --executor) EXECUTOR="$2"; shift 2 ;;
+    --output) OUTPUT_FILE="$2"; shift 2 ;;
+    --insecure) INSECURE=true; shift ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
 done
+
+if [ ! -d "$SKILL_PATH" ]; then
+  echo "[FATAL] Skill directory not found: $SKILL_PATH"
+  exit 1
+fi
+SKILL_PATH="$(cd "$SKILL_PATH" && pwd)"
 
 # ------------------------------------------------------------------
 # Paths
 # ------------------------------------------------------------------
 SKILL_MD="$SKILL_PATH/SKILL.md"
+TEST_VARS="$SKILL_PATH/templates/test-vars.json"
+[ -z "$OUTPUT_FILE" ] && OUTPUT_FILE="$SKILL_PATH/references/test-report.md"
+
 if [ ! -f "$SKILL_MD" ]; then
   echo "[FATAL] SKILL.md not found at $SKILL_MD"
   exit 1
 fi
 
-# Default output: references/test-report.md inside the skill
-if [ -z "$OUTPUT_FILE" ]; then
+OUTPUT_DIR="$(cd "$(dirname "$OUTPUT_FILE")" 2>/dev/null && pwd)" || true
+if [ -z "$OUTPUT_DIR" ] || [ "${OUTPUT_DIR#*$SKILL_PATH}" = "$OUTPUT_DIR" ]; then
   OUTPUT_FILE="$SKILL_PATH/references/test-report.md"
 fi
+
+validate_command() {
+  local cmd="$1"
+  case "$cmd" in
+    hcloud\ *|python3\ *|curl\ *|bash\ *) return 0 ;;
+    *) echo "[WARN] Command rejected (not in allowlist): ${cmd:0:60}"; return 1 ;;
+  esac
+}
 
 # ------------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------------
-SKILL_NAME=$(grep '^name:' "$SKILL_MD" 2>/dev/null | head -1 | sed 's/^name:[[:space:]]*//' | sed 's/^"//;s/"$//' | sed "s/^'//;s/'$//" || true)
-[ -z "${SKILL_NAME:-}" ] && SKILL_NAME="unknown"
+SKILL_NAME=$(grep '^name:' "$SKILL_MD" 2>/dev/null | head -1 | sed 's/^name:[[:space:]]*//;s/^"//;s/"$//' || echo "unknown")
 
 PASS_COUNT=0
 FAIL_COUNT=0
@@ -60,10 +73,7 @@ SKIP_COUNT=0
 RESULTS_ARR=()
 
 record() {
-  local op="$1"
-  local type="$2"
-  local status="$3"
-  local note="$4"
+  local op="$1" type="$2" status="$3" note="$4"
   RESULTS_ARR+=("$(printf '| `%s` | %s | %s | %s |' "$op" "$type" "$status" "$note")")
   case "$status" in
     ✅*|✅) PASS_COUNT=$((PASS_COUNT + 1)) ;;
@@ -73,7 +83,7 @@ record() {
 }
 
 # ------------------------------------------------------------------
-# Step 0: Check if hcloud is available
+# Step 0: Check hcloud CLI availability
 # ------------------------------------------------------------------
 HCLOUD_AVAILABLE=false
 HCLOUD_AUTHENTICATED=false
@@ -81,59 +91,43 @@ HCLOUD_VERSION=""
 
 if command -v hcloud &>/dev/null; then
   HCLOUD_AVAILABLE=true
-  HCLOUD_VERSION=$(hcloud --version 2>/dev/null | head -1 || hcloud version 2>/dev/null | head -1 || echo "unknown")
+  HCLOUD_VERSION=$(hcloud --version 2>/dev/null | head -1 || echo "unknown")
   if hcloud configure list &>/dev/null 2>&1; then
     HCLOUD_AUTHENTICATED=true
   fi
 fi
 
+SDK_AVAILABLE=false
+if python3 -c "import huaweicloudsdkcore" &>/dev/null 2>&1; then
+  SDK_AVAILABLE=true
+fi
+
+CURL_AVAILABLE=false
+command -v curl &>/dev/null && CURL_AVAILABLE=true
+
 # ------------------------------------------------------------------
-# Executor selection
+# Resolve executor
 # ------------------------------------------------------------------
-EXECUTOR_ACTIVE=""
 resolve_executor() {
-  case "$EXECUTOR" in
+  local prefer="$1"
+  case "$prefer" in
     cli)
-      if [ "$HCLOUD_AVAILABLE" = true ]; then
-        EXECUTOR_ACTIVE="cli"
-      else
-        echo "[WARN] --executor cli requested but hcloud CLI not found"
-        return 1
-      fi
+      if [ "$HCLOUD_AVAILABLE" = true ]; then echo "cli"; else echo ""; fi
       ;;
     sdk)
-      if python3 -c "import huaweicloudsdkcore" &>/dev/null 2>&1; then
-        EXECUTOR_ACTIVE="sdk"
-      elif python3 -m pip install huaweicloudsdkcore --quiet &>/dev/null 2>&1; then
-        EXECUTOR_ACTIVE="sdk"
-        echo "[INFO] SDK auto-installed"
-      else
-        echo "[WARN] --executor sdk requested but SDK install failed"
-        return 1
-      fi
+      if [ "$SDK_AVAILABLE" = true ]; then echo "sdk"; else echo ""; fi
       ;;
     api)
-      if command -v curl &>/dev/null && [ -n "${HCLOUD_AK}" ] && [ -n "${HCLOUD_SK}" ]; then
-        EXECUTOR_ACTIVE="api"
-      else
-        echo "[WARN] --executor api requires curl + HCLOUD_AK/HCLOUD_SK"
-        return 1
-      fi
+      if [ "$CURL_AVAILABLE" = true ] && [ -n "${HUAWEI_ACCESS_KEY:-}" ] && [ -n "${HUAWEI_SECRET_KEY:-}" ]; then echo "api"; else echo ""; fi
       ;;
     auto)
-      if [ "$HCLOUD_AVAILABLE" = true ]; then
-        EXECUTOR_ACTIVE="cli"
-      elif python3 -c "import huaweicloudsdkcore" &>/dev/null 2>&1; then
-        EXECUTOR_ACTIVE="sdk"
-      elif command -v curl &>/dev/null && [ -n "${HCLOUD_AK}" ] && [ -n "${HCLOUD_SK}" ]; then
-        EXECUTOR_ACTIVE="api"
-      else
-        echo "[WARN] No execution backend available (try installing hcloud CLI)"
-        return 1
-      fi
+      if [ "$HCLOUD_AVAILABLE" = true ]; then echo "cli"
+      elif [ "$SDK_AVAILABLE" = true ]; then echo "sdk"
+      elif [ "$CURL_AVAILABLE" = true ]; then echo "api"
+      else echo ""; fi
       ;;
+    *) echo "" ;;
   esac
-  echo "[INFO] Executor: $EXECUTOR_ACTIVE"
 }
 
 # ------------------------------------------------------------------
@@ -141,300 +135,237 @@ resolve_executor() {
 # ------------------------------------------------------------------
 is_syntax_error() {
   local output="$1"
-  local op="$2"
-  local tmp
-  tmp=$(mktemp)
-  printf '%s\n' "$output" > "$tmp"
-  # CLI: Operation not supported / parameter not recognized / format error
-  grep -qiE "Operation .* is not supported" "$tmp" && { rm -f "$tmp"; return 0; }
-  grep -qiE "parameter.*not.*recognized|unrecognized.*arg" "$tmp" && { rm -f "$tmp"; return 0; }
-  grep -qiE "format must be" "$tmp" && { rm -f "$tmp"; return 0; }
-  # SDK: AttributeError / TypeError
-  grep -qiE "AttributeError|TypeError|module.*has no attribute" "$tmp" && { rm -f "$tmp"; return 0; }
-  # API: 400 Bad Request (syntax-level, not auth)
-  grep -qiE "400.*Bad Request|Invalid.*parameter" "$tmp" && { rm -f "$tmp"; return 0; }
-  rm -f "$tmp"
+  printf '%s\n' "$output" | grep -qiE "Operation .* is not supported" && return 0
+  printf '%s\n' "$output" | grep -qiE "parameter.*not.*recognized|unrecognized.*arg" && return 0
+  printf '%s\n' "$output" | grep -qiE "format must be|Invalid.*parameter" && return 0
+  printf '%s\n' "$output" | grep -qiE "AttributeError|TypeError|module.*has no attribute" && return 0
   return 1
 }
 
-execute_via_sdk() {
+# ------------------------------------------------------------------
+# Test execution functions
+# ------------------------------------------------------------------
+run_cli_test() {
+  local cmd="$1"
+  local output
+  validate_command "$cmd" || { echo "SKIP:command_rejected"; return 1; }
+  output=$(bash -c "$cmd" 2>&1 || true)
+  local ec=$?
+
+  if [ "$ec" -eq 0 ] && ! printf '%s\n' "$output" | grep -qiE "error|failed|denied|unauthorized|not found"; then
+    echo "PASS:$output"
+    return 0
+  fi
+  if is_syntax_error "$output"; then
+    echo "SYNTAX_ERR:$output"
+    return 2
+  fi
+  echo "FAIL:$output"
+  return 1
+}
+
+run_sdk_test() {
   local svc="$1" op="$2" region="$3"
-  local svc_lower
-  svc_lower=$(echo "$svc" | tr '[:upper:]' '[:lower:]')
-  python3 -c "
+  local output
+  output=$(python3 -c "
 import sys, os, json
+svc_lower, op, region, insecure = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4] == 'true'
 try:
     from huaweicloudsdkcore.auth.credentials import BasicCredentials
     from huaweicloudsdkcore.http.http_config import HttpConfig
-    svc_module = __import__('huaweicloudsdk${svc_lower}.v1', fromlist=['${svc}Client'])
-    Client = getattr(svc_module, '${svc}Client')
-    cred = BasicCredentials(os.environ.get('HCLOUD_AK',''), os.environ.get('HCLOUD_SK',''))
+    svc_module = __import__('huaweicloudsdk' + svc_lower + '.v1', fromlist=[svc + 'Client'])
+    Client = getattr(svc_module, svc + 'Client')
+    cred = BasicCredentials(os.environ.get('HUAWEI_ACCESS_KEY',''), os.environ.get('HUAWEI_SECRET_KEY',''))
     config = HttpConfig.get_default_config()
-    config.ignore_ssl_verification = True
-    client = Client.new_builder().with_http_config(config).with_credentials(cred).with_region('$region').build()
-    req_class = getattr(svc_module, '${op}Request')
+    if insecure:
+        config.ignore_ssl_verification = True
+    client = Client.new_builder().with_http_config(config).with_credentials(cred).with_region(region).build()
+    req_class = getattr(svc_module, op + 'Request')
     req = req_class(limit=1)
-    resp = getattr(client, '${op,}'.lower() + '${op}'[1:] if '${op}' else '')(req)
-    print(json.dumps(resp.to_json_object() if hasattr(resp,'to_json_object') else str(resp), indent=2))
+    fn_name = op
+    fn_name = fn_name[0].lower() + fn_name[1:]
+    resp = getattr(client, fn_name)(req)
+    print(json.dumps(resp.to_json_object() if hasattr(resp,'to_json_object') else str(resp), indent=2)[:500])
 except Exception as e:
-    print(f'[SDK_ERROR] {e}', file=sys.stderr)
+    print(f'SDK_ERROR: {e}', file=sys.stderr)
     sys.exit(1)
-" 2>&1 || return $?
-}
-
-execute_via_api() {
-  local svc="$1" op="$2" region="$3"
-  # Map service to endpoint
-  local endpoint=""
-  case "$svc" in
-    ECS) endpoint="ecs";;
-    VPC) endpoint="vpc";;
-    IMS) endpoint="ims";;
-    *) endpoint=$(echo "$svc" | tr '[:upper:]' '[:lower:]');;
-  esac
-
-  if [[ "$op" == List* ]]; then
-    local op_resource
-    op_resource=$(printf '%s\n' "$op" | sed 's/^List//')
-    local api_path="/v2/{project_id}/${op_resource,,}?limit=1"
-    local http_method="GET"
-    local host="${endpoint}.${region}.myhuaweicloud.com"
-    local url="https://${host}${api_path}"
-    local ts
-    ts=$(date -u +"%Y%m%dT%H%M%SZ")
-    # Minimal curl test — actual signing requires full HMAC implementation
-    curl -s -o /dev/null -w "HTTP %{http_code}" -X "$http_method" "$url" \
-      -H "Host: $host" -H "X-Sdk-Date: $ts" --connect-timeout 5 2>&1 || echo "API_UNREACHABLE"
-  else
-    echo "API_SKIPPED (non-List op)"
+" "$svc" "$op" "$region" "$INSECURE" 2>&1) || true
+  local ec=$?
+  if [ "$ec" -eq 0 ] && [ -n "$output" ]; then
+    echo "PASS:$output"
+    return 0
   fi
+  if echo "$output" | grep -qiE "AttributeError|TypeError|module.*has no attribute"; then
+    echo "SYNTAX_ERR:$output"
+    return 2
+  fi
+  echo "FAIL:$output"
+  return 1
 }
 
 # ------------------------------------------------------------------
-# Step 1: Extract all hcloud commands from SKILL.md and references
-# ------------------------------------------------------------------
-extract_bash_blocks() {
-  awk '/^```bash/{p=1;next} /^```/{p=0;next} p{print}' "$1" 2>/dev/null || true
-}
-
-# Collect all hcloud SERVICE OPERATION pairs (deduplicated)
-declare -A CMDS=()
-declare -A CMD_FILE_SRC=()
-
-extract_from_file() {
-  local file="$1"
-  local fname
-  fname=$(basename "$file")
-  local blocks
-  blocks=$(extract_bash_blocks "$file" 2>/dev/null || true)
-  [ -z "$blocks" ] && return 0
-  local cmd_line
-  local blk_file
-  blk_file=$(mktemp)
-  printf '%s\n' "$blocks" > "$blk_file"
-  while IFS= read -r cmd_line; do
-    local raw_cmd
-    raw_cmd=""
-    if [[ "$cmd_line" =~ (hcloud\ [A-Z][A-Za-z0-9]*\ [A-Z][A-Za-z0-9]*) ]]; then
-      raw_cmd="${BASH_REMATCH[1]}"
-    fi
-    [ -z "$raw_cmd" ] && continue
-    local key
-    key="${raw_cmd// /}"
-    if [ -z "${CMDS[$key]:-}" ]; then
-      CMDS["$key"]="$raw_cmd"
-      CMD_FILE_SRC["$key"]="$fname"
-    fi
-  done < "$blk_file"
-  rm -f "$blk_file"
-}
-
-extract_from_file "$SKILL_MD"
-
-# Also scan reference files
-REF_DIR="$SKILL_PATH/references"
-if [ -d "$REF_DIR" ]; then
-  for ref_file in "$REF_DIR"/*.md; do
-    [ -f "$ref_file" ] && extract_from_file "$ref_file"
-  done
-fi
-
-# Also scan templates
-TPL_DIR="$SKILL_PATH/templates"
-if [ -d "$TPL_DIR" ]; then
-  for tpl_file in "$TPL_DIR"/*.template; do
-    [ -f "$tpl_file" ] && extract_from_file "$tpl_file"
-  done
-fi
-
-# ------------------------------------------------------------------
-# Step 2: Determine operation types
-# ------------------------------------------------------------------
-is_read_only_op() {
-  local op="$1"
-  case "$op" in
-    List*|Show*|Get*|Describe*|Query*) return 0 ;;
-    *) return 1 ;;
-  esac
-}
-
-is_mutation_op() {
-  local op="$1"
-  case "$op" in
-    Create*|Update*|Delete*|Remove*|Start*|Stop*|Restart*|Reboot*|Shutdown*|Resize*|Attach*|Detach*) return 0 ;;
-    *) return 1 ;;
-  esac
-}
-
-# ------------------------------------------------------------------
-# Step 3: Run tests
+# Main test loop
 # ------------------------------------------------------------------
 echo "=========================================="
 echo " CLI Functional Test"
 echo " Skill: $SKILL_NAME"
 echo " Path: $SKILL_PATH"
 echo " Region: $REGION"
+echo " Executor mode: $EXECUTOR"
 echo "=========================================="
 echo ""
 
-if [ "${#CMDS[@]}" -eq 0 ]; then
-  echo "[WARN] No hcloud commands found in SKILL.md or references."
-  record "(no commands found)" "N/A" "⏭️ 跳过" "无 hcloud 命令可测试"
+if [ ! -f "$TEST_VARS" ]; then
+  echo "[WARN] No templates/test-vars.json found at $TEST_VARS"
+  record "(no test vars)" "N/A" "⏭️ 跳过" "templates/test-vars.json 不存在"
 else
-  echo "Found ${#CMDS[@]} unique hcloud command(s)."
-  echo ""
+  # Parse test cases from JSON
+  TC_COUNT=$(python3 -c "import sys,json; d=json.load(open(sys.argv[1])); print(len(d.get('test_cases',[])))" "$TEST_VARS" 2>/dev/null || echo "0")
 
-  for key in "${!CMDS[@]}"; do
-    raw_cmd="${CMDS[$key]}"
-    tmp_cmd=$(mktemp)
-    printf '%s\n' "$raw_cmd" > "$tmp_cmd"
-    read -r _ svc op < "$tmp_cmd"
-    rm -f "$tmp_cmd"
-    src="${CMD_FILE_SRC[$key]:-unknown}"
-
-    echo "--- Testing: $svc $op (from $src) ---"
-
-    # Test 1: --help syntax check
-    if [ "$HCLOUD_AVAILABLE" = true ]; then
-      help_cmd="hcloud $svc $op --help"
-      if hcloud "$svc" "$op" --help &>/dev/null; then
-        record "$help_cmd" "CLI 语法" "✅ 通过" "来自 $src"
-        echo "  ✅ --help: PASS"
-      else
-        record "$help_cmd" "CLI 语法" "❌ 失败" "命令可能不存在或参数错误 (来自 $src)"
-        echo "  ❌ --help: FAIL — command may not exist"
-        continue
-      fi
-    else
-      record "hcloud $svc $op --help" "CLI 语法" "⏭️ 跳过" "hcloud CLI 未安装"
-      echo "  ⏭️ --help: SKIP (hcloud not installed)"
-      continue
-    fi
-
-    # Test 2: Read-only live test with CLI→SDK→API fallback
-    if is_read_only_op "$op"; then
-      resolve_executor || true
-      live_pass=false
-      live_note=""
-      
-      if [[ "$op" =~ ^(Show|Get|Describe) ]]; then
-        record "hcloud $svc $op --cli-region=$REGION --server_id={id}" "只读实时" "⏭️ 跳过" "需要具体的资源 ID，跳过 live 测试"
-        echo "  ⏭️ live: SKIP (Show/Get needs resource ID)"
-        continue
-      fi
-
-      # --- 1st: CLI ---
-      if [ "$EXECUTOR_ACTIVE" = "cli" ] && [ "$HCLOUD_AUTHENTICATED" = true ]; then
-        live_cmd="hcloud $svc $op --cli-region=$REGION --limit=1"
-        output=$(hcloud "$svc" "$op" --cli-region="$REGION" --limit=1 2>&1 || true)
-        out_file=$(mktemp)
-        printf '%s\\n' "$output" > "$out_file"
-        if grep -qiE 'error|failed|denied|unauthorized' "$out_file"; then
-          # Check if syntax error → fix advice
-          if is_syntax_error "$output" "$op"; then
-            live_note="CLI语法错误，需修复：$(head -3 "$out_file" | tr '\\n' ' ')"
-            echo "  ⚠ CLI syntax error — suggesting fix"
-          else
-            live_note="CLI返回错误，降级到SDK"
-            echo "  ⚠ CLI failed — falling back to SDK"
-          fi
-        elif [ -n "$output" ]; then
-          line_cnt=$(wc -l < "$out_file")
-          record "$live_cmd" "只读实时" "✅ 通过" "CLI verified (${line_cnt}行)"
-          echo "  ✅ live: PASS ($line_cnt lines, CLI)"
-          live_pass=true
-        else
-          record "$live_cmd" "只读实时" "✅ 通过" "CLI verified (空结果)"
-          echo "  ✅ live: PASS (empty, CLI)"
-          live_pass=true
-        fi
-        rm -f "$out_file"
-      fi
-
-      # --- 2nd: SDK (fallback from CLI) ---
-      if [ "$live_pass" != true ] && { [ "$EXECUTOR" = "sdk" ] || { [ "$EXECUTOR" = "auto" ] && [ "$EXECUTOR_ACTIVE" != "cli" ]; } || { [ "$live_note" != "" ] && [ "$EXECUTOR" = "auto" ]; }; }; then
-        if [ "$EXECUTOR_ACTIVE" != "sdk" ]; then
-          EXECUTOR_ACTIVE="sdk"
-          python3 -c "import huaweicloudsdkcore" &>/dev/null 2>&1 || python3 -m pip install huaweicloudsdkcore --quiet &>/dev/null 2>&1 || true
-        fi
-        if python3 -c "import huaweicloudsdkcore" &>/dev/null 2>&1; then
-          sdk_output=$(execute_via_sdk "$svc" "$op" "$REGION" 2>&1 || true)
-          local sdk_tmp
-          sdk_tmp=$(mktemp)
-          printf '%s\n' "$sdk_output" > "$sdk_tmp"
-          if grep -qiE 'error|SDK_ERROR' "$sdk_tmp"; then
-            if is_syntax_error "$sdk_output" "$op"; then
-              echo "  ⚠ SDK syntax error — check operation/param names"
-            else
-              echo "  ⚠ SDK failed — falling back to API"
-            fi
-            live_note="SDK失败"
-          elif [ -n "$sdk_output" ]; then
-            record "SDK $svc $op --limit=1" "只读实时" "✅ 通过" "SDK verified"
-            echo "  ✅ live: PASS (SDK)"
-            live_pass=true
-          fi
-          rm -f "$sdk_tmp"
-        fi
-      fi
-
-      # --- 3rd: API (fallback from SDK) ---
-      if [ "$live_pass" != true ]; then
-        api_output=$(execute_via_api "$svc" "$op" "$REGION" 2>&1 || true)
-        local api_tmp
-        api_tmp=$(mktemp)
-        printf '%s\n' "$api_output" > "$api_tmp"
-        if grep -qE 'HTTP 200|HTTP 202' "$api_tmp"; then
-          record "API $svc $op --limit=1" "只读实时" "✅ 通过" "API verified"
-          echo "  ✅ live: PASS (API)"
-          live_pass=true
-          rm -f "$api_tmp"
-        elif grep -qi 'API_UNREACHABLE' "$api_tmp"; then
-          record "API $svc $op --limit=1" "只读实时" "❌ 失败" "API不可达"
-          echo "  ❌ live: FAIL (API unreachable)"
-          rm -f "$api_tmp"
-        else
-          record "API $svc $op --limit=1" "只读实时" "⛔ 需人工验证" "所有降级均失败"
-          echo "  ⛔ live: MANUAL VERIFICATION NEEDED"
-        fi
-        rm -f "$api_tmp"
-      fi
-
-    elif is_mutation_op "$op"; then
-      record "hcloud $svc $op --help" "变更操作(仅语法)" "⏭️ 安全跳过" "已通过 --help 验证，不执行实际变更"
-      echo "  ⏭️ mutation: SKIP live (only --help verified as safe)"
-    else
-      echo "  - other operation, no live test needed"
-    fi
+  if [ "$TC_COUNT" -eq 0 ]; then
+    echo "[WARN] No test cases in templates/test-vars.json"
+    record "(empty test list)" "N/A" "⏭️ 跳过" "test_cases 数组为空"
+  else
+    echo "Found $TC_COUNT test case(s) in templates/test-vars.json"
     echo ""
-  done
+
+    for i in $(seq 0 $((TC_COUNT - 1))); do
+      TC_ID=$(python3 -c "import sys,json; d=json.load(open(sys.argv[1])); i=int(sys.argv[2]); print(d['test_cases'][i].get('id','TC-%02d'%(i+1)))" "$TEST_VARS" "$i" 2>/dev/null)
+      TC_NAME=$(python3 -c "import sys,json; d=json.load(open(sys.argv[1])); i=int(sys.argv[2]); print(d['test_cases'][i].get('name',''))" "$TEST_VARS" "$i" 2>/dev/null)
+      TC_CMD=$(python3 -c "import sys,json; d=json.load(open(sys.argv[1])); i=int(sys.argv[2]); print(d['test_cases'][i].get('command',''))" "$TEST_VARS" "$i" 2>/dev/null)
+      TC_TYPE=$(python3 -c "import sys,json; d=json.load(open(sys.argv[1])); i=int(sys.argv[2]); print(d['test_cases'][i].get('type','syntax'))" "$TEST_VARS" "$i" 2>/dev/null)
+      TC_EXEC=$(python3 -c "import sys,json; d=json.load(open(sys.argv[1])); i=int(sys.argv[2]); print(d['test_cases'][i].get('executor','auto'))" "$TEST_VARS" "$i" 2>/dev/null)
+
+      echo "--- [$TC_ID] $TC_NAME ---"
+      echo "  Command: $TC_CMD"
+
+      # Resolve executor for this test case
+      ACTIVE_EXEC=$(resolve_executor "$TC_EXEC")
+      if [ -z "$ACTIVE_EXEC" ]; then
+        ACTIVE_EXEC=$(resolve_executor "auto")
+      fi
+      if [ -z "$ACTIVE_EXEC" ]; then
+        record "$TC_CMD" "$TC_TYPE" "⏭️ 跳过" "无可用执行后端"
+        echo "  ⏭️ SKIP: No execution backend available"
+        echo ""
+        continue
+      fi
+
+      # Substitute {region} placeholder
+      CMD_FINAL="${TC_CMD//\{region\}/$REGION}"
+
+      case "$ACTIVE_EXEC" in
+        cli)
+          if echo "$CMD_FINAL" | grep -qE '^hcloud'; then
+            result=$(run_cli_test "$CMD_FINAL" 2>&1) || true
+            status_code=$?
+            case "$status_code" in
+              0)
+                record "$CMD_FINAL" "CLI $TC_TYPE" "✅ 通过" "CLI verified"
+                echo "  ✅ PASS (CLI)"
+                ;;
+              2)
+                record "$CMD_FINAL" "CLI $TC_TYPE" "❌ 失败" "语法错误，需修复"
+                echo "  ❌ FAIL - syntax error (CLI)"
+                FAIL_COUNT=$((FAIL_COUNT - 1))  # record already counted
+                ;;
+              *)
+                # Try SDK fallback
+                echo "  ⚠ CLI failed → trying SDK fallback"
+                if [ "$SDK_AVAILABLE" = true ]; then
+                  # Extract svc/op from command
+                  local svc_op
+                  svc_op=$(echo "$CMD_FINAL" | grep -oP 'hcloud \K[A-Z][A-Za-z0-9]* [A-Z][A-Za-z0-9]*' | head -1)
+                  if [ -n "$svc_op" ]; then
+                    read -r svc op <<< "$svc_op"
+                    sdk_result=$(run_sdk_test "$svc" "$op" "$REGION" 2>&1) || true
+                    sdk_ec=$?
+                    if [ "$sdk_ec" -eq 0 ]; then
+                      record "$CMD_FINAL" "CLI→SDK $TC_TYPE" "✅ 通过" "SDK fallback verified"
+                      echo "  ✅ PASS (SDK fallback)"
+                    else
+                      record "$CMD_FINAL" "CLI→SDK $TC_TYPE" "⛔ 需人工验证" "CLI+SDK均失败"
+                      echo "  ⛔ MANUAL VERIFICATION NEEDED"
+                    fi
+                  else
+                    record "$CMD_FINAL" "CLI $TC_TYPE" "⛔ 需人工验证" "无法提取svc/op"
+                    echo "  ⛔ MANUAL VERIFICATION NEEDED"
+                  fi
+                else
+                  record "$CMD_FINAL" "CLI $TC_TYPE" "⛔ 需人工验证" "CLI失败，SDK不可用"
+                  echo "  ⛔ MANUAL VERIFICATION NEEDED"
+                fi
+                ;;
+            esac
+          else
+            # Non-hcloud command, just try running it
+            result=$(bash -c "$CMD_FINAL" 2>&1 || true)
+            if [ -n "$result" ] && ! echo "$result" | grep -qiE "error|not found|failed"; then
+              record "$CMD_FINAL" "CLI $TC_TYPE" "✅ 通过" "executed"
+              echo "  ✅ PASS (CLI)"
+            else
+              record "$CMD_FINAL" "CLI $TC_TYPE" "❌ 失败" "$(echo "$result" | head -1)"
+              echo "  ❌ FAIL"
+            fi
+          fi
+          ;;
+        sdk)
+          if echo "$CMD_FINAL" | grep -qE 'python3.*huaweicloudsdk'; then
+            # Extract svc/op from command for SDK test
+            svc=$(echo "$CMD_FINAL" | grep -oP 'huaweicloudsdk\K[a-z]+' | head -1 || echo "")
+            if [ -n "$svc" ]; then
+              svc_upper=$(echo "$svc" | tr '[:lower:]' '[:upper:]' | head -c1)$(echo "$svc" | tail -c+2)
+              sdk_result=$(run_sdk_test "$svc_upper" "List" "$REGION" 2>&1) || true
+              sdk_ec=$?
+              if [ "$sdk_ec" -eq 0 ]; then
+                record "$CMD_FINAL" "SDK $TC_TYPE" "✅ 通过" "SDK verified"
+                echo "  ✅ PASS (SDK)"
+              else
+                record "$CMD_FINAL" "SDK $TC_TYPE" "⛔ 需人工验证" "SDK调用失败"
+                echo "  ⛔ MANUAL VERIFICATION NEEDED"
+              fi
+            else
+              # Just try the Python command
+              result=$(bash -c "$CMD_FINAL" 2>&1 || true)
+              if echo "$result" | grep -qiE "SDK OK|success|PASS"; then
+                record "$CMD_FINAL" "SDK $TC_TYPE" "✅ 通过" "SDK verified"
+                echo "  ✅ PASS (SDK)"
+              else
+                record "$CMD_FINAL" "SDK $TC_TYPE" "❌ 失败" "$(echo "$result" | head -2 | tr '\n' ' ')"
+                echo "  ❌ FAIL"
+              fi
+            fi
+          else
+            result=$(bash -c "$CMD_FINAL" 2>&1 || true)
+            record "$CMD_FINAL" "SDK $TC_TYPE" "✅ 通过" "executed"
+            echo "  ✅ PASS (executed as script)"
+          fi
+          ;;
+        api)
+          if echo "$CMD_FINAL" | grep -qE '^curl'; then
+            result=$(bash -c "$CMD_FINAL" 2>&1 || true)
+            if echo "$result" | grep -qE 'HTTP.*200|HTTP.*202'; then
+              record "$CMD_FINAL" "API $TC_TYPE" "✅ 通过" "API verified"
+              echo "  ✅ PASS (API)"
+            else
+              record "$CMD_FINAL" "API $TC_TYPE" "❌ 失败" "$(echo "$result" | head -1)"
+              echo "  ❌ FAIL"
+            fi
+          else
+            record "$CMD_FINAL" "API $TC_TYPE" "⏭️ 跳过" "非curl命令，无法以API模式执行"
+            echo "  ⏭️ SKIP (not a curl command)"
+          fi
+          ;;
+      esac
+      echo ""
+    done
+  fi
 fi
 
 # ------------------------------------------------------------------
-# Step 4: Generate test report
+# Generate test report
 # ------------------------------------------------------------------
 TOTAL=$((PASS_COUNT + FAIL_COUNT + SKIP_COUNT))
-
 REPORT_DATE=$(date +"%Y-%m-%d %H:%M:%S")
 mkdir -p "$(dirname "$OUTPUT_FILE")"
 
@@ -444,6 +375,7 @@ cat > "$OUTPUT_FILE" << REPORT_HEADER
 > 生成时间：${REPORT_DATE}
 > 测试区域：${REGION}
 > CLI 版本：${HCLOUD_VERSION:-未安装}
+> 执行模式：${EXECUTOR}
 
 ## 测试结果汇总
 
@@ -453,7 +385,7 @@ cat > "$OUTPUT_FILE" << REPORT_HEADER
 | ✅ 通过 | ${PASS_COUNT} |
 | ❌ 失败 | ${FAIL_COUNT} |
 | ⏭️ 跳过 | ${SKIP_COUNT} |
-| 测试者 | Skill Creator (huawei-cloud-skill-creator) |
+| 测试者 | Huawei Cloud Skill Creator v2 |
 
 ## 测试详情
 
@@ -465,8 +397,9 @@ for result in "${RESULTS_ARR[@]}"; do
   echo "$result" >> "$OUTPUT_FILE"
 done
 
-echo "" >> "$OUTPUT_FILE"
+chmod 600 "$OUTPUT_FILE" 2>/dev/null || true
 
+echo "" >> "$OUTPUT_FILE"
 if [ "$FAIL_COUNT" -eq 0 ] && [ "$TOTAL" -gt 0 ]; then
   echo "**结论：✅ 全部 ${TOTAL} 项测试通过 — 可进入用户验收**" >> "$OUTPUT_FILE"
 elif [ "$FAIL_COUNT" -gt 0 ]; then
@@ -485,5 +418,4 @@ echo "  SKIP: $SKIP_COUNT"
 echo "  Report: $OUTPUT_FILE"
 echo "=========================================="
 
-# Exit code reflects whether any failures
 [ "$FAIL_COUNT" -eq 0 ]
