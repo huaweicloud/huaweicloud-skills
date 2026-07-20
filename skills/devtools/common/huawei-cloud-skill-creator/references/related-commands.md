@@ -1,49 +1,53 @@
-# Related Commands Quick Reference - huawei-cloud-skill-creator-skill
+# Related Commands — Huawei Cloud Skill Creator v2
 
-> Read this file when you need to quickly look up Skill creation related commands.
-
-## hcloud CLI General Commands
-
-Use CLI help flags to explore services and operations (e.g., `--help`).
+## CLI Commands
 
 ```bash
-# Example: list ECS instances
-hcloud ECS ListServers --cli-region={region}
-```
-
-## Common Service Quick Reference
-
-| Service | Common Operations | Description |
-|---------|-------------------|-------------|
-| ECS | ListServers, ShowServer, CreateServers, DeleteServers | Elastic Cloud Server |
-| VPC | ListVpcs, ShowVpc, CreateVpc, DeleteVpc | Virtual Private Cloud |
-| OBS | ListBuckets, CreateBucket, DeleteBucket | Object Storage |
-| RDS | ListInstances, ShowInstance, CreateInstance | Relational Database |
-| IAM | ListUsers, ShowUser, CreatePolicy | Identity & Access Mgmt |
-| CCE | ListClusters, ShowCluster, CreateCluster | Cloud Container Engine |
-| CES | ListMetrics, ShowMetricData, ListAlarms | Cloud Eye |
-| ELB | ListLoadBalancers, ShowLoadBalancer | Elastic Load Balancer |
-| EVS | ListVolumes, ShowVolume, CreateVolume | Elastic Volume |
-
-## Skill Validation Commands
-
-```bash
-# Validate Skill structure
+# Validate generated skill
 bash scripts/validate-skill.sh {skill-path}
 
-# Check SKILL.md format
-head -1 {skill-path}/SKILL.md  # Should be ---
-
-# Check references completeness
-ls {skill-path}/references/
+# Test generated skill commands
+bash scripts/test-cli-commands.sh {skill-path} --executor cli
+bash scripts/test-cli-commands.sh {skill-path} --executor sdk
+bash scripts/test-cli-commands.sh {skill-path} --executor api
 ```
 
-## File Operations
+## SDK Methods
+
+```python
+# Check SDK availability
+from huaweicloudsdkbss.v2 import BssClient
+
+# Generate dataflow diagram
+bash scripts/generate-dataflow-diagram.sh {skill-path}
+```
+
+## Phase Summary Helpers
 
 ```bash
-# Create Skill directory structure
-mkdir -p {domain}/{skill-name}/{references,scripts,templates,demo}
+# Check all phase summaries
+for i in 1 2 3 4 5 6; do
+  if [ -f "phase-${i}-summary.json" ]; then
+    echo "✅ Phase $i: $(cat phase-${i}-summary.json | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('summary',''))" 2>/dev/null)"
+  else
+    echo "❌ Phase $i: not completed"
+  fi
+done
+```
 
-# Generate SKILL.md from template
-cp templates/SKILL.md.template {domain}/{skill-name}/SKILL.md
+## hcloud CLI Service Check
+
+```bash
+# Check if a service is supported
+hcloud --help | grep -i "{service_name}"
+
+# List all available services
+python3 -c "
+import json, os
+with open(os.path.expanduser('~/.hcloud/metaRepo/services_en.json')) as f:
+    data = json.load(f)
+for item in data.get('items', []):
+    s = item.get('Service', {})
+    print(f\"{s.get('Text',''):20} {s.get('Description','')}\")
+"
 ```

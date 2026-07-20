@@ -1,0 +1,48 @@
+{
+  "skill_name": "huawei-cloud-{product}-{function}",
+  "region": "cn-north-4",
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "CLI 服务可用性检查",
+      "command": "hcloud {Service} {Operation} --help",
+      "expected": "帮助信息正常输出，命令存在",
+      "type": "syntax",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-02",
+      "name": "CLI 只读操作实时测试",
+      "command": "hcloud {Service} {Operation} --cli-region={region} --limit=1",
+      "expected": "返回正常数据，无错误",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-03",
+      "name": "SDK 可用性检查",
+      "command": "python3 -c \"from huaweicloudsdk{service_lower}.v2 import {Service}Client; print('SDK OK')\"",
+      "expected": "SDK 导入成功",
+      "type": "syntax",
+      "executor": "sdk"
+    },
+    {
+      "id": "TC-04",
+      "name": "SDK 只读操作测试",
+      "command": "python3 -c \"... SDK call with limit=1 ...\"",
+      "expected": "返回正常数据",
+      "type": "readonly",
+      "executor": "sdk"
+    },
+    {
+      "id": "TC-05",
+      "name": "API 只读操作测试",
+      "command": "curl -X GET https://{endpoint}/{path}?limit=1",
+      "expected": "HTTP 200",
+      "type": "readonly",
+      "executor": "api"
+    }
+  ],
+  "env_vars_required": ["HUAWEI_ACCESS_KEY", "HUAWEI_SECRET_KEY"],
+  "notes": "使用前请将 {Service}/{Operation}/{region}/{endpoint} 等占位符替换为实际值"
+}
