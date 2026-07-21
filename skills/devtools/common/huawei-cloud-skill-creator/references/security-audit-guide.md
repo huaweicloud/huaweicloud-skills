@@ -62,7 +62,7 @@ markdownlint-cli2 "{skill-path}/**/*.md" --config "{skill-path}/.markdownlint.js
 | section.missing-required | 补充必需章节：概述/前置条件/核心命令/参数确认/参考文档 |
 | section.missing-recommended | 补充推荐章节：最佳实践/注意事项/验证方法 |
 | size.skill-md-lines | SKILL.md 超 500 行时拆分至 references/ |
-| size.dir-too-large | 目录超 5MB 时拆分大文件 |
+| size.dir-too-large | 目录超 40MB 时拆分大文件 |
 
 ### gitleaks
 

@@ -43,6 +43,6 @@
       "executor": "api"
     }
   ],
-  "env_vars_required": ["HUAWEI_ACCESS_KEY", "HUAWEI_SECRET_KEY"],
+  "env_vars_required": ["以 HUAWEI/HW/HWC 开头的环境变量中匹配 AK/SK 的键值对"],
   "notes": "使用前请将 {Service}/{Operation}/{region}/{endpoint} 等占位符替换为实际值"
 }
