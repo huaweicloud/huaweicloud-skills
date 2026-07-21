@@ -32,34 +32,33 @@ check_phase_deps() {
     4)
       [ ! -f "$(phase_file "$skill_dir" 3)" ] && missing+=("phase-3-summary.json")
       ;;
-    5)
-      [ ! -f "$(phase_file "$skill_dir" 4)" ] && missing+=("phase-4-summary.json")
-      ;;
-    6)
-      # Phase 6: needs ALL skills' phase-5
-      for skill in "$@"; do
-        local sd; sd=$(find_skill_path "$skill") || { missing+=("skill '$skill' not found"); continue; }
-        [ ! -f "$(phase_file "$sd" 5)" ] && missing+=("${skill}: phase-5-summary.json")
-      done
-      ;;
-    7)
-      [ ! -f "$(phase_file "$skill_dir" 6)" ] && missing+=("phase-6-summary.json")
-      ;;
-    8)
-      # Phase 8: no strict deps on execution, but check skill existence
-      ;;
-    9)
-      # Phase 9: check ALL phase-0~8 exist
-      for p in 0 1 2 3 4 5 6 7 8; do
-        [ ! -f "$(phase_file "$skill_dir" $p)" ] && missing+=("phase-${p}-summary.json")
-      done
-      for skill in "$@"; do
-        local sd; sd=$(find_skill_path "$skill") || continue
-        for p in 0 1 2 3 4 5; do
-          [ ! -f "$(phase_file "$sd" $p)" ] && missing+=("${skill}: phase-${p}-summary.json")
-        done
-      done
-      ;;
+     5)
+       # Phase 5 (Orchestration): needs ALL skills' phase-4
+       for skill in "$@"; do
+         local sd
+         if [ -d "$skill" ]; then
+           sd="$skill"
+         else
+           sd=$(find_skill_path "$skill") || { missing+=("skill '$skill' not found"); continue; }
+         fi
+         [ ! -f "$(phase_file "$sd" 4)" ] && missing+=("${skill}: phase-4-summary.json")
+       done
+       ;;
+     6)
+       [ ! -f "$(phase_file "$skill_dir" 5)" ] && missing+=("phase-5-summary.json")
+       ;;
+     7)
+       # Phase 7 (Report): check ALL phase-0~6 exist
+       for p in 0 1 2 3 4 5 6; do
+         [ ! -f "$(phase_file "$skill_dir" $p)" ] && missing+=("phase-${p}-summary.json")
+       done
+       for skill in "$@"; do
+         local sd; sd=$(find_skill_path "$skill") || continue
+         for p in 0 1 2 3 4; do
+           [ ! -f "$(phase_file "$sd" $p)" ] && missing+=("${skill}: phase-${p}-summary.json")
+         done
+       done
+       ;;
   esac
 
   if [ ${#missing[@]} -gt 0 ]; then
@@ -80,7 +79,7 @@ check_phase_deps() {
 
 find_first_missing_phase() {
   local skill_dir="$1"
-  for p in 0 1 2 3 4 5 6 7 8 9; do
+  for p in 0 1 2 3 4 5 6 7; do
     [ ! -f "$(phase_file "$skill_dir" $p)" ] && echo "$p" && return 0
   done
   echo "all_done"

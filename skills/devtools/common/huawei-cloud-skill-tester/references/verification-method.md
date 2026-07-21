@@ -1,78 +1,37 @@
-# Verification Method — huawei-cloud-skill-tester
-
-## Overview
-
-This document describes how to verify the skill-tester framework is correctly installed, configured, and producing valid results.
-
-## Prerequisites Verification
-
-### 1. Check Directory Structure
-
-```bash
-ls $HOME/.hermes/skills/huawei-cloud-skill-tester/
-# Should contain: SKILL.md, scripts/, references/
-```
-
-### 2. Verify Script Availability
-
-```bash
-ls scripts/
-# Should contain: run-test-pipeline.sh, tier1/, tier2/, tier3/, lib/
-```
-
-### 3. Check Required Dependencies
-
-```bash
-python3 --version            # Python 3.8+
-hcloud version               # hcloud CLI installed
-jq --version                 # jq installed
-env | grep -E "HUAWEI_AK|HWC_AK"  # AK/SK configured
-```
+# Verification Method
 
 ## Pipeline Verification
 
-### Unit Test (Single Skill)
+### Phase 0: Install Check
 
 ```bash
-bash scripts/run-test-pipeline.sh --skills "huawei-cloud-bss-voucher-manage"
+# Check skill directory exists
+ls -la skills/{skill-name}/SKILL.md
+
+# Check required subdirectories
+ls -la skills/{skill-name}/references/
+ls -la skills/{skill-name}/scripts/
+ls -la skills/{skill-name}/templates/
 ```
 
-Expected output:
-- Phase 0~5 complete with `pass` verdict
-- `phase-5-summary.json` generated
-
-### Integration Test (Multi-Skill)
+### Phase 1: Skill Analysis
 
 ```bash
-bash scripts/run-test-pipeline.sh --skills "skill-a, skill-b"
+# Run analysis
+bash scripts/tier1/phase-1-skill-analysis.sh skills/{skill-name}
 ```
 
-Expected output:
-- Phase 6 generates orchestration scenarios
-- Phase 7 executes E2E flow
-- Phase 8 produces consolidated report
-
-## Output Validation
-
-Each phase produces a `phase-N-summary.json`. Validate using:
+### Phase 4: Test Execution
 
 ```bash
-jq '.summary.verdict' phase-4-summary.json
+# Run all test cases
+bash scripts/tier1/phase-4-execute-tests.sh skills/{skill-name}
 ```
 
-Expected verdicts: `pass`, `fail`, `partial`, `skipped`, or `downgraded`.
+## Output Verification
 
-## Chain Integrity Verification
-
-Verify chain dependency between phases:
+Check that phase summary JSON files are generated:
 
 ```bash
-# Phase 2 requires Phase 1
-test -f phase-1-summary.json && echo "Chain OK" || echo "Chain broken"
+ls -la skills/{skill-name}/phase-*-summary.json
 ```
-
-## Error Recovery Verification
-
-1. Delete a phase JSON file
-2. Re-run the pipeline
-3. Confirm it detects the missing phase and restarts from that point

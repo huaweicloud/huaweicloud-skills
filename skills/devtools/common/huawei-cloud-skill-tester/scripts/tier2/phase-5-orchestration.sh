@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# phase-6-orchestration.sh — 多Skill编排测试
+# phase-5-orchestration.sh — 多Skill编排测试
 # 全量触发词冲突扫描 + 数据传递测试 + 并行加载验证
 set -uo pipefail
 
@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 source "$SCRIPT_DIR/lib/utils.sh"
 source "$SCRIPT_DIR/lib/chain-verify.sh"
 
-PHASE_NUM=6
+PHASE_NUM=5
 PHASE_NAME="orchestration"
 
 # Parse --skills from args
@@ -40,17 +40,34 @@ done
 
 SKILL_COUNT=${#SKILL_PATHS[@]}
 
-header "Phase 6: 多Skill编排测试"
+header "Phase ${PHASE_NUM}: 多Skill编排测试"
 
 ts=$(timestamp)
 start_ts=$(date +%s)
 
+# === Scan sibling skills if only one skill provided ===
+if [ "$SKILL_COUNT" -le 1 ]; then
+  target_dir="${SKILL_PATHS[0]}"
+  parent_dir=$(dirname "$target_dir")
+  target_name=$(basename "$target_dir")
+
+  info "扫描本地 skill 目录: $parent_dir"
+  for sibling in "$parent_dir"/huawei-cloud-*; do
+    [ -d "$sibling" ] || continue
+    sname=$(basename "$sibling")
+    [ "$sname" = "$target_name" ] && continue
+    SKILL_PATHS+=("$sibling")
+    info "  发现同目录 skill: $sname"
+  done
+  SKILL_COUNT=${#SKILL_PATHS[@]}
+fi
+
 # === Branch: downgrade for single skill ===
 if [ "$SKILL_COUNT" -le 1 ]; then
-  info "仅 ${SKILL_COUNT} 个 skill，降级为自检模式"
+  info "仅 ${SKILL_COUNT} 个 skill（无其他可组合 skill），降级为自检模式"
 
   local_skill_dir="${SKILL_PATHS[0]}"
-  check_phase_deps "$local_skill_dir" 6 ${SKILLS_LIST} || exit 1
+  check_phase_deps "$local_skill_dir" 5 ${SKILLS_LIST} || exit 1
 
   # Read Phase 1 for the single skill's triggers
   p1_file=$(phase_file "$local_skill_dir" 1)
@@ -114,13 +131,13 @@ PYSELF
   has_cycles=$(echo "$self_check" | python3 -c "import json,sys; d=json.load(sys.stdin); print(len(d.get('conflict_scan',{}).get('cycle_warnings',[])))" 2>/dev/null || echo "0")
   [ "$has_ambiguities" -gt 0 ] || [ "$has_cycles" -gt 0 ] && verdict="partial"
 
-  output_file="${local_skill_dir}/phase-6-summary.json"
+  output_file="${local_skill_dir}/phase-5-summary.json"
 else
   # === Full orchestration mode ===
   # Check all skills' Phase 5
   for sp in "${SKILL_PATHS[@]}"; do
     sn=$(basename "$sp")
-    check_phase_deps "$sp" 6 "${SKILLS_LIST}" || exit 1
+    check_phase_deps "$sp" 5 "${SKILLS_LIST}" || exit 1
   done
 
   info "全量编排模式: ${SKILL_COUNT} 个 skill"
@@ -232,7 +249,7 @@ PYORCH6
 
   [ "$high_conflicts" -gt 0 ] && verdict="fail"
 
-  output_file="${SKILL_PATHS[0]}/phase-6-summary.json"
+  output_file="${SKILL_PATHS[0]}/phase-5-summary.json"
 fi
 
 end_ts=$(date +%s)
@@ -326,4 +343,4 @@ print(f\"  并行加载: {d.get('parallel_load_test', {}).get('verdict', 'N/A')}
 "
 fi
 
-pass "Phase 6: 编排测试完成"
+pass "Phase ${PHASE_NUM}: 编排测试完成"
