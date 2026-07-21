@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# phase-9-final-report.sh — 最终报告
+# phase-7-final-report.sh — 最终报告
 # 合并 Phase 0~8 的所有 JSON，输出综合测试报告
 set -uo pipefail
 
@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 source "$SCRIPT_DIR/lib/utils.sh"
 source "$SCRIPT_DIR/lib/chain-verify.sh"
 
-PHASE_NUM=9
+PHASE_NUM=7
 PHASE_NAME="final-report"
 
 # Parse args
@@ -37,13 +37,13 @@ for arg in "$@"; do
 done
 unset skills_next output_next
 
-header "Phase 9: 最终报告"
+header "Phase ${PHASE_NUM}: 最终报告"
 
 ts=$(timestamp)
 start_ts=$(date +%s)
 
 # Verify all phases exist
-check_phase_deps "${SKILL_PATHS[0]}" 9 || exit 1
+check_phase_deps "${SKILL_PATHS[0]}" 7 || exit 1
 
 REPORT_DIR="${OUTPUT_DIR}/report-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$REPORT_DIR"
@@ -76,21 +76,26 @@ warnings = []
 
 PHASE_NAMES = {
     0: 'install-check', 1: 'skill-analysis', 2: 'tech-research',
-    3: 'test-case-generation', 4: 'test-execution', 5: 'cleanup',
-    6: 'orchestration', 7: 'full-flow', 8: 'compliance-check'
+    3: 'test-case-generation', 4: 'test-execution',
+    5: 'orchestration', 6: 'full-flow'
 }
+PHASE_COUNT = len(PHASE_NAMES)
 
 # Collect phase summaries
-for p in range(9):
+for p in range(PHASE_COUNT):
     summary = {'phase': p, 'name': PHASE_NAMES.get(p, f'phase-{p}'), 'verdict': 'missing', 'duration_s': 0}
     
     for sp in skill_paths:
         pf = os.path.join(sp, f'phase-{p}-summary.json')
-        if os.path.isfile(pf):
-            with open(pf) as f:
-                data = json.load(f)
-            v = data.get('summary', {}).get('verdict', 'missing')
-            d = data.get('execution_meta', {}).get('duration_s', 0)
+        if os.path.isfile(pf) and os.path.getsize(pf) > 0:
+            try:
+                with open(pf, encoding='utf-8') as f:
+                    data = json.load(f)
+                v = data.get('summary', {}).get('verdict', 'missing')
+                d = data.get('execution_meta', {}).get('duration_s', 0)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                v = 'partial'
+                d = 0
             
             # Prefer first skill's data
             if summary['verdict'] == 'missing':
@@ -116,11 +121,14 @@ for sp in skill_paths:
     skill_info = {'name': sn}
     
     # Phase 4 stats
-    if os.path.isfile(p4f):
-        with open(p4f) as f:
-            p4 = json.load(f)
+    if os.path.isfile(p4f) and os.path.getsize(p4f) > 0:
+        try:
+            with open(p4f, encoding='utf-8') as f:
+                p4 = json.load(f)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            p4 = {}
         stats = p4.get('result', {}).get('statistics', {})
-        skill_info['phases_completed'] = 6  # Tier 1 phases
+        skill_info['phases_completed'] = 5  # Tier 1 phases (0-4)
         skill_info['test_cases'] = stats.get('total', 0)
         skill_info['pass'] = stats.get('pass', 0)
         skill_info['fail'] = stats.get('fail', 0)
@@ -142,9 +150,12 @@ for sp in skill_paths:
         skill_info['phases_completed'] = 0
     
     # Phase 5 stats
-    if os.path.isfile(p5f):
-        with open(p5f) as f:
-            p5 = json.load(f)
+    if os.path.isfile(p5f) and os.path.getsize(p5f) > 0:
+        try:
+            with open(p5f, encoding='utf-8') as f:
+                p5 = json.load(f)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            p5 = {}
         rsrc = p5.get('result', {})
         auto_c = len(rsrc.get('auto_cleaned', []))
         fail_c = len(rsrc.get('failed_cleanup', []))
@@ -166,9 +177,12 @@ for sp in skill_paths:
 # Collect warnings from various phases
 for sp in skill_paths:
     p6f = os.path.join(sp, 'phase-6-summary.json')
-    if os.path.isfile(p6f):
-        with open(p6f) as f:
-            p6 = json.load(f)
+    if os.path.isfile(p6f) and os.path.getsize(p6f) > 0:
+        try:
+            with open(p6f, encoding='utf-8') as f:
+                p6 = json.load(f)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            p6 = {}
         conflicts = p6.get('result', {}).get('conflict_scan', {}).get('conflicts', [])
         for c in conflicts:
             warnings.append({
@@ -200,7 +214,7 @@ result = {
     'environment': env_info,
     'phases_summary': phases_summary,
     'overall_statistics': {
-        'total_phases': 9,
+        'total_phases': PHASE_COUNT,
         'phase_pass': overall_pass,
         'phase_fail': overall_fail,
         'phase_skipped': overall_skip,
@@ -238,8 +252,8 @@ md.append(f"**时间:** {datetime.now().isoformat()}  \n")
 md.append("## 总体统计\n")
 md.append(f"| 指标 | 值 |")
 md.append(f"|------|----|")
-md.append(f"| Phase通过 | {overall_pass}/9 |")
-md.append(f"| Phase失败 | {overall_fail}/9 |")
+md.append(f"| Phase通过 | {overall_pass}/{PHASE_COUNT} |")
+md.append(f"| Phase失败 | {overall_fail}/{PHASE_COUNT} |")
 md.append(f"| 测试用例总数 | {total_test_cases} |")
 md.append(f"| 用例通过 | {total_test_pass} |")
 md.append(f"| 用例失败 | {total_test_fail} |")
@@ -293,13 +307,16 @@ end_ts=$(date +%s)
 duration=$((end_ts - start_ts))
 
 # Write Phase 9 output
-output_file="${SKILL_PATHS[0]}/phase-9-summary.json"
+output_file="${SKILL_PATHS[0]}/phase-${PHASE_NUM}-summary.json"
 p9_tmp=$(mktemp)
 echo "$json_output" > "$p9_tmp"
 p9_wrap_tmp=$(mktemp)
 cat > "$p9_wrap_tmp" << 'P9WRAP'
 import json, sys
-data = json.load(open(sys.argv[1]))
+try:
+    data = json.load(open(sys.argv[1], encoding='utf-8'))
+except (json.JSONDecodeError, UnicodeDecodeError, FileNotFoundError):
+    data = {'overall_statistics': {'test_cases_total': 0, 'test_cases_fail': 0}, 'warnings': []}
 PHASE_NUM = int(sys.argv[2])
 PHASE_NAME = sys.argv[3]
 SKILLS_LIST = sys.argv[4]
@@ -340,6 +357,6 @@ print(f'     Markdown: {sys.argv[1]}/test-report.md')
 print(f'     JSON: {sys.argv[1]}/test-report.json')
 " "$REPORT_DIR"
 
-pass "Phase 9: 最终报告完成"
+pass "Phase ${PHASE_NUM}: 最终报告完成"
 echo ""
-header "🎉 三轨九阶测试全部完成"
+header "🎉 三轨七阶测试全部完成"

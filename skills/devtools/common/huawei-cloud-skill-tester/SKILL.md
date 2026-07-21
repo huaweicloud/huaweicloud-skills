@@ -14,7 +14,7 @@ description: |
 tags: [huawei-cloud, testing, e2e, orchestration, qa]
 ---
 
-# Huawei Cloud Skill Tester — Three-Track Eight-Phase E2E Testing Pipeline
+# Huawei Cloud Skill Tester — Three-Track Seven-Phase E2E Testing Pipeline
 
 > Independent, repeatable Huawei Cloud Skill testing framework. Does not depend on skill-creator; can test any existing Huawei Cloud Skill.
 > Focuses on **real-environment functional testing** and **multi-skill orchestration scenarios**.
@@ -23,13 +23,13 @@ tags: [huawei-cloud, testing, e2e, orchestration, qa]
 
 ## Overview
 
-This Skill provides a **three-track, eight-phase** standardized testing pipeline:
+This Skill provides a **three-track, seven-phase** standardized testing pipeline:
 
 | Tier | Phases | Goal |
 |------|--------|------|
-| **Tier 1: Single-Skill Unit Testing** | Phase 0~5 | Verify each skill item by item: installation, feature extraction, technical research, test case generation, execution, cleanup |
-| **Tier 2: Integration Testing** | Phase 6~7 | Multi-skill orchestration scenario derivation + end-to-end real-environment flow verification |
-| **Tier 3: Final Report** | Phase 8 | Consolidated report merging all phase outputs |
+| **Tier 1: Single-Skill Unit Testing** | Phase 0~4 | Verify each skill item by item: installation, feature extraction, technical research, test case generation, execution |
+| **Tier 2: Integration Testing** | Phase 5~6 | Multi-skill orchestration scenario derivation + end-to-end real-environment flow verification |
+| **Tier 3: Final Report** | Phase 7 | Consolidated report merging all phase outputs |
 
 ### Core Design Principles
 
@@ -37,8 +37,8 @@ This Skill provides a **three-track, eight-phase** standardized testing pipeline
 2. **Agent-proof** — Write operations require user confirmation for each item; automatic gate bypassing is not allowed
 3. **Three-Track Layering** — Clear gates between Tiers; Tier 1 must be completed before entering Tier 2
 4. **Batch Repeatable** — Supports `--skills "skill-a,skill-b"` or `--all-installed`
-5. **Fallback Strategy** — When only 1 skill, Phase 6/7 automatically downgrade to single-skill lifecycle testing
-6. **Standardized JSON Output** — All phases output in a unified schema; Phase 8 merges into a single report
+5. **Fallback Strategy** — When only 1 skill, Phase 5/6 automatically downgrade to single-skill lifecycle testing
+6. **Standardized JSON Output** — All phases output in a unified schema; Phase 7 merges into a single report
 7. **Real-Environment First** — All Tier 2 orchestrations execute against real Huawei Cloud; no mocks or simulations
 
 ### Data Flow Diagram
@@ -47,16 +47,16 @@ This Skill provides a **three-track, eight-phase** standardized testing pipeline
 User Input (--skills or --all-installed)
     │
     ├── Tier 1 ──── Iterate over each skill ────
-    │   Phase 0 → 1 → 2 → 3 → 4 → 5
+    │   Phase 0 → 1 → 2 → 3 → 4
     │   (phase-N-summary.json chain validation)
     │
     ├── Tier 2 ──── Integration ────
-    │   Phase 6 (orchestration scenario derivation + real-environment execution)
-    │   Phase 7 (e2e full-flow: create→query→update→delete lifecycle)
+    │   Phase 5 (orchestration scenario derivation + real-environment execution)
+    │   Phase 6 (e2e full-flow: create→query→update→delete lifecycle)
     │   Only 1 skill → Downgrade single-skill closed loop
     │
     └── Tier 3 ──── Final ────
-        Phase 8 (merge phase-0~7 JSON into consolidated report)
+        Phase 7 (merge phase-0~6 JSON into consolidated report)
 ```
 
 ---
@@ -65,14 +65,14 @@ User Input (--skills or --all-installed)
 
 1. **hcloud CLI** installed and authenticated (for Tier 2 CLI mode testing) — Reference: https://support.huaweicloud.com/qs-hcli/hcli_02_003.html
 2. **Python 3.8+** + `huaweicloudsdk` packages (for SDK mode testing) — SDK Reference: https://console.huaweicloud.com/apiexplorer/#/sdkcenter
-3. **Huawei Cloud AK/SK** environment variables (`HUAWEI_ACCESS_KEY` / `HUAWEI_SECRET_KEY` or `HWC_AK` / `HWC_SK`) — **If missing, must prompt the user to provide them; if the user does not provide, terminate the process. Strictly prohibited from skipping**
+3. **Huawei Cloud AK/SK** — 自动扫描所有以 `HUAWEI` / `HW` / `HWC` 开头的环境变量，匹配其中含 `ACCESS_KEY` / `_AK` / `SECRET_KEY` / `_SK` 的键值对。**If missing, must prompt the user to provide them; if the user does not provide, terminate the process. Strictly prohibited from skipping**
 4. **Target Skill** must be under $HOME/.hermes/skills/ or a user-specified path
 5. **jq** command (all JSON processing depends on it)
 6. **API Reference**: https://console.huaweicloud.com/apiexplorer/#/openapi
 
 ---
 
-## Workflow — Three-Track Eight-Phase
+## Workflow — Three-Track Seven-Phase
 
 ```
 Tier 1: Single-Skill Unit Testing
@@ -81,14 +81,13 @@ Tier 1: Single-Skill Unit Testing
    Phase 2: Technical Research (CLI→SDK→API three-level availability)
    Phase 3: Test Case Generation (functional cases TC-F + API cases TC-A)
    Phase 4: Real-Environment Execution (read-only automatic + write operations require confirmation)
-   Phase 5: Cleanup (automatic cleanup + legacy report)
 
 Tier 2: Integration Testing — Real-Environment Orchestration
-   Phase 6: Multi-Skill Orchestration (scenario derivation → step execution → state verification)
-   Phase 7: End-to-End Flow (resource lifecycle: create→query→update→delete)
+   Phase 5: Multi-Skill Orchestration (scenario derivation → step execution → state verification)
+   Phase 6: End-to-End Flow (resource lifecycle: create→query→update→delete)
 
 Tier 3: Final Report
-   Phase 8: Consolidated Report (merge phase-0~7 JSON into single report)
+   Phase 7: Consolidated Report (merge phase-0~6 JSON into single report)
 ```
 
 ---
@@ -326,55 +325,11 @@ Iterate over each test case:
 
 ---
 
-### Phase 5: Cleanup
-
-**Goal:** Automatically clean up resource changes produced in Phase 4. For failures, output manual cleanup instructions.
-
-**Dependency:** Phase 4 completed (phase-4-summary.json exists)
-
-**Execution rules:**
-
-```
-if phase-4.all_resources_changed == []:
-  Output skipped_no_resources → Phase 5 complete
-
-Iterate over phase-4.all_resources_changed:
-  if cleanup_required == false:
-    Skip (resource already deleted or no cleanup needed)
-  if cleanup_required == true:
-    Attempt automatic cleanup (retry 3 times)
-    if all 3 retries failed:
-      Mark failed → Add to manual_cleanup list
-      Generate manual operation instructions
-```
-
-**Output:** `phase-5-summary.json`
-
-```json
-{
-  "resources_to_clean": [{"resource_type": "ecs_instance", "change_type": "created", ...}],
-  "auto_cleaned": [{"resource_id": "VCH-abc123", "status": "success"}],
-  "failed_cleanup": [],
-  "manual_cleanup": [
-    {
-      "resource_type": "disk_volume",
-      "resource_id": "vol-xyz789",
-      "reason": "Dependent resource not released",
-      "manual_steps": ["# User confirmation required before executing the Delete command", "hcloud EVS DeleteVolume --volume_id=vol-xyz789"],
-      "reference": "Huawei Cloud Console → Elastic Volume → Delete"
-    }
-  ],
-  "verdict": "partial"
-}
-```
-
----
-
-### Phase 6: Multi-Skill Orchestration — Real-Environment Scenario Testing
+### Phase 5: Multi-Skill Orchestration — Real-Environment Scenario Testing
 
 **Goal:** Derive multi-skill business scenarios and execute them against the real Huawei Cloud environment to verify cross-skill integration.
 
-**Dependency:** Phase 5 completed for all tested skills
+**Dependency:** Phase 4 completed for all tested skills
 
 **Branch logic:**
 
@@ -387,19 +342,19 @@ if skills_count == 1:
     Verify each step's output feeds correctly into the next
 
 if skills_count >= 2:
-  6a: Scenario derivation
+  5a: Scenario derivation
       - Group feature points by resource type from each skill's Phase 1 output
       - Sort by dependency order (e.g., VPC must exist before ECS)
       - Auto-generate scenario chains with resource passing between skills
       - Present scenarios to user for confirmation
-  6b: Real-environment execution
+  5b: Real-environment execution
       - Execute each step in the confirmed scenario chain
       - Pass resource IDs/outputs between steps as runtime context
       - Record actual CLI/SDK output for each step
-  6c: Cross-skill data flow verification
+  5c: Cross-skill data flow verification
       - Verify output of skill A's operation can be consumed by skill B
       - Check data format compatibility (JSON field mapping)
-  6d: Rollback on failure
+  5d: Rollback on failure
       - If any step fails, execute rollback steps for already-created resources
 ```
 
@@ -432,7 +387,7 @@ Derived scenario:
 
 **Execution mode:** All steps run against real Huawei Cloud. Read-only steps (List/Show/Describe) run automatically. Write steps (Create/Delete/Update) require user confirmation for each step.
 
-**Output:** `phase-6-summary.json`
+**Output:** `phase-5-summary.json`
 
 ```json
 {
@@ -459,11 +414,11 @@ Derived scenario:
 
 ---
 
-### Phase 7: End-to-End Flow Testing — Real-Environment Lifecycle
+### Phase 6: End-to-End Flow Testing — Real-Environment Lifecycle
 
 **Goal:** End-to-end verification of complete resource lifecycles against real Huawei Cloud, automatically deriving scenario chains from Phase 1 feature lists and executing them with real API calls.
 
-**Dependency:** Phase 6 completed (phase-6-summary.json exists)
+**Dependency:** Phase 5 completed (phase-5-summary.json exists)
 
 **Branch logic:**
 
@@ -476,19 +431,19 @@ if skills_count == 1:
     Verify resource state after each mutation
 
 if skills_count >= 2:
-  7a: Scenario derivation (from Phase 6 output)
-      - Use the confirmed scenario chain from Phase 6
+  6a: Scenario derivation (from Phase 5 output)
+      - Use the confirmed scenario chain from Phase 5
       - Extend with additional verification steps
-  7b: Lifecycle execution
+  6b: Lifecycle execution
       - Execute each step against real Huawei Cloud environment
       - Read-only steps auto-execute; write steps prompt user
-  7c: State consistency verification
+  6c: State consistency verification
       - After each write operation, verify via read operation
       - Confirm resource state matches expected
-  7d: Cross-step data validation
+  6d: Cross-step data validation
       - Verify output schema compatibility between steps
       - Detect field name mismatches, type mismatches
-  7e: Cleanup verification
+  6e: Cleanup verification
       - Verify all created resources are properly deleted
       - Check for orphaned resources
 ```
@@ -517,7 +472,7 @@ Steps:
   Step 5: Delete volume → verify deleted
 ```
 
-**Output:** `phase-7-summary.json`
+**Output:** `phase-6-summary.json`
 
 ```json
 {
@@ -540,13 +495,13 @@ Steps:
 ```
 ---
 
-### Phase 8: Consolidated Report
+### Phase 7: Consolidated Report
 
-**Goal:** Merge Phase 0~7 JSON outputs into a single, comprehensive test report.
+**Goal:** Merge Phase 0~6 JSON outputs into a single, comprehensive test report.
 
-**Dependency:** Phase 0~7 all exist
+**Dependency:** Phase 0~6 all exist
 
-**Output:** `phase-8-summary.json`
+**Output:** `phase-7-summary.json`
 
 ```json
 {
@@ -557,13 +512,12 @@ Steps:
     {"phase": 2, "name": "tech-research", "verdict": "pass", "duration_s": 45.0},
     {"phase": 3, "name": "test-generation", "verdict": "pass", "duration_s": 8.0},
     {"phase": 4, "name": "execution", "verdict": "pass", "duration_s": 120.0},
-    {"phase": 5, "name": "cleanup", "verdict": "pass", "duration_s": 15.0},
-    {"phase": 6, "name": "orchestration", "verdict": "pass", "duration_s": 200.0},
-    {"phase": 7, "name": "e2e-flow", "verdict": "pass", "duration_s": 180.0}
+    {"phase": 5, "name": "orchestration", "verdict": "pass", "duration_s": 200.0},
+    {"phase": 6, "name": "e2e-flow", "verdict": "pass", "duration_s": 180.0}
   ],
   "overall_statistics": {
-    "total_phases": 8,
-    "pass": 8,
+    "total_phases": 7,
+    "pass": 7,
     "fail": 0,
     "skipped": 0,
     "total_duration_s": 583.5,
@@ -582,11 +536,37 @@ Steps:
       "phase": 5,
       "resource_type": "disk_volume",
       "resource_id": "vol-xyz789",
-      "steps": ["# User confirmation required before executing the Delete command", "hcloud EVS DeleteVolume --volume_id=vol-xyz789"]
+      "steps": ["hcloud EVS DeleteVolume --volume_id=vol-xyz789"]
     }
   ],
   "html_report": "reports/test-20260716-100300.html"
 }
+```
+
+---
+
+## KooCLI Command Format Standard
+
+This testing framework uses `bash` scripts as the primary execution mode, not direct `hcloud` CLI commands. However, when executing test cases, the framework constructs `hcloud` CLI commands in the following format:
+
+```bash
+hcloud <Service> <Operation> --cli-region={region} [--param1=value1 ...]
+```
+
+**Format Rules:**
+
+| Rule | Description |
+|------|-------------|
+| Service name | Follows KooCLI Services (uppercase: ECS, VPC, OBS; title case: CloudPond, IAMAccessAnalyzer) |
+| Operation name | PascalCase (e.g., ListServersDetails, ListBuckets) |
+| Region | Always include `--cli-region={region}` parameter |
+| Parameters | Use `--param=value` syntax |
+| Read-only limit | Always append `--limit=1` for exploratory queries |
+
+For OBS service, the framework uses `hcloud obs` (obsutil) subsystem:
+
+```bash
+hcloud obs <command> [args...] [options...]
 ```
 
 ---
@@ -617,18 +597,18 @@ bash scripts/run-test-pipeline.sh --skills "bss-voucher" --fresh
 ```bash
 bash scripts/tier1/phase-0-install-check.sh --skill "huawei-cloud-bss-voucher-manage"
 bash scripts/tier1/phase-1-skill-analysis.sh --skill "huawei-cloud-bss-voucher-manage"
-bash scripts/tier2/phase-6-orchestration.sh --skills "skill-a, skill-b"
-bash scripts/tier3/phase-8-report.sh --skills "skill-a, skill-b"
+bash scripts/tier2/phase-5-orchestration.sh --skills "skill-a, skill-b"
+bash scripts/tier3/phase-7-final-report.sh --skills "skill-a, skill-b"
 ```
 
 ### Run Multi-Skill Orchestration
 
 ```bash
 # Derive and execute orchestration scenarios for 3 skills
-bash scripts/tier2/phase-6-orchestration.sh --skills "ecs-manage, vpc-manage, eip-manage"
+bash scripts/tier2/phase-5-orchestration.sh --skills "ecs-manage, vpc-manage, eip-manage"
 
 # Run E2E lifecycle test for a single skill
-bash scripts/tier2/phase-7-e2e-flow.sh --skill "huawei-cloud-rds-intelligent-service"
+bash scripts/tier2/phase-6-full-flow.sh --skill "huawei-cloud-rds-intelligent-service"
 ```
 
 ---
@@ -648,7 +628,7 @@ bash scripts/tier2/phase-7-e2e-flow.sh --skill "huawei-cloud-rds-intelligent-ser
 
 ## References
 
-- `references/architecture.md` — Three-track eight-phase architecture diagram (Mermaid)
+- `references/architecture.md` — Three-track seven-phase architecture diagram (Mermaid)
 - `references/output-schema-spec.md` — Complete JSON field specification for each phase
 - `references/phase-transition-rules.md` — Phase transition/fallback/skip rules
 
@@ -656,26 +636,25 @@ bash scripts/tier2/phase-7-e2e-flow.sh --skill "huawei-cloud-rds-intelligent-ser
 
 ## Output Format
 
-All phases output `phase-N-summary.json`; Phase 8 merges them into a single report. See `references/output-schema-spec.md` for the JSON schema.
+All phases output `phase-N-summary.json`; Phase 7 merges them into a single report. See `references/output-schema-spec.md` for the JSON schema.
 
-Phase 6 and 7 additionally output scenario execution logs with real CLI/SDK responses for auditability.
+Phase 5 and 6 additionally output scenario execution logs with real CLI/SDK responses for auditability.
 
 ## Best Practices
 
 - Complete Tier 1 before entering Tier 2 to ensure skills are individually functional before orchestration
-- Confirm write operations one by one in Phase 4 and Phase 6/7; do not batch-confirm to avoid misoperations
-- With only 1 skill, Phase 6/7 automatically downgrade to single-skill closed loop; no need to manually skip
+- Confirm write operations one by one in Phase 4 and Phase 5/6; do not batch-confirm to avoid misoperations
+- With only 1 skill, Phase 5/6 automatically downgrade to single-skill closed loop; no need to manually skip
 - When using `--fresh` to reset and rerun, confirm there are no uncleaned test resources
 - Review orchestration scenarios before execution to ensure resource dependency order is correct
-- After E2E flow, verify cleanup phase to avoid orphaned cloud resources
 
 ## Notes
 
-- Three-track eight-phase strictly follows sequential order; chain verification prevents skipping
+- Three-track seven-phase strictly follows sequential order; chain verification prevents skipping
 - API endpoints are strictly prohibited from being inferred; only obtain from SDK `_http_info` or API Explorer
 - Credentials are read from environment variables; hardcoding is prohibited
 - **If AK/SK is missing, must prompt the user to provide them; if the user does not provide, terminate the process. Strictly prohibited from skipping any step that requires credentials**
-- Resource cleanup failures must never be silently ignored; output manual operation instructions
+- Resources created during testing must be tracked; if any are left behind, output manual cleanup instructions
 - Orchestration scenarios are auto-derived; user should review and confirm before execution
 - Write operations in orchestration scenarios require per-step user confirmation
 
@@ -689,9 +668,7 @@ Phase 6 and 7 additionally output scenario execution logs with real CLI/SDK resp
 | Some Phase JSON files deleted | Chain detection → Restart from the deleted Phase |
 | Network interruption during Phase 4 execution | Already executed case results are not lost; on rerun, skip passed cases (via `--phase` flag) |
 | User hits Ctrl+C mid-execution | Already output phase JSON is valid; next time `--resume` will recover from the current phase |
-| Only 1 skill under test | Phase 6 → single-skill orchestration, Phase 7 → single-skill closed loop |
-| No resource changes in Phase 4 | Phase 5 automatically skips (`skipped_no_resources`) |
-| Resource cleanup retry fails 3 times | Output manual operation instructions to `manual_cleanup`, mark failed |
+| Only 1 skill under test | Phase 5 → single-skill orchestration, Phase 6 → single-skill closed loop |
 | User unsatisfied with derived orchestration scenarios | User can manually edit the scenario or choose to skip it |
 | Multi-skill scenario step fails midway | Execute rollback steps for already-created resources, report partial failure |
 | Cross-skill data flow mismatch | Log field mapping details, suggest adapter/fix |
@@ -701,9 +678,9 @@ Phase 6 and 7 additionally output scenario execution logs with real CLI/SDK resp
 
 - **Chain Verification** — Each Phase checks the previous phase's JSON to prevent skipping
 - **Agent-proof** — Write operations must be confirmed by the user; fake confirmations are not allowed
-- **Data-Driven** — All phases output in JSON format; Phase 8 merges
+- **Data-Driven** — All phases output in JSON format; Phase 7 merges
 - **Batch Repeatable** — The same set of skills can be tested repeatedly; --fresh resets
 - **Real-Environment First** — All orchestrations and E2E flows execute against real Huawei Cloud; no mocks
 - **Degrade Without Losing Value** — Single skill does not run empty orchestration phases; degrades to meaningful single-skill lifecycle tests
-- **Resource Safety** — Resource cleanup failures must never be silently ignored; output clear manual operation instructions
+- **Resource Safety** — Resources created during testing must be tracked; if any remain, output clear manual cleanup instructions
 - **Credentials Mandatory** — If AK/SK is missing, must prompt the user to provide; if not provided, terminate process. Strictly prohibited from skipping

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# phase-7-full-flow.sh — 全流程走通测试
+# phase-6-full-flow.sh — 全流程走通测试
 # 自动推导场景链 → 用户确认 → 端到端执行 → 状态验证 → 清理
 set -uo pipefail
 
@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 source "$SCRIPT_DIR/lib/utils.sh"
 source "$SCRIPT_DIR/lib/chain-verify.sh"
 
-PHASE_NUM=7
+PHASE_NUM=6
 PHASE_NAME="full-flow"
 
 # Parse args
@@ -30,19 +30,36 @@ unset skills_next
 
 SKILL_COUNT=${#SKILL_PATHS[@]}
 
-header "Phase 7: 全流程走通测试"
+header "Phase ${PHASE_NUM}: 全流程走通测试"
 
 ts=$(timestamp)
 start_ts=$(date +%s)
+
+# === Scan sibling skills if only one skill provided ===
+if [ "$SKILL_COUNT" -le 1 ]; then
+  target_dir="${SKILL_PATHS[0]}"
+  parent_dir=$(dirname "$target_dir")
+  target_name=$(basename "$target_dir")
+
+  info "扫描本地 skill 目录: $parent_dir"
+  for sibling in "$parent_dir"/huawei-cloud-*; do
+    [ -d "$sibling" ] || continue
+    sname=$(basename "$sibling")
+    [ "$sname" = "$target_name" ] && continue
+    SKILL_PATHS+=("$sibling")
+    info "  发现同目录 skill: $sname"
+  done
+  SKILL_COUNT=${#SKILL_PATHS[@]}
+fi
 
 if [ "$SKILL_COUNT" -le 1 ]; then
   # === Single-skill full flow ===
   local_skill_dir="${SKILL_PATHS[0]}"
   local_skill_name=$(basename "$local_skill_dir")
   
-  info "降级为单技能完整功能闭环: $local_skill_name"
+  info "降级为单技能完整功能闭环（无其他可组合 skill）: $local_skill_name"
 
-  check_phase_deps "$local_skill_dir" 7 || exit 1
+  check_phase_deps "$local_skill_dir" 6 || exit 1
 
   # Force AK/SK check before any SDK/CLI execution
   step "检查 AK/SK 凭证..."
@@ -53,14 +70,16 @@ if [ "$SKILL_COUNT" -le 1 ]; then
 
   p1_file=$(phase_file "$local_skill_dir" 1)
   
-  flow_result=$(python3 << 'PYEOF'
+  p7_py_tmp=$(mktemp)
+  cat > "$p7_py_tmp" << 'PYEOF'
 import json, subprocess, os, sys
 
-with open(sys.argv[1]) as f:
-    p1 = json.load(f)
-
+p1_file = sys.argv[1]
 local_skill_name = sys.argv[2]
 local_skill_dir = sys.argv[3]
+
+with open(p1_file) as f:
+    p1 = json.load(f)
 
 caps = p1.get('result', {}).get('capabilities', {})
 commands = p1.get('result', {}).get('commands', [])
@@ -204,15 +223,16 @@ result = {
 }
 print(json.dumps(result, indent=2, ensure_ascii=False))
 PYEOF
-"$p1_file" "$local_skill_name" "$local_skill_dir"
-)
 
-  output_file="${local_skill_dir}/phase-7-summary.json"
+  flow_result=$(python3 "$p7_py_tmp" "$p1_file" "$local_skill_name" "$local_skill_dir")
+  rm -f "$p7_py_tmp"
+
+  output_file="${local_skill_dir}/phase-6-summary.json"
 
 else
   # === Multi-skill full flow ===
   info "多skill全流程走通: ${SKILL_COUNT} 个 skill"
-  check_phase_deps "${SKILL_PATHS[0]}" 7 || exit 1
+  check_phase_deps "${SKILL_PATHS[0]}" 6 || exit 1
 
   # Force AK/SK check before any SDK/CLI execution
   step "检查 AK/SK 凭证..."
@@ -221,8 +241,9 @@ else
     exit 1
   fi
 
-  local flow_result
-  flow_result=$(python3 << 'PYEOF'
+  flow_result=""
+  p7_multi_py_tmp=$(mktemp)
+  cat > "$p7_multi_py_tmp" << 'PYEOF'
 import json, os, sys
 
 skill_paths = sys.argv[1:]
@@ -348,10 +369,11 @@ result = {
 }
 print(json.dumps(result, indent=2, ensure_ascii=False))
 PYEOF
-"${SKILL_PATHS[@]}"
-)
 
-  output_file="${SKILL_PATHS[0]}/phase-7-summary.json"
+  flow_result=$(python3 "$p7_multi_py_tmp" "${SKILL_PATHS[@]}")
+  rm -f "$p7_multi_py_tmp"
+
+  output_file="${SKILL_PATHS[0]}/phase-6-summary.json"
 fi
 
 end_ts=$(date +%s)
@@ -407,4 +429,4 @@ if len(s.get('steps', [])) > 3:
     print(f'    ... 共 {len(s[\"steps\"])} 步')
 "
 
-pass "Phase 7: 全流程走通测试完成"
+pass "Phase ${PHASE_NUM}: 全流程走通测试完成"

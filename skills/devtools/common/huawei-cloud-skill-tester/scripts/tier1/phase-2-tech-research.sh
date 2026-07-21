@@ -55,6 +55,7 @@ not_avail = 0
 for cmd in cmds:
     desc = cmd.get('description', '')
     executor = cmd.get('executor', 'unknown')
+    cmd_raw = cmd.get('command', cmd.get('command_raw', ''))
 
     entry = {
         'cmd_id': cmd.get('id', 'CMD-00'),
@@ -69,13 +70,15 @@ for cmd in cmds:
     # CLI check: try a simple help command
     hcloud_cmd = None
     desc_lower = desc.lower()
+    cmd_lower = cmd_raw.lower()
+    search_text = desc_lower + ' ' + cmd_lower
     # BSS is NOT supported by hcloud CLI — skip CLI check for BSS
-    bss_only = any(kw in desc_lower for kw in ['bss', 'coupon', 'voucher', 'stored_value', 'card', 'order_coupon', '\u4ee3\u91d1\u5238', '\u4f18\u60e0\u5238', '\u50a8\u503c\u5361'])
+    bss_only = any(kw in search_text for kw in ['bss', 'coupon', 'voucher', 'stored_value', 'card', 'order_coupon', '\u4ee3\u91d1\u5238', '\u4f18\u60e0\u5238', '\u50a8\u503c\u5361'])
     if bss_only:
         entry['cli'] = {'available': False, 'command': None, 'reason': 'BSS not supported by hcloud CLI'}
     else:
         for svc in ['ecs', 'vpc', 'evs', 'eip', 'ims', 'as', 'elb', 'rds', 'dns', 'obs']:
-            if svc in desc_lower or svc.upper() in desc_lower:
+            if svc in search_text or svc.upper() in search_text:
                 try:
                     r = subprocess.run(
                         ['hcloud', svc.upper(), '--help'],
@@ -84,7 +87,7 @@ for cmd in cmds:
                     if r.returncode == 0:
                         entry['cli'] = {
                             'available': True,
-                            'command': f'hcloud {svc.upper()} <Operation> --cli-region=cn-north-4',
+                            'command': f'hcloud {svc.upper()} <Operation> --cli-region={os.environ.get("HUAWEI_REGION", "cn-north-4")}',
                             'reason': f'hcloud {svc.upper()} CLI 可用'
                         }
                         entry['recommended_executor'] = 'cli'

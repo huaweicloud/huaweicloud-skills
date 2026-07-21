@@ -37,7 +37,7 @@ import json, re, os, sys
 sk_file = sys.argv[1]
 skill_dir = sys.argv[2]
 
-with open(sk_file, 'r') as f:
+with open(sk_file, 'r', encoding='utf-8') as f:
     text = f.read()
 
 # Extract YAML frontmatter
@@ -73,7 +73,11 @@ if desc_match:
     trig_match = re.search(r'Triggers include:\s*(.*?)(?:\.|$)', desc_text, re.DOTALL)
     if trig_match:
         trig_raw = trig_match.group(1)
-        triggers = [t.strip().strip(',').strip() for t in trig_raw.replace(',', ' ').split() if t.strip()]
+        triggers = re.findall(r'"([^"]*)"', trig_raw)
+        if not triggers:
+            triggers = re.findall(r'\'([^\']*)\'', trig_raw)
+        if not triggers:
+            triggers = [t.strip().strip(',').strip().strip('"').strip("'") for t in trig_raw.replace(',', ' ').split() if t.strip()]
 
 # Extract capabilities by looking for sections
 cap_list = []
@@ -124,17 +128,26 @@ def build_sdk_snippet(svc, method_name, request_class, code_block):
         'from huaweicloudsdkcore.auth.credentials import GlobalCredentials, BasicCredentials',
     ]
     client_cls = svc[0].upper() + svc[1:] + 'Client'
-    snippet_lines.append('from huaweicloudsdk%s.v2 import %s, %s' % (svc, client_cls, request_class))
+    sdk_ver = os.environ.get('HUAWEI_SDK_VERSION', 'v2')
+    import json as _json
+    _ver_overrides = _json.loads(os.environ.get('SDK_VERSION_OVERRIDES', '{"iam":"v3"}'))
+    sdk_ver = _ver_overrides.get(svc, sdk_ver)
+    snippet_lines.append('from huaweicloudsdk%s.%s import %s, %s' % (svc, sdk_ver, client_cls, request_class))
     snippet_lines.append('')
-    snippet_lines.append("ak = os.getenv('HUAWEI_ACCESS_KEY') or os.getenv('HWC_AK') or ''")
-    snippet_lines.append("sk = os.getenv('HUAWEI_SECRET_KEY') or os.getenv('HWC_SK') or ''")
+    snippet_lines.append('ak, sk = "", ""')
+    snippet_lines.append('for k, v in os.environ.items():')
+    snippet_lines.append('    u = k.upper()')
+    snippet_lines.append("    if not (u.startswith('HUAWEI') or u.startswith('HW') or u.startswith('HWC')): continue")
+    snippet_lines.append("    if 'ACCESS_KEY' in u or u.endswith('_AK') or u == 'AK': ak = v or ak")
+    snippet_lines.append("    if 'SECRET_KEY' in u or u.endswith('_SK') or u == 'SK': sk = v or sk")
+    snippet_lines.append("region = os.environ.get('HUAWEI_REGION', 'cn-north-4')")
     if svc == 'bss':
         snippet_lines.append("domain_id = os.getenv('HUAWEI_DOMAIN_ID', '')")
         snippet_lines.append('cred = GlobalCredentials().with_ak(ak).with_sk(sk).with_domain_id(domain_id)')
-        snippet_lines.append("client = %s.new_builder().with_credentials(cred).with_endpoints(['bss.myhuaweicloud.com']).build()" % client_cls)
+        snippet_lines.append("client = %s.new_builder().with_credentials(cred).with_region(region).build()" % client_cls)
     else:
         snippet_lines.append('cred = BasicCredentials(ak, sk)')
-        snippet_lines.append("client = %s.new_builder().with_credentials(cred).with_region(%s_region='cn-north-4').build()" % (client_cls, svc))
+        snippet_lines.append("client = %s.new_builder().with_credentials(cred).with_region(%s_region=region).build()" % (client_cls, svc))
     snippet_lines.append('')
     req_lines = []
     in_req = False
@@ -169,11 +182,13 @@ def build_sdk_snippet(svc, method_name, request_class, code_block):
         except Exception:
             pass
     # Built-in safe defaults for common BSS parameters
+    from datetime import datetime, timedelta
+    _now = datetime.utcnow()
     builtin_defaults = {
         'limit': 10, 'offset': 0,
         'coupon_type': 1, 'status': 2,
-        'trade_time_begin': '2025-01-01T00:00:00Z',
-        'trade_time_end': '2026-12-31T23:59:59Z',
+        'trade_time_begin': (_now - timedelta(days=365)).strftime('%Y-%m-%dT00:00:00Z'),
+        'trade_time_end': (_now + timedelta(days=30)).strftime('%Y-%m-%dT23:59:59Z'),
     }
     builtin_defaults.update(param_defaults)
     # Check which request.xxx assignments are already set
@@ -461,7 +476,7 @@ cmds = d.get('commands', [])
 if cmds:
     print('  命令列表:')
     for c in cmds:
-        mark = '✏️' if c['is_write'] else '📖'
+        mark = '[W]' if c['is_write'] else '[R]'
         print(f'    {mark} {c[\"id\"]}: {c[\"description\"][:60]}')
 trigs = d.get('metadata', {}).get('triggers', []) 
 if trigs:
