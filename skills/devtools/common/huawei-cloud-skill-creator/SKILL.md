@@ -1,6 +1,6 @@
 ---
 name: huawei-cloud-skill-creator
-version: 2.1.2
+version: 2.1.3
 description: |
   1. Six-phase pipeline for creating Huawei Cloud skills — Socratic requirements gathering, CLI→SDK→API research, MD generation, test preparation, detailed testing, and final cleanup & compliance check
   2. Phase-chained dependency: each phase builds on the previous phase's output, no phase may be skipped
@@ -28,7 +28,7 @@ The Huawei Cloud Skill Creator v2 is based on a six-phase strict pipeline: start
 1. **hcloud CLI** installed and authenticated — Reference: https://support.huaweicloud.com/qs-hcli/hcli_02_003.html
 2. **Python 3.8+** with `huaweicloudsdk` packages available — SDK Reference: https://console.huaweicloud.com/apiexplorer/#/sdkcenter
 3. **Node.js + npx** available
-4. **Huawei Cloud AK/SK** environment variables (`HUAWEI_ACCESS_KEY` / `HUAWEI_SECRET_KEY` or `HWC_AK` / `HWC_SK`)
+4. **Huawei Cloud AK/SK** — 自动扫描所有以 `HUAWEI` / `HW` / `HWC` 开头的环境变量，匹配其中含 `ACCESS_KEY` / `_AK` / `SECRET_KEY` / `_SK` 的键值对
 5. **API Reference**: https://console.huaweicloud.com/apiexplorer/#/openapi
 
 ---
@@ -180,6 +180,14 @@ Generate Skill files based on Phase 2 conclusions:
 6. **Generate IAM policies** → `references/iam-policies.md` (principle of least privilege)
 7. **Generate reference materials**: If Phase 2 discovered API paths through SDK source, organize them into `references/api-paths.md`
 
+8. **File size constraint**: Total skill directory size **must not exceed 40 MB**. Run `du -sh {skill-dir}` to verify after generation.
+
+9. **File extension constraint**: All generated files **must use one of the following allowed extensions**:
+   `.md`, `.sh`, `.bash`, `.ps1`, `.py`, `.json`, `.yaml`, `.yml`, `.toml`, `.txt`, `.png`, `.jpg`, `.jpeg`, `.svg`, `.css`, `.js`, `.lock`, `.gitkeep`, `.pdf`, `.drawio`.
+   Any file with an extension not in this list must be removed or renamed before the skill is considered complete.
+
+10. **File count constraint**: Total number of files in the skill directory **must not exceed 30** (including SKILL.md, all files under references/, scripts/, templates/, and any other subdirectories). Count with `find {skill-dir} -type f | wc -l`.
+
 **🛑 Strictly prohibited from generating hallucinated URIs / fabricated API paths. Feature points not verified in Phase 2 must not have specific commands written.**
 
 **Output:** `phase-3-summary.json` — List of generated files and structure validation results
@@ -212,7 +220,7 @@ Generate Skill files based on Phase 2 conclusions:
 3. **Show all test cases to the user for confirmation**
 
 4. **Run tests:**
-   - Read AK/SK from environment variables: `HUAWEI_ACCESS_KEY` / `HUAWEI_SECRET_KEY` or `HWC_AK` / `HWC_SK`
+    - Read AK/SK from environment variables: 自动扫描所有以 `HUAWEI` / `HW` / `HWC` 开头的环境变量，匹配其中含 `ACCESS_KEY` / `_AK` / `SECRET_KEY` / `_SK` 的键值对
    - **If not found, must prompt the user to provide AK/SK; if the user does not provide, terminate the process. Strictly prohibited from skipping**
    - Execute test cases one by one
    - **Before executing mutating commands (Create/Update/Delete), must prompt the user and wait for confirmation**
