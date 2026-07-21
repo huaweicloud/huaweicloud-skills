@@ -43,7 +43,7 @@ PYEOF
   dir_pass=$(echo "$checks" | python3 -c "import json,sys; d=json.load(sys.stdin); print(all(d.values()))")
 
   # === Install/Uninstall/Reinstall ===
-  local hermes_skill_dir="$HOME/.hermes/skills"
+  local hermes_skill_dir="${SKILL_PATH_HERMES:-$HOME/.hermes/skills}"
   local target_dir="$hermes_skill_dir/$skill_name"
   local is_remote=false
   [[ "$skill_dir" == http://* || "$skill_dir" == https://* ]] && is_remote=true
@@ -126,14 +126,14 @@ import json, sys
 with open(sys.argv[1]) as f:
     ck = json.load(f)
 
-dir_pass_bool_val = sys.argv[2] == "True"
+dir_pass_bool_val = sys.argv[2].lower() == "true"
 install_status = sys.argv[3]
 install_duration = float(sys.argv[4])
 uninstall_status = sys.argv[5]
 uninstall_duration = float(sys.argv[6])
 reinstall_status = sys.argv[7]
 reinstall_duration = float(sys.argv[8])
-target_exists = sys.argv[9] == "True"
+target_exists = sys.argv[9].lower() == "true"
 
 r = {
     "install": {"status": install_status, "existing": target_exists, "duration_s": install_duration * 1e-3},
