@@ -118,7 +118,7 @@ resolve_executor() {
       if [ "$SDK_AVAILABLE" = true ]; then echo "sdk"; else echo ""; fi
       ;;
     api)
-      if [ "$CURL_AVAILABLE" = true ] && [ -n "${HUAWEI_ACCESS_KEY:-}" ] && [ -n "${HUAWEI_SECRET_KEY:-}" ]; then echo "api"; else echo ""; fi
+      local _ak="" _sk="" _name _value; while IFS='=' read -r _name _value; do case "${_name^^}" in HUAWEI*_ACCESS_KEY|HUAWEI*_AK|HW*_ACCESS_KEY|HW*_AK|HWC*_ACCESS_KEY|HWC*_AK) _ak="$_value" ;; HUAWEI*_SECRET_KEY|HUAWEI*_SK|HW*_SECRET_KEY|HW*_SK|HWC*_SECRET_KEY|HWC*_SK) _sk="$_value" ;; esac; done < <(env); if [ "$CURL_AVAILABLE" = true ] && [ -n "$_ak" ] && [ -n "$_sk" ]; then echo "api"; else echo ""; fi
       ;;
     auto)
       if [ "$HCLOUD_AVAILABLE" = true ]; then echo "cli"
@@ -175,7 +175,13 @@ try:
     from huaweicloudsdkcore.http.http_config import HttpConfig
     svc_module = __import__('huaweicloudsdk' + svc_lower + '.v1', fromlist=[svc + 'Client'])
     Client = getattr(svc_module, svc + 'Client')
-    cred = BasicCredentials(os.environ.get('HUAWEI_ACCESS_KEY',''), os.environ.get('HUAWEI_SECRET_KEY',''))
+    ak, sk = '', ''
+    for k, v in os.environ.items():
+        u = k.upper()
+        if not (u.startswith('HUAWEI') or u.startswith('HW') or u.startswith('HWC')): continue
+        if 'ACCESS_KEY' in u or u.endswith('_AK') or u == 'AK': ak = v or ak
+        if 'SECRET_KEY' in u or u.endswith('_SK') or u == 'SK': sk = v or sk
+    cred = BasicCredentials(ak, sk)
     config = HttpConfig.get_default_config()
     if insecure:
         config.ignore_ssl_verification = True
