@@ -79,10 +79,21 @@ def make_boundary_sdk_snippet(snippet, method_name):
     return modified
 
 # If clean commands exist, generate test cases from them
+def replace_placeholders(text):
+    import re, os
+    _region = os.environ.get('HUAWEI_REGION', 'cn-north-4')
+    text = re.sub(r'\{region\}|\{cli_region\}|\{location\}', _region, text)
+    text = re.sub(r'<region>|<cli-region>|<location>', _region, text)
+    text = re.sub(r'\{id\}|\{instance_id\}|\{server_id\}|\{vpc_id\}|\{subnet_id\}|\{flavor_id\}|\{image_id\}|\{config_id\}', 'test-placeholder', text)
+    text = re.sub(r'<id>|<instance_id>|<server_id>|<vpc_id>|<subnet_id>|<flavor_id>|<image_id>|<config_id>', 'test-placeholder', text)
+    text = re.sub(r'--cli-region=\{.*?\}|\{.*?\}', '', text)
+    return text
+
 if commands and any(c.get('command') for c in commands):
     for cmd in commands:
         tc_f_id += 1
         cmd_text = cmd.get('command', cmd.get('description', ''))
+        cmd_text = replace_placeholders(cmd_text)
         # Skip commands that are descriptions without executable code
         if not cmd.get('command') and not cmd.get('command_raw'):
             continue

@@ -22,7 +22,7 @@ run_phase4() {
   step "检查 AK/SK 凭证..."
   if ! ensure_ak_sk; then
     fail "AK/SK 凭证缺失，无法执行 SDK/CLI 测试用例"
-    warn "请设置环境变量后重试: export HUAWEI_ACCESS_KEY=xxx; export HUAWEI_SECRET_KEY=xxx"
+    warn "请设置环境变量后重试: export HUAWEI_ACCESS_KEY=xxx; export HUAWEI_SECRET_KEY=xxx (或任意以 HUAWEI/HW/HWC 开头的 AK/SK 变量)"
     return 1
   fi
 
@@ -98,25 +98,34 @@ for tc in cases:
     try:
         if executor_type == 'cli':
             cmd_text = tc.get('command', tc.get('description', ''))
-            # Clean up HTML-style placeholders: <r> → cn-north-4, <id> → etc.
-            cmd_text = re.sub(r'<r>|<region>', 'cn-north-4', cmd_text)
-            cmd_text = re.sub(r'<id>|<server_id>|<vpc_id>|<subnet_id>|<flavor_id>|<image_id>', '', cmd_text)
-            cmd_text = re.sub(r'<[^>]+>', '', cmd_text)
+            # Clean up placeholders: {region} → cn-north-4, {id} → etc.
+            _region = os.environ.get('HUAWEI_REGION', 'cn-north-4')
+            cmd_text = re.sub(r'<r>|<region>|\{region\}|\{cli_region\}', _region, cmd_text)
+            cmd_text = re.sub(r'<id>|<server_id>|<vpc_id>|<subnet_id>|<flavor_id>|<image_id>|\{id\}|\{instance_id\}', '', cmd_text)
+            cmd_text = re.sub(r'<[^>]+>|\{[^}]+\}', '', cmd_text)
+            cmd_text = re.sub(r'--cli-region=\{\w+\}', '', cmd_text)
             # Remove leading/trailing pipes and whitespace that might leak from table extraction
             cmd_text = cmd_text.strip().lstrip('|').strip()
             if cmd_text and len(cmd_text) > 5:
                 r = subprocess.run(
                     ['bash', '-c', cmd_text],
-                    capture_output=True, text=True, timeout=30,
+                    capture_output=True, text=True, timeout=int(os.environ.get('TIMEOUT_CLI', '30')),
                     env=os.environ
                 )
-                output = (r.stdout[:1000] + r.stderr[:300]).strip()
+                _trunc = int(os.environ.get('OUTPUT_TRUNC_CLI', '1000'))
+                _trunc_err = int(os.environ.get('OUTPUT_TRUNC_ERR', '300'))
+                output = (r.stdout[:_trunc] + r.stderr[:_trunc_err]).strip()
                 status = 'pass' if r.returncode == 0 else 'fail'
                 if r.returncode != 0:
-                    # Show trimmed error for display
                     error_detail = (r.stderr[:200] or r.stdout[:200]).strip()
                 else:
                     error_detail = None
+                    # Even with return code 0, check output for CLI error patterns (e.g. hcloud USE_ERROR)
+                    out_lower = output.lower()
+                    _cli_err_patterns = json.loads(os.environ.get('CLI_ERROR_PATTERNS', '[]'))
+                    if any(kw in out_lower for kw in _cli_err_patterns):
+                        status = 'warn'
+                        error_detail = f'CLI returned error in output (rc=0): {output[:200]}'
             else:
                 output = f"命令为空: {cmd_text}"
                 status = 'fail'
@@ -128,10 +137,12 @@ for tc in cases:
             if cmd_text.startswith('python3 -c ') or cmd_text.startswith('python3  -c '):
                 r = subprocess.run(
                     ['bash', '-c', cmd_text],
-                    capture_output=True, text=True, timeout=30,
+                    capture_output=True, text=True, timeout=int(os.environ.get('TIMEOUT_CLI', '30')),
                     env=os.environ
                 )
-                output = (r.stdout[:2000] + '\n' + r.stderr[:500]).strip()
+                _trunc = int(os.environ.get('OUTPUT_TRUNC_SDK', '2000'))
+                _trunc_err = int(os.environ.get('OUTPUT_TRUNC_ERR', '500'))
+                output = (r.stdout[:_trunc] + '\n' + r.stderr[:_trunc_err]).strip()
                 status = 'pass' if r.returncode == 0 else 'fail'
                 error_detail = (r.stderr[:300] or r.stdout[:300]).strip() if r.returncode != 0 else None
             # Real SDK execution: write the full Python snippet to a temp file and run it
@@ -170,6 +181,9 @@ for tc in cases:
                         m = re.match(r'(\w+)\s*(?:\((.*?)\))?', cmd_text.strip())
                         method_name = m.group(1) if m else ''
 
+                    # Canonical SDK method map is in scripts/lib/config.sh (SERVICES_SDK).
+                    # This inline dict is a fallback for dynamic SDK execution.
+                    # Keep in sync with config.sh when adding new services.
                     svc_map = {
                         'list_sub_customer_coupons': ('bss', 'v2', 'ListSubCustomerCouponsRequest'),
                         'list_customer_coupon_change_records': ('bss', 'v2', 'ListCustomerCouponChangeRecordsRequest'),
@@ -190,18 +204,24 @@ for tc in cases:
                         client_cls_name = svc[0].upper() + svc[1:] + 'Client'
                         client_class = getattr(mod, client_cls_name)
                         from huaweicloudsdkcore.auth.credentials import BasicCredentials, GlobalCredentials
-                        ak = os.environ.get('HUAWEI_ACCESS_KEY') or os.environ.get('HWC_AK') or ''
-                        sk = os.environ.get('HUAWEI_SECRET_KEY') or os.environ.get('HWC_SK') or ''
+                        ak, sk = '', ''
+                        for k, v in os.environ.items():
+                            u = k.upper()
+                            if not (u.startswith('HUAWEI') or u.startswith('HW') or u.startswith('HWC')): continue
+                            if 'ACCESS_KEY' in u or u.endswith('_AK') or u == 'AK': ak = v or ak
+                            if 'SECRET_KEY' in u or u.endswith('_SK') or u == 'SK': sk = v or sk
                         if svc == 'bss':
                             domain_id = os.environ.get('HUAWEI_DOMAIN_ID', '')
                             cred = GlobalCredentials().with_ak(ak).with_sk(sk).with_domain_id(domain_id)
+                            _region = os.environ.get('HUAWEI_REGION', 'cn-north-4')
                             client = client_class.new_builder() \
                                 .with_credentials(cred) \
-                                .with_endpoints(['bss.myhuaweicloud.com']) \
+                                .with_region(_region) \
                                 .build()
                         else:
                             cred = BasicCredentials(ak, sk)
-                            region_kw = {f'{svc}_region': 'cn-north-4'}
+                            _region = os.environ.get('HUAWEI_REGION', 'cn-north-4')
+                            region_kw = {f'{svc}_region': _region}
                             client = client_class.new_builder() \
                                 .with_credentials(cred) \
                                 .with_region(**region_kw) \
@@ -278,18 +298,10 @@ for tc in cases:
         else:
             # Classify SDK/CLI errors: param validation → warn, auth → fail, other → fail
             err_text = output[:500].lower()
-            is_param_error = any(kw in err_text for kw in [
-                'paramvalidation', 'parameter', 'invalidparam',
-                'valueerror', 'typeerror', 'field required',
-                'must be', 'cannot be none', 'cannot be empty',
-                'invalid value', 'out of range', 'limit',
-                '400', 'bad request',
-            ])
-            is_auth_error = any(kw in err_text for kw in [
-                'unauthorized', '401', '403', 'forbidden',
-                'access denied', 'auth', 'credential',
-                'ak cannot be none', 'sk cannot be none',
-            ])
+            _param_err_kw = json.loads(os.environ.get('PARAM_ERROR_KEYWORDS', '[]'))
+            _auth_err_kw = json.loads(os.environ.get('AUTH_ERROR_KEYWORDS', '[]'))
+            is_param_error = any(kw in err_text for kw in _param_err_kw)
+            is_auth_error = any(kw in err_text for kw in _auth_err_kw)
             if is_param_error and not is_auth_error:
                 entry['status'] = 'warn'
                 # Extract missing param hints from error
@@ -443,7 +455,7 @@ PYEOF
     echo "============================================================"
     echo "📋 以下 ${manual_count} 个用例因缺少业务数据需手工测试:"
     echo "============================================================"
-    local manual_tmp; manual_tmp=$(mktemp /tmp/manual_test_XXXXXX.json)
+    local manual_tmp; manual_tmp=$(mktemp "${TMPDIR:-/tmp}/manual_test_XXXXXX.json")
     echo "$json_output" > "$manual_tmp"
     local manual_display_py_tmp; manual_display_py_tmp=$(mktemp)
     cat > "$manual_display_py_tmp" << 'PYEOF'
