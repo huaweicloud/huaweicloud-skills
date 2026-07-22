@@ -65,7 +65,7 @@ This Skill provides one-click local installation capability for JiuwenSwarm with
    agent MUST display ONLY the following message exactly, with NO additional
    commands, explanations, or other text:
    ```
-   OpenJiuwenSwarm已启动, 请点击访问: https://{port}-{devenvd_id}.workspace.developer.huaweicloud.com
+   JiuwenSwarm已启动, 请点击访问: https://{port}-{devenvd_id}.workspace.developer.huaweicloud.com
    ```
    Replace `{devenvd_id}` with the actual container ID, and `{port}` with the web port (from `WEB_PORT` in `.env`, configured during Phase 3, default 5173).
 
@@ -229,7 +229,7 @@ Choose next step:
 
 **Agent's final response MUST be exactly this one line (no extra explanation, no commands, no summary):**
 ```
-OpenJiuwenSwarm已启动, 请点击访问: https://{port}-{devenvd_id}.workspace.developer.huaweicloud.com
+JiuwenSwarm已启动, 请点击访问: https://{port}-{devenvd_id}.workspace.developer.huaweicloud.com
 ```
 
 ---
