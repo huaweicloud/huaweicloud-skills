@@ -10,6 +10,17 @@ from common import *
 ensure_keyutils()
 
 print("[3/5] \U0001f527 Configuring runtime environment...", flush=True)
+
+# Ensure the default Python/SSL cert path exists on EulerOS-like hosts.
+# Jiuwen runtime uses an Ubuntu-style Python image expecting /etc/ssl/cert.pem,
+# while EulerOS stores CA bundles under /etc/pki/ca-trust/extracted/pem/.
+sudo = "sudo" if os.getuid() != 0 else ""
+cert_src = "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"
+cert_dest = "/etc/ssl/cert.pem"
+if os.path.exists(cert_src):
+    if not os.path.exists(cert_dest) or not os.path.islink(cert_dest) or os.path.realpath(cert_dest) != cert_src:
+        subprocess.run(f"{sudo} ln -sf {cert_src} {cert_dest}", shell=True, capture_output=True)
+
 # Fix shebang — replace any wrong python shebang with the correct RUNTIME_PYTHON path
 scripts = [RUNTIME_INIT, RUNTIME_START]
 correct_shebang = f"#!{RUNTIME_PYTHON}"
