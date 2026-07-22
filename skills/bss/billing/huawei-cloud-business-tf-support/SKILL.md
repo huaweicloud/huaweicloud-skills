@@ -1,6 +1,6 @@
 ---
-name: huawei-cloud-business-support-query
-description: "Queries Huawei Cloud billing and pricing. Covers balances, bills, coupons, cash coupons, stored-value cards, orders, refunds, costs, free resources, resource usage, enterprise accounts, and on-demand/period/ELB/NAT/DCS pricing. No write operations. Use this skill when the user needs to check fees, view bills, estimate prices, review coupon balances, query orders, or get consumption stats. Triggers: 华为云计费, 账单, 余额, 优惠券, 代金券, 储值卡, 订单, 退款, 成本, 资源用量, 询价, 定价, 费用查看, 账单明细, 价格估算, 消费统计, billing, pricing, cost."
+name: huawei-cloud-business-tf-support
+description: "Queries Huawei Cloud billing and fee details only when Terraform needs a billing or pricing inquiry. Covers balances, bills, coupons, cash coupons, stored-value cards, orders, refunds, costs, free resources, resource usage, enterprise accounts, and on-demand/period/ELB/NAT/DCS pricing. No write operations. Use this skill only when Terraform requires billing details, invoice/bill summaries, coupon or balance status, refund/order billing status, or pricing inquiry. Triggers: Terraform 账单查询, Terraform 费用查询, Terraform 价格询价, Terraform 询价, Terraform billing query, Terraform pricing inquiry, Terraform price quote, Terraform bill summary."
 ---
 # Huawei Cloud Resource Query
 
