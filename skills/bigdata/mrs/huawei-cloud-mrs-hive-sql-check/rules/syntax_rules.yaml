@@ -1,0 +1,143 @@
+# MRS Hive SQL 语法检查规则
+syntax_rules:
+  - id: SYN-ERR
+    name: "词法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "SQL 文本中存在无法识别的字符或格式错误"
+    check_type: "tokenizer_error"
+    fix_suggestion: "检查 SQL 文本中是否存在非法字符、未闭合的引号或注释"
+
+  - id: SYN001
+    name: "无效关键字使用"
+    level: ERROR
+    category: "语法检查"
+    description: "使用了 Hive 不支持的关键字"
+    check_type: "keyword_validation"
+    fix_suggestion: "查阅 Hive SQL 参考手册确认支持的关键字"
+
+  - id: SYN002
+    name: "保留关键字用作标识符"
+    level: ERROR
+    category: "语法检查"
+    description: "保留关键字不能用作表名/列名等标识符，除非用反引号引用"
+    check_type: "reserved_keyword_check"
+    fix_suggestion: "使用反引号引用保留关键字，如 `user` 或更换标识符名称"
+
+  - id: SYN003
+    name: "语法结构错误"
+    level: ERROR
+    category: "语法检查"
+    description: "SQL 语句结构不符合语法规范，缺少必选子句或关键字"
+    check_type: "structure_validation"
+    fix_suggestion: "检查语句是否缺少必选关键字或子句"
+
+  - id: SYN004
+    name: "子句顺序错误"
+    level: ERROR
+    category: "语法检查"
+    description: "SQL 子句顺序不符合语法规范"
+    check_type: "clause_order_validation"
+    correct_order: ["WITH", "SELECT", "FROM", "WHERE", "GROUP BY", "HAVING", "ORDER BY", "LIMIT"]
+    fix_suggestion: "按照正确顺序重排 SQL 子句"
+
+  - id: SYN005
+    name: "PARTITIONED BY 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "PARTITIONED BY 分区定义语法不合法"
+    check_type: "partition_syntax"
+    applies_to: ["CREATE TABLE"]
+    fix_suggestion: "使用 PARTITIONED BY (col_name data_type, ...)"
+
+  - id: SYN006
+    name: "CLUSTERED BY 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "CLUSTERED BY 分桶定义语法不合法"
+    check_type: "bucket_syntax"
+    applies_to: ["CREATE TABLE"]
+    fix_suggestion: "使用 CLUSTERED BY (col) [SORTED BY (col)] INTO N BUCKETS"
+
+  - id: SYN007
+    name: "STORED AS 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "STORED AS 存储格式不合法"
+    check_type: "storage_format"
+    valid_formats: ["ORC", "ORCFILE", "TEXTFILE", "PARQUET", "SEQUENCEFILE", "AVRO", "RCFILE", "JSONFILE", "CUSTOMTEXTSERDE"]
+    applies_to: ["CREATE TABLE"]
+    fix_suggestion: "使用 STORED AS ORC / TEXTFILE / PARQUET 等合法格式"
+
+  - id: SYN008
+    name: "ROW FORMAT 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "ROW FORMAT 序列化定义语法不合法"
+    check_type: "row_format_syntax"
+    applies_to: ["CREATE TABLE"]
+    fix_suggestion: "使用 ROW FORMAT SERDE 'class_name' 或 ROW FORMAT DELIMITED"
+
+  - id: SYN009
+    name: "INSERT OVERWRITE 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "INSERT OVERWRITE 语句结构不合法"
+    check_type: "insert_overwrite_syntax"
+    applies_to: ["INSERT"]
+    fix_suggestion: "使用 INSERT OVERWRITE TABLE table_name [PARTITION (...)] SELECT ..."
+
+  - id: SYN010
+    name: "LATERAL VIEW 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "LATERAL VIEW 语句结构不合法"
+    check_type: "lateral_view_syntax"
+    applies_to: ["SELECT"]
+    fix_suggestion: "使用 LATERAL VIEW table_func(col) alias AS col_alias"
+
+  - id: SYN011
+    name: "子查询语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "子查询结构不合法"
+    check_type: "subquery_syntax"
+    fix_suggestion: "检查子查询是否正确使用括号包裹"
+
+  - id: SYN012
+    name: "CREATE TABLE 结构错误"
+    level: ERROR
+    category: "语法检查"
+    description: "CREATE TABLE 语句缺少必要元素（列定义、AS SELECT、LIKE、TBLPROPERTIES、ROW FORMAT SERDE 或 STORED BY）"
+    check_type: "create_table_structure"
+    applies_to: ["CREATE TABLE"]
+    fix_suggestion: "CREATE TABLE 语句必须包含列定义、AS SELECT、LIKE、或通过 TBLPROPERTIES/ROW FORMAT SERDE/STORED BY 定义外部 schema"
+
+  - id: SYN013
+    name: "ALTER TABLE 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "ALTER TABLE 操作语法不合法"
+    check_type: "alter_table_syntax"
+    applies_to: ["ALTER TABLE"]
+    fix_suggestion: "使用合法的 ALTER TABLE 操作，如 ADD/DROP/RENAME COLUMNS, ADD/DROP PARTITION 等"
+
+  - id: SYN014
+    name: "MERGE 语句语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "MERGE 语句结构不合法，缺少必选子句 MERGE INTO ... USING ... ON ... WHEN MATCHED"
+    check_type: "merge_syntax"
+    applies_to: ["MERGE"]
+    required_clauses: ["MERGE", "INTO", "USING", "ON", "WHEN", "MATCHED"]
+    fix_suggestion: "使用 MERGE INTO target USING source ON condition WHEN MATCHED THEN UPDATE/DELETE"
+
+  - id: SYN015
+    name: "LOAD DATA 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "LOAD DATA 语句结构不合法，缺少必选子句 LOAD DATA [LOCAL] INPATH 'path' [OVERWRITE] INTO TABLE"
+    check_type: "load_data_syntax"
+    applies_to: ["LOAD"]
+    required_clauses: ["LOAD", "DATA", "INPATH", "INTO", "TABLE"]
+    fix_suggestion: "使用 LOAD DATA [LOCAL] INPATH 'path' [OVERWRITE] INTO TABLE table_name [PARTITION (...)]"
