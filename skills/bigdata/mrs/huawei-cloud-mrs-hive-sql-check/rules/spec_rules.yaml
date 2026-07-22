@@ -1,0 +1,246 @@
+# MRS Hive SQL 规范检查规则
+spec_rules:
+  # ---- 数据操作规范 ----
+  - id: SPEC001
+    name: "禁止使用 SELECT *"
+    level: WARNING
+    category: "数据操作规范"
+    description: "查询语句必须明确指定字段列表，SELECT * 会导致不必要的 I/O 和网络传输"
+    applies_to: ["SELECT"]
+    check_type: "ast_pattern"
+    pattern: "SelectStmt with has_select_star"
+    fix_suggestion: "将 SELECT * 替换为具体的字段列表"
+
+  - id: SPEC002
+    name: "DELETE/UPDATE 缺少 WHERE 条件"
+    level: ERROR
+    category: "数据操作规范"
+    description: "DELETE/UPDATE 语句必须包含 WHERE 条件，否则将影响全表数据"
+    applies_to: ["DELETE", "UPDATE"]
+    check_type: "ast_pattern"
+    pattern: "DeleteStmt/UpdateStmt with missing_where"
+    fix_suggestion: "添加 WHERE 条件限制操作范围"
+
+  - id: SPEC003
+    name: "笛卡尔积风险"
+    level: ERROR
+    category: "数据操作规范"
+    description: "多表查询缺少 JOIN 条件，可能产生笛卡尔积。笛卡尔积只有1个reduce任务，会导致计算超慢甚至节点挂掉"
+    applies_to: ["SELECT"]
+    check_type: "ast_pattern"
+    pattern: "SelectStmt with multiple from_tables and no join/where"
+    fix_suggestion: "使用显式 JOIN 语法并指定 ON 条件"
+
+  - id: SPEC004
+    name: "隐式类型转换风险"
+    level: WARNING
+    category: "数据操作规范"
+    description: "WHERE 条件中可能存在隐式类型转换，可能导致结果异常"
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    check_type: "token_pattern"
+    pattern: "WHERE column = 'number' (string-number mismatch)"
+    fix_suggestion: "确保比较操作两侧的数据类型一致，使用显式类型转换 CAST()"
+
+  - id: SPEC005
+    name: "LIKE 前缀通配符导致全表扫描"
+    level: WARNING
+    category: "数据操作规范"
+    description: "LIKE '%...' 模式无法使用分区裁剪，将导致全表扫描"
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    check_type: "token_pattern"
+    pattern: "LIKE '%...'"
+    fix_suggestion: "避免使用前缀通配符"
+
+  - id: SPEC006
+    name: "分区字段使用函数导致裁剪失效"
+    level: WARNING
+    category: "数据操作规范"
+    description: "对分区字段使用函数会导致分区裁剪失效，产生全表扫描"
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    check_type: "token_pattern"
+    pattern: "WHERE SUBSTR(dt,1,6)='202405' or similar"
+    fix_suggestion: "使用范围比较替代函数，如 WHERE dt>='20240501' AND dt<'20240601'"
+
+  - id: SPEC007
+    name: "INSERT 缺少列列表"
+    level: WARNING
+    category: "数据操作规范"
+    description: "INSERT 语句未指定列列表，依赖列的默认顺序，可能导致兼容性问题"
+    applies_to: ["INSERT"]
+    check_type: "ast_pattern"
+    pattern: "InsertStmt without columns"
+    fix_suggestion: "添加列列表 INSERT INTO table (col1, col2, ...) SELECT ..."
+
+  - id: SPEC008
+    name: "CREATE TABLE 缺少表注释"
+    level: INFO
+    category: "对象设计规范"
+    description: "表未添加注释，不利于后续维护"
+    applies_to: ["CREATE TABLE"]
+    check_type: "ast_pattern"
+    pattern: "CreateStmt without comment"
+    fix_suggestion: "添加 COMMENT '表用途说明'"
+
+  # ---- 命名规范 ----
+  - id: SPEC009
+    name: "使用保留关键字作标识符"
+    level: ERROR
+    category: "命名规范"
+    description: "使用保留关键字作为表名/列名可能导致语法歧义"
+    applies_to: ["ALL"]
+    check_type: "reserved_keyword_check"
+    pattern: "identifier matching RESERVED_KEYWORD"
+    fix_suggestion: "更换标识符名称或使用反引号引用"
+
+  - id: SPEC010
+    name: "字段名超过30字符"
+    level: WARNING
+    category: "命名规范"
+    description: "字段名过长不利于维护和阅读"
+    applies_to: ["CREATE TABLE"]
+    check_type: "identifier_pattern"
+    pattern: "column_name length > 30"
+    fix_suggestion: "缩短字段名，保持在30字符以内"
+
+  # ---- 对象设计规范 ----
+  - id: SPEC012
+    name: "金额字段禁止使用 FLOAT/DOUBLE"
+    level: ERROR
+    category: "对象设计规范"
+    description: "金额字段应使用 DECIMAL(p,s) 而非 FLOAT/DOUBLE，避免精度丢失"
+    applies_to: ["CREATE TABLE"]
+    check_type: "ast_pattern"
+    pattern: "column defined as FLOAT/DOUBLE for monetary data"
+    fix_suggestion: "使用 DECIMAL(p,s) 类型存储金额"
+
+  - id: SPEC013
+    name: "表字段数不建议超过100个"
+    level: WARNING
+    category: "对象设计规范"
+    description: "字段数过多会导致 ORC 压缩缓冲区开销大，可能引起 OOM"
+    applies_to: ["CREATE TABLE"]
+    check_type: "ast_pattern"
+    pattern: "column count > 100"
+    fix_suggestion: "拆分大表，减少字段数量"
+
+  - id: SPEC014
+    name: "分区字段不建议超过3个"
+    level: WARNING
+    category: "对象设计规范"
+    description: "分区字段过多会产生大量小文件，影响计算效率和元数据库负载"
+    applies_to: ["CREATE TABLE"]
+    check_type: "ast_pattern"
+    pattern: "partition columns count > 3"
+    fix_suggestion: "合理设计分区粒度，分区字段不超过3个"
+
+  - id: SPEC015
+    name: "字段缺少注释"
+    level: INFO
+    category: "对象设计规范"
+    description: "字段未添加注释，不利于后续维护"
+    applies_to: ["CREATE TABLE"]
+    check_type: "ast_pattern"
+    pattern: "column without COMMENT"
+    fix_suggestion: "为每个字段添加 COMMENT '字段说明'"
+
+  # ---- 数据操作规范（续） ----
+  - id: SPEC016
+    name: "CASE WHEN 缺少 ELSE"
+    level: WARNING
+    category: "数据操作规范"
+    description: "CASE WHEN 语句应包含 ELSE 子句，避免 NULL 值导致意外结果"
+    applies_to: ["SELECT", "UPDATE", "INSERT"]
+    check_type: "token_pattern"
+    pattern: "CASE ... WHEN ... THEN ... END without ELSE"
+    fix_suggestion: "添加 ELSE 默认值，如 CASE WHEN ... THEN ... ELSE default_val END"
+
+  - id: SPEC017
+    name: "NULL 值处理风险"
+    level: WARNING
+    category: "数据操作规范"
+    description: "条件判断中未考虑 NULL 对结果的影响"
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    check_type: "token_pattern"
+    pattern: "IF(col <> value, ...) without NULL check"
+    fix_suggestion: "显式处理 NULL 逻辑，如 IF(col <> value AND col IS NOT NULL, ...)"
+
+  - id: SPEC018
+    name: "禁止使用字符串 'NULL'"
+    level: ERROR
+    category: "数据操作规范"
+    description: "数据处理中禁止使用字符串 'null'/'NULL'，应使用 NULL 关键字"
+    applies_to: ["SELECT", "INSERT"]
+    check_type: "token_pattern"
+    pattern: "SELECT 'NULL' or INSERT 'NULL'"
+    fix_suggestion: "使用 NULL 关键字替代字符串 'NULL'"
+
+  - id: SPEC019
+    name: "关联字段类型不一致"
+    level: WARNING
+    category: "数据操作规范"
+    description: "表关联时应保证关联字段类型一致，否则可能导致隐式转换和性能问题"
+    applies_to: ["SELECT"]
+    check_type: "token_pattern"
+    pattern: "JOIN ON string_col = int_col"
+    fix_suggestion: "显式转换类型使关联字段类型一致"
+
+  # ---- SQL开发规范 ----
+  - id: SPEC020
+    name: "避免使用 INSERT INTO VALUES"
+    level: WARNING
+    category: "SQL开发规范"
+    description: "INSERT INTO VALUES 效率低，建议使用 LOAD DATA 或 INSERT INTO SELECT"
+    applies_to: ["INSERT"]
+    check_type: "token_pattern"
+    pattern: "INSERT INTO ... VALUES (...)"
+    fix_suggestion: "使用 LOAD DATA INPATH 或 INSERT INTO ... SELECT 替代"
+
+  - id: SPEC021
+    name: "子查询嵌套不建议超过3层"
+    level: WARNING
+    category: "SQL开发规范"
+    description: "子查询嵌套层数过多，多次生成临时数据，SQL 不易维护"
+    applies_to: ["SELECT"]
+    check_type: "ast_pattern"
+    pattern: "subquery nesting depth > 3"
+    fix_suggestion: "拆分为中间表或使用 CTE (WITH 子句)"
+
+  - id: SPEC022
+    name: "分区表查询缺少分区过滤"
+    level: ERROR
+    category: "数据操作规范"
+    description: "分区表查询必须带分区条件，否则将扫描全部分区数据"
+    applies_to: ["SELECT"]
+    check_type: "token_pattern"
+    pattern: "SELECT from partitioned table without partition filter"
+    fix_suggestion: "添加分区过滤条件 WHERE dt='xxxx'"
+
+  - id: SPEC023
+    name: "JOIN ON 中不应包含 IF/CASE WHEN"
+    level: WARNING
+    category: "数据操作规范"
+    description: "JOIN ON 条件中不应使用 IF/CASE WHEN，应在 WHERE 子句中处理"
+    applies_to: ["SELECT"]
+    check_type: "token_pattern"
+    pattern: "JOIN ON CASE WHEN..."
+    fix_suggestion: "将 IF/CASE WHEN 逻辑移到 WHERE 子句中"
+
+  - id: SPEC024
+    name: "CASCADE 使用需谨慎"
+    level: WARNING
+    category: "SQL开发规范"
+    description: "ALTER TABLE 中使用 CASCADE 会级联修改分区列，需确认影响范围"
+    applies_to: ["ALTER TABLE"]
+    check_type: "token_pattern"
+    pattern: "ALTER TABLE ... CASCADE"
+    fix_suggestion: "确认影响范围后再使用 CASCADE"
+
+  - id: SPEC025
+    name: "禁止使用 Hive on Spark"
+    level: WARNING
+    category: "SQL开发规范"
+    description: "MRS Hive 应使用 Tez 执行引擎，禁止使用 Spark 执行引擎"
+    applies_to: ["SET"]
+    check_type: "token_pattern"
+    pattern: "SET hive.execution.engine=spark"
+    fix_suggestion: "使用 SET hive.execution.engine=tez"

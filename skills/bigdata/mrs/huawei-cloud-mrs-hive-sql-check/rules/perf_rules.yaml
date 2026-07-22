@@ -1,0 +1,70 @@
+# MRS Hive SQL 大SQL拦截规则
+# 用于拦截可能导致集群资源耗尽的高风险SQL
+perf_rules:
+  - id: INTERCEPT001
+    name: "COUNT(DISTINCT) 次数超限"
+    level: ERROR
+    category: "大SQL拦截"
+    description: "SQL中 COUNT(DISTINCT) 出现次数超过阈值(10)，多个 COUNT(DISTINCT) 会增大 Shuffle 量"
+    check_type: "token_pattern"
+    threshold: 10
+    applies_to: ["SELECT"]
+    fix_suggestion: "将多个 COUNT(DISTINCT) 拆分为多个子查询，利用 UNION ALL 合并结果"
+
+  - id: INTERCEPT002
+    name: "NOT IN 子查询检测"
+    level: WARNING
+    category: "大SQL拦截"
+    description: "SQL中使用了 NOT IN 子查询，性能差且 NULL 值会导致结果异常"
+    check_type: "token_pattern"
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    fix_suggestion: "使用 NOT EXISTS 或 LEFT JOIN + IS NULL 替代"
+
+  - id: INTERCEPT003
+    name: "JOIN 次数过多"
+    level: ERROR
+    category: "大SQL拦截"
+    description: "SQL中 JOIN 次数超过阈值(20)，可能导致内存占用过多"
+    check_type: "token_pattern"
+    threshold: 20
+    applies_to: ["SELECT"]
+    fix_suggestion: "减少 JOIN 次数，可将多个小表合并后再进行 JOIN"
+
+  - id: INTERCEPT004
+    name: "UNION ALL 次数超限"
+    level: ERROR
+    category: "大SQL拦截"
+    description: "SQL中 UNION ALL 次数超过阈值(20)，可能产生超大结果集"
+    check_type: "token_pattern"
+    threshold: 20
+    applies_to: ["SELECT"]
+    fix_suggestion: "拆分 SQL 或使用 INSERT INTO 分开写入"
+
+  - id: INTERCEPT005
+    name: "子查询嵌套层数超限"
+    level: ERROR
+    category: "大SQL拦截"
+    description: "子查询嵌套层数超过阈值(20)，多次生成临时数据且不易维护"
+    check_type: "ast_pattern"
+    threshold: 20
+    applies_to: ["SELECT"]
+    fix_suggestion: "优化 SQL，避免多重嵌套查询，拆分为中间表"
+
+  - id: INTERCEPT006
+    name: "SQL 语句长度超限"
+    level: WARNING
+    category: "大SQL拦截"
+    description: "SQL 字符串长度超过阈值(10KB)，表示 SQL 过于复杂"
+    check_type: "text_length"
+    threshold: 10240
+    applies_to: ["ALL"]
+    fix_suggestion: "将复杂 SQL 拆分为多个简单 SQL 或使用中间表"
+
+  - id: INTERCEPT007
+    name: "笛卡尔积检测"
+    level: ERROR
+    category: "大SQL拦截"
+    description: "多表关联时存在笛卡尔积，会导致数据膨胀，大量占用集群资源"
+    check_type: "ast_pattern"
+    applies_to: ["SELECT"]
+    fix_suggestion: "添加 JOIN 关联条件"
