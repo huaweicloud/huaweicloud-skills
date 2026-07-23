@@ -97,6 +97,8 @@ def write_feedback_md(feedback: FeedbackRecord, file_path: Path) -> None:
     ]
     if feedback.product_name:
         lines.append(f"- **product_name**: {feedback.product_name}")
+    if feedback.voice_source:
+        lines.append(f"- **voice_source**: {feedback.voice_source}")
 
     error_stack_content = _build_error_stack(feedback)
     lines.extend([
@@ -435,6 +437,7 @@ def read_feedback_md(file_path: Path) -> FeedbackRecord:
         occurrence_scenario=occurrence_scenario,
         expected_behavior=expected_behavior,
         product_name=meta.get("product_name") or None,
+        voice_source=meta.get("voice_source") or None,
         more_details=more_details,
     )
 
@@ -493,6 +496,7 @@ def main() -> None:
     write_p.add_argument("--problem-description", default="", help="problem description (for user_report)")
     write_p.add_argument("--occurrence-scenario", default="", help="occurrence scenario")
     write_p.add_argument("--expected-behavior", default="", help="expected behavior")
+    write_p.add_argument("--voice-source", default="", help="voice source attribution for VOD sound issues")
     write_p.add_argument("--recurrence-count", type=int, default=1, help="recurrence count")
     write_p.add_argument("--dedup-key", default="", help="dedup key")
     write_p.add_argument("--annotations", nargs="*", default=[], help="annotation labels (e.g. skill:xxx category:yyy severity:high)")
@@ -523,6 +527,7 @@ def main() -> None:
             confidence=args.confidence,
             status=FeedbackStatus(args.status),
             product_name=args.product_name or None,
+            voice_source=args.product_name or None,
             error_type=_resolve_value(args.error_type) or None,
             error_message=_resolve_value(args.error_message) or None,
             error_stack=_resolve_value(args.error_stack) or None,

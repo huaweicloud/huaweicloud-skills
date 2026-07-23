@@ -9,6 +9,7 @@
 - **confidence**: 0.0-1.0
 - **status**: open | promoted | resolved | discarded
 - **product_name**: <product/skill name>
+- **voice_source**: <voice source>
 
 ## Error Information
 - **error_type**: command_failure | api_error | timeout | service_error | configuration_issue

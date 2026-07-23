@@ -10,6 +10,66 @@ description: |
 
 ---
 
+## Overview
+
+The VoD (Voice of Developer) Collector captures poor developer experiences and issues encountered while using Huawei Cloud tools or services. It prepares high-quality requirements or issue reports (GitCode issues) for product and engineering teams.
+
+## Core Commands
+
+Common CLI examples grouped by function (all scripts under `<SKILL_DIR>/scripts/`):
+
+- Capture
+
+```bash
+python <SKILL_DIR>/scripts/md_io.py write-feedback --output .vod/feedbacks/
+python <SKILL_DIR>/scripts/vod_sanitize.py file --path <file>
+```
+
+- Extract / Edit (use `write-feedback` to update fields or edit feedback files directly)
+
+- Deliver
+
+```bash
+python <SKILL_DIR>/scripts/vod_deliver.py deliver --feedback-id <id> --feedbacks-dir .vod/feedbacks
+python <SKILL_DIR>/scripts/vod_deliver.py update-status --feedback-id <id> --status delivered --feedbacks-dir .vod/feedbacks
+```
+
+- Auto-login (only when `deliver` returns `need_login`)
+
+```bash
+bash <SKILL_DIR>/scripts/vod_install.sh
+python <SKILL_DIR>/scripts/vod_deliver.py server-start
+curl -s -X POST http://localhost:8080/login/start
+python <SKILL_DIR>/scripts/vod_deliver.py login-wait --session-id <session_id>
+python <SKILL_DIR>/scripts/vod_deliver.py server-stop --pid <pid>
+```
+
+## Parameters
+
+The following parameters can be configured by users or integrators:
+
+- `--feedbacks-dir`: Path for storing feedbacks, default is `.vod/feedbacks/`.
+- `--atomgit-home` / `ATOMCODE_HOME`: AtomGit-GO configuration directory, default `~/.atomcode`.
+- `delivery.channels.gitcode.repo_url`: Target repository URL — read only from `assets/config.yaml.template`.
+- `capture.dedup_window_sec`: In-session deduplication window in seconds.
+- `storage.max_feedbacks_per_session`: Maximum stored feedbacks per session (default 5).
+- Logging/Debug: Optional flags inside scripts to enable additional logging or debug modes.
+
+Before delivery or auto-login, ensure the `repo_url` is provided via `assets/config.yaml.template` and is not inferred from `git remote`.
+
+## References
+
+See additional implementation details and integration guides in the repository:
+
+- [references/hooks-setup.md](references/hooks-setup.md)
+- [references/openclaw-integration.md](references/openclaw-integration.md)
+- [assets/VOD_FEEDBACKS.md](assets/VOD_FEEDBACKS.md)
+- [assets/VOD_ISSUE.md](assets/VOD_ISSUE.md)
+- [references/VOD_ISSUE.md](assets/VOD_ISSUE.md)
+- [references/acceptance-criteria.md](references/acceptance-criteria.md)
+
+---
+
 ## Prerequisites
 
 ### Python dependencies
@@ -72,13 +132,6 @@ python <SKILL_DIR>/scripts/vod_deliver.py deliver \
   --feedbacks-dir .vod/feedbacks
 ```
 
-**Batch notification** — scan undelivered feedbacks and submit as a single merged issue:
-
-```bash
-python <SKILL_DIR>/scripts/vod_deliver.py notify \
-  --feedbacks-dir .vod/feedbacks
-```
-
 **Update status** — mark a feedback as delivered (or other status):
 
 ```bash
@@ -88,7 +141,7 @@ python <SKILL_DIR>/scripts/vod_deliver.py update-status \
 
 ---
 
-**Auto-login** — when `deliver` or `notify` returns `"need_login": true`, perform the following:
+**Auto-login** — when `deliver` returns `"need_login": true`, perform the following:
 
 **CRITICAL: Before installation, MUST tell the user:**
 - This login uses the open-source project **AtomGit-GO** (MIT license).
@@ -114,7 +167,7 @@ python <SKILL_DIR>/scripts/vod_deliver.py update-status \
 
 7. **Stop server**: `python <SKILL_DIR>/scripts/vod_deliver.py server-stop --pid <pid>`
 
-8. **Re-run** the original `deliver` or `notify` command.
+8. **Re-run** the original `deliver` command.
 
 ---
 
