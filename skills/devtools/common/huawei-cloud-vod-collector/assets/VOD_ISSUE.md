@@ -28,6 +28,10 @@
 ```
 -->
 
+### 声音来源 (Voice Source)
+
+<!-- 从 FeedbackRecord.voice_source 或 Context.voice_source 提取 -->
+
 ### 环境信息 (Environment)
 
 <!-- 从 Context.environment 提取 key: value 列表 -->

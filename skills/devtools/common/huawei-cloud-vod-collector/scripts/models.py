@@ -58,4 +58,5 @@ class FeedbackRecord:
     occurrence_scenario: str | None = None
     expected_behavior: str | None = None
     product_name: str | None = None
+    voice_source: str | None = None
     more_details: dict[str, str] | None = None
