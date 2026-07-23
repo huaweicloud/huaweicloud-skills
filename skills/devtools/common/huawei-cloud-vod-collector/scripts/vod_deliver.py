@@ -223,6 +223,50 @@ def _infer_product_name(feedback) -> str:
     return ""
 
 
+def _infer_voice_sources(feedback) -> str:
+    """Infer voice source(s) using the same heuristics as product name but
+    return all unique candidates joined by comma.
+    """
+    candidates: list[str] = []
+
+    def _add(value: str | None):
+        if not value:
+            return
+        # split common separators, but preserve multi-word product names like "AI Shell"
+        parts = re.split(r"[,;，；\n]+", str(value))
+        for p in parts:
+            p = p.strip()
+            if not p:
+                continue
+            if p not in candidates:
+                candidates.append(p)
+
+    # 1) explicit field from metadata
+    _add(getattr(feedback, "voice_source", None))
+
+    # 2) also consider product_name as a possible source
+    _add(getattr(feedback, "product_name", None))
+
+    # 3) annotations with skill: prefix
+    for ann in getattr(feedback, "annotations", []) or []:
+        if isinstance(ann, str) and ann.startswith("skill:"):
+            _add(ann.split("skill:", 1)[1].strip())
+
+    # 4) agent action: call/invoke <name>
+    if getattr(feedback, "agent_action", None):
+        m = re.search(r"(?:call|invoke)\s+(\S+?)(?:\s+skill|$)", feedback.agent_action, re.IGNORECASE)
+        if m:
+            _add(m.group(1).strip())
+
+    # 5) error message pattern like word-word(-word)+
+    if getattr(feedback, "error_message", None):
+        m = re.search(r"(\w+-\w+(?:-\w+)+)", feedback.error_message)
+        if m:
+            _add(m.group(1))
+
+    return ", ".join(candidates)
+
+
 def _build_issue_title(feedback, feedback_file: Path | None = None, product_name: str = "") -> str:
     desc = feedback.problem_description or feedback.error_message or feedback.user_intent or ""
     if not desc:
@@ -283,6 +327,15 @@ def _build_issue_body(feedback, feedback_file: Path) -> str:
             "```",
             clean_stack,
             "```",
+            "",
+        ])
+
+    # Show all inferred voice sources (preserve explicit metadata if present).
+    voice_sources = _infer_voice_sources(feedback)
+    if voice_sources:
+        lines.extend([
+            "### 声音来源 (Voice Source)",
+            voice_sources,
             "",
         ])
 
@@ -478,120 +531,6 @@ def deliver_feedback(
     return result
 
 
-def _build_merged_issue_title(feedbacks: list, feedbacks_dir: Path, product_name: str = "") -> str:
-    if len(feedbacks) == 1:
-        fb_file = feedbacks_dir / f"{feedbacks[0].feedback_id}.md"
-        return _build_issue_title(feedbacks[0], fb_file, product_name)
-    first_desc = (
-        feedbacks[0].problem_description
-        or feedbacks[0].error_message
-        or feedbacks[0].user_intent
-        or ""
-    )
-    summary = first_desc[:30] if first_desc else "Batch feedback"
-    prefix = f"【{product_name}】" if product_name else ""
-    return f"{prefix}VoD Batch ({len(feedbacks)} items): {summary} etc."
-
-
-def _build_merged_issue_body(feedbacks: list, feedbacks_dir: Path) -> str:
-    if len(feedbacks) == 1:
-        fb_file = feedbacks_dir / f"{feedbacks[0].feedback_id}.md"
-        return _build_issue_body(feedbacks[0], fb_file)
-
-    parts = [f"Total {len(feedbacks)} feedback item(s), submitted together:", ""]
-    for i, fb in enumerate(feedbacks, 1):
-        desc = fb.problem_description or fb.error_message or fb.user_intent or ""
-        scenario = fb.occurrence_scenario or ""
-        expected = fb.expected_behavior or fb.user_expected or ""
-
-        parts.append(f"### {i}. {desc or fb.feedback_id}")
-        parts.append("")
-        if scenario:
-            parts.extend(["**To Reproduce**", scenario, ""])
-        if expected:
-            parts.extend(["**Expected behavior**", expected, ""])
-        clean_stack = _strip_error_stack_markers(fb.error_stack)
-        if clean_stack:
-            parts.extend(["```", clean_stack, "```", ""])
-        parts.append("---")
-        parts.append("")
-
-    return "\n".join(parts)
-
-
-def notify(
-    feedbacks_dir: Path,
-    atomgit_home: str | None = None,
-) -> list[dict]:
-    config = _load_config()
-    gitcode_cfg = config.get("delivery", {}).get("channels", {}).get("gitcode", {})
-
-    if not gitcode_cfg.get("enabled", False):
-        return []
-
-    repo_url = gitcode_cfg.get("repo_url", "")
-    if not repo_url:
-        return [{"success": False, "error": "GitCode repo URL not configured"}]
-
-    # Get token from AtomGit-GO
-    resolution = _resolve_atomgit_token(atomgit_home)
-    if not resolution["success"]:
-        return [resolution]  # carries need_login signal or error
-
-    token = resolution["access_token"]
-    atomgit_hint = resolution.get("atomgit")
-
-    all_feedbacks = read_all_feedbacks(feedbacks_dir)
-    pending = []
-    for fb in all_feedbacks:
-        fb_file = feedbacks_dir / f"{fb.feedback_id}.md"
-        content = fb_file.read_text(encoding="utf-8") if fb_file.exists() else ""
-        if "delivery_status: delivered" in content:
-            continue
-        if fb.status == FeedbackStatus.DISCARDED:
-            continue
-        pending.append(fb)
-
-    if not pending:
-        return []
-
-    product_name = pending[0].product_name or "" if pending else ""
-    title = _build_merged_issue_title(pending, feedbacks_dir, product_name)
-    body = _build_merged_issue_body(pending, feedbacks_dir)
-    result = _create_gitcode_issue(repo_url, token, title, body)
-
-    results = []
-    if result.get("success"):
-        for fb in pending:
-            fb_file = feedbacks_dir / f"{fb.feedback_id}.md"
-            _update_feedback_delivery_status(
-                fb_file,
-                result.get("issue_url", ""),
-                str(result.get("issue_iid", "")),
-            )
-            entry = {
-                "feedback_id": fb.feedback_id,
-                "success": True,
-                "issue_url": result.get("issue_url", ""),
-                "issue_iid": result.get("issue_iid", ""),
-            }
-            # If using AtomGit-GO token, attach source info
-            if atomgit_hint and atomgit_hint.get("status") == "available":
-                entry["auth_source"] = "atomgit-go"
-                if atomgit_hint.get("user"):
-                    entry["auth_user"] = atomgit_hint["user"]
-            results.append(entry)
-    else:
-        for fb in pending:
-            results.append({
-                "feedback_id": fb.feedback_id,
-                "success": False,
-                "error": result.get("error", "unknown"),
-            })
-
-    return results
-
-
 def _find_server_binary() -> str | None:
     """Find the atomcode server binary. Checks common locations and names."""
     home = Path.home()
@@ -674,10 +613,6 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="VoD Feedback Delivery Tool")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    notify_p = subparsers.add_parser("notify", help="Push undelivered feedbacks")
-    notify_p.add_argument("--feedbacks-dir", "--feedback-dir", required=True, type=Path, dest="feedbacks_dir", help="Path to .vod/feedbacks/")
-    notify_p.add_argument("--atomgit-home", default=None, help="AtomGit-GO config dir (default: ~/.atomcode or $ATOMCODE_HOME)")
-
     deliver_p = subparsers.add_parser("deliver", help="Deliver single feedback")
     deliver_p.add_argument("--feedback-id", required=True, help="Feedback ID")
     deliver_p.add_argument("--feedbacks-dir", "--feedback-dir", required=True, type=Path, dest="feedbacks_dir", help="Path to .vod/feedbacks/")
@@ -707,12 +642,6 @@ def main() -> None:
     elif args.command == "server-stop":
         result = _stop_login_server(args.pid)
         print(json.dumps(result, ensure_ascii=False))
-    elif args.command == "notify":
-        results = notify(
-            args.feedbacks_dir,
-            atomgit_home=getattr(args, "atomgit_home", None),
-        )
-        print(json.dumps(results, ensure_ascii=False, indent=2))
     elif args.command == "deliver":
         result = deliver_feedback(
             args.feedback_id, args.feedbacks_dir,
