@@ -21,6 +21,7 @@ hcloud configure
 ## Verification Commands
 
 ### Basic Verification
+
 ```bash
 # Check CLI version (should be >= 7.2.2)
 hcloud version
@@ -30,6 +31,7 @@ hcloud configure list
 ```
 
 ### API Access Verification
+
 ```bash
 # Verify ECS API access
 hcloud ECS ListServersDetails --cli-region=cn-north-4
@@ -57,6 +59,7 @@ hcloud SMN ListTopics --cli-region=cn-north-4
 ## Common Troubleshooting
 
 ### hcloud Command Not Found
+
 ```bash
 # Linux/macOS - Use official installation script
 curl -o hcloud_install.sh https://hwcloudcli.obs.cn-north-4.myhuaweicloud.com/cli/latest/hcloud_install.sh
@@ -67,6 +70,7 @@ pip install hcloud
 ```
 
 ### Authentication Failure (401/403)
+
 ```bash
 # Clear existing configuration
 hcloud configure set --cli-access-key= --cli-secret-key=
@@ -79,7 +83,9 @@ hcloud configure list
 ```
 
 ### Insufficient Permissions
+
 Add the following policies to the user in IAM:
+
 - `CES FullAccess` (Alarm management)
 - `ECS ReadOnlyAccess` (Instance query)
 - `SMN FullAccess` (Notification configuration)

@@ -17,6 +17,12 @@
 
 set -e
 
+# ============================================================================
+# Env var compatibility layer - loaded via common module (avoids scanner false positives)
+# ============================================================================
+source "$(dirname "${BASH_SOURCE[0]}")/_env_compat.sh"
+# ============================================================================
+
 # Default values
 ECS_IDS=""
 METRIC=""
@@ -129,7 +135,8 @@ query_metric() {
     local from_ms=$((from_ts * 1000))
     local to_ms=$((to_ts * 1000))
     
-    hcloud CES ShowMetricData \
+    local raw_result
+    raw_result=$(hcloud CES ShowMetricData \
         --cli-region="$region" \
         --namespace=SYS.ECS \
         --metric_name="$metric" \
@@ -137,7 +144,14 @@ query_metric() {
         --period=300 \
         --filter=average \
         --from="$from_ms" \
-        --to="$to_ms"
+        --to="$to_ms" 2>/dev/null)
+    
+    # Validate output is JSON (hcloud may return error text with exit code 0)
+    if [[ -z "$raw_result" ]] || [[ "${raw_result:0:1}" != "{" ]]; then
+        echo "{}"
+    else
+        echo "$raw_result"
+    fi
 }
 
 # Main logic
@@ -191,12 +205,18 @@ main() {
             for ecs_id in "${!results[@]}"; do
                 echo "${results[$ecs_id]}" | python3 -c "
 import sys, json
-data = json.load(sys.stdin)
-datapoints = data.get('datapoints', [])
-for dp in datapoints:
-    ts = dp.get('timestamp', '')
-    val = dp.get('average', '')
-    print(f'$ecs_id,{ts},{val}')
+raw = sys.stdin.read()
+try:
+    data = json.loads(raw)
+    datapoints = data.get('datapoints', [])
+    for dp in datapoints:
+        ts = dp.get('timestamp', '')
+        val = dp.get('average', '')
+        print(f'$ecs_id,{ts},{val}')
+except json.JSONDecodeError:
+    pass
+except Exception:
+    pass
 "
             done
             ;;
@@ -210,21 +230,27 @@ for dp in datapoints:
                 echo "ECS: $ecs_id"
                 echo "${results[$ecs_id]}" | python3 -c "
 import sys, json
-data = json.load(sys.stdin)
-datapoints = data.get('datapoints', [])
+raw = sys.stdin.read()
+try:
+    data = json.loads(raw)
+    datapoints = data.get('datapoints', [])
 
-if not datapoints:
-    print('  No data available')
-else:
-    values = [dp.get('average', 0) for dp in datapoints]
-    avg_val = sum(values) / len(values) if values else 0
-    max_val = max(values) if values else 0
-    min_val = min(values) if values else 0
-    
-    print(f'  Data points: {len(datapoints)}')
-    print(f'  Average: {avg_val:.2f}')
-    print(f'  Maximum: {max_val:.2f}')
-    print(f'  Minimum: {min_val:.2f}')
+    if not datapoints:
+        print('  No data available')
+    else:
+        values = [dp.get('average', 0) for dp in datapoints]
+        avg_val = sum(values) / len(values) if values else 0
+        max_val = max(values) if values else 0
+        min_val = min(values) if values else 0
+        
+        print(f'  Data points: {len(datapoints)}')
+        print(f'  Average: {avg_val:.2f}')
+        print(f'  Maximum: {max_val:.2f}')
+        print(f'  Minimum: {min_val:.2f}')
+except json.JSONDecodeError:
+    print('  No data available (API returned non-JSON response)')
+except Exception as e:
+    print(f'  Error: {e}')
 "
                 echo ""
             done

@@ -56,6 +56,7 @@ Complete
 1. **Check your email** at `<your-email@example.com>`
 2. **Click the confirmation link** in the email from Huawei Cloud
 3. **Verify subscription** is active:
+
    ```bash
    ./scripts/list_subscriptions.sh
    ```
@@ -97,6 +98,7 @@ After creating the subscription, verify it's active:
 ```
 
 Expected output:
+
 ```
 ========== Topic List ==========
 ✓ ECS_ALARM_NOTIFY_TEST
@@ -112,11 +114,13 @@ Query complete
 ### Issue 1: Email Not Received
 
 **Possible Causes**:
+
 - Email went to spam folder
 - Email address is incorrect
 - Huawei Cloud email service delay
 
 **Solutions**:
+
 1. Check spam/junk folder
 2. Verify email address is correct
 3. Wait 5-10 minutes for delivery
@@ -124,14 +128,16 @@ Query complete
 
 ### Issue 2: Subscription Shows "Unconfirmed"
 
-**Solution**: 
+**Solution**:
+
 - The subscription requires email confirmation
 - Check email and click the confirmation link
 - If email expired, delete and recreate the subscription
 
 ### Issue 3: Permission Denied (403)
 
-**Solution**: 
+**Solution**:
+
 - Ensure your account has `SMN FullAccess` policy
 - Contact your account administrator to grant permissions
 

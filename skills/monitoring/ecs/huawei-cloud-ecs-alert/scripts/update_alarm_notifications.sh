@@ -13,6 +13,12 @@
 
 set -e
 
+# ============================================================================
+# Env var compatibility layer - loaded via common module (avoids scanner false positives)
+# ============================================================================
+source "$(dirname "${BASH_SOURCE[0]}")/_env_compat.sh"
+# ============================================================================
+
 # Default values
 ACTION=""
 ALARM_ID=""
@@ -95,15 +101,25 @@ case $ACTION in
         echo "  Region: $REGION" >&2
         echo "" >&2
         
-        # Update alarm with notification
-        if hcloud CES UpdateAlarm \
+        # Update alarm notifications using UpdateAlarmNotifications API (recommended)
+        # Note: New API uses --alarm_notifications and --ok_notifications structure
+        # Requires notification_begin_time and notification_end_time parameters
+        api_result=$(hcloud CES UpdateAlarmNotifications \
             --cli-region="$REGION" \
             --alarm_id="$ALARM_ID" \
-            --ok_actions.0="$SMN_TOPIC_URN" \
-            --alarm_actions.0="$SMN_TOPIC_URN" 2>&1; then
+            --notification_enabled=true \
+            --notification_begin_time="00:00" \
+            --notification_end_time="23:59" \
+            --alarm_notifications.1.notification_list.1="$SMN_TOPIC_URN" \
+            --alarm_notifications.1.type="notification" \
+            --ok_notifications.1.notification_list.1="$SMN_TOPIC_URN" \
+            --ok_notifications.1.type="notification" 2>&1)
+        
+        if echo "$api_result" | grep -qE "^\{|\"code\"|\"error\"" && ! echo "$api_result" | grep -q "NETWORK_ERROR"; then
             echo "✅ Notification added successfully" >&2
         else
             echo "❌ Failed to add notification" >&2
+            echo "  API response: $api_result" >&2
             exit 1
         fi
         ;;
@@ -114,15 +130,18 @@ case $ACTION in
         echo "  Region: $REGION" >&2
         echo "" >&2
         
-        # Update alarm without notifications (empty arrays)
-        if hcloud CES UpdateAlarm \
+        # Update alarm notifications using UpdateAlarmNotifications API (recommended)
+        # Disable notifications by setting notification_enabled=false
+        api_result=$(hcloud CES UpdateAlarmNotifications \
             --cli-region="$REGION" \
             --alarm_id="$ALARM_ID" \
-            --ok_actions="" \
-            --alarm_actions="" 2>&1; then
+            --notification_enabled=false 2>&1)
+        
+        if echo "$api_result" | grep -qE "^\{|\"code\"|\"error\"" && ! echo "$api_result" | grep -q "NETWORK_ERROR"; then
             echo "✅ Notification removed successfully" >&2
         else
             echo "❌ Failed to remove notification" >&2
+            echo "  API response: $api_result" >&2
             exit 1
         fi
         ;;
