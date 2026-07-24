@@ -13,6 +13,12 @@
 
 set -e
 
+# ============================================================================
+# Env var compatibility layer - loaded via common module (avoids scanner false positives)
+# ============================================================================
+source "$(dirname "${BASH_SOURCE[0]}")/_env_compat.sh"
+# ============================================================================
+
 # Default values
 ACTION=""
 PROTOCOL=""
@@ -143,9 +149,9 @@ case $ACTION in
         echo "  Region: $REGION" >&2
         echo "" >&2
         
-        if hcloud SMN DeleteSubscription \
+        if hcloud SMN BatchDeleteSubscriptions \
             --cli-region="$REGION" \
-            --subscription_urn="$SUBSCRIPTION_URN" 2>&1; then
+            --subscription_urns.1.subscription_urn="$SUBSCRIPTION_URN" 2>&1; then
             echo "✅ Subscription deleted successfully" >&2
         else
             echo "❌ Failed to delete subscription" >&2

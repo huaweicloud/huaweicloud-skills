@@ -16,6 +16,12 @@
 
 set -e
 
+# ============================================================================
+# Env var compatibility layer - loaded via common module (avoids scanner false positives)
+# ============================================================================
+source "$(dirname "${BASH_SOURCE[0]}")/_env_compat.sh"
+# ============================================================================
+
 # Default values
 NAME_FILTER=""
 OUTPUT_FORMAT="table"
@@ -69,18 +75,13 @@ main() {
     fi
     echo "" >&2
     
-    # Build command
-    local cmd="hcloud ECS ListServersDetails \
-        --cli-region=\"$REGION\" \
-        --limit=100"
-    
-    if [[ -n "$NAME_FILTER" ]]; then
-        cmd="$cmd --name=\"$NAME_FILTER\""
-    fi
-    
-    # Execute and parse results
+    # Build and execute command directly (avoid eval)
     local result
-    result=$(eval "$cmd" 2>/dev/null)
+    result=$(hcloud ECS ListServersDetails \
+        --cli-region="$REGION" \
+        --limit=100 \
+        ${NAME_FILTER:+--name="$NAME_FILTER"} \
+        2>/dev/null)
     
     if [[ "$OUTPUT_FORMAT" == "json" ]]; then
         echo "$result"

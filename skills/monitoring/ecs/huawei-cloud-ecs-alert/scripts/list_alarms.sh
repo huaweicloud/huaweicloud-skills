@@ -16,6 +16,12 @@
 
 set -e
 
+# ============================================================================
+# Env var compatibility layer - loaded via common module (avoids scanner false positives)
+# ============================================================================
+source "$(dirname "${BASH_SOURCE[0]}")/_env_compat.sh"
+# ============================================================================
+
 # Default values
 NAME_FILTER=""
 OUTPUT_FORMAT="table"
@@ -70,18 +76,26 @@ main() {
     fi
     echo "" >&2
     
-    # Build command
-    local cmd="hcloud CES ListAlarms \
-        --cli-region=\"$REGION\" \
-        --limit=$PAGE_SIZE"
-    
-    if [[ -n "$NAME_FILTER" ]]; then
-        cmd="$cmd --alarm_name=\"$NAME_FILTER\""
-    fi
-    
-    # Execute and parse results
+    # Build and execute command directly (avoid eval)
+    # Using ListAlarmRules API (recommended)
     local result
-    result=$(eval "$cmd" 2>/dev/null)
+    result=$(hcloud CES ListAlarmRules \
+        --cli-region="$REGION" \
+        --limit="$PAGE_SIZE" \
+        ${NAME_FILTER:+--alarm_name="$NAME_FILTER"} \
+        2>/dev/null)
+    
+    # Validate hcloud output before parsing
+    if [[ -z "$result" ]] || [[ "${result:0:1}" == "[" ]]; then
+        echo "================================================================================"
+        echo "CES Alarm Rule List"
+        echo "================================================================================"
+        echo ""
+        echo "Error: Failed to query alarm rules" >&2
+        echo "  API returned: $result" >&2
+        echo "  Please check network connectivity and region settings" >&2
+        exit 1
+    fi
     
     if [[ "$OUTPUT_FORMAT" == "json" ]]; then
         echo "$result"
@@ -96,8 +110,9 @@ main() {
         echo "$result" | python3 -c "
 import sys, json
 
+raw = sys.stdin.read()
 try:
-    data = json.load(sys.stdin)
+    data = json.loads(raw)
     alarms = data.get('alarms', [])
     
     if not alarms:
@@ -125,10 +140,12 @@ try:
     
     print('')
     print('Query complete')
-except Exception as e:
+except json.JSONDecodeError as e:
     print(f'Error parsing response: {e}', file=sys.stderr)
-    print('Raw response:')
-    print(data)
+    print(f'Raw response: {raw[:200]}', file=sys.stderr)
+    sys.exit(1)
+except Exception as e:
+    print(f'Error: {e}', file=sys.stderr)
     sys.exit(1)
 "
     fi

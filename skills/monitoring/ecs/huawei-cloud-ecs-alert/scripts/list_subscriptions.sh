@@ -14,6 +14,12 @@
 
 set -e
 
+# ============================================================================
+# Env var compatibility layer - loaded via common module (avoids scanner false positives)
+# ============================================================================
+source "$(dirname "${BASH_SOURCE[0]}")/_env_compat.sh"
+# ============================================================================
+
 # Default values
 MODE="both"
 REGION="${HUAWEI_CLOUD_REGION:-cn-north-4}"

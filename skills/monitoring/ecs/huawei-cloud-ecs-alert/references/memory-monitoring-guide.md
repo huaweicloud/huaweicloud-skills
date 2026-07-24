@@ -5,6 +5,7 @@
 Failed to create memory usage alarm because **ECS instances do not have the monitoring Agent installed**.
 
 ### Error Information
+
 ```
 http_code: 400
 code: ces.0014
@@ -12,7 +13,9 @@ details: Some content in message body is not correct.
 ```
 
 ### Root Cause
+
 The `mem_used_percent` metric is **not available** in the `SYS.ECS` namespace because:
+
 - **Basic Monitoring** (Free): Only provides virtualization-layer metrics such as CPU, network traffic, and disk I/O
 - **Operating System Monitoring** (Requires Agent): Provides OS-level metrics such as memory, disk usage, and processes
 
@@ -23,10 +26,12 @@ The `mem_used_percent` metric is **not available** in the `SYS.ECS` namespace be
 ### Solution 1: Install Monitoring Agent (Recommended)
 
 #### Step 1: Log in to Huawei Cloud Console
+
 1. Visit: https://console.huaweicloud.com/ces
 2. Select region: **Beijing 4 (cn-north-4)**
 
 #### Step 2: Install Agent
+
 1. Left menu: **Host Monitoring** → **Install Agent**
 2. Select hosts to install (ecs-9095-0001, ecs-9095-0002)
 3. Click **Batch Install**
@@ -35,12 +40,16 @@ The `mem_used_percent` metric is **not available** in the `SYS.ECS` namespace be
    - **Manual Install**: Copy command and execute inside ECS
 
 #### Step 3: Verify Installation
+
 After installation, wait 5-10 minutes, then check in CES console:
+
 - **Host Monitoring** → **Host Details**
 - You should see memory, disk usage, and other OS-level metrics
 
 #### Step 4: Create Memory Alarm
+
 After Agent is successfully installed, re-run the command:
+
 ```bash
 ./scripts/create_alert_rules.sh --metric mem_used_percent --threshold 83.3 --ecs-ids <ecs-id>
 ```
@@ -82,14 +91,17 @@ Successfully created alarm rules:
 ## How to Check Agent Status
 
 ### Method 1: Console View
+
 1. Log in to Huawei Cloud Console
 2. Go to **CES Host Monitoring**
 3. Check the **Agent Status** column in the host list
 
 ### Method 2: CLI Query
+
 ```bash
 hcloud CES ListMetrics --cli-region=cn-north-4 --namespace=SYS.ECS | grep -i mem
 ```
+
 - Has output: Agent is installed
 - No output: Agent needs to be installed
 
@@ -104,6 +116,7 @@ hcloud CES ListMetrics --cli-region=cn-north-4 --namespace=SYS.ECS | grep -i mem
 ---
 
 **Recommended Actions**:
+
 1. Install Agent plugin first (takes 5 minutes)
 2. Wait 10 minutes for Agent to report data
 3. Re-run the command to create memory alarm

@@ -1,0 +1,15 @@
+# 强制使用 LF 换行符，避免跨平台兼容性问题
+# Shell 脚本
+*.sh text eol=lf
+
+# Python 脚本
+*.py text eol=lf
+
+# 文档文件
+*.md text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+
+# 其他配置文件
+*.json text eol=lf
+*.txt text eol=lf

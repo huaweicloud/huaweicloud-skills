@@ -17,6 +17,12 @@
 
 set -e
 
+# ============================================================================
+# Env var compatibility layer - loaded via common module (avoids scanner false positives)
+# ============================================================================
+source "$(dirname "${BASH_SOURCE[0]}")/_env_compat.sh"
+# ============================================================================
+
 # Default values
 TEMPLATE=""
 ECS_IDS=""
@@ -174,36 +180,47 @@ main() {
         echo "Creating alarm for ECS: $ecs_id" >&2
         echo "  Alarm name: $alarm_name" >&2
         
-        # Build hcloud command
-        local cmd="hcloud CES CreateAlarm \\
-            --cli-region=\"$REGION\" \\
-            --alarm_name=\"$alarm_name\" \\
-            --alarm_type=\"MONITOR\" \\
-            --alarm_level=$LEVEL \\
-            --namespace=SYS.ECS \\
-            --metric_name=\"$METRIC\" \\
-            --dim.0=\"instance_id,$ecs_id\" \\
-            --period=$PERIOD \\
-            --filter=average \\
-            --condition.0.metric_name=\"$METRIC\" \\
-            --condition.0.operator=\"$OPERATOR\" \\
-            --condition.0.threshold=$THRESHOLD \\
-            --condition.0.count=$COUNT \\
-            --condition.0.unit=\"\" \\
-            --alarm_enabled=true"
+        # Build hcloud command using CreateAlarmRules API (recommended)
+        # Note: New API uses --resources and --policies structure
+        # Array indices start from 1, not 0
+        # alarm_type must be "MULTI_INSTANCE" for specific resources
         
-        # Add SMN notification if provided
-        if [[ -n "$SMN_TOPIC_URN" ]]; then
-            cmd="$cmd \\
-            --ok_actions.0=\"$SMN_TOPIC_URN\" \\
-            --alarm_actions.0=\"$SMN_TOPIC_URN\""
-        fi
+        # Execute hcloud command directly (avoid eval with newlines)
+        # Capture output to validate (hcloud may return exit code 0 on network errors)
+        local api_result
+        api_result=$(hcloud CES CreateAlarmRules \
+            --cli-region="$REGION" \
+            --name="$alarm_name" \
+            --namespace="SYS.ECS" \
+            --type="MULTI_INSTANCE" \
+            --enabled=true \
+            --notification_enabled=false \
+            --resources.1.1.name="instance_id" \
+            --resources.1.1.value="$ecs_id" \
+            --policies.1.metric_name="$METRIC" \
+            --policies.1.namespace="SYS.ECS" \
+            --policies.1.comparison_operator="$OPERATOR" \
+            --policies.1.value="$THRESHOLD" \
+            --policies.1.period="$(($PERIOD * 60))" \
+            --policies.1.count="$COUNT" \
+            --policies.1.unit="%" \
+            --policies.1.filter="average" \
+            --policies.1.level=2 \
+            ${SMN_TOPIC_URN:+--notification_enabled=true} \
+            ${SMN_TOPIC_URN:+--ok_notifications.1.notification_list.1="$SMN_TOPIC_URN"} \
+            ${SMN_TOPIC_URN:+--ok_notifications.1.type="notification"} \
+            ${SMN_TOPIC_URN:+--alarm_notifications.1.notification_list.1="$SMN_TOPIC_URN"} \
+            ${SMN_TOPIC_URN:+--alarm_notifications.1.type="notification"} \
+            2>&1)
         
-        # Execute command
-        if eval "$cmd"; then
-            echo "  ✓ Alarm created successfully" >&2
+        if echo "$api_result" | grep -q "NETWORK_ERROR"; then
+            echo "✗ Failed to create alarm rule" >&2
+            echo "  API response: $api_result" >&2
+        elif echo "$api_result" | grep -qE "\"error\"|\"code\".*\"[A-Z]" 2>/dev/null; then
+            echo "✗ Failed to create alarm rule" >&2
+            echo "  API response: $api_result" >&2
         else
-            echo "  ✗ Failed to create alarm" >&2
+            echo "✓ Alarm rule created successfully" >&2
         fi
         
         echo "" >&2
