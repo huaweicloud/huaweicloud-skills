@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document provides API reference information for Huawei Cloud UCS (Universal Cloud Service) cluster onboarding operations using hcloud CLI. All commands follow the standard format: `hcloud UCS <Operation> --param=value --cli-region=<region>`.
+This document provides API reference information for Huawei Cloud UCS (Ubiquitous Cloud Native Service) cluster onboarding operations using hcloud CLI. All commands follow the standard format: `hcloud UCS <Operation> --param=value --cli-region=<region>`.
 
 ## Authentication
 
@@ -70,7 +70,7 @@ hcloud configure list
 ### 1. Register a CCE Cluster
 
 ```bash
-hcloud UCS RegisterCluster --apiVersion=v1 --kind=Cluster --metadata.name=my-cce-cluster --spec.category=self --spec.provider=huaweicloud --spec.type=cce --spec.manageType=grouped --spec.country=CN --spec.city=110000 --metadata.uid=<cce-cluster-id> --spec.projectID=<project-id> --spec.region=cn-north-4 --cli-region=cn-north-4
+hcloud UCS RegisterCluster --apiVersion=v1 --kind=Cluster --metadata.name=my-cce-cluster --spec.category=self --spec.provider=huaweicloud --spec.type=turbo --spec.manageType=discrete --spec.country=CN --spec.city=110000 --metadata.uid=<cce-cluster-id> --spec.projectID=<project-id> --spec.region=cn-north-4 --cli-region=cn-north-4
 ```
 
 **Response Example** (verified):
@@ -123,6 +123,8 @@ hcloud UCS RetryClusterActivation --clusterid=<ucs-cluster-id> --cli-region=cn-n
 - `--cli-region` (required): Region ID
 
 **Use Case**: Retry activation when cluster status is stuck in `Registering` or `Unavailable`.
+
+> ⚠️ **Category Limitation** (verified): `RetryClusterActivation` only works for `category=onpremise` clusters. For `category=self` (CCE) clusters, it returns `UCS.01000011: Cluster category not supported`. Use this API only for third-party/self-managed clusters.
 
 ## Cluster Query Operations
 
@@ -303,18 +305,12 @@ hcloud UCS ShowClusterAccessInfo --clusterid=<ucs-cluster-id> --region=cn-north-
 - `--vpcendpoint` (optional): VPC endpoint flag
 - `--cli-region` (required): Region ID
 
-**Response Example** [to be verified — UCS responses follow k8s-style format based on verified ShowClusterList pattern]:
+> ⚠️ **Category Limitation** (verified): `ShowClusterAccessInfo` only works for `category=onpremise` clusters. For `category=self` (CCE) clusters, it returns `UCS.01030011: Cluster category not supported`. The API documentation states: "Only used to obtain access info for third-party clusters; CCE clusters do not use this API".
 
-The exact response format for `ShowClusterAccessInfo` has not been verified. Based on the verified k8s-style pattern from `ShowClusterList`, access info may be returned as a structured object rather than a flat JSON object. The likely fields include:
-
+**Response** (verified for onpremise clusters): Returns proxy-agent connection information including:
 - API server endpoint address (public and/or private)
 - Access type (`Public`, `Private`, `Both`)
-- Intranet endpoint (for CCE clusters)
-
-**Key Fields** (expected, format to be verified):
-- API server endpoint: Cluster API server address (field name TBD)
-- Access type: Network access type (`Public`, `Private`, `Both`)
-- Intranet endpoint: Internal network endpoint
+- Proxy-agent configuration for tunnel establishment
 
 ## Fleet Group Operations
 
@@ -418,6 +414,11 @@ hcloud UCS CreateClusterKubeconfig --clusterid=<ucs-cluster-id> --cli-region=cn-
 - `--cli-region` (required): Region ID
 
 **Response**: Returns a Kubernetes kubeconfig YAML content that can be saved to a file for `kubectl` access.
+
+> ⚠️ **Verified Limitation**: For `category=self` (CCE) clusters, `CreateClusterKubeconfig` may return an internal error. To obtain kubeconfig for CCE clusters, use the CCE API `CreateKubernetesClusterCert` instead:
+> ```bash
+> hcloud CCE CreateKubernetesClusterCert --cluster_id=<cce-cluster-id> --duration=30 --cli-region=cn-north-4
+> ```
 
 ### 2. Create Cluster Configuration
 

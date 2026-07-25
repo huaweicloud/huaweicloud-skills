@@ -8,14 +8,32 @@ UCS access management covers obtaining cluster kubeconfig, accessing cluster inf
 
 | Operation                   | Method | Description              | Key Parameters                    |
 | --------------------------- | ------ | ------------------------ | --------------------------------- |
-| `ShowClusterAccessInfo`     | GET    | 获取集群接入信息         | `--clusterid`, `--region` (optional), `--vpcendpoint` (optional) |
-| `CreateClusterKubeconfig`   | POST   | 创建集群kubeconfig       | `--clusterid`                     |
-| `CreateClusterConf`         | POST   | 创建集群配置             | `--clusterid`                     |
-| `DownloadFederationKubeconfig` | GET | 下载联邦kubeconfig    | `--clustergroupid` (REQUIRED), `--duration` (REQUIRED) |
+| `ShowClusterAccessInfo`     | GET    | Get cluster access info (**only for category=onpremise**) | `--clusterid`, `--region` (optional), `--vpcendpoint` (optional) |
+| `CreateClusterKubeconfig`   | POST   | Create cluster kubeconfig (**applies to all categories**) | `--clusterid`                     |
+| `CreateClusterConf`         | POST   | Create cluster configuration  | `--clusterid`                     |
+| `DownloadFederationKubeconfig` | GET | Download federation kubeconfig | `--clustergroupid` (REQUIRED), `--duration` (REQUIRED) |
+
+## API Decision Tree: Obtaining Kubeconfig
+
+```
+Need cluster kubeconfig?
+├── category=self (CCE cluster)
+│   └── CreateClusterKubeconfig --clusterid=<ucs-cluster-id> --cli-region=cn-north-4
+│       (direct access, no proxy-agent needed)
+│       (ShowClusterAccessInfo NOT supported — returns "Cluster category not supported")
+└── category=onpremise (self-managed cluster)
+    ├── Step 1: ShowClusterAccessInfo --clusterid=<ucs-cluster-id> --cli-region=cn-north-4
+    │   (obtain proxy-agent configuration)
+    ├── Step 2: Deploy proxy-agent in the target cluster
+    └── Step 3: CreateClusterKubeconfig --clusterid=<ucs-cluster-id> --cli-region=cn-north-4
+        (obtain kubeconfig after tunnel is established)
+```
 
 ## Workflows
 
 ### W1: View Cluster Access Information
+
+> ⚠️ **This operation only applies to `category=onpremise` (self-managed) clusters.** For `category=self` (CCE) clusters, it returns "Cluster category not supported". CCE clusters do not need proxy-agent — use `CreateClusterKubeconfig` (W2) directly.
 
 ```bash
 hcloud UCS ShowClusterAccessInfo --clusterid=<ucs-cluster-id> --cli-region=cn-north-4
@@ -27,9 +45,9 @@ With optional parameters for specific access details:
 hcloud UCS ShowClusterAccessInfo --clusterid=<ucs-cluster-id> --region=cn-north-4 --vpcendpoint=true --cli-region=cn-north-4
 ```
 
-**Response Example** [to be verified — UCS responses follow k8s-style format based on verified ShowClusterList pattern]:
+**Response Example** [verified for category=onpremise clusters only]:
 
-The exact response format for `ShowClusterAccessInfo` has not been verified. Based on the verified k8s-style pattern from `ShowClusterList`, access info may be returned as a structured object rather than a flat JSON object. The likely fields include:
+The response format for `ShowClusterAccessInfo` has been verified for `category=onpremise` clusters. For `category=self` (CCE) clusters, this API returns "Cluster category not supported" — use `CreateClusterKubeconfig` instead. The likely fields for onpremise clusters include:
 
 - API server endpoint address (public and/or private)
 - Access type (`Public`, `Private`, `Both`)
@@ -131,7 +149,7 @@ Expected: Returns cluster information and node list without errors.
 ### S1: Obtain Kubeconfig for New Cluster
 
 ```bash
-hcloud UCS RegisterCluster --apiVersion=v1 --kind=Cluster --metadata.name=my-cluster --spec.category=self --spec.provider=huaweicloud --spec.type=cce --spec.manageType=grouped --spec.country=CN --spec.city=110000 --metadata.uid=<cce-id> --spec.projectID=<project-id> --spec.region=cn-north-4 --cli-region=cn-north-4
+hcloud UCS RegisterCluster --apiVersion=v1 --kind=Cluster --metadata.name=my-cluster --spec.category=self --spec.provider=huaweicloud --spec.type=turbo --spec.manageType=discrete --spec.country=CN --spec.city=110000 --metadata.uid=<cce-id> --spec.projectID=<project-id> --spec.region=cn-north-4 --cli-region=cn-north-4
 
 hcloud UCS ShowCluster --clusterid=<ucs-cluster-id> --cli-region=cn-north-4
 
