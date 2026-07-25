@@ -1,10 +1,8 @@
 ---
-id: huawei-cloud-ucs-cluster-onboarding-manager
 name: huawei-cloud-ucs-cluster-onboarding-manager
 description: |
-  Huawei Cloud UCS (Universal Cloud Service) cluster onboarding, lifecycle, and fleet grouping management skill using hcloud CLI.
-  Use this skill when the user wants to: (1) register self-managed or CCE clusters to UCS - register/query/remove, (2) manage cluster lifecycle - update/query/list clusters, (3) manage fleet groups - create/delete/query cluster groups, (4) obtain cluster access information and kubeconfig, (5) download federation kubeconfig for multi-cluster access, (6) check UCS resource quotas.
-  Trigger: user mentions "UCS cluster onboarding", "UCS 集群纳管", "UCS cluster registration", "UCS 注册集群", "UCS fleet", "UCS 舰队", "UCS 集群组", "cluster group", "fleet grouping", "UCS kubeconfig", "UCS 集群接入", "UCS federation", "UCS 联邦", "UCS 配额", "cluster lifecycle", "集群生命周期", "managed clusters", "纳管集群", "集群管理"
+  Huawei Cloud UCS cluster onboarding, lifecycle, and fleet management via hcloud CLI. Register/query/remove clusters, manage fleet groups, obtain kubeconfig, check quotas.
+  Trigger: "UCS cluster onboarding", "UCS 集群纳管", "UCS fleet", "UCS 舰队", "UCS kubeconfig", "UCS federation", "UCS 联邦", "UCS 配额", "cluster lifecycle", "纳管集群", "集群管理"
 tags: [ucs, cluster-onboarding, fleet, kubeconfig, cluster-lifecycle]
 ---
 
@@ -12,7 +10,7 @@ tags: [ucs, cluster-onboarding, fleet, kubeconfig, cluster-lifecycle]
 
 ## Overview
 
-This skill provides cluster onboarding, lifecycle, and fleet grouping management capabilities for Huawei Cloud UCS (Universal Cloud Service) using the `hcloud` CLI.
+This skill provides cluster onboarding, lifecycle, and fleet grouping management capabilities for Huawei Cloud UCS (Ubiquitous Cloud Native Service) using the `hcloud` CLI.
 
 **Architecture**: hcloud CLI → UCS Service API → Cluster/ClusterGroup/AccessConfig/KubeConfig resources
 
@@ -89,7 +87,28 @@ export HUAWEI_CLOUD_REGION=cn-north-4
 - Enable MFA for sensitive operations
 - Rotate AK/SK regularly
 
-### 3. IAM Permission Requirements
+### 3. K8s Version Compatibility (CRITICAL)
+
+⚠️ **UCS has a maximum supported Kubernetes version limit.** CCE clusters created with default settings may use a version that exceeds UCS support range. Registering an unsupported version will fail with error `UCS.01030012: Register cce cluster error - cce cluster version not support in UCS service` (verified: CCE default creates v1.35, UCS supports up to v1.34 as of 2025-07). **Always query the supported versions dynamically** — do not hardcode version numbers, as UCS updates its support range over time:
+   ```bash
+   hcloud UCS ListRegisteredClusterVersions --cli-region=cn-north-4
+   ```
+
+**Pre-registration Version Check**:
+
+```bash
+# List unimported CCE clusters to check their versions
+hcloud UCS ListManagedClusters --unimported=true --cli-region=cn-north-4
+
+# Or check specific CCE cluster version via CCE API
+hcloud CCE ShowCluster --clusterid=<cce-cluster-id> --cli-region=cn-north-4
+```
+
+If the cluster K8s version exceeds UCS support range, either:
+- Downgrade the CCE cluster K8s version to within UCS support range, OR
+- Wait for UCS to support the newer version
+
+### 4. IAM Permission Requirements
 
 | API Action                       | Permission        | Purpose                                |
 | -------------------------------- | ----------------- | -------------------------------------- |
@@ -125,11 +144,12 @@ See [Task: Cluster Registration](references/task-cluster-registration.md) for de
 RegisterCluster uses Kubernetes API-style parameters (apiVersion, kind, metadata.*, spec.*).
 
 ```bash
-# Register a CCE cluster to UCS
-hcloud UCS RegisterCluster --apiVersion=v1 --kind=Cluster --metadata.name=prod-backend-cluster --spec.category=self --spec.provider=huaweicloud --spec.type=cce --spec.manageType=grouped --spec.country=CN --spec.city=110000 --metadata.uid=<cce-cluster-id> --spec.projectID=<project-id> --spec.region=cn-north-4 --cli-region=cn-north-4
+# Register a CCE cluster to UCS (⚠️ 接入收费: requires user confirmation)
+# **Confirm with user before executing** — UCS cluster onboarding is a paid service, costs will be incurred
+hcloud UCS RegisterCluster --apiVersion=v1 --kind=Cluster --metadata.name=prod-backend-cluster --spec.category=self --spec.provider=huaweicloud --spec.type=turbo --spec.manageType=discrete --spec.country=CN --spec.city=110000 --metadata.uid=<cce-cluster-id> --spec.projectID=<project-id> --spec.region=cn-north-4 --cli-region=cn-north-4
 
 # Register a CCE cluster and assign to fleet group at registration
-hcloud UCS RegisterCluster --apiVersion=v1 --kind=Cluster --metadata.name=prod-backend-cluster --spec.category=self --spec.provider=huaweicloud --spec.type=cce --spec.manageType=grouped --spec.country=CN --spec.city=110000 --metadata.uid=<cce-cluster-id> --spec.projectID=<project-id> --spec.region=cn-north-4 --spec.clusterGroupID=<group-id> --cli-region=cn-north-4
+hcloud UCS RegisterCluster --apiVersion=v1 --kind=Cluster --metadata.name=prod-backend-cluster --spec.category=self --spec.provider=huaweicloud --spec.type=turbo --spec.manageType=discrete --spec.country=CN --spec.city=110000 --metadata.uid=<cce-cluster-id> --spec.projectID=<project-id> --spec.region=cn-north-4 --spec.clusterGroupID=<group-id> --cli-region=cn-north-4
 
 # Register a self-managed/attached cluster
 hcloud UCS RegisterCluster --apiVersion=v1 --kind=Cluster --metadata.name=datacenter-k8s --spec.category=onpremise --spec.provider=self_managed --spec.type=Kubernetes --spec.manageType=discrete --spec.country=CN --spec.city=110000 --metadata.annotations.kubeconfig=<kubeconfig-yaml-content> --cli-region=cn-north-4
@@ -137,13 +157,36 @@ hcloud UCS RegisterCluster --apiVersion=v1 --kind=Cluster --metadata.name=datace
 # Retry cluster activation (if registration stuck)
 hcloud UCS RetryClusterActivation --clusterid=<ucs-cluster-id> --cli-region=cn-north-4
 
-# Remove a cluster from UCS
+# Remove a cluster from UCS (⚠️ destructive: requires user confirmation)
+# **Confirm with user before executing** — deregistration is irreversible
 hcloud UCS DeleteCluster --clusterid=<ucs-cluster-id> --cli-region=cn-north-4
 ```
 
 **Cluster Categories (spec.category)**:
 - `self`: Huawei Cloud CCE (Cloud Container Engine) managed cluster
+  - UCS directly accesses CCE API via internal network — **no proxy-agent needed**
+  - Use CCE API `CreateKubernetesClusterCert` to obtain kubeconfig (NOT UCS `CreateClusterKubeconfig`)
+  - `ShowClusterAccessInfo` returns `UCS.01030011` — **NOT supported** for this category
+  - `RetryClusterActivation` returns `UCS.01000011` — **NOT supported** for this category
+  - Note: CCE cluster `spec.category` is `Turbo`, but UCS `ListManagedClusters` returns `category=self`, `type=turbo`
 - `onpremise`: Self-managed or third-party Kubernetes cluster
+  - Requires deploying proxy-agent to establish tunnel between cluster and UCS
+  - Use `ShowClusterAccessInfo` to obtain proxy-agent configuration, then deploy proxy-agent
+  - Use `CreateClusterKubeconfig` to obtain kubeconfig after proxy-agent is running
+
+**Kubeconfig Retrieval Decision Tree** (verified via API testing):
+```
+Need cluster kubeconfig?
+├── category=self (CCE cluster)
+│   └── CCE CreateKubernetesClusterCert --cluster_id=<cce-cluster-id> --duration=30
+│       (CCE API, NOT UCS CreateClusterKubeconfig which returns internal error)
+└── category=onpremise (self-managed cluster)
+    ├── Step 1: ShowClusterAccessInfo --clusterid=<ucs-cluster-id>
+    │   (obtain proxy-agent configuration — only for onpremise, returns UCS.01030011 for CCE)
+    ├── Step 2: Deploy proxy-agent in the cluster
+    └── Step 3: CreateClusterKubeconfig --clusterid=<ucs-cluster-id>
+        (obtain kubeconfig after tunnel established)
+```
 
 **Cluster Providers (spec.provider)**:
 - `huaweicloud`: Huawei Cloud managed CCE cluster
@@ -169,15 +212,18 @@ hcloud UCS ShowClusterList --category=CCE --enablestatus=Available --clustergrou
 hcloud UCS ListManagedClusters --cli-region=cn-north-4
 hcloud UCS ListManagedClusters --unimported --cli-region=cn-north-4
 
-# Update cluster properties (K8s API-style params)
+# Update cluster properties (K8s API-style params) (⚠️ modification: requires user confirmation)
+# **Confirm with user before executing**
 hcloud UCS UpdateCluster --clusterid=<ucs-cluster-id> --apiVersion=v1 --kind=Cluster --spec.city=Shanghai --spec.country=CN --cli-region=cn-north-4
 
-# Show cluster access information
+# Show cluster access information (only for category=onpremise clusters)
 hcloud UCS ShowClusterAccessInfo --clusterid=<ucs-cluster-id> --cli-region=cn-north-4
 
-# Show cluster access information with optional filters
+# Show cluster access information with optional filters (only for category=onpremise clusters)
 hcloud UCS ShowClusterAccessInfo --clusterid=<ucs-cluster-id> --region=cn-north-4 --vpcendpoint=<vpc-id> --cli-region=cn-north-4
 ```
+
+> ⚠️ **ShowClusterAccessInfo only applies to `category=onpremise` clusters.** For `category=self` (CCE) clusters, it returns `UCS.01030011: Cluster category not supported` (verified). For CCE cluster kubeconfig, use CCE API `CreateKubernetesClusterCert` instead of UCS `CreateClusterKubeconfig`.
 
 **ShowClusterList Valid Filter Parameters**:
 - `--category`: Filter by cluster category (self, onpremise)
@@ -204,10 +250,12 @@ hcloud UCS ListClusterGroup --limit=20 --offset=0 --cli-region=cn-north-4
 # Show fleet group details
 hcloud UCS ShowClusterGroup --clustergroupid=<group-id> --cli-region=cn-north-4
 
-# Update fleet group description
+# Update fleet group description (⚠️ modification: requires user confirmation)
+# **Confirm with user before executing**
 hcloud UCS UpdateClusterGroup --clustergroupid=<group-id> --description="Updated fleet description" --cli-region=cn-north-4
 
-# Add clusters to fleet group
+# Add clusters to fleet group (⚠️ modification: requires user confirmation)
+# **Confirm with user before executing**
 hcloud UCS UpdateClusterGroupAssociatedClusters --clustergroupid=<group-id> --clusterIds.1=<cluster-id-1> --clusterIds.2=<cluster-id-2> --cli-region=cn-north-4
 
 # Add a single cluster to fleet group (join)
@@ -216,7 +264,8 @@ hcloud UCS JoinGroup --clusterid=<ucs-cluster-id> --clusterGroupID=<group-id> --
 # Remove a cluster from fleet group (leave)
 hcloud UCS LeaveGroup --clusterid=<ucs-cluster-id> --cli-region=cn-north-4
 
-# Delete a fleet group
+# Delete a fleet group (⚠️ destructive: requires user confirmation)
+# **Confirm with user before executing** — deletion removes the group but clusters remain registered
 hcloud UCS DeleteClusterGroup --clustergroupid=<group-id> --cli-region=cn-north-4
 ```
 
@@ -246,9 +295,11 @@ hcloud UCS DownloadFederationKubeconfig --clustergroupid=<group-id> --duration=3
 hcloud UCS ShowQuota --domainid=<account-id> --cli-region=cn-north-4
 ```
 
-## Parameter Reference
+## 参数确认
 
-### Common Parameters
+> ⚠️ **费用提醒**: UCS 集群接入为**收费服务**，注册集群到 UCS 会产生费用。在执行 `RegisterCluster` 等接入操作前，**必须向用户确认是否同意产生费用**，获得明确同意后方可执行。
+
+### 通用参数
 
 | Parameter        | Required/Optional | Description                   | Default                              |
 | ---------------- | ----------------- | ----------------------------- | ------------------------------------ |
@@ -256,84 +307,32 @@ hcloud UCS ShowQuota --domainid=<account-id> --cli-region=cn-north-4
 | `--clusterid`    | Context-dependent | UCS cluster ID                | N/A                                  |
 | `--clustergroupid` | Context-dependent | Fleet group ID              | N/A                                  |
 
-### Cluster Registration Parameters (K8s API Style)
+### 集群注册参数 (K8s API Style)
 
 | Parameter                        | Required | Description                        | Constraints                                  |
 | -------------------------------- | -------- | ---------------------------------- | -------------------------------------------- |
-| `--apiVersion`                   | Yes      | API version (always `v1`)          | Must be `v1`                                 |
-| `--kind`                         | Yes      | Resource kind (always `Cluster`)   | Must be `Cluster`                            |
-| `--metadata.name`                | Yes      | Cluster display name               | 1-128 chars                                  |
-| `--spec.category`                | Yes      | Cluster category                   | `self` or `onpremise`                        |
+| `--spec.category`                | Yes      | Cluster category                   | `self` (CCE) or `onpremise` (self-managed)   |
 | `--spec.provider`                | Yes      | Cluster provider                   | `huaweicloud` or `self_managed`              |
 | `--spec.type`                    | Yes      | Cluster type                       | `cce`, `baremetal`, `Kubernetes`, etc.       |
 | `--spec.manageType`              | Yes      | Management type                    | `grouped` or `discrete`                      |
-| `--spec.country`                 | Yes      | Country code                       | Country code (e.g., `CN`)                    |
-| `--spec.city`                    | Yes      | City code                          | City code (e.g., `110000` for Beijing)       |
 | `--metadata.uid`                 | CCE only | CCE cluster ID                     | Must reference existing CCE cluster          |
-| `--spec.projectID`               | CCE only | Project ID                         | Valid Huawei Cloud project ID                |
-| `--spec.region`                  | CCE only | CCE cluster region                 | Must match CCE cluster region                |
-| `--metadata.annotations.kubeconfig` | Self-managed only | Kubeconfig content | Valid Kubernetes kubeconfig YAML           |
+| `--spec.projectID`               | CCE only | Project ID                         | Obtain via `ListManagedClusters` response    |
 | `--spec.clusterGroupID`          | No       | Assign to fleet at registration    | Valid fleet group ID                         |
-| `--metadata.labels.*`            | No       | Custom labels                      | Key-value pairs                              |
 
-### UpdateCluster Parameters (K8s API Style)
+### 写操作参数（需用户确认）
 
-| Parameter                        | Required | Description                        | Constraints                                  |
-| -------------------------------- | -------- | ---------------------------------- | -------------------------------------------- |
-| `--clusterid`                    | Yes      | UCS cluster ID (path param)        | Must be registered cluster                   |
-| `--apiVersion`                   | Yes      | API version (always `v1`)          | Must be `v1`                                 |
-| `--kind`                         | Yes      | Resource kind (always `Cluster`)   | Must be `Cluster`                            |
-| `--spec.city`                    | No       | Update city                        | City name                                    |
-| `--spec.country`                 | No       | Update country                     | Country code                                 |
-| `--metadata.annotations`         | No       | Update annotations                 | Key-value pairs                              |
-| `--spec.workerConfig.replicas`   | No       | Update worker replicas             | Integer                                      |
-| `--spec.workerConfig.strategy.*` | No       | Update worker strategy             | K8s deployment strategy fields               |
+| Command          | Parameters | Confirmation Required | Reason |
+| ---------------- | ---------- | --------------------- | ------ |
+| `RegisterCluster` | See above | ✅ Yes | **接入收费**，产生费用 |
+| `DeleteCluster`   | `--clusterid` | ✅ Yes | 退出纳管，不可逆 |
+| `UpdateCluster`   | `--clusterid` + K8s params | ✅ Yes | 修改集群属性 |
+| `RegisterClusterGroup` | Group name + description | ✅ Yes | 创建舰队组 |
+| `DeleteClusterGroup` | `--clustergroupid` | ✅ Yes | 删除舰队组 |
+| `UpdateClusterGroup` | `--clustergroupid` + params | ✅ Yes | 修改舰队组属性 |
+| `JoinGroup`      | `--clusterid` + `--clustergroupid` | ✅ Yes | 修改集群归属 |
+| `LeaveGroup`     | `--clusterid` + `--clustergroupid` | ✅ Yes | 修改集群归属 |
 
-### Fleet Group Parameters
-
-| Parameter                        | Required | Description              | Constraints                                  |
-| -------------------------------- | -------- | ------------------------ | -------------------------------------------- |
-| `--metadata.name`                | Yes (create) | Group display name   | 1-128 chars                                  |
-| `--spec.description`             | No (create)  | Group description    | Free text                                    |
-| `--spec.clusterIds.N`            | No (create)  | Initial cluster IDs  | Indexed (1, 2, 3...)                         |
-| `--clustergroupid`               | Yes (get/delete/update) | Group ID    | UUID format                                   |
-| `--description`                  | Yes (UpdateClusterGroup) | New description | Free text                  |
-| `--clusterIds.N`                 | Yes (UpdateClusterGroupAssociatedClusters) | Cluster IDs to add | Indexed |
-
-### Join/Leave Group Parameters
-
-| Parameter                        | Required | Description              | Constraints                                  |
-| -------------------------------- | -------- | ------------------------ | -------------------------------------------- |
-| `--clusterid`                    | Yes      | UCS cluster ID (path)    | Must be registered cluster                   |
-| `--clusterGroupID`               | Yes (JoinGroup) | Fleet group ID (body) | Valid fleet group ID                       |
-
-### Kubeconfig Parameters
-
-| Parameter                        | Required | Description              | Constraints                                  |
-| -------------------------------- | -------- | ------------------------ | -------------------------------------------- |
-| `--clusterid`                    | Yes      | UCS cluster ID           | Must be registered cluster                   |
-| `--clustergroupid`               | Yes (DownloadFederationKubeconfig) | Fleet group ID | Valid fleet group ID            |
-| `--duration`                     | Yes (DownloadFederationKubeconfig) | Token duration in seconds | Integer                   |
-
-### Quota Parameters
-
-| Parameter                        | Required | Description              | Constraints                                  |
-| -------------------------------- | -------- | ------------------------ | -------------------------------------------- |
-| `--domainid`                     | Yes      | Account ID               | Huawei Cloud account/domain ID               |
-
-### ShowClusterList Filter Parameters
-
-| Parameter        | Required/Optional | Description                   |
-| ---------------- | ----------------- | ----------------------------- |
-| `--category`     | Optional          | Filter by cluster category    |
-| `--clustergroupid` | Optional        | Filter by fleet group ID      |
-| `--clusterids`   | Optional          | Filter by specific cluster IDs |
-| `--enablestatus` | Optional          | Filter by cluster status      |
-| `--managetype`   | Optional          | Filter by manage type         |
-| `--limit`        | Optional          | Pagination limit              |
-| `--offset`       | Optional          | Pagination offset             |
-| `--order`        | Optional          | Sort order (asc/desc)         |
-| `--order_by`     | Optional          | Sort field                    |
+> 完整参数表见 [Parameter Reference](references/parameter-reference.md)
 
 ## Output Format
 
@@ -358,6 +357,26 @@ See [Verification Method](references/verification-method.md) for step-by-step ve
 6. **Quota Monitoring**: Check quotas before registering new clusters to avoid hitting limits
 7. **Federation Kubeconfig Duration**: Choose appropriate `--duration` for federation kubeconfig tokens based on usage patterns
 
+## Workflow
+
+The skill workflow is as follows:
+
+1. **Environment Check** — Verify hcloud CLI is installed and AK/SK credentials are configured (see [CLI Installation Guide](references/cli-installation-guide.md))
+2. **Version Compatibility Check** — Call `ListRegisteredClusterVersions` to get the list of K8s versions supported by UCS, and confirm the target cluster version is in the list
+3. **Cluster Registration** — Choose registration method based on cluster type:
+   - CCE cluster: `--spec.category=self --spec.provider=huaweicloud --spec.type=turbo`
+   - Self-managed cluster: `--spec.category=onpremise --spec.provider=self_managed` (requires kubeconfig)
+4. **Registration Verification** — Call `ShowCluster` or `ShowClusterList` to confirm cluster status is `Available`
+5. **Cluster Management** (optional):
+   - Fleet grouping: `RegisterClusterGroup` / `JoinGroup` / `LeaveGroup`
+   - Access management: CCE clusters use `CreateKubernetesClusterCert`, third-party clusters use `ShowClusterAccessInfo` + proxy-agent
+   - Property update: `UpdateCluster` (requires user confirmation)
+6. **Deregister Cluster** (optional) — `DeleteCluster` (⚠️ irreversible operation, requires user confirmation)
+
+## KooCLI Command Format Standard
+
+All operations use `hcloud UCS <Operation> --<param>=<value> --cli-region=<region>` format. See [KooCLI Command Format](references/kocli-command-format.md) for detailed examples and parameter naming rules.
+
 ## Reference Documents
 
 | Document                                               | Description                              |
@@ -370,9 +389,14 @@ See [Verification Method](references/verification-method.md) for step-by-step ve
 | [Task: Cluster Registration](references/task-cluster-registration.md) | Registration and deregistration workflows |
 | [Task: Fleet Management](references/task-fleet-management.md) | Fleet group workflows |
 | [Task: Access Management](references/task-access-management.md) | Kubeconfig and access control workflows |
+| [CLI Installation Guide](references/cli-installation-guide.md) | hcloud CLI installation and configuration |
+| [Parameter Reference](references/parameter-reference.md) | Complete parameter tables for all operations |
+| [KooCLI Command Format](references/kocli-command-format.md) | Command format standard and examples |
+| [Acceptance Criteria](references/acceptance-criteria.md) | Skill acceptance criteria and test checklist |
 
 ## Notes
 
+- **K8s version compatibility** — UCS has a maximum supported K8s version that updates over time. CCE default cluster version may exceed this limit. Query supported versions with `hcloud UCS ListRegisteredClusterVersions` and verify cluster version is in the list before registration.
 - **Cluster deregistration is irreversible** — the cluster loses all UCS management capabilities
 - **Self-managed cluster kubeconfig must be valid** — invalid kubeconfig will cause registration failure; pass via `--metadata.annotations.kubeconfig`
 - **AK/SK must never be hardcoded** — credentials should only be obtained via environment variables
@@ -384,19 +408,3 @@ See [Verification Method](references/verification-method.md) for step-by-step ve
 ## Common Pitfalls
 
 See [Common Pitfalls & Solutions](references/common-pitfalls.md) for detailed troubleshooting guides.
-
-**Quick Reference**:
-
-| Pitfall                     | Symptom                         | Quick Fix                                    |
-| --------------------------- | ------------------------------- | -------------------------------------------- |
-| Invalid kubeconfig          | Registration fails              | Verify kubeconfig validity and API server reachability |
-| Cluster already registered  | 409 Conflict                    | Use `ShowCluster` to check existing registration |
-| CCE cluster not found       | 404 Not Found                   | Verify CCE cluster ID via `--metadata.uid` in same region |
-| Quota exceeded              | 403 Quota limit                 | Check quotas with `ShowQuota --domainid=<account-id>` |
-| Fleet group already exists  | 409 Conflict                    | Use `ShowClusterGroup` to check first        |
-| Deregistration impact       | Policies stop working           | Consider disabling policies before deregistration |
-| Federation kubeconfig expired | Multi-cluster access fails    | Re-download with `DownloadFederationKubeconfig --clustergroupid=<id> --duration=N` |
-| Wrong parameter names       | Command fails or unrecognized   | Use `--clusterid` (not --cluster_id), `--clustergroupid` (not --group_id) |
-| Using --name on ShowClusterList | Parameter not recognized    | Use `--category`, `--clustergroupid`, `--enablestatus` filters instead |
-| Missing domainid on ShowQuota | Missing required parameter    | Provide `--domainid=<account-id>` |
-| Missing duration on DownloadFederationKubeconfig | Missing required parameter | Provide `--duration=<seconds>` |
