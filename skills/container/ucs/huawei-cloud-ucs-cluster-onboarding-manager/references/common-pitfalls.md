@@ -151,7 +151,7 @@ hcloud UCS DownloadFederationKubeconfig --clustergroupid=<group-id> --duration=8
 **Solution**: Ensure the region matches the CCE cluster's actual region:
 
 ```bash
-hcloud UCS RegisterCluster --apiVersion=v1 --kind=Cluster --metadata.name=my-cluster --spec.category=self --spec.provider=huaweicloud --spec.type=cce --spec.manageType=grouped --spec.country=CN --spec.city=110000 --metadata.uid=<cce-id> --spec.projectID=<project-id> --spec.region=cn-north-4 --cli-region=cn-north-4
+hcloud UCS RegisterCluster --apiVersion=v1 --kind=Cluster --metadata.name=my-cluster --spec.category=self --spec.provider=huaweicloud --spec.type=turbo --spec.manageType=discrete --spec.country=CN --spec.city=110000 --metadata.uid=<cce-id> --spec.projectID=<project-id> --spec.region=cn-north-4 --cli-region=cn-north-4
 ```
 
 ## Pitfall 11: RegisterCluster Uses Kubernetes-Style Parameters
@@ -162,12 +162,12 @@ hcloud UCS RegisterCluster --apiVersion=v1 --kind=Cluster --metadata.name=my-clu
 
 **Common Mistakes**:
 - ❌ Using `--name=my-cluster` instead of `--metadata.name=my-cluster`
-- ❌ Using `--cluster_type=CCE` instead of `--spec.category=self --spec.type=cce`
+- ❌ Using `--cluster_type=CCE` instead of `--spec.category=self --spec.type=turbo`
 - ❌ Using `--cluster_id=<cce-id>` instead of `--metadata.uid=<cce-id>`
 - ❌ Using `--kubeconfig_file=<content>` instead of `--metadata.annotations.kubeconfig=<content>`
 - ❌ Using `--spec.category=CCE` (uppercase) instead of `--spec.category=self` (verified correct value)
 - ❌ Using `--spec.provider=huawei_cloud` (with underscore) instead of `--spec.provider=huaweicloud` (no underscore)
-- ❌ Using `--spec.type=CCE` (uppercase) instead of `--spec.type=cce` (lowercase)
+- ❌ Using `--spec.type=CCE` (uppercase) instead of `--spec.type=turbo` (lowercase)
 - ❌ Using `--spec.city=Beijing` (city name) instead of `--spec.city=110000` (city code)
 - ❌ Missing required `--apiVersion=v1` and `--kind=Cluster`
 - ❌ Missing required `--spec.country` and `--spec.city`
@@ -175,7 +175,7 @@ hcloud UCS RegisterCluster --apiVersion=v1 --kind=Cluster --metadata.name=my-clu
 **Correct CCE Example**:
 
 ```bash
-hcloud UCS RegisterCluster --apiVersion=v1 --kind=Cluster --metadata.name=prod-cluster --spec.category=self --spec.provider=huaweicloud --spec.type=cce --spec.manageType=grouped --spec.country=CN --spec.city=110000 --metadata.uid=<cce-cluster-id> --spec.projectID=<project-id> --spec.region=cn-north-4 --cli-region=cn-north-4
+hcloud UCS RegisterCluster --apiVersion=v1 --kind=Cluster --metadata.name=prod-cluster --spec.category=self --spec.provider=huaweicloud --spec.type=turbo --spec.manageType=discrete --spec.country=CN --spec.city=110000 --metadata.uid=<cce-cluster-id> --spec.projectID=<project-id> --spec.region=cn-north-4 --cli-region=cn-north-4
 ```
 
 **Correct Self-Managed Example**:
@@ -247,7 +247,7 @@ hcloud UCS DownloadFederationKubeconfig --clustergroupid=<group-id> --duration=8
 
 **Verified Correct Values**:
 
-| Parameter        | CCE Cluster (华为云CCE)         | Self-Managed Cluster (自管集群)  |
+| Parameter        | CCE Cluster (Huawei Cloud CCE)  | Self-Managed Cluster            |
 | ---------------- | ------------------------------- | -------------------------------- |
 | `--spec.category`| `self`                          | `onpremise`                      |
 | `--spec.provider`| `huaweicloud` (no underscore)   | `self_managed`                   |
@@ -273,7 +273,7 @@ The response includes `spec.category`, `spec.provider`, `spec.type`, `spec.city`
 
 ```bash
 # CCE cluster registration (verified correct)
-hcloud UCS RegisterCluster --apiVersion=v1 --kind=Cluster --metadata.name=my-cce-cluster --spec.category=self --spec.provider=huaweicloud --spec.type=cce --spec.manageType=grouped --spec.country=CN --spec.city=110000 --metadata.uid=<cce-cluster-id> --spec.projectID=<project-id> --spec.region=cn-north-4 --cli-region=cn-north-4
+hcloud UCS RegisterCluster --apiVersion=v1 --kind=Cluster --metadata.name=my-cce-cluster --spec.category=self --spec.provider=huaweicloud --spec.type=turbo --spec.manageType=discrete --spec.country=CN --spec.city=110000 --metadata.uid=<cce-cluster-id> --spec.projectID=<project-id> --spec.region=cn-north-4 --cli-region=cn-north-4
 
 # Self-managed cluster registration (verified category)
 hcloud UCS RegisterCluster --apiVersion=v1 --kind=Cluster --metadata.name=datacenter-k8s --spec.category=onpremise --spec.provider=self_managed --spec.type=Kubernetes --spec.manageType=discrete --spec.country=CN --spec.city=110000 --metadata.annotations.kubeconfig=<kubeconfig-content> --cli-region=cn-north-4
@@ -290,6 +290,62 @@ hcloud UCS RegisterCluster --apiVersion=v1 --kind=Cluster --metadata.name=datace
 | Chengdu     | `510100` |
 | Hangzhou    | `330100` |
 
+## Pitfall 17: K8s Version Incompatibility (UCS.01030012)
+
+**Symptom**: `RegisterCluster` returns `UCS.01030012: Register cce cluster error` with reason `cce cluster version not support in UCS service`.
+
+**Root Cause**: UCS has a maximum supported Kubernetes version limit that updates over time. CCE clusters created with default settings may use a version that exceeds the current UCS support range. For example, as of 2025-07, CCE default creates v1.35 clusters, but UCS only supports up to v1.34.
+
+**How to Diagnose** (verified procedure):
+
+1. Check the CCE cluster K8s version:
+```bash
+hcloud UCS ListManagedClusters --cli-region=cn-north-4
+```
+Look at the `status.kubernetesVersion` field in the response.
+
+2. Query UCS supported versions:
+```bash
+hcloud UCS ListRegisteredClusterVersions --cli-region=cn-north-4
+```
+If the cluster version is not in the returned `versions` list, that's the root cause.
+
+**Solution**: Create the CCE cluster with a specific version that is within the UCS support range:
+```bash
+# Get the latest supported version from ListRegisteredClusterVersions
+# Then create CCE cluster with that version
+hcloud CCE CreateCluster ... --spec.version=v1.34
+```
+Or wait for UCS to support the newer version.
+
+**Key Takeaway**: Always query `ListRegisteredClusterVersions` before creating a CCE cluster intended for UCS registration. Use the maximum supported version from the response as the `--spec.version` parameter when creating the CCE cluster.
+
+## Pitfall 18: ShowClusterAccessInfo Not Supported for category=self Clusters
+
+**Symptom**: `ShowClusterAccessInfo` returns `UCS.01030011: Cluster category not supported` error.
+
+**Root Cause**: `ShowClusterAccessInfo` only applies to `category=onpremise` (self-managed) clusters. For `category=self` (CCE) clusters, this API is not applicable because CCE clusters are directly accessible via UCS internal network without proxy-agent. The API documentation explicitly states: "Only used to obtain access info for third-party clusters; CCE clusters do not use this API. If a CCE cluster ID is passed, the return code is 400".
+
+**Solution**: For `category=self` (CCE) clusters, use CCE API `CreateKubernetesClusterCert` to obtain kubeconfig (NOT UCS `CreateClusterKubeconfig` which returns internal error):
+```bash
+hcloud CCE CreateKubernetesClusterCert --cluster_id=<cce-cluster-id> --duration=30 --cli-region=cn-north-4
+```
+
+`ShowClusterAccessInfo` is only needed for `category=onpremise` clusters to obtain proxy-agent configuration before establishing the tunnel.
+
+## Pitfall 19: Using onpremise + proxy-agent for CCE Clusters
+
+**Symptom**: Attempting to register a CCE cluster using `--spec.category=onpremise` and deploying proxy-agent, resulting in registration errors and wasted time.
+
+**Root Cause**: CCE clusters should always be registered with `--spec.category=self`. The `onpremise` category is for self-managed/third-party Kubernetes clusters that need proxy-agent to establish a tunnel. CCE clusters have native integration with UCS and do not need proxy-agent.
+
+**Solution**: Always use `--spec.category=self --spec.provider=huaweicloud` for CCE clusters:
+```bash
+hcloud UCS RegisterCluster --apiVersion=v1 --kind=Cluster --metadata.name=my-cce-cluster --spec.category=self --spec.provider=huaweicloud --spec.type=turbo --spec.manageType=discrete --spec.country=CN --spec.city=110000 --metadata.uid=<cce-cluster-id> --spec.projectID=<project-id> --spec.region=cn-north-4 --cli-region=cn-north-4
+```
+
+Never use `--spec.category=onpremise` for CCE clusters.
+
 ## Common Error Response Reference
 
 | Error Code          | HTTP Status | Description                  | Recommended Action                    |
@@ -299,6 +355,8 @@ hcloud UCS RegisterCluster --apiVersion=v1 --kind=Cluster --metadata.name=datace
 | `UCS.003`           | 409         | Resource already exists      | Use Show operation to check           |
 | `UCS.004`           | 403         | Permission denied            | Check IAM policies                    |
 | `UCS.005`           | 403         | Quota exceeded               | Check quotas, clean up or apply       |
-| `UCS.006`           | 401         | Authentication failed        | Regenerate or check credentials       |
+| `UCS.006`           | 401         | Authentication failed        | Verify credentials (AK/SK/SecurityToken). Note: K8s version incompatibility returns `UCS.01030012`, NOT 401 |
 | `UCS.007`           | 429         | Too many requests            | Add delay, reduce request rate        |
 | `UCS.008`           | 400         | Invalid kubeconfig           | Verify kubeconfig format and validity |
+| `UCS.01030011`      | 400         | Cluster category not supported | API only supports `category=onpremise`. For CCE clusters, use CCE API instead |
+| `UCS.01030012`      | 400         | Register CCE cluster error    | Check K8s version compatibility (see Pitfall 17) |
