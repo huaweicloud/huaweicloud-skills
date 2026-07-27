@@ -8,11 +8,11 @@ SWR shared download domains allow other organizations or users to download image
 
 | Operation          | Method | Description              | Key Parameters                                  |
 | ------------------ | ------ | ------------------------ | ----------------------------------------------- |
-| `ListRepoDomains`  | GET    | 获取共享下载域名列表     | `--namespace`, `--repository`                   |
-| `CreateRepoDomains` | POST  | 创建共享下载域名         | `--namespace`, `--repository`, `--domain`       |
-| `ShowAccessDomain` | GET    | 获取共享下载域名详情     | `--namespace`, `--repository`, `--access_domain` |
-| `UpdateRepoDomains` | PUT   | 修改共享下载域名         | `--namespace`, `--repository`, `--domain`, `--permit` |
-| `DeleteRepoDomains` | DELETE | 删除共享下载域名         | `--namespace`, `--repository`, `--access_domain` |
+| `ListRepoDomains`  | GET    | List shared accounts     | `--namespace`, `--repository`                   |
+| `CreateRepoDomains` | POST  | Create shared account         | `--namespace`, `--repository`, `--access_domain`, `--deadline`, `--permit` |
+| `ShowAccessDomain` | GET    | Show shared account details     | `--namespace`, `--repository`, `--access_domain` |
+| `UpdateRepoDomains` | PATCH  | Update shared account         | `--namespace`, `--repository`, `--access_domain`, `--deadline`, `--permit` |
+| `DeleteRepoDomains` | DELETE | Delete shared account         | `--namespace`, `--repository`, `--access_domain` |
 
 ## Workflows
 
@@ -56,13 +56,19 @@ hcloud SWR ListRepoDomains --namespace=pancake --repository=openclaw-sandbox --c
 
 ```bash
 # Create a shared download domain
-hcloud SWR CreateRepoDomains --namespace=pancake --repository=openclaw-sandbox --domain=shared-domain-name --cli-region=cn-north-4
+# --access_domain: Huawei Cloud IAM domain name (tenant name) of the target account to share with
+# --deadline: Expiration time in UTC format; use "forever" for permanent access
+# --permit: Permission type; currently only "read" is supported
+hcloud SWR CreateRepoDomains --namespace=pancake --repository=openclaw-sandbox --access_domain=<iam-domain-name> --deadline=forever --permit=read --cli-region=cn-north-4
 ```
 
 **Parameters**:
 - `--namespace` (required): Namespace name (path parameter)
 - `--repository` (required): Repository name (path parameter)
-- `--domain` (required, body): Shared download domain name
+- `--access_domain` (required, body): Huawei Cloud IAM domain name (shared tenant name) of the target account to share with. This is the account's domain name, not a custom identifier.
+- `--deadline` (required, body): Expiration time in UTC format (e.g., `2025-12-31T23:59:59Z`). Use `forever` for permanent access.
+- `--permit` (required, body): Permission type. Currently only `read` is supported.
+- `--description` (optional, body): Human-readable description. Default: empty string.
 - `--cli-region` (required): Region ID
 
 **Post-creation Verification**:
@@ -87,19 +93,21 @@ hcloud SWR ShowAccessDomain --namespace=pancake --repository=openclaw-sandbox --
 
 ```bash
 # Update domain permit or deadline
-hcloud SWR UpdateRepoDomains --namespace=pancake --repository=openclaw-sandbox --domain=shared-domain-name --permit=read --cli-region=cn-north-4
+hcloud SWR UpdateRepoDomains --namespace=pancake --repository=openclaw-sandbox --access_domain=<iam-domain-name> --deadline=forever --permit=read --cli-region=cn-north-4
 ```
 
 **Parameters**:
 - `--namespace` (required): Namespace name
 - `--repository` (required): Repository name
-- `--domain` (required): Domain name
-- `--permit` (required): Permission type (`read`)
+- `--access_domain` (required, path): Huawei Cloud IAM domain name (shared tenant name) of the shared account
+- `--deadline` (required, body): Expiration time in UTC format. Use `forever` for permanent access.
+- `--permit` (required, body): Permission type. Currently only `read` is supported.
+- `--description` (optional, body): Human-readable description. Default: empty string.
 - `--cli-region` (required): Region ID
 
 ### W5: Delete a Shared Domain
 
-⚠️ **CAUTION**: Deleting a shared domain removes the ability for external users to download images via this domain.
+⚠️ **CAUTION**: Deleting a shared domain removes the ability for external users to download images via this domain. **Users in the target organization will immediately receive authentication errors and be unable to pull images.** Coordinate with the target organization before proceeding.
 
 ```bash
 hcloud SWR DeleteRepoDomains --namespace=pancake --repository=openclaw-sandbox --access_domain=shared-domain-name --cli-region=cn-north-4
@@ -125,7 +133,7 @@ Allow other teams to pull your base image:
 
 ```bash
 # Create a shared domain for the base image repository
-hcloud SWR CreateRepoDomains --namespace=team-infra --repository=base-ubuntu --domain=team-infra-shared --cli-region=cn-north-4
+hcloud SWR CreateRepoDomains --namespace=team-infra --repository=base-ubuntu --access_domain=team-infra-shared --deadline=forever --permit=read --cli-region=cn-north-4
 
 # Verify the domain is active
 hcloud SWR ShowAccessDomain --namespace=team-infra --repository=base-ubuntu --access_domain=team-infra-shared --cli-region=cn-north-4

@@ -28,6 +28,8 @@ hcloud SWR ListRetentions --namespace=pancake --repository=openclaw-sandbox --cl
 
 ### W2: Create a Retention Rule
 
+⚠️ **CAUTION**: When the retention rule executes, image tags not matching the retention conditions are automatically deleted. **Deleted tags cannot be recovered.** Verify the rule conditions carefully before confirming.
+
 Retention rules define which tags to keep. Tags NOT matching any rule condition will be deleted during execution.
 
 **Rule Templates**:
@@ -45,7 +47,7 @@ Retention rules define which tags to keep. Tags NOT matching any rule condition 
 hcloud SWR CreateRetention --namespace=pancake --repository=openclaw-sandbox \
   --algorithm=or \
   --rules.1.template=tag_rule \
-  --rules.1.params.num=10 \
+  --rules.1.params='{"num":"10"}' \
   --rules.1.tag_selectors.1.kind=label \
   --rules.1.tag_selectors.1.pattern=latest \
   --cli-region=cn-north-4
@@ -54,7 +56,7 @@ hcloud SWR CreateRetention --namespace=pancake --repository=openclaw-sandbox \
 hcloud SWR CreateRetention --namespace=pancake --repository=openclaw-sandbox \
   --algorithm=or \
   --rules.1.template=date_rule \
-  --rules.1.params.days=30 \
+  --rules.1.params='{"days":"30"}' \
   --rules.1.tag_selectors.1.kind=label \
   --rules.1.tag_selectors.1.pattern=latest \
   --cli-region=cn-north-4
@@ -63,11 +65,11 @@ hcloud SWR CreateRetention --namespace=pancake --repository=openclaw-sandbox \
 hcloud SWR CreateRetention --namespace=pancake --repository=openclaw-sandbox \
   --algorithm=or \
   --rules.1.template=tag_rule \
-  --rules.1.params.num=5 \
+  --rules.1.params='{"num":"5"}' \
   --rules.1.tag_selectors.1.kind=label \
   --rules.1.tag_selectors.1.pattern=latest \
   --rules.2.template=date_rule \
-  --rules.2.params.days=30 \
+  --rules.2.params='{"days":"30"}' \
   --rules.2.tag_selectors.1.kind=regexp \
   --rules.2.tag_selectors.1.pattern=v\d+ \
   --cli-region=cn-north-4
@@ -76,7 +78,7 @@ hcloud SWR CreateRetention --namespace=pancake --repository=openclaw-sandbox \
 hcloud SWR CreateRetention --namespace=pancake --repository=openclaw-sandbox \
   --algorithm=or \
   --rules.1.template=tag_rule \
-  --rules.1.params.num=10 \
+  --rules.1.params='{"num":"10"}' \
   --rules.1.tag_selectors.1.kind=label \
   --rules.1.tag_selectors.1.pattern=latest \
   --rules.1.tag_selectors.2.kind=label \
@@ -107,13 +109,15 @@ Response format to be verified with actual API call.
 
 ### W4: Update a Retention Rule
 
+⚠️ **CAUTION**: Modifying retention rule conditions may cause previously retained image tags to be deleted on the next execution. **Deleted tags cannot be recovered.** Verify the new conditions carefully before confirming.
+
 ```bash
 # Change retention to keep only last 5 tags
 hcloud SWR UpdateRetention --namespace=pancake --repository=openclaw-sandbox \
   --retention_id=<id> \
   --algorithm=or \
   --rules.1.template=tag_rule \
-  --rules.1.params.num=5 \
+  --rules.1.params='{"num":"5"}' \
   --rules.1.tag_selectors.1.kind=label \
   --rules.1.tag_selectors.1.pattern=latest \
   --cli-region=cn-north-4
@@ -123,7 +127,7 @@ hcloud SWR UpdateRetention --namespace=pancake --repository=openclaw-sandbox \
 
 ### W5: Delete a Retention Rule
 
-⚠️ **CAUTION**: Deleting a retention rule stops automated cleanup. Old tags will accumulate indefinitely.
+⚠️ **CAUTION**: Deleting a retention rule stops automated cleanup. Old tags will accumulate indefinitely. Existing tags are preserved — no data is lost, but no future automated pruning will occur.
 
 ```bash
 hcloud SWR DeleteRetention --namespace=pancake --repository=openclaw-sandbox --retention_id=<id> --cli-region=cn-north-4
@@ -154,7 +158,7 @@ Keep a reasonable number of recent tags:
 hcloud SWR CreateRetention --namespace=dev-team --repository=my-app \
   --algorithm=or \
   --rules.1.template=tag_rule \
-  --rules.1.params.num=10 \
+  --rules.1.params='{"num":"10"}' \
   --rules.1.tag_selectors.1.kind=label \
   --rules.1.tag_selectors.1.pattern=latest \
   --cli-region=cn-north-4
@@ -169,7 +173,7 @@ Keep production images for a longer period:
 hcloud SWR CreateRetention --namespace=prod-team --repository=my-app \
   --algorithm=or \
   --rules.1.template=date_rule \
-  --rules.1.params.days=90 \
+  --rules.1.params='{"days":"90"}' \
   --rules.1.tag_selectors.1.kind=regexp \
   --rules.1.tag_selectors.1.pattern=v\d+\.\d+\.\d+ \
   --cli-region=cn-north-4
@@ -184,7 +188,7 @@ Use tag selectors to protect critical tags:
 hcloud SWR CreateRetention --namespace=team-backend --repository=gateway \
   --algorithm=or \
   --rules.1.template=tag_rule \
-  --rules.1.params.num=3 \
+  --rules.1.params='{"num":"3"}' \
   --rules.1.tag_selectors.1.kind=label \
   --rules.1.tag_selectors.1.pattern=latest \
   --rules.1.tag_selectors.2.kind=label \
@@ -204,7 +208,7 @@ hcloud SWR ListReposDetails --namespace=team-backend --cli-region=cn-north-4
 hcloud SWR CreateRetention --namespace=team-backend --repository=<repo-name> \
   --algorithm=or \
   --rules.1.template=tag_rule \
-  --rules.1.params.num=10 \
+  --rules.1.params='{"num":"10"}' \
   --rules.1.tag_selectors.1.kind=label \
   --rules.1.tag_selectors.1.pattern=latest \
   --cli-region=cn-north-4
