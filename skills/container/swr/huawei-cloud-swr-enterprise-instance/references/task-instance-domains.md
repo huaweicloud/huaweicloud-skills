@@ -8,11 +8,11 @@ SWR enterprise instance domains provide custom access URLs for the container reg
 
 | Operation            | Method | Description              | Key Parameters                                  |
 | -------------------- | ------ | ------------------------ | ----------------------------------------------- |
-| `AddDomainName`      | POST   | 增加域名                 | `--instance_id`, `--domain_name`, `--certificate_id` |
-| `ListDomainNames`    | GET    | 查询当前实例的所有域名   | `--instance_id`, `--domain_name`, `--uid`       |
-| `ShowDomainOverview` | GET    | 获取租户总览信息         | (none instance-specific)                        |
-| `UpdateDomainName`   | PUT    | 更新域名                 | `--instance_id`, `--domainname_id`, `--certificate_id` |
-| `DeleteDomainName`   | DELETE | 删除域名                 | `--instance_id`, `--domainname_id`              |
+| `AddDomainName`      | POST   | Add domain name                 | `--instance_id`, `--domain_name`, `--certificate_id` |
+| `ListDomainNames`    | GET    | List all domains for instance   | `--instance_id`, `--domain_name`, `--uid`       |
+| `ShowDomainOverview` | GET    | Get tenant overview         | (none instance-specific)                        |
+| `UpdateDomainName`   | PUT    | Update domain                 | `--instance_id`, `--domainname_id`, `--certificate_id` |
+| `DeleteDomainName`   | DELETE | Delete domain                 | `--instance_id`, `--domainname_id`              |
 
 ## Workflows
 

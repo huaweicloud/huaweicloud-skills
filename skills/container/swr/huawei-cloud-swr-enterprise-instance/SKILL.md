@@ -6,7 +6,6 @@ description: |
   Use this skill when the user wants to: (1) manage SWR enterprise instances - create/list/show/delete/update configuration, (2) manage instance namespaces - create/list/show/update/delete with security scanning settings, (3) manage instance registries (sync targets) - create/list/show/update/delete, (4) manage instance repositories - list/show/delete/update, (5) manage instance artifacts (image versions) - list/show/delete/scan, (6) manage instance credentials - long-term and temporary, (7) manage instance endpoints - internal/public access, (8) manage instance domains - add/list/show/delete/update, (9) check instance statistics and job status.
   Trigger: user mentions "SWR enterprise instance", "SWR 企业实例", "SWR 企业版", "企业仓库实例", "SWR instance", "SWR 专业版", "swr.ee", "instance namespace", "instance registry", "instance repository", "instance artifact", "instance credential", "instance endpoint", "instance domain", "企业仓库", "实例管理"
 tags: [swr, enterprise-instance, container-registry, registry, domain]
-version: 1.0.0
 ---
 
 # Huawei Cloud SWR Enterprise Instance Management
@@ -73,7 +72,26 @@ export HUAWEI_CLOUD_REGION=cn-north-4
 
 - **Security rules**: Never expose AK/SK/SecurityToken values. Use `hcloud configure list` to check presence only.
 
-### 3. IAM Permission Requirements
+### 3. SWR Enterprise Service Activation (MANDATORY)
+
+Before creating SWR enterprise instances, the user **must first activate the SWR enterprise service** in the Huawei Cloud console. This is a one-time enablement step per account/region.
+
+**Activation Steps**:
+
+1. Access the SWR enterprise instance console via direct URL: `https://console.huaweicloud.com/swr-instance`
+   - **Important**: The SWR enterprise instance console is **not available from the main console navigation menu**. Users must use this direct URL to access it.
+2. If prompted, review and accept the SWR enterprise service terms
+3. Confirm the service is activated by verifying the console loads successfully
+4. If activation is not available in the target region, the console will display an error or the service will not be listed
+
+**Verification**: After activation, run `hcloud SWR ListInstance --cli-region=<region>` — if the service is activated, this returns an empty list (or existing instances). If not activated, an error will be returned.
+
+**Console Access**:
+- SWR Enterprise Instance Console: `https://console.huaweicloud.com/swr-instance`
+- This URL provides access to instance management, namespace configuration, repository browsing, and replication policy setup
+- The console is region-aware — select the target region in the top-right corner after opening the URL
+
+### 4. IAM Permission Requirements
 
 | API Action                                    | Permission                   | Purpose                                        |
 | --------------------------------------------- | ---------------------------- | ---------------------------------------------- |
@@ -145,13 +163,21 @@ hcloud SWR ListInstance --cli-region=cn-north-4
 hcloud SWR ListInstance --status=Running --cli-region=cn-north-4
 
 # Show instance details
+# Show instance details
 hcloud SWR ShowInstance --instance_id=<instance-id> --cli-region=cn-north-4
+
+**Note**: `ShowInstance` does not return endpoint information. To view network access endpoints, use:
+- `hcloud SWR ListInstanceInternalEndpoints --instance_id=<instance-id> --cli-region=cn-north-4` for internal VPC endpoints
+- `hcloud SWR ShowInstanceEndpointPolicy --instance_id=<instance-id> --cli-region=cn-north-4` for public access status and whitelist
 
 # View instance configuration
 hcloud SWR ShowInstanceConfiguration --instance_id=<instance-id> --cli-region=cn-north-4
 
 # Update instance configuration (anonymous access)
+# Update instance configuration (anonymous access)
 hcloud SWR UpdateInstanceConfiguration --instance_id=<instance-id> --anonymous_access=false --cli-region=cn-north-4
+
+**Configuration Scope**: `UpdateInstanceConfiguration` only supports the `--anonymous_access` parameter (boolean). This is the sole instance-level configuration option available via API. Other settings (spec, VPC, encryption) are set at creation time and cannot be modified afterward.
 
 # Delete instance (CAUTION: removes all data permanently)
 hcloud SWR DeleteInstance --instance_id=<instance-id> --cli-region=cn-north-4
@@ -165,6 +191,23 @@ hcloud SWR DeleteInstance --instance_id=<instance-id> --cli-region=cn-north-4
 - Length: 3-48 characters
 
 **Instance Spec Options**: `swr.ee.basic` (basic edition), `swr.ee.professional` (professional edition)
+
+**Spec and Region Availability**:
+- Not all specs (flavors) are available in all regions. Before creating an instance, verify that the desired spec is supported in the target region.
+- Use `hcloud SWR ListInstance --cli-region=<region>` to check if the SWR enterprise service is available in a region. If the API returns an error, the service may not be available in that region.
+- Use `hcloud SWR ListSyncRegions --cli-region=<region>` to list regions where SWR service is available for cross-region sync.
+- Common regions with SWR enterprise support include: `cn-north-4`, `cn-north-1`, `cn-east-3`, `cn-south-1`, `cn-east-2`, `cn-southwest-2`, `cn-north-9`, `ap-southeast-1`, `ap-southeast-2`, `ap-southeast-3`.
+- If instance creation fails with spec/region errors, try a different spec or region. The error message will indicate if the spec is not supported in the target region.
+
+**Billing Details**:
+- **WARNING: Creating an SWR enterprise instance incurs hourly costs.** The user must be informed of this before proceeding.
+- `--charge_mode`: Only `postPaid` (on-demand/pay-as-you-go) is supported. No prepaid or annual/monthly billing available.
+- `--spec=swr.ee.basic`: Basic edition — suitable for small teams, limited features. Lower hourly cost.
+- `--spec=swr.ee.professional`: Professional edition — full features including security scanning, replication, custom domains. Higher hourly cost.
+- Costs are incurred per hour based on instance spec. No upfront payment required. Billing starts when the instance enters `Running` status.
+- To stop billing: delete the instance with `hcloud SWR DeleteInstance`. Billing stops immediately after deletion.
+- Use `--enterprise_project_id` to associate the instance with an enterprise project for cost tracking and attribution.
+- For detailed pricing information, refer to the Huawei Cloud SWR pricing page or consult the SWR enterprise instance console at `https://console.huaweicloud.com/swr-instance`.
 
 **Instance Status Values**: `Initial`, `Creating`, `Running`, `Unavailable`
 
@@ -226,6 +269,12 @@ hcloud SWR DeleteInstanceRegistry --instance_id=<instance-id> --registry_id=<reg
 ```
 
 **Registry Types**: `swr-pro` (open-source Harbor), `swr-pro-internal` (another SWR enterprise instance), `huawei-SWR` (basic SWR)
+
+**Credential Acquisition for Target Registries**:
+- For `swr-pro-internal` (another SWR enterprise instance): Use `CreateInstanceLtCredential` on the target instance to obtain `access_key` (credential name) and `access_secret` (credential password).
+- For `huawei-SWR` (basic SWR): Use `CreateInstanceTempCredential` or basic SWR `CreateAuthorizationToken` to get temporary credentials.
+- For `swr-pro` (Harbor): Use the Harbor account username and password.
+- Credentials are stored securely by the instance and used for replication operations only.
 
 ### 4. Instance Repositories
 
@@ -393,7 +442,7 @@ hcloud SWR DeleteInstanceJob --job_id=<job-id> --cli-region=cn-north-4
 | `--description`            | No       | Instance description       | Free text                                      |
 | `--enable_intranet_access` | No       | Create internal access     | Default `true`                                 |
 | `--obs_encrypt`            | No       | Enable OBS encryption      | `true` or `false`                              |
-| `--encrypt_type`           | No       | OBS encryption algorithm   | `gm` (国密), empty for AES-256                 |
+| `--encrypt_type`           | No       | OBS encryption algorithm   | `gm` (GM — Chinese national cryptographic standard), empty for AES-256                 |
 | `--obs_bucket_name`        | No       | Custom OBS bucket name     | If specified, OBS encryption not needed        |
 | `--obs_enc_kms_key_id`     | No       | KMS key ID for OBS         | Required if obs_encrypt=true (no custom bucket) |
 
@@ -445,10 +494,59 @@ See [Verification Method](references/verification-method.md) for step-by-step ve
 4. **Severity blocking**: Set `severity=high` or `critical` for production; use `none` or `low` for development
 5. **Registry credentials**: Store registry credentials securely; rotate access keys periodically
 6. **Public access whitelist**: Always configure IP whitelist when enabling public access; use `UpdateInstanceEndpointPolicy` for full whitelist management
-6. **Custom domains**: Use SCM (SSL Certificate Manager) certificates for custom domain HTTPS
-7. **Delete with caution**: Deleting an instance removes ALL data permanently; deleting a namespace removes ALL repositories
-8. **Long-term credentials**: Use `CreateInstanceLtCredential` for CI/CD pipelines; use `CreateInstanceTempCredential` for temporary access
-9. **Instance spec selection**: Use `swr.ee.basic` for small teams; `swr.ee.professional` for enterprise requirements with advanced features
+7. **Custom domains**: Use SCM (SSL Certificate Manager) certificates for custom domain HTTPS
+8. **Delete with caution**: Deleting an instance removes ALL data permanently; deleting a namespace removes ALL repositories
+9. **Long-term credentials**: Use `CreateInstanceLtCredential` for CI/CD pipelines; use `CreateInstanceTempCredential` for temporary access
+10. **Instance spec selection**: Use `swr.ee.basic` for small teams; `swr.ee.professional` for enterprise requirements with advanced features
+
+## 参数确认
+
+| Operation | CLI Command | Risk Level | Confirmation Required |
+| --------- | ----------- | ---------- | -------------------- |
+| CreateInstance | `hcloud SWR CreateInstance` | High | Creating a paid instance incurs costs. Confirm instance spec (`swr.ee.basic` or `swr.ee.professional`), VPC/subnet configuration, and enterprise project before proceeding. |
+| UpdateInstanceConfiguration | `hcloud SWR UpdateInstanceConfiguration --anonymous_access=true` | High | Enabling anonymous access allows unauthenticated users to pull images, reducing security. Confirm this is intended before proceeding. |
+| CreateInstanceEndpointPolicy | `hcloud SWR CreateInstanceEndpointPolicy --enable=true` | Medium | Enabling public access exposes the instance to the internet. Must configure IP whitelist via `UpdateInstanceEndpointPolicy` to restrict access. Confirm before proceeding. |
+| DeleteInstanceLtCredential | `hcloud SWR DeleteInstanceLtCredential` | Medium | Deleting a credential immediately revokes access for CI/CD pipelines using it. Recommend disabling the credential first (`UpdateInstanceLtCredential --enable=false`), verifying no active pipelines, then deleting. |
+| CreateInstanceRegistry | `hcloud SWR CreateInstanceRegistry` | Medium | Creating a sync target registry stores the target registry authentication credentials (`access_key`/`access_secret`). Confirm the target registry URL and credential information before proceeding. |
+
+## Unsupported Operations
+
+The following operations are not supported by the SWR enterprise instance API and require alternative approaches:
+
+| Unsupported Operation | Reason | Alternative Approach |
+| -------------------- | ------ | ------------------- |
+| Push images to instance | Docker CLI operation, not an API call | Use `CreateInstanceTempCredential` or `CreateInstanceLtCredential` to get credentials, then `docker login` and `docker push` |
+| Pull images from instance | Docker CLI operation, not an API call | Use `CreateInstanceTempCredential` or `CreateInstanceLtCredential` to get credentials, then `docker login` and `docker pull` |
+| Build images | SWR is a registry, not a build service | Use CodeArts Build, CCE, or local Docker build, then push to SWR |
+| Image replication/sync policies | Replication policy management is a separate API | Use SWR console or replication policy API directly |
+| Instance backup/restore | No backup API available | Use OBS bucket backup for data persistence, or migrate namespaces/repositories manually |
+
+## 工作流
+
+This skill follows a standard workflow for SWR enterprise instance management:
+
+1. **Prerequisites Check** — Verify hcloud CLI installation and credential configuration
+2. **Instance Identification** — List or show existing instances to obtain `instance_id`
+3. **Operation Execution** — Execute the requested operation (create/update/delete/query)
+4. **Result Verification** — Confirm the operation succeeded by querying the resulting state
+5. **Credential Management** — For write operations, obtain and securely store any returned credentials
+6. **Cleanup Confirmation** — For destructive operations, confirm with the user before proceeding
+
+## KooCLI命令格式标准
+
+All CLI commands in this skill use the `hcloud` KooCLI format:
+
+```bash
+hcloud SWR <Operation> --param1=value1 --param2=value2 --cli-region=<region>
+```
+
+**Rules**:
+
+- Use `--key=value` format for all parameters (dot notation supported for nested fields: `--metadata.public=true`)
+- Always specify `--cli-region` explicitly
+- Never expose AK/SK or security tokens in command output
+- For write operations (Create/Update/Delete), confirm with the user before executing
+- Use `--cli-output=json` for structured output parsing
 
 ## Reference Documents
 
@@ -467,6 +565,8 @@ See [Verification Method](references/verification-method.md) for step-by-step ve
 | [Task: Instance Credentials](references/task-instance-credentials.md) | Credential management workflows |
 | [Task: Instance Endpoints](references/task-instance-endpoints.md) | Internal and public access configuration |
 | [Task: Instance Domains](references/task-instance-domains.md) | Custom domain management |
+| [CLI Installation Guide](references/cli-installation-guide.md) | hcloud CLI installation and configuration |
+| [Acceptance Criteria](references/acceptance-criteria.md) | Success criteria for all operations |
 
 ## Notes
 
@@ -478,6 +578,10 @@ See [Verification Method](references/verification-method.md) for step-by-step ve
 - **hcloud CLI is the only supported method** — all operations use `hcloud SWR <Operation>` format
 - **Pagination offset must be multiple of limit** — `offset` must be 0 or a multiple of `limit`
 - **Registry credential.access_secret is sensitive** — never expose or log access secrets
+- **SWR enterprise service must be activated first** — access `https://console.huaweicloud.com/swr-instance` to activate before creating instances
+- **Console access requires direct URL** — the SWR enterprise instance console is not in the main navigation menu; use `https://console.huaweicloud.com/swr-instance`
+- **Spec availability varies by region** — not all specs are available in all regions; verify before creating instances
+- **Instance creation incurs hourly costs** — inform the user of billing implications before creating an instance
 
 ## Common Pitfalls
 
@@ -495,3 +599,6 @@ See [Common Pitfalls & Solutions](references/common-pitfalls.md) for detailed tr
 | Domain cert not found           | Domain creation fails           | Verify certificate_id in SCM                 |
 | Cannot delete default domain    | Delete fails                    | Only custom domains can be deleted           |
 | Public access whitelist format  | Whitelist update fails          | Use indexed: --ip_list.1.ip=value            |
+| SWR service not activated       | API returns service error       | Activate via `https://console.huaweicloud.com/swr-instance` |
+| Spec not available in region    | CreateInstance fails            | Try different spec or region                   |
+| Console not in navigation       | Cannot find SWR enterprise      | Use direct URL: `https://console.huaweicloud.com/swr-instance` |
