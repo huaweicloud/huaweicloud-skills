@@ -109,6 +109,8 @@ hcloud SWR ListTriggersDetails --namespace=group-dev --repository=my-app --cli-r
 
 Expected: Returns list of triggers (may be empty if none configured).
 
+> **Note**: `ListTriggersDetails` does not return `trigger_history` (always null). Use `ShowTrigger` to view trigger execution history. See section 3.6 for details.
+
 ```bash
 # Create a trigger (requires CCE cluster)
 hcloud SWR CreateTrigger --namespace=group-dev --repository=my-app --name=test-trigger --trigger_type=all --condition=".*" --action=update --app_type=deployments --application=<deployment-name> --cluster_ns=default --enable=true --trigger_mode=cce --cluster_id=<cluster-id> --cli-region=cn-north-4
@@ -133,6 +135,60 @@ Expected: Trigger disabled.
 ```bash
 # Clean up: delete trigger
 hcloud SWR DeleteTrigger --namespace=group-dev --repository=my-app --trigger=test-trigger --cli-region=cn-north-4
+```
+
+Expected: Trigger deleted.
+
+### 3.6 End-to-End Trigger Verification
+
+This section verifies the complete trigger lifecycle: create trigger -> push image -> trigger fires -> Deployment updates.
+
+> **Prerequisite**: Docker (or Podman) installed on a machine with network access to the SWR registry. The image push step is performed outside this skill. Follow the official SWR Quick Start guide for authentication and push instructions: https://support.huaweicloud.com/qs-swr/index.html
+
+**Step 1: Create a trigger**
+
+```bash
+hcloud SWR CreateTrigger --namespace=group-dev --repository=my-app --name=e2e-test-trigger --trigger_type=all --condition=".*" --action=update --app_type=deployments --application=<deployment-name> --cluster_ns=default --enable=true --trigger_mode=cce --cluster_id=<cluster-id> --cli-region=cn-north-4
+```
+
+Expected: Trigger created successfully.
+
+**Step 2: Push a new image tag** (performed on a machine with Docker)
+
+Follow the official SWR Quick Start guide to obtain login credentials and push a new image tag:
+- https://support.huaweicloud.com/qs-swr/index.html
+
+Key steps from the official guide:
+1. Obtain SWR login credentials via `hcloud SWR CreateAuthorizationToken --cli-region=cn-north-4`
+2. `docker login` to the SWR registry using the returned credential
+3. `docker tag` and `docker push` the new image version
+
+**Step 3: Wait for trigger execution**
+
+Wait 30-120 seconds for the trigger to detect the new image push and update the target workload.
+
+**Step 4: Verify trigger execution history**
+
+```bash
+hcloud SWR ShowTrigger --namespace=group-dev --repository=my-app --trigger=e2e-test-trigger --cli-region=cn-north-4
+```
+
+Expected: The `trigger_history` field contains a new successful execution record with the pushed image tag.
+
+> **Important**: Use `ShowTrigger` (not `ListTriggersDetails`) to check trigger history. `ListTriggersDetails` returns `null` for `trigger_history` — this is a known API behavior, not an error.
+
+**Step 5: Verify CCE Deployment image updated**
+
+```bash
+hcloud CCE ShowDeployment --cluster_id=<cluster-id> --namespace=default --deployment_name=<deployment-name> --cli-region=cn-north-4
+```
+
+Expected: The Deployment's container image matches the newly pushed tag.
+
+**Step 6: Cleanup**
+
+```bash
+hcloud SWR DeleteTrigger --namespace=group-dev --repository=my-app --trigger=e2e-test-trigger --cli-region=cn-north-4
 ```
 
 Expected: Trigger deleted.
