@@ -62,6 +62,8 @@ hcloud SWR ShowUserRepositoryAuth --namespace=pancake --repository=openclaw-sand
 
 ### W3: Modify Repository Permission
 
+⚠️ **CAUTION**: Downgrading a user's permission level may prevent them from performing operations they currently rely on, impacting business workflows. Confirm the new permission level is sufficient before proceeding.
+
 ```bash
 # Downgrade from manage to edit
 hcloud SWR UpdateUserRepositoryAuth --namespace=pancake --repository=openclaw-sandbox --1.auth=3 --1.user_id=05949eb5350010e21f85c017722182de --1.user_name=hwstaff_p00506267 --cli-region=cn-north-4
@@ -71,6 +73,8 @@ hcloud SWR UpdateUserRepositoryAuth --namespace=pancake --repository=openclaw-sa
 ```
 
 ### W4: Revoke Repository Permission
+
+⚠️ **CAUTION**: Revoking repository permission immediately removes the user's access. **This may cause business interruption — services pulling from this repository will immediately lose access.**
 
 ```bash
 hcloud SWR DeleteUserRepositoryAuth --namespace=pancake --repository=openclaw-sandbox --1.user_id=05949eb5350010e21f85c017722182de --1.user_name=hwstaff_p00506267 --cli-region=cn-north-4
