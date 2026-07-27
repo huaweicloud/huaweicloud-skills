@@ -60,6 +60,8 @@ hcloud SWR CreateImageSyncRepo --namespace=group-dev --repository=my-app --remot
 - `--override=true`: Overwrite existing images in target region
 - `--override=false`: Skip images that already exist in target
 
+⚠️ **CAUTION**: If `override=true`, existing images in the target region with the same name will be overwritten and cannot be recovered. Confirm the override setting before proceeding.
+
 **Post-creation Verification**:
 
 ```bash
@@ -124,7 +126,7 @@ hcloud SWR ShowSyncJob --namespace=group-dev --repository=my-app --cli-region=cn
 
 ### W6: Delete Auto-sync Configuration
 
-⚠️ **Note**: Deleting sync config stops automatic replication but does NOT delete already-synced images.
+⚠️ **CAUTION**: Deleting sync config stops automatic replication. New image pushes will no longer auto-sync to the target region. Already-synced images are preserved. Confirm before proceeding.
 
 ```bash
 hcloud SWR DeleteImageSyncRepo --namespace=group-dev --repository=my-app --remoteRegionId=cn-east-3 --remoteNamespace=group-dev --cli-region=cn-north-4
