@@ -122,7 +122,7 @@ hcloud SWR ListReposDetails --namespace=group-dev --cli-region=cn-north-4
 hcloud SWR ListReposDetails --namespace=group-dev --limit=20 --offset=0 --cli-region=cn-north-4
 
 # Sort repositories by update time (descending)
-hcloud SWR ListReposDetails --namespace=group-dev --order_column=updated_at --order_type=desc --cli-region=cn-north-4
+hcloud SWR ListReposDetails --namespace=group-dev --order_column=updated_time --order_type=desc --cli-region=cn-north-4
 
 # Search by name (fuzzy match)
 hcloud SWR ListReposDetails --name=nginx --cli-region=cn-north-4
@@ -504,3 +504,19 @@ hcloud SWR ListQuotas --cli-region=cn-north-4
 - [Huawei Cloud SWR Documentation](https://support.huaweicloud.com/swr/index.html)
 - [hcloud CLI Documentation](https://support.huaweicloud.com/cli/index.html)
 - [Huawei Cloud API Explorer](https://apiexplorer.developer.huaweicloud.com/)
+## Pagination Parameter Scope
+
+The `--limit` and `--offset` parameters are only supported by specific list commands. Using them with unsupported commands will cause an error.
+
+| Command | Supports `--limit`/`--offset` | Notes |
+| ------- | ------- | ----- |
+| `ListNamespaces` | No | Returns all namespaces, no pagination |
+| `ListReposDetails` | Yes | Supports pagination and sorting (`--order_column`, `--order_type`) |
+| `ListRepositoryTags` | Yes | Supports pagination and sorting (`--order_column`, `--order_type`) |
+| `ListQuotas` | No | Returns all quotas, no pagination |
+| `ShowNamespace` | No | Single resource query |
+| `ShowRepository` | No | Single resource query |
+| `ShowRepoTag` | No | Single resource query |
+
+**Note**: When using `--limit` and `--offset`, they must be used together. Using one without the other has no effect.
+

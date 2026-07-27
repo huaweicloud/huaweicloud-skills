@@ -151,6 +151,48 @@ hcloud SWR DeleteNamespaces --namespace=test-verify --cli-region=cn-north-4
 
 Expected: All test resources cleaned up.
 
+### 3.7 Write Operation Verification
+
+Write operations (Create/Delete/Update) return empty output on success. Always verify by running a query command after the write operation.
+
+```bash
+# Create namespace and verify
+hcloud SWR CreateNamespace --namespace=test-verify --cli-region=cn-north-4
+# Returns: {} (empty - normal)
+
+hcloud SWR ListNamespaces --cli-region=cn-north-4
+# Verify: test-verify appears in the list
+```
+
+```bash
+# Create repository and verify
+hcloud SWR CreateRepo --namespace=test-verify --repository=test-image --is_public=false --cli-region=cn-north-4
+# Returns: {} (empty - normal)
+
+hcloud SWR ListReposDetails --namespace=test-verify --cli-region=cn-north-4
+# Verify: test-image appears in the list
+```
+
+```bash
+# Update repository and verify
+hcloud SWR UpdateRepo --namespace=test-verify --repository=test-image --is_public=true --cli-region=cn-north-4
+# Returns: {} (empty - normal)
+
+hcloud SWR ShowRepository --namespace=test-verify --repository=test-image --cli-region=cn-north-4
+# Verify: is_public field shows true
+```
+
+```bash
+# Delete repository and verify
+hcloud SWR DeleteRepo --namespace=test-verify --repository=test-image --cli-region=cn-north-4
+# Returns: empty (normal)
+
+hcloud SWR ListReposDetails --namespace=test-verify --cli-region=cn-north-4
+# Verify: test-image no longer appears in the list
+```
+
+**Success Criteria**: Exit code 0 and no stderr error output.
+
 ## Verification Checklist
 
 | #  | Check Item                | Command                                             | Status |
@@ -169,3 +211,38 @@ Expected: All test resources cleaned up.
 | 12 | Check quotas              | `hcloud SWR ListQuotas --cli-region=cn-north-4`     | ☐      |
 | 13 | Delete repository         | `hcloud SWR DeleteRepo --namespace=test-verify --repository=test-image --cli-region=cn-north-4` | ☐ |
 | 14 | Delete namespace          | `hcloud SWR DeleteNamespaces --namespace=test-verify --cli-region=cn-north-4` | ☐ |
+## Write Operation Return Values
+
+Write operations in SWR return empty output on success. This is normal hcloud CLI behavior, not an error.
+
+### Return Value Reference
+
+| Operation | Return on Success | Meaning |
+| --------- | ----------------- | ------- |
+| `CreateNamespace` | `{}` (empty JSON object) | Namespace created successfully |
+| `CreateRepo` | `{}` (empty JSON object) | Repository created successfully |
+| `UpdateRepo` | `{}` (empty JSON object) | Repository updated successfully |
+| `CreateRepoTag` | `{}` (empty JSON object) | Tag created successfully |
+| `DeleteNamespaces` | (completely empty) | Namespace deleted successfully |
+| `DeleteRepo` | (completely empty) | Repository deleted successfully |
+| `DeleteRepoTag` | (completely empty) | Tag deleted successfully |
+
+### Success Criteria
+
+- **Exit code 0** and **no stderr error** → operation succeeded
+- **Non-zero exit code** or **stderr contains error** → operation failed
+
+### Post-Write Verification
+
+After executing a write operation, verify the result by running the corresponding query command:
+
+| Write Operation | Verification Command | Expected Result |
+| --------------- | -------------------- | --------------- |
+| `CreateNamespace --namespace=<ns>` | `hcloud SWR ListNamespaces` | New namespace appears in list |
+| `CreateRepo --namespace=<ns> --repository=<repo>` | `hcloud SWR ListReposDetails --namespace=<ns>` | New repository appears in list |
+| `UpdateRepo --namespace=<ns> --repository=<repo>` | `hcloud SWR ShowRepository --namespace=<ns> --repository=<repo>` | Updated properties reflected |
+| `CreateRepoTag --namespace=<ns> --repository=<repo> --destination_tag=<tag>` | `hcloud SWR ListRepositoryTags --namespace=<ns> --repository=<repo>` | New tag appears in list |
+| `DeleteNamespaces --namespace=<ns>` | `hcloud SWR ListNamespaces` | Deleted namespace no longer appears |
+| `DeleteRepo --namespace=<ns> --repository=<repo>` | `hcloud SWR ListReposDetails --namespace=<ns>` | Deleted repository no longer appears |
+| `DeleteRepoTag --namespace=<ns> --repository=<repo> --tag=<tag>` | `hcloud SWR ListRepositoryTags --namespace=<ns> --repository=<repo>` | Deleted tag no longer appears |
+

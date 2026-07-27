@@ -290,6 +290,50 @@ Decode the `auth` field to get username and password for docker login.
 
 To find namespace quota, filter the array where `quota_key == "namespace"`.
 
+## Pitfall 16: Write Operations Return Empty Output
+
+**Symptom**: `CreateNamespace`, `CreateRepo`, `UpdateRepo`, `CreateRepoTag` return `{}`; `DeleteNamespaces`, `DeleteRepo`, `DeleteRepoTag` return completely empty output
+
+**Root Cause**: This is normal hcloud CLI behavior for SWR write operations. Empty output does NOT indicate failure.
+
+**Solution**: Check the exit code to determine success:
+- Exit code 0 and no stderr error → operation succeeded
+- Non-zero exit code or stderr contains error → operation failed
+
+After a write operation, verify the result by running the corresponding query command:
+
+```bash
+# Example: verify CreateNamespace
+hcloud SWR CreateNamespace --namespace=test-ns --cli-region=cn-north-4
+# Returns: {} (empty - this is normal)
+
+# Verify by listing namespaces
+hcloud SWR ListNamespaces --cli-region=cn-north-4
+# Check if test-ns appears in the list
+```
+
+See the [Write Operation Return Values](../SKILL.md#write-operation-return-values) section in SKILL.md for the complete verification table.
+
+## Pitfall 17: order_column Values Differ Between Commands
+
+**Symptom**: `ListReposDetails --order_column=updated_at` returns `SVCSTG.SWR.4001096: param order column error`
+
+**Root Cause**: The valid `--order_column` values are **different** for `ListReposDetails` and `ListRepositoryTags`:
+- `ListReposDetails`: accepts `name`, `updated_time`, `tag_count`
+- `ListRepositoryTags`: accepts `updated_at` only
+
+The CLI help text incorrectly shows `updated_at` for both commands, but the API only accepts `updated_time` for `ListReposDetails`.
+
+**Solution**: Use the correct value for each command:
+
+```bash
+# ListReposDetails - use updated_time (NOT updated_at)
+hcloud SWR ListReposDetails --namespace=group-dev --order_column=updated_time --order_type=desc --cli-region=cn-north-4
+
+# ListRepositoryTags - use updated_at
+hcloud SWR ListRepositoryTags --namespace=group-dev --repository=nginx --order_column=updated_at --order_type=desc --cli-region=cn-north-4
+```
+
 ## Common Error Response Reference
 
 | Error Code          | HTTP Status | Description                  | Recommended Action                    |
