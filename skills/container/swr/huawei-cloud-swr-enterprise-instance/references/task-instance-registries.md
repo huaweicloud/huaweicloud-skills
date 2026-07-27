@@ -10,11 +10,11 @@ SWR enterprise instance registries define target repositories for image synchron
 
 | Operation                    | Method | Description              | Key Parameters                                  |
 | ---------------------------- | ------ | ------------------------ | ----------------------------------------------- |
-| `CreateInstanceRegistry`     | POST   | 创建镜像同步目标仓库      | `--instance_id`, `--name`, `--type`, `--url`, `--credential.type`, `--credential.access_key`, `--credential.access_secret`, `--insecure` |
-| `ListInstanceRegistries`     | GET    | 获取目标仓库列表         | `--instance_id`, `--limit`, `--offset`, `--name`, `--type` |
-| `ShowInstanceRegistry`      | GET    | 获取目标仓库详情         | `--instance_id`, `--registry_id`                |
-| `UpdateInstanceRegistry`     | PUT    | 修改目标仓库             | `--instance_id`, `--registry_id`, `--name`, `--type`, `--url`, `--credential.*`, `--insecure` |
-| `DeleteInstanceRegistry`     | DELETE | 删除同步仓库             | `--instance_id`, `--registry_id`                |
+| `CreateInstanceRegistry`     | POST   | Create sync target registry      | `--instance_id`, `--name`, `--type`, `--url`, `--credential.type`, `--credential.access_key`, `--credential.access_secret`, `--insecure` |
+| `ListInstanceRegistries`     | GET    | List registries         | `--instance_id`, `--limit`, `--offset`, `--name`, `--type` |
+| `ShowInstanceRegistry`      | GET    | Show registry details         | `--instance_id`, `--registry_id`                |
+| `UpdateInstanceRegistry`     | PUT    | Update registry             | `--instance_id`, `--registry_id`, `--name`, `--type`, `--url`, `--credential.*`, `--insecure` |
+| `DeleteInstanceRegistry`     | DELETE | Delete registry             | `--instance_id`, `--registry_id`                |
 
 ### Workflows
 
@@ -24,7 +24,11 @@ Registries define external target repositories for image replication/sync.
 
 **Pre-creation Checklist**:
 1. Verify the target registry URL is accessible
-2. Obtain authentication credentials for the target registry
+2. Obtain authentication credentials for the target registry:
+   - For SWR enterprise instances: Call `CreateInstanceLtCredential` on the target instance to get `username` and `password`
+   - For Harbor: Use the Harbor admin credentials or service account
+   - For basic SWR: Use your Huawei Cloud AK/SK or IAM token credentials
+   - The `--credential.access_key` is the username, `--credential.access_secret` is the password
 3. Decide registry type: `swr-pro` (Harbor), `swr-pro-internal` (SWR enterprise), `huawei-SWR` (basic SWR)
 
 ```bash
@@ -113,11 +117,11 @@ hcloud SWR ListInstanceRegistries --instance_id=<instance-id> --cli-region=cn-no
 
 | Operation                    | Method | Description              | Key Parameters                                  |
 | ---------------------------- | ------ | ------------------------ | ----------------------------------------------- |
-| `ListInstanceRepositories`   | GET    | 获取制品仓库列表         | `--instance_id`, `--namespace_id`, `--limit`, `--offset` |
-| `ListAllInstanceRepositories`| GET    | 获取所有实例仓库列表     | `--limit`, `--marker`, `--name`                 |
-| `ShowInstanceRepository`     | GET    | 获取制品仓库详情         | `--instance_id`, `--namespace_name`, `--repository_name` |
-| `UpdateInstanceRepository`   | PUT    | 修改制品仓库             | `--instance_id`, `--namespace_name`, `--repository_name`, `--description` |
-| `DeleteInstanceRepository`   | DELETE | 删除仓库                 | `--instance_id`, `--namespace_name`, `--repository_name` |
+| `ListInstanceRepositories`   | GET    | List repositories         | `--instance_id`, `--namespace_id`, `--limit`, `--offset` |
+| `ListAllInstanceRepositories`| GET    | List all repositories     | `--limit`, `--marker`, `--name`                 |
+| `ShowInstanceRepository`     | GET    | Show repository details         | `--instance_id`, `--namespace_name`, `--repository_name` |
+| `UpdateInstanceRepository`   | PUT    | Update repository             | `--instance_id`, `--namespace_name`, `--repository_name`, `--description` |
+| `DeleteInstanceRepository`   | DELETE | Delete repository                 | `--instance_id`, `--namespace_name`, `--repository_name` |
 
 ### Workflows
 

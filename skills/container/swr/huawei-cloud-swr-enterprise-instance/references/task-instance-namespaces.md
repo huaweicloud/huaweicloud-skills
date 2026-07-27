@@ -8,11 +8,11 @@ SWR enterprise instance namespaces organize repositories within an instance. Unl
 
 | Operation                    | Method | Description              | Key Parameters                                  |
 | ---------------------------- | ------ | ------------------------ | ----------------------------------------------- |
-| `CreateInstanceNamespace`    | POST   | 创建命名空间             | `--instance_id`, `--namespace_name`, `--metadata.public`, `--metadata.auto_scan`, `--metadata.prevent_vul`, `--metadata.severity` |
-| `ListInstanceNamespaces`     | GET    | 获取命名空间列表         | `--instance_id`, `--limit`, `--offset`, `--name`, `--public` |
-| `ShowInstanceNamespace`      | GET    | 获取命名空间详情         | `--instance_id`, `--namespace_name`             |
-| `UpdateInstanceNamespace`    | PUT    | 修改命名空间             | `--instance_id`, `--namespace_name`, `--metadata.public`, `--metadata.auto_scan`, `--metadata.prevent_vul`, `--metadata.severity`, `--cve_allowlist` |
-| `DeleteInstanceNamespace`    | DELETE | 删除命名空间             | `--instance_id`, `--namespace_name`             |
+| `CreateInstanceNamespace`    | POST   | Create namespace             | `--instance_id`, `--namespace_name`, `--metadata.public`, `--metadata.auto_scan`, `--metadata.prevent_vul`, `--metadata.severity` |
+| `ListInstanceNamespaces`     | GET    | List namespaces         | `--instance_id`, `--limit`, `--offset`, `--name`, `--public` |
+| `ShowInstanceNamespace`      | GET    | Show namespace details         | `--instance_id`, `--namespace_name`             |
+| `UpdateInstanceNamespace`    | PUT    | Update namespace             | `--instance_id`, `--namespace_name`, `--metadata.public`, `--metadata.auto_scan`, `--metadata.prevent_vul`, `--metadata.severity`, `--cve_allowlist` |
+| `DeleteInstanceNamespace`    | DELETE | Delete namespace             | `--instance_id`, `--namespace_name`             |
 
 ## Workflows
 
@@ -48,11 +48,21 @@ hcloud SWR CreateInstanceNamespace --instance_id=<instance-id> --namespace_name=
 - Length: 1-64 characters
 
 **Security Scanning Parameters**:
-- `metadata.auto_scan=true`: Automatically scan images on upload
-- `metadata.prevent_vul=true`: Block pulling images that have vulnerabilities above the severity threshold
-- `metadata.severity`: Vulnerability blocking threshold (`none`, `low`, `medium`, `high`, `critical`)
+- `--metadata.auto_scan`: Whether to automatically trigger vulnerability scanning when an image is pushed. Values: `true` or `false`. When enabled, every uploaded image is scanned automatically.
+- `--metadata.prevent_vul`: Whether to block pulling images that contain vulnerabilities above the severity threshold.
+  Values: `true` or `false`. When enabled, `docker pull` will fail for images with vulnerabilities exceeding the threshold.
+- `--metadata.severity`: The vulnerability severity threshold for blocking. Only effective when `prevent_vul=true`. Values: `none`, `low`, `medium`, `high`, `critical`.
 
-**Severity Behavior**:
+**Scanning Workflow**:
+1. Image is pushed to the namespace repository
+2. If `auto_scan=true`, vulnerability scanning starts automatically
+3. Scan results are available via `ShowInstanceArtifact --with_scan_overview=true`
+4. If `prevent_vul=true` and vulnerabilities exceed `severity` threshold, `docker pull` is blocked
+5. Use `StartManualScanning` to trigger a manual scan on existing artifacts
+6. Use `ListInstanceArtifactVulnerabilities` to view detailed vulnerability findings
+
+**CVE Whitelist**: Use `--cve_allowlist.items.[N].cve_id` in `UpdateInstanceNamespace` to allow specific CVEs to bypass blocking, even if their severity exceeds the threshold.
+
 - `none`: Block any image with any vulnerability
 - `low`: Block images with low or higher severity vulnerabilities
 - `medium`: Block images with medium or higher severity vulnerabilities

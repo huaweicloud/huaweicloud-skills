@@ -4,17 +4,24 @@
 
 SWR enterprise instance endpoints define network access paths for the registry. Enterprise instances support two types of access: internal VPC endpoints (for within-network access) and public access endpoints (with IP whitelist for controlled external access). This task covers creating, listing, showing, deleting internal endpoints, and managing public access.
 
+**Finding the Instance Access URL**: The instance endpoint URL is NOT returned by `ShowInstance`. To find the access URL:
+1. Call `ShowInstance` to get the instance name and status
+2. The internal access URL format is: `swr.<region>.myhuaweicloud.com` (for shared SWR) or `<instance-name>.swr.<region>.myhuaweicloud.com` (for enterprise instances)
+3. For internal VPC endpoints, the URL is shown in `ListInstanceInternalEndpoints` response (`endpoint.service.name` field)
+4. For public access, the URL is shown in `ShowInstanceEndpointPolicy` response (`endpoint` field)
+5. Use the endpoint URL with `docker login <endpoint-url>` after obtaining credentials
+
 ## Operations Catalog
 
 | Operation                        | Method | Description              | Key Parameters                                  |
 | -------------------------------- | ------ | ------------------------ | ----------------------------------------------- |
-| `CreateInstanceInternalEndpoint` | POST   | 新增内网访问             | `--instance_id`, `--vpc_id`, `--subnet_id`, `--project_id`, `--description` |
-| `ListInstanceInternalEndpoints`  | GET    | 获取内网访问列表         | `--instance_id`, `--limit`, `--offset`          |
-| `ShowInstanceInternalEndpoint`   | GET    | 查询内网访问详情         | `--instance_id`, `--internal_endpoints_id`      |
-| `DeleteInstanceInternalEndpoint` | DELETE | 删除内网访问             | `--instance_id`, `--internal_endpoints_id`      |
-| `CreateInstanceEndpointPolicy`   | POST   | 开启或关闭公网访问       | `--instance_id`, `--enable`                     |
-| `ShowInstanceEndpointPolicy`     | GET    | 获取公网访问信息         | `--instance_id`                                 |
-| `UpdateInstanceEndpointPolicy`   | PUT    | 更新公网访问白名单       | `--instance_id`, `--ip_list.[N].ip`, `--ip_list.[N].description` |
+| `CreateInstanceInternalEndpoint` | POST   | Create internal endpoint             | `--instance_id`, `--vpc_id`, `--subnet_id`, `--project_id`, `--description` |
+| `ListInstanceInternalEndpoints`  | GET    | List internal endpoints         | `--instance_id`, `--limit`, `--offset`          |
+| `ShowInstanceInternalEndpoint`   | GET    | Show internal endpoint details         | `--instance_id`, `--internal_endpoints_id`      |
+| `DeleteInstanceInternalEndpoint` | DELETE | Delete internal endpoint             | `--instance_id`, `--internal_endpoints_id`      |
+| `CreateInstanceEndpointPolicy`   | POST   | Enable/disable public access       | `--instance_id`, `--enable`                     |
+| `ShowInstanceEndpointPolicy`     | GET    | Get public access info         | `--instance_id`                                 |
+| `UpdateInstanceEndpointPolicy`   | PUT    | Update public access whitelist       | `--instance_id`, `--ip_list.[N].ip`, `--ip_list.[N].description` |
 
 ## Workflows
 

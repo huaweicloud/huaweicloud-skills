@@ -8,13 +8,13 @@ SWR enterprise instance artifacts represent image versions (tags) within reposit
 
 | Operation                            | Method | Description              | Key Parameters                                  |
 | ------------------------------------ | ------ | ------------------------ | ----------------------------------------------- |
-| `ListInstanceArtifacts`              | GET    | 获取制品版本列表         | `--instance_id`, `--namespace_name`, `--repository_name`, `--limit`, `--offset`, `--tags`, `--type` |
-| `ListInstanceAllArtifacts`           | GET    | 获取所有制品版本列表     | `--instance_id`, `--limit`, `--marker`          |
-| `ShowInstanceArtifact`               | GET    | 获取制品版本详情         | `--instance_id`, `--namespace_name`, `--repository_name`, `--reference`, `--with_scan_overview` |
-| `ShowInstanceArtifactAddition`       | GET    | 获取制品附加信息         | `--instance_id`, `--namespace_name`, `--repository_name`, `--reference`, `--addition` |
-| `ListInstanceArtifactVulnerabilities`| GET    | 获取制品漏洞信息         | `--instance_id`, `--namespace_name`, `--repository_name`, `--reference` |
-| `StartManualScanning`                | POST   | 手动启动制品扫描         | `--instance_id`, `--namespace_name`, `--repository_name`, `--reference` |
-| `DeleteInstanceArtifact`             | DELETE | 删除制品版本             | `--instance_id`, `--namespace_name`, `--repository_name`, `--reference` |
+| `ListInstanceArtifacts`              | GET    | List artifact versions         | `--instance_id`, `--namespace_name`, `--repository_name`, `--limit`, `--offset`, `--tags`, `--type` |
+| `ListInstanceAllArtifacts`           | GET    | List all artifact versions     | `--instance_id`, `--limit`, `--marker`          |
+| `ShowInstanceArtifact`               | GET    | Show artifact details         | `--instance_id`, `--namespace_name`, `--repository_name`, `--reference`, `--with_scan_overview` |
+| `ShowInstanceArtifactAddition`       | GET    | Get artifact addition info         | `--instance_id`, `--namespace_name`, `--repository_name`, `--reference`, `--addition` |
+| `ListInstanceArtifactVulnerabilities`| GET    | List artifact vulnerabilities         | `--instance_id`, `--namespace_name`, `--repository_name`, `--reference` |
+| `StartManualScanning`                | POST   | Start manual scanning         | `--instance_id`, `--namespace_name`, `--repository_name`, `--reference` |
+| `DeleteInstanceArtifact`             | DELETE | Delete artifact version             | `--instance_id`, `--namespace_name`, `--repository_name`, `--reference` |
 
 ## Workflows
 
@@ -35,6 +35,19 @@ hcloud SWR ListInstanceArtifacts --instance_id=<instance-id> --namespace_name=gr
 ```
 
 ⚠️ **Pagination Note**: `offset` must be 0 or a multiple of `limit` (0, 20, 40...).
+
+**Return Field Descriptions** (ListInstanceArtifacts response):
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `digest` | string | Artifact digest (SHA256) — unique identifier for the image version |
+| `type` | string | Artifact type: `IMAGE` (container image) or `CHART` (Helm chart) |
+| `size` | integer | Artifact size in bytes |
+| `tags` | array | List of tag names associated with the artifact (e.g., `v1.0`, `latest`) |
+| `push_time` | string | Timestamp when the artifact was pushed (UTC) |
+| `pull_time` | string | Timestamp of the last pull operation |
+| `vulnerability_scan_status` | string | Scan status: `Success`, `Failed`, `Ongoing`, `NotStart` |
+| `reference` | string | The digest or tag used to reference this artifact |
 
 ### W2: List All Artifacts Across All Repositories
 

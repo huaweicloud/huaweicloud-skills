@@ -8,23 +8,26 @@ SWR enterprise instances provide dedicated, isolated container registry environm
 
 | Operation                    | Method | Description              | Key Parameters                                  |
 | ---------------------------- | ------ | ------------------------ | ----------------------------------------------- |
-| `CreateInstance`             | POST   | 创建企业仓库实例          | `--name`, `--spec`, `--charge_mode`, `--vpc_id`, `--subnet_id`, `--enterprise_project_id` |
-| `ListInstance`               | GET    | 查询实例列表             | `--status`, `--limit`, `--offset`, `--enterprise_project_id` |
-| `ShowInstance`               | GET    | 获取实例详情             | `--instance_id`                                 |
-| `ShowInstanceConfiguration`  | GET    | 查看实例配置             | `--instance_id`                                 |
-| `UpdateInstanceConfiguration`| PUT    | 修改实例配置             | `--instance_id`, `--anonymous_access`           |
-| `DeleteInstance`             | DELETE | 删除实例                 | `--instance_id`, `--delete_obs`, `--delete_dns` |
+| `CreateInstance`             | POST   | Create enterprise instance          | `--name`, `--spec`, `--charge_mode`, `--vpc_id`, `--subnet_id`, `--enterprise_project_id` |
+| `ListInstance`               | GET    | List instances             | `--status`, `--limit`, `--offset`, `--enterprise_project_id` |
+| `ShowInstance`               | GET    | Show instance details             | `--instance_id`                                 |
+| `ShowInstanceConfiguration`  | GET    | Show instance configuration             | `--instance_id`                                 |
+| `UpdateInstanceConfiguration`| PUT    | Update instance configuration             | `--instance_id`, `--anonymous_access`           |
+| `DeleteInstance`             | DELETE | Delete instance                 | `--instance_id`, `--delete_obs`, `--delete_dns` |
 
 ## Workflows
 
 ### W1: Create an Enterprise Instance
 
 **Pre-creation Checklist**:
-1. Verify VPC exists and is in the target region
-2. Verify subnet exists within the VPC
-3. Decide instance spec: `swr.ee.basic` or `swr.ee.professional`
-4. Choose instance name (3-48 chars, lowercase start)
-5. Determine enterprise project (use `0` for default)
+1. **Activate SWR enterprise service** — Access `https://console.huaweicloud.com/swr-instance` and complete service activation if not already done
+2. **Verify region availability** — Not all specs are available in all regions. Use `hcloud SWR ListInstance --cli-region=<region>` to verify the service is available in the target region
+3. Verify VPC exists and is in the target region
+4. Verify subnet exists within the VPC
+5. Decide instance spec: `swr.ee.basic` or `swr.ee.professional` (verify spec is supported in the target region)
+6. Choose instance name (3-48 chars, lowercase start)
+7. Determine enterprise project (use `0` for default)
+8. **Review billing** — Creating an instance incurs hourly costs based on the selected spec. Inform the user before proceeding
 
 ```bash
 # Create basic edition instance
@@ -36,7 +39,7 @@ hcloud SWR CreateInstance --name=prod-instance --spec=swr.ee.professional --char
 # Create instance with OBS encryption (AES-256)
 hcloud SWR CreateInstance --name=secure-instance --spec=swr.ee.professional --charge_mode=postPaid --vpc_id=<vpc-id> --subnet_id=<subnet-id> --enterprise_project_id=0 --obs_encrypt=true --obs_enc_kms_key_id=<kms-key-id> --cli-region=cn-north-4
 
-# Create instance with 国密 encryption
+# Create instance with GM (Chinese national cryptographic standard) encryption
 hcloud SWR CreateInstance --name=gm-instance --spec=swr.ee.professional --charge_mode=postPaid --vpc_id=<vpc-id> --subnet_id=<subnet-id> --enterprise_project_id=0 --obs_encrypt=true --encrypt_type=gm --cli-region=cn-north-4
 
 # Create instance with resource tags
@@ -47,6 +50,13 @@ hcloud SWR CreateInstance --name=tagged-instance --spec=swr.ee.professional --ch
 - `--name`: Instance name (3-48 chars, lowercase start, no consecutive hyphens, no ending hyphen)
 - `--spec`: `swr.ee.basic` or `swr.ee.professional`
 - `--charge_mode`: Only `postPaid` (on-demand) supported currently
+- `--spec` details: `swr.ee.basic` (basic tier, limited repos/namespaces) or `swr.ee.professional` (professional tier, higher limits and features)
+- `--obs_encrypt`: Enable OBS bucket encryption (`true`/`false`). When `true`, `--obs_enc_kms_key_id` is required.
+- `--obs_enc_kms_key_id`: KMS key ID for OBS encryption (required when `obs_encrypt=true`)
+- `--encrypt_type`: Image encryption type. `gm` for GM (Chinese national cryptographic standard) encryption, or omit for no image encryption
+- `--resource_tags.N.key`/`--resource_tags.N.value`: Resource tags for billing attribution and management (N starts from 1)
+- `--description`: Instance description (max 255 characters)
+- `--enable_intranet_access`: Default `true`, creates internal VPC access endpoint automatically
 - `--vpc_id`: Existing VPC ID in the target region
 - `--subnet_id`: Existing subnet ID within the VPC
 - `--enterprise_project_id`: Enterprise project ID (use `0` for default)
@@ -114,7 +124,12 @@ hcloud SWR UpdateInstanceConfiguration --instance_id=<instance-id> --anonymous_a
 ```
 
 **Configuration Options**:
-- `anonymous_access`: Whether unauthenticated users can pull images. Default is `false` for security.
+- `--anonymous_access`: Whether unauthenticated users can pull images without credentials. Values: `true` or `false`. Default is `false` for security.
+  - `true`: Enables anonymous pull access — anyone with network access can pull images (useful for public image distribution)
+  - `false`: Requires authentication for all pull operations (recommended for production)
+  - **Security Impact**: Setting `anonymous_access=true` bypasses namespace-level access control for pull operations. Only enable for public-facing image registries.
+  - **Prerequisite**: The instance must have public access enabled (via `CreateInstanceEndpointPolicy --enable=true`) for anonymous access to work externally.
+  - **Verification**: After updating, call `ShowInstanceConfiguration` to confirm the change took effect.
 
 ### W5: Delete an Instance
 
@@ -125,7 +140,29 @@ hcloud SWR UpdateInstanceConfiguration --instance_id=<instance-id> --anonymous_a
 ```bash
 hcloud SWR ListInstanceNamespaces --instance_id=<instance-id> --cli-region=cn-north-4
 ```
-2. Confirm with the user that ALL data will be permanently deleted
+2. Check for long-term credentials that will be revoked:
+```bash
+hcloud SWR ListInstanceLtCredentials --instance_id=<instance-id> --cli-region=cn-north-4
+```
+3. Check for sync target registries that will be removed:
+```bash
+hcloud SWR ListInstanceRegistries --instance_id=<instance-id> --cli-region=cn-north-4
+```
+4. Check for internal endpoints that will be removed:
+```bash
+hcloud SWR ListInstanceInternalEndpoints --instance_id=<instance-id> --cli-region=cn-north-4
+```
+5. Check for custom domains that will be removed:
+```bash
+hcloud SWR ListDomainNames --instance_id=<instance-id> --cli-region=cn-north-4
+```
+6. Review instance statistics to understand total data volume:
+```bash
+hcloud SWR ListInstanceStatistics --instance_id=<instance-id> --cli-region=cn-north-4
+```
+7. Confirm with the user that ALL data will be permanently deleted
+8. If data needs to be preserved, migrate/sync to another instance first
+
 3. If data needs to be preserved, migrate/sync to another instance first
 
 ```bash
