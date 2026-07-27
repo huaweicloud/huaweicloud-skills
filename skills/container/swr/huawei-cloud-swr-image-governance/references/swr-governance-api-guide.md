@@ -226,13 +226,13 @@ When retention rules exist, returns array of retention rule objects. Response fo
 
 ```bash
 # Keep last 10 tags (tag_rule)
-hcloud SWR CreateRetention --namespace=pancake --repository=openclaw-sandbox --algorithm=or --rules.1.template=tag_rule --rules.1.params.num=10 --rules.1.tag_selectors.1.kind=label --rules.1.tag_selectors.1.pattern=latest --cli-region=cn-north-4
+hcloud SWR CreateRetention --namespace=pancake --repository=openclaw-sandbox --algorithm=or --rules.1.template=tag_rule --rules.1.params='{"num":"10"}' --rules.1.tag_selectors.1.kind=label --rules.1.tag_selectors.1.pattern=latest --cli-region=cn-north-4
 
 # Keep tags from last 30 days (date_rule)
-hcloud SWR CreateRetention --namespace=pancake --repository=openclaw-sandbox --algorithm=or --rules.1.template=date_rule --rules.1.params.days=30 --rules.1.tag_selectors.1.kind=label --rules.1.tag_selectors.1.pattern=latest --cli-region=cn-north-4
+hcloud SWR CreateRetention --namespace=pancake --repository=openclaw-sandbox --algorithm=or --rules.1.template=date_rule --rules.1.params='{"days":"30"}' --rules.1.tag_selectors.1.kind=label --rules.1.tag_selectors.1.pattern=latest --cli-region=cn-north-4
 
 # Multiple rules (OR logic)
-hcloud SWR CreateRetention --namespace=pancake --repository=openclaw-sandbox --algorithm=or --rules.1.template=tag_rule --rules.1.params.num=5 --rules.1.tag_selectors.1.kind=label --rules.1.tag_selectors.1.pattern=latest --rules.2.template=date_rule --rules.2.params.days=30 --rules.2.tag_selectors.1.kind=regexp --rules.2.tag_selectors.1.pattern=v\d+ --cli-region=cn-north-4
+hcloud SWR CreateRetention --namespace=pancake --repository=openclaw-sandbox --algorithm=or --rules.1.template=tag_rule --rules.1.params='{"num":"5"}' --rules.1.tag_selectors.1.kind=label --rules.1.tag_selectors.1.pattern=latest --rules.2.template=date_rule --rules.2.params='{"days":"30"}' --rules.2.tag_selectors.1.kind=regexp --rules.2.tag_selectors.1.pattern=v\d+ --cli-region=cn-north-4
 ```
 
 **Parameters**:
@@ -266,7 +266,7 @@ Response format to be verified with actual API call.
 ### 4. Update Retention Rule
 
 ```bash
-hcloud SWR UpdateRetention --namespace=pancake --repository=openclaw-sandbox --retention_id=<id> --algorithm=or --rules.1.template=tag_rule --rules.1.params.num=5 --rules.1.tag_selectors.1.kind=label --rules.1.tag_selectors.1.pattern=latest --cli-region=cn-north-4
+hcloud SWR UpdateRetention --namespace=pancake --repository=openclaw-sandbox --retention_id=<id> --algorithm=or --rules.1.template=tag_rule --rules.1.params='{"num":"5"}' --rules.1.tag_selectors.1.kind=label --rules.1.tag_selectors.1.pattern=latest --cli-region=cn-north-4
 ```
 
 **Parameters**: Same as CreateRetention plus `--retention_id`.
@@ -337,13 +337,16 @@ hcloud SWR ListRepoDomains --namespace=pancake --repository=openclaw-sandbox --c
 ### 2. Create Shared Domain
 
 ```bash
-hcloud SWR CreateRepoDomains --namespace=pancake --repository=openclaw-sandbox --domain=shared-domain-name --cli-region=cn-north-4
+hcloud SWR CreateRepoDomains --namespace=pancake --repository=openclaw-sandbox --access_domain=<iam-domain-name> --deadline=forever --permit=read --cli-region=cn-north-4
 ```
 
 **Parameters**:
 - `--namespace` (required): Namespace name (path parameter)
 - `--repository` (required): Repository name (path parameter)
-- `--domain` (required, body): Shared download domain name
+- `--access_domain` (required, body): Huawei Cloud IAM domain name (shared tenant name) of the target account to share with
+- `--deadline` (required, body): Expiration time in UTC format. Use `forever` for permanent access.
+- `--permit` (required, body): Permission type. Currently only `read` is supported.
+- `--description` (optional, body): Human-readable description. Default: empty string.
 - `--cli-region` (required): Region ID
 
 ### 3. Show Shared Domain Details
@@ -361,14 +364,16 @@ hcloud SWR ShowAccessDomain --namespace=pancake --repository=openclaw-sandbox --
 ### 4. Update Shared Domain
 
 ```bash
-hcloud SWR UpdateRepoDomains --namespace=pancake --repository=openclaw-sandbox --domain=shared-domain-name --permit=read --cli-region=cn-north-4
+hcloud SWR UpdateRepoDomains --namespace=pancake --repository=openclaw-sandbox --access_domain=<iam-domain-name> --deadline=forever --permit=read --cli-region=cn-north-4
 ```
 
 **Parameters**:
 - `--namespace` (required): Namespace name
 - `--repository` (required): Repository name
-- `--domain` (required): Domain name
-- `--permit` (required): Permission type (`read`)
+- `--access_domain` (required, path): Huawei Cloud IAM domain name (shared tenant name) of the shared account
+- `--deadline` (required, body): Expiration time in UTC format. Use `forever` for permanent access.
+- `--permit` (required, body): Permission type. Currently only `read` is supported.
+- `--description` (optional, body): Human-readable description. Default: empty string.
 - `--cli-region` (required): Region ID
 
 ### 5. Delete Shared Domain
