@@ -248,6 +248,30 @@ hcloud SWR ListAllInstanceRepositories --limit=20 --marker=<next_marker> --cli-r
 hcloud SWR ListAllInstanceRepositories --limit=20 --offset=0 --cli-region=cn-north-4
 ```
 
+## P8: SWR Enterprise Service Not Activated
+
+**Symptom**: API calls return errors indicating the service is not available or not activated.
+
+**Cause**: The SWR enterprise service has not been activated in the target region.
+
+**Solution**:
+1. Access the SWR enterprise instance console: `https://console.huaweicloud.com/swr-instance`
+2. Complete the service activation process if prompted
+3. Verify activation by running `hcloud SWR ListInstance --cli-region=<region>`
+4. If the service is not available in the region, try a different region
+
+## P9: Spec Not Available in Region
+
+**Symptom**: `CreateInstance` fails with an error about invalid or unsupported spec.
+
+**Cause**: The selected instance spec (`swr.ee.basic` or `swr.ee.professional`) is not available in the target region.
+
+**Solution**:
+1. Try the other spec (e.g., switch from `swr.ee.basic` to `swr.ee.professional` or vice versa)
+2. Try a different region where the spec is known to be available
+3. Use `hcloud SWR ListSyncRegions --cli-region=<region>` to check available regions
+4. Consult the SWR enterprise instance console at `https://console.huaweicloud.com/swr-instance` for current spec/region availability
+
 ## Common Error Response Reference
 
 | Error Code          | HTTP Status | Description                  | Recommended Action                    |
