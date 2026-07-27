@@ -5,8 +5,12 @@ description: |
   Huawei Cloud SWR (Software Repository for Container) image lifecycle management skill using hcloud CLI.
   Use this skill when the user wants to: (1) manage SWR namespaces (organizations) - create/query/delete, (2) manage image repositories - create/query/update/delete, (3) manage image tags/versions - query/create/delete, (4) obtain docker login credentials for SWR, (5) check SWR quotas and usage limits.
   Trigger: user mentions "SWR image management", "SWR 镜像管理", "container image", "镜像仓库", "SWR 组织", "SWR namespace", "镜像版本", "docker login", "SWR 配额", "SWR tag", "容器镜像", "镜像生命周期", "SWR repository", "SWR 登录", "SWR quota"
-tags: [swr, image-management, namespace, repository, tag]
-version: 1.0.0
+tags:
+  - swr
+  - image-management
+  - namespace
+  - repository
+  - tag
 ---
 
 # Huawei Cloud SWR Image Management
@@ -16,11 +20,6 @@ version: 1.0.0
 This skill provides lifecycle management capabilities for Huawei Cloud SWR (Software Repository for Container) images using the `hcloud` CLI.
 
 **Architecture**: hcloud CLI → SWR Service API → Namespace/Repository/Tag/Auth/Quota resources
-
-**Related Skills**:
-- `huawei-cloud-swr-image-governance` - Image governance (permissions, retention, sharing, tags, immutable rules)
-- `huawei-cloud-swr-image-automation` - Image automation ops (sync, triggers, domains)
-- `huawei-cloud-swr-enterprise-instance` - Enterprise instance management
 
 - Create and manage SWR namespaces (organizations)
 - Create and manage image repositories with public/private settings
@@ -38,6 +37,40 @@ This skill provides lifecycle management capabilities for Huawei Cloud SWR (Soft
 - "Check my SWR quota usage"
 - "Create a private repository for my custom image"
 - "Update repository description and visibility"
+
+## 工作流
+
+1. **Parse user request** — identify the SWR operation (namespace, repository, tag, auth, quota)
+2. **Verify prerequisites** — check hcloud CLI installation and credential configuration
+3. **Confirm parameters** — display the operation, target resources, and parameters to the user for confirmation
+4. **Execute read operations** — for query operations (Show, List), run hcloud CLI directly
+5. **Confirm write operations** — for write operations (Create, Update, Delete), prompt user confirmation before execution (see [参数确认](#参数确认))
+6. **Parse and format output** — extract relevant fields, format as table or structured output
+7. **Report results** — present results with context (e.g., namespace created, repository visibility changed)
+8. **Suggest next actions** — recommend related operations (e.g., after creating namespace, suggest creating a repository)
+
+### 参数确认
+
+> **All write operations (Create, Update, Delete) require explicit user confirmation before execution.**
+
+Before executing any write operation, the skill must:
+
+1. Display the exact hcloud command to be executed
+2. Show the target resource (namespace, repository, tag, etc.)
+3. Show the change to be applied (create, delete, visibility change)
+4. Wait for user confirmation ("yes" / "确认") before proceeding
+5. If user declines, abort the operation and return to step 1
+
+**Write operations requiring confirmation**:
+
+| Operation | Command | Risk Level | Description |
+|-----------|---------|------------|-------------|
+| Create namespace | `CreateNamespace` | Medium | Creates a new SWR namespace (consumes quota) |
+| Create repository | `CreateRepo` | Medium | Creates a new image repository |
+| Update repository | `UpdateRepo` | Medium | Changes repository visibility (public/private) |
+| Delete namespace | `DeleteNamespaces` | High | Deletes namespace AND all repos/images under it |
+| Delete repository | `DeleteRepo` | High | Deletes repository AND all image tags permanently |
+| Delete tag | `DeleteRepoTag` | High | Deletes image tag permanently (irreversible) |
 
 ## Prerequisites
 
@@ -111,6 +144,37 @@ See [IAM Permission Policies](references/iam-policies.md) for complete policy JS
 3. Guide the user to create a custom policy in the IAM console and grant authorization
 4. Pause execution and wait for user confirmation that permissions have been granted
 
+## KooCLI命令格式标准
+
+All commands follow the standard hcloud KooCLI format:
+
+```bash
+hcloud SWR <Operation> --param1=value1 --param2=value2 --cli-region=<region>
+```
+
+**Key conventions**:
+
+- Service name: `SWR` (uppercase, matches KooCLI Services listing)
+- Operation name: PascalCase (e.g., `ShowNamespace`, `CreateRepo`, `ListRepoTags`)
+- Region parameter: `--cli-region=<value>` (default: `cn-north-4`, or `HUAWEI_CLOUD_REGION` env var)
+- Output format: `--cli-output=json` (for agent processing)
+- JMESPath filtering: `--cli-query="<expression>"` (to reduce output)
+- Object-type parameters: JSON string format `--key={subkey:value}`
+
+**Example — read operation**:
+
+```bash
+hcloud SWR ShowNamespace --namespace=pancake --cli-region=cn-north-4 --cli-output=json
+```
+
+**Example — write operation (requires user confirmation)**:
+
+```bash
+# Step 1: Display command and parameters for user confirmation
+# Step 2: After user confirms, execute:
+hcloud SWR CreateNamespace --namespace=my-project --cli-region=cn-north-4
+```
+
 ## Core Commands
 
 ### 1. Namespace (Organization) Management
@@ -154,7 +218,7 @@ hcloud SWR ListReposDetails --cli-region=cn-north-4
 hcloud SWR ListReposDetails --namespace=group-dev --cli-region=cn-north-4
 
 # List repositories with pagination and sorting
-hcloud SWR ListReposDetails --namespace=group-dev --limit=20 --offset=0 --order_column=updated_at --order_type=desc --cli-region=cn-north-4
+hcloud SWR ListReposDetails --namespace=group-dev --limit=20 --offset=0 --order_column=updated_time --order_type=desc --cli-region=cn-north-4
 
 # List repositories by category
 hcloud SWR ListReposDetails --category=database --cli-region=cn-north-4
@@ -253,199 +317,17 @@ hcloud SWR ListQuotas --cli-region=cn-north-4
 
 ## Parameter Reference
 
-### Common Parameters
+See [Parameter Reference](references/parameter-reference.md) for detailed parameter tables and valid values per command.
 
-| Parameter       | Required/Optional | Description                   | Default                              |
-| --------------- | ----------------- | ----------------------------- | ------------------------------------ |
-| `--cli-region`  | Required          | Huawei Cloud region ID        | Config value or `HUAWEI_CLOUD_REGION` |
-| `--namespace`   | Context-dependent | SWR namespace (organization)  | N/A                                  |
-| `--repository`  | Context-dependent | Image repository name         | N/A                                  |
-| `--tag`         | Context-dependent | Image tag/version name        | N/A                                  |
-
-### Namespace Parameters
-
-| Parameter      | Required | Description            | Constraints                                    |
-| -------------- | -------- | ---------------------- | ---------------------------------------------- |
-| `--namespace`  | Yes      | Namespace name         | 1-64 chars, lowercase start, specific rules    |
-| `--filter`     | No       | Filter by name/mode    | `namespace::{name}|mode::{mode}`               |
-
-### Repository Parameters
-
-| Parameter         | Required | Description              | Constraints                                  |
-| ----------------- | -------- | ------------------------ | -------------------------------------------- |
-| `--namespace`     | Yes      | Namespace name           | See naming rules                             |
-| `--repository`    | Yes      | Repository name          | See naming rules                             |
-| `--is_public`     | Yes      | Public/private           | `true` or `false`                            |
-| `--category`      | No       | Repository category      | See category list                            |
-| `--description`   | No       | Repository description   | Free text                                    |
-| `--limit`         | No       | Page size                | Max 1000, default 100                        |
-| `--offset`        | No       | Page offset              | Must pair with `--limit`                     |
-| `--order_column`  | No       | Sort column              | `name`, `updated_time`, `tag_count` (note: `tag_count` is the param value even though response field is `num_images`) |
-| `--order_type`    | No       | Sort direction           | `desc` (descending), `asc` (ascending)       |
-| `--name`          | No       | Search by name (fuzzy)   | Partial match                                |
-
-### Tag Parameters
-
-| Parameter         | Required | Description              | Constraints                                  |
-| ----------------- | -------- | ------------------------ | -------------------------------------------- |
-| `--namespace`     | Yes      | Namespace name           | See naming rules                             |
-| `--repository`    | Yes      | Repository name          | See naming rules                             |
-| `--tag`           | Yes      | Tag/version name         | Free text                                    |
-| `--source_tag`    | Yes      | Source tag (for create)  | Existing tag name                            |
-| `--destination_tag` | Yes    | Target tag (for create)  | New tag name                                 |
-| `--override`      | No       | Overwrite existing tag   | `true` or `false`                            |
 
 ## Output Format
 
-### Namespace List
+See [Output Format Reference](references/output-format.md) for JSON response formats of all SWR API commands.
 
-```json
-{
-  "namespaces": [
-    {
-      "id": 3827347,
-      "name": "group-dev",
-      "creator_name": "user-name",
-      "auth": 7,
-      "access_user_count": 1,
-      "repo_count": 2
-    }
-  ]
-}
-```
-
-### Repository List
-
-Response is a flat JSON array (not wrapped in an object):
-
-```json
-[
-  {
-    "name": "nginx",
-    "category": "app_server",
-    "description": "Nginx web server",
-    "size": 268435456,
-    "is_public": true,
-    "num_images": 5,
-    "num_download": 120,
-    "path": "swr.cn-north-4.myhuaweicloud.com/group-dev/nginx",
-    "internal_path": "swr.cn-north-4.myhuaweicloud.com/group-dev/nginx",
-    "namespace": "group-dev",
-    "domain_name": "user-name",
-    "tags": ["v1.0", "v1.1", "latest"],
-    "created_at": "2026-04-15T10:30:00Z",
-    "updated_at": "2026-05-20T14:20:00Z",
-    "logo": "",
-    "url": "",
-    "status": false,
-    "total_range": 2
-  }
-]
-```
-
-**Note**: `num_images` is the tag count (not `tag_count`). `tags` is an array of tag name strings included directly in the repository listing.
-
-### Tag List
-
-Response is a flat JSON array (not wrapped in an object):
-
-```json
-[
-  {
-    "id": 32962315,
-    "repo_id": 3374895,
-    "Tag": "v1.0",
-    "image_id": "f47c82866a20...",
-    "digest": "sha256:c8cede14b121...",
-    "schema": 2,
-    "size": 134217728,
-    "path": "swr.cn-north-4.myhuaweicloud.com/group-dev/nginx:v1.0",
-    "internal_path": "swr.cn-north-4.myhuaweicloud.com/group-dev/nginx:v1.0",
-    "is_trusted": false,
-    "created": "2026-04-15T10:30:00Z",
-    "updated": "2026-05-20T14:20:00Z",
-    "domain_id": "xxx",
-    "scanned": false,
-    "tag_type": 0
-  }
-]
-```
-
-**Note**: Tag name field is `Tag` (capital T), timestamps use `created`/`updated` (not `created_at`/`updated_at`).
-
-### Show Repository Details
-
-```json
-{
-  "id": 3374887,
-  "ns_id": 3827347,
-  "name": "nginx",
-  "category": "other",
-  "creator_id": "05949eb5...",
-  "creator_name": "user-name",
-  "num_images": 17,
-  "num_download": 35,
-  "is_public": false,
-  "path": "swr.cn-north-4.myhuaweicloud.com/group-dev/nginx",
-  "created": "2026-03-26T07:42:40Z",
-  "updated": "2026-05-06T09:22:11Z",
-  "domain_id": "05949eb4...",
-  "priority": 0
-}
-```
-
-**Note**: ShowRepository uses `created`/`updated` and `num_images` — **different** from ListReposDetails which uses `created_at`/`updated_at`.
-
-### Auth Token Response
-
-```json
-{
-  "auths": {
-    "swr.cn-north-4.myhuaweicloud.com": {
-      "auth": "base64-encoded-username:password"
-    }
-  }
-}
-```
-
-**Note**: The `auth` field is base64-encoded. Decode it to get docker login credentials. This is a Docker config format, NOT a header+body response.
-
-### Quota List
-
-```json
-{
-  "quotas": [
-    {
-      "quota_key": "namespace",
-      "quota_limit": 5,
-      "used": 1,
-      "unit": ""
-    }
-  ]
-}
-```
-
-**Note**: Quotas are returned as an **array of objects** with `quota_key`/`quota_limit`/`used`/`unit` fields, not flat key-value pairs like `namespace_limit`/`namespace_used`.
 
 ## Verification
 
 See [Verification Method](references/verification-method.md) for step-by-step verification.
-
-## Common Region IDs
-
-| Region Name                    | Region ID        |
-| ------------------------------ | ---------------- |
-| North China - Beijing 4        | `cn-north-4`     |
-| North China - Beijing 1        | `cn-north-1`     |
-| East China - Shanghai 1        | `cn-east-3`      |
-| East China - Shanghai 2        | `cn-east-2`      |
-| South China - Guangzhou        | `cn-south-1`     |
-| South China - Shenzhen         | `cn-south-4`     |
-| Southwest China - Guiyang 1    | `cn-southwest-2` |
-| Asia Pacific - Bangkok         | `ap-southeast-2` |
-| Asia Pacific - Singapore       | `ap-southeast-1` |
-| Asia Pacific - Hong Kong       | `ap-southeast-3` |
-| Europe - Paris                 | `eu-west-0`      |
 
 ## Best Practices
 
@@ -462,6 +344,8 @@ See [Verification Method](references/verification-method.md) for step-by-step ve
 | Document                                               | Description                              |
 | ------------------------------------------------------ | ---------------------------------------- |
 | [SWR API Guide](references/swr-api-guide.md)           | hcloud SWR API reference                 |
+| [Parameter Reference](references/parameter-reference.md) | Parameter tables and region IDs        |
+| [Output Format](references/output-format.md)           | JSON response formats                    |
 | [IAM Permission Policies](references/iam-policies.md)  | Required permissions and policy JSON     |
 | [Verification Method](references/verification-method.md) | Step-by-step verification              |
 | [Common Pitfalls](references/common-pitfalls.md)       | Troubleshooting guides                   |
@@ -470,6 +354,60 @@ See [Verification Method](references/verification-method.md) for step-by-step ve
 | [Task: Tag Management](references/task-tag-management.md) | Tag workflows                        |
 | [Task: Auth Management](references/task-auth-management.md) | Login credential workflows          |
 | [Task: Quota Management](references/task-quota-management.md) | Quota check workflows             |
+| [CLI Installation Guide](references/cli-installation-guide.md) | hcloud install, config, verify   |
+| [Acceptance Criteria](references/acceptance-criteria.md) | Correct/error pattern comparison  |
+
+## Unsupported Operations
+
+This skill manages SWR namespaces, repositories, tags, auth credentials, and quotas via the hcloud CLI. The following operations are **not supported** by this skill:
+
+### Push/Pull Images (docker CLI operations)
+
+This skill provides docker login credentials via `CreateAuthorizationToken` or `CreateSecret`, but does **not** execute `docker push` or `docker pull`. After obtaining credentials, use docker CLI directly:
+
+```bash
+# Step 1: Get login credentials from this skill
+hcloud SWR CreateAuthorizationToken --cli-region=cn-north-4
+# Decode the auth field to get username:password
+
+# Step 2: Login and push/pull with docker CLI
+docker login -u <user> -p <pass> swr.cn-north-4.myhuaweicloud.com
+docker push swr.cn-north-4.myhuaweicloud.com/<namespace>/<repo>:<tag>
+docker pull swr.cn-north-4.myhuaweicloud.com/<namespace>/<repo>:<tag>
+```
+
+### Image Security Scanning
+
+Image security scanning is **not provided** by this skill. It strongly depends on Huawei Cloud HSS (Host Security Service) and requires an enterprise SWR instance. The `StartManualScanning` API is only available in enterprise SWR instances, not in basic SWR. This skill covers basic SWR management only and does not include image scanning capabilities.
+
+
+### Build History
+
+The SWR API does not provide build history commands. Image build functionality is available only in the SWR Web Console. Use the Huawei Cloud console at `https://console.huawei.com/swr` to view build history.
+
+### External Image Import
+
+The SWR API does not provide an image import operation. To import an external image (e.g., from Docker Hub):
+
+```bash
+# Step 1: Pull the external image
+docker pull docker.io/library/nginx:latest
+
+# Step 2: Get SWR login credentials from this skill
+hcloud SWR CreateAuthorizationToken --cli-region=cn-north-4
+
+# Step 3: Tag and push to SWR
+docker tag docker.io/library/nginx:latest swr.cn-north-4.myhuaweicloud.com/<namespace>/nginx:latest
+docker push swr.cn-north-4.myhuaweicloud.com/<namespace>/nginx:latest
+```
+
+## Write Operation Return Values
+
+See [Verification Method](references/verification-method.md) for write operation return values and post-write verification steps.
+
+## Pagination Parameter Scope
+
+See [SWR API Guide](references/swr-api-guide.md) for pagination parameter scope details.
 
 ## Notes
 
