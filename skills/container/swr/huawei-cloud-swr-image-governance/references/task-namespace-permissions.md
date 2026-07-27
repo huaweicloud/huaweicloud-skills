@@ -87,7 +87,7 @@ hcloud SWR ShowNamespaceAuth --namespace=pancake --cli-region=cn-north-4
 
 ### W4: Revoke Namespace Permission
 
-⚠️ **CAUTION**: Revoking namespace permission removes access to the namespace AND ALL repositories under it.
+⚠️ **CAUTION**: Revoking namespace permission removes access to the namespace AND ALL repositories under it. **This may cause business interruption — any CI/CD pipelines or services using this namespace will immediately lose access.** Verify that no production workloads depend on this access before proceeding.
 
 ```bash
 hcloud SWR DeleteNamespaceAuth --namespace=pancake --1.user_id=05949eb5350010e21f85c017722182de --1.user_name=hwstaff_p00506267 --cli-region=cn-north-4

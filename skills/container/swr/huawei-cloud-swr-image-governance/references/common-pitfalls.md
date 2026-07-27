@@ -116,7 +116,7 @@ hcloud SWR CreateNamespaceAuth --namespace=pancake --auth=7 --user_id=xxx --user
 hcloud SWR CreateRetention --namespace=pancake --repository=openclaw-sandbox \
   --algorithm=or \
   --rules.1.template=tag_rule \
-  --rules.1.params.num=10 \
+  --rules.1.params='{"num":"10"}' \
   --rules.1.tag_selectors.1.kind=label \
   --rules.1.tag_selectors.1.pattern=latest \
   --cli-region=cn-north-4
@@ -125,7 +125,7 @@ hcloud SWR CreateRetention --namespace=pancake --repository=openclaw-sandbox \
 hcloud SWR CreateRetention --namespace=pancake --repository=openclaw-sandbox \
   --algorithm=or \
   --rules.1.template=tag_rule \
-  --rules.1.params.num=10 \
+  --rules.1.params='{"num":"10"}' \
   --rules.1.tag_selectors.kind=label \
   --cli-region=cn-north-4
 ```
@@ -140,8 +140,8 @@ hcloud SWR CreateRetention --namespace=pancake --repository=openclaw-sandbox \
 
 ```bash
 # ✅ CORRECT - String values
---rules.1.params.num=10
---rules.1.params.days=30
+--rules.1.params='{"num":"10"}'
+--rules.1.params='{"days":"30"}'
 
 # Note: hcloud CLI accepts numeric-looking strings; the API expects string format
 ```
