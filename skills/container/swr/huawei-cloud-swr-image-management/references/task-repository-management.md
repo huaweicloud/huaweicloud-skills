@@ -30,7 +30,7 @@ hcloud SWR ListReposDetails --namespace=group-dev --cli-region=cn-north-4
 hcloud SWR ListReposDetails --namespace=group-dev --limit=20 --offset=0 --cli-region=cn-north-4
 
 # Sort by most recently updated
-hcloud SWR ListReposDetails --namespace=group-dev --order_column=updated_at --order_type=desc --cli-region=cn-north-4
+hcloud SWR ListReposDetails --namespace=group-dev --order_column=updated_time --order_type=desc --cli-region=cn-north-4
 
 # Sort by tag count (order_column uses "tag_count" even though response field is "num_images")
 hcloud SWR ListReposDetails --namespace=group-dev --order_column=tag_count --order_type=desc --cli-region=cn-north-4
