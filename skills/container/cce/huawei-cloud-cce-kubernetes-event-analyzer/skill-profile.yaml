@@ -1,0 +1,16 @@
+﻿name: huawei-cloud-cce-kubernetes-event-analyzer
+level: L2
+domain: observability
+description: Query and analyze Kubernetes Events in Huawei Cloud CCE clusters. Trigger when users ask about CCE events, Kubernetes warning events, FailedScheduling, FailedMount, ImagePullBackOff, event patterns, historical events in LTS, or event-based diagnosis for a CCE cluster or namespace.
+tools:
+  - huawei_get_cce_events
+  - huawei_query_k8s_events_from_lts
+  - huawei_analyze_cce_events
+references:
+  - references/workflow.md
+  - references/risk-rules.md
+  - references/output-schema.md
+  - references/acceptance-criteria.md
+  - references/kubectl-cce.md
+guardrails:
+  max_auto_risk: R3
