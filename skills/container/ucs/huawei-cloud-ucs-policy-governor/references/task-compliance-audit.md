@@ -8,10 +8,10 @@ UCS compliance audit enables fleet-wide governance monitoring by reviewing polic
 
 | Operation          | Method | Description              | Key Parameters                    |
 | ------------------ | ------ | ------------------------ | --------------------------------- |
-| `ListPolicyJobs`   | GET    | 列出策略执行任务         | `--kind` (optional, default "EnablePolicy") |
-| `ShowPolicyJob`    | GET    | 获取策略执行任务详情     | `--jobid` (required)              |
-| `ListPolicyInstances` | GET  | 列出策略实例             | `--cli-region` only (no filter params) |
-| `ShowPolicyInstance`  | GET  | 获取策略实例详情         | `--policyinstanceid`              |
+| `ListPolicyJobs`   | GET    | List policy enforcement jobs         | `--kind` (optional, default "EnablePolicy") |
+| `ShowPolicyJob`    | GET    | Show policy enforcement job details     | `--jobid` (required)              |
+| `ListPolicyInstances` | GET  | List policy instances             | `--cli-region` only (no filter params) |
+| `ShowPolicyInstance`  | GET  | Show policy instance details         | `--policyinstanceid`              |
 
 ## Workflows
 
@@ -27,15 +27,15 @@ hcloud UCS ListPolicyInstances --cli-region=cn-north-4
 hcloud UCS ListPolicyJobs --kind=EnablePolicy --cli-region=cn-north-4
 ```
 
-**Policy Job Response Fields**:
-- `jobid`: Enforcement job UUID
-- `kind`: Job type (e.g., `EnablePolicy`)
-- `status`: Job execution status (`Success`, `Failed`, `InProgress`)
+**Policy Job Response Fields** (k8s-style, verified via `ListPolicyJobs`):
+- `metadata.uid`: Enforcement job UUID
+- `spec.type`: Job type (e.g., `EnablePolicy`, `DisablePolicy`, `PolicyReconcile`)
+- `status.status`: Job execution status (`Succeeded`, `Failed`, `InProgress`)
 
 **Audit Checklist**:
-- ✅ All jobs show `status: Success` — Policy enforcement deployed successfully
-- ⚠️ Some jobs show `status: Failed` — Investigate specific failures with `ShowPolicyJob`
-- ❌ Many jobs show `status: Failed` — Systemic issue, requires immediate action
+- ✅ All jobs show `status.status: Succeeded` — Policy enforcement deployed successfully
+- ⚠️ Some jobs show `status.status: Failed` — Investigate specific failures with `ShowPolicyJob`
+- ❌ Many jobs show `status.status: Failed` — Systemic issue, requires immediate action
 
 ### W2: Cluster-Level Compliance Review
 
@@ -53,7 +53,7 @@ hcloud UCS ShowPolicyJob --jobid=<job-id> --cli-region=cn-north-4
 ```
 
 **Job Status Values**:
-- `Success`: Policy enforcement deployed successfully, compliance checks active
+- `Succeeded`: Policy enforcement deployed successfully, compliance checks active
 - `Failed`: Policy enforcement failed, check job details for error information
 - `InProgress`: Policy enforcement being deployed, compliance check pending
 
@@ -73,10 +73,10 @@ hcloud UCS ShowPolicyJob --jobid=<job-id> --cli-region=cn-north-4
 Each failed or partially successful enforcement job includes violation information. UCS responses follow k8s-style format based on verified ListPolicyDefinitions/ListPolicyJobs patterns:
 
 ```json
-[to be verified for populated response — verified empty ListPolicyJobs returns { "items": null }]
+[verified — ListPolicyJobs returns k8s-style objects with kind/apiVersion/metadata/spec/status fields]
 ```
 
-The exact violation detail structure has not been verified. Based on verified k8s-style UCS responses, violation information is likely in a structured `status.conditions` or similar field rather than flat fields like `jobid`, `kind`, `details.cluster_id`, `details.violations`.
+The exact violation detail structure has not been fully verified. Based on verified k8s-style UCS responses, violation information is in structured `status.conditions` or similar field rather than flat fields like `jobid`, `kind`, `details.cluster_id`, `details.violations`.
 
 **Violation Resolution Steps**:
 1. Review each violation description from `ShowPolicyJob`
@@ -185,8 +185,8 @@ done
 When a new cluster joins the fleet, verify it meets compliance standards:
 
 ```bash
-# 1. Register the new cluster
-hcloud UCS RegisterCluster --name=new-cluster --cluster_type=CCE --cluster_id=<cce-id> --cli-region=cn-north-4
+# 1. Register the new cluster (refer to huawei-cloud-ucs-cluster-onboarding-manager for full parameters)
+hcloud UCS RegisterCluster --metadata.name=new-cluster --spec.category=CCE --spec.city=310000 --cli-region=cn-north-4
 
 # 2. Enable policy on the new cluster
 hcloud UCS EnableClusterPolicy --clusterid=<new-ucs-id> --cli-region=cn-north-4

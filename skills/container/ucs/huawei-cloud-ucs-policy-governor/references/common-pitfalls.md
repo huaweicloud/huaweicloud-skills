@@ -18,7 +18,7 @@ hcloud UCS ListPolicyDefinitions --cli-region=cn-north-4
 hcloud UCS ShowPolicyDefinition --policydefinitionid=<definition-id> --cli-region=cn-north-4
 ```
 
-Use the `id` field from `ListPolicyDefinitions` response as the `--constraintTemplateID` parameter.
+Use the `metadata.name` field from `ListPolicyDefinitions` response as the `--constraintTemplateID` parameter.
 
 ## Pitfall 2: Using Wrong Create Operation for the Scope
 
@@ -49,7 +49,8 @@ hcloud UCS CreatePolicyInstance --name=my-policy --policy_definition_id=<def-id>
 
 1. Register the cluster to UCS first (use `huawei-cloud-ucs-cluster-onboarding-manager` skill):
 ```bash
-hcloud UCS RegisterCluster --name=my-cluster --cluster_type=CCE --cluster_id=<cce-cluster-id> --cli-region=cn-north-4
+# Register a CCE cluster to UCS (refer to huawei-cloud-ucs-cluster-onboarding-manager for full parameters)
+hcloud UCS RegisterCluster --metadata.name=my-cluster --spec.category=CCE --spec.city=310000 --cli-region=cn-north-4
 ```
 
 2. Use the UCS-assigned cluster ID (not the CCE cluster ID) for policy operations:
