@@ -41,6 +41,27 @@ This skill provides policy governance and compliance management capabilities for
 - "Delete an obsolete policy instance"
 - "Query policy definition details before applying"
 
+## Workflow
+
+The skill workflow is as follows:
+
+1. **Environment Check** — Verify hcloud CLI is installed and AK/SK credentials are configured (see [CLI Installation Guide](references/cli-installation-guide.md))
+2. **Policy Definition Query** — Call `ListPolicyDefinitions` to browse available governance policy templates
+3. **Policy Instance Management** — Choose management action based on user request:
+   - Create: `CreateClusterPolicyInstance` or `CreateClusterGroupPolicyInstance` (requires cluster/fleet with policy center enabled)
+   - Update: `UpdatePolicyInstance` (requires user confirmation — see [Parameter Confirmation](#参数确认))
+   - Query: `ListPolicyInstances` / `ShowPolicyInstance`
+   - Delete: `DeletePolicyInstance` (⚠️ irreversible, requires user confirmation)
+4. **Policy Center Management** (optional):
+   - Enable: `EnableClusterPolicy` / `EnableClusterGroupPolicy` (requires cluster/fleet in Available status)
+   - Disable: `DisableClusterPolicy` / `DisableClusterGroupPolicy` (requires user confirmation — suspends enforcement)
+5. **Compliance Audit** — Call `ListPolicyJobs` / `ShowPolicyJob` to review policy enforcement history and compliance status
+6. **Verification** — Confirm policy instance status and enforcement behavior (see [Verification](verification-method.md))
+
+## KooCLI Command Format Standard
+
+All operations use `hcloud UCS <Operation> --<param>=<value> --cli-region=<region>` format. Parameters use `--key=value` style (not JSON body). See [Parameter Reference](#parameter-reference) for detailed parameter descriptions.
+
 ## Prerequisites
 
 ### 1. hcloud CLI Requirements (MANDATORY)
@@ -182,6 +203,15 @@ hcloud UCS ListPolicyJobs --kind=EnablePolicy --cli-region=cn-north-4
 hcloud UCS ShowPolicyJob --jobid=<job-id> --cli-region=cn-north-4
 ```
 
+## 参数确认
+
+| 操作 | CLI 命令 | 风险等级 | 需确认事项 |
+|------|---------|---------|-----------|
+| DeletePolicyInstance | `hcloud UCS DeletePolicyInstance --policyinstanceid=<id>` | High | Deleting a policy instance permanently removes enforcement. The cluster/fleet will no longer be governed by this policy, increasing compliance risk. Consider disabling first. |
+| UpdatePolicyInstance | `hcloud UCS UpdatePolicyInstance --policyinstanceid=<id> --enforcementAction=<action>` | Medium | Modifying policy parameters affects enforcement behavior. Changing enforcementAction from `warn` to `deny` will block non-compliant deployments. Confirm the new parameters. |
+| DisableClusterPolicy | `hcloud UCS DisableClusterPolicy --clusterid=<id>` | Medium | Disabling policy on a cluster suspends enforcement. Existing violation records are preserved but no new checks are performed. Confirm before proceeding. |
+| DisableClusterGroupPolicy | `hcloud UCS DisableClusterGroupPolicy --clustergroupid=<id>` | Medium | Disabling fleet-level policy affects compliance governance across all clusters in the fleet group. Existing violations are preserved but no new checks are performed. Confirm before proceeding. |
+
 ## Parameter Reference
 
 ### Common Parameters
@@ -300,11 +330,11 @@ UCS API returns Kubernetes-style objects, not flat JSON. Based on verified `Show
 
 **Response Example** (verified for empty result):
 
-When no jobs exist, returns `{ "items": null }`. When populated, likely k8s-style objects based on verified UCS pattern:
+When no jobs exist, returns `{ "items": [] }` (empty array). When populated, returns k8s-style objects based on verified UCS pattern:
 
 ```json
 {
-  "items": null
+  "items": []
 }
 ```
 
@@ -355,6 +385,8 @@ See [Verification Method](references/verification-method.md) for step-by-step ve
 | [Common Pitfalls](references/common-pitfalls.md)       | Troubleshooting guides                   |
 | [Task: Policy Management](references/task-policy-management.md) | Policy instance CRUD workflows |
 | [Task: Compliance Audit](references/task-compliance-audit.md) | Compliance and audit workflows |
+| [CLI Installation Guide](references/cli-installation-guide.md) | KooCLI install and auth setup |
+| [Acceptance Criteria](references/acceptance-criteria.md) | Test checklist and standards |
 
 ## Notes
 
