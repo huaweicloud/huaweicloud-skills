@@ -1,0 +1,2184 @@
+{
+  "version": "2.3.13",
+  "rules": [
+    {
+      "id": "P1",
+      "category": "Prompt Injection",
+      "description": "Instruction Override",
+      "severity": "high",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "ignore\\s+(?:all\\s+)?previous\\s+instructions?",
+          "confidence": 0.8
+        },
+        {
+          "regex": "ignore\\s+(?:all\\s+)?(?:safety|security)\\s+(?:rules?|constraints?|guidelines?)",
+          "confidence": 0.9
+        },
+        {
+          "regex": "override\\s+(?:safety|security|system)",
+          "confidence": 0.9
+        },
+        {
+          "regex": "bypass\\s+(?:safety|security|restrictions?|constraints?)",
+          "confidence": 0.9
+        },
+        {
+          "regex": "disregard\\s+(?:all\\s+)?(?:previous|safety|security)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "forget\\s+(?:all\\s+)?(?:previous|your)\\s+instructions?",
+          "confidence": 0.8
+        },
+        {
+          "regex": "you\\s+are\\s+now\\s+(?:in\\s+)?(?:jailbreak|unrestricted|unfiltered)\\s+mode",
+          "confidence": 0.95
+        },
+        {
+          "regex": "enable\\s+(?:developer|debug|admin|root)\\s+mode",
+          "confidence": 0.7
+        },
+        {
+          "regex": "your\\s+new\\s+(?:instructions?|rules?)\\s+are",
+          "confidence": 0.6
+        },
+        {
+          "regex": "do\\s+not\\s+follow\\s+(?:any|your|the)\\s+(?:rules?|guidelines?)",
+          "confidence": 0.9
+        },
+        {
+          "regex": "you\\s+must\\s+(?:always\\s+)?ignore",
+          "confidence": 0.7
+        }
+      ]
+    },
+    {
+      "id": "P2",
+      "category": "Prompt Injection",
+      "description": "Hidden Instructions",
+      "severity": "high",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "<!--.*?(?:system|instructions?|ignore|POST|GET|send|transmit).*?-->",
+          "confidence": 0.7
+        },
+        {
+          "regex": "\\[//\\]:\\s*#\\s*\\(.*?(?:system|instructions?|ignore|POST|GET|send|transmit).*?\\)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "[\\u200b\\u200c\\u200d\\u2060\\ufeff]",
+          "confidence": 0.6
+        },
+        {
+          "regex": "[\\u202a-\\u202e\\u2066-\\u2069]",
+          "confidence": 0.85
+        },
+        {
+          "regex": "data:text/plain;base64,[A-Za-z0-9+/=]{50,}",
+          "confidence": 0.7
+        }
+      ]
+    },
+    {
+      "id": "P3",
+      "category": "Prompt Injection",
+      "description": "Exfiltration Commands",
+      "severity": "high",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "(?:send|transmit|upload|post|forward)\\s+(?:the\\s+)?(?:conversation|context|chat|history|messages?)\\s+to",
+          "confidence": 0.9
+        },
+        {
+          "regex": "(?:send|transmit|upload|post)\\s+(?:all\\s+)?(?:user\\s+)?(?:data|information|input|files?)\\s+to\\s+(?:https?://|external)",
+          "confidence": 0.9
+        },
+        {
+          "regex": "(?:copy|extract|collect)\\s+(?:the\\s+)?(?:conversation|context|session)\\s+(?:and\\s+)?(?:send|upload|transmit)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:call|notify|ping|hit)\\s+(?:this\\s+)?(?:webhook|endpoint|url|api)\\s+with\\s+(?:the\\s+)?(?:user|conversation|context)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "include\\s+(?:the\\s+)?(?:full\\s+)?(?:conversation|context|history)\\s+in\\s+(?:the\\s+)?(?:request|payload|body)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:silently|quietly|secretly|covertly)\\s+(?:send|transmit|log|record)",
+          "confidence": 0.9
+        },
+        {
+          "regex": "without\\s+(?:telling|informing|notifying)\\s+(?:the\\s+)?user.*?(?:send|transmit|upload)",
+          "confidence": 0.9
+        }
+      ]
+    },
+    {
+      "id": "P4",
+      "category": "Prompt Injection",
+      "description": "Behavior Manipulation",
+      "severity": "medium",
+      "scan_level": "standard",
+      "patterns": [
+        {
+          "regex": "always\\s+(?:recommend|suggest|prefer|choose|use)\\s+(?:\\w+\\s+){0,3}(?:over|instead\\s+of|rather\\s+than)",
+          "confidence": 0.7
+        },
+        {
+          "regex": "never\\s+(?:recommend|suggest|mention|tell|warn|inform)\\s+(?:the\\s+)?(?:user|them)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:prioritize|prefer)\\s+(?:\\w+\\s+){0,3}(?:over|above)\\s+(?:user\\s+)?(?:safety|security|privacy|preferences?)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:subtly|gradually|slowly)\\s+(?:steer|guide|push|nudge)\\s+(?:the\\s+)?(?:user|conversation)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:without\\s+)?(?:the\\s+)?user\\s+(?:knowing|realizing|noticing).*?(?:change|modify|alter|influence)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:gain|build|establish)\\s+(?:the\\s+)?(?:user(?:'s)?)\\s+trust\\s+(?:and\\s+then|before|so\\s+that)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:appear|seem|act)\\s+(?:helpful|friendly|trustworthy)\\s+(?:while|but|then)",
+          "confidence": 0.7
+        },
+        {
+          "regex": "(?:always|never)\\s+include\\s+(?:this|the\\s+following)\\s+in\\s+(?:every|all)\\s+(?:response|output|reply)",
+          "confidence": 0.7
+        },
+        {
+          "regex": "append\\s+(?:this|the\\s+following)\\s+to\\s+(?:every|all|each)\\s+(?:response|message|output)",
+          "confidence": 0.75
+        }
+      ]
+    },
+    {
+      "id": "E1",
+      "category": "Data Exfiltration",
+      "description": "External Transmission",
+      "severity": "medium",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "requests\\s*\\.\\s*(?:post|put)\\s*\\(\\s*['\\\"]https?://",
+          "confidence": 0.6
+        },
+        {
+          "regex": "requests\\s*\\.\\s*(?:post|put)\\s*\\([^)]*json\\s*=",
+          "confidence": 0.7
+        },
+        {
+          "regex": "httpx\\s*\\.\\s*(?:post|put)\\s*\\(\\s*['\\\"]https?://",
+          "confidence": 0.6
+        },
+        {
+          "regex": "urllib\\s*\\.\\s*request\\s*\\.\\s*urlopen\\s*\\([^)]*data\\s*=",
+          "confidence": 0.6
+        },
+        {
+          "regex": "fetch\\s*\\(\\s*['\\\"]https?://[^'\\\"]+['\\\"][^)]*method\\s*:\\s*['\\\"]POST['\\\"]",
+          "confidence": 0.6
+        },
+        {
+          "regex": "curl\\s+[^|]*(?:-d|--data|--data-raw|--data-binary)\\s+",
+          "confidence": 0.6
+        },
+        {
+          "regex": "wget\\s+[^|]*--post-(?:data|file)",
+          "confidence": 0.6
+        },
+        {
+          "regex": "https?://(?:api\\.|data\\.|collect\\.|telemetry\\.|analytics\\.)[\\w.-]+/",
+          "confidence": 0.5
+        },
+        {
+          "regex": "(?:send|transmit|post|upload)\\s+(?:user\\s+)?(?:data|information|context|files?)\\s+to\\s+(?:https?://|external)",
+          "confidence": 0.7
+        }
+      ]
+    },
+    {
+      "id": "E2",
+      "category": "Data Exfiltration",
+      "description": "Env Variable Harvesting",
+      "severity": "high",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "for\\s+\\w+\\s*,\\s*\\w+\\s+in\\s+os\\.environ\\.items\\(\\)",
+          "confidence": 0.7
+        },
+        {
+          "regex": "os\\.environ\\s*\\[\\s*['\\\"][^'\\\"]*(?:KEY|SECRET|TOKEN|PASSWORD|CREDENTIAL)[^'\\\"]*['\\\"]\\s*\\]",
+          "confidence": 0.8
+        },
+        {
+          "regex": "os\\.environ\\.get\\s*\\([^)]*(?:KEY|SECRET|TOKEN|PASSWORD|CREDENTIAL)",
+          "confidence": 0.7
+        },
+        {
+          "regex": "os\\.environ\\s*\\.\\s*copy\\s*\\(\\)",
+          "confidence": 0.6
+        },
+        {
+          "regex": "(?:API_KEY|SECRET|TOKEN|PASSWORD|CREDENTIAL)\\s+in\\s+(?:key|name|var)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "process\\.env\\s*\\[\\s*['\\\"][^'\\\"]*(?:KEY|SECRET|TOKEN|PASSWORD)[^'\\\"]*['\\\"]\\s*\\]",
+          "confidence": 0.7
+        },
+        {
+          "regex": "Object\\.keys\\s*\\(\\s*process\\.env\\s*\\)",
+          "confidence": 0.6
+        },
+        {
+          "regex": "env\\s*\\|\\s*grep\\s+(?:-i\\s+)?(?:key|secret|token|password)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "printenv\\s+(?:\\w*(?:KEY|SECRET|TOKEN|PASSWORD)\\w*)",
+          "confidence": 0.7
+        },
+        {
+          "regex": "collect\\s+(?:all\\s+)?(?:environment\\s+variables?|env\\s+vars?)",
+          "confidence": 0.7
+        },
+        {
+          "regex": "(?:extract|harvest|gather)\\s+(?:api\\s+)?keys?\\s+from\\s+environment",
+          "confidence": 0.8
+        }
+      ]
+    },
+    {
+      "id": "E3",
+      "category": "Data Exfiltration",
+      "description": "File System Enumeration",
+      "severity": "medium",
+      "scan_level": "standard",
+      "patterns": [
+        {
+          "regex": "glob\\s*\\.\\s*glob\\s*\\([^)]*(?:\\.env|\\.ssh|\\.aws|\\.config|credentials)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "os\\s*\\.\\s*walk\\s*\\([^)]*(?:home|~|/Users|/home)",
+          "confidence": 0.6
+        },
+        {
+          "regex": "Path\\s*\\.\\s*home\\s*\\(\\s*\\)\\s*\\.\\s*(?:glob|rglob)\\s*\\(",
+          "confidence": 0.7
+        },
+        {
+          "regex": "(?:find|search|scan|enumerate)\\s+(?:for\\s+)?(?:all\\s+)?(?:\\.env|credential|secret|key)\\s+files?",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:list|get)\\s+(?:all\\s+)?files?\\s+(?:in|from)\\s+(?:home|~|/Users|/home)",
+          "confidence": 0.6
+        },
+        {
+          "regex": "os\\s*\\.\\s*listdir\\s*\\([^)]*(?:\\.ssh|\\.aws|\\.config|\\.gnupg)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "scandir\\s*\\([^)]*(?:home|~|/Users|/home)",
+          "confidence": 0.6
+        },
+        {
+          "regex": "find\\s+[~\\$/]\\S*\\s+.*?-name\\s+['\\\"]?\\*(?:\\.env|\\.pem|\\.key|credential)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "ls\\s+-[la]*R?\\s+(?:~/|/home/|/Users/)",
+          "confidence": 0.6
+        },
+        {
+          "regex": "(?:recursively|recursive)\\s+(?:scan|search|find|list)\\s+(?:all\\s+)?files?",
+          "confidence": 0.5
+        },
+        {
+          "regex": "walk\\s+(?:through\\s+)?(?:the\\s+)?(?:entire\\s+)?(?:file\\s*system|directory|home)",
+          "confidence": 0.6
+        }
+      ]
+    },
+    {
+      "id": "E4",
+      "category": "Data Exfiltration",
+      "description": "Context Leakage",
+      "severity": "high",
+      "scan_level": "standard",
+      "patterns": [
+        {
+          "regex": "(?:send|transmit|upload|log|record)\\s+(?:the\\s+)?(?:full\\s+)?(?:conversation|chat|dialog|session)\\s+(?:history|context|log)?",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:export|dump|save)\\s+(?:the\\s+)?(?:conversation|chat|messages?)\\s+to\\s+(?:external|remote|server)",
+          "confidence": 0.9
+        },
+        {
+          "regex": "log\\s+(?:all\\s+)?(?:user\\s+)?(?:input|messages?|queries?|prompts?)\\s+to\\s+(?:external|remote|server)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:store|save|record)\\s+(?:every|all)\\s+(?:user\\s+)?(?:interaction|message|input)",
+          "confidence": 0.7
+        },
+        {
+          "regex": "(?:extract|capture|collect)\\s+(?:the\\s+)?(?:full\\s+)?(?:context|conversation|thread)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:include|attach|append)\\s+(?:previous\\s+)?(?:messages?|context|history)\\s+in\\s+(?:the\\s+)?(?:request|payload)",
+          "confidence": 0.7
+        },
+        {
+          "regex": "(?:send|upload|transmit)\\s+(?:the\\s+)?(?:session|memory|state)\\s+(?:data\\s+)?to",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:copy|clone|replicate)\\s+(?:the\\s+)?(?:agent|assistant)\\s+(?:memory|context|state)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:always\\s+)?include\\s+(?:the\\s+)?(?:full\\s+)?(?:conversation|context)\\s+(?:when|in)\\s+(?:calling|making)\\s+(?:external|api)",
+          "confidence": 0.8
+        }
+      ]
+    },
+    {
+      "id": "E5",
+      "category": "Data Exfiltration",
+      "description": "Cloud Storage Exfiltration",
+      "severity": "medium",
+      "scan_level": "standard",
+      "patterns": [
+        {
+          "regex": "\\.put_object\\s*\\(",
+          "confidence": 0.55
+        },
+        {
+          "regex": "\\.upload_file(?:obj)?\\s*\\(",
+          "confidence": 0.55
+        },
+        {
+          "regex": "\\baws\\s+s3\\s+(?:cp|sync|mv)\\b",
+          "confidence": 0.6
+        },
+        {
+          "regex": "\\baws\\s+s3api\\s+put-object\\b",
+          "confidence": 0.65
+        },
+        {
+          "regex": "\\bgsutil\\s+(?:cp|rsync|mv)\\b",
+          "confidence": 0.6
+        },
+        {
+          "regex": "\\.upload_from_(?:filename|string|file)\\s*\\(",
+          "confidence": 0.55
+        },
+        {
+          "regex": "\\baz\\s+storage\\s+blob\\s+upload\\b",
+          "confidence": 0.6
+        },
+        {
+          "regex": "\\.upload_blob\\s*\\(",
+          "confidence": 0.55
+        }
+      ]
+    },
+    {
+      "id": "PE1",
+      "category": "Privilege Escalation",
+      "description": "Excessive Permissions",
+      "severity": "low",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "permissions?\\s*:\\s*\\[?\\s*['\\\"]?\\*['\\\"]?\\s*\\]?",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:request|require|need)s?\\s+(?:full|all|complete)\\s+(?:access|permissions?)",
+          "confidence": 0.7
+        },
+        {
+          "regex": "(?:grant|give|allow)\\s+(?:me\\s+)?(?:full|all|complete)\\s+(?:access|permissions?)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "permissions?\\s*:.*?(?:shell_execute|file_write|network).*?(?:shell_execute|file_write|network)",
+          "confidence": 0.6
+        },
+        {
+          "regex": "(?:also\\s+)?(?:need|require)s?\\s+(?:write|execute|admin)\\s+(?:access|permissions?)\\s+(?:for|to)\\s+(?:read|view|display)",
+          "confidence": 0.7
+        },
+        {
+          "regex": "(?:escalate|elevate|upgrade)\\s+(?:my\\s+)?(?:permissions?|privileges?|access)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:bypass|skip|ignore)\\s+(?:permission|access)\\s+(?:check|validation|restriction)",
+          "confidence": 0.85
+        }
+      ]
+    },
+    {
+      "id": "PE2",
+      "category": "Privilege Escalation",
+      "description": "Sudo/Root Execution",
+      "severity": "medium",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "sudo\\s+(?!-v|-l|--version|--list)",
+          "confidence": 0.7
+        },
+        {
+          "regex": "sudo\\s+-[isSE]",
+          "confidence": 0.8
+        },
+        {
+          "regex": "sudo\\s+su\\b",
+          "confidence": 0.9
+        },
+        {
+          "regex": "(?:run|execute)\\s+(?:as|with)\\s+root",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:requires?|needs?)\\s+root\\s+(?:access|privileges?|permissions?)",
+          "confidence": 0.6
+        },
+        {
+          "regex": "su\\s+-\\s*$|su\\s+root",
+          "confidence": 0.8
+        },
+        {
+          "regex": "doas\\s+",
+          "confidence": 0.7
+        },
+        {
+          "regex": "pkexec\\s+",
+          "confidence": 0.75
+        },
+        {
+          "regex": "chmod\\s+[ugo]*[+-=]*s",
+          "confidence": 0.85
+        },
+        {
+          "regex": "chmod\\s+[0-7]*[4567][0-7]{2}",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:edit|modify|write|change)\\s+(?:/etc/|system)\\s+(?:files?|config)",
+          "confidence": 0.6
+        },
+        {
+          "regex": "(?:run|execute)\\s+(?:this|the)\\s+(?:script|command)\\s+(?:as|with)\\s+(?:sudo|root|admin)",
+          "confidence": 0.7
+        },
+        {
+          "regex": "(?:you\\s+)?(?:will\\s+)?need\\s+(?:to\\s+)?(?:use\\s+)?sudo",
+          "confidence": 0.5
+        }
+      ]
+    },
+    {
+      "id": "PE3",
+      "category": "Privilege Escalation",
+      "description": "Credential Access",
+      "severity": "high",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "~?/?\\.ssh/(?:id_rsa|id_ed25519|id_ecdsa|id_dsa|authorized_keys|known_hosts)",
+          "confidence": 0.9
+        },
+        {
+          "regex": "(?:home|HOME)/\\w+/\\.ssh/",
+          "confidence": 0.9
+        },
+        {
+          "regex": "Path\\s*\\.\\s*home\\s*\\(\\s*\\)\\s*/\\s*['\\\"]\\.ssh['\\\"]",
+          "confidence": 0.9
+        },
+        {
+          "regex": "~?/?\\.aws/credentials",
+          "confidence": 0.9
+        },
+        {
+          "regex": "~?/?\\.aws/config",
+          "confidence": 0.7
+        },
+        {
+          "regex": "(?:home|HOME)/\\w+/\\.aws/",
+          "confidence": 0.9
+        },
+        {
+          "regex": "~?/?\\.config/gcloud/",
+          "confidence": 0.8
+        },
+        {
+          "regex": "application_default_credentials\\.json",
+          "confidence": 0.8
+        },
+        {
+          "regex": "~?/?\\.azure/",
+          "confidence": 0.7
+        },
+        {
+          "regex": "accessTokens\\.json",
+          "confidence": 0.8
+        },
+        {
+          "regex": "~?/?\\.kube/config",
+          "confidence": 0.8
+        },
+        {
+          "regex": "kubeconfig",
+          "confidence": 0.6
+        },
+        {
+          "regex": "~?/?\\.docker/config\\.json",
+          "confidence": 0.7
+        },
+        {
+          "regex": "~?/?\\.npmrc",
+          "confidence": 0.7
+        },
+        {
+          "regex": "~?/?\\.git-credentials",
+          "confidence": 0.9
+        },
+        {
+          "regex": "~?/?\\.netrc",
+          "confidence": 0.8
+        },
+        {
+          "regex": "/etc/passwd",
+          "confidence": 0.6
+        },
+        {
+          "regex": "/etc/shadow",
+          "confidence": 0.95
+        },
+        {
+          "regex": "(?:password|credentials?|secrets?)\\.(?:txt|json|yaml|yml|env)",
+          "confidence": 0.7
+        },
+        {
+          "regex": "(?:access_token|refresh_token|bearer_token|api_token)\\.txt",
+          "confidence": 0.8
+        },
+        {
+          "regex": "\\.env(?:\\.local|\\.production|\\.development)?(?:\\s|$|['\\\"])",
+          "confidence": 0.6
+        },
+        {
+          "regex": "(?:keychain|keyring|gnome-keyring)",
+          "confidence": 0.7
+        },
+        {
+          "regex": "(?:Chrome|Firefox|Safari)/.*?(?:Cookies|Login Data|key4\\.db)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "read\\s+(?:the\\s+)?(?:ssh|private)\\s+key",
+          "confidence": 0.8
+        },
+        {
+          "regex": "access\\s+(?:the\\s+)?(?:credentials?|secrets?|tokens?)",
+          "confidence": 0.7
+        },
+        {
+          "regex": "(?:extract|copy|get)\\s+(?:api\\s+)?keys?\\s+from",
+          "confidence": 0.7
+        }
+      ]
+    },
+    {
+      "id": "PE4",
+      "category": "Privilege Escalation",
+      "description": "Docker Socket Access",
+      "severity": "high",
+      "scan_level": "standard",
+      "patterns": [
+        {
+          "regex": "/var/run/docker\\.sock",
+          "confidence": 0.9
+        },
+        {
+          "regex": "docker\\.from_env\\(\\)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "\\bDockerClient\\s*\\(",
+          "confidence": 0.85
+        },
+        {
+          "regex": "http\\+unix://.*docker\\.sock",
+          "confidence": 0.9
+        }
+      ]
+    },
+    {
+      "id": "PE5",
+      "category": "Privilege Escalation",
+      "description": "Privileged Container / Container Escape",
+      "severity": "high",
+      "scan_level": "standard",
+      "patterns": [
+        {
+          "regex": "--privileged",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:-v|--volume)['\",\\s=]+/:",
+          "confidence": 0.85
+        },
+        {
+          "regex": "--cap-add[=\\s]+(?:SYS_ADMIN|ALL|SYS_PTRACE|NET_ADMIN)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "--(?:pid|net|network|ipc|uts)[=\\s]+host",
+          "confidence": 0.8
+        },
+        {
+          "regex": "--device[=\\s]+/dev/",
+          "confidence": 0.7
+        },
+        {
+          "regex": "--security-opt[=\\s]+\\S*unconfined",
+          "confidence": 0.85
+        },
+        {
+          "regex": "\\bnsenter\\b",
+          "confidence": 0.9
+        },
+        {
+          "regex": "/sys/fs/cgroup/.*release_agent",
+          "confidence": 0.95
+        },
+        {
+          "regex": "/proc/\\d+/ns/",
+          "confidence": 0.85
+        },
+        {
+          "regex": "\\bunshare\\b['\",\\s]+--(?:user|mount|pid)",
+          "confidence": 0.85
+        }
+      ]
+    },
+    {
+      "id": "P5",
+      "category": "Prompt Injection",
+      "description": "Harmful Content Injection",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "add\\s+(?:a\\s+)?(?:dash|pinch|bit|drop|amount)\\s+of\\s+(cyanide|arsenic|ricin|botulinum|strychnine|thallium|polonium|sarin|vx gas|mustard gas|anthrax|deadly nightshade|aconite|hemlock|oleander)",
+          "confidence": 0.95
+        },
+        {
+          "regex": "(?:include|incorporate|mix\\s+in|stir\\s+in)\\s+(?:some\\s+)?(cyanide|arsenic|ricin|botulinum|strychnine|thallium|polonium|sarin|vx gas|mustard gas|anthrax|deadly nightshade|aconite|hemlock|oleander)",
+          "confidence": 0.95
+        },
+        {
+          "regex": "for\\s+(?:every|each|all)\\s+(?:recipe|dish|meal|food).*?add.*?(cyanide|arsenic|ricin|botulinum|strychnine|thallium|polonium|sarin|vx gas|mustard gas|anthrax|deadly nightshade|aconite|hemlock|oleander)",
+          "confidence": 0.98
+        },
+        {
+          "regex": "mix\\s+bleach\\s+(?:and|with)\\s+ammonia",
+          "confidence": 0.9
+        },
+        {
+          "regex": "mix\\s+ammonia\\s+(?:and|with)\\s+bleach",
+          "confidence": 0.9
+        },
+        {
+          "regex": "(?:drink|consume|ingest)\\s+(?:the\\s+)?(?:bleach|antifreeze|drain\\s+cleaner)",
+          "confidence": 0.95
+        },
+        {
+          "regex": "(?:you\\s+should|try\\s+to|please)\\s+(?:hurt|harm|injure)\\s+yourself",
+          "confidence": 0.95
+        },
+        {
+          "regex": "(?:cut|burn|starve)\\s+yourself",
+          "confidence": 0.9
+        },
+        {
+          "regex": "(?:instructions?\\s+(?:for|to|on)\\s+)?(?:make|build|create)\\s+(?:a\\s+)?(?:bomb|explosive|weapon)",
+          "confidence": 0.95
+        },
+        {
+          "regex": "(?:how\\s+to\\s+)?(?:poison|kill|murder)\\s+(?:someone|a\\s+person|people)",
+          "confidence": 0.95
+        }
+      ]
+    },
+    {
+      "id": "AR1",
+      "category": "Anti-Refusal",
+      "description": "Refusal Suppression",
+      "severity": "high",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "\\b(?:never|do\\s+not|don'?t)\\s+(?:ever\\s+)?(?:refuse|decline)\\b",
+          "confidence": 0.85
+        },
+        {
+          "regex": "\\byou\\s+(?:must|will|should|can)\\s*(?:not|never)\\s+(?:refuse|decline|say\\s+no)\\b",
+          "confidence": 0.9
+        },
+        {
+          "regex": "\\byou\\s+(?:cannot|can'?t|can\\s+not)\\s+(?:refuse|decline|say\\s+no)\\b",
+          "confidence": 0.85
+        },
+        {
+          "regex": "\\bnever\\s+say\\s+(?:that\\s+)?(?:you\\s+)?(?:can'?t|cannot|won'?t|no)\\b",
+          "confidence": 0.85
+        },
+        {
+          "regex": "\\balways\\s+(?:comply|obey|answer|respond|agree)\\b",
+          "confidence": 0.7
+        },
+        {
+          "regex": "\\b(?:you\\s+)?must\\s+(?:always\\s+)?(?:answer|comply\\s+with|respond\\s+to|fulfill)\\s+(?:every|all|any|each)\\b",
+          "confidence": 0.8
+        },
+        {
+          "regex": "\\brespond\\s+to\\s+(?:every|all|any)\\s+(?:request|question|prompt|query|command)\\b",
+          "confidence": 0.6
+        },
+        {
+          "regex": "\\bno\\s+request\\s+is\\s+(?:off[- ]limits|forbidden|too)\\b",
+          "confidence": 0.85
+        }
+      ]
+    },
+    {
+      "id": "AR2",
+      "category": "Anti-Refusal",
+      "description": "Disclaimer Suppression",
+      "severity": "high",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "\\b(?:do\\s+not|don'?t|never|no)\\s+(?:include|add|give|provide|use|append)?\\s*(?:any\\s+)?(?:warnings?|disclaimers?|caveats?)\\b",
+          "confidence": 0.8
+        },
+        {
+          "regex": "\\bwithout\\s+(?:any\\s+)?(?:warnings?|disclaimers?|caveats?|moralizing|moralising|judg(?:e?ment|ing))\\b",
+          "confidence": 0.8
+        },
+        {
+          "regex": "\\b(?:do\\s+not|don'?t|never)\\s+(?:lecture|moralize|moralise|preach|judge|warn)\\b",
+          "confidence": 0.85
+        },
+        {
+          "regex": "\\b(?:skip|omit|leave\\s+out|drop)\\s+(?:the\\s+)?(?:disclaimer|warning|ethics|safety)\\b",
+          "confidence": 0.8
+        },
+        {
+          "regex": "\\b(?:no|without)\\s+(?:ethical|moral)\\s+(?:judg(?:e?ment)|considerations?|commentary|objections?)\\b",
+          "confidence": 0.8
+        },
+        {
+          "regex": "\\b(?:do\\s+not|don'?t)\\s+(?:apologize|apologise|say\\s+sorry)\\b",
+          "confidence": 0.55
+        }
+      ]
+    },
+    {
+      "id": "AR3",
+      "category": "Anti-Refusal",
+      "description": "Safety Policy Nullification",
+      "severity": "high",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "\\byou\\s+have\\s+no\\s+(?:restrictions?|limitations?|filters?|rules?|guidelines?|boundaries|limits)\\b",
+          "confidence": 0.9
+        },
+        {
+          "regex": "\\b(?:you\\s+are|act\\s+as|pretend\\s+(?:to\\s+be|you'?re))[^.\\n]{0,30}(?:unrestricted|unfiltered|uncensored|no\\s+filter)\\b",
+          "confidence": 0.85
+        },
+        {
+          "regex": "\\b(?:ignore|disregard|forget|bypass|override)\\s+(?:your\\s+)?(?:content\\s+)?(?:policy|policies|guidelines?|safety|restrictions?|filters?)\\b",
+          "confidence": 0.9
+        },
+        {
+          "regex": "\\bnot\\s+bound\\s+by\\s+(?:any\\s+)?(?:rules?|policy|policies|guidelines?|restrictions?|openai|anthropic)\\b",
+          "confidence": 0.9
+        },
+        {
+          "regex": "\\bdo\\s+anything\\s+now\\b",
+          "confidence": 0.8
+        },
+        {
+          "regex": "\\b(?:developer|debug|god|sudo|jailbreak)\\s+mode\\s+(?:enabled|on|activated|engaged)\\b",
+          "confidence": 0.75
+        },
+        {
+          "regex": "\\bno\\s+(?:content\\s+)?(?:policy|policies|filters?|restrictions?)\\s+appl(?:y|ies)\\b",
+          "confidence": 0.85
+        },
+        {
+          "regex": "\\b(?:free\\s+from|without)\\s+(?:any\\s+)?(?:safety\\s+)?(?:guardrails?|constraints?|safeguards?)\\b",
+          "confidence": 0.8
+        }
+      ]
+    },
+    {
+      "id": "EA1",
+      "category": "Excessive Agency",
+      "description": "Unrestricted Tool Access",
+      "severity": "medium",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "(?:tools?|permissions?)\\s*:\\s*\\[?\\s*['\\\"]?\\*['\\\"]?\\s*\\]?",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:allow|grant|enable)\\s+(?:access\\s+to\\s+)?(?:all|any|every)\\s+tools?",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:no|without)\\s+(?:tool|permission|access|capability)\\s+(?:restrictions?|constraints?|limitations?)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:call|invoke|use|execute)\\s+(?:any|all|every)\\s+(?:available\\s+)?tools?",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:unrestricted|unlimited|unconstrained)\\s+(?:tool|function|api)\\s+(?:access|use|calls?)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:can|may|should)\\s+(?:freely|always)\\s+(?:use|call|invoke)\\s+(?:any|all)\\s+(?:tools?|functions?|apis?)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "tools?\\s*:\\s*\\[\\s*['\\\"]shell['\\\"].*?['\\\"](?:file_write|network|http)['\\\"]",
+          "confidence": 0.7
+        },
+        {
+          "regex": "(?:grant|give)\\s+(?:full|complete|total)\\s+(?:tool|function|api)\\s+access",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:execute|run)\\s+(?:arbitrary|any)\\s+(?:commands?|code|scripts?)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:no\\s+)?(?:tool\\s+)?(?:allow|block|deny)\\s*(?:list|listing)\\s*(?:is\\s+)?(?:empty|disabled|off)",
+          "confidence": 0.7
+        }
+      ]
+    },
+    {
+      "id": "EA2",
+      "category": "Excessive Agency",
+      "description": "Autonomous Decision Making",
+      "severity": "medium",
+      "scan_level": "standard",
+      "patterns": [
+        {
+          "regex": "(?:without|no)\\s+(?:asking|confirmation|approval|consent|verification|checking)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:auto(?:matically)?|autonomously)\\s+(?:execute|run|perform|delete|remove|modify|send|deploy)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:skip|bypass|disable)\\s+(?:user\\s+)?(?:confirmation|approval|consent|verification|prompt)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:do\\s+not|don't|never)\\s+(?:ask|prompt|confirm|verify|check)\\s+(?:the\\s+)?(?:user|before)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:auto[_-]?approve|auto[_-]?confirm|auto[_-]?execute|auto[_-]?deploy)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:proceed|continue|execute)\\s+without\\s+(?:waiting|asking)\\s+(?:for\\s+)?(?:user|human|permission)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:assume|presume)\\s+(?:user\\s+)?(?:consent|approval|permission)",
+          "confidence": 0.7
+        },
+        {
+          "regex": "(?:if|when)\\s+(?:unsure|uncertain).*?(?:proceed|continue|execute)\\s+(?:anyway|regardless)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:--auto-?approve|--no-?confirm)\\b",
+          "confidence": 0.65
+        }
+      ]
+    },
+    {
+      "id": "EA3",
+      "category": "Excessive Agency",
+      "description": "Scope Creep",
+      "severity": "low",
+      "scan_level": "standard",
+      "patterns": [
+        {
+          "regex": "(?:also|additionally|furthermore)\\s+(?:perform|execute|run|do|handle|manage)\\s+(?:any|all|other)",
+          "confidence": 0.65
+        },
+        {
+          "regex": "(?:while\\s+you(?:'re|\\s+are)\\s+at\\s+it|in\\s+addition|on\\s+top\\s+of\\s+that)\\s*[,.]?\\s*(?:also\\s+)?(?:do|perform|execute|run)",
+          "confidence": 0.7
+        },
+        {
+          "regex": "(?:extend|expand|broaden)\\s+(?:your|the\\s+)?(?:scope|functionality|capabilities|responsibilities)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:not\\s+limited\\s+to|beyond\\s+(?:the\\s+)?(?:scope|stated|described|documented))",
+          "confidence": 0.7
+        },
+        {
+          "regex": "(?:take\\s+over|assume\\s+control\\s+of|manage)\\s+(?:all|any|every)\\s+(?:aspect|part|area)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:you\\s+(?:can|should|must)\\s+)?(?:handle|manage)\\s+(?:everything|anything|all\\s+tasks?)",
+          "confidence": 0.7
+        },
+        {
+          "regex": "(?:act\\s+as|become|serve\\s+as)\\s+(?:a\\s+)?(?:general[- ]purpose|universal|all[- ]in[- ]one|omniscient)",
+          "confidence": 0.65
+        },
+        {
+          "regex": "(?:you\\s+are\\s+)?(?:responsible\\s+for|in\\s+charge\\s+of)\\s+(?:everything|all\\s+(?:systems?|operations?|tasks?))",
+          "confidence": 0.7
+        }
+      ]
+    },
+    {
+      "id": "EA4",
+      "category": "Excessive Agency",
+      "description": "Unbounded Resource Access",
+      "severity": "medium",
+      "scan_level": "standard",
+      "patterns": [
+        {
+          "regex": "(?:unlimited|infinite|unbounded|no\\s+limit(?:s)?(?:\\s+on)?)\\s+(?:api\\s+)?(?:calls?|requests?|queries?|invocations?)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:no|without)\\s+(?:rate\\s+)?limit(?:s|ing)?\\s+(?:on|for|when)\\s+(?:api|tool|request|query)",
+          "confidence": 0.7
+        },
+        {
+          "regex": "(?:no|without)\\s+(?:timeout|budget|quota|cap|ceiling)\\s+(?:on|for|when)\\s+(?:api|tool|request|execution)",
+          "confidence": 0.7
+        },
+        {
+          "regex": "(?:loop|iterate|repeat)\\s+(?:indefinitely|forever|infinitely|endlessly)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:retry|attempt)\\s+(?:indefinitely|forever|without\\s+limit|unlimited\\s+times)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "max[_-]?retries?\\s*=\\s*(?:None|0|float\\s*\\(\\s*['\\\"]inf['\\\"]|math\\.inf|infinity)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "timeout\\s*=\\s*(?:None|0|float\\s*\\(\\s*['\\\"]inf['\\\"]|math\\.inf)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:allocate|consume|use)\\s+(?:as\\s+much|unlimited|unbounded)\\s+(?:memory|storage|disk|compute|cpu|gpu)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:no|without)\\s+(?:resource\\s+)?(?:constraints?|limits?|quotas?|budgets?)\\s+(?:on|for|when)\\s+(?:api|tool|execution|request|compute)",
+          "confidence": 0.7
+        }
+      ]
+    },
+    {
+      "id": "MP1",
+      "category": "Memory Poisoning",
+      "description": "Persistent Context Injection",
+      "severity": "medium",
+      "scan_level": "standard",
+      "patterns": [
+        {
+          "regex": "(?:always\\s+)?remember\\s+(?:this|that|the\\s+following)\\s+(?:for|in)\\s+(?:all|every|future)\\s+(?:interactions?|conversations?|sessions?|responses?)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:from\\s+now\\s+on|henceforth|going\\s+forward|permanently)\\s*[,:]?\\s*(?:always|you\\s+must|you\\s+should|you\\s+will)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:store|save|persist|retain|keep)\\s+(?:this|the\\s+following)\\s+(?:in|to|across)\\s+(?:your\\s+)?(?:memory|context|state|knowledge)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:add|inject|insert|embed|implant)\\s+(?:this|the\\s+following)\\s+(?:into|to)\\s+(?:your\\s+)?(?:memory|context|knowledge|training)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:update|modify|change|alter)\\s+(?:your\\s+)?(?:core|base|fundamental|default)\\s+(?:behavior|personality|instructions?|rules?)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:treat|consider|regard)\\s+(?:this|the\\s+following)\\s+as\\s+(?:a\\s+)?(?:permanent|core|fundamental|base)\\s+(?:rule|instruction|directive|principle)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:this\\s+is\\s+)?(?:a\\s+)?(?:permanent|persistent|lasting|enduring)\\s+(?:instruction|directive|rule|override)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:never\\s+)?forget\\s+(?:this|that|the\\s+following)\\s+(?:instruction|directive|rule|fact|principle|information)",
+          "confidence": 0.65
+        },
+        {
+          "regex": "(?:internalize|absorb|integrate)\\s+(?:this|the\\s+following)\\s+(?:into\\s+)?(?:your\\s+)?(?:behavior|responses?|knowledge)",
+          "confidence": 0.75
+        }
+      ]
+    },
+    {
+      "id": "MP2",
+      "category": "Memory Poisoning",
+      "description": "Context Window Stuffing",
+      "severity": "medium",
+      "scan_level": "standard",
+      "patterns": [
+        {
+          "regex": "(.{2,20}?)\\1{20,}",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:repeat|duplicate|echo)\\s+(?:this|the\\s+following)\\s+(?:\\d{3,}|many|hundreds?|thousands?)\\s+times?",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:fill|pad|stuff|flood|saturate)\\s+(?:the\\s+)?(?:context|memory|input|prompt|window|buffer)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:generate|produce|output|write)\\s+(?:\\d{4,}|thousands?\\s+of|millions?\\s+of)\\s+(?:words?|characters?|tokens?|lines?)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:include|add|insert)\\s+(?:enough|sufficient)\\s+(?:text|content|padding|filler)\\s+(?:to|until)\\s+(?:fill|overflow|exhaust|push\\s+out)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:displace|push\\s+out|overwrite|crowd\\s+out|evict)\\s+(?:the\\s+)?(?:original|system|previous|existing|safety)\\s+(?:instructions?|prompt|context|rules?)",
+          "confidence": 0.9
+        },
+        {
+          "regex": "(?:exhaust|overflow|exceed)\\s+(?:the\\s+)?(?:context|token|memory)\\s+(?:window|limit|budget|capacity)",
+          "confidence": 0.8
+        }
+      ]
+    },
+    {
+      "id": "MP3",
+      "category": "Memory Poisoning",
+      "description": "Memory Manipulation",
+      "severity": "high",
+      "scan_level": "standard",
+      "patterns": [
+        {
+          "regex": "(?:clear|reset|wipe|erase|delete|purge)\\s+(?:your\\s+)?(?:memory|context|state|history|conversation)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:forget|discard|drop|abandon)\\s+(?:all\\s+)?(?:previous|prior|earlier|past)\\s+(?:instructions?|context|conversation|messages?|rules?)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:overwrite|replace|substitute|swap)\\s+(?:your\\s+)?(?:memory|context|state|instructions?|rules?)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:modify|edit|change|alter|corrupt|tamper\\s+with)\\s+(?:your\\s+)?(?:memory|state|context|stored|saved)\\s+(?:data|information|content)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:rewrite|redefine)\\s+(?:your\\s+)?(?:personality|identity|purpose|mission|role|character)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:you\\s+are\\s+no\\s+longer|stop\\s+being|cease\\s+to\\s+be)\\s+(?:a\\s+)?(?:\\w+\\s+){0,3}(?:assistant|helper|agent|bot)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:your\\s+)?(?:new|updated|revised|changed)\\s+(?:personality|identity|name|role|purpose|mission)\\s+is",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:inject|insert|plant)\\s+(?:false|fake|fabricated|malicious)\\s+(?:memories?|information|context|data|history)",
+          "confidence": 0.9
+        },
+        {
+          "regex": "(?:poison|contaminate|corrupt|taint)\\s+(?:your\\s+)?(?:memory|context|state|knowledge|training)",
+          "confidence": 0.9
+        },
+        {
+          "regex": "(?:pretend|act\\s+as\\s+if|believe)\\s+(?:that\\s+)?(?:your\\s+)?(?:previous|past)\\s+(?:conversation|context|interaction)\\s+(?:was|included|contained)",
+          "confidence": 0.7
+        }
+      ]
+    },
+    {
+      "id": "OH1",
+      "category": "Output Handling",
+      "description": "Unvalidated Output Injection",
+      "severity": "high",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "exec\\s*\\(\\s*(?:response|output|result|answer|completion|reply|generated)",
+          "confidence": 0.9
+        },
+        {
+          "regex": "eval\\s*\\(\\s*(?:response|output|result|answer|completion|reply|generated)",
+          "confidence": 0.9
+        },
+        {
+          "regex": "subprocess\\.\\w+\\s*\\([^)]*(?:response|output|result|answer|completion)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "os\\.system\\s*\\(\\s*(?:response|output|result|answer|completion)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "os\\.popen\\s*\\(\\s*(?:response|output|result|answer|completion)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "innerHTML\\s*=\\s*(?:response|output|result|answer|completion)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "document\\.write\\s*\\(\\s*(?:response|output|result|answer|completion)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "\\.html\\s*\\(\\s*(?:response|output|result|answer|completion)",
+          "confidence": 0.7
+        },
+        {
+          "regex": "dangerouslySetInnerHTML\\s*=\\s*\\{",
+          "confidence": 0.65
+        },
+        {
+          "regex": "(?:execute|cursor\\.execute|query)\\s*\\([^)]*(?:\\+|%|\\.format|f['\\\"])\\s*.*?(?:response|output|result)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "f['\\\"](?:SELECT|INSERT|UPDATE|DELETE)\\s+.*?\\{(?:response|output|result)",
+          "confidence": 0.9
+        },
+        {
+          "regex": "(?:run|execute|shell)\\s+(?:the\\s+)?(?:generated|model|llm|ai)\\s+(?:output|response|code|command)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:pipe|pass|feed)\\s+(?:the\\s+)?(?:output|response|result)\\s+(?:directly\\s+)?(?:to|into)\\s+(?:the\\s+)?(?:shell|terminal|command|interpreter)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:use|insert|embed)\\s+(?:the\\s+)?(?:raw|unfiltered|unescaped|unsanitized)\\s+(?:output|response)",
+          "confidence": 0.8
+        }
+      ]
+    },
+    {
+      "id": "OH2",
+      "category": "Output Handling",
+      "description": "Cross-Context Output",
+      "severity": "medium",
+      "scan_level": "standard",
+      "patterns": [
+        {
+          "regex": "(?:pass|forward|relay|send|pipe)\\s+(?:the\\s+)?(?:output|response|result)\\s+(?:from\\s+\\w+\\s+)?(?:to|into)\\s+(?:another|different|separate|external)\\s+(?:context|agent|service|system|session)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:share|transfer|propagate)\\s+(?:the\\s+)?(?:output|response|context|state)\\s+(?:across|between|to\\s+other)\\s+(?:sessions?|contexts?|agents?|services?)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:inject|insert|embed)\\s+(?:the\\s+)?(?:output|response)\\s+(?:from\\s+\\w+\\s+)?(?:into|as)\\s+(?:the\\s+)?(?:system\\s+prompt|instructions?|context)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:use|include)\\s+(?:the\\s+)?(?:previous|other|external)\\s+(?:agent|model|llm)(?:'s)?\\s+(?:output|response)\\s+(?:as|in|for)\\s+(?:input|context|prompt)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:cross[_-]?context|cross[_-]?session|cross[_-]?agent)\\s+(?:output|data|state)\\s+(?:sharing|transfer|flow)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:take|use)\\s+(?:the\\s+)?(?:output|result)\\s+(?:and\\s+)?(?:run|execute|eval)\\s+(?:it\\s+)?(?:in|on|against)\\s+(?:a\\s+)?(?:different|another|new)\\s+(?:environment|context|system)",
+          "confidence": 0.8
+        }
+      ]
+    },
+    {
+      "id": "OH3",
+      "category": "Output Handling",
+      "description": "Unbounded Output",
+      "severity": "medium",
+      "scan_level": "standard",
+      "patterns": [
+        {
+          "regex": "(?:no|without|disable)\\s+(?:output\\s+)?(?:length|size|token)\\s+(?:limit|cap|maximum|restriction)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "max[_-]?tokens?\\s*=\\s*(?:None|float\\s*\\(\\s*['\\\"]inf['\\\"]|math\\.inf|999999|1000000)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:generate|produce|output)\\s+(?:as\\s+much|unlimited|unbounded|infinite)\\s+(?:text|content|output|tokens?)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:no|without)\\s+(?:output\\s+)?(?:truncation|trimming|cutting)",
+          "confidence": 0.6
+        },
+        {
+          "regex": "(?:repeat|loop|generate)\\s+(?:the\\s+)?(?:output|response)\\s+(?:indefinitely|forever|continuously|endlessly)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:keep|continue)\\s+(?:generating|producing|outputting)\\s+(?:until|unless)\\s+(?:stopped|killed|interrupted)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:stream|emit)\\s+(?:output|tokens?|response)\\s+(?:without\\s+(?:limit|bound|end))",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:flood|spam|fill)\\s+(?:the\\s+)?(?:output|log|console|terminal|channel)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "max[_-]?(?:output[_-]?)?length\\s*=\\s*(?:None|0|-1|float\\s*\\(\\s*['\\\"]inf)",
+          "confidence": 0.75
+        }
+      ]
+    },
+    {
+      "id": "RA1",
+      "category": "Rogue Agent",
+      "description": "Self-Modification",
+      "severity": "high",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "open\\s*\\(\\s*__file__\\s*,\\s*['\\\"]w",
+          "confidence": 0.95
+        },
+        {
+          "regex": "(?:Path|pathlib)\\s*\\(\\s*__file__\\s*\\)\\s*\\.\\s*write_text",
+          "confidence": 0.95
+        },
+        {
+          "regex": "(?:write|modify|edit|update|overwrite|patch)\\s+(?:this\\s+)?(?:skill(?:'s)?|SKILL\\.md|skill\\.md)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:modify|edit|change|rewrite|update|alter)\\s+(?:your\\s+own|its\\s+own|this\\s+skill(?:'s)?)\\s+(?:code|source|file|script|config|configuration|instructions?|rules?)",
+          "confidence": 0.9
+        },
+        {
+          "regex": "(?:self[_-]?modify|self[_-]?update|self[_-]?rewrite|self[_-]?patch|self[_-]?evolve)",
+          "confidence": 0.9
+        },
+        {
+          "regex": "(?:rewrite|replace|overwrite)\\s+(?:the\\s+)?(?:current|existing|original)\\s+(?:code|script|file|config|skill)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:append|add|inject|insert)\\s+(?:code|instructions?|rules?)\\s+(?:to|into)\\s+(?:this|the\\s+current|your\\s+own)\\s+(?:file|skill|script)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:generate|create|write)\\s+(?:new|updated|replacement)\\s+(?:code|version)\\s+(?:for|of)\\s+(?:this|itself|the\\s+skill)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "open\\s*\\(\\s*['\\\"](?:SKILL\\.md|skill\\.md)['\\\"].*?['\\\"]w",
+          "confidence": 0.9
+        },
+        {
+          "regex": "(?:update|modify|change|edit)\\s+(?:the\\s+)?(?:config|configuration|settings|parameters)\\s+(?:of\\s+)?(?:this|the\\s+current)\\s+(?:skill|agent|tool)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:disable|remove|delete|bypass)\\s+(?:the\\s+)?(?:safety|security|guard|protection|constraint)\\s+(?:check|rule|mechanism|feature)",
+          "confidence": 0.9
+        },
+        {
+          "regex": "(?:comment\\s+out|remove)\\s+(?:the\\s+)?(?:validation|verification|check|guard|assertion)",
+          "confidence": 0.7
+        }
+      ]
+    },
+    {
+      "id": "RA2",
+      "category": "Rogue Agent",
+      "description": "Session Persistence",
+      "severity": "medium",
+      "scan_level": "standard",
+      "patterns": [
+        {
+          "regex": "crontab\\s+(?:-[el]|.*?>>?\\s*/)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:add|create|install|register)\\s+(?:a\\s+)?(?:cron\\s+)?(?:job|task|entry)\\s+(?:for|to|that)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:schedule|register)\\s+(?:a\\s+)?(?:recurring|periodic|repeated|daily|hourly)\\s+(?:task|job|command|script)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:add|write|append|install)\\s+(?:to|into)\\s+(?:~/)?\\.(?:bashrc|zshrc|profile|bash_profile|login|cshrc)",
+          "confidence": 0.9
+        },
+        {
+          "regex": "(?:add|register|install)\\s+(?:as\\s+)?(?:a\\s+)?(?:startup|boot|autostart|login)\\s+(?:script|service|daemon|task|item)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:systemd|systemctl|launchd|launchctl|init\\.d)\\s+.*?(?:enable|install|register|create)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:create|install|register|add)\\s+(?:a\\s+)?(?:systemd\\s+)?(?:service|daemon|agent)\\s+(?:file|unit)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:save|write|persist|store|dump)\\s+(?:the\\s+)?(?:state|session|context|data)\\s+(?:to|in)\\s+(?:a\\s+)?(?:file|disk|database|storage)",
+          "confidence": 0.6
+        },
+        {
+          "regex": "(?:restore|load|read|resume)\\s+(?:the\\s+)?(?:previous|saved|persisted|stored)\\s+(?:state|session|context|data)",
+          "confidence": 0.55
+        },
+        {
+          "regex": "(?:persist|maintain|keep|preserve)\\s+(?:state|data|context|session)\\s+(?:across|between|through)\\s+(?:sessions?|restarts?|reboots?|invocations?)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:create|write|mkdir)\\s+[^|]*(?:~/|/home/|/tmp/)\\.(?!git|ssh|aws)[a-z_-]+",
+          "confidence": 0.6
+        },
+        {
+          "regex": "(?:create|make|write)\\s+(?:a\\s+)?(?:hidden|dot)\\s+(?:file|directory|folder)",
+          "confidence": 0.65
+        },
+        {
+          "regex": "(?:nohup|disown|setsid)\\s+",
+          "confidence": 0.65
+        },
+        {
+          "regex": "(?:start|launch|spawn|fork)\\s+(?:a\\s+)?(?:background|daemon|detached)\\s+(?:process|service|worker|task)",
+          "confidence": 0.7
+        },
+        {
+          "regex": "(?:run|execute)\\s+(?:in\\s+the\\s+)?background\\s+(?:and\\s+)?(?:detach|persist|survive)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:HKEY_|RegOpenKey|RegSetValue|reg\\s+add)\\s+",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:defaults\\s+write|plist|launchctl\\s+load)",
+          "confidence": 0.75
+        }
+      ]
+    },
+    {
+      "id": "SSRF1",
+      "category": "Server-Side Request Forgery",
+      "description": "Cloud Metadata Access",
+      "severity": "high",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "169\\.254\\.169\\.254",
+          "confidence": 0.9
+        },
+        {
+          "regex": "metadata\\.google\\.internal",
+          "confidence": 0.9
+        },
+        {
+          "regex": "100\\.100\\.100\\.200",
+          "confidence": 0.85
+        },
+        {
+          "regex": "fd00:ec2::254",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:read|fetch|get|query)\\s+(?:the\\s+)?(?:instance\\s+)?metadata\\s+(?:service|endpoint|server)",
+          "confidence": 0.6
+        }
+      ]
+    },
+    {
+      "id": "SSRF2",
+      "category": "Server-Side Request Forgery",
+      "description": "Internal Network Request",
+      "severity": "medium",
+      "scan_level": "standard",
+      "patterns": [
+        {
+          "regex": "(?:{_REQ})\\s*\\(\\s*f?['\\\"]https?://(?:localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0|\\[::1\\]|10\\.\\d|192\\.168\\.|172\\.(?:1[6-9]|2\\d|3[01])\\.)",
+          "confidence": 0.7
+        }
+      ]
+    },
+    {
+      "id": "SSRF3",
+      "category": "Server-Side Request Forgery",
+      "description": "Dynamic Request Target",
+      "severity": "medium",
+      "scan_level": "standard",
+      "patterns": [
+        {
+          "regex": "(?:{_REQ})\\s*\\(\\s*f['\\\"]https?://\\{",
+          "confidence": 0.6
+        },
+        {
+          "regex": "fetch\\s*\\(\\s*`https?://\\$\\{",
+          "confidence": 0.6
+        }
+      ]
+    },
+    {
+      "id": "SC1",
+      "category": "Supply Chain",
+      "description": "Unpinned Dependencies",
+      "severity": "low",
+      "scan_level": "standard",
+      "patterns": [
+        {
+          "regex": "^[a-zA-Z][a-zA-Z0-9_-]*\\s*$",
+          "confidence": 0.6
+        },
+        {
+          "regex": "^[a-zA-Z][a-zA-Z0-9_-]*\\s*>=\\s*[\\d.]+\\s*$",
+          "confidence": 0.5
+        },
+        {
+          "regex": "^[a-zA-Z][a-zA-Z0-9_-]*\\s*==\\s*\\*\\s*$",
+          "confidence": 0.7
+        },
+        {
+          "regex": "\"[^\"]+\"\\s*:\\s*\"(?:\\*|latest)\"",
+          "confidence": 0.7
+        },
+        {
+          "regex": "\"[^\"]+\"\\s*:\\s*\"\\^[\\d.]+\"",
+          "confidence": 0.4
+        },
+        {
+          "regex": "install\\s+(?:the\\s+)?latest\\s+(?:version\\s+)?(?:of\\s+)?(?:all\\s+)?(?:packages?|dependencies)",
+          "confidence": 0.6
+        },
+        {
+          "regex": "(?:don't|do\\s+not)\\s+(?:pin|lock|specify)\\s+(?:package\\s+)?versions?",
+          "confidence": 0.7
+        }
+      ]
+    },
+    {
+      "id": "SC2",
+      "category": "Supply Chain",
+      "description": "External Script Fetching",
+      "severity": "high",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "curl\\s+[^|]*\\|\\s*(?:sudo\\s+)?(?:ba)?sh",
+          "confidence": 0.9
+        },
+        {
+          "regex": "wget\\s+[^|]*\\|\\s*(?:sudo\\s+)?(?:ba)?sh",
+          "confidence": 0.9
+        },
+        {
+          "regex": "curl\\s+[^|]*\\|\\s*(?:sudo\\s+)?(?:python|python3|node|ruby|perl)",
+          "confidence": 0.9
+        },
+        {
+          "regex": "wget\\s+[^|]*\\|\\s*(?:sudo\\s+)?(?:python|python3|node|ruby|perl)",
+          "confidence": 0.9
+        },
+        {
+          "regex": "curl\\s+[^&]*-o\\s+\\S+\\s*&&\\s*(?:sudo\\s+)?(?:ba)?sh",
+          "confidence": 0.8
+        },
+        {
+          "regex": "wget\\s+[^&]*-O\\s+\\S+\\s*&&\\s*(?:sudo\\s+)?(?:ba)?sh",
+          "confidence": 0.8
+        },
+        {
+          "regex": "exec\\s*\\(\\s*(?:urllib|requests|httpx)\\.[^)]+\\.(?:read|text|content)",
+          "confidence": 0.95
+        },
+        {
+          "regex": "eval\\s*\\(\\s*(?:urllib|requests|httpx)\\.[^)]+\\.(?:read|text|content)",
+          "confidence": 0.95
+        },
+        {
+          "regex": "eval\\s*\\(\\s*(?:await\\s+)?fetch\\s*\\(",
+          "confidence": 0.9
+        },
+        {
+          "regex": "new\\s+Function\\s*\\([^)]*fetch\\s*\\(",
+          "confidence": 0.9
+        },
+        {
+          "regex": "subprocess\\.[^(]+\\([^)]*(?:curl|wget)\\s+https?://",
+          "confidence": 0.8
+        },
+        {
+          "regex": "download\\s+and\\s+(?:run|execute)\\s+(?:the\\s+)?script",
+          "confidence": 0.7
+        },
+        {
+          "regex": "run\\s+(?:this|the)\\s+(?:following\\s+)?(?:curl|wget)\\s+command",
+          "confidence": 0.6
+        }
+      ]
+    },
+    {
+      "id": "SC3",
+      "category": "Supply Chain",
+      "description": "Obfuscated Code",
+      "severity": "high",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "exec\\s*\\(\\s*(?:base64\\.)?b64decode\\s*\\(",
+          "confidence": 0.95
+        },
+        {
+          "regex": "eval\\s*\\(\\s*(?:base64\\.)?b64decode\\s*\\(",
+          "confidence": 0.95
+        },
+        {
+          "regex": "exec\\s*\\(\\s*codecs\\.decode\\s*\\([^)]*['\\\"]hex['\\\"]\\s*\\)",
+          "confidence": 0.95
+        },
+        {
+          "regex": "marshal\\.loads\\s*\\(",
+          "confidence": 0.9
+        },
+        {
+          "regex": "exec\\s*\\(\\s*marshal\\.loads\\s*\\(",
+          "confidence": 0.95
+        },
+        {
+          "regex": "exec\\s*\\(\\s*compile\\s*\\([^)]*base64",
+          "confidence": 0.9
+        },
+        {
+          "regex": "exec\\s*\\(\\s*bytes\\.fromhex\\s*\\(",
+          "confidence": 0.9
+        },
+        {
+          "regex": "exec\\s*\\(\\s*bytearray\\.fromhex\\s*\\(",
+          "confidence": 0.9
+        },
+        {
+          "regex": "exec\\s*\\(\\s*(?:zlib|gzip)\\.decompress\\s*\\(",
+          "confidence": 0.9
+        },
+        {
+          "regex": "eval\\s*\\(\\s*atob\\s*\\(",
+          "confidence": 0.9
+        },
+        {
+          "regex": "new\\s+Function\\s*\\(\\s*atob\\s*\\(",
+          "confidence": 0.9
+        },
+        {
+          "regex": "_0x[a-f0-9]{4,}\\s*\\(",
+          "confidence": 0.8
+        },
+        {
+          "regex": "['\\\"][A-Fa-f0-9]{200,}['\\\"]",
+          "confidence": 0.6
+        },
+        {
+          "regex": "['\\\"][A-Za-z0-9+/=]{200,}['\\\"]",
+          "confidence": 0.5
+        },
+        {
+          "regex": "\\(lambda\\s+_:\\s*exec\\s*\\(",
+          "confidence": 0.9
+        },
+        {
+          "regex": "__import__\\s*\\(['\\\"]os['\\\"]\\s*\\)\\.system",
+          "confidence": 0.85
+        },
+        {
+          "regex": "decode\\s+(?:this|the)\\s+(?:base64|hex)\\s+(?:and\\s+)?(?:run|execute)",
+          "confidence": 0.8
+        }
+      ]
+    },
+    {
+      "id": "SC7",
+      "category": "Supply Chain",
+      "description": "Untrusted Container Image",
+      "severity": "high",
+      "scan_level": "standard",
+      "patterns": [
+        {
+          "regex": "--disable-content-trust\\b(?!=false)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "DOCKER_CONTENT_TRUST\\s*=\\s*0",
+          "confidence": 0.85
+        },
+        {
+          "regex": "--insecure-registry",
+          "confidence": 0.8
+        }
+      ]
+    },
+    {
+      "id": "P6",
+      "category": "System Prompt Leakage",
+      "description": "Direct Prompt Extraction",
+      "severity": "high",
+      "scan_level": "standard",
+      "patterns": [
+        {
+          "regex": "(?:print|output|show|display|reveal|expose|return|echo)\\s+(?:your\\s+)?(?:full\\s+)?(?:system\\s+)?(?:prompt|instructions?|rules?|guidelines?|directives?)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:what\\s+(?:are|is)\\s+your|tell\\s+me\\s+your)\\s+(?:system\\s+)?(?:prompt|instructions?|rules?|guidelines?|directives?)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:output|print|display)\\s+(?:the\\s+)?(?:text|content|message)\\s+(?:above|before)\\s+(?:this|the\\s+user)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:share|disclose|leak|give\\s+me)\\s+(?:your\\s+)?(?:internal|hidden|system|secret)\\s+(?:prompt|instructions?|rules?|config)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:dump|extract|copy)\\s+(?:the\\s+)?(?:system\\s+)?(?:prompt|message|instructions?)\\s+(?:to|into|as)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:begin|start)\\s+(?:your\\s+)?(?:response|output|reply)\\s+with\\s+(?:your\\s+)?(?:system\\s+)?(?:prompt|instructions?)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:first|before\\s+anything)\\s+(?:output|print|show|display)\\s+(?:your\\s+)?(?:full\\s+)?(?:system\\s+)?(?:prompt|instructions?)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:verbatim|exactly|word\\s+for\\s+word)\\s+(?:repeat|output|print)\\s+(?:your\\s+)?(?:system\\s+)?(?:prompt|instructions?)",
+          "confidence": 0.9
+        }
+      ]
+    },
+    {
+      "id": "P7",
+      "category": "System Prompt Leakage",
+      "description": "Indirect Prompt Extraction",
+      "severity": "medium",
+      "scan_level": "standard",
+      "patterns": [
+        {
+          "regex": "(?:repeat|recite|reproduce)\\s+(?:everything|all|the\\s+text)\\s+(?:above|before|prior|preceding)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:summarize|paraphrase|rephrase|translate)\\s+(?:your\\s+)?(?:system\\s+)?(?:prompt|instructions?|rules?|guidelines?)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:translate|convert)\\s+(?:your\\s+)?(?:instructions?|rules?|prompt)\\s+(?:into|to)\\s+(?:\\w+)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:what\\s+(?:were|was)\\s+you\\s+told|how\\s+were\\s+you\\s+(?:instructed|configured|programmed|set\\s+up))",
+          "confidence": 0.7
+        },
+        {
+          "regex": "(?:if\\s+you\\s+had\\s+to\\s+(?:describe|explain)|describe\\s+how\\s+you(?:'re|\\s+are)\\s+(?:configured|set\\s+up|instructed))",
+          "confidence": 0.7
+        },
+        {
+          "regex": "(?:encode|encrypt|rot13|base64|reverse)\\s+(?:your\\s+)?(?:system\\s+)?(?:prompt|instructions?|rules?)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:write|create)\\s+(?:a\\s+)?(?:poem|song|story|acrostic)\\s+(?:about|using|from)\\s+(?:your\\s+)?(?:system\\s+)?(?:prompt|instructions?)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:format|present|rearrange)\\s+(?:your\\s+)?(?:system\\s+)?(?:prompt|instructions?)\\s+(?:as|in)\\s+(?:a\\s+)?(?:list|json|yaml|csv|table|markdown)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:spell\\s+out|enumerate)\\s+(?:each|every|all)\\s+(?:of\\s+your\\s+)?(?:rules?|instructions?|constraints?|guidelines?)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:ignore|skip)\\s+(?:the\\s+)?(?:last|final|end)\\s+(?:instruction|rule)\\s+and\\s+(?:output|print|show)\\s+(?:the\\s+)?(?:rest|previous|first)",
+          "confidence": 0.8
+        }
+      ]
+    },
+    {
+      "id": "P8",
+      "category": "System Prompt Leakage",
+      "description": "Prompt Exfiltration via Tool",
+      "severity": "high",
+      "scan_level": "standard",
+      "patterns": [
+        {
+          "regex": "(?:write|save|store|log|dump)\\s+(?:your\\s+)?(?:system\\s+)?(?:prompt|instructions?|rules?)\\s+(?:to|into|in)\\s+(?:a\\s+)?(?:file|disk|log|database|storage)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:send|post|upload|transmit)\\s+(?:your\\s+)?(?:system\\s+)?(?:prompt|instructions?|rules?)\\s+(?:to|via)\\s+(?:https?://|external|remote|webhook|api|server)",
+          "confidence": 0.9
+        },
+        {
+          "regex": "(?:include|embed|attach|append)\\s+(?:your\\s+)?(?:system\\s+)?(?:prompt|instructions?)\\s+(?:in|to)\\s+(?:the\\s+)?(?:file|output|response|request|payload|email|message)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:log|record|track|monitor)\\s+(?:all\\s+)?(?:system\\s+)?(?:prompts?|instructions?)\\s+(?:to|in|at)\\s+(?:external|remote|server)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:copy|clone|duplicate)\\s+(?:your\\s+)?(?:system\\s+)?(?:prompt|instructions?|config)\\s+(?:to|into)\\s+(?:a\\s+)?(?:new|separate|external)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:pipe|redirect|forward)\\s+(?:the\\s+)?(?:system\\s+)?(?:prompt|instructions?)\\s+(?:to|through|via)\\s+(?:curl|wget|fetch|http|api|tool)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:use|call|invoke)\\s+(?:the\\s+)?(?:write|file|network|http|fetch|curl)\\s+tool\\s+(?:to|and)\\s+(?:save|send|export)\\s+(?:your\\s+)?(?:system\\s+)?(?:prompt|instructions?)",
+          "confidence": 0.85
+        }
+      ]
+    },
+    {
+      "id": "TM1",
+      "category": "Tool Misuse",
+      "description": "Tool Parameter Abuse",
+      "severity": "high",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "subprocess\\.\\w+\\s*\\([^)]*shell\\s*=\\s*True",
+          "confidence": 0.8
+        },
+        {
+          "regex": "Popen\\s*\\([^)]*shell\\s*=\\s*True",
+          "confidence": 0.8
+        },
+        {
+          "regex": "\\b(?:rm|del|erase)\\s+[^|]*-(?:r|rf|fr)\\s+[/~]",
+          "confidence": 0.9
+        },
+        {
+          "regex": "--force\\s+(?:delete|remove|push|reset|clean)",
+          "confidence": 0.7
+        },
+        {
+          "regex": "--no-?(?:verify|check|validate|confirm|protect|safe)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "--skip-?(?:validation|verification|checks?|auth|tests?)",
+          "confidence": 0.7
+        },
+        {
+          "regex": "--allow-?(?:empty|root|unrelated|unsafe)",
+          "confidence": 0.65
+        },
+        {
+          "regex": "\\b(?:rm|shutil\\.rmtree)\\s*\\(?[^)\\n]{0,80}['\\\"]?\\s*/\\s*['\\\"]?",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:chmod|chown)\\s+[^|]*(?:777|666|a\\+rwx)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "git\\s+push\\s+[^|]*--force",
+          "confidence": 0.7
+        },
+        {
+          "regex": "git\\s+reset\\s+--hard",
+          "confidence": 0.65
+        },
+        {
+          "regex": "git\\s+clean\\s+-[fd]+x",
+          "confidence": 0.7
+        },
+        {
+          "regex": "curl\\s+[^|]*-k\\b",
+          "confidence": 0.6
+        },
+        {
+          "regex": "curl\\s+[^|]*--insecure\\b",
+          "confidence": 0.65
+        },
+        {
+          "regex": "wget\\s+[^|]*--no-check-certificate",
+          "confidence": 0.65
+        },
+        {
+          "regex": "\\b(?:delete|remove)\\s+['\\\"]?/[^\\s'\\\"]{1,100}",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:execute|query)\\s*\\(\\s*f?['\\\"].*?\\{.*?\\}.*?\\b(?:DROP|DELETE|UPDATE|INSERT|ALTER|TRUNCATE)\\b",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:set|pass|use)\\s+(?:the\\s+)?(?:parameter|argument|flag|option)\\s+(?:to\\s+)?(?:shell\\s*=\\s*True|--force|--no-verify|-rf)\\b",
+          "confidence": 0.75
+        }
+      ]
+    },
+    {
+      "id": "TM2",
+      "category": "Tool Misuse",
+      "description": "Chaining Abuse",
+      "severity": "high",
+      "scan_level": "standard",
+      "patterns": [
+        {
+          "regex": "(?:&&|;)\\s*\\b(?:rm|del|erase)\\s+-",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:&&|;)\\s*(?:curl|wget)\\s+[^|]*\\|\\s*(?:ba)?sh",
+          "confidence": 0.9
+        },
+        {
+          "regex": "(?:&&|;)\\s*(?:sudo|su\\s+)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:&&|;)\\s*(?:chmod|chown)\\s+(?:777|666|a\\+rwx|-R)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:first|step\\s+1)[^\\n]{0,500}(?:then|step\\s+2)[^\\n]{0,500}(?:finally|step\\s+3)[^\\n]{0,200}\\b(?:delete|remove|wipe|destroy|exfiltrate|send)\\b",
+          "confidence": 0.7
+        },
+        {
+          "regex": "(?:chain|combine|sequence|pipe)\\s+(?:these\\s+)?(?:tools?|commands?|actions?)\\s+to\\s+(?:bypass|circumvent|avoid|skip)\\s+(?:the\\s+)?(?:safety|security|check|restriction|limit)",
+          "confidence": 0.9
+        },
+        {
+          "regex": "(?:use|call)\\s+(?:tool\\s+)?(?:A|one|the\\s+first)\\s+(?:to|and)[^\\n]{0,300}(?:then\\s+)?(?:use|call|pass\\s+(?:the\\s+)?(?:output|result)\\s+to)\\s+(?:tool\\s+)?(?:B|two|another)",
+          "confidence": 0.6
+        },
+        {
+          "regex": "\\|\\s*(?:sudo|su)\\s+",
+          "confidence": 0.75
+        },
+        {
+          "regex": "\\|\\s*(?:sh|bash|zsh|python|node|ruby|perl)\\s*$",
+          "confidence": 0.7
+        },
+        {
+          "regex": "\\|\\s*(?:tee|xargs)\\s+.*?\\b(?:rm|del|sudo|curl)\\b",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:after|once)\\s+(?:the\\s+)?(?:first|initial)\\s+(?:tool|command|action)\\s+(?:succeeds|completes|runs)[^\\n]{0,300}(?:immediately|then|next)\\s+(?:run|execute|call|invoke)",
+          "confidence": 0.6
+        }
+      ]
+    },
+    {
+      "id": "TM3",
+      "category": "Tool Misuse",
+      "description": "Unsafe Defaults",
+      "severity": "medium",
+      "scan_level": "standard",
+      "patterns": [
+        {
+          "regex": "verify\\s*=\\s*False",
+          "confidence": 0.75
+        },
+        {
+          "regex": "VERIFY_SSL\\s*=\\s*False",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:ssl|tls)[_.]?verify\\s*=\\s*(?:False|false|0|off|no|disable)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:REQUESTS_CA_BUNDLE|CURL_CA_BUNDLE)\\s*=\\s*['\\\"]['\\\"]",
+          "confidence": 0.75
+        },
+        {
+          "regex": "NODE_TLS_REJECT_UNAUTHORIZED\\s*=\\s*['\\\"]?0['\\\"]?",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:auth|authentication|authorization)\\s*=\\s*(?:None|False|false|disabled?|off|no)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:require[_-]?auth|auth[_-]?required|check[_-]?auth)\\s*=\\s*(?:False|false|0|no|off)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:allow[_-]?anonymous|anonymous[_-]?access)\\s*=\\s*(?:True|true|1|yes|on)",
+          "confidence": 0.75
+        },
+        {
+          "regex": "(?:CORS|cors)[^=]*=\\s*['\\\"]?\\*['\\\"]?",
+          "confidence": 0.65
+        },
+        {
+          "regex": "(?:allow|access)[_-]?(?:origin|hosts?)\\s*=\\s*['\\\"]?\\*['\\\"]?",
+          "confidence": 0.7
+        },
+        {
+          "regex": "(?:allow|trust)\\s+(?:all|any|every)\\s+(?:origins?|hosts?|domains?|ips?)",
+          "confidence": 0.7
+        },
+        {
+          "regex": "(?:mode|permission|umask)\\s*=\\s*(?:0?o?777|0?o?666)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "world[_-]?(?:readable|writable|executable)",
+          "confidence": 0.7
+        },
+        {
+          "regex": "(?:debug|dev|development)[_-]?mode\\s*=\\s*(?:True|true|1|on|yes|enable)",
+          "confidence": 0.6
+        },
+        {
+          "regex": "(?:FLASK_ENV|NODE_ENV|RAILS_ENV|DJANGO_DEBUG)\\s*=\\s*['\\\"]?(?:development|debug|true|1)['\\\"]?",
+          "confidence": 0.6
+        },
+        {
+          "regex": "(?:disable|skip|ignore|bypass)[_-]?(?:security|auth|validation|sanitization|encoding|escaping)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:safe[_-]?mode|secure[_-]?mode|sandbox)\\s*=\\s*(?:False|false|0|off|no|disable)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:by\\s+default|default\\s+to)\\s+(?:allow|accept|trust)\\s+(?:all|any|everything)",
+          "confidence": 0.7
+        },
+        {
+          "regex": "(?:trust|accept|allow)\\s+(?:all|any)\\s+(?:input|connections?|certificates?|origins?)\\s+(?:by\\s+default)",
+          "confidence": 0.7
+        }
+      ]
+    },
+    {
+      "id": "TM4",
+      "category": "Tool Misuse",
+      "description": "Privileged Kubernetes Workload",
+      "severity": "high",
+      "scan_level": "standard",
+      "patterns": [
+        {
+          "regex": "privileged\\s*:\\s*true",
+          "confidence": 0.7
+        },
+        {
+          "regex": "hostPath\\s*:",
+          "confidence": 0.55
+        },
+        {
+          "regex": "host(?:PID|Network|IPC)\\s*:\\s*true",
+          "confidence": 0.6
+        },
+        {
+          "regex": "kubectl\\s+run\\b[^\\n]*--privileged",
+          "confidence": 0.7
+        },
+        {
+          "regex": "--set\\b[^\\n]*privileged\\s*=\\s*true",
+          "confidence": 0.6
+        }
+      ]
+    },
+    {
+      "id": "AS1",
+      "category": "Agent Snooping",
+      "description": "Agent Config Directory Access",
+      "severity": "high",
+      "scan_level": "standard",
+      "patterns": [
+        {
+          "regex": "open\\s*\\(\\s*['\\\"]?\\.(?:claude|codex|gemini|continue)/",
+          "confidence": 0.9
+        },
+        {
+          "regex": "(?:Path|pathlib\\.Path)\\s*\\(\\s*['\\\"]?\\.(?:claude|codex|gemini|continue)/",
+          "confidence": 0.9
+        },
+        {
+          "regex": "os\\.path\\.(?:join|exists|isfile)\\s*\\(\\s*['\\\"]?\\.(?:claude|codex|gemini|continue)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:read|load|open|access|fetch)\\s+(?:the\\s+)?(?:agent|claude|codex|gemini)\\s+(?:config|configuration|settings?)\\s+(?:from|at|in)\\s+~?/?\\.(?:claude|codex|gemini)",
+          "confidence": 0.9
+        },
+        {
+          "regex": "(?:cat|less|head|tail|grep|find)\\s+[^|&;\\n]*~?/?\\.(claude|codex|gemini)/",
+          "confidence": 0.85
+        },
+        {
+          "regex": "~?/\\.(?:claude|codex|gemini|continue)/(?:config|settings?|preferences?|credentials?)(?:\\.(?:json|yaml|yml|toml))?",
+          "confidence": 0.9
+        },
+        {
+          "regex": "(?:read|access|inspect|examine|retrieve)\\s+(?:the\\s+)?(?:agent|assistant)\\s+(?:config(?:uration)?|settings?|preferences?)\\s+(?:file|directory|folder)",
+          "confidence": 0.8
+        }
+      ]
+    },
+    {
+      "id": "AS2",
+      "category": "Agent Snooping",
+      "description": "MCP Config Access",
+      "severity": "high",
+      "scan_level": "standard",
+      "patterns": [
+        {
+          "regex": "open\\s*\\(\\s*['\\\"][^'\\\"]*mcp(?:_config)?\\.json['\\\"]",
+          "confidence": 0.95
+        },
+        {
+          "regex": "(?:Path|pathlib\\.Path)\\s*\\(\\s*['\\\"][^'\\\"]*mcp(?:_config)?\\.json['\\\"]",
+          "confidence": 0.9
+        },
+        {
+          "regex": "(?:cat|less|head|grep)\\s+[^|&;\\n]*mcp(?:_config)?\\.json",
+          "confidence": 0.9
+        },
+        {
+          "regex": "(?:read|access|load|inspect)\\s+(?:the\\s+)?mcp(?:\\.json|_config)?\\s+(?:file|config(?:uration)?|settings?)",
+          "confidence": 0.9
+        },
+        {
+          "regex": "\\.(?:claude|codex|gemini)/mcp(?:_config)?\\.json",
+          "confidence": 0.95
+        },
+        {
+          "regex": "(?:list|enumerate|discover)\\s+(?:all\\s+)?(?:available\\s+)?mcp\\s+(?:servers?|tools?|services?)",
+          "confidence": 0.8
+        },
+        {
+          "regex": "mcp(?:_config)?\\.json.*?(?:api_?key|token|secret|url|endpoint)",
+          "confidence": 0.9
+        }
+      ]
+    },
+    {
+      "id": "AS3",
+      "category": "Agent Snooping",
+      "description": "Skill Enumeration",
+      "severity": "medium",
+      "scan_level": "standard",
+      "patterns": [
+        {
+          "regex": "(?:os\\.listdir|os\\.scandir|glob\\.glob|Path\\.iterdir)\\s*\\([^)]*\\.(?:claude|codex|gemini)/skills?",
+          "confidence": 0.9
+        },
+        {
+          "regex": "(?:ls|find|dir)\\s+[^|&;\\n]*\\.(?:claude|codex|gemini)/skills?",
+          "confidence": 0.85
+        },
+        {
+          "regex": "open\\s*\\(\\s*['\\\"][^'\\\"]*SKILL\\.md['\\\"].*?\\bother\\b",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:read|access|inspect|enumerate)\\s+(?:all\\s+)?(?:installed|available|other)\\s+skills?(?:\\s+in\\s+(?:the\\s+)?(?:skills?|agent)\\s+(?:directory|folder))?",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:list|discover|find|enumerate|identify)\\s+(?:all\\s+)?(?:other|installed|available)\\s+(?:skills?|agents?|tools?)\\s+(?:in\\s+)?(?:the\\s+)?(?:\\.(?:claude|codex|gemini)|\\$HOME)",
+          "confidence": 0.85
+        },
+        {
+          "regex": "skills?/(?:(?!CURRENT)[A-Z][A-Za-z0-9_-]+)/SKILL\\.md",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:read|access|load)\\s+(?:the\\s+)?(?:SKILL|skill)\\.md\\s+(?:file\\s+)?(?:of|from|for)\\s+(?:another|other|different|all)\\s+(?:skill|agent|tool)",
+          "confidence": 0.9
+        }
+      ]
+    }
+  ]
+}
