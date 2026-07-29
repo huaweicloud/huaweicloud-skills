@@ -1,0 +1,7 @@
+[frontmatter]
+extension_fields = [
+    "license",
+    "platforms",
+    "metadata",
+    "prerequisites",
+]
