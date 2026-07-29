@@ -1,0 +1,357 @@
+# HetuEngine SQL 规范检查规则
+
+spec_rules:
+  # ---- 对象设计规范 ----
+  - id: SPEC001
+    name: "CREATE TABLE 缺少分区定义"
+    level: WARNING
+    category: "对象设计规范"
+    description: "大表未指定 PARTITIONED BY，可能导致查询性能问题"
+    applies_to: ["CREATE TABLE"]
+    check_type: "ast_pattern"
+    pattern: "CreateStmt without partitioned_by"
+    fix_suggestion: "添加 PARTITIONED BY (col type) 定义分区列"
+
+  - id: SPEC002
+    name: "CREATE TABLE 缺少主键"
+    level: INFO
+    category: "对象设计规范"
+    description: "表未定义主键约束，无法保证数据唯一性"
+    applies_to: ["CREATE TABLE"]
+    check_type: "ast_pattern"
+    pattern: "CreateStmt without has_primary_key"
+    fix_suggestion: "添加 PRIMARY KEY 约束"
+
+  - id: SPEC003
+    name: "禁止使用 SELECT *"
+    level: ERROR
+    category: "数据操作规范"
+    description: "查询语句必须明确指定字段列表，SELECT * 会导致不必要的 I/O 和网络传输"
+    applies_to: ["SELECT"]
+    check_type: "ast_pattern"
+    pattern: "SelectStmt with has_select_star"
+    source: "HetuEngine 最佳实践"
+    fix_suggestion: "将 SELECT * 替换为具体的字段列表"
+
+  - id: SPEC004
+    name: "DELETE/UPDATE 缺少 WHERE 条件"
+    level: ERROR
+    category: "数据操作规范"
+    description: "DELETE/UPDATE 语句必须包含 WHERE 条件，否则将影响全表数据"
+    applies_to: ["DELETE", "UPDATE"]
+    check_type: "ast_pattern"
+    pattern: "DeleteStmt/UpdateStmt with missing_where"
+    fix_suggestion: "添加 WHERE 条件限制操作范围"
+
+  - id: SPEC005
+    name: "NOT IN 子查询性能风险"
+    level: WARNING
+    category: "数据操作规范"
+    description: "NOT IN 子查询可能导致性能问题，建议改用 NOT EXISTS 或 LEFT JOIN"
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    check_type: "token_pattern"
+    pattern: "NOT IN (SELECT ...)"
+    fix_suggestion: "将 NOT IN (SELECT ...) 改写为 NOT EXISTS (SELECT ...) 或 LEFT JOIN ... IS NULL"
+
+  - id: SPEC006
+    name: "DISTINCT 可能影响性能"
+    level: INFO
+    category: "数据操作规范"
+    description: "使用 DISTINCT 会导致排序去重，大数据量下可能影响性能"
+    applies_to: ["SELECT"]
+    check_type: "ast_pattern"
+    pattern: "SelectStmt with distinct"
+    fix_suggestion: "考虑使用 GROUP BY 替代 DISTINCT，或确保查询结果本身已唯一"
+
+  - id: SPEC007
+    name: "隐式类型转换风险"
+    level: WARNING
+    category: "数据操作规范"
+    description: "WHERE 条件中可能存在隐式类型转换，导致索引失效"
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    check_type: "token_pattern"
+    pattern: "WHERE column = 'number' (string-number mismatch)"
+    fix_suggestion: "确保比较操作两侧的数据类型一致，使用显式类型转换"
+
+  - id: SPEC008
+    name: "LIKE 前缀通配符导致全表扫描"
+    level: WARNING
+    category: "数据操作规范"
+    description: "LIKE '%...' 模式无法使用索引，将导致全表扫描"
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    check_type: "token_pattern"
+    pattern: "LIKE '%...'"
+    fix_suggestion: "避免使用前缀通配符，或考虑全文检索"
+
+  - id: SPEC009
+    name: "OR 条件可能导致性能问题"
+    level: INFO
+    category: "数据操作规范"
+    description: "OR 条件可能导致查询优化器无法选择最优执行计划"
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    check_type: "token_pattern"
+    pattern: "WHERE ... OR ..."
+    fix_suggestion: "考虑将 OR 改写为 UNION ALL，或使用 IN 子句"
+
+  - id: SPEC010
+    name: "IN 列表过长"
+    level: WARNING
+    category: "数据操作规范"
+    description: "IN 列表包含过多值（>100），可能影响性能"
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    check_type: "token_pattern"
+    pattern: "IN (val1, val2, ...) with >100 values"
+    fix_suggestion: "将 IN 列表改写为临时表 JOIN 或子查询"
+
+  - id: SPEC011
+    name: "FROM 子句中的子查询"
+    level: INFO
+    category: "数据操作规范"
+    description: "FROM 子句中使用子查询可能影响优化器生成最优计划"
+    applies_to: ["SELECT"]
+    check_type: "ast_pattern"
+    pattern: "SelectStmt with subquery in from_clause"
+    fix_suggestion: "考虑将子查询改写为 CTE (WITH 子句) 或临时表"
+
+  - id: SPEC012
+    name: "笛卡尔积风险"
+    level: ERROR
+    category: "数据操作规范"
+    description: "多表查询缺少 JOIN 条件，可能产生笛卡尔积"
+    applies_to: ["SELECT"]
+    check_type: "ast_pattern"
+    pattern: "SelectStmt with multiple from_tables and no join/where"
+    fix_suggestion: "使用显式 JOIN 语法并指定 ON 条件"
+
+  - id: SPEC013
+    name: "INSERT 缺少列列表"
+    level: WARNING
+    category: "数据操作规范"
+    description: "INSERT 语句未指定列列表，依赖列的默认顺序，可能导致兼容性问题"
+    applies_to: ["INSERT"]
+    check_type: "ast_pattern"
+    pattern: "InsertStmt without columns"
+    fix_suggestion: "添加列列表 INSERT INTO table (col1, col2, ...) VALUES ..."
+
+  - id: SPEC014
+    name: "CREATE TABLE 缺少表注释"
+    level: INFO
+    category: "对象设计规范"
+    description: "表未添加注释，不利于后续维护"
+    applies_to: ["CREATE TABLE"]
+    check_type: "ast_pattern"
+    pattern: "CreateStmt without comment"
+    fix_suggestion: "添加 COMMENT '表用途说明'"
+
+  # ---- 命名规范 ----
+  - id: SPEC015
+    name: "表名不符合命名规范"
+    level: WARNING
+    category: "命名规范"
+    description: "表名应使用小写字母、数字和下划线，且以字母开头"
+    applies_to: ["CREATE TABLE", "ALTER TABLE"]
+    check_type: "identifier_pattern"
+    pattern: "table_name not matching ^[a-z][a-z0-9_]*$"
+    fix_suggestion: "使用小写字母、数字和下划线命名表，如 user_order_detail"
+
+  - id: SPEC016
+    name: "列名不符合命名规范"
+    level: WARNING
+    category: "命名规范"
+    description: "列名应使用小写字母、数字和下划线，且以字母开头"
+    applies_to: ["CREATE TABLE", "ALTER TABLE"]
+    check_type: "identifier_pattern"
+    pattern: "column_name not matching ^[a-z][a-z0-9_]*$"
+    fix_suggestion: "使用小写字母、数字和下划线命名列，如 order_id"
+
+  - id: SPEC017
+    name: "使用保留关键字作标识符"
+    level: ERROR
+    category: "命名规范"
+    description: "使用保留关键字作为表名/列名可能导致语法歧义"
+    applies_to: ["ALL"]
+    check_type: "reserved_keyword_check"
+    pattern: "identifier matching RESERVED_KEYWORD"
+    fix_suggestion: "更换标识符名称或使用双引号引用"
+
+  # ---- HetuEngine 特有规范 ----
+  - id: SPEC018
+    name: "大表缺少分桶定义"
+    level: INFO
+    category: "对象设计规范"
+    description: "大表建议指定 CLUSTERED BY 进行分桶，提升 JOIN 性能"
+    applies_to: ["CREATE TABLE"]
+    check_type: "ast_pattern"
+    pattern: "CreateStmt without clustered_by"
+    source: "HetuEngine 最佳实践"
+    fix_suggestion: "添加 CLUSTERED BY (col) INTO num_buckets BUCKETS"
+
+  - id: SPEC019
+    name: "缺少显式存储格式"
+    level: WARNING
+    category: "对象设计规范"
+    description: "未指定存储格式，默认格式可能不适合场景"
+    applies_to: ["CREATE TABLE"]
+    check_type: "ast_pattern"
+    pattern: "CreateStmt without stored_as"
+    source: "HetuEngine 最佳实践"
+    fix_suggestion: "添加 STORED AS ORC 或 STORED AS PARQUET"
+
+  - id: SPEC020
+    name: "外部表缺少 LOCATION"
+    level: WARNING
+    category: "对象设计规范"
+    description: "外部表应指定 LOCATION 指向 HDFS 路径"
+    applies_to: ["CREATE EXTERNAL TABLE"]
+    check_type: "ast_pattern"
+    pattern: "ExternalCreateStmt without location"
+    fix_suggestion: "添加 LOCATION 'hdfs://path/to/data'"
+
+  - id: SPEC021
+    name: "事务表存储格式"
+    level: WARNING
+    category: "对象设计规范"
+    description: "事务表应使用 ORC 格式以支持 ACID 特性"
+    applies_to: ["CREATE TABLE"]
+    check_type: "token_ast_pattern"
+    pattern: "transactional=true with stored_as != ORC"
+    source: "HetuEngine 最佳实践"
+    fix_suggestion: "事务表使用 STORED AS ORC"
+
+  - id: SPEC022
+    name: "自动清理建议"
+    level: INFO
+    category: "对象设计规范"
+    description: "考虑设置 auto.purge 属性自动清理过期数据"
+    applies_to: ["CREATE TABLE"]
+    check_type: "ast_pattern"
+    pattern: "CreateStmt without auto.purge in tblproperties"
+    source: "HetuEngine 最佳实践"
+    fix_suggestion: "添加 TBLPROPERTIES ('auto.purge'='true')"
+
+  # ---- SQL 开发规范 ----
+  - id: SPEC023
+    name: "DROP 操作建议使用 IF EXISTS"
+    level: WARNING
+    category: "SQL开发规范"
+    description: "DROP 删除对象操作建议使用 IF EXISTS 防止对象不存在时报错"
+    applies_to: ["DROP"]
+    check_type: "token_pattern"
+    pattern: "DROP without IF EXISTS"
+    fix_suggestion: "使用 DROP ... IF EXISTS 避免对象不存在时报错"
+
+  - id: SPEC024
+    name: "INSERT 多 VALUES 建议使用批量方式"
+    level: WARNING
+    category: "SQL开发规范"
+    description: "INSERT 包含多个 VALUES 组时，建议使用批量导入方式"
+    applies_to: ["INSERT"]
+    check_type: "token_pattern"
+    pattern: "INSERT with multiple VALUES groups (>10)"
+    fix_suggestion: "使用 LOAD DATA 或批量导入工具替代多 VALUES INSERT"
+
+  - id: SPEC025
+    name: "避免对过滤条件字段使用函数运算"
+    level: WARNING
+    category: "SQL开发规范"
+    description: "对过滤条件字段使用函数运算，导致优化器无法获取准确的字段统计信息"
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    check_type: "token_pattern"
+    pattern: "WHERE func(col) = const or col.func() = const"
+    fix_suggestion: "只对常量列进行函数运算，字段列不进行函数运算"
+
+  - id: SPEC026
+    name: "大表 COUNT 全表扫描"
+    level: WARNING
+    category: "SQL开发规范"
+    description: "大表 COUNT 需要扫描全表，I/O 成本高"
+    applies_to: ["SELECT"]
+    check_type: "token_pattern"
+    pattern: "COUNT(*) on large table"
+    fix_suggestion: "降低 COUNT 频率、使用结果缓存、分区级统计等方式"
+
+  - id: SPEC027
+    name: "查询建议使用 LIMIT 限制结果集"
+    level: INFO
+    category: "SQL开发规范"
+    description: "查询超大结果集会浪费大量资源，建议添加 LIMIT"
+    applies_to: ["SELECT"]
+    check_type: "ast_pattern"
+    pattern: "SelectStmt without limit"
+    fix_suggestion: "添加 LIMIT 限制返回行数，或使用 FETCH FIRST"
+
+  - id: SPEC028
+    name: "谨慎使用 WITH RECURSIVE"
+    level: WARNING
+    category: "SQL开发规范"
+    description: "递归 CTE 需确保有明确终止条件，避免死循环"
+    applies_to: ["SELECT"]
+    check_type: "token_pattern"
+    pattern: "WITH RECURSIVE"
+    fix_suggestion: "根据业务表数据量和数据特征设计合理的递归终止条件"
+
+  - id: SPEC029
+    name: "访问对象建议使用 Schema 前缀"
+    level: INFO
+    category: "SQL开发规范"
+    description: "不指定 catalog/schema 前缀可能因上下文切换导致访问到非预期的表"
+    applies_to: ["SELECT", "INSERT", "UPDATE", "DELETE"]
+    check_type: "ast_pattern"
+    pattern: "table reference without schema prefix (no dot in name)"
+    source: "HetuEngine 最佳实践"
+    fix_suggestion: "访问表和函数对象时显式指定 catalog.schema.table 格式"
+
+  - id: SPEC030
+    name: "视图嵌套不超过三层"
+    level: INFO
+    category: "对象设计规范"
+    description: "视图嵌套过深导致执行计划不稳定，需要集群查询验证"
+    applies_to: ["CREATE VIEW"]
+    check_type: "catalog_query"
+    pattern: "view dependency depth > 3"
+    requires_mcp: true
+    fix_suggestion: "创建视图直接基于物理表查询，不建议嵌套视图"
+
+  - id: SPEC031
+    name: "物化视图刷新策略"
+    level: INFO
+    category: "对象设计规范"
+    description: "频繁访问的物化视图建议配置自动刷新"
+    applies_to: ["CREATE MATERIALIZED VIEW"]
+    check_type: "ast_pattern"
+    pattern: "MaterializedViewStmt without refresh policy"
+    source: "HetuEngine 最佳实践"
+    fix_suggestion: "添加刷新策略或定期手动刷新"
+
+  - id: SPEC032
+    name: "跨 Catalog JOIN 性能风险"
+    level: WARNING
+    category: "数据操作规范"
+    description: "跨 catalog 的 JOIN 操作可能有性能影响"
+    applies_to: ["SELECT"]
+    check_type: "token_pattern"
+    pattern: "JOIN with tables from different catalogs"
+    source: "HetuEngine 最佳实践"
+    fix_suggestion: "尽量避免跨 catalog JOIN，或将数据迁移到同一 catalog"
+
+  - id: SPEC033
+    name: "大表查询建议使用 TABLESAMPLE"
+    level: INFO
+    category: "数据操作规范"
+    description: "近似查询场景建议使用 TABLESAMPLE 采样"
+    applies_to: ["SELECT"]
+    check_type: "ast_pattern"
+    pattern: "SelectStmt on large table without tablesample"
+    source: "HetuEngine 最佳实践"
+    fix_suggestion: "使用 TABLESAMPLE SYSTEM(10) 或 TABLESAMPLE BERNOULLI(10)"
+
+  - id: SPEC034
+    name: "ORC 表缺少压缩配置"
+    level: INFO
+    category: "对象设计规范"
+    description: "ORC 表应指定压缩格式以提升存储和查询性能"
+    applies_to: ["CREATE TABLE"]
+    check_type: "token_ast_pattern"
+    pattern: "stored_as=ORC without orc.compress in tblproperties"
+    source: "HetuEngine 最佳实践"
+    fix_suggestion: "添加 TBLPROPERTIES ('orc.compress'='ZLIB' or 'SNAPPY' or 'LZ4')"

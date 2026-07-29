@@ -1,0 +1,214 @@
+# HetuEngine SQL 语法检查规则
+# 基于 HetuEngine Hive 兼容语法定义
+
+syntax_rules:
+  # ---- 词法级检查 ----
+  - id: SYN-ERR
+    name: "词法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "SQL 文本中存在无法识别的字符或格式错误"
+    check_type: "tokenizer_error"
+    fix_suggestion: "检查 SQL 文本中是否存在非法字符、未闭合的引号或注释"
+
+  - id: SYN001
+    name: "无效关键字使用"
+    level: ERROR
+    category: "语法检查"
+    description: "使用了 HetuEngine 不支持的关键字"
+    check_type: "keyword_validation"
+    check_logic: "Token 类型为关键字时，验证其存在于 HetuEngine 关键字表中"
+    fix_suggestion: "查阅 HetuEngine SQL 参考手册确认支持的关键字"
+
+  - id: SYN002
+    name: "保留关键字用作标识符"
+    level: ERROR
+    category: "语法检查"
+    description: "保留关键字不能用作表名/列名等标识符，除非用双引号引用"
+    check_type: "reserved_keyword_check"
+    check_logic: "标识符 Token 匹配 RESERVED_KEYWORD 列表时报错"
+    fix_suggestion: "使用双引号引用保留关键字，如 \"USER\" 或更换标识符名称"
+
+  - id: SYN003
+    name: "语法结构错误"
+    level: ERROR
+    category: "语法检查"
+    description: "SQL 语句结构不符合语法规范，缺少必选子句或关键字"
+    check_type: "structure_validation"
+    check_logic: "根据语句类型的 required_clauses 验证完整性"
+    fix_suggestion: "检查语句是否缺少必选关键字或子句"
+
+  # ---- 子句级检查 ----
+  - id: SYN004
+    name: "子句顺序错误"
+    level: ERROR
+    category: "语法检查"
+    description: "SQL 子句顺序不符合语法规范"
+    check_logic: "验证子句出现顺序：SELECT → FROM → WHERE → GROUP BY → HAVING → WINDOW → ORDER BY → OFFSET → LIMIT → FETCH"
+    correct_order:
+      - SELECT
+      - FROM
+      - WHERE
+      - GROUP BY
+      - HAVING
+      - WINDOW
+      - ORDER BY
+      - OFFSET
+      - LIMIT
+      - FETCH
+    fix_suggestion: "按照正确顺序重排 SQL 子句"
+
+  - id: SYN005
+    name: "PARTITIONED BY 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "分区定义语法不合法，HetuEngine 使用 PARTITIONED BY 而非 PARTITION BY"
+    check_logic: "验证 PARTITIONED BY (col type) 语法结构，兼容 Hive 语法"
+    applies_to: ["CREATE TABLE"]
+    fix_suggestion: "使用 PARTITIONED BY (col1 type1, col2 type2) 定义分区列"
+
+  - id: SYN006
+    name: "STORED AS 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "存储格式定义不合法"
+    check_logic: "验证 STORED AS format 语法，format 必须为支持的格式"
+    valid_formats:
+      - ORC
+      - PARQUET
+      - AVRO
+      - RCBINARY
+      - RCTEXT
+      - SEQUENCEFILE
+      - JSON
+      - TEXTFILE
+      - TEXTFILE_MULTIDELIM
+      - CSV
+    applies_to: ["CREATE TABLE"]
+    fix_suggestion: "使用 STORED AS ORC/PARQUET/AVRO/RCBINARY/RCTEXT/SEQUENCEFILE/JSON/TEXTFILE/TEXTFILE_MULTIDELIM/CSV"
+
+  - id: SYN007
+    name: "CLUSTERED BY 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "分桶定义语法不合法"
+    check_logic: "验证 CLUSTERED BY (col_list) INTO num_buckets BUCKETS 语法"
+    applies_to: ["CREATE TABLE"]
+    fix_suggestion: "使用 CLUSTERED BY (col1, col2) INTO 32 BUCKETS"
+
+  - id: SYN008
+    name: "EXPLAIN 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "EXPLAIN 选项不合法"
+    check_logic: "验证 EXPLAIN [ANALYZE|VERBOSE|IO|TYPE|GRAPHVIZ] 语法"
+    valid_options:
+      - ANALYZE
+      - VERBOSE
+      - IO
+      - TYPE
+      - GRAPHVIZ
+    applies_to: ["EXPLAIN"]
+    fix_suggestion: "使用 EXPLAIN [ANALYZE|VERBOSE|IO|TYPE|GRAPHVIZ] statement"
+
+  - id: SYN009
+    name: "TABLESAMPLE 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "TABLESAMPLE 采样语法不合法"
+    check_logic: "验证 TABLESAMPLE [SYSTEM|BERNOULLI](percentage) 语法"
+    valid_methods:
+      - SYSTEM
+      - BERNOULLI
+    applies_to: ["SELECT"]
+    fix_suggestion: "使用 TABLESAMPLE SYSTEM(10) 或 TABLESAMPLE BERNOULLI(10)"
+
+  - id: SYN010
+    name: "INSERT OVERWRITE 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "INSERT OVERWRITE 语句结构不合法"
+    check_logic: "验证 INSERT OVERWRITE [INTO|TABLE] table_name [PARTITION(...)] SELECT ... 语法"
+    applies_to: ["INSERT"]
+    fix_suggestion: "使用 INSERT OVERWRITE TABLE table_name [PARTITION(...)] SELECT ..."
+
+  - id: SYN011
+    name: "LOAD DATA 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "LOAD DATA INPATH 语句结构不合法"
+    check_logic: "验证 LOAD DATA [LOCAL] INPATH 'path' [OVERWRITE] INTO TABLE table_name [PARTITION(...)] 语法"
+    applies_to: ["LOAD DATA"]
+    fix_suggestion: "使用 LOAD DATA [LOCAL] INPATH 'path' [OVERWRITE] INTO TABLE table_name"
+
+  - id: SYN012
+    name: "CREATE FUNCTION 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "CREATE FUNCTION 语句结构不合法"
+    check_logic: "验证 CREATE [TEMPORARY] FUNCTION [IF NOT EXISTS] name AS 'class_name' [USING JAR|FILE 'path'] 语法"
+    applies_to: ["CREATE FUNCTION"]
+    fix_suggestion: "使用 CREATE FUNCTION name AS 'com.example.MyUDF' USING JAR 'hdfs://path/to/jar'"
+
+  - id: SYN013
+    name: "CREATE MATERIALIZED VIEW 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "物化视图创建语句结构不合法"
+    check_logic: "验证 CREATE MATERIALIZED VIEW [IF NOT EXISTS] name [PARTITIONED BY (...)] AS SELECT ... 语法"
+    applies_to: ["CREATE MATERIALIZED VIEW"]
+    fix_suggestion: "使用 CREATE MATERIALIZED VIEW name AS SELECT ... [PARTITIONED BY (...)]"
+
+  - id: SYN014
+    name: "FETCH 子句语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "FETCH FIRST/NEXT 子句语法不合法"
+    check_logic: "验证 FETCH {FIRST|NEXT} [count] {ROW|ROWS} ONLY 语法"
+    applies_to: ["SELECT"]
+    fix_suggestion: "使用 FETCH FIRST 10 ROWS ONLY 或 FETCH NEXT 5 ROWS ONLY"
+
+  - id: SYN015
+    name: "MATCH_RECOGNIZE 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "MATCH_RECOGNIZE 语句结构不合法"
+    check_logic: "验证 MATCH_RECOGNIZE (PARTITION BY ... ORDER BY ... MEASURES ... PATTERN ... DEFINE ...) 语法"
+    applies_to: ["SELECT"]
+    fix_suggestion: "确保 MATCH_RECOGNIZE 包含 PARTITION BY、ORDER BY、MEASURES、PATTERN 和 DEFINE 子句"
+
+  - id: SYN016
+    name: "Semi/Anti Join 语法错误"
+    level: WARNING
+    category: "语法检查"
+    description: "LEFT/RIGHT SEMI/ANTI JOIN 使用不当"
+    check_logic: "验证 LEFT SEMI JOIN / LEFT ANTI JOIN 语法，不支持 RIGHT SEMI/ANTI JOIN"
+    applies_to: ["SELECT"]
+    fix_suggestion: "使用 LEFT SEMI JOIN 或 LEFT ANTI JOIN，不支持 RIGHT SEMI/ANTI JOIN"
+
+  - id: SYN017
+    name: "WITH RECURSIVE 语法错误"
+    level: WARNING
+    category: "语法检查"
+    description: "递归 CTE 语法问题"
+    check_logic: "验证 WITH RECURSIVE name AS (anchor UNION ALL recursive) 语法"
+    applies_to: ["SELECT"]
+    fix_suggestion: "确保递归 CTE 包含锚定成员和递归成员，使用 UNION ALL 连接"
+
+  - id: SYN018
+    name: "ROW FORMAT 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "ROW FORMAT DELIMITED 结构不合法"
+    check_logic: "验证 ROW FORMAT DELIMITED FIELDS TERMINATED BY '...' [LINES TERMINATED BY '...'] 语法"
+    applies_to: ["CREATE TABLE"]
+    fix_suggestion: "使用 ROW FORMAT DELIMITED FIELDS TERMINATED BY '\\t' LINES TERMINATED BY '\\n'"
+
+  - id: SYN019
+    name: "Virtual Schema 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "CREATE VIRTUAL SCHEMA 语句结构不合法"
+    check_logic: "验证 CREATE VIRTUAL SCHEMA name [WITH (properties)] 语法"
+    applies_to: ["CREATE VIRTUAL SCHEMA"]
+    fix_suggestion: "使用 CREATE VIRTUAL SCHEMA name WITH (connector='...', catalog='...')"
