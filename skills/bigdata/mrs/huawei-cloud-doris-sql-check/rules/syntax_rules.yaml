@@ -1,0 +1,418 @@
+# Apache Doris SQL 语法检查规则
+# 基于 Doris 3.1.4 Nereids ANTLR4 语法 (DorisLexer.g4 / DorisParser.g4) 提取
+
+syntax_rules:
+  # ---- 词法级检查 ----
+  - id: SYN-ERR
+    name: "词法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "SQL 文本中存在无法识别的字符或格式错误"
+    check_type: "tokenizer_error"
+    fix_suggestion: "检查 SQL 文本中是否存在非法字符、未闭合的引号或注释"
+
+  - id: SYN001
+    name: "无效关键字使用"
+    level: ERROR
+    category: "语法检查"
+    description: "使用了 Doris 不支持的关键字（Doris 3.1.4 共有 504 个关键字）"
+    check_type: "keyword_validation"
+    check_logic: "Token 类型为关键字时，验证其存在于 Doris 关键字表中"
+    fix_suggestion: "查阅 Doris SQL 参考手册确认支持的关键字"
+
+  - id: SYN002
+    name: "保留关键字用作标识符"
+    level: ERROR
+    category: "语法检查"
+    description: "Doris 保留关键字（约 130 个）不能用作表名/列名等标识符，除非用反引号(`)引用"
+    check_type: "reserved_keyword_check"
+    check_logic: "标识符 Token 匹配 RESERVED_KEYWORD 列表时报错"
+    fix_suggestion: "使用反引号引用保留关键字，如 `USER` 或更换标识符名称（Doris 使用反引号而非双引号）"
+
+  - id: SYN003
+    name: "语法结构错误"
+    level: ERROR
+    category: "语法检查"
+    description: "SQL 语句结构不符合 Doris 语法规范，缺少必选子句或关键字"
+    check_type: "structure_validation"
+    check_logic: "根据语句类型的 required_clauses 验证完整性"
+    fix_suggestion: "检查语句是否缺少 Doris 必选关键字或子句"
+
+  # ---- 子句级检查 ----
+  - id: SYN004
+    name: "子句顺序错误"
+    level: ERROR
+    category: "语法检查"
+    description: "SQL 子句顺序不符合 Doris 语法规范"
+    check_logic: "验证子句出现顺序：SELECT → FROM → WHERE → GROUP BY → HAVING → ORDER BY → LIMIT → OFFSET → INTO OUTFILE"
+    correct_order:
+      - SELECT
+      - FROM
+      - WHERE
+      - GROUP BY
+      - HAVING
+      - ORDER BY
+      - LIMIT
+      - OFFSET
+      - INTO OUTFILE
+    fix_suggestion: "按照正确顺序重排 SQL 子句"
+
+  # ---- Doris 特有语法检查 ----
+  - id: SYN005
+    name: "DISTRIBUTED BY 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "Doris 分布策略不合法，仅支持 HASH(列) 或 RANDOM"
+    check_logic: "验证分布类型为 HASH(列列表) 或 RANDOM 之一"
+    valid_strategies:
+      - HASH
+      - RANDOM
+    applies_to: ["CREATE_TABLE", "CREATE_MTMV", "ALTER_TABLE"]
+    fix_suggestion: "使用 DISTRIBUTED BY HASH(col1, col2) 或 DISTRIBUTED BY RANDOM"
+    note: "Doris 不支持 DWS 的 MODULO/REPLICATION/ROUNDROBIN 分布策略"
+
+  - id: SYN006
+    name: "PARTITION BY 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "分区定义语法不合法，Doris 支持 RANGE/LIST/AUTO 三种分区"
+    check_logic: "验证 PARTITION BY (RANGE|LIST)? ... (AUTO)? 语法结构"
+    valid_partition_types:
+      - RANGE
+      - LIST
+      - AUTO
+    applies_to: ["CREATE_TABLE", "CREATE_MTMV", "ALTER_TABLE"]
+    fix_suggestion: "使用 PARTITION BY RANGE(col) 或 PARTITION BY LIST(col) 或 AUTO PARTITION BY RANGE(col)"
+    note: "Doris 不支持 DWS 的 INTERVAL 分区，但支持 AUTO 自动分区"
+
+  - id: SYN007
+    name: "BUCKETS 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "BUCKETS 子句不合法，必须为正整数或 AUTO"
+    check_logic: "验证 BUCKETS (INTEGER_VALUE | AUTO) 语法"
+    applies_to: ["CREATE_TABLE", "CREATE_MTMV", "ALTER_TABLE"]
+    fix_suggestion: "使用 BUCKETS 10 或 BUCKETS AUTO"
+
+  - id: SYN008
+    name: "EXPLAIN planType 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "EXPLAIN 计划类型不合法"
+    check_logic: "验证 EXPLAIN [PARSED|ANALYZED|REWRITTEN|LOGICAL|OPTIMIZED|PHYSICAL|SHAPE|MEMO|DISTRIBUTED|ALL] 语法"
+    valid_plan_types:
+      - PARSED
+      - ANALYZED
+      - REWRITTEN
+      - LOGICAL
+      - OPTIMIZED
+      - PHYSICAL
+      - SHAPE
+      - MEMO
+      - DISTRIBUTED
+      - ALL
+    valid_levels:
+      - VERBOSE
+      - TREE
+      - GRAPH
+      - PLAN
+      - DUMP
+    applies_to: ["EXPLAIN"]
+    fix_suggestion: "使用 EXPLAIN ANALYZED SELECT ... 或 EXPLAIN VERBOSE SELECT ..."
+
+  - id: SYN009
+    name: "KEY 模型语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "Doris 数据模型定义不合法，仅支持 DUPLICATE/AGGREGATE/UNIQUE KEY"
+    check_logic: "验证 (DUPLICATE | AGGREGATE | UNIQUE) KEY (列列表) (CLUSTER BY 列列表)? 语法"
+    valid_key_models:
+      - DUPLICATE
+      - AGGREGATE
+      - UNIQUE
+    applies_to: ["CREATE_TABLE"]
+    fix_suggestion: "使用 DUPLICATE KEY(col1, col2) 或 AGGREGATE KEY(col1) 或 UNIQUE KEY(col1)"
+
+  - id: SYN010
+    name: "PROPERTIES 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "PROPERTIES 子句语法不合法"
+    check_logic: "验证 PROPERTIES ('key'='value', ...) 语法"
+    applies_to: ["CREATE_TABLE", "CREATE_MTMV", "ALTER_TABLE", "LOAD", "EXPORT", "CREATE_CATALOG"]
+    fix_suggestion: "使用 PROPERTIES ('replication_num'='3', 'compaction'='true')"
+
+  - id: SYN011
+    name: "ENGINE 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "ENGINE 子句不合法，Doris 支持多种存储引擎"
+    check_logic: "验证 ENGINE = olap | mysql | elasticsearch | hive | hudi | iceberg | jdbc | broker | odbc 语法"
+    valid_engines:
+      - OLAP
+      - MYSQL
+      - ELASTICSEARCH
+      - HIVE
+      - HUDI
+      - ICEBERG
+      - JDBC
+      - BROKER
+      - ODBC
+    applies_to: ["CREATE_TABLE"]
+    fix_suggestion: "使用 ENGINE = olap (默认，Doris 原生引擎)"
+
+  - id: SYN012
+    name: "INSERT OVERWRITE 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "INSERT OVERWRITE 语句结构不合法"
+    check_logic: "验证 INSERT OVERWRITE TABLE tableName ... 语法（注意必须有 TABLE 关键字）"
+    applies_to: ["INSERT"]
+    fix_suggestion: "使用 INSERT OVERWRITE TABLE target_table SELECT ... 或 INSERT INTO target_table SELECT ..."
+    note: "Doris 要求 INSERT OVERWRITE 后必须加 TABLE 关键字"
+
+  - id: SYN013
+    name: "LOAD 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "LOAD LABEL (BROKER LOAD) 语句结构不合法"
+    check_logic: "验证 LOAD LABEL label_name (DATA INFILE ('file') INTO TABLE target ...) 语法"
+    applies_to: ["LOAD"]
+    fix_suggestion: "使用 LOAD LABEL db.label (DATA INFILE ('hdfs://...') INTO TABLE target)"
+
+  - id: SYN014
+    name: "ROUTINE LOAD 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "CREATE ROUTINE LOAD 语句结构不合法"
+    check_logic: "验证 CREATE ROUTINE LOAD name ON table (FROM type (props))? properties? 语法"
+    applies_to: ["ROUTINE_LOAD"]
+    fix_suggestion: "使用 CREATE ROUTINE LOAD job_name ON target_table FROM KAFKA ('kafka_broker_list'='...', 'kafka_topic'='...')"
+
+  - id: SYN015
+    name: "EXPORT 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "EXPORT 语句结构不合法"
+    check_logic: "验证 EXPORT TABLE tableName (PARTITION ...)? (WHERE ...)? TO 'path' (PROPERTIES ...)? 语法"
+    applies_to: ["EXPORT"]
+    fix_suggestion: "使用 EXPORT TABLE target TO 'hdfs://path' PROPERTIES (...)"
+
+  - id: SYN016
+    name: "BACKUP/RESTORE SNAPSHOT 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "BACKUP/RESTORE SNAPSHOT 语句结构不合法"
+    check_logic: "验证 BACKUP SNAPSHOT name TO repo (ON|EXCLUDE ...)? properties? / RESTORE SNAPSHOT name FROM repo ... 语法"
+    applies_to: ["BACKUP", "RESTORE"]
+    fix_suggestion: "使用 BACKUP SNAPSHOT db.snapshot TO repository 或 RESTORE SNAPSHOT db.snapshot FROM repository"
+
+  - id: SYN017
+    name: "CREATE MATERIALIZED VIEW (MTMV) 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "CREATE MATERIALIZED VIEW 语句结构不合法"
+    check_logic: "验证 CREATE MATERIALIZED VIEW name ... (BUILD IMMEDIATE|DEFERRED)? (REFRESH COMPLETE|AUTO)? ... AS? query 语法"
+    applies_to: ["CREATE_MTMV"]
+    valid_build_modes: [IMMEDIATE, DEFERRED]
+    valid_refresh_methods: [COMPLETE, AUTO]
+    valid_refresh_triggers: [MANUAL, SCHEDULE, COMMIT]
+    fix_suggestion: "使用 CREATE MATERIALIZED VIEW mv_name DISTRIBUTED BY HASH(id) BUCKETS 10 REFRESH COMPLETE ON COMMIT AS SELECT ..."
+
+  - id: SYN018
+    name: "CREATE CATALOG 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "CREATE CATALOG 语句结构不合法"
+    check_logic: "验证 CREATE CATALOG (IF NOT EXISTS)? name (WITH RESOURCE ...)? (COMMENT)? properties? 语法"
+    applies_to: ["CREATE_CATALOG"]
+    fix_suggestion: "使用 CREATE CATALOG hive_catalog PROPERTIES ('type'='hive', 'hive.metastore.uris'='...')"
+
+  - id: SYN019
+    name: "CREATE USER/ROLE 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "CREATE USER/ROLE 语句结构不合法"
+    check_logic: "验证 CREATE USER (IF NOT EXISTS)? user (SUPERUSER | DEFAULT ROLE ...)? passwordOption* (COMMENT)? / CREATE ROLE ... 语法"
+    applies_to: ["CREATE_USER", "CREATE_ROLE"]
+    fix_suggestion: "使用 CREATE USER user_name IDENTIFIED BY 'password' DEFAULT ROLE role_name"
+
+  - id: SYN020
+    name: "CREATE ROW POLICY 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "CREATE ROW POLICY 语句结构不合法"
+    check_logic: "验证 CREATE ROW POLICY name ON table AS (RESTRICTIVE|PERMISSIVE) TO (user|ROLE) USING (booleanExpression) 语法"
+    applies_to: ["CREATE_ROW_POLICY"]
+    valid_policy_types: [RESTRICTIVE, PERMISSIVE]
+    fix_suggestion: "使用 CREATE ROW POLICY policy_name ON table_name AS RESTRICTIVE TO ROLE role_name USING (col = 1)"
+
+  - id: SYN021
+    name: "CREATE SQL_BLOCK_RULE 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "CREATE SQL_BLOCK_RULE 语句结构不合法"
+    check_logic: "验证 CREATE SQL_BLOCK_RULE name properties? 语法"
+    applies_to: ["CREATE_SQL_BLOCK_RULE"]
+    fix_suggestion: "使用 CREATE SQL_BLOCK_RULE rule_name PROPERTIES (...)"
+
+  - id: SYN022
+    name: "CREATE STAGE 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "CREATE STAGE 语句结构不合法"
+    check_logic: "验证 CREATE STAGE (IF NOT EXISTS)? name properties? 语法"
+    applies_to: ["CREATE_STAGE"]
+    fix_suggestion: "使用 CREATE STAGE stage_name PROPERTIES (...)"
+
+  - id: SYN023
+    name: "CREATE JOB 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "CREATE JOB ON SCHEDULE 语句结构不合法"
+    check_logic: "验证 CREATE JOB name ON SCHEDULE (EVERY timeUnit (STARTS)? (ENDS)? | AT time) (COMMENT)? DO dml 语法"
+    applies_to: ["CREATE_JOB"]
+    fix_suggestion: "使用 CREATE JOB job_name ON SCHEDULE EVERY 1 DAY DO INSERT INTO t SELECT ..."
+
+  - id: SYN024
+    name: "CREATE ENCRYPTKEY 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "CREATE ENCRYPTKEY 语句结构不合法"
+    check_logic: "验证 CREATE ENCRYPTKEY (IF NOT EXISTS)? multipartIdentifier AS STRING_LITERAL 语法"
+    applies_to: ["CREATE_ENCRYPTKEY"]
+    fix_suggestion: "使用 CREATE ENCRYPTKEY db.key_name AS 'key_value'"
+
+  - id: SYN025
+    name: "ADMIN SET/SHOW 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "ADMIN 语句结构不合法"
+    check_logic: "验证 ADMIN SET/SHOW (REPLICA_STATUS | REPLICA_VERSION | FRONTEND_CONFIG | ...) 语法"
+    applies_to: ["ADMIN"]
+    valid_admin_actions:
+      - SET_REPLICA_STATUS
+      - SET_REPLICA_VERSION
+      - SET_PARTITION_VERSION
+      - SET_FRONTEND_CONFIG
+      - SET_TABLE_STATUS
+      - SET_ENCRYPTION_ROOT_KEY
+      - SHOW_REPLICA_STATUS
+      - SHOW_REPLICA_DISTRIBUTION
+      - SHOW_TABLET_STORAGE_FORMAT
+      - SHOW_TABLET_DIAGNOSE
+      - SHOW_FRONTEND_CONFIG
+      - COPY_TABLET
+      - REPAIR_TABLE
+      - CANCEL_REPAIR_TABLE
+      - COMPACT_TABLE
+      - CHECK_TABLETS
+      - REBALANCE_DISK
+      - CANCEL_REBALANCE_DISK
+      - CLEAN_TRASH
+      - ROTATE_TDE_ROOT_KEY
+    fix_suggestion: "使用 ADMIN SHOW FRONTEND CONFIG 或 ADMIN SET REPLICA STATUS PROPERTIES (...)"
+
+  - id: SYN026
+    name: "CANCEL 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "CANCEL 语句结构不合法"
+    check_logic: "验证 CANCEL (LOAD | EXPORT | ALTER TABLE | BUILD INDEX | BACKUP | RESTORE | WARM UP | MTMV TASK) 语法"
+    applies_to: ["CANCEL"]
+    valid_cancel_types:
+      - LOAD
+      - EXPORT
+      - ALTER TABLE
+      - BUILD INDEX
+      - BACKUP
+      - RESTORE
+      - WARM UP
+      - MTMV TASK
+    fix_suggestion: "使用 CANCEL LOAD FROM db WHERE label='...' 或 CANCEL EXPORT FROM db WHERE label='...'"
+
+  - id: SYN027
+    name: "KILL 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "KILL 语句结构不合法"
+    check_logic: "验证 KILL (CONNECTION | QUERY)? connectionId 语法"
+    applies_to: ["KILL"]
+    valid_kill_types: [CONNECTION, QUERY]
+    fix_suggestion: "使用 KILL QUERY 12345 或 KILL CONNECTION 12345"
+
+  - id: SYN028
+    name: "TABLESAMPLE 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "TABLESAMPLE 子句语法不合法"
+    check_logic: "验证 TABLESAMPLE (PERCENT | ROWS) (REPEATABLE seed)? 语法"
+    applies_to: ["SELECT"]
+    fix_suggestion: "使用 TABLESAMPLE(10 PERCENT) 或 TABLESAMPLE(1000 ROWS) 或 TABLESAMPLE(10 PERCENT) REPEATABLE 1"
+
+  - id: SYN029
+    name: "OUTFILE 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "OUTFILE 子句语法不合法"
+    check_logic: "验证 INTO OUTFILE 'path' (FORMAT AS format)? (PROPERTIES (...))? 语法"
+    applies_to: ["SELECT"]
+    fix_suggestion: "使用 INTO OUTFILE 'hdfs://path/file_' FORMAT AS csv PROPERTIES (...)"
+
+  - id: SYN030
+    name: "Hint 语法错误"
+    level: WARNING
+    category: "语法检查"
+    description: "Optimizer Hint 格式不合法"
+    check_logic: "验证 /*+ hint_name(params) */ 格式 或 [hint_name] 关系提示格式"
+    applies_to: ["SELECT", "INSERT", "UPDATE", "DELETE", "MERGE"]
+    fix_suggestion: "使用 /*+ SET_VAR(time_zone='Asia/Shanghai') */ 或 /*+ SET_VAR(exec_mem_limit='8G') */ 格式"
+
+  - id: SYN031
+    name: "全文检索 MATCH 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "Doris 全文检索语法不合法"
+    check_logic: "验证 column MATCH_ALL/MATCH_ANY/MATCH_PHRASE/MATCH_PHRASE_PREFIX/MATCH_PHRASE_EDGE/MATCH_REGEXP 'text' 语法"
+    valid_match_operators:
+      - MATCH_ALL
+      - MATCH_ANY
+      - MATCH_PHRASE
+      - MATCH_PHRASE_PREFIX
+      - MATCH_PHRASE_EDGE
+      - MATCH_REGEXP
+      - MATCH_NAME
+      - MATCH_NAME_GLOB
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    fix_suggestion: "使用 col MATCH_PHRASE 'search text' 或 col MATCH_ANY 'term1 term2'"
+
+  - id: SYN032
+    name: "COLOCATE GROUP 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "ALTER COLOCATE GROUP 语句结构不合法"
+    check_logic: "验证 ALTER COLOCATE GROUP name SET propertyClause 语法"
+    applies_to: ["ALTER_COLOCATE_GROUP"]
+    fix_suggestion: "使用 ALTER COLOCATE GROUP group_name SET ('replication_num'='3')"
+
+  - id: SYN033
+    name: "GRANT/REVOKE 语法错误"
+    level: ERROR
+    category: "语法检查"
+    description: "GRANT/REVOKE 语句结构不合法"
+    check_logic: "验证 GRANT privilegeList ON object TO (user|ROLE) / REVOKE ... FROM ... 语法"
+    applies_to: ["GRANT", "REVOKE"]
+    valid_privileges:
+      - SELECT
+      - INSERT
+      - UPDATE
+      - DELETE
+      - LOAD
+      - EXPORT
+      - ALTER
+      - CREATE
+      - DROP
+      - USAGE
+      - SHOW
+      - ALL
+    fix_suggestion: "使用 GRANT SELECT ON db.table TO user_name 或 GRANT ALL ON db.* TO ROLE role_name"

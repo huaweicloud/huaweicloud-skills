@@ -1,0 +1,472 @@
+# Apache Doris SQL 规范检查规则
+# 基于 Doris 3.1.4 开发最佳实践
+
+spec_rules:
+  # ---- 对象设计规范 ----
+  - id: SPEC001
+    name: "CREATE TABLE 缺少 DISTRIBUTED BY"
+    level: ERROR
+    category: "对象设计规范"
+    description: "Doris 建表必须指定分布策略（DISTRIBUTED BY HASH(列) 或 RANDOM），否则使用默认值可能导致数据倾斜"
+    applies_to: ["CREATE_TABLE"]
+    check_type: "ast_pattern"
+    pattern: "CreateStmt without distributed_by"
+    source: "Doris 建表规范"
+    fix_suggestion: "添加 DISTRIBUTED BY HASH(分布键) BUCKETS 10 或 DISTRIBUTED BY RANDOM BUCKETS 10"
+
+  - id: SPEC002
+    name: "CREATE TABLE 缺少 ENGINE"
+    level: INFO
+    category: "对象设计规范"
+    description: "建议显式指定 ENGINE，默认为 OLAP（Doris 原生引擎）"
+    applies_to: ["CREATE_TABLE"]
+    check_type: "ast_pattern"
+    pattern: "CreateStmt without engine"
+    fix_suggestion: "添加 ENGINE = olap（或 mysql/hive/jdbc 等外部数据源引擎）"
+
+  - id: SPEC003
+    name: "禁止使用 SELECT *"
+    level: ERROR
+    category: "数据操作规范"
+    description: "查询语句必须明确指定字段列表，SELECT * 会导致不必要的 I/O 和网络传输，且 Doris 列存场景下更明显"
+    applies_to: ["SELECT"]
+    check_type: "ast_pattern"
+    pattern: "SelectStmt with has_select_star"
+    source: "Doris 查询规范"
+    fix_suggestion: "将 SELECT * 替换为具体的字段列表"
+
+  - id: SPEC004
+    name: "DELETE/UPDATE 缺少 WHERE 条件"
+    level: ERROR
+    category: "数据操作规范"
+    description: "DELETE/UPDATE 语句必须包含 WHERE 条件，否则将影响全表数据。Doris 的 UPDATE/DELETE 是 read-merge-write，开销大"
+    applies_to: ["DELETE", "UPDATE"]
+    check_type: "ast_pattern"
+    pattern: "DeleteStmt/UpdateStmt with missing_where"
+    fix_suggestion: "添加 WHERE 条件限制操作范围"
+
+  - id: SPEC005
+    name: "NOT IN 子查询性能风险"
+    level: WARNING
+    category: "数据操作规范"
+    description: "NOT IN 子查询可能导致性能问题，建议改用 NOT EXISTS 或 LEFT JOIN ... IS NULL"
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    check_type: "token_pattern"
+    pattern: "NOT IN (SELECT ...)"
+    fix_suggestion: "将 NOT IN (SELECT ...) 改写为 NOT EXISTS (SELECT ...) 或 LEFT JOIN ... WHERE col IS NULL"
+
+  - id: SPEC006
+    name: "DISTINCT 可能影响性能"
+    level: INFO
+    category: "数据操作规范"
+    description: "使用 DISTINCT 会导致排序去重，大数据量下可能影响性能。Doris 在 GROUP BY 上有更好的优化"
+    applies_to: ["SELECT"]
+    check_type: "ast_pattern"
+    pattern: "SelectStmt with distinct"
+    fix_suggestion: "考虑使用 GROUP BY 替代 DISTINCT，或确保查询结果本身已唯一"
+
+  - id: SPEC007
+    name: "隐式类型转换风险"
+    level: WARNING
+    category: "数据操作规范"
+    description: "WHERE 条件中可能存在隐式类型转换，导致 zone-map 索引失效、统计信息偏差"
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    check_type: "token_pattern"
+    pattern: "WHERE column = 'number' (string-number mismatch)"
+    fix_suggestion: "确保比较操作两侧的数据类型一致，使用显式类型转换 CAST(col AS type)"
+
+  - id: SPEC008
+    name: "LIKE 前缀通配符导致全表扫描"
+    level: WARNING
+    category: "数据操作规范"
+    description: "LIKE '%...' 模式无法使用 zone-map 或倒排索引，将导致全表扫描"
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    check_type: "token_pattern"
+    pattern: "LIKE '%...'"
+    fix_suggestion: "避免使用前缀通配符，或考虑使用 Doris 倒排索引（INVERTED INDEX）+ MATCH 查询"
+
+  - id: SPEC009
+    name: "OR 条件可能导致性能问题"
+    level: INFO
+    category: "数据操作规范"
+    description: "OR 条件可能导致查询优化器无法选择最优执行计划"
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    check_type: "token_pattern"
+    pattern: "WHERE ... OR ..."
+    fix_suggestion: "考虑将 OR 改写为 UNION ALL，或使用 IN 子句"
+
+  - id: SPEC010
+    name: "IN 列表过长"
+    level: WARNING
+    category: "数据操作规范"
+    description: "IN 列表包含过多值（>1000），可能影响性能"
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    check_type: "token_pattern"
+    pattern: "IN (val1, val2, ...) with >1000 values"
+    fix_suggestion: "将 IN 列表改写为临时表 JOIN 或子查询"
+
+  - id: SPEC011
+    name: "FROM 子句中的子查询"
+    level: INFO
+    category: "数据操作规范"
+    description: "FROM 子句中使用子查询可能影响优化器生成最优计划"
+    applies_to: ["SELECT"]
+    check_type: "ast_pattern"
+    pattern: "SelectStmt with subquery in from_clause"
+    fix_suggestion: "考虑将子查询改写为 CTE (WITH 子句) 或临时表"
+
+  - id: SPEC012
+    name: "笛卡尔积风险"
+    level: ERROR
+    category: "数据操作规范"
+    description: "多表查询缺少 JOIN 条件，可能产生笛卡尔积"
+    applies_to: ["SELECT"]
+    check_type: "ast_pattern"
+    pattern: "SelectStmt with multiple from_tables and no join/where"
+    fix_suggestion: "使用显式 JOIN 语法并指定 ON 条件"
+
+  - id: SPEC013
+    name: "INSERT 缺少列列表"
+    level: WARNING
+    category: "数据操作规范"
+    description: "INSERT 语句未指定列列表，依赖列的默认顺序，可能导致兼容性问题"
+    applies_to: ["INSERT"]
+    check_type: "ast_pattern"
+    pattern: "InsertStmt without columns"
+    fix_suggestion: "添加列列表 INSERT INTO table (col1, col2, ...) VALUES ..."
+
+  - id: SPEC014
+    name: "CREATE TABLE 缺少表注释"
+    level: INFO
+    category: "对象设计规范"
+    description: "表未添加注释，不利于后续维护"
+    applies_to: ["CREATE_TABLE"]
+    check_type: "ast_pattern"
+    pattern: "CreateStmt without comment"
+    fix_suggestion: "添加 COMMENT '表用途说明'"
+
+  # ---- 命名规范 ----
+  - id: SPEC015
+    name: "表名不符合命名规范"
+    level: WARNING
+    category: "命名规范"
+    description: "表名应使用小写字母、数字和下划线，且以字母开头"
+    applies_to: ["CREATE_TABLE", "ALTER_TABLE"]
+    check_type: "identifier_pattern"
+    pattern: "table_name not matching ^[a-z][a-z0-9_]*$"
+    fix_suggestion: "使用小写字母、数字和下划线命名表，如 user_order_detail"
+
+  - id: SPEC016
+    name: "列名不符合命名规范"
+    level: WARNING
+    category: "命名规范"
+    description: "列名应使用小写字母、数字和下划线，且以字母开头"
+    applies_to: ["CREATE_TABLE", "ALTER_TABLE"]
+    check_type: "identifier_pattern"
+    pattern: "column_name not matching ^[a-z][a-z0-9_]*$"
+    fix_suggestion: "使用小写字母、数字和下划线命名列，如 order_id"
+
+  - id: SPEC017
+    name: "使用保留关键字作标识符"
+    level: ERROR
+    category: "命名规范"
+    description: "使用 Doris 保留关键字作为表名/列名可能导致语法歧义"
+    applies_to: ["ALL"]
+    check_type: "reserved_keyword_check"
+    pattern: "identifier matching RESERVED_KEYWORD"
+    fix_suggestion: "更换标识符名称或使用反引号(`)引用（Doris 用反引号而非双引号）"
+
+  # ---- Doris 特有规范 ----
+  - id: SPEC018
+    name: "DISTRIBUTED BY HASH 列建议为列定义中出现"
+    level: WARNING
+    category: "对象设计规范"
+    description: "DISTRIBUTED BY HASH 的分布键应为表中实际存在的列"
+    applies_to: ["CREATE_TABLE"]
+    check_type: "ast_pattern"
+    pattern: "distribute column not in column definitions"
+    fix_suggestion: "确保分布键列在表定义中存在"
+
+  - id: SPEC019
+    name: "分区键建议与分布键不同"
+    level: INFO
+    category: "对象设计规范"
+    description: "分区键和分布键使用相同列可能导致数据倾斜"
+    applies_to: ["CREATE_TABLE"]
+    check_type: "ast_pattern"
+    pattern: "partition_key == distribute_key"
+    fix_suggestion: "考虑使用不同列作为分区键和分布键"
+
+  - id: SPEC020
+    name: "缺少 KEY 模型定义"
+    level: INFO
+    category: "对象设计规范"
+    description: "建议显式指定 Doris 的数据模型（DUPLICATE/AGGREGATE/UNIQUE KEY），否则默认为 DUPLICATE KEY"
+    applies_to: ["CREATE_TABLE"]
+    check_type: "ast_pattern"
+    pattern: "CreateStmt without key_model"
+    fix_suggestion: "添加 DUPLICATE KEY(col1, col2) 或 AGGREGATE KEY(col1) 或 UNIQUE KEY(col1)"
+
+  - id: SPEC021
+    name: "大表建议设计分区"
+    level: INFO
+    category: "对象设计规范"
+    description: "针对包含时间类型字段的表建议设计分区，改善查询性能和提升数据治理效率"
+    applies_to: ["CREATE_TABLE"]
+    check_type: "ast_pattern"
+    pattern: "CreateStmt without partition_by"
+    fix_suggestion: "添加 PARTITION BY RANGE(时间字段) 或 PARTITION BY LIST(枚举字段) 或 AUTO PARTITION BY RANGE(时间字段)"
+
+  - id: SPEC022
+    name: "BUCKETS 数量建议"
+    level: INFO
+    category: "对象设计规范"
+    description: "BUCKETS 数量影响并行度，建议根据表大小和 BE 节点数合理设置"
+    applies_to: ["CREATE_TABLE"]
+    check_type: "ast_pattern"
+    pattern: "CreateStmt without buckets or with inappropriate bucket count"
+    fix_suggestion: "建议单 tablet 大小在 1-10GB，BUCKETS 数量约为 表大小GB / 单 tablet 大小GB"
+
+  - id: SPEC023
+    name: "字段建议添加 NOT NULL 约束"
+    level: INFO
+    category: "对象设计规范"
+    description: "明确不存在 NULL 值的字段加上 NOT NULL 约束，优化器会在特定场景下对其进行自动优化"
+    applies_to: ["CREATE_TABLE"]
+    check_type: "ast_pattern"
+    pattern: "column without NOT NULL constraint"
+    fix_suggestion: "对明确不存在 NULL 值的字段添加 NOT NULL 约束"
+
+  - id: SPEC024
+    name: "DROP 操作建议使用 IF EXISTS"
+    level: WARNING
+    category: "SQL开发规范"
+    description: "DROP 删除对象操作存在数据丢失风险，建议使用 IF EXISTS 防止对象不存在时报错"
+    applies_to: ["DROP_TABLE", "DROP_VIEW", "DROP_INDEX"]
+    check_type: "token_pattern"
+    pattern: "DROP without IF EXISTS"
+    fix_suggestion: "使用 DROP TABLE IF EXISTS table_name 避免对象不存在时报错"
+
+  - id: SPEC025
+    name: "INSERT 多 VALUES 建议使用 STREAM LOAD 替代"
+    level: WARNING
+    category: "SQL开发规范"
+    description: "多 VALUES 批插场景入库效率低，建议使用 STREAM LOAD / BROKER LOAD / ROUTINE LOAD 替代"
+    applies_to: ["INSERT"]
+    check_type: "token_pattern"
+    pattern: "INSERT with multiple VALUES groups (>3)"
+    fix_suggestion: "使用 STREAM LOAD HTTP API 或 BROKER LOAD 替代 INSERT VALUES"
+
+  - id: SPEC026
+    name: "禁止对 Doris 表频繁小批量 INSERT"
+    level: WARNING
+    category: "SQL开发规范"
+    description: "Doris 是列存 + LSM-tree 架构，频繁小批量入库会导致 compaction 压力大、版本膨胀"
+    applies_to: ["INSERT"]
+    check_type: "token_pattern"
+    pattern: "Frequent small-batch INSERT (recommend batch > 100K rows or 100MB)"
+    fix_suggestion: "攒批入库，单次入库量建议 > 100K 行 或 > 100MB，或使用 STREAM LOAD"
+
+  - id: SPEC027
+    name: "避免频繁 UPDATE/DELETE"
+    level: WARNING
+    category: "SQL开发规范"
+    description: "Doris UPDATE/DELETE 是 read-merge-write，开销大，频繁操作影响性能"
+    applies_to: ["UPDATE", "DELETE"]
+    check_type: "token_pattern"
+    pattern: "Frequent UPDATE/DELETE operations"
+    fix_suggestion: "频繁 UPDATE/DELETE 的表考虑使用 UNIQUE KEY + merge-on-write 模型（enable_unique_key_merge_on_write=true）"
+
+  - id: SPEC028
+    name: "避免对过滤条件字段使用函数运算"
+    level: WARNING
+    category: "SQL开发规范"
+    description: "对关联条件字段和过滤条件字段进行函数运算，导致优化器无法获取准确的字段统计信息、zone-map 失效"
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    check_type: "token_pattern"
+    pattern: "WHERE func(col) = const or col.func() = const"
+    fix_suggestion: "只对常量列进行函数运算，字段列不进行函数运算"
+
+  - id: SPEC029
+    name: "禁止对大表频繁 COUNT"
+    level: WARNING
+    category: "SQL开发规范"
+    description: "Doris 大表 COUNT 需要扫描全表（或所有 key 列），频繁 COUNT 会消耗大量 I/O"
+    applies_to: ["SELECT"]
+    check_type: "token_pattern"
+    pattern: "COUNT(*) on large table"
+    fix_suggestion: "降低 COUNT 频率、使用结果缓存、分区级统计，或使用 BITMAP 精确去重"
+
+  - id: SPEC030
+    name: "查询建议使用 LIMIT 限制结果集"
+    level: INFO
+    category: "SQL开发规范"
+    description: "在实际不需要查看所有结果的场景，查询超大结果集会浪费大量资源"
+    applies_to: ["SELECT"]
+    check_type: "ast_pattern"
+    pattern: "SelectStmt without limit"
+    fix_suggestion: "添加 LIMIT 限制返回行数"
+
+  - id: SPEC031
+    name: "谨慎使用递归 CTE"
+    level: WARNING
+    category: "SQL开发规范"
+    description: "无明确终止条件递归陷入死循环，重复数据过多占用大量资源（Doris 通过 WITH CTE 实现，无显式 RECURSIVE 关键字）"
+    applies_to: ["SELECT"]
+    check_type: "token_pattern"
+    pattern: "WITH cte that references itself"
+    fix_suggestion: "根据业务表数据量和数据特征设计合理的递归终止条件"
+
+  - id: SPEC032
+    name: "访问对象建议带上 CATALOG/DB 名称"
+    level: INFO
+    category: "SQL开发规范"
+    description: "Doris 多 Catalog 场景下，不指定 CATALOG/DB 前缀可能访问到非预期的表"
+    applies_to: ["SELECT", "INSERT", "UPDATE", "DELETE"]
+    check_type: "ast_pattern"
+    pattern: "table reference without catalog.db prefix (no dot in name)"
+    fix_suggestion: "访问表对象时显式指定 catalog.db.table 格式"
+
+  - id: SPEC033
+    name: "视图嵌套不超过三层"
+    level: INFO
+    category: "对象设计规范"
+    description: "视图嵌套过深导致执行计划不稳定、耗时不稳定，视图依赖的对象重建风险高"
+    applies_to: ["CREATE_VIEW"]
+    check_type: "catalog_query"
+    pattern: "view dependency depth > 3"
+    fix_suggestion: "创建视图直接基于物理表查询，不建议嵌套视图"
+    requires_mcp: true
+
+  - id: SPEC034
+    name: "单表索引个数不宜超过5个"
+    level: WARNING
+    category: "对象设计规范"
+    description: "冗余索引浪费空间，索引多影响入库效率"
+    applies_to: ["CREATE_INDEX", "ALTER_TABLE"]
+    check_type: "catalog_query"
+    pattern: "indexes count > 5 for same table"
+    fix_suggestion: "通过组合索引控制索引个数，单表索引控制在 5 个以内"
+    requires_mcp: true
+
+  - id: SPEC035
+    name: "禁止执行不下推的 SQL"
+    level: ERROR
+    category: "SQL开发规范"
+    description: "Doris 为分布式架构，SQL 语句必须下推到 BE 才能充分利用分布式的计算资源"
+    applies_to: ["SELECT", "INSERT", "UPDATE", "DELETE"]
+    check_type: "explain_plan"
+    pattern: "EXPLAIN output contains coordinator-only execution"
+    fix_suggestion: "不使用不下推的语法和不下推的函数"
+    requires_mcp: true
+
+  - id: SPEC036
+    name: "BITMAP/HLL 列建议指定聚合类型"
+    level: WARNING
+    category: "对象设计规范"
+    description: "BITMAP/HLL 类型的列应指定 BITMAP_UNION/HLL_UNION 聚合类型，否则无法正确去重"
+    applies_to: ["CREATE_TABLE"]
+    check_type: "ast_pattern"
+    pattern: "column type is BITMAP/HLL but aggregation type is not BITMAP_UNION/HLL_UNION"
+    fix_suggestion: "在 AGGREGATE KEY 模型中使用 BITMAP_UNION(col) 或 HLL_UNION(col)"
+
+  - id: SPEC037
+    name: "重复聚合查询建议使用 MTMV"
+    level: INFO
+    category: "对象设计规范"
+    description: "对于重复执行的复杂聚合查询，建议使用 MTMV 预计算结果，避免重复计算"
+    applies_to: ["SELECT"]
+    check_type: "ast_pattern"
+    pattern: "Complex aggregation query that runs frequently"
+    fix_suggestion: "创建 MTMV (CREATE MATERIALIZED VIEW ... REFRESH COMPLETE ON COMMIT AS SELECT ...) 预计算"
+
+  - id: SPEC038
+    name: "避免频繁使用 OUTFILE 导出"
+    level: INFO
+    category: "SQL开发规范"
+    description: "SELECT ... INTO OUTFILE 频繁导出大表数据效率低，建议使用 EXPORT TABLE 语句"
+    applies_to: ["SELECT"]
+    check_type: "ast_pattern"
+    pattern: "SELECT with INTO OUTFILE clause"
+    fix_suggestion: "对于大表导出，使用 EXPORT TABLE ... TO 'path' 替代 SELECT ... INTO OUTFILE"
+
+  - id: SPEC039
+    name: "VARCHAR 长度建议显式指定"
+    level: WARNING
+    category: "对象设计规范"
+    description: "VARCHAR 不指定长度时默认为 MAX_LENGTH，可能浪费存储和内存"
+    applies_to: ["CREATE_TABLE"]
+    check_type: "ast_pattern"
+    pattern: "VARCHAR column without length"
+    fix_suggestion: "显式指定 VARCHAR(N)，如 VARCHAR(255)"
+
+  - id: SPEC040
+    name: "DECIMAL 精度建议显式指定"
+    level: WARNING
+    category: "对象设计规范"
+    description: "DECIMAL 不指定精度时默认为 DECIMALV2(27,9)，可能不满足业务需求"
+    applies_to: ["CREATE_TABLE"]
+    check_type: "ast_pattern"
+    pattern: "DECIMAL column without (precision, scale)"
+    fix_suggestion: "显式指定 DECIMAL(p,s) 或 DECIMALV3(p,s)，如 DECIMALV3(18,2)"
+
+  # ---- 复杂查询限制 ----
+  - id: SPEC041
+    name: "COUNT(DISTINCT) 使用次数过多"
+    level: ERROR
+    category: "复杂查询限制"
+    description: "SQL 语句中 COUNT(DISTINCT col) 出现次数超过 5 次，可能导致性能严重下降"
+    applies_to: ["SELECT"]
+    check_type: "token_pattern"
+    pattern: "COUNT(DISTINCT ...) count > 5"
+    fix_suggestion: "减少 COUNT(DISTINCT) 使用次数，考虑使用 GROUP BY 或拆分查询，或使用 BITMAP/HLL 精确/近似去重"
+
+  - id: SPEC042
+    name: "NOT IN 子查询禁止使用"
+    level: ERROR
+    category: "复杂查询限制"
+    description: "NOT IN 子查询会导致全表扫描和性能严重下降，Doris 优化器难以优化此类语句"
+    applies_to: ["SELECT", "UPDATE", "DELETE"]
+    check_type: "token_pattern"
+    pattern: "NOT IN (SELECT ...)"
+    fix_suggestion: "将 NOT IN (SELECT ...) 改写为 NOT EXISTS (SELECT ...) 或 LEFT JOIN ... WHERE ... IS NULL"
+
+  - id: SPEC043
+    name: "JOIN 次数过多"
+    level: ERROR
+    category: "复杂查询限制"
+    description: "SQL 语句中 JOIN 次数超过 20 次，可能导致查询计划不稳定、内存消耗过大"
+    applies_to: ["SELECT"]
+    check_type: "token_pattern"
+    pattern: "JOIN count > 20"
+    fix_suggestion: "减少 JOIN 数量，考虑拆分查询、使用中间表或临时表，或重新设计数据模型减少关联"
+
+  - id: SPEC044
+    name: "UNION ALL 次数过多"
+    level: ERROR
+    category: "复杂查询限制"
+    description: "SQL 语句中 UNION ALL 次数超过 20 次，可能导致查询计划复杂、资源消耗大"
+    applies_to: ["SELECT"]
+    check_type: "token_pattern"
+    pattern: "UNION ALL count > 20"
+    fix_suggestion: "减少 UNION ALL 次数，考虑使用临时表存储中间结果，或使用 INSERT INTO 分批次写入"
+
+  - id: SPEC045
+    name: "嵌套子查询层级过深"
+    level: ERROR
+    category: "复杂查询限制"
+    description: "SQL 语句中嵌套子查询超过 20 层，可能导致解析和执行性能严重下降"
+    applies_to: ["SELECT"]
+    check_type: "token_pattern"
+    pattern: "nested subquery depth > 20"
+    fix_suggestion: "减少子查询嵌套层级，使用 CTE (WITH 子句) 或临时表将复杂查询拆分为多个简单步骤"
+
+  - id: SPEC046
+    name: "SQL 语句长度超限"
+    level: ERROR
+    category: "复杂查询限制"
+    description: "SQL 语句长度超过 2MB，可能导致解析超时、内存占用过大"
+    applies_to: ["ALL"]
+    check_type: "sql_length"
+    pattern: "SQL text length > 2MB"
+    fix_suggestion: "缩短 SQL 语句长度，将大型 IN 列表改为临时表 JOIN，或将多个 UNION 改为批量 INSERT"
