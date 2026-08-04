@@ -202,6 +202,8 @@ hcloud SWR DeleteImageSyncRepo --namespace=group-dev --repository=my-app --remot
 
 **Auto Sync Behavior**: When `syncAuto=true`, every new image push to the source repository automatically triggers a sync to the target region. When `syncAuto=false`, sync only occurs on manual trigger.
 
+⚠️ **Query Limitation**: `ListImageAutoSyncReposDetails` only returns `syncAuto=true` configurations. `syncAuto=false` configs will not appear in query results — their absence does not indicate creation failure.
+
 ### 2. Manual Sync
 
 ```bash
@@ -345,6 +347,8 @@ Response is a flat JSON array of region objects:
 
 Response format to be verified — returns list of sync repo configurations when they exist. Returns empty when no auto sync configured.
 
+⚠️ **Limitation**: Only returns configurations where `syncAuto=true` (auto-sync). Configurations with `syncAuto=false` (manual sync only) will **not** appear in results. See [Task: Image Sync](references/task-image-sync.md) W3 for workaround.
+
 ### ListTriggersDetails
 
 Response format to be verified — returns list of trigger objects when they exist. Returns empty when no triggers configured.
@@ -418,6 +422,9 @@ See [Verification Method](references/verification-method.md) for step-by-step ve
 - **hcloud CLI is the only supported method** — all operations use `hcloud SWR <Operation>` format
 - **Trigger requires CCE/CCI cluster** — triggers only work with existing CCE clusters or CCI instances
 - **Response formats pending verification** — ListImageAutoSyncReposDetails, ListTriggersDetails, ShowTrigger response formats need live verification
+- **CLI exit code limitation** — hcloud CLI (KooCLI 7.2.2) may return exit code 0 even when the SWR API returns an error. In automation scripts, do NOT rely solely on exit code; check output for `error_code` or `error_msg` fields to determine success/failure
+- **Pre-validation required** — SWR APIs do not validate target namespace existence, tag existence, or region validity at request time. Always run pre-validation checks (ShowNamespace, ListRepositoryTags, ListSyncRegions) before creating sync configs or manual sync jobs
+- **CCI authorization prerequisite** — before creating a `trigger_mode=cci` trigger, verify CCI service is authorized via `hcloud CCI ListNamespaces`. Unauthorized CCI returns a misleading "Server internal error" instead of an authorization hint
 
 ## Common Pitfalls
 
@@ -432,4 +439,9 @@ See [Common Pitfalls & Solutions](references/common-pitfalls.md) for detailed tr
 | Invalid remoteRegionId         | Sync creation fails             | Check with `ListSyncRegions`                 |
 | CCE cluster not found          | Trigger creation fails          | Verify cluster_id with CCE console           |
 | Trigger already exists         | 409 Conflict                    | Use `ShowTrigger` to check first             |
+| CCI not authorized             | "Server internal error"         | Authorize CCI at console first               |
+| "Invalid param" on CreateTrigger | Generic error, multiple causes | Pre-check name/cluster/app existence         |
+| API error but exit code 0      | Script thinks success           | Check output for error_code, not exit code   |
+| syncAuto=false not in list     | Config seems missing            | ListImageAutoSyncReposDetails only shows true |
+| Sync to non-existent namespace | Silent success, invalid config  | Verify namespace with ShowNamespace first    |
 | Auto-sync unwanted             | Images sync unexpectedly        | Set `syncAuto=false` or delete sync config   |

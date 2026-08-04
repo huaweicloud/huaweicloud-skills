@@ -35,11 +35,24 @@ hcloud SWR ListSyncRegions --cli-region=cn-north-4
 
 Set up automatic image replication across regions:
 
-**Pre-creation Checklist**:
-1. Verify target region is available: `hcloud SWR ListSyncRegions --cli-region=cn-north-4`
-2. Ensure target namespace exists in target region:
+**Pre-creation Checklist** (all steps are mandatory — skipping may create invalid configs silently):
+1. Verify target region is available:
 ```bash
-hcloud SWR CreateNamespace --namespace=group-dev --cli-region=cn-east-3
+hcloud SWR ListSyncRegions --cli-region=cn-north-4
+# Check that --remoteRegionId appears in the returned region list.
+# If the target region is NOT in the list:
+#   Tell the user: "Region {remoteRegionId} is not a valid sync target region."
+#   Show the available regions from the list.
+#   Do NOT proceed with CreateImageSyncRepo.
+```
+2. Verify target namespace exists in the target region (do NOT skip — API will silently create an invalid config if the namespace does not exist):
+```bash
+hcloud SWR ShowNamespace --namespace=group-dev --cli-region=cn-east-3
+# If the command returns 404 or namespace not found:
+#   Tell the user: "Target namespace group-dev does not exist in cn-east-3."
+#   Tell the user: "Please create the namespace in the target region first, then retry."
+#   Do NOT proceed with CreateImageSyncRepo.
+# If the namespace exists: continue to step 3.
 ```
 3. Verify source repository exists:
 ```bash
@@ -80,18 +93,40 @@ hcloud SWR ListImageAutoSyncReposDetails --namespace=group-dev --repository=my-a
 - Check whether auto-sync is enabled or manual-only
 - Audit cross-region replication setup
 
+⚠️ **Limitation — `syncAuto=false` configs not returned**: `ListImageAutoSyncReposDetails` only returns configurations where `syncAuto=true` (auto-sync). Configurations created with `syncAuto=false` (manual sync only) will **not** appear in the query results. If you created a `syncAuto=false` config and don't see it in the list, this does not mean the creation failed.
+
+To verify a `syncAuto=false` config exists:
+1. Attempt `CreateManualImageSyncRepo` — if the config doesn't exist, the API will return an appropriate error
+2. Or attempt to re-create with `CreateImageSyncRepo` — if the config already exists, the API will return a "duplicate sync repo" error, confirming it was created
+
 ### W4: Manually Sync Specific Tags
 
 Manually replicate specific image tags to a target region:
 
-**Pre-sync Checklist**:
-1. Verify source tags exist:
+**Pre-sync Checklist** (all steps are mandatory — skipping may cause silent failures or invalid operations):
+1. Verify source tags exist — check each `--imageTag` value against the repository's actual tags:
 ```bash
 hcloud SWR ListRepositoryTags --namespace=group-dev --repository=my-app --cli-region=cn-north-4
+# Compare the returned tag list against all --imageTag values you plan to sync.
+# If any specified tag is NOT in the returned list:
+#   Tell the user: "Repository group-dev/my-app does not contain the following tags: {missing tags}"
+#   Tell the user: "Please push the corresponding images before syncing, or verify the tag names are correct."
+#   Do NOT proceed with CreateManualImageSyncRepo.
+# If all tags exist: continue to step 2.
 ```
-2. Ensure target namespace exists:
+2. Verify target namespace exists in the target region:
 ```bash
 hcloud SWR ShowNamespace --namespace=group-dev --cli-region=cn-east-3
+# If the command returns 404 or namespace not found:
+#   Tell the user: "Target namespace group-dev does not exist in cn-east-3."
+#   Tell the user: "Please create the namespace in the target region first, then retry."
+#   Do NOT proceed with CreateManualImageSyncRepo.
+```
+3. Verify target region is a valid sync target:
+```bash
+hcloud SWR ListSyncRegions --cli-region=cn-north-4
+# Ensure --remoteRegionId appears in the returned region list.
+# If not: tell the user the region is invalid and show available regions.
 ```
 
 ```bash

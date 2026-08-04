@@ -180,6 +180,112 @@ hcloud SWR ShowSyncJob --repository=my-app --cli-region=cn-north-4
 hcloud SWR DeleteRepoTag --namespace=group-dev --repository=my-app --tag=v1.0 --cli-region=cn-east-3
 ```
 
+## Pitfall 11: CCI Not Authorized — Misleading "Server internal error"
+
+**Symptom**: `CreateTrigger` with `trigger_mode=cci` returns `SVCSTG.SWR.5004002 "Server internal error: fail to get k8s deployment"`
+
+**Root Cause**: CCI service has not been authorized. The SWR API wraps the CCI authorization error as a generic "Server internal error", which does not mention CCI authorization at all.
+
+**Solution**: Before creating a CCI trigger, verify CCI is authorized:
+
+```bash
+# Check CCI authorization
+hcloud CCI ListNamespaces --cli-region=cn-north-4
+# If you get 403 or "user has no agency to cci":
+#   CCI is not authorized. Authorize at:
+#   https://console.huaweicloud.com/cci/?region=cn-north-4
+#   (Service Authorization -> agree)
+```
+
+Do NOT mistake this error for a deployment issue. The real problem is CCI authorization, not a missing deployment.
+
+## Pitfall 12: CreateTrigger "Invalid param" — Multiple Possible Causes
+
+**Symptom**: `CreateTrigger` returns `SVCSTG.SWR.4000014 "Invalid param"` with empty detail
+
+**Root Cause**: The API returns the same generic error for multiple distinct failure scenarios:
+- Trigger name already exists (duplicate)
+- CCE cluster_id does not exist
+- Application/deployment name is wrong
+- Namespace is incorrect
+
+**Solution**: Run pre-creation checks to identify the specific cause:
+
+```bash
+# 1. Check if trigger name already exists
+hcloud SWR ListTriggersDetails --namespace=group-dev --repository=my-app --cli-region=cn-north-4
+
+# 2. Check if CCE cluster exists (for trigger_mode=cce)
+hcloud CCE ShowCluster --cluster_id={cluster_id} --cli-region=cn-north-4
+
+# 3. Verify application/deployment exists in the cluster
+#    (via CCE/CCI console or API)
+```
+
+If the trigger name already exists, choose a different name. If the cluster doesn't exist, verify the cluster ID.
+
+## Pitfall 13: API Returns Error but CLI Exit Code is 0
+
+**Symptom**: `hcloud SWR` commands return error messages (e.g., `SVCSTG.SWR.4040126 "Not found trigger"`) but the shell exit code is 0, causing automation scripts to incorrectly assume success.
+
+**Root Cause**: hcloud CLI (KooCLI 7.2.2) does not set a non-zero exit code when SWR API returns HTTP error status codes. This is a CLI-level limitation affecting all SWR operations.
+
+**Affected Commands**: `DeleteTrigger`, `DeleteImageSyncRepo`, `ShowTrigger`, `CreateManualImageSyncRepo`, and other SWR operations.
+
+**Solution**: In automation scripts, do NOT rely solely on exit code. Check the output content for `error_code` or `error_msg` fields:
+
+```bash
+result=$(hcloud SWR DeleteTrigger --namespace=group-dev --repository=my-app --trigger=nonexistent --cli-region=cn-north-4 2>&1)
+if echo "$result" | grep -q "error_code"; then
+    echo "Operation failed: $result"
+    # Error handling
+else
+    echo "Operation succeeded"
+fi
+```
+
+## Pitfall 14: Sync to Non-existent Namespace Silently Succeeds
+
+**Symptom**: `CreateImageSyncRepo` returns success (exit 0, empty response `{}`) even when the target namespace does not exist in the target region. The sync config is created but will never function.
+
+**Root Cause**: The SWR API does not validate whether `remoteNamespace` exists in `remoteRegionId` at config creation time. The invalid config is silently stored.
+
+**Solution**: Always verify the target namespace exists before creating a sync config:
+
+```bash
+# Verify target namespace exists in target region
+hcloud SWR ShowNamespace --namespace=group-dev --cli-region=cn-east-3
+# If 404: create the namespace first, then create the sync config
+```
+
+## Pitfall 15: Sync to Invalid Region Returns "Internal error"
+
+**Symptom**: `CreateImageSyncRepo` with an invalid `--remoteRegionId` returns `SVCSTG.SWR.5001101 "Internal error"` with no indication that the region is the problem.
+
+**Root Cause**: The API returns a generic internal error for invalid target regions, without specifying which parameter is wrong.
+
+**Solution**: Always verify the target region before creating a sync config:
+
+```bash
+# List valid sync target regions
+hcloud SWR ListSyncRegions --cli-region=cn-north-4
+# Verify that --remoteRegionId appears in the returned list
+```
+
+## Pitfall 16: Manual Sync with Non-existent Tags Silently Succeeds
+
+**Symptom**: `CreateManualImageSyncRepo` returns success even when the specified `--imageTag` values do not exist in the source repository. The sync job is created but will fail silently.
+
+**Root Cause**: The API does not validate tag existence at request time for manual sync operations.
+
+**Solution**: Always verify tags exist before triggering manual sync:
+
+```bash
+# List existing tags in the source repository
+hcloud SWR ListRepositoryTags --namespace=group-dev --repository=my-app --cli-region=cn-north-4
+# Verify all --imageTag values appear in the returned tag list
+```
+
 ## Common Error Response Reference
 
 | Error Code          | HTTP Status | Description                  | Recommended Action                    |
