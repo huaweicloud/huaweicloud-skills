@@ -22,6 +22,14 @@ SWR enterprise instance registries define target repositories for image synchron
 
 Registries define external target repositories for image replication/sync.
 
+⚠️ **Security Warning**: Creating a sync target registry stores the target registry's authentication credentials (`access_key`/`access_secret`) on the SWR enterprise instance. These credentials are used for automated image replication and will persist until the registry is updated or deleted. **Before creating a registry**, ensure that:
+- The target registry URL is correct and points to the intended registry
+- The credentials provided have the minimum required permissions for replication (read/pull access)
+- Credentials are not shared or reused from other services with broader permissions
+- The target registry's access policy permits sync operations from this instance
+
+**Confirmation Required**: Confirm the target registry address and credential information before proceeding.
+
 **Pre-creation Checklist**:
 1. Verify the target registry URL is accessible
 2. Obtain authentication credentials for the target registry:
