@@ -67,7 +67,7 @@ Before executing any write operation, the skill must:
 |-----------|---------|------------|-------------|
 | Create namespace | `CreateNamespace` | Medium | Creates a new SWR namespace (consumes quota) |
 | Create repository | `CreateRepo` | Medium | Creates a new image repository |
-| Update repository | `UpdateRepo` | Medium | Changes repository visibility (public/private) |
+| Update repository | `UpdateRepo` | Medium | Changes repository visibility (public/private). **When changing `is_public` to `true` (private→public), an explicit security warning must be displayed:** ⚠️ Public repositories allow any user to pull images, which may pose security risks. The skill must warn the user and require explicit confirmation before proceeding. If the user declines, abort the operation. |
 | Delete namespace | `DeleteNamespaces` | High | Deletes namespace AND all repos/images under it |
 | Delete repository | `DeleteRepo` | High | Deletes repository AND all image tags permanently |
 | Delete tag | `DeleteRepoTag` | High | Deletes image tag permanently (irreversible) |
@@ -230,6 +230,9 @@ hcloud SWR ShowRepository --namespace=group-dev --repository=nginx --cli-region=
 hcloud SWR CreateRepo --namespace=group-dev --repository=my-app --is_public=false --category=other --description="Custom app image" --cli-region=cn-north-4
 
 # Update repository (change visibility, description, category)
+# ⚠️ SECURITY WARNING: When changing is_public to true (private→public):
+#   "Public repositories allow any user to pull images, which may pose security risks."
+#   The skill MUST display this warning and require explicit user confirmation before proceeding.
 hcloud SWR UpdateRepo --namespace=group-dev --repository=my-app --is_public=true --description="Updated description" --cli-region=cn-north-4
 
 # Delete a repository (CAUTION: removes all image tags)
@@ -299,11 +302,16 @@ The response returns a Docker auth config object:
 - `auths`: Docker config auth object, registry host as key
 - `auth`: Base64-encoded `username:password` string
 
-**Docker Login Command**:
+**Docker Login**:
+
+> ⚠️ **Security**: The agent must NOT decode the `auth` field. Provide the following commands to the user to run in their own terminal.
+
+The agent should extract the `auth` field value from the API response and present these commands to the user:
 
 ```bash
-# Decode auth field: echo <auth_value> | base64 -d → username:password
-docker login -u <decoded_username> -p <decoded_password> swr.cn-north-4.myhuaweicloud.com
+# User runs these in their terminal (agent must NOT execute):
+echo <auth_value> | base64 -d  # Outputs username:password
+docker login -u <username> -p <password> swr.cn-north-4.myhuaweicloud.com
 ```
 
 ### 5. Quota Management
@@ -339,6 +347,16 @@ See [Verification Method](references/verification-method.md) for step-by-step ve
 6. **Long-term Login for CI/CD**: Use `CreateSecret` for automation pipelines; use `CreateAuthorizationToken` for temporary access
 7. **Delete with Caution**: Deleting a namespace removes ALL repositories under it; deleting a repository removes ALL tags
 
+## Related Capabilities (Agent-Orchestrated)
+
+> The following capabilities are not provided by this skill. The Agent may orchestrate these through separate skills.
+
+| Skill | Description |
+|-------|-------------|
+| `huawei-cloud-swr-enterprise-instance` | Enterprise SWR instance management: create/delete instances, configure access endpoints, manage long-term credentials, **image security scanning** (`StartManualScanning`), **build history** (`ShowInstanceArtifactAddition --addition=build_history`), and image sync registries |
+| `huawei-cloud-swr-image-automation` | SWR image automation: automatic image sync across regions, trigger-based deployment to CCE/CCI |
+| `huawei-cloud-swr-image-governance` | SWR image governance: retention policies, shared download domains, namespace/repository authorization |
+
 ## Reference Documents
 
 | Document                                               | Description                              |
@@ -365,29 +383,50 @@ This skill manages SWR namespaces, repositories, tags, auth credentials, and quo
 
 This skill provides docker login credentials via `CreateAuthorizationToken` or `CreateSecret`, but does **not** execute `docker push` or `docker pull`. After obtaining credentials, use docker CLI directly:
 
-```bash
-# Step 1: Get login credentials from this skill
-hcloud SWR CreateAuthorizationToken --cli-region=cn-north-4
-# Decode the auth field to get username:password
+**Step-by-step workflow:**
 
-# Step 2: Login and push/pull with docker CLI
-docker login -u <user> -p <pass> swr.cn-north-4.myhuaweicloud.com
+1. **Get credentials** — Use this skill to obtain SWR login credentials
+2. **Provide auth token to user** — Extract the `auth` field from the response and present it to the user. ⚠️ The agent must NOT decode this field.
+3. **User decodes and logs in** — The user runs the following commands in their terminal:
+
+```bash
+# User runs these in their terminal (agent must NOT execute):
+echo <auth_value> | base64 -d  # Outputs username:password
+docker login -u <username> -p <password> swr.cn-north-4.myhuaweicloud.com
+```
+
+4. **Push/pull images** — The user uses standard docker CLI commands:
+
+```bash
 docker push swr.cn-north-4.myhuaweicloud.com/<namespace>/<repo>:<tag>
 docker pull swr.cn-north-4.myhuaweicloud.com/<namespace>/<repo>:<tag>
 ```
 
+**For long-term CI/CD credentials**, use `CreateSecret` instead of `CreateAuthorizationToken` (valid for 1 year vs 12 hours).
+
 ### Image Security Scanning
 
-Image security scanning is **not provided** by this skill. It strongly depends on Huawei Cloud HSS (Host Security Service) and requires an enterprise SWR instance. The `StartManualScanning` API is only available in enterprise SWR instances, not in basic SWR. This skill covers basic SWR management only and does not include image scanning capabilities.
+Image security scanning is **not provided** by this skill. It requires an enterprise SWR instance and depends on Huawei Cloud HSS (Host Security Service). The `StartManualScanning` API is only available in enterprise SWR instances, not in basic SWR.
+
+**To check if scanning is enabled on an enterprise instance**, query the instance configuration and look for the `enableArtifactScanning` field (see [SWR API documentation](https://support.huaweicloud.com/api-swr2/swr_03_0701.html)). If `enableArtifactScanning` is `false`, scanning must be enabled on the enterprise instance first.
+
+Image security scanning is not supported by this skill. Users should enable HSS (Host Security Service) and perform scanning through the SWR web console.
 
 
 ### Build History
 
-The SWR API does not provide build history commands. Image build functionality is available only in the SWR Web Console. Use the Huawei Cloud console at `https://console.huawei.com/swr` to view build history.
+Build history is **not available in basic SWR**. For enterprise SWR instances, build history can be queried via the `ShowInstanceArtifactAddition` API with `--addition=build_history` (see [SWR API documentation](https://support.huaweicloud.com/api-swr2/swr_03_0305.html)):
+
+```bash
+# Query build history for an enterprise instance artifact (requires instance_id)
+hcloud SWR ShowInstanceArtifactAddition --instance_id={instance_id} --namespace_name={ns} --repository_name={repo} --reference={digest} --addition=build_history --cli-region=cn-north-4
+```
+
+For basic SWR (non-enterprise), image build functionality is available only in the SWR Web Console at `https://console.huawei.com/swr`.
 
 ### External Image Import
 
-The SWR API does not provide an image import operation. To import an external image (e.g., from Docker Hub):
+The SWR API does not provide a direct image import operation. To import an external image (e.g., from Docker Hub), use the docker CLI retag-and-push workflow:
 
 ```bash
 # Step 1: Pull the external image
@@ -400,6 +439,11 @@ hcloud SWR CreateAuthorizationToken --cli-region=cn-north-4
 docker tag docker.io/library/nginx:latest swr.cn-north-4.myhuaweicloud.com/<namespace>/nginx:latest
 docker push swr.cn-north-4.myhuaweicloud.com/<namespace>/nginx:latest
 ```
+
+**Limitations**:
+- This workflow requires docker CLI to be installed and running locally (e.g., Docker Desktop or dockerd)
+- Large images may take significant time to pull and push, depending on network bandwidth
+- The local machine must have sufficient disk space to store the pulled image temporarily
 
 ## Write Operation Return Values
 
