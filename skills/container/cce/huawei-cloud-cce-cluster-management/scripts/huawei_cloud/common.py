@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import base64
 import os
+import re
+import secrets
+import string
 import sys
 import uuid
 import warnings
@@ -23,38 +26,8 @@ try:
 except ImportError:
     MATPLOTLIB_AVAILABLE = False
 
-try:
-    import kubernetes
-    from kubernetes import client as k8s_client
-
-    K8S_AVAILABLE = True
-    K8S_IMPORT_ERROR = None
-except ImportError as exc:
-    kubernetes = None
-    k8s_client = None
-    K8S_AVAILABLE = False
-    K8S_IMPORT_ERROR = str(exc)
-
-try:
-    from huaweicloudsdkaom.v2 import AomClient, ShowMetricsDataRequest
-
-    AOM_AVAILABLE = True
-    AOM_IMPORT_ERROR = None
-except ImportError as exc:
-    AomClient = None
-    ShowMetricsDataRequest = None
-    AOM_AVAILABLE = False
-    AOM_IMPORT_ERROR = str(exc)
-
 from huaweicloudsdkcore.auth.credentials import GlobalCredentials, BasicCredentials
-from huaweicloudsdkecs.v2 import *
-from huaweicloudsdkvpc.v2 import *
-from huaweicloudsdkces.v1 import *
 from huaweicloudsdkcce.v3 import *
-from huaweicloudsdkevs.v2 import *
-from huaweicloudsdkeip.v2 import *
-from huaweicloudsdkelb.v2 import *
-from huaweicloudsdkelb.v3 import *
 from huaweicloudsdkiam.v3 import *
 
 PROJECT_IDS = {}
@@ -83,30 +56,6 @@ SUPPORTED_REGIONS = {
     "ap-northeast-1": {"name": "亚太-东京", "description": "日本节点"},
 }
 
-ECS_ENDPOINTS = {
-    "cn-north-4": "ecs.cn-north-4.myhuaweicloud.com", "cn-north-1": "ecs.cn-north-1.myhuaweicloud.com", "cn-north-9": "ecs.cn-north-9.myhuaweicloud.com",
-    "cn-east-3": "ecs.cn-east-3.myhuaweicloud.com", "cn-east-2": "ecs.cn-east-2.myhuaweicloud.com", "cn-south-1": "ecs.cn-south-1.myhuaweicloud.com",
-    "cn-southwest-2": "ecs.cn-southwest-2.myhuaweicloud.com", "cn-west-3": "ecs.cn-west-3.myhuaweicloud.com", "ap-southeast-1": "ecs.ap-southeast-1.myhuaweicloud.com",
-    "ap-southeast-2": "ecs.ap-southeast-2.myhuaweicloud.com", "ap-southeast-3": "ecs.ap-southeast-3.myhuaweicloud.com", "ap-southeast-4": "ecs.ap-southeast-4.myhuaweicloud.com",
-    "af-south-1": "ecs.af-south-1.myhuaweicloud.com", "la-south-2": "ecs.la-south-2.myhuaweicloud.com", "la-north-2": "ecs.la-north-2.myhuaweicloud.com",
-    "eu-west-0": "ecs.eu-west-0.myhuaweicloud.com", "ap-northeast-1": "ecs.ap-northeast-1.myhuaweicloud.com",
-}
-VPC_ENDPOINTS = {
-    "cn-north-4": "vpc.cn-north-4.myhuaweicloud.com", "cn-north-1": "vpc.cn-north-1.myhuaweicloud.com", "cn-north-9": "vpc.cn-north-9.myhuaweicloud.com",
-    "cn-east-3": "vpc.cn-east-3.myhuaweicloud.com", "cn-east-2": "vpc.cn-east-2.myhuaweicloud.com", "cn-south-1": "vpc.cn-south-1.myhuaweicloud.com",
-    "cn-southwest-2": "vpc.cn-southwest-2.myhuaweicloud.com", "cn-west-3": "vpc.cn-west-3.myhuaweicloud.com", "ap-southeast-1": "vpc.ap-southeast-1.myhuaweicloud.com",
-    "ap-southeast-2": "vpc.ap-southeast-2.myhuaweicloud.com", "ap-southeast-3": "vpc.ap-southeast-3.myhuaweicloud.com", "ap-southeast-4": "vpc.ap-southeast-4.myhuaweicloud.com",
-    "af-south-1": "vpc.af-south-1.myhuaweicloud.com", "la-south-2": "vpc.la-south-2.myhuaweicloud.com", "la-north-2": "vpc.la-north-2.myhuaweicloud.com",
-    "eu-west-0": "vpc.eu-west-0.myhuaweicloud.com", "ap-northeast-1": "vpc.ap-northeast-1.myhuaweicloud.com",
-}
-CES_ENDPOINTS = {
-    "cn-north-4": "ces.cn-north-4.myhuaweicloud.com", "cn-north-1": "ces.cn-north-1.myhuaweicloud.com", "cn-north-9": "ces.cn-north-9.myhuaweicloud.com",
-    "cn-east-3": "ces.cn-east-3.myhuaweicloud.com", "cn-east-2": "ces.cn-east-2.myhuaweicloud.com", "cn-south-1": "ces.cn-south-1.myhuaweicloud.com",
-    "cn-southwest-2": "ces.cn-southwest-2.myhuaweicloud.com", "cn-west-3": "ces.cn-west-3.myhuaweicloud.com", "ap-southeast-1": "ces.ap-southeast-1.myhuaweicloud.com",
-    "ap-southeast-2": "ces.ap-southeast-2.myhuaweicloud.com", "ap-southeast-3": "ces.ap-southeast-3.myhuaweicloud.com", "ap-southeast-4": "ces.ap-southeast-4.myhuaweicloud.com",
-    "af-south-1": "ces.af-south-1.myhuaweicloud.com", "la-south-2": "ces.la-south-2.myhuaweicloud.com", "la-north-2": "ces.la-north-2.myhuaweicloud.com",
-    "eu-west-0": "ces.eu-west-0.myhuaweicloud.com", "ap-northeast-1": "ces.ap-northeast-1.myhuaweicloud.com",
-}
 CCE_ENDPOINTS = {
     "cn-north-4": "cce.cn-north-4.myhuaweicloud.com", "cn-north-1": "cce.cn-north-1.myhuaweicloud.com", "cn-north-9": "cce.cn-north-9.myhuaweicloud.com",
     "cn-east-3": "cce.cn-east-3.myhuaweicloud.com", "cn-east-2": "cce.cn-east-2.myhuaweicloud.com", "cn-south-1": "cce.cn-south-1.myhuaweicloud.com",
@@ -114,23 +63,6 @@ CCE_ENDPOINTS = {
     "ap-southeast-2": "cce.ap-southeast-2.myhuaweicloud.com", "ap-southeast-3": "cce.ap-southeast-3.myhuaweicloud.com", "ap-southeast-4": "cce.ap-southeast-4.myhuaweicloud.com",
     "af-south-1": "cce.af-south-1.myhuaweicloud.com", "la-south-2": "cce.la-south-2.myhuaweicloud.com", "la-north-2": "cce.la-north-2.myhuaweicloud.com",
     "eu-west-0": "cce.eu-west-0.myhuaweicloud.com", "ap-northeast-1": "cce.ap-northeast-1.myhuaweicloud.com",
-}
-EVS_ENDPOINTS = {
-    "cn-north-4": "evs.cn-north-4.myhuaweicloud.com", "cn-north-1": "evs.cn-north-1.myhuaweicloud.com", "cn-north-9": "evs.cn-north-9.myhuaweicloud.com",
-    "cn-east-3": "evs.cn-east-3.myhuaweicloud.com", "cn-east-2": "evs.cn-east-2.myhuaweicloud.com", "cn-south-1": "evs.cn-south-1.myhuaweicloud.com",
-    "cn-southwest-2": "evs.cn-southwest-2.myhuaweicloud.com", "cn-west-3": "evs.cn-west-3.myhuaweicloud.com", "ap-southeast-1": "evs.ap-southeast-1.myhuaweicloud.com",
-    "ap-southeast-2": "evs.ap-southeast-2.myhuaweicloud.com", "ap-southeast-3": "evs.ap-southeast-3.myhuaweicloud.com", "ap-southeast-4": "evs.ap-southeast-4.myhuaweicloud.com",
-    "af-south-1": "evs.af-south-1.myhuaweicloud.com", "la-south-2": "evs.la-south-2.myhuaweicloud.com", "la-north-2": "evs.la-north-2.myhuaweicloud.com",
-    "eu-west-0": "evs.eu-west-0.myhuaweicloud.com", "ap-northeast-1": "evs.ap-northeast-1.myhuaweicloud.com",
-}
-EIP_ENDPOINTS = VPC_ENDPOINTS
-ELB_ENDPOINTS = {
-    "cn-north-4": "elb.cn-north-4.myhuaweicloud.com", "cn-north-1": "elb.cn-north-1.myhuaweicloud.com", "cn-north-9": "elb.cn-north-9.myhuaweicloud.com",
-    "cn-east-3": "elb.cn-east-3.myhuaweicloud.com", "cn-east-2": "elb.cn-east-2.myhuaweicloud.com", "cn-south-1": "elb.cn-south-1.myhuaweicloud.com",
-    "cn-southwest-2": "elb.cn-southwest-2.myhuaweicloud.com", "cn-west-3": "elb.cn-west-3.myhuaweicloud.com", "ap-southeast-1": "elb.ap-southeast-1.myhuaweicloud.com",
-    "ap-southeast-2": "elb.ap-southeast-2.myhuaweicloud.com", "ap-southeast-3": "elb.ap-southeast-3.myhuaweicloud.com", "ap-southeast-4": "elb.ap-southeast-4.myhuaweicloud.com",
-    "af-south-1": "elb.af-south-1.myhuaweicloud.com", "la-south-2": "elb.la-south-2.myhuaweicloud.com", "la-north-2": "elb.la-north-2.myhuaweicloud.com",
-    "eu-west-0": "elb.eu-west-0.myhuaweicloud.com", "ap-northeast-1": "elb.ap-northeast-1.myhuaweicloud.com",
 }
 IAM_ENDPOINT = "iam.myhuaweicloud.com"
 
@@ -370,75 +302,7 @@ def get_credentials_with_region(region: str, ak: Optional[str] = None, sk: Optio
     
     return access_key, secret_key, proj_id
 
-def create_ecs_client(region: str, ak: str, sk: str, project_id: str = None):
-    """Create ECS client"""
-    # Auto-fetch project_id if not provided
-    if not project_id:
-        project_id = get_project_id_for_region(region, ak, sk)
-    
-    if project_id:
-        credentials = BasicCredentials(ak=ak, sk=sk, project_id=project_id)
-    else:
-        credentials = BasicCredentials(ak=ak, sk=sk)
-
-    endpoint = ECS_ENDPOINTS.get(region, f"ecs.{region}.myhuaweicloud.com")
-    return EcsClient.new_builder() \
-        .with_credentials(credentials) \
-        .with_endpoint(endpoint) \
-        .build()
-
-def create_vpc_client(region: str, ak: str, sk: str, project_id: str = None):
-    """Create VPC client"""
-    # Auto-fetch project_id if not provided
-    if not project_id:
-        project_id = get_project_id_for_region(region, ak, sk)
-    
-    if project_id:
-        credentials = BasicCredentials(ak=ak, sk=sk, project_id=project_id)
-    else:
-        credentials = BasicCredentials(ak=ak, sk=sk)
-
-    endpoint = VPC_ENDPOINTS.get(region, f"vpc.{region}.myhuaweicloud.com")
-    return VpcClient.new_builder() \
-        .with_credentials(credentials) \
-        .with_endpoint(endpoint) \
-        .build()
-
-def create_ces_client(region: str, ak: str, sk: str, project_id: str = None):
-    """Create CES (Cloud Eye Service) client"""
-    # Auto-fetch project_id if not provided
-    if not project_id:
-        project_id = get_project_id_for_region(region, ak, sk)
-    
-    if project_id:
-        credentials = BasicCredentials(ak=ak, sk=sk, project_id=project_id)
-    else:
-        credentials = BasicCredentials(ak=ak, sk=sk)
-
-    endpoint = CES_ENDPOINTS.get(region, f"ces.{region}.myhuaweicloud.com")
-    return CesClient.new_builder() \
-        .with_credentials(credentials) \
-        .with_endpoint(endpoint) \
-        .build()
-
-def create_aom_client(region: str, ak: str, sk: str, project_id: str = None):
-    """Create AOM (Application Operations Management) client"""
-    # Auto-fetch project_id if not provided
-    if not project_id:
-        project_id = get_project_id_for_region(region, ak, sk)
-    
-    if project_id:
-        credentials = BasicCredentials(ak=ak, sk=sk, project_id=project_id)
-    else:
-        credentials = BasicCredentials(ak=ak, sk=sk)
-
-    endpoint = f"aom.{region}.myhuaweicloud.com"
-    return AomClient.new_builder() \
-        .with_credentials(credentials) \
-        .with_endpoint(endpoint) \
-        .build()
-
-def create_cce_client(region: str, ak: str, sk: str, project_id: str = None):
+def create_cce_client(region: str, ak: str, sk: str, project_id: str = None, security_token: str = None):
     """Create CCE (Cloud Container Engine) client
 
     Note: Using public CCE endpoint.
@@ -452,61 +316,13 @@ def create_cce_client(region: str, ak: str, sk: str, project_id: str = None):
     else:
         credentials = BasicCredentials(ak=ak, sk=sk)
 
+    if security_token:
+        credentials = credentials.with_security_token(security_token)
+
     # Use public CCE endpoint
     endpoint = CCE_ENDPOINTS.get(region, f"cce.{region}.myhuaweicloud.com")
 
     return CceClient.new_builder() \
-        .with_credentials(credentials) \
-        .with_endpoint(endpoint) \
-        .build()
-
-def create_evs_client(region: str, ak: str, sk: str, project_id: str = None):
-    """Create EVS (Elastic Volume Service) client"""
-    # Auto-fetch project_id if not provided
-    if not project_id:
-        project_id = get_project_id_for_region(region, ak, sk)
-    
-    if project_id:
-        credentials = BasicCredentials(ak=ak, sk=sk, project_id=project_id)
-    else:
-        credentials = BasicCredentials(ak=ak, sk=sk)
-
-    endpoint = EVS_ENDPOINTS.get(region, f"evs.{region}.myhuaweicloud.com")
-    return EvsClient.new_builder() \
-        .with_credentials(credentials) \
-        .with_endpoint(endpoint) \
-        .build()
-
-def create_eip_client(region: str, ak: str, sk: str, project_id: str = None):
-    """Create EIP (Elastic IP) client"""
-    # Auto-fetch project_id if not provided
-    if not project_id:
-        project_id = get_project_id_for_region(region, ak, sk)
-    
-    if project_id:
-        credentials = BasicCredentials(ak=ak, sk=sk, project_id=project_id)
-    else:
-        credentials = BasicCredentials(ak=ak, sk=sk)
-
-    endpoint = EIP_ENDPOINTS.get(region, f"vpc.{region}.myhuaweicloud.com")
-    return EipClient.new_builder() \
-        .with_credentials(credentials) \
-        .with_endpoint(endpoint) \
-        .build()
-
-def create_elb_client(region: str, ak: str, sk: str, project_id: str = None):
-    """Create ELB (Elastic Load Balance) client"""
-    # Auto-fetch project_id if not provided
-    if not project_id:
-        project_id = get_project_id_for_region(region, ak, sk)
-    
-    if project_id:
-        credentials = BasicCredentials(ak=ak, sk=sk, project_id=project_id)
-    else:
-        credentials = BasicCredentials(ak=ak, sk=sk)
-
-    endpoint = ELB_ENDPOINTS.get(region, f"elb.{region}.myhuaweicloud.com")
-    return ElbClient.new_builder() \
         .with_credentials(credentials) \
         .with_endpoint(endpoint) \
         .build()
@@ -523,3 +339,50 @@ def create_iam_client(ak: str, sk: str):
         .with_credentials(credentials) \
         .with_endpoint(IAM_ENDPOINT) \
         .build()
+
+def generate_random_password(length: int = 16) -> str:
+    """Generate a random password with >=3 character categories."""
+    upper = string.ascii_uppercase
+    lower = string.ascii_lowercase
+    digits = string.digits
+    special = '!@#$%^&*()-_=+[]{}:,.?'
+    all_chars = upper + lower + digits + special
+    while True:
+        pw = ''.join(secrets.choice(all_chars) for _ in range(length))
+        cats = sum([
+            bool(re.search(r'[A-Z]', pw)),
+            bool(re.search(r'[a-z]', pw)),
+            bool(re.search(r'[0-9]', pw)),
+            bool(re.search(r'[!@#$%^&*()\-_=+\[\]{}:,.?]', pw)),
+        ])
+        if cats >= 3:
+            return pw
+
+def salt_password(password: str) -> str:
+    """SHA-512 crypt + base64 encode, per CCE API requirement."""
+    try:
+        from passlib.hash import sha512_crypt
+        hashed = sha512_crypt.using(rounds=5000).hash(password)
+    except ImportError:
+        import crypt
+        salt = '$6$' + ''.join(secrets.choice(string.ascii_letters + string.digits + './') for _ in range(16))
+        hashed = crypt.crypt(password, salt)
+    return base64.b64encode(hashed.encode('utf-8')).decode('utf-8')
+
+def resolve_node_login(ssh_key=None, password=None):
+    """
+    Returns (login_config_dict, was_auto_generated).
+    Priority: ssh_key > password param > CCE_NODE_PASSWORD env > auto-generate.
+    The raw auto-generated password is NEVER returned in tool responses.
+    """
+    if ssh_key:
+        return {'sshKey': ssh_key}, False
+
+    raw_password = password or os.environ.get('CCE_NODE_PASSWORD')
+    was_auto = False
+    if not raw_password:
+        raw_password = generate_random_password()
+        was_auto = True
+
+    salted = salt_password(raw_password)
+    return {'userPassword': {'username': 'root', 'password': salted}}, was_auto
