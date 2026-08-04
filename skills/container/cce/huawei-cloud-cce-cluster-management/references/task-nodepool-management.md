@@ -4,6 +4,8 @@
 
 Node pool lifecycle management, including creating node pools, querying node pool lists, and adjusting node counts.
 
+> **Note:** `huawei_create_cce_nodepool` uses the Python SDK fallback due to a known hcloud `CreateNodePool` metadata parsing defect. See [cce-api-guide.md](cce-api-guide.md#hcloud-defect-createcluster--createnodepool-sdk-fallback).
+
 ## Create Node Pool Parameters
 
 ### Required Parameters
@@ -18,15 +20,19 @@ Node pool lifecycle management, including creating node pools, querying node poo
 | `root_volume_size` | System disk size (GB) | `40` |
 | `root_volume_type` | System disk type | `GPSSD` |
 | `initial_node_count` | Initial node count | `1` |
-| `ssh_key` or `password` | Login authentication (one required) | `KeyPair-dev` or `MyPass123!` |
 
-### Login Authentication
+### Login Authentication — Three-Level Priority
 
-One of `ssh_key` and `password` is required; they are mutually exclusive:
-- `ssh_key`: SSH key pair name
-- `password`: Node login password (8-26 characters, must contain at least three of: uppercase, lowercase, digits, special characters)
+The node login credential is resolved with the following priority:
 
-> **Important: The script automatically performs SHA-512 salted encryption + base64 encoding on the password. No manual processing is needed. However, if calling the CCE API directly, you must encrypt it yourself.**
+1. **`ssh_key` parameter** — SSH key pair name (preferred when available). Mutually exclusive with password.
+2. **`password` parameter** — raw node login password (8–26 chars, ≥3 of: uppercase / lowercase / digits / special).
+3. **`CCE_NODE_PASSWORD` environment variable** — used when neither `ssh_key` nor `password` is provided.
+4. **Auto-generated random password** — when none of the above is supplied.
+
+> ⚠️ **The auto-generated password is NEVER returned in the tool response.** To access the nodes afterwards, reset the password via the CCE console or the ECS API. The success message only contains a hint to reset the password.
+
+The script automatically performs SHA-512 salted encryption + base64 encoding on the password — no manual processing required.
 
 ### Data Volumes (data_volumes)
 
@@ -65,7 +71,7 @@ Node pools in Turbo (ENI network) clusters must use ENI-compatible flavors. Inco
 |------|------|-----|
 | `region` | Huawei Cloud region | Yes |
 | `cluster_id` | Cluster ID | Yes |
-| `nodepool_id` | Node pool ID | Yes |
+| `nodepool_id` | Node pool ID **or name** (resolved to UID automatically) | Yes |
 | `node_count` | Target node count | Yes |
 | `confirm` | Confirm execution | Yes |
 
@@ -98,8 +104,21 @@ python3 huawei-cloud.py huawei_create_cce_nodepool \
 ### Create Node Pool (Turbo Cluster)
 
 ```bash
-export CCE_NODE_PASSWORD="your_password"
+# Option A: ssh_key (preferred)
+python3 huawei-cloud.py huawei_create_cce_nodepool \
+    region=cn-north-4 \
+    cluster_id=xxx \
+    nodepool_name=dev-worker-pool \
+    flavor=c7.large.2 \
+    availability_zone=cn-north-4a \
+    root_volume_size=40 \
+    root_volume_type=GPSSD \
+    initial_node_count=1 \
+    'data_volumes=[{"size":100,"type":"SSD"}]' \
+    ssh_key=KeyPair-dev
 
+# Option B: password env var
+export CCE_NODE_PASSWORD="your_password"
 python3 huawei-cloud.py huawei_create_cce_nodepool \
     region=cn-north-4 \
     cluster_id=xxx \
@@ -110,6 +129,9 @@ python3 huawei-cloud.py huawei_create_cce_nodepool \
     root_volume_type=GPSSD \
     initial_node_count=1 \
     'data_volumes=[{"size":100,"type":"SSD"}]'
+
+# Option C: omit both — the skill auto-generates a strong password
+#           (the response will tell you to reset it to access nodes)
 ```
 
 ### Query Node Pools
