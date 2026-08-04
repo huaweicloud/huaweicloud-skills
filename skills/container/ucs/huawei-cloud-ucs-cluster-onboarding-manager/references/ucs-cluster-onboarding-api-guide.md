@@ -192,7 +192,7 @@ hcloud UCS ShowClusterList --clustergroupid=<group-id> --cli-region=cn-north-4
 
 hcloud UCS ListManagedClusters --cli-region=cn-north-4
 
-hcloud UCS ListManagedClusters --unimported --cli-region=cn-north-4
+hcloud UCS ListManagedClusters --unimported=true --cli-region=cn-north-4
 ```
 
 **ShowClusterList Parameters**:
@@ -268,12 +268,12 @@ hcloud UCS ListManagedClusters --unimported --cli-region=cn-north-4
 - `status.conditions`: Array of status conditions with `type`, `status`, `reason`, `message`
 
 **ListManagedClusters Parameters**:
-- `--unimported` (optional): Boolean flag to list only unimported clusters
+- `--unimported=true` (optional): Boolean flag to list only unimported clusters (must use `=true` format, bare `--unimported` is rejected by hcloud CLI)
 
 ### 3. Update Cluster
 
 ```bash
-hcloud UCS UpdateCluster --clusterid=<ucs-cluster-id> --apiVersion=v1 --kind=Cluster --spec.city=Shanghai --spec.country=CN --cli-region=cn-north-4
+hcloud UCS UpdateCluster --clusterid=<ucs-cluster-id> --apiVersion=v1 --kind=Cluster --spec.city=310000 --spec.country=CN --cli-region=cn-north-4
 ```
 
 **Parameters** (Kubernetes-style):

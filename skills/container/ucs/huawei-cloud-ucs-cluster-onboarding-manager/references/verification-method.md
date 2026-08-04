@@ -75,7 +75,7 @@ Expected: Cluster registered successfully.
 ### 3.4 Cluster Update
 
 ```bash
-hcloud UCS UpdateCluster --clusterid=<ucs-cluster-id> --apiVersion=v1 --kind=Cluster --spec.city=Shanghai --cli-region=cn-north-4
+hcloud UCS UpdateCluster --clusterid=<ucs-cluster-id> --apiVersion=v1 --kind=Cluster --spec.city=310000 --cli-region=cn-north-4
 ```
 
 Expected: Cluster updated successfully.
@@ -110,17 +110,30 @@ Expected: Fleet group deleted successfully.
 
 > ⚠️ **ShowClusterAccessInfo only works for `category=onpremise` clusters** (verified: returns `UCS.01030011`). For `category=self` (CCE) clusters, skip this step and use CCE API `CreateKubernetesClusterCert` to get kubeconfig.
 
+**For category=onpremise (self-managed) clusters**:
+
 ```bash
 hcloud UCS ShowClusterAccessInfo --clusterid=<ucs-cluster-id> --cli-region=cn-north-4
 ```
 
-Expected: Returns cluster access information with API server endpoint (onpremise only). For CCE clusters, this will return "Cluster category not supported".
+Expected: Returns cluster access information with API server endpoint (onpremise only).
 
 ```bash
 hcloud UCS CreateClusterKubeconfig --clusterid=<ucs-cluster-id> --cli-region=cn-north-4
 ```
 
 Expected: Returns kubeconfig content.
+
+**For category=self (CCE) clusters**:
+
+```bash
+# ShowClusterAccessInfo returns "Cluster category not supported" — skip it
+# CreateClusterKubeconfig returns internal error — do NOT use it
+# Use CCE API instead:
+hcloud CCE CreateKubernetesClusterCert --cluster_id=<cce-cluster-id> --duration=30 --cli-region=cn-north-4
+```
+
+Expected: Returns kubeconfig content from CCE API.
 
 ### 3.7 Quota Check
 
@@ -154,7 +167,7 @@ Expected: Test cluster no longer appears in list.
 | 4  | List managed clusters     | `hcloud UCS ShowClusterList --cli-region=cn-north-4`| ☐      |
 | 5  | Register CCE cluster      | `hcloud UCS RegisterCluster --apiVersion=v1 --kind=Cluster --metadata.name=test-verify --spec.category=self --spec.provider=huaweicloud --spec.type=turbo --spec.manageType=discrete --spec.country=CN --spec.city=110000 --metadata.uid=<cce-id> --spec.projectID=<project-id> --spec.region=cn-north-4 --cli-region=cn-north-4` | ☐ |
 | 6  | Show cluster details      | `hcloud UCS ShowCluster --clusterid=<ucs-id> --cli-region=cn-north-4` | ☐ |
-| 7  | Update cluster            | `hcloud UCS UpdateCluster --clusterid=<ucs-id> --apiVersion=v1 --kind=Cluster --spec.city=Shanghai --cli-region=cn-north-4` | ☐ |
+| 7  | Update cluster            | `hcloud UCS UpdateCluster --clusterid=<ucs-id> --apiVersion=v1 --kind=Cluster --spec.city=310000 --cli-region=cn-north-4` | ☐ |
 | 8  | Show cluster access       | `hcloud UCS ShowClusterAccessInfo --clusterid=<ucs-id> --cli-region=cn-north-4` | ☐ |
 | 9  | Create fleet group        | `hcloud UCS RegisterClusterGroup --metadata.name=test-verify-group --cli-region=cn-north-4` | ☐ |
 | 10 | Show fleet group          | `hcloud UCS ShowClusterGroup --clustergroupid=<group-id> --cli-region=cn-north-4` | ☐ |
@@ -215,9 +228,9 @@ Status stuck in "Registering"
 
 **Root Cause**: `ShowClusterAccessInfo` only applies to `category=onpremise` clusters.
 
-**Solution**: For `category=self` (CCE) clusters, use `CreateClusterKubeconfig` directly:
+**Solution**: For `category=self` (CCE) clusters, use CCE API `CreateKubernetesClusterCert` to obtain kubeconfig (NOT UCS `CreateClusterKubeconfig` which returns internal error for CCE clusters):
 ```bash
-hcloud UCS CreateClusterKubeconfig --clusterid=<ucs-cluster-id> --cli-region=cn-north-4
+hcloud CCE CreateKubernetesClusterCert --cluster_id=<cce-cluster-id> --duration=30 --cli-region=cn-north-4
 ```
 
 ### 4.4 Project ID Invalid or Not Found

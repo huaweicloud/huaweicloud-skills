@@ -2,20 +2,20 @@
 
 ## Overview
 
-UCS fleet groups (集群组/舰队) provide organizational grouping for managed clusters, enabling unified policy governance and management across multiple clusters. This task covers creating, querying, and managing fleet groups.
+UCS fleet groups provide organizational grouping for managed clusters, enabling unified policy governance and management across multiple clusters. This task covers creating, querying, and managing fleet groups.
 
 ## Operations Catalog
 
 | Operation          | Method | Description              | Key Parameters                    |
 | ------------------ | ------ | ------------------------ | --------------------------------- |
-| `RegisterClusterGroup` | POST  | 创建集群组             | `--metadata.name`, `--spec.description`, `--spec.clusterIds.1` |
-| `ListClusterGroup` | GET    | 列出集群组列表           | `--limit`, `--offset`, `--order`, `--order_by` |
-| `ShowClusterGroup` | GET    | 获取集群组详情           | `--clustergroupid`                |
-| `UpdateClusterGroup` | PUT  | 更新集群组描述           | `--clustergroupid`, `--description` |
-| `UpdateClusterGroupAssociatedClusters` | PUT | 添加集群到舰队 | `--clustergroupid`, `--clusterIds.[N]` |
-| `DeleteClusterGroup` | DELETE | 删除集群组             | `--clustergroupid`                |
-| `JoinGroup`        | POST   | 添加集群到舰队           | `--clusterid` (path), `--clusterGroupID` (body) |
-| `LeaveGroup`       | POST   | 从舰队移除集群           | `--clusterid`                     |
+| `RegisterClusterGroup` | POST  | Create fleet group     | `--metadata.name`, `--spec.description`, `--spec.clusterIds.1` |
+| `ListClusterGroup` | GET    | List fleet groups       | `--limit`, `--offset`, `--order`, `--order_by` |
+| `ShowClusterGroup` | GET    | Show fleet group details | `--clustergroupid`                |
+| `UpdateClusterGroup` | PUT  | Update fleet group desc | `--clustergroupid`, `--description` |
+| `UpdateClusterGroupAssociatedClusters` | PUT | Add clusters to fleet | `--clustergroupid`, `--clusterIds.[N]` |
+| `DeleteClusterGroup` | DELETE | Delete fleet group     | `--clustergroupid`                |
+| `JoinGroup`        | POST   | Add cluster to fleet    | `--clusterid` (path), `--clusterGroupID` (body) |
+| `LeaveGroup`       | POST   | Remove cluster from fleet | `--clusterid`                     |
 
 ## Workflows
 

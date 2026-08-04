@@ -12,7 +12,7 @@ UCS cluster registration (onboarding) enables unified management of Kubernetes c
 | `DeleteCluster`    | DELETE | Remove cluster from UCS   | `--clusterid`                     |
 | `ShowCluster`      | GET    | Get cluster details       | `--clusterid`                     |
 | `ShowClusterList`  | GET    | List registered clusters  | `--limit`, `--offset`, `--category`, `--managetype`, `--clustergroupid`, `--clusterids` |
-| `ListManagedClusters` | GET | List CCE clusters for current tenant (not UCS-registered) | `--unimported` (optional, filter clusters not imported to UCS) |
+| `ListManagedClusters` | GET | List CCE clusters for current tenant (not UCS-registered) | `--unimported=true` (optional, filter clusters not imported to UCS; must use `=true` format) |
 | `RetryClusterActivation` | POST | Retry cluster activation  | `--clusterid`                     |
 | `UpdateCluster`    | PUT    | Update cluster properties  | `--clusterid`, `--apiVersion`, `--kind`, `--metadata.annotations`, `--spec.city`, `--spec.country` |
 
@@ -30,9 +30,10 @@ UCS cluster registration (onboarding) enables unified management of Kubernetes c
    hcloud UCS ListManagedClusters --unimported=true --cli-region=cn-north-4
    ```
    If the cluster version is not in the `ListRegisteredClusterVersions` response, downgrade the cluster before proceeding.
-3. Check UCS quota availability: `hcloud UCS ShowQuota --domainid=<account-id> --cli-region=cn-north-4`
-4. Verify the cluster is not already registered: `hcloud UCS ShowClusterList --category=self --managetype=grouped --cli-region=cn-north-4`
-5. **Obtain the correct project ID**: The `--spec.projectID` value must match the CCE cluster's project. Retrieve it from `ListManagedClusters` response (this API returns CCE clusters, not UCS-registered clusters, so it can be called before registration):
+3. ⚠️ **Verify IAM agency delegation**: `ListManagedClusters` requires an account-level IAM agency. If not configured, it returns `UCS.01010005: get IAM agency's token error`. See `references/common-pitfalls.md` Pitfall 20 for setup instructions.
+4. Check UCS quota availability: `hcloud UCS ShowQuota --domainid=<account-id> --cli-region=cn-north-4`
+5. Verify the cluster is not already registered: `hcloud UCS ShowClusterList --category=self --managetype=grouped --cli-region=cn-north-4`
+6. **Obtain the correct project ID**: The `--spec.projectID` value must match the CCE cluster's project. Retrieve it from `ListManagedClusters` response (this API returns CCE clusters, not UCS-registered clusters, so it can be called before registration):
    ```bash
    hcloud UCS ListManagedClusters --unimported=true --cli-region=cn-north-4
    ```
@@ -102,7 +103,22 @@ hcloud UCS RetryClusterActivation --clusterid=<ucs-cluster-id> --cli-region=cn-n
 
 Expected: Cluster status transitions from stalled state toward `Available`.
 
-**Category Limitation** (verified): `RetryClusterActivation` only works for `category=onpremise` clusters. For `category=self` (CCE) clusters, it returns `UCS.01000011: Cluster category not supported`. Do not use this API for CCE clusters.
+**Diagnostic Value** (verified): Beyond simply retrying activation, `RetryClusterActivation` serves as a **diagnostic tool** for identifying registration failure root causes. When a cluster registration fails with a misleading error (e.g., `401 Unauthorized`), calling `RetryClusterActivation` can return a more specific error message that reveals the true root cause:
+
+- `UCS.01030012: cce cluster version not support in UCS service` → K8s version incompatibility (see Pitfall 17)
+- `UCS.01030011: Cluster category not supported` → Wrong cluster category
+- Other specific error codes → Reveal underlying issues not visible in the original registration response
+
+**Recommended Diagnostic Flow**:
+```
+Cluster registration failed or stuck?
+├── Step 1: Call RetryClusterActivation
+│   └── Examine the error response for specific root cause
+├── Step 2: If error mentions version → Check ListRegisteredClusterVersions
+└── Step 3: If error mentions category → Verify spec.category parameter
+```
+
+**Category Limitation** (verified): `RetryClusterActivation` only works for `category=onpremise` clusters. For `category=self` (CCE) clusters, it returns `UCS.01000011: Cluster category not supported`. Do not use this API for CCE clusters. For CCE cluster registration issues, check K8s version compatibility via `ListRegisteredClusterVersions` instead.
 
 ### W5: Deregister (Remove) a Cluster from UCS
 
