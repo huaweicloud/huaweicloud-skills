@@ -2,17 +2,40 @@
 id: huawei-cloud-ucs-policy-governor
 name: huawei-cloud-ucs-policy-governor
 description: |
-  Huawei Cloud UCS (Universal Cloud Service) policy governance and compliance management skill using hcloud CLI.
+  Huawei Cloud UCS (Ubiquitous Cloud Native Service) policy governance and compliance management skill using hcloud CLI.
   Use this skill when the user wants to: (1) manage UCS policy instances - create/update/query/delete, (2) manage UCS policy definitions - query/list, (3) enable/disable policies on clusters or fleet groups, (4) check policy enforcement job status, (5) audit fleet compliance and review policy enforcement status.
   Trigger: user mentions "UCS policy", "UCS 策略", "UCS governance", "UCS 治理", "UCS compliance", "UCS 合规", "policy instance", "策略实例", "policy definition", "策略定义", "enable policy", "启用策略", "disable policy", "禁用策略", "fleet compliance", "舰队合规", "policy audit", "策略审计", "UCS 策略管理", "UCS 合规治理", "policy governance", "策略治理"
 tags: [ucs, policy-governance, compliance, policy-instance, fleet]
+triggers:
+  - "UCS policy"
+  - "UCS 策略"
+  - "UCS governance"
+  - "UCS 治理"
+  - "UCS compliance"
+  - "UCS 合规"
+  - "policy instance"
+  - "策略实例"
+  - "policy definition"
+  - "策略定义"
+  - "enable policy"
+  - "启用策略"
+  - "disable policy"
+  - "禁用策略"
+  - "fleet compliance"
+  - "舰队合规"
+  - "policy audit"
+  - "策略审计"
+  - "UCS 策略管理"
+  - "UCS 合规治理"
+  - "policy governance"
+  - "策略治理"
 ---
 
 # Huawei Cloud UCS Policy Governor
 
 ## Overview
 
-This skill provides policy governance and compliance management capabilities for Huawei Cloud UCS (Universal Cloud Service) using the `hcloud` CLI, covering policy instance lifecycle, policy definitions, policy enforcement, and compliance auditing.
+This skill provides policy governance and compliance management capabilities for Huawei Cloud UCS (Ubiquitous Cloud Native Service) using the `hcloud` CLI, covering policy instance lifecycle, policy definitions, policy enforcement, and compliance auditing.
 
 **Architecture**: hcloud CLI → UCS Service API → PolicyInstance/PolicyDefinition/PolicyJob resources
 
@@ -61,6 +84,16 @@ The skill workflow is as follows:
 ## KooCLI Command Format Standard
 
 All operations use `hcloud UCS <Operation> --<param>=<value> --cli-region=<region>` format. Parameters use `--key=value` style (not JSON body). See [Parameter Reference](#parameter-reference) for detailed parameter descriptions.
+
+**Supported Regions** (verified):
+
+| Region | Status | Notes |
+|--------|--------|-------|
+| `cn-north-4` | ✅ Available | Primary region, all commands verified |
+| `ap-southeast-3` | ✅ Available | Verified in second-round testing |
+| `cn-south-4` | ❌ Unavailable | DNS resolution fails, do not use |
+
+Other regions may be supported but have not been verified. Always test with `hcloud UCS ListPolicyDefinitions --cli-region=<region>` first.
 
 ## Prerequisites
 
@@ -166,7 +199,12 @@ hcloud UCS ListPolicyInstances --cli-region=cn-north-4
 hcloud UCS ListPolicyDefinitions --cli-region=cn-north-4
 
 # Show policy definition details
-hcloud UCS ShowPolicyDefinition --policydefinitionid=<definition-id> --cli-region=cn-north-4
+# NOTE: --policydefinitionid requires the metadata.uid (UUID format) from ListPolicyDefinitions,
+# NOT the policy definition name. Using a name will return UCS.000000 error.
+# Step 1: List policy definitions to get the UID
+hcloud UCS ListPolicyDefinitions --cli-region=cn-north-4
+# Step 2: Use the metadata.uid value from the list result
+hcloud UCS ShowPolicyDefinition --policydefinitionid=<metadata.uid> --cli-region=cn-north-4
 ```
 
 ### 3. Policy Enforcement (Enable/Disable)
@@ -239,7 +277,7 @@ hcloud UCS ShowPolicyJob --jobid=<job-id> --cli-region=cn-north-4
 
 | Parameter               | Required | Description              | Constraints                                  |
 | ----------------------- | -------- | ------------------------ | -------------------------------------------- |
-| `--policydefinitionid`  | Yes      | Definition ID            | Used in ShowPolicyDefinition                 |
+| `--policydefinitionid`  | Yes      | Definition UID (`metadata.uid`) | UUID format from `ListPolicyDefinitions` response. Using policy name instead of UID returns `UCS.000000` error |
 
 ### Policy Job Parameters
 
@@ -399,6 +437,16 @@ See [Verification Method](references/verification-method.md) for step-by-step ve
 - **Enable/Disable are scope-specific** — use `EnableClusterPolicy`/`DisableClusterPolicy` for clusters and `EnableClusterGroupPolicy`/`DisableClusterGroupPolicy` for fleet groups
 - **GetPolicyAssignment does not exist** — use `ListPolicyJobs` and `ShowPolicyJob` to check enforcement task status
 - **ListPolicyInstances and ListPolicyDefinitions have no filter parameters** — only `--cli-region` is available
+- **ShowPolicyDefinition requires UID, not name** — the `--policydefinitionid` parameter must be the `metadata.uid` (UUID format) from `ListPolicyDefinitions` response. Using the policy definition name returns `UCS.000000` error. Always call `ListPolicyDefinitions` first to obtain the UID
+- **hcloud JSON output parsing** — the default hcloud output mixes JSON with diagnostic tables, causing `json.loads()` to fail. For programmatic parsing, use `--cli-output=json` to get pure JSON output:
+
+```bash
+# Default output (mixed format, json.loads() will fail)
+hcloud UCS ListPolicyDefinitions --cli-region=cn-north-4
+
+# Pure JSON output (safe for json.loads())
+hcloud UCS ListPolicyDefinitions --cli-region=cn-north-4 --cli-output=json
+```
 
 ## Common Pitfalls
 

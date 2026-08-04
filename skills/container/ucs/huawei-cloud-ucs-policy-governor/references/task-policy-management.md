@@ -32,7 +32,9 @@ Before creating a policy instance, review available definitions:
 hcloud UCS ListPolicyDefinitions --cli-region=cn-north-4
 
 # Show definition details to understand parameters
-hcloud UCS ShowPolicyDefinition --policydefinitionid=<definition-id> --cli-region=cn-north-4
+# NOTE: --policydefinitionid requires metadata.uid (UUID), NOT the definition name.
+# Use ListPolicyDefinitions first to get the UID, then query with ShowPolicyDefinition.
+hcloud UCS ShowPolicyDefinition --policydefinitionid=<metadata.uid> --cli-region=cn-north-4
 ```
 
 **Policy Definition Categories** (verified via `ListPolicyDefinitions`, 33 definitions):
@@ -44,7 +46,7 @@ hcloud UCS ShowPolicyDefinition --policydefinitionid=<definition-id> --cli-regio
 **Pre-creation Checklist**:
 1. Verify cluster is registered in UCS: `hcloud UCS ShowClusterList --name=<cluster-name> --cli-region=cn-north-4`
 2. Identify the appropriate policy definition: `hcloud UCS ListPolicyDefinitions --cli-region=cn-north-4`
-3. Verify definition details: `hcloud UCS ShowPolicyDefinition --policydefinitionid=<id> --cli-region=cn-north-4`
+3. Verify definition details: `hcloud UCS ShowPolicyDefinition --policydefinitionid=<metadata.uid> --cli-region=cn-north-4` (use `metadata.uid` from ListPolicyDefinitions, not the name)
 
 ```bash
 # Create a cluster-level policy instance
@@ -222,5 +224,6 @@ hcloud UCS ListPolicyInstances --cli-region=cn-north-4
 hcloud UCS ListPolicyJobs --kind=EnablePolicy --cli-region=cn-north-4
 
 # Review definitions being used
-hcloud UCS ShowPolicyDefinition --policydefinitionid=<template-id> --cli-region=cn-north-4
+# Use metadata.uid from ListPolicyDefinitions (not the name)
+hcloud UCS ShowPolicyDefinition --policydefinitionid=<metadata.uid> --cli-region=cn-north-4
 ```
