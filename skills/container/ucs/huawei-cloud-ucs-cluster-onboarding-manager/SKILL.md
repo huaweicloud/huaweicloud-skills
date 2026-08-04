@@ -144,7 +144,7 @@ See [Task: Cluster Registration](references/task-cluster-registration.md) for de
 RegisterCluster uses Kubernetes API-style parameters (apiVersion, kind, metadata.*, spec.*).
 
 ```bash
-# Register a CCE cluster to UCS (⚠️ 接入收费: requires user confirmation)
+# Register a CCE cluster to UCS (⚠️ paid service: requires user confirmation)
 # **Confirm with user before executing** — UCS cluster onboarding is a paid service, costs will be incurred
 hcloud UCS RegisterCluster --apiVersion=v1 --kind=Cluster --metadata.name=prod-backend-cluster --spec.category=self --spec.provider=huaweicloud --spec.type=turbo --spec.manageType=discrete --spec.country=CN --spec.city=110000 --metadata.uid=<cce-cluster-id> --spec.projectID=<project-id> --spec.region=cn-north-4 --cli-region=cn-north-4
 
@@ -209,12 +209,15 @@ hcloud UCS ShowClusterList --limit=20 --offset=0 --cli-region=cn-north-4
 hcloud UCS ShowClusterList --category=CCE --enablestatus=Available --clustergroupid=<group-id> --cli-region=cn-north-4
 
 # List all managed clusters (with optional unimported flag)
+# ⚠️ Prerequisite: ListManagedClusters requires IAM agency delegation configured at account level.
+# If not configured, returns UCS.01010005: get IAM agency's token error.
+# See references/common-pitfalls.md Pitfall 20 for IAM agency setup instructions.
 hcloud UCS ListManagedClusters --cli-region=cn-north-4
-hcloud UCS ListManagedClusters --unimported --cli-region=cn-north-4
+hcloud UCS ListManagedClusters --unimported=true --cli-region=cn-north-4
 
 # Update cluster properties (K8s API-style params) (⚠️ modification: requires user confirmation)
 # **Confirm with user before executing**
-hcloud UCS UpdateCluster --clusterid=<ucs-cluster-id> --apiVersion=v1 --kind=Cluster --spec.city=Shanghai --spec.country=CN --cli-region=cn-north-4
+hcloud UCS UpdateCluster --clusterid=<ucs-cluster-id> --apiVersion=v1 --kind=Cluster --spec.city=310000 --spec.country=CN --cli-region=cn-north-4
 
 # Show cluster access information (only for category=onpremise clusters)
 hcloud UCS ShowClusterAccessInfo --clusterid=<ucs-cluster-id> --cli-region=cn-north-4
@@ -235,6 +238,8 @@ hcloud UCS ShowClusterAccessInfo --clusterid=<ucs-cluster-id> --region=cn-north-
 - `--offset`: Pagination offset
 - `--order`: Sort order (asc, desc)
 - `--order_by`: Sort field
+
+> ⚠️ **`--name` filter is NOT supported** by ShowClusterList API. To find a cluster by name, call `ShowClusterList` without name filter and match by `metadata.name` in the response locally.
 
 ### 3. Fleet Group Management
 
@@ -274,7 +279,8 @@ hcloud UCS DeleteClusterGroup --clustergroupid=<group-id> --cli-region=cn-north-
 See [Task: Access Management](references/task-access-management.md) for detailed workflows.
 
 ```bash
-# Get kubeconfig for a specific cluster
+# Get kubeconfig for a specific cluster (⚠️ only for category=onpremise clusters)
+# For category=self (CCE) clusters, use: hcloud CCE CreateKubernetesClusterCert --cluster_id=<cce-id> --duration=30 --cli-region=cn-north-4
 hcloud UCS CreateClusterKubeconfig --clusterid=<ucs-cluster-id> --cli-region=cn-north-4
 
 # Create cluster configuration
@@ -297,42 +303,42 @@ hcloud UCS ShowQuota --domainid=<account-id> --cli-region=cn-north-4
 
 ## 参数确认
 
-> ⚠️ **费用提醒**: UCS 集群接入为**收费服务**，注册集群到 UCS 会产生费用。在执行 `RegisterCluster` 等接入操作前，**必须向用户确认是否同意产生费用**，获得明确同意后方可执行。
+> ⚠️ **Cost Notice**: UCS cluster onboarding is a **paid service**. Registering a cluster to UCS incurs costs. Before executing `RegisterCluster` or other onboarding operations, **you must confirm with the user whether they agree to incur costs** and obtain explicit consent before proceeding.
 
-### 通用参数
+### Common Parameters
 
-| Parameter        | Required/Optional | Description                   | Default                              |
-| ---------------- | ----------------- | ----------------------------- | ------------------------------------ |
-| `--cli-region`   | Required          | Huawei Cloud region ID        | Config value or `HUAWEI_CLOUD_REGION` |
-| `--clusterid`    | Context-dependent | UCS cluster ID                | N/A                                  |
-| `--clustergroupid` | Context-dependent | Fleet group ID              | N/A                                  |
+| Parameter          | Required/Optional | Description              | Default                              |
+| ------------------ | ----------------- | ------------------------ | ------------------------------------ |
+| `--cli-region`     | Required          | Huawei Cloud region ID   | Config value or `HUAWEI_CLOUD_REGION` |
+| `--clusterid`      | Context-dependent | UCS cluster ID           | N/A                                  |
+| `--clustergroupid` | Context-dependent | Fleet group ID           | N/A                                  |
 
-### 集群注册参数 (K8s API Style)
+### Cluster Registration Parameters (K8s API Style)
 
-| Parameter                        | Required | Description                        | Constraints                                  |
-| -------------------------------- | -------- | ---------------------------------- | -------------------------------------------- |
-| `--spec.category`                | Yes      | Cluster category                   | `self` (CCE) or `onpremise` (self-managed)   |
-| `--spec.provider`                | Yes      | Cluster provider                   | `huaweicloud` or `self_managed`              |
-| `--spec.type`                    | Yes      | Cluster type                       | `cce`, `baremetal`, `Kubernetes`, etc.       |
-| `--spec.manageType`              | Yes      | Management type                    | `grouped` or `discrete`                      |
-| `--metadata.uid`                 | CCE only | CCE cluster ID                     | Must reference existing CCE cluster          |
-| `--spec.projectID`               | CCE only | Project ID                         | Obtain via `ListManagedClusters` response    |
-| `--spec.clusterGroupID`          | No       | Assign to fleet at registration    | Valid fleet group ID                         |
+| Parameter               | Required | Description                     | Constraints                               |
+| ----------------------- | -------- | ------------------------------- | ----------------------------------------- |
+| `--spec.category`       | Yes      | Cluster category                | `self` (CCE) or `onpremise` (self-managed) |
+| `--spec.provider`       | Yes      | Cluster provider                | `huaweicloud` or `self_managed`           |
+| `--spec.type`           | Yes      | Cluster type                    | `cce`, `baremetal`, `Kubernetes`, etc.    |
+| `--spec.manageType`     | Yes      | Management type                 | `grouped` or `discrete`                   |
+| `--metadata.uid`        | CCE only | CCE cluster ID                  | Must reference existing CCE cluster       |
+| `--spec.projectID`      | CCE only | Project ID                      | Obtain via `ListManagedClusters` response |
+| `--spec.clusterGroupID` | No       | Assign to fleet at registration | Valid fleet group ID                      |
 
-### 写操作参数（需用户确认）
+### Write Operations (User Confirmation Required)
 
-| Command          | Parameters | Confirmation Required | Reason |
-| ---------------- | ---------- | --------------------- | ------ |
-| `RegisterCluster` | See above | ✅ Yes | **接入收费**，产生费用 |
-| `DeleteCluster`   | `--clusterid` | ✅ Yes | 退出纳管，不可逆 |
-| `UpdateCluster`   | `--clusterid` + K8s params | ✅ Yes | 修改集群属性 |
-| `RegisterClusterGroup` | Group name + description | ✅ Yes | 创建舰队组 |
-| `DeleteClusterGroup` | `--clustergroupid` | ✅ Yes | 删除舰队组 |
-| `UpdateClusterGroup` | `--clustergroupid` + params | ✅ Yes | 修改舰队组属性 |
-| `JoinGroup`      | `--clusterid` + `--clustergroupid` | ✅ Yes | 修改集群归属 |
-| `LeaveGroup`     | `--clusterid` + `--clustergroupid` | ✅ Yes | 修改集群归属 |
+| Operation             | CLI Command                          | Risk Level | Confirmation Required                                                                                                                                                          |
+| --------------------- | ------------------------------------ | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `RegisterCluster`     | `hcloud UCS RegisterCluster`         | High       | UCS onboarding is a paid service; after registration, the cluster will be subject to UCS policy governance constraints. Confirm cluster name, category, and billing consent.   |
+| `DeleteCluster`       | `hcloud UCS DeleteCluster`           | High       | Deregistration is irreversible; the cluster loses all UCS management capabilities, policy governance, and fleet association. Confirm cluster ID before proceeding.            |
+| `UpdateCluster`       | `hcloud UCS UpdateCluster`           | Medium     | Modifies cluster properties (e.g., location, labels). Confirm the changes before proceeding.                                                                                   |
+| `RegisterClusterGroup` | `hcloud UCS RegisterClusterGroup`   | Medium     | Creates a new fleet group for cluster organization. Confirm group name and description.                                                                                        |
+| `DeleteClusterGroup`  | `hcloud UCS DeleteClusterGroup`      | High       | Deletes the fleet group; clusters remain registered but lose group-level governance and federation access. Confirm group ID before proceeding.                                |
+| `UpdateClusterGroup`  | `hcloud UCS UpdateClusterGroup`      | Medium     | Modifies fleet group description. Confirm the new description.                                                                                                                 |
+| `JoinGroup`           | `hcloud UCS JoinGroup`               | Medium     | Joining a fleet group affects the cluster's governance scope and policy execution. Confirm cluster ID and target group ID.                                                    |
+| `LeaveGroup`          | `hcloud UCS LeaveGroup`              | Medium     | Leaving a fleet group affects the cluster's governance scope and policy execution; the cluster will no longer be governed by group-level policies. Confirm cluster ID.        |
 
-> 完整参数表见 [Parameter Reference](references/parameter-reference.md)
+> See [Parameter Reference](references/parameter-reference.md) for complete parameter tables.
 
 ## Output Format
 

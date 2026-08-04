@@ -346,6 +346,57 @@ hcloud UCS RegisterCluster --apiVersion=v1 --kind=Cluster --metadata.name=my-cce
 
 Never use `--spec.category=onpremise` for CCE clusters.
 
+## Pitfall 20: IAM Agency Required for ListManagedClusters (UCS.01010005)
+
+**Symptom**: `ListManagedClusters` returns `UCS.01010005: get IAM agency's token error`.
+
+**Root Cause**: `ListManagedClusters` depends on an account-level IAM agency (委托) delegation. This is a Huawei Cloud platform prerequisite — the UCS service needs to assume an IAM agency to access CCE cluster information on behalf of the user. If the agency is not configured, the API call fails.
+
+**Solution**: Configure the IAM agency delegation in the Huawei Cloud console:
+
+1. Log in to Huawei Cloud console → IAM → Agencies (委托)
+2. Create a new agency with:
+   - **Agency name**: `ucs_admin` (or similar)
+   - **Delegated account**: Select the current account
+   - **Delegated permissions**: Grant `CCE FullAccess` (or minimal `cce:cluster:get` + `cce:cluster:list`)
+3. The UCS service will automatically use this agency when calling `ListManagedClusters`
+
+After configuring the agency, retry:
+```bash
+hcloud UCS ListManagedClusters --cli-region=cn-north-4
+```
+
+> ⚠️ This is a platform-level configuration that cannot be done via hcloud CLI. It must be configured in the IAM console by an account administrator.
+
+## Pitfall 21: 401 Unauthorized May Indicate Version Incompatibility, Not Credential Issue
+
+**Symptom**: `RegisterCluster` or `RetryClusterActivation` returns `401 Unauthorized` error, but credentials (AK/SK) are valid and other UCS API calls work fine.
+
+**Root Cause**: When UCS does not support the cluster's Kubernetes version, the error response may return `401 Unauthorized` instead of a clear version incompatibility message. This is misleading — the actual problem is K8s version mismatch, not authentication failure.
+
+**How to Diagnose**:
+
+1. **Do NOT immediately regenerate credentials** — first verify whether version incompatibility is the root cause:
+```bash
+# Check UCS supported versions
+hcloud UCS ListRegisteredClusterVersions --cli-region=cn-north-4
+
+# Check the cluster's K8s version
+hcloud UCS ListManagedClusters --unimported=true --cli-region=cn-north-4
+# Look at status.kubernetesVersion in the response
+```
+
+2. If the cluster version is NOT in the `ListRegisteredClusterVersions` response, the 401 error is caused by version incompatibility, NOT credential issues.
+
+3. **Use `RetryClusterActivation` as a diagnostic tool** — calling `RetryClusterActivation` on a failed registration can return a more specific error message (e.g., `UCS.01030012: cce cluster version not support in UCS service`) that reveals the true root cause:
+```bash
+hcloud UCS RetryClusterActivation --clusterid=<ucs-cluster-id> --cli-region=cn-north-4
+```
+
+**Solution**: If version incompatibility is confirmed, either downgrade the CCE cluster K8s version or wait for UCS to support the newer version. See Pitfall 17 for detailed version compatibility handling.
+
+**Key Takeaway**: When encountering `401 Unauthorized` during cluster registration, always check K8s version compatibility first (via `ListRegisteredClusterVersions`) before investigating credentials. The 401 error in this context is a known misleading behavior of the UCS service.
+
 ## Common Error Response Reference
 
 | Error Code          | HTTP Status | Description                  | Recommended Action                    |
@@ -355,8 +406,9 @@ Never use `--spec.category=onpremise` for CCE clusters.
 | `UCS.003`           | 409         | Resource already exists      | Use Show operation to check           |
 | `UCS.004`           | 403         | Permission denied            | Check IAM policies                    |
 | `UCS.005`           | 403         | Quota exceeded               | Check quotas, clean up or apply       |
-| `UCS.006`           | 401         | Authentication failed        | Verify credentials (AK/SK/SecurityToken). Note: K8s version incompatibility returns `UCS.01030012`, NOT 401 |
+| `UCS.006`           | 401         | Authentication failed        | Verify credentials (AK/SK/SecurityToken). ⚠️ **However, 401 during RegisterCluster may actually indicate K8s version incompatibility, NOT credential failure** — check `ListRegisteredClusterVersions` first (see Pitfall 21) |
 | `UCS.007`           | 429         | Too many requests            | Add delay, reduce request rate        |
 | `UCS.008`           | 400         | Invalid kubeconfig           | Verify kubeconfig format and validity |
+| `UCS.01010005`      | 400         | IAM agency token error       | Configure IAM agency delegation (see Pitfall 20) |
 | `UCS.01030011`      | 400         | Cluster category not supported | API only supports `category=onpremise`. For CCE clusters, use CCE API instead |
 | `UCS.01030012`      | 400         | Register CCE cluster error    | Check K8s version compatibility (see Pitfall 17) |
