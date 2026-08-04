@@ -2,16 +2,31 @@
 
 ## Overview
 
-Common issues and solutions in CCE cluster management operations.
+Common issues and solutions for CCE cluster management operations executed via **hcloud (KooCLI)** and **kubectl cce**. hcloud failures are categorized by bracketed tags in stderr; kubectl cce failures surface as connection, validation, or RBAC errors.
 
-## Issue Categories
+## hcloud Error Categories
+
+hcloud tags every failure with a bracketed category in stderr. The skill surfaces the full stderr line in the `error` field of tool responses.
+
+| Tag | Meaning | Typical Cause |
+|---------|---------|---------|
+| `[NETWORK_ERROR]` | Cannot reach Huawei Cloud API | Network outage, DNS, proxy, wrong region endpoint |
+| `[CLI_ERROR]` | hcloud CLI internal failure | hcloud not installed / wrong version, bad CLI args, missing `--cli-jsonInput` temp file |
+| `[USE_ERROR]` | Parameter / usage error | Invalid param value, missing required flag, malformed JSON body |
+| `[OPENAPI_ERROR]` | Huawei Cloud OpenAPI returned 4xx/5xx | Insufficient IAM permissions, resource not found, state conflict, quota exceeded |
+| `[APIE_ERROR]` | API gateway / engine error | Throttling, gateway-side failure, transient — retry candidate |
+
+## Quick Triage Table
 
 | Error Type | Possible Cause | Solution |
 |---------|---------|---------|
-| 403 Insufficient Permissions | Missing IAM permissions | Check IAM policy configuration |
-| 404 Resource Not Found | Incorrect cluster/node ID | Verify resource ID is correct |
-| 400 Parameter Error | Invalid parameter format | Check parameter format and values |
-| 409 State Conflict | Operation not allowed in current resource state | Wait for resource state change and retry |
+| `[OPENAPI_ERROR]` 403 Insufficient Permissions | Missing IAM permissions | Check IAM policy configuration |
+| `[OPENAPI_ERROR]` 404 Resource Not Found | Incorrect cluster/node/nodepool/addon ID | Verify resource ID is correct |
+| `[OPENAPI_ERROR]` 400 Parameter Error | Invalid parameter format | Check parameter format and values |
+| `[OPENAPI_ERROR]` 409 State Conflict | Operation not allowed in current resource state | Wait for resource state change and retry |
+| `[APIE_ERROR]` Throttled | API gateway rate limiting | Wait, then retry with backoff |
+| `[NETWORK_ERROR]` | Cannot reach API | Check region, DNS, proxy, network |
+| `[CLI_ERROR]` | hcloud misconfigured | Verify `hcloud version` ≥ 7.2; re-run installer |
 
 ## Common Issues
 
@@ -23,22 +38,24 @@ Common issues and solutions in CCE cluster management operations.
 
 **Solutions:**
 ```bash
-# Verify region is correct
-python3 huawei-cloud.py huawei_list_cce_clusters region=cn-north-4
+# Verify region is correct (hcloud connectivity test)
+hcloud CCE ListClusters --cli-region=cn-north-4
 
 # Check other regions
-python3 huawei-cloud.py huawei_list_cce_clusters region=cn-east-3
+hcloud CCE ListClusters --cli-region=cn-east-3
 ```
 
 ### 2. Node operation returns insufficient permissions
 
 **Possible Causes:**
 - IAM lacks `cce:node:update` permission
+- For kubectl cce ops, the AK/SK identity lacks RBAC on the cluster
 
 **Solutions:**
-Add CCE-related permissions for the user in the IAM console.
+- Add CCE-related permissions for the user in the IAM console.
+- For kubectl cce operations, ensure the IAM user is a member of the cluster's `iam:group` (CCE console → Cluster → Permissions).
 
-### 3. Cluster sleep/awaken operation failed
+### 3. Cluster hibernate/awaken operation failed
 
 **Possible Causes:**
 - Cluster state does not support this operation
@@ -47,8 +64,7 @@ Add CCE-related permissions for the user in the IAM console.
 **Solutions:**
 ```bash
 # First query cluster status
-python3 huawei-cloud.py huawei_list_cce_clusters region=cn-north-4
-
+hcloud CCE ListClusters --cli-region=cn-north-4
 # Confirm status is Available before operating
 ```
 
@@ -73,34 +89,34 @@ python3 huawei-cloud.py huawei_resize_cce_nodepool \
 
 **Error Messages:**
 - `CCE_CM.0004 - Request is invalid, Unexpected initial node password format`
-- `CCE_NODE_PASSWORD environment variable is not set`
+- `CCE_NODE_PASSWORD environment variable is not set` (only when no ssh_key / password / env var is supplied — the skill auto-generates a password in this case)
 - `CCE_NODE_PASSWORD length must be 8-26 characters`
 - `CCE_NODE_PASSWORD must contain at least 3 of: uppercase, lowercase, digits, special chars`
 
 **Causes:**
-- `CCE_NODE_PASSWORD` environment variable not set
-- Password complexity does not meet requirements (8-26 characters, must contain at least 3 of: uppercase, lowercase, digits, special characters)
-- When calling CCE API directly, password not encrypted with SHA-512 salted encryption + base64 encoding
+- `CCE_NODE_PASSWORD` environment variable set but not meeting complexity (8–26 chars, ≥3 of: uppercase, lowercase, digits, special)
+- Password not encrypted with SHA-512 salted + base64 encoding before being sent to the CCE API
+
+**Node login resolution priority (see [SKILL.md](../SKILL.md) "Node Login Password Security"):**
+1. `ssh_key` parameter (preferred)
+2. `password` parameter
+3. `CCE_NODE_PASSWORD` environment variable
+4. **Auto-generated random password** (never returned in the response; reset via CCE console / ECS API to access the node)
 
 **Solutions:**
 ```bash
-# Set password environment variable (must meet complexity requirements)
-export CCE_NODE_PASSWORD="MyPass123!"
-
-# The script automatically performs SHA-512 salted encryption + base64 encoding, no manual processing needed
+# Option A: set a compliant password env var
+export CCE_NODE_PASSWORD="${NODE_PASSWORD}"  # 8-26 chars, >=3 categories
 python3 huawei-cloud.py huawei_create_cce_nodepool ...
+
+# Option B: pass an ssh_key (preferred when available)
+python3 huawei-cloud.py huawei_create_cce_nodepool ... ssh_key=KeyPair-dev
+
+# Option C: omit both — the skill auto-generates a strong password.
+# The success message will instruct you to reset the node password to access it.
 ```
 
-When calling CCE API directly, you need to encrypt yourself:
-```python
-import os
-from passlib.hash import sha512_crypt
-import base64
-
-password = os.environ.get("CCE_NODE_PASSWORD")
-hashed = sha512_crypt.using(rounds=5000).hash(password)
-salted_b64 = base64.b64encode(hashed.encode("utf-8")).decode("utf-8")
-```
+The skill automatically applies SHA-512 salted + base64 encoding; no manual processing is needed.
 
 ### 6. "Flavor ENI network is not supported" error when creating node pool
 
@@ -132,73 +148,104 @@ python3 huawei-cloud.py huawei_create_cce_nodepool \
   'data_volumes=[{"size":100,"type":"SSD"}]'
 ```
 
-### 8. "instanceID is invalid" error when querying addon details
+### 8. hcloud CreateCluster / CreateNodePool defect (SDK fallback)
 
-**Error Message:** `CCE.03400001 - Invalid request., instanceID is invalid`
+**Error Message (when forced through hcloud):** metadata/spec parsing failure, or the API rejects the request with a missing-field error even though the body is populated.
 
-**Cause:** Incorrect value passed to the `id` field of `ShowAddonInstanceRequest`.
+**Cause:** `hcloud CCE CreateCluster` and `hcloud CCE CreateNodePool` have a known **metadata parsing defect** — nested `metadata`/`spec` fields are not parsed correctly by hcloud.
+
+**Mitigation (already in place):** the skill's `huawei_create_cce_cluster` and `huawei_create_cce_nodepool` tools bypass hcloud and call the Python SDK directly (`huaweicloudsdkcce.v3`). No user action is needed. If you see this error, confirm you are calling the skill's tool and not invoking `hcloud CCE CreateCluster` manually. See [cce-api-guide.md](cce-api-guide.md#hcloud-defect-createcluster--createnodepool-sdk-fallback).
+
+### 9. kubectl cce: "The connection to the server was refused" / connection errors
+
+**Error Message:** `Unable to connect to the server: dial tcp ...: connect: connection refused` or `error: ... connection refused`.
+
+**Possible Causes:**
+- kubectl-cce plugin not installed or not in PATH
+- Cluster API gateway endpoint not reachable (region mismatch)
+- Credentials invalid (AK/SK/token)
 
 **Solutions:**
-- The `id` field should use the addon instance UID (obtained from `huawei_list_cce_addons` or the `uid` field in the creation response)
-- Do not use the `addon_name` field (deprecated), use the `id` field instead
-- Call `client.show_addon_instance()` method, not `client.show_addon()`
+```bash
+# 1. Verify kubectl-cce plugin is installed
+kubectl cce --help
 
-### 9. "InstanceSpec got unexpected keyword argument 'template_name'" error when installing addon
+# 2. Test connectivity manually
+HW_ACCESS_KEY=<AK> HW_SECRET_KEY=<SK> HW_SECURITY_TOKEN=<token> \
+  kubectl cce --cluster-id <id> --region <region> --project-id <pid> get nodes
 
-**Error Message:** `InstanceSpec.__init__() got an unexpected keyword argument 'template_name'`
-
-**Cause:** The correct field name for CCE SDK `InstanceSpec` class is `addon_template_name`, not `template_name`.
-
-**Solutions:**
-```python
-spec = InstanceSpec(
-    addon_template_name="volcano",  # Correct
-    # template_name="volcano",      # Incorrect
-    ...
-)
+# 3. Confirm region matches the cluster's region
+# 4. Confirm HW_ACCESS_KEY / HW_SECRET_KEY (and HW_SECURITY_TOKEN for temp creds) are set
 ```
 
-### 10. "cannot import name 'CreateNodeRequestBody'" error when creating node
+### 9a. kubectl cce: "failed to request discovery client" / OpenAPI validation error
 
-**Error Message:** `cannot import name 'CreateNodeRequestBody' from 'huaweicloudsdkcce.v3'`
+**Error Message:** `failed to request discovery client to find mappings` or `the server could not find the requested resource`.
 
-**Cause:** CCE SDK does not have `CreateNodeRequestBody` class; use `Node` object as the body of `CreateNodeRequest`.
+**Cause:** The CCE API Gateway `/api/` endpoint may return 404 on OpenAPI schema validation with certain kubectl versions.
 
-**Solutions:**
-```python
-from huaweicloudsdkcce.v3 import CreateNodeRequest, Node, NodeMetadata, NodeSpec
+**Solution:** Ensure the kubectl-cce plugin is up to date. The `kubectl_cce()` helper handles connection setup automatically.
 
-body = Node(kind="Node", api_version="v3", metadata=NodeMetadata(name="my-node"), spec=node_spec)
-request = CreateNodeRequest(cluster_id="cluster-id")
-request.body = body
-response = client.create_node(request)
-```
+### 10. kubectl drain blocked by PodDisruptionBudget
 
-### 11. SDK attribute name error when creating node
+**Error Message:** `error: unable to drain node "xxx" due to error:PodDisruptionBudget ...`, or `cannot delete pods ... because PDB ... would be violated`.
 
-**Error Message:** `Login.__init__() got an unexpected keyword argument 'userPassword'` or similar
-
-**Cause:** CCE SDK Python package attribute names use snake_case, not camelCase.
-
-**Common error reference:**
-
-| Incorrect (camelCase) | Correct (snake_case) |
-|----------------------|----------------------|
-| `Login(userPassword=...)` | `Login(user_password=...)` |
-| `Login(sshkey=...)` | `Login(ssh_key=...)` |
-| `NodeSpec(rootVolume=...)` | `NodeSpec(root_volume=...)` |
-| `NodeSpec(dataVolumes=...)` | `NodeSpec(data_volumes=...)` |
-| `NodeSpec(nodeNicSpec=...)` | `NodeSpec(node_nic_spec=...)` |
-| `NodeNicSpec(subnetId=...)` | `NodeNicSpec(primary_nic={"subnetId": "xxx"})` |
-
-### 12. NodeNicSpec construction error
-
-**Error Message:** `NodeNicSpec.__init__() got an unexpected keyword argument 'subnetId'`
-
-**Cause:** `NodeNicSpec` does not directly accept `subnetId` parameter; pass it through `primary_nic` dict.
+**Cause:** `huawei_cce_node_drain` uses `kubectl cce drain` with `--ignore-daemonsets --delete-emptydir-data`, which **respects PodDisruptionBudget**. Pods governed by a PDB that forbids disruption will block the drain.
 
 **Solutions:**
-```python
-node_nic_spec = NodeNicSpec(primary_nic={"subnetId": "subnet-id"})  # Correct
-# NodeNicSpec(subnetId="subnet-id")  # Incorrect
+- Wait for the protected workload to drain naturally, or scale it down / delete the PDB intentionally.
+- Do **not** add `--force` bypass logic — the skill intentionally preserves PDB safety. If the user explicitly requests a forced drain, run `kubectl cce ... drain <node> --force --ignore-daemonsets --delete-emptydir-data` manually with appropriate review.
+
+### 11. API gateway rate limiting (`[APIE_ERROR]`)
+
+**Error Message:** `[APIE_ERROR]` throttling / 429 / "Request too frequent".
+
+**Cause:** API gateway throttled the hcloud call.
+
+**Solutions:**
+- Wait a few seconds and retry.
+- For batch node-pool operations, space calls by a few seconds.
+
+### 12. hcloud not installed / wrong version (`[CLI_ERROR]`)
+
+**Error Message:** `'hcloud' is not recognized` / `[CLI_ERROR]` / `unknown command`.
+
+**Solutions:**
+```bash
+# Verify install and version (must be 7.2+)
+hcloud version
+
+# Install / upgrade
+curl -sSL https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/hcloud_install.sh -o ./hcloud_install.sh && bash ./hcloud_install.sh
 ```
+
+### 13. Node drain timeout (`drain ... timeout`)
+
+**Error Message:** `error: timed out waiting for the condition` / drain command exits with timeout after 120s.
+
+**Cause:** `huawei_cce_node_drain` uses `--timeout=120s`. On nodes with many pods or large workloads, eviction can take longer than 120 seconds. This is a CCE platform behavior, not a skill bug.
+
+**Solutions:**
+- The cordon portion of drain still succeeds even if eviction times out — the node is marked unschedulable.
+- Retry the drain after workloads have been scaled down or migrated.
+- For maintenance windows, cordon the node first (`huawei_cce_node_cordon`), then manually drain with a longer timeout via `kubectl cce ... drain <node> --timeout=300s`.
+
+### 14. Addon uninstall fails when addon is upgrading
+
+**Error Message:** `CCE.0500` or similar error when calling `huawei_uninstall_cce_addon`.
+
+**Cause:** The addon is in `upgrading` state (check via `huawei_list_cce_addons` → `status.status`). CCE does not allow deleting an addon that is currently being upgraded.
+
+**Solutions:**
+- Wait for the upgrade to complete (addon status returns to `running` or `abnormal`).
+- Then retry `huawei_uninstall_cce_addon` with the addon **UID** (not name).
+
+### 15. ShowAddonInstance returns "not found" when using addon name
+
+**Error Message:** `Addon not found` or similar 404 error.
+
+**Cause:** `huawei_get_cce_addon_detail` (`ShowAddonInstance`) and `huawei_uninstall_cce_addon` (`DeleteAddonInstance`) require the addon **UID**, not the addon name.
+
+**Solutions:**
+- Call `huawei_list_cce_addons` first to get the addon list.
+- Use the `metadata.uid` field (not `metadata.name`) as the `addon_id` parameter.
