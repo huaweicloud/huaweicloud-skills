@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document provides API reference information for Huawei Cloud UCS (Universal Cloud Service) policy governance operations using hcloud CLI. All commands follow the standard format: `hcloud UCS <Operation> --param=value --cli-region=<region>`.
+This document provides API reference information for Huawei Cloud UCS (Ubiquitous Cloud Native Service) policy governance operations using hcloud CLI. All commands follow the standard format: `hcloud UCS <Operation> --param=value --cli-region=<region>`.
 
 ## Authentication
 
