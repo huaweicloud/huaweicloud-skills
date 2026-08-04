@@ -890,6 +890,35 @@ hcloud SWR DeleteInstanceJob --job_id=<job-id> --cli-region=cn-north-4
 - `--job_id` (required, path): Job ID
 - `--project_id` (required, path, auto-filled): Project ID
 
+## Instance Audit Log Operations
+
+SWR enterprise instances provide built-in audit logging via the `ListAuditLogs` API. This records image upload and download operations (pull, delete, create) for tracking and compliance — no dependency on CTS required.
+
+### 1. List Audit Logs
+
+```bash
+# List pull (download) audit logs
+hcloud SWR ListAuditLogs --instance_id=<instance-id> --project_id=<project-id> --operation=pull --cli-region=cn-north-4
+
+# List delete audit logs
+hcloud SWR ListAuditLogs --instance_id=<instance-id> --project_id=<project-id> --operation=delete --cli-region=cn-north-4
+
+# List create (upload) audit logs
+hcloud SWR ListAuditLogs --instance_id=<instance-id> --project_id=<project-id> --operation=create --cli-region=cn-north-4
+
+# Paginate results
+hcloud SWR ListAuditLogs --instance_id=<instance-id> --project_id=<project-id> --operation=pull --limit=20 --offset=0 --cli-region=cn-north-4
+```
+
+**Parameters**:
+- `--instance_id` (required, path): Enterprise repository instance ID
+- `--project_id` (required, path): Project ID
+- `--operation` (required, query): Operation type — `pull`, `delete`, or `create`
+- `--limit` (optional): Page size
+- `--offset` (optional): Page offset
+
+> 💡 **Note**: SWR `ListAuditLogs` provides image-level audit trails specific to the SWR enterprise instance. For broader cloud-level audit trails across all services, use Huawei Cloud CTS (Cloud Trace Service).
+
 ## Common Region IDs
 
 | Region Name                    | Region ID        |
@@ -930,8 +959,12 @@ The following operations are NOT available through the SWR Enterprise Instance A
 | Image push/pull (`docker push`/`docker pull`) | Use `docker` CLI directly | Requires credentials from `CreateInstanceLtCredential` or `CreateInstanceTempCredential` and `docker login` first |
 | Image build (`docker build`) | Use `docker` CLI or CodeArts Build | SWR is a registry, not a build service |
 | Image tag (`docker tag`) | Use `docker` CLI directly | Tagging is a local Docker operation |
-| Image copy/sync between instances | Use `CreateInstanceRegistry` + sync config | Configure sync target and trigger replication |
-| Webhook management | Not supported in SWR Enterprise | Use event notifications via LTS or CES instead |
+| Image copy/sync between instances | CLI available: `CreateInstanceReplicationPolicy` etc. | Use `hcloud SWR CreateInstanceReplicationPolicy` or SWR enterprise instance console |
+| Image retention/aging policies | CLI available but not documented in this skill | Use `hcloud SWR CreateInstanceRetentionPolicy` / `ListInstanceRetentionPolicies` etc., or SWR enterprise instance console |
+| Webhook management | CLI available but not documented in this skill | Use `hcloud SWR CreateInstanceWebhook` / `ListInstanceWebhooks` etc., or SWR enterprise instance console |
+| Image signing policies | CLI available but not documented in this skill | Use `hcloud SWR CreateInstanceSignPolicy` / `ListInstanceSignPolicies` etc., or SWR enterprise instance console |
+| Resource tag management | CLI available but not documented in this skill | Use `hcloud SWR CreateInstanceResourceTags` / `ListInstanceResourceTags` etc., or TMS console |
+| IAM delegation management | Not supported by this skill | Use IAM console to configure delegation. `CheckAgency`/`CreateAgency` are for SWR→CCE/CCI direction, not enterprise instance delegation |
 | Garbage collection | Not supported via API | Contact Huawei Cloud support for GC operations |
 | Backup/restore instance | Not supported via API | Use CBR or contact support for instance-level backup |
 | RBAC/permission management | Limited to namespace-level `metadata.public` | Fine-grained IAM policies at account level |

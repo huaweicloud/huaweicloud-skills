@@ -272,6 +272,88 @@ hcloud SWR ListAllInstanceRepositories --limit=20 --offset=0 --cli-region=cn-nor
 3. Use `hcloud SWR ListSyncRegions --cli-region=<region>` to check available regions
 4. Consult the SWR enterprise instance console at `https://console.huaweicloud.com/swr-instance` for current spec/region availability
 
+## Pitfall 15: Same-Name Parameter Conflict (path vs body)
+
+**Symptom**: Commands like `CreateInstance`, `CreateInstanceInternalEndpoint`, or `CreateInstanceRegistry` fail with "missing required parameter" or "duplicate parameter" errors when using `--project_id` or `--instance_id` CLI arguments.
+
+**Root Cause**: Some SWR API operations define the same parameter name in both the request path and request body. The hcloud CLI cannot distinguish between path and body parameters with the same name:
+- `CreateInstance`: `project_id` appears in both path (auto-filled) and body (VPC/subnet project)
+- `CreateInstanceInternalEndpoint`: `project_id` appears in both path (auto-filled) and body (VPC/subnet project)
+- `CreateInstanceRegistry`: `instance_id` appears in both path (source instance) and body (target instance for `swr-pro-internal`)
+
+**Solution**: Use `--cli-jsonInput` to pass all parameters via a JSON file with `path` and `body` sections (required by hcloud to distinguish same-name parameters):
+
+```bash
+# CreateInstance example
+cat > create_instance.json << 'EOF'
+{
+  "path": {
+    "project_id": "<project-id>"
+  },
+  "body": {
+    "name": "my-instance",
+    "spec": "swr.ee.professional",
+    "charge_mode": "postPaid",
+    "vpc_id": "<vpc-id>",
+    "subnet_id": "<subnet-id>",
+    "enterprise_project_id": "0",
+    "project_id": "<vpc-project-id>"
+  }
+}
+EOF
+
+hcloud SWR CreateInstance --cli-jsonInput=create_instance.json --cli-region=cn-north-4
+```
+
+```bash
+# CreateInstanceInternalEndpoint example
+cat > create_endpoint.json << 'EOF'
+{
+  "path": {
+    "instance_id": "<instance-id>",
+    "project_id": "<project-id>"
+  },
+  "body": {
+    "vpc_id": "<vpc-id>",
+    "subnet_id": "<subnet-id>",
+    "project_id": "<vpc-project-id>"
+  }
+}
+EOF
+
+hcloud SWR CreateInstanceInternalEndpoint --cli-jsonInput=create_endpoint.json --cli-region=cn-north-4
+```
+
+```bash
+# CreateInstanceRegistry example (swr-pro-internal type)
+cat > create_registry.json << 'EOF'
+{
+  "path": {
+    "instance_id": "<source-instance-id>",
+    "project_id": "<project-id>"
+  },
+  "body": {
+    "name": "target-registry",
+    "type": "swr-pro-internal",
+    "url": "https://<target-instance>.cn-east-3.myhuaweicloud.com",
+    "credential": {
+      "type": "basic",
+      "access_key": "<access-key>",
+      "access_secret": "<access-secret>"
+    },
+    "insecure": false,
+    "instance_id": "<target-instance-id>",
+    "project_id": "<target-project-id>",
+    "region_id": "cn-east-3"
+  }
+}
+EOF
+
+hcloud SWR CreateInstanceRegistry --cli-jsonInput=create_registry.json --cli-region=cn-north-4
+```
+
+**Note**: The `path`/`body` separation in the JSON file is mandatory — hcloud uses it to route same-name parameters to the correct API location. A flat JSON without `path`/`body` keys will be rejected.
+
 ## Common Error Response Reference
 
 | Error Code          | HTTP Status | Description                  | Recommended Action                    |
