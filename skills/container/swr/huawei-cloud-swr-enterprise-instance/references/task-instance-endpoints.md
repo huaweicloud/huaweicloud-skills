@@ -92,6 +92,13 @@ hcloud SWR DeleteInstanceInternalEndpoint --instance_id=<instance-id> --internal
 
 Public access allows external connections to the instance, controlled by an IP whitelist.
 
+⚠️ **Security Warning**: Enabling public access exposes the SWR enterprise instance to the internet. Without a properly configured IP whitelist, any external client can attempt to access the instance, increasing the risk of unauthorized access or DDoS attacks. **Before enabling public access**, ensure that:
+- An IP whitelist is configured via `UpdateInstanceEndpointPolicy` to restrict access to known IP ranges only
+- The whitelist does not include `0.0.0.0/0` (all IPs) unless absolutely necessary
+- Security group rules and network policies are reviewed for the instance's VPC/subnet
+
+**Confirmation Required**: Confirm that public access is intended and that an IP whitelist will be configured immediately after enabling.
+
 ```bash
 # Enable public access
 hcloud SWR CreateInstanceEndpointPolicy --instance_id=<instance-id> --enable=true --cli-region=cn-north-4

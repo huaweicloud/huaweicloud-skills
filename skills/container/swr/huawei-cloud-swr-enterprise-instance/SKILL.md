@@ -4,7 +4,7 @@ name: huawei-cloud-swr-enterprise-instance
 description: |
   Huawei Cloud SWR enterprise instance management skill using hcloud CLI.
   Use this skill when the user wants to: (1) manage SWR enterprise instances - create/list/show/delete/update configuration, (2) manage instance namespaces - create/list/show/update/delete with security scanning settings, (3) manage instance registries (sync targets) - create/list/show/update/delete, (4) manage instance repositories - list/show/delete/update, (5) manage instance artifacts (image versions) - list/show/delete/scan, (6) manage instance credentials - long-term and temporary, (7) manage instance endpoints - internal/public access, (8) manage instance domains - add/list/show/delete/update, (9) check instance statistics and job status.
-  Trigger: user mentions "SWR enterprise instance", "SWR 企业实例", "SWR 企业版", "企业仓库实例", "SWR instance", "SWR 专业版", "swr.ee", "instance namespace", "instance registry", "instance repository", "instance artifact", "instance credential", "instance endpoint", "instance domain", "企业仓库", "实例管理"
+  Trigger: user mentions "SWR enterprise instance", "SWR 企业实例", "SWR 企业版", "企业仓库实例", "SWR instance", "SWR 专业版", "swr.ee", "instance namespace", "instance registry", "instance repository", "instance artifact", "instance credential", "instance endpoint", "instance domain", "企业仓库", "实例管理", "同步目标仓库", "sync target"
 tags: [swr, enterprise-instance, container-registry, registry, domain]
 ---
 
@@ -13,6 +13,8 @@ tags: [swr, enterprise-instance, container-registry, registry, domain]
 ## Overview
 
 This skill provides lifecycle management capabilities for Huawei Cloud SWR (Software Repository for Container) enterprise instances using the `hcloud` CLI. Enterprise instances provide dedicated, isolated container registry environments with advanced features like security scanning, replication policies, and custom domain support.
+
+> **Note**: Some features mentioned above (e.g., replication policies) are managed via the SWR enterprise instance console, not through this skill's CLI commands. See the **Unsupported Operations** section below for details.
 
 **Architecture**: hcloud CLI → SWR Service API → Instance/Namespace/Registry/Repository/Artifact/Credential/Endpoint/Domain resources
 
@@ -93,51 +95,7 @@ Before creating SWR enterprise instances, the user **must first activate the SWR
 
 ### 4. IAM Permission Requirements
 
-| API Action                                    | Permission                   | Purpose                                        |
-| --------------------------------------------- | ---------------------------- | ---------------------------------------------- |
-| `swr:instance:create`                         | Create instance              | Create enterprise registry instances            |
-| `swr:instance:list`                           | List instances               | Query all enterprise instances                  |
-| `swr:instance:get`                            | Get instance                 | View instance details                           |
-| `swr:instance:delete`                         | Delete instance              | Remove enterprise instances (irreversible)      |
-| `swr:instance:update`                         | Update instance              | Modify instance configuration                   |
-| `swr:instanceNamespace:create`                | Create instance namespace    | Create namespaces in instance                   |
-| `swr:instanceNamespace:list`                  | List instance namespaces     | Query instance namespaces                       |
-| `swr:instanceNamespace:get`                   | Get instance namespace       | View namespace details                          |
-| `swr:instanceNamespace:update`                | Update instance namespace    | Modify namespace settings                       |
-| `swr:instanceNamespace:delete`                | Delete instance namespace    | Remove namespaces                               |
-| `swr:instanceRegistry:create`                 | Create instance registry     | Configure sync target registries                |
-| `swr:instanceRegistry:list`                   | List instance registries     | Query sync target registries                    |
-| `swr:instanceRegistry:get`                   | Get instance registry        | View registry details                           |
-| `swr:instanceRegistry:update`                 | Update instance registry     | Modify registry settings                        |
-| `swr:instanceRegistry:delete`                 | Delete instance registry     | Remove sync target registries                   |
-| `swr:instanceRepository:list`                 | List instance repos          | Query repositories                              |
-| `swr:instanceRepository:get`                  | Get instance repo            | View repository details                         |
-| `swr:instanceRepository:delete`               | Delete instance repo         | Remove repositories                             |
-| `swr:instanceRepository:update`               | Update instance repo         | Modify repository settings                      |
-| `swr:instanceArtifact:list`                   | List instance artifacts      | Query image versions/artifacts                  |
-| `swr:instanceArtifact:get`                    | Get instance artifact        | View artifact details                           |
-| `swr:instanceArtifact:delete`                 | Delete instance artifact     | Remove image versions                           |
-| `swr:instanceArtifact:scan`                   | Scan instance artifact       | Trigger vulnerability scanning                  |
-| `swr:instanceCredential:create`               | Create instance credential   | Obtain access credentials                       |
-| `swr:instanceCredential:list`                 | List instance credentials    | Query long-term credentials                     |
-| `swr:instanceCredential:update`               | Update instance credential   | Enable/disable long-term credentials            |
-| `swr:instanceCredential:delete`               | Delete instance credential   | Remove long-term credentials                    |
-| `swr:instanceEndpoint:create`                 | Create instance endpoint     | Configure VPC internal endpoints                |
-| `swr:instanceEndpoint:list`                   | List instance endpoints      | Query network access endpoints                  |
-| `swr:instanceEndpoint:get`                    | Get instance endpoint        | View endpoint details                           |
-| `swr:instanceEndpoint:delete`                 | Delete instance endpoint     | Remove internal endpoints                       |
-| `swr:instanceEndpoint:update`                 | Update instance endpoint     | Configure public access whitelist               |
-| `swr:instanceDomain:add`                      | Add domain name              | Add custom domain                               |
-| `swr:instanceDomain:list`                     | List domain names            | Query all domains                               |
-| `swr:instanceDomain:get`                      | Get domain overview          | View domain details                             |
-| `swr:instanceDomain:delete`                   | Delete domain name           | Remove custom domain                            |
-| `swr:instanceDomain:update`                   | Update domain name           | Update domain certificate                       |
-| `swr:instanceJob:list`                        | List instance jobs           | Query async job status                          |
-| `swr:instanceJob:get`                         | Get instance job             | View job details                                |
-| `swr:instanceJob:delete`                      | Delete instance job          | Remove job records                              |
-| `swr:instanceStatistic:get`                   | Get instance statistics      | View instance resource statistics               |
-
-See [IAM Permission Policies](references/iam-policies.md) for complete policy JSON.
+This skill requires SWR enterprise instance permissions (instance, namespace, registry, repository, artifact, credential, endpoint, domain, job, statistic operations). See [IAM Permission Policies](references/iam-policies.md) for the complete permission table and policy JSON.
 
 **Permission Failure Handling**:
 
@@ -329,6 +287,11 @@ hcloud SWR DeleteInstanceArtifact --instance_id=<instance-id> --namespace_name=g
 
 **Artifact Types**: `IMAGE` (container image), `CHART` (Helm chart)
 
+> ⚠️ **Image Vulnerability Scanning Limitation**: Image vulnerability scanning depends on Huawei Cloud HSS (Host Security Service). The current skill does not support HSS configuration or management. To use scanning features:
+> - **Basic edition (`swr.ee.basic`)**: Scanning is not supported. Upgrade to professional edition.
+> - **Professional edition (`swr.ee.professional`)**: Scanning requires HSS to be enabled. Please activate HSS in the Huawei Cloud console first, then use the SWR enterprise instance console (`https://console.huaweicloud.com/swr-instance`) to verify scanning is functional before relying on it in automation workflows.
+> - If scanning fails on a professional edition instance, check HSS service status and ensure HSS is properly activated for the target region.
+
 ### 6. Instance Credentials
 
 See [Task: Instance Credentials](references/task-instance-credentials.md) for detailed workflows.
@@ -419,64 +382,20 @@ hcloud SWR ShowInstanceJob --job_id=<job-id> --cli-region=cn-north-4
 hcloud SWR DeleteInstanceJob --job_id=<job-id> --cli-region=cn-north-4
 ```
 
+### 10. Instance Audit Logs
+
+SWR enterprise instances provide built-in audit logging via `ListAuditLogs` API (pull/delete/create operations). No dependency on CTS required.
+
+```bash
+hcloud SWR ListAuditLogs --instance_id=<instance-id> --project_id=<project-id> --operation=pull --cli-region=cn-north-4
+# --operation: pull, delete, or create; --limit/--offset for pagination
+```
+
+See [API Guide](references/swr-instance-api-guide.md#instance-audit-log-operations) for full details.
+
 ## Parameter Reference
 
-### Common Parameters
-
-| Parameter       | Required/Optional | Description                   | Default                              |
-| --------------- | ----------------- | ----------------------------- | ------------------------------------ |
-| `--cli-region`  | Required          | Huawei Cloud region ID        | Config value or `HUAWEI_CLOUD_REGION` |
-| `--instance_id` | Context-dependent | Enterprise instance ID        | N/A                                  |
-| `--project_id`  | Auto-filled       | Project ID                    | Auto from credentials or config      |
-
-### Instance Creation Parameters
-
-| Parameter                  | Required | Description                | Constraints                                    |
-| -------------------------- | -------- | -------------------------- | ---------------------------------------------- |
-| `--name`                   | Yes      | Instance name              | 3-48 chars, lowercase start, no consecutive hyphens |
-| `--spec`                   | Yes      | Instance spec              | `swr.ee.basic` or `swr.ee.professional`        |
-| `--charge_mode`            | Yes      | Billing mode               | `postPaid` (on-demand only)                    |
-| `--vpc_id`                 | Yes      | VPC ID                     | Existing VPC                                   |
-| `--subnet_id`              | Yes      | Subnet ID                  | Existing subnet within VPC                     |
-| `--enterprise_project_id`  | Yes      | Enterprise project ID      | Use `0` for default project                    |
-| `--description`            | No       | Instance description       | Free text                                      |
-| `--enable_intranet_access` | No       | Create internal access     | Default `true`                                 |
-| `--obs_encrypt`            | No       | Enable OBS encryption      | `true` or `false`                              |
-| `--encrypt_type`           | No       | OBS encryption algorithm   | `gm` (GM — Chinese national cryptographic standard), empty for AES-256                 |
-| `--obs_bucket_name`        | No       | Custom OBS bucket name     | If specified, OBS encryption not needed        |
-| `--obs_enc_kms_key_id`     | No       | KMS key ID for OBS         | Required if obs_encrypt=true (no custom bucket) |
-
-### Namespace Parameters
-
-| Parameter              | Required | Description              | Constraints                                  |
-| ---------------------- | -------- | ------------------------ | -------------------------------------------- |
-| `--namespace_name`     | Yes      | Namespace name           | 1-64 chars, lowercase/digit start            |
-| `--metadata.public`    | Yes      | Public/private           | `true` or `false`                            |
-| `--metadata.auto_scan` | No       | Auto scan on upload      | `true` or `false`                            |
-| `--metadata.prevent_vul` | No     | Block vulnerable images  | `true` or `false`                            |
-| `--metadata.severity`  | No       | Blocking severity level  | `none`, `low`, `medium`, `high`, `critical`  |
-
-### Registry Parameters
-
-| Parameter                   | Required | Description              | Constraints                                  |
-| --------------------------- | -------- | ------------------------ | -------------------------------------------- |
-| `--name`                    | Yes      | Registry display name    | 1-64 chars                                   |
-| `--type`                    | Yes      | Registry type            | `swr-pro`, `swr-pro-internal`, `huawei-SWR`  |
-| `--url`                     | Yes      | Registry URL             | Target registry address                      |
-| `--credential.type`         | Yes      | Auth type                | `basic` only                                 |
-| `--credential.access_key`   | Yes      | Access ID/username       | Auth credential                               |
-| `--credential.access_secret` | Yes    | Access secret/password   | Auth credential                               |
-| `--insecure`                | Yes      | Verify remote cert       | `true` (skip) or `false` (verify)            |
-| `--instance_id` (body)      | Cond.    | Target instance ID       | Required when type=swr-pro-internal          |
-| `--project_id` (body)       | Cond.    | Target project ID        | Required when type=swr-pro-internal          |
-| `--region_id`               | Cond.    | Target region ID         | Required when type=swr-pro-internal          |
-
-### Endpoint Whitelist Parameters
-
-| Parameter                    | Required | Description              | Constraints                                  |
-| ---------------------------- | -------- | ------------------------ | -------------------------------------------- |
-| `--ip_list.[N].ip`           | Yes      | IP or CIDR range         | Indexed array format                         |
-| `--ip_list.[N].description`  | No       | Description for IP entry | Indexed array format                         |
+See [Parameter Reference](references/parameter-reference.md) for complete parameter tables including: common parameters, instance creation (name, spec, VPC, subnet, encryption), namespace (public, auto_scan, prevent_vul, severity), registry (type, url, credential), and endpoint whitelist parameters.
 
 ## Output Format
 
@@ -488,16 +407,12 @@ See [Verification Method](references/verification-method.md) for step-by-step ve
 
 ## Best Practices
 
-1. **Instance naming**: Use descriptive names like `prod-instance`, `dev-instance` that reflect the environment
-2. **VPC selection**: Choose VPC/subnet that matches your workload deployment environment
-3. **Namespace security**: Enable `auto_scan=true` and `prevent_vul=true` for production namespaces to block vulnerable images
-4. **Severity blocking**: Set `severity=high` or `critical` for production; use `none` or `low` for development
-5. **Registry credentials**: Store registry credentials securely; rotate access keys periodically
-6. **Public access whitelist**: Always configure IP whitelist when enabling public access; use `UpdateInstanceEndpointPolicy` for full whitelist management
-7. **Custom domains**: Use SCM (SSL Certificate Manager) certificates for custom domain HTTPS
-8. **Delete with caution**: Deleting an instance removes ALL data permanently; deleting a namespace removes ALL repositories
-9. **Long-term credentials**: Use `CreateInstanceLtCredential` for CI/CD pipelines; use `CreateInstanceTempCredential` for temporary access
-10. **Instance spec selection**: Use `swr.ee.basic` for small teams; `swr.ee.professional` for enterprise requirements with advanced features
+1. **Instance naming & VPC**: Use descriptive names (`prod-instance`, `dev-instance`); choose VPC/subnet matching your workload environment
+2. **Namespace security**: Enable `auto_scan=true` and `prevent_vul=true` for production; set `severity=high`/`critical` for prod, `none`/`low` for dev
+3. **Credentials**: Store registry credentials securely and rotate periodically; use `CreateInstanceLtCredential` for CI/CD, `CreateInstanceTempCredential` for temp access
+4. **Public access**: Always configure IP whitelist when enabling public access via `UpdateInstanceEndpointPolicy`; use SCM certificates for custom domain HTTPS
+5. **Delete with caution**: Deleting an instance removes ALL data permanently; deleting a namespace removes ALL repositories
+6. **Instance spec**: Use `swr.ee.basic` for small teams; `swr.ee.professional` for enterprise with advanced features
 
 ## 参数确认
 
@@ -518,8 +433,13 @@ The following operations are not supported by the SWR enterprise instance API an
 | Push images to instance | Docker CLI operation, not an API call | Use `CreateInstanceTempCredential` or `CreateInstanceLtCredential` to get credentials, then `docker login` and `docker push` |
 | Pull images from instance | Docker CLI operation, not an API call | Use `CreateInstanceTempCredential` or `CreateInstanceLtCredential` to get credentials, then `docker login` and `docker pull` |
 | Build images | SWR is a registry, not a build service | Use CodeArts Build, CCE, or local Docker build, then push to SWR |
-| Image replication/sync policies | Replication policy management is a separate API | Use SWR console or replication policy API directly |
+| Image replication/sync policies | CLI available but not documented in this skill | Use `hcloud SWR CreateInstanceReplicationPolicy` / `ListInstanceReplicationPolicies` etc., or SWR enterprise instance console (`https://console.huaweicloud.com/swr-instance`) |
 | Instance backup/restore | No backup API available | Use OBS bucket backup for data persistence, or migrate namespaces/repositories manually |
+| Image retention/aging policies | CLI available but not documented in this skill | Use `hcloud SWR CreateInstanceRetentionPolicy` / `ListInstanceRetentionPolicies` etc., or SWR enterprise instance console |
+| Webhook notification configuration | CLI available but not documented in this skill | Use `hcloud SWR CreateInstanceWebhook` / `ListInstanceWebhooks` etc., or SWR enterprise instance console |
+| Image signing policies | CLI available but not documented in this skill | Use `hcloud SWR CreateInstanceSignPolicy` / `ListInstanceSignPolicies` etc., or SWR enterprise instance console |
+| Resource tag management | CLI available but not documented in this skill | Use `hcloud SWR CreateInstanceResourceTags` / `ListInstanceResourceTags` etc., or TMS console |
+| IAM delegation management | Not supported by this skill | Use IAM console to configure delegation. `CheckAgency`/`CreateAgency` in hcloud are for SWR→CCE/CCI direction, not enterprise instance delegation |
 
 ## 工作流
 
@@ -534,19 +454,11 @@ This skill follows a standard workflow for SWR enterprise instance management:
 
 ## KooCLI命令格式标准
 
-All CLI commands in this skill use the `hcloud` KooCLI format:
+All CLI commands use `hcloud SWR <Operation> --param1=value1 --cli-region=<region>` format.
 
-```bash
-hcloud SWR <Operation> --param1=value1 --param2=value2 --cli-region=<region>
-```
+**Key rules**: Use `--key=value` format, always specify `--cli-region`, never expose AK/SK, confirm before write operations, use `--cli-output=json` for structured output.
 
-**Rules**:
-
-- Use `--key=value` format for all parameters (dot notation supported for nested fields: `--metadata.public=true`)
-- Always specify `--cli-region` explicitly
-- Never expose AK/SK or security tokens in command output
-- For write operations (Create/Update/Delete), confirm with the user before executing
-- Use `--cli-output=json` for structured output parsing
+**Known CLI Limitation**: Some commands (CreateInstance, CreateInstanceInternalEndpoint, CreateInstanceRegistry) have same-name parameter conflicts between path and body. Use `--cli-jsonInput` with `path`/`body` sections to resolve. See [CLI Format Guide](references/cli-format-guide.md) for full details and examples.
 
 ## Reference Documents
 
@@ -585,20 +497,4 @@ hcloud SWR <Operation> --param1=value1 --param2=value2 --cli-region=<region>
 
 ## Common Pitfalls
 
-See [Common Pitfalls & Solutions](references/common-pitfalls.md) for detailed troubleshooting guides.
-
-**Quick Reference**:
-
-| Pitfall                         | Symptom                         | Quick Fix                                    |
-| ------------------------------- | ------------------------------- | -------------------------------------------- |
-| Invalid instance name           | 400 Bad Request                 | 3-48 chars, lowercase start, no consecutive hyphens |
-| VPC/subnet not found            | Instance creation fails         | Verify VPC/subnet exist in region            |
-| Instance still creating         | Operations fail                 | Wait for Running, check with ListInstance    |
-| Offset not multiple of limit    | Pagination returns error        | offset must be 0 or multiple of limit        |
-| Registry credential wrong       | Sync fails                      | Verify access_key/access_secret              |
-| Domain cert not found           | Domain creation fails           | Verify certificate_id in SCM                 |
-| Cannot delete default domain    | Delete fails                    | Only custom domains can be deleted           |
-| Public access whitelist format  | Whitelist update fails          | Use indexed: --ip_list.1.ip=value            |
-| SWR service not activated       | API returns service error       | Activate via `https://console.huaweicloud.com/swr-instance` |
-| Spec not available in region    | CreateInstance fails            | Try different spec or region                   |
-| Console not in navigation       | Cannot find SWR enterprise      | Use direct URL: `https://console.huaweicloud.com/swr-instance` |
+See [Common Pitfalls & Solutions](references/common-pitfalls.md) for detailed troubleshooting guides covering: invalid instance names, VPC/subnet errors, instance creation state, pagination offset rules, registry credential issues, domain certificate problems, public access whitelist format, SWR service activation, and spec availability.

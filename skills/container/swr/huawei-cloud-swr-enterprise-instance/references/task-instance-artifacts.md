@@ -4,6 +4,11 @@
 
 SWR enterprise instance artifacts represent image versions (tags) within repositories. Enterprise instances provide advanced artifact management including vulnerability scanning, build history viewing, and security blocking. This task covers listing, viewing, scanning, and deleting artifacts.
 
+> ⚠️ **Scanning Dependency — HSS Required**: Image vulnerability scanning depends on Huawei Cloud HSS (Host Security Service). The current skill does not support HSS configuration or management.
+> - **Basic edition**: Scanning is not supported. Upgrade to professional edition (`swr.ee.professional`).
+> - **Professional edition**: Scanning requires HSS to be activated. Please enable HSS in the Huawei Cloud console first, then verify scanning works via the SWR enterprise instance console (`https://console.huaweicloud.com/swr-instance`) before using `StartManualScanning` or `ListInstanceArtifactVulnerabilities` in automation.
+> - If scanning fails on a professional edition instance, check HSS service status and activation for the target region.
+
 ## Operations Catalog
 
 | Operation                            | Method | Description              | Key Parameters                                  |
