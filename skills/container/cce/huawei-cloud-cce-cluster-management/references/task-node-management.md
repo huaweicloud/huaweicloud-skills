@@ -2,7 +2,7 @@
 
 ## Overview
 
-Cluster node lifecycle management, including creation, querying, cordon, uncordon, drain, and deletion operations.
+Cluster node lifecycle management, including creation, querying, cordon, uncordon, drain, and deletion operations. Node scheduling operations (`cordon`, `uncordon`, `drain`, `status`) run via **kubectl cce** plugin (no cluster EIP or manual kubeconfig needed).
 
 ## Create Node Parameters
 
@@ -16,18 +16,29 @@ Cluster node lifecycle management, including creation, querying, cordon, uncordo
 | `availability_zone` | Availability zone | `cn-north-4a` |
 | `root_volume_size` | System disk size (GB) | `40` |
 | `root_volume_type` | System disk type | `GPSSD` |
-| `ssh_key` or password | Login authentication (one required) | `KeyPair-dev` or `CCE_NODE_PASSWORD` environment variable |
 
-### Login Authentication
+### Login Authentication — Three-Level Priority
 
-Either `ssh_key` or password is required (mutually exclusive):
-- `ssh_key`: SSH key pair name
-- Password: passed via `CCE_NODE_PASSWORD` environment variable (8-26 characters, must contain at least three of: uppercase, lowercase, digits, special characters)
+The node login credential is resolved with the following priority:
 
-> **Important: The password is read from the `CCE_NODE_PASSWORD` environment variable, and the script automatically performs SHA-512 salted encryption + base64 encoding, no manual processing required.**
+1. **`ssh_key` parameter** — SSH key pair name (preferred when available).
+2. **`password` parameter** — raw node login password (8–26 chars, ≥3 of: uppercase / lowercase / digits / special).
+3. **`CCE_NODE_PASSWORD` environment variable** — used when neither `ssh_key` nor `password` is provided.
+4. **Auto-generated random password** — when none of the above is supplied.
+
+> ⚠️ **The auto-generated password is NEVER returned in the tool response.** To access the node afterwards, reset the password via the CCE console or the ECS API. The success message only contains a hint to reset the password.
+
+The script automatically performs SHA-512 salted encryption + base64 encoding on the password — no manual processing required.
 
 ```bash
+# Option A: ssh_key (preferred)
+export ... ssh_key=KeyPair-dev   # as a parameter
+
+# Option B: password env var
 export CCE_NODE_PASSWORD="your_password"
+
+# Option C: omit both — the skill auto-generates a strong password
+#           (the response will tell you to reset it to access the node)
 ```
 
 ### Data Volumes (data_volumes)
@@ -56,8 +67,12 @@ Nodes in Turbo (ENI network) clusters must use flavors that support ENI (such as
 |------|------|-----|
 | `region` | Huawei Cloud region | Yes |
 | `cluster_id` | Cluster ID | Yes |
-| `node_id` | Node ID | Yes |
-| `confirm` | Confirm dangerous operations | Required for dangerous operations |
+| `node_name` | Node name (k8s node name) | Yes |
+| `confirm` | Confirm dangerous operations | Required for cordon/uncordon/drain |
+
+> kubectl operations identify nodes by their **k8s node name** (`node_name`), not the CCE node UID. Use `huawei_list_cce_nodes` to find the node name.
+>
+> **Important:** The k8s node name is typically in **IP format** (e.g., `192.168.3.15`), not the CCE node display name. Always use `huawei_list_cce_nodes` to retrieve the actual k8s node name before calling cordon/uncordon/drain/status.
 
 ## Node Scheduling Status
 
@@ -72,17 +87,29 @@ Nodes in Turbo (ENI network) clusters must use flavors that support ENI (such as
 |------|------|---------|-------|
 | Create Node | Add node | 🟢 Low | No |
 | Query Node List | Get all nodes | 🟢 Low | No |
-| Query Node Status | Get scheduling status | 🟢 Low | No |
-| cordon | Mark as unschedulable | 🟡 Medium | Yes |
-| uncordon | Restore schedulable | 🟡 Medium | Yes |
-| drain | Evict all Pods | 🟠 High | Yes |
+| Query Node Status | Get scheduling status (via `kubectl get node`) | 🟢 Low | No |
+| cordon | Mark as unschedulable (via `kubectl cordon`) | 🟡 Medium | Yes |
+| uncordon | Restore schedulable (via `kubectl uncordon`) | 🟡 Medium | Yes |
+| drain | Cordon + evict all Pods respecting PDB (via `kubectl drain`) | 🟠 High | Yes |
 | delete | Delete node | 🟠 High | Yes |
 
 ### Create Node (Turbo Cluster)
 
 ```bash
-export CCE_NODE_PASSWORD="your_password"
+# Option A: ssh_key
+python3 huawei-cloud.py huawei_create_cce_node \
+    region=cn-north-4 \
+    cluster_id=xxx \
+    flavor=c7.large.2 \
+    availability_zone=cn-north-4a \
+    root_volume_size=40 \
+    root_volume_type=GPSSD \
+    node_count=1 \
+    'data_volumes=[{"size":100,"type":"SSD"}]' \
+    ssh_key=KeyPair-dev
 
+# Option B: password env var
+export CCE_NODE_PASSWORD="your_password"
 python3 huawei-cloud.py huawei_create_cce_node \
     region=cn-north-4 \
     cluster_id=xxx \
@@ -94,20 +121,30 @@ python3 huawei-cloud.py huawei_create_cce_node \
     'data_volumes=[{"size":100,"type":"SSD"}]'
 ```
 
-### Node Maintenance Process
+### Node Maintenance Process (kubectl drain semantics)
+
+`huawei_cce_node_drain` follows standard **kubectl drain** semantics: it first **cordons** the node (so no new pods are scheduled), then **evicts** all resident pods while respecting `PodDisruptionBudget` (PDB). The underlying command is:
+
+```
+kubectl drain <node> --ignore-daemonsets --delete-emptydir-data --grace-period=30 --timeout=120s
+```
+
+DaemonSet pods and emptyDir data are evicted automatically; PDB-governed workloads may block the drain until evictable.
 
 ```bash
-# 1. Mark node as unschedulable
+# 1. Mark node as unschedulable (kubectl cordon)
 python3 huawei-cloud.py huawei_cce_node_cordon \
-  region=cn-north-4 cluster_id=xxx node_id=xxx confirm=true
+  region=cn-north-4 cluster_id=xxx node_name=<node-name> confirm=true
 
-# 2. Evict Pods on the node
+# 2. Cordon + evict all pods respecting PDB (kubectl drain)
 python3 huawei-cloud.py huawei_cce_node_drain \
-  region=cn-north-4 cluster_id=xxx node_id=xxx confirm=true
+  region=cn-north-4 cluster_id=xxx node_name=<node-name> confirm=true
 
 # 3. Perform maintenance operations...
 
-# 4. Restore node scheduling
+# 4. Restore node scheduling (kubectl uncordon)
 python3 huawei-cloud.py huawei_cce_node_uncordon \
-  region=cn-north-4 cluster_id=xxx node_id=xxx confirm=true
+  region=cn-north-4 cluster_id=xxx node_name=<node-name> confirm=true
 ```
+
+> Note: `drain` already cordons the node, so steps 1 and 2 are alternatives depending on whether you want to evict pods. To preview the pods that would be affected by a drain, call `huawei_cce_node_drain` without `confirm=true` — the response includes an `affected_pods` list.
