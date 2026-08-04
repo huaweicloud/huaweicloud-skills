@@ -102,8 +102,13 @@ hcloud SWR ShowRepository --namespace=group-dev --repository=my-app --cli-region
 
 ### W4: Update Repository Properties
 
+⚠️ **SECURITY WARNING for `is_public=true`**: When changing repository visibility from private to public, the skill MUST:
+1. Display warning: "Public repositories allow any user to pull images, which may pose security risks."
+2. Require explicit user confirmation (yes/no) before proceeding
+3. Abort the operation if the user declines
+
 ```bash
-# Change visibility from private to public
+# Change visibility from private to public (requires user confirmation due to security risk)
 hcloud SWR UpdateRepo --namespace=group-dev --repository=my-app --is_public=true --cli-region=cn-north-4
 
 # Update description
