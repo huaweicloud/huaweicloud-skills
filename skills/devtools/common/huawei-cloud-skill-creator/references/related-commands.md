@@ -17,10 +17,11 @@ bash scripts/test-cli-commands.sh {skill-path} --executor api
 ```python
 # Check SDK availability
 from huaweicloudsdkbss.v2 import BssClient
-
-# Generate dataflow diagram
-bash scripts/generate-dataflow-diagram.sh {skill-path}
 ```
+
+## Dataflow Diagram
+
+Phase 3 writes the Mermaid dataflow content directly to `references/dataflow-diagram.md`; no separate generation script is required.
 
 ## Phase Summary Helpers
 
