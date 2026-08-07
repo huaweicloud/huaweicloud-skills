@@ -15,23 +15,71 @@ tags: [huawei-cloud, skill-creator, cli, sdk, devops]
 
 > **Six-Phase Strict Pipeline** — Each phase depends on the previous phase's output and cannot be skipped. If any phase is missing, restart from the missing phase.
 
----
-
 ## Overview
 
 The Huawei Cloud Skill Creator v2 is based on a six-phase strict pipeline: starting with Socratic Q&A requirements analysis, followed by technical research (CLI→SDK→API three-level fallback), document generation, test preparation, detailed testing, resource cleanup and compliance check, ultimately generating a complete skill package that conforms to the Huawei Cloud Skill Specification.
 
----
+## Pre-check: Huawei Cloud Credentials Required
+
+> **Mandatory gate.** This pre-check MUST pass before invoking any hcloud / huaweicloudsdk command — including Phase 2 research, Phase 4/5 testing, and Phase 6 validation. If no valid credential profile is detected, STOP and obtain credentials **out-of-band**.
+
+### Security Rules
+
+- **NEVER** read, echo, or print AK/SK values (e.g., printing the value of an `HUAWEI_ACCESS_KEY`-style env var is **FORBIDDEN**).
+- **NEVER** read or cat the on-disk credential files for hcloud, obsutil, the SDK, or any other secret-storing location. Treat all such files as confidential; the *names* of those files (used by their owners) are documented in `references/cli-installation-guide.md`.
+- **NEVER** ask the user to input AK/SK directly in the conversation or command line.
+- **NEVER** invoke `hcloud configure set` with literal credential strings passed via the CLI's `cli-<ak-flag>` / `cli-<sk-flag>` parameters or any equivalent in-band secret-entry form.
+- **ONLY** use `hcloud configure list` to check credential status — non-interactive, read-only, no secrets echoed.
+
+### Verification Steps
+
+```bash
+hcloud configure list
+```
+
+Check the output for a valid profile (AK/SK, or temporary security credentials / agency-assumed role).
+
+If no valid profile exists, **STOP** here.
+
+1. Obtain credentials from **Huawei Cloud Console** → 身份与访问管理 (IAM) → 我的凭证 → 新增访问密钥.
+2. **Output** the following copy-paste ready env-var setup block to the user (fill in real values **outside** of this session, never in chat). The Agent must **NEVER** ask the user to type the AK/SK value in the conversation — only emit the template below:
+
+   ```bash
+   # Set Huawei Cloud AK/SK in your shell profile, then reload or 'source' it.
+   export HUAWEI_ACCESS_KEY="<your-access-key-id>"
+   export HUAWEI_SECRET_KEY="<your-secret-access-key>"
+   export HUAWEI_REGION="cn-north-4"
+   ```
+
+   Optional alternative — only as an interactive out-of-band step (Agent must NOT invoke this with literal values):
+
+   ```bash
+   hcloud configure    # interactive; prompts for AK/SK in the user's terminal
+   ```
+3. After the user confirms they have configured env vars (or run `hcloud configure`), re-run `hcloud configure list`. If the profile is valid → resume Phase 1. If still missing → terminate, do not proceed.
+
+> **Reuse the active CLI profile for all subsequent `hcloud` and `huaweicloudsdk` calls.** Do not print or hardcode secrets. Do not replace this gate with `obsutil config`, `hcloud configure set` with literal arguments, SDK credentials constructors filled with literal strings (for example, the SDK's `BasicCredentials` built from string literals rather than env vars), or any other in-session secret-entry flow.
+
+### Credential Source Priority
+
+When invoking commands later (Phase 2/4/5), the skill accepts credentials in this priority order:
+
+| Priority | Source | Notes |
+|----------|--------|-------|
+| 1 | Environment variables | Auto-scan all variables prefixed with `HUAWEI` / `HW` / `HWC` containing `ACCESS_KEY` / `_AK` / `SECRET_KEY` / `_SK` |
+| 2 | `hcloud configure` profile | Active CLI profile — preferred for hcloud calls |
+| 3 | IAM agency / temporary credentials | AK/SK + SecurityToken (programmatic access) |
+
+If **none** of the above are available when Phase 4/5 testing starts, prompt the user once to configure them out-of-band and re-run the pre-check. If still unavailable, **terminate the process** — strictly prohibited from skipping credential-required steps.
 
 ## Prerequisites
 
 1. **hcloud CLI** installed and authenticated — Reference: https://support.huaweicloud.com/qs-hcli/hcli_02_003.html
+   - Authentication verified via the **Pre-check** above (`hcloud configure list`).
 2. **Python 3.8+** with `huaweicloudsdk` packages available — SDK Reference: https://console.huaweicloud.com/apiexplorer/#/sdkcenter
 3. **Node.js + npx** available
-4. **Huawei Cloud AK/SK** — 自动扫描所有以 `HUAWEI` / `HW` / `HWC` 开头的环境变量，匹配其中含 `ACCESS_KEY` / `_AK` / `SECRET_KEY` / `_SK` 的键值对
+4. **Huawei Cloud AK/SK** — Auto-scan all environment variables prefixed `HUAWEI` / `HW` / `HWC` matching `ACCESS_KEY` / `_AK` / `SECRET_KEY` / `_SK`. Hardcoding AK/SK in scripts, docs, or command lines is **forbidden**.
 5. **API Reference**: https://console.huaweicloud.com/apiexplorer/#/openapi
-
----
 
 ## Workflow — Six-Phase Strict Pipeline
 
@@ -45,8 +93,7 @@ Phase 1 (Q&A) → Phase 2 (Tech Research) → Phase 3 (Generate MD)
 - Before starting each phase, **must** verify that the previous phase's summary file exists
 - After all 6 phases are completed, perform a **final check** for any missing phases. If any are missing, restart from the missing phase
 - Skipping any phase is strictly prohibited
-
----
+- The **Pre-check: Huawei Cloud Credentials Required** gate must have passed before any Phase 2 research or Phase 4/5 execution begins
 
 ### Phase 1: Requirements Analysis (Socratic Q&A)
 
@@ -63,8 +110,6 @@ Phase 1 (Q&A) → Phase 2 (Tech Research) → Phase 3 (Generate MD)
 - **🛑 Do NOT proceed to Phase 2 until the user has explicitly confirmed**
 
 **Output:** `phase-1-summary.json` — User-confirmed requirements description
-
----
 
 ### Phase 2: Technical Research (CLI→SDK→API Three-Level Fallback)
 
@@ -129,70 +174,64 @@ grep -A8 "_{method}_http_info" <path>/{service}_client.py
 
 **Output:** `phase-2-summary.json` — Execution mode (CLI/SDK/API/⛔) and corresponding command/code/API path for each feature point
 
----
-
 ### Phase 3: Document Generation
 
 **Dependency:** Phase 2 technical research completed (phase-2-summary.json exists)
 
 Generate Skill files based on Phase 2 conclusions:
 
-1. **Name the Skill** — `huawei-cloud-{product}-{function}` format
+1. **Name the Skill** — Use `huawei-cloud-{product}-{function}` and make the frontmatter `name` match the directory name.
 2. **Language** — Generate SKILL.md in **English** by default. Chinese documentation may be added in `references/` as supplementary. The main SKILL.md must use English for frontmatter description, section titles, command examples, and all explanatory content.
-3. **Create directory structure:**
-   ```
-   skills/{category}/{skill-name}/
+3. **Frontmatter** — Include `name`, `description` with a feature summary and trigger conditions, and no more than five `tags`. Do not generate a `version` field.
+4. **Create directory structure:**
+   ```text
+   skills/{skill-name}/
    ├── SKILL.md
    ├── references/
-   │   ├── iam-policies.md          (Required)
-   │   ├── verification-method.md     (Recommended)
-   │   ├── dataflow-diagram.md        (Recommended)
-   │   └── acceptance-criteria.md     (Recommended)
+   │   ├── iam-policies.md              (Required)
+   │   ├── cli-installation-guide.md    (Required when CLI is used)
+   │   ├── verification-method.md       (Recommended)
+   │   ├── dataflow-diagram.md          (Recommended)
+   │   └── acceptance-criteria.md       (Recommended)
    ├── scripts/
    │   └── test-cli-commands.sh
-   ├── templates/
-   │   └── test-vars.json
+   └── templates/
+       └── test-vars.json
    ```
-3. **SKILL.md content generation rules:**
+5. **SKILL.md content generation rules:**
 
    | Execution Mode | Command Format in SKILL.md |
    |---------------|---------------------------|
    | **CLI** | `hcloud <Service> <Operation> --cli-region={region} [--params]` |
    | **SDK** | Python script example (`python3 -c "..."`) |
-   | **API** | curl command + user-provided endpoint (mark ⚠ user-provided) |
-   | **⛔** | Mark `requires manual verification`, do not generate specific commands |
+   | **API** | curl command + user-provided endpoint (mark as user-provided) |
+   | **Unavailable** | Mark `requires manual verification`, do not generate specific commands |
 
-4. **Required sections in SKILL.md (per specification):**
+6. **Required sections in SKILL.md:**
 
    | Section | Severity | Description |
    |---------|----------|-------------|
-   | YAML Frontmatter | Critical | name + description (including Triggers include:) + tags |
+   | YAML Frontmatter | Critical | `name` + `description` with feature summary and trigger conditions + `tags`; no `version` |
    | Overview | High | Feature overview, architecture, applicable scenarios |
-   | Prerequisites | High | CLI version, authentication config, IAM permissions |
-   | Workflow | High | Phase 1-6 process steps |
-   | KooCLI Command Format Standard | High | General CLI command format specification (service name/operation name/parameter syntax) |
+   | Prerequisites | High | CLI version, authentication configuration, IAM permissions |
+   | Workflow | High | Skill workflow steps |
    | Core Commands | High | Command examples grouped by function |
    | Parameter Confirmation | High | User-configurable parameter table |
-   | Reference Documents | Critical | Links to documents under references/ |
-   | IAM Permissions | Critical | references/iam-policies.md |
+   | Reference Documents | Critical | Links to documents under `references/` |
+   | KooCLI Command Format Standard | Low | Required when CLI is involved; service, operation, region, and parameter syntax |
 
-5. **Generate Mermaid data flow diagram** → `references/dataflow-diagram.md`
-6. **Generate IAM policies** → `references/iam-policies.md` (principle of least privilege)
-7. **Generate reference materials**: If Phase 2 discovered API paths through SDK source, organize them into `references/api-paths.md`
-
-8. **File size constraint**: Total skill directory size **must not exceed 40 MB**. Run `du -sh {skill-dir}` to verify after generation.
-
-9. **File extension constraint**: All generated files **must use one of the following allowed extensions**:
-   `.md`, `.sh`, `.bash`, `.ps1`, `.py`, `.json`, `.yaml`, `.yml`, `.toml`, `.txt`, `.png`, `.jpg`, `.jpeg`, `.svg`, `.css`, `.js`, `.lock`, `.gitkeep`, `.pdf`, `.drawio`.
-   Any file with an extension not in this list must be removed or renamed before the skill is considered complete.
-
-10. **File count constraint**: Total number of files in the skill directory **must not exceed 30** (including SKILL.md, all files under references/, scripts/, templates/, and any other subdirectories). Count with `find {skill-dir} -type f | wc -l`.
+7. **Generate Mermaid data flow diagram** → `references/dataflow-diagram.md`.
+8. **Generate IAM policies** → `references/iam-policies.md` using least privilege.
+9. **Record API references** — Keep verified API paths in `phase-2-summary.json`. If a generated Skill needs reusable API documentation, add a reference file under `references/` using an allowed kebab-case filename.
+10. **Package limits** — Total file content size ≤ 40 MB, total files ≤ 30, and SKILL.md ≤ 500 lines. Split oversized SKILL.md content into `references/`.
+11. **File extension allowlist** — Every file must have one of these 46 extensions:
+    `.md`, `.mdx`, `.txt`, `.json`, `.json5`, `.yaml`, `.yml`, `.toml`, `.js`, `.cjs`, `.mjs`, `.ts`, `.tsx`, `.jsx`, `.py`, `.sh`, `.ps1`, `.psm1`, `.psd1`, `.r`, `.rb`, `.go`, `.rs`, `.swift`, `.kt`, `.java`, `.cs`, `.cpp`, `.c`, `.h`, `.hpp`, `.sql`, `.csv`, `.tsv`, `.ini`, `.cfg`, `.conf`, `.env`, `.properties`, `.dat`, `.xml`, `.html`, `.css`, `.scss`, `.sass`, `.svg`.
+    Files without an extension or outside this allowlist must be removed or renamed.
+12. **Change scope** — A pull request must change only one Skill directory. Use `BASE_REF=<base-ref> bash scripts/validate-skill.sh {skill-path}` to validate the PR diff when a base ref is available.
 
 **🛑 Strictly prohibited from generating hallucinated URIs / fabricated API paths. Feature points not verified in Phase 2 must not have specific commands written.**
 
 **Output:** `phase-3-summary.json` — List of generated files and structure validation results
-
----
 
 ### Phase 4: Test Preparation
 
@@ -202,7 +241,7 @@ Generate Skill files based on Phase 2 conclusions:
 
    | Case Type | Coverage Requirement | Example |
    |-----------|---------------------|---------|
-   | CLI cases | One case per hcloud command | `hcloud ECS ListServers --limit=1` |
+   | CLI cases | One case per hcloud command | `hcloud ECS ListServers --cli-region=cn-north-4 --limit=1` |
    | SDK cases | One case per SDK call | `list_sub_customer_coupons(limit=1)` |
    | API cases | One case per user-provided endpoint | `curl -X GET {endpoint}` |
 
@@ -221,9 +260,17 @@ Generate Skill files based on Phase 2 conclusions:
 
 4. **Run tests:**
     - Read AK/SK from environment variables: 自动扫描所有以 `HUAWEI` / `HW` / `HWC` 开头的环境变量，匹配其中含 `ACCESS_KEY` / `_AK` / `SECRET_KEY` / `_SK` 的键值对
-   - **If not found, must prompt the user to provide AK/SK; if the user does not provide, terminate the process. Strictly prohibited from skipping**
-   - Execute test cases one by one
-   - **Before executing mutating commands (Create/Update/Delete), must prompt the user and wait for confirmation**
+    - **If no valid AK/SK env var or CLI profile is detected, output the env-var setup template below and STOP — never ask the user to type AK/SK in chat. The user fills in real values out-of-band and re-runs the Pre-check:**
+
+      ```bash
+      export HUAWEI_ACCESS_KEY="<your-access-key-id>"
+      export HUAWEI_SECRET_KEY="<your-secret-access-key>"
+      export HUAWEI_REGION="cn-north-4"
+      ```
+
+      If the user cannot / will not provide env vars, **terminate the process**. Strictly prohibited from skipping credential-required steps.
+    - Execute test cases one by one
+    - **Before executing mutating commands (Create/Update/Delete), must prompt the user and wait for confirmation**
 
 5. **Test verification flow:**
 
@@ -240,8 +287,6 @@ Generate Skill files based on Phase 2 conclusions:
    ```
 
 **Output:** `phase-4-summary.json` — Test case list + per-case execution results
-
----
 
 ### Phase 5: Detailed Testing
 
@@ -267,8 +312,6 @@ Generate Skill files based on Phase 2 conclusions:
 
 **Output:** `phase-5-summary.json` — Detailed test results + resource operation records
 
----
-
 ### Phase 6: Resource Cleanup and Compliance Check
 
 **Dependency:** Phase 5 detailed testing completed (phase-5-summary.json exists)
@@ -289,15 +332,15 @@ Generate Skill files based on Phase 2 conclusions:
     | YAML Frontmatter exists | Critical | `grep '^---$'` |
     | name field exists | Critical | Frontmatter name field exists and matches directory name |
     | description field exists | Critical | Frontmatter description field exists and contains feature summary + trigger words |
-    | description includes trigger words | Medium | grep 'Triggers include:' |
-    | Should not contain version field | Low | No version field in frontmatter |
-    | Overview section | High | grep '##.*概述' |
-    | Prerequisites section | High | grep '##.*前置条件' |
-    | Workflow section | High | grep '##.*工作流' |
-    | Core Commands section | High | grep '##.*核心命令' |
-    | Parameter Confirmation section | High | grep '##.*参数确认' |
-    | Reference Documents section | Critical | grep '##.*参考文档' |
-    | KooCLI Command Format Standard section | Low | Required when CLI is involved, grep '##.*KooCLI.*命令格式' |
+    | description includes trigger words | Medium | Accept `Triggers include:`, `Use when`, or equivalent trigger conditions |
+    | Should not contain version field | Low | No `version` field in frontmatter |
+    | Overview section | High | Match `Overview` or `概述` |
+    | Prerequisites section | High | Match `Prerequisites` or `前置条件` |
+    | Workflow section | High | Match `Workflow` or `工作流` |
+    | Core Commands section | High | Match `Core Commands` or `核心命令` |
+    | Parameter Confirmation section | High | Match `Parameter Confirmation` or `参数确认` |
+    | Reference Documents section | Critical | Match `Reference Documents`, `References`, or `参考文档` |
+    | KooCLI Command Format Standard section | Low | Required when CLI is involved; match the English or Chinese heading |
     | references/cli-installation-guide.md | High | Required when CLI is involved, file existence |
     | references/iam-policies.md | Critical | File existence |
     | references/verification-method.md | Medium | Recommended file existence |
@@ -306,63 +349,28 @@ Generate Skill files based on Phase 2 conclusions:
     | Credential hardcoding | Critical | grep for credential hardcoding patterns and CLI credential config |
     | Cross-Skill direct calls | Critical | grep other Skill names |
     | CLI write operations require confirmation | Low | Check whether user confirmation is prompted |
-    | Service name requirement | Medium | hcloud service names follow KooCLI Services (uppercase/title case) |
-    | Operation name PascalCase | Medium | Operation names use PascalCase |
-    | Includes --cli-region | Medium | Whether CLI commands include --cli-region parameter |
+    | Service name requirement | Medium | Every concrete hcloud service matches a KooCLI Service name and starts with uppercase/title case, such as `ECS`, `CloudPond`, or `IAMAccessAnalyzer` |
+    | Operation name PascalCase | Medium | Every concrete operation name uses PascalCase |
+    | Includes `--cli-region` | Medium | Every concrete CLI command includes the region parameter |
+    | Total skill size ≤ 40 MB | Medium | Sum all file content sizes under the Skill directory |
+    | Total file count ≤ 30 | Medium | Count SKILL.md and every file in all subdirectories |
+    | SKILL.md line count ≤ 500 | Medium | Split excess content into `references/` |
+    | File extensions in allowlist | Medium | Reject extensionless files and extensions outside the 46-type allowlist |
 
-   3. **Security Audit (skill-targeted-audit five checks + specification security scan four items):**
+   3. **Security Audit:**
 
-     Run `skill_audit.py` on the generated Skill, performing the following five security and quality checks:
+   Have the Agent orchestrate the five-tool audit described in `references/security-audit-guide.md`. Do not invoke another named Skill or call scripts from another Skill directory directly.
 
-     | # | Tool | Check Content | Severity | Installation |
-     |---|------|--------------|----------|-------------|
-     | 1 | **skillcheck** | SKILL.md agentskills.io specification validation (frontmatter fields, description quality, reference safety) | WARNING/ERROR | `pip install skillcheck` |
-     | 2 | **markdownlint-cli2** | Markdown style consistency (line length, duplicate headings, code block formatting, etc.) | ERROR | `npm install -g markdownlint-cli2` |
-     | 3 | **cisco-ai-skill-scanner** | AI security scan: command injection, reverse shell, credential leakage, dangerous functions, prompt injection | CRITICAL/HIGH | `pip install cisco-ai-skill-scanner` (CLI: `skill-scanner`) |
-     | 4 | **hwcloud-spec** | Huawei Cloud SKILL.md specification check: frontmatter required fields, section structure, file size | ERROR/WARNING | Built-in (`hwcloud_spec_check.py`) |
-     | 5 | **gitleaks** | Credential leak scan: detects hardcoded API keys, passwords, private keys, tokens, and 800+ other patterns | ERROR | Download from [GitHub Releases](https://github.com/gitleaks/gitleaks/releases) |
+   The gate combines skillcheck, markdownlint-cli2, cisco-ai-skill-scanner, the Huawei Cloud specification check, and gitleaks. It must explicitly cover these Critical specification checks:
 
-     **Specification Security Scan Four Checks (Huawei Cloud Skill Specification Part 2):**
+   | Check | Required coverage |
+   |-------|-------------------|
+   | Secret leak detection | AK/SK hardcoding, `hcloud configure set`, and report-output masking |
+   | Vulnerability pattern detection | Known command injection, reverse shell, dangerous function, and prompt injection patterns |
+   | Dependency security detection | Known unsafe dependency versions via `pip audit`, `safety check`, or an equivalent tool |
+   | Insecure configuration detection | Insecure protocols, weak passwords, and unsafe defaults |
 
-     | # | Specification Check | Level | Coverage Tool | Coverage Description |
-     |---|-------------------|-------|--------------|---------------------|
-     | 1 | Secret leak detection | Critical | gitleaks + skill-scanner | AK/SK hardcoding, CLI credential config, report output masking |
-     | 2 | Vulnerability pattern detection | Critical | skill-scanner | Known vulnerability code pattern matching (command injection, reverse shell, etc.) |
-     | 3 | Dependency security detection | Critical | ⚠️ Requires additional tools | Known unsafe dependency version detection, recommended to integrate `pip audit` or `safety check` |
-     | 4 | Insecure configuration detection | Critical | skill-scanner | Insecure protocols, weak password configuration, etc. |
-
-    **Execution method:**
-
-    ```bash
-    python3 scripts/skill_audit.py --target {skill-path}
-    ```
-
-     **Security audit flow:**
-
-     ```
-     Run skill_audit.py → Generate skill-gate-report-<timestamp>.txt
-       ├── Gate Verdict: PASS → ✅ Audit passed, proceed to next step
-       └── Gate Verdict: FAIL → Fix issues item by item per Report Section 4
-            ├── skillcheck issues → Fix frontmatter/description/references
-            ├── markdownlint issues → First run markdownlint-cli2 --fix for auto-fix
-            │                       → Then manually fix non-auto-fixable items (MD036/MD040, etc.)
-            ├── skill-scanner issues → Command injection/reverse shell → Move to scripts/ reference
-            │                        → Credential leakage → Replace with environment variable reference
-            ├── hwcloud-spec issues → Add missing sections/fields
-            ├── gitleaks issues → Replace hardcoded credentials with environment variables
-            ├── Dependency security detection → Run pip audit / safety check, fix unsafe dependency versions
-            └── After fixing, rerun skill_audit.py → Until PASS
-     ```
-
-     **Security audit result handling:**
-
-     | Audit Result | Action |
-     |-------------|--------|
-     | PASS (0 issues) | Record in phase-6-summary.json, proceed to step 4 |
-     | PASS (WARNINGs only) | Record WARNINGs in phase-6-summary.json, prompt user to confirm acceptance, proceed to step 4 |
-     | FAIL (has ERROR/CRITICAL) | Must fix and re-audit, cannot skip |
-
-     **🛑 When the security audit does not pass, declaring the Skill creation complete is strictly prohibited. CRITICAL/ERROR level issues must be fixed.**
+   ERROR or CRITICAL findings must be fixed and re-audited. WARNING-only results require explicit user acceptance. Record the report path, verdict, findings, and accepted warnings in `phase-6-summary.json`.
 
 4. **Final report:**
    - Merge Phase 1-6 phase summaries
@@ -396,8 +404,6 @@ Generate Skill files based on Phase 2 conclusions:
 
 **Output:** `phase-6-summary.json` — Final creation report + compliance check results + security audit conclusion
 
----
-
 ## KooCLI Command Format Standard
 
 ```bash
@@ -406,23 +412,18 @@ hcloud <Service> <Operation> --cli-region=<region> [--key=value ...]
 
 | Feature | Description | Example |
 |---------|-------------|---------|
-| Service name | Uppercase PascalCase | `ECS`, `VPC`, `IAM` |
+| Service name | Exact KooCLI Service name beginning with uppercase/title case | `ECS`, `VPC`, `CloudPond`, `IAMAccessAnalyzer` |
 | Operation name | PascalCase | `ListServers`, `ShowServer` |
 | Region parameter | `--cli-region=<value>` | `--cli-region=cn-north-4` |
 | Simple parameter | `--key=value` | `--server_id=xxx` |
 | Indexed parameter | `--key.1=value1` | `--servers.1.id=xxx` |
 
----
-
 ## Core Commands
 
 | Command | Purpose |
 |---------|---------|
-| `bash scripts/validate-skill.sh {path}` | Phase 3/6: Structure validation + spec check + security audit |
+| `bash scripts/validate-skill.sh {path}` | Phase 3/6: Structure and Huawei Cloud specification validation |
 | `bash scripts/test-cli-commands.sh {path} --executor {cli\|sdk\|api}` | Phase 4/5: Functional testing |
-| `python3 scripts/skill_audit.py --target {path}` | Phase 6: Five-item security audit (skillcheck+markdownlint+skill-scanner+hwcloud-spec+gitleaks) |
-
----
 
 ## Parameter Confirmation
 
@@ -432,14 +433,12 @@ hcloud <Service> <Operation> --cli-region=<region> [--key=value ...]
 | `{region}` | No | Huawei Cloud region | `cn-north-4` |
 | `{executor}` | No | Execution mode (cli/sdk/api) | `cli` |
 
----
-
 ## Edge Cases
 
 | Scenario | Handling |
 |----------|----------|
 | User skips questions and says "start" directly | Remind: requirements analysis must be completed first, start from Phase 1 questions |
-| AK/SK environment variables not set | Prompt user to provide AK/SK; if user does not provide, terminate process, strictly prohibited from skipping |
+| AK/SK environment variables not set | Re-run the **Pre-check** above. Output the env-var setup template (`export HUAWEI_ACCESS_KEY=...` / `export HUAWEI_SECRET_KEY=...`) and let the user fill it out-of-band. **NEVER** ask the user to paste AK/SK into chat. If user does not configure, terminate process, strictly prohibited from skipping |
 | Target service not supported by hcloud CLI | Phase 2 fallback to SDK → Read SDK source _http_info → If still not found, mark ⛔ |
 | SDK package does not exist | Check package name variants, if still not found, inform user, do not infer API |
 | User is unsure of API endpoint | Mark ⛔ requires manual verification, do not fabricate endpoints. If SDK has the method, read _http_info for the real path |
@@ -450,13 +449,11 @@ hcloud <Service> <Operation> --cli-region=<region> [--key=value ...]
 | User refuses resource lifecycle testing | Inform user: resource lifecycle testing is a required step and cannot be skipped; if user still refuses, terminate process |
 | Phase 6 finds missing phases | Restart from the missing phase until all 6 phases are complete |
 | SDK has method but actual API path unknown | Read SDK source `grep _http_info {service}_client.py` to get real path |
-| BSS service SDK initialization fails (GlobalCredentials) | See `references/bss-sdk-notes.md`: BSS must use GlobalCredentials + with_endpoints, not BasicCredentials + with_region |
+| BSS service SDK initialization fails (GlobalCredentials) | BSS is global and must use `GlobalCredentials` with `with_endpoints`, not `BasicCredentials` with `with_region` |
 | list_sub_customer_coupons query returns 400 | BSS limit parameter maximum is 100, not the default 200 |
-| Phase 6 security audit FAIL | Fix issues item by item per skill-gate-report Section 4, rerun skill_audit.py after fixing |
+| Phase 6 security audit FAIL | Fix issues from the audit report, then have the Agent rerun the audit until it passes |
 | skill-scanner false positive | Use `<!-- skill-scanner:ignore -->` comment annotation, or exclude in .secrets.baseline |
 | gitleaks false positive | Add to `.gitleaksignore` file |
-
----
 
 ## Verification Method
 
@@ -481,19 +478,8 @@ Missing any ❌ → Restart from the missing phase
 ```
 
 ### Security Audit (Phase 6)
-```bash
-# Run five security checks
-python3 scripts/skill_audit.py --target {skill-path}
 
-# If FAIL, fix per report and rerun
-# Auto-fix markdownlint issues
-markdownlint-cli2 "{skill-path}/**/*.md" --config "{skill-path}/.markdownlint.json" --fix
-
-# Re-audit
-python3 scripts/skill_audit.py --target {skill-path}
-```
-
----
+Have the Agent orchestrate the tools listed in `references/security-audit-guide.md`, collect their findings into the Phase 6 report, fix every ERROR/CRITICAL issue, and repeat until the gate passes. Do not call another Skill's scripts directly.
 
 ## Reference Documents
 
@@ -503,9 +489,7 @@ python3 scripts/skill_audit.py --target {skill-path}
 - `references/dataflow-diagram.md` — Mermaid data flow diagram
 - `references/acceptance-criteria.md` — Acceptance criteria
 - `references/related-commands.md` — Command quick reference
-- `references/api-paths.md` — (Optional) REST API paths discovered via SDK source in Phase 2
-- `references/bss-sdk-notes.md` — BSS service SDK initialization guide (GlobalCredentials + with_endpoints), reference when creating voucher/billing-related Skills
-- `references/security-audit-guide.md` — Phase 6 security audit guide (usage and fix strategies for the five skill-targeted-audit checks)
+- `references/security-audit-guide.md` — Phase 6 five-tool security audit and remediation guide
 
 ## Best Practices
 
@@ -519,11 +503,11 @@ python3 scripts/skill_audit.py --target {skill-path}
 
 - Six-phase pipeline strictly follows sequential order; no phase may be skipped
 - API endpoints are only allowed from SDK source `_http_info` or Huawei Cloud API Explorer; strictly prohibited from inferring via naming patterns
-- Credentials (AK/SK) are read from environment variables; hardcoding in scripts or documents is prohibited
-- **If AK/SK is not set, must prompt the user to provide them; if the user does not provide, terminate the process. Strictly prohibited from skipping any step that requires credentials**
+- **Pre-check is a hard gate.** Credentials (AK/SK) are sourced from environment variables or active CLI profile — never read, echoed, hardcoded, or entered through `hcloud configure set` with literal values
+- **If AK/SK is not set after running the Pre-check, output the env-var setup template (`export HUAWEI_ACCESS_KEY=...` / `export HUAWEI_SECRET_KEY=...`) for the user to fill out-of-band. NEVER ask the user to paste AK/SK into chat. If the user does not configure, terminate the process. Strictly prohibited from skipping any step that requires credentials**
 - BSS service SDK must use GlobalCredentials + with_endpoints; BasicCredentials must not be used
 - Resources created during resource lifecycle testing must be cleaned up in Phase 6 to avoid leftovers
-- When Phase 6 security audit (skill-targeted-audit) FAILs, CRITICAL/ERROR level issues must be fixed and cannot be skipped
+- When the Phase 6 security audit fails, CRITICAL/ERROR level issues must be fixed and the Agent must rerun the audit
 - skill-scanner only detects known cloud API key formats; common passwords/Chinese keyword credentials require gitleaks supplementary detection
 - The skillPath in skills-lock.json is: skills/devtools/common/huawei-cloud-skill-creator/SKILL.md
 
@@ -535,5 +519,5 @@ python3 scripts/skill_audit.py --target {skill-path}
 - **Phase 4/5 Real Execution** — Every command must be actually executed and verified; if it fails, fallback or mark
 - **Phase 6 Double Check** — Resource cleanup + specification compliance + six-phase completeness
 - **Credential Security** — No hardcoded AK/SK, read from environment variables, write operations require user confirmation
-- **Credentials Mandatory** — If AK/SK is missing, must prompt the user to provide; if not provided, terminate process. Strictly prohibited from skipping
+- **Credentials Mandatory** — If AK/SK is missing, output the env-var setup template (`export HUAWEI_ACCESS_KEY=...` / `export HUAWEI_SECRET_KEY=...`) and let the user fill it out-of-band. **Never** ask the user to paste AK/SK into chat. If the user does not configure, terminate process. Strictly prohibited from skipping
 - **Least Privilege** — iam-policies.md provides least-privilege policy JSON
