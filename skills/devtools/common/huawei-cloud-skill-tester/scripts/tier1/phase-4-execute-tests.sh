@@ -20,9 +20,22 @@ run_phase4() {
 
   # Force AK/SK check before any SDK/CLI execution
   step "检查 AK/SK 凭证..."
-  if ! ensure_ak_sk; then
-    fail "AK/SK 凭证缺失，无法执行 SDK/CLI 测试用例"
-    warn "请设置环境变量后重试: export HUAWEI_ACCESS_KEY=xxx; export HUAWEI_SECRET_KEY=xxx (或任意以 HUAWEI/HW/HWC 开头的 AK/SK 变量)"
+  ensure_ak_sk
+  cred_rc=$?
+  if [ $cred_rc -ne 0 ]; then
+    if [ $cred_rc -eq 77 ]; then
+      # Credentials required but not provided — env-var template has been
+      # emitted to stderr by ensure_ak_sk(). The calling agent (or human)
+      # MUST output that template to the user and ask them to set env vars
+      # out-of-band (shell profile / PowerShell $PROFILE). Do NOT ask the
+      # user to type or paste AK/SK in chat. See SKILL.md "Agent Protocol".
+      fail "AK/SK 凭证缺失（exit 77 — 详见 stderr 中的 env-var 设置模板）"
+      fail "  sentinel: $CRED_REQUEST_SENTINEL"
+      fail "  调用方应将该模板原样输出给用户，让用户带外设置环境变量后重跑"
+      fail "  --phase 4 或 --resume，禁止直接索要 AK/SK 明文"
+      return 77
+    fi
+    fail "AK/SK 凭证检查失败（exit=$cred_rc）"
     return 1
   fi
 
@@ -88,7 +101,7 @@ for tc in cases:
         risk = tc.get('risk_level', 'high')
         print(f"    ⚠️  写操作 [{risk}] — 命令: {tc.get('command', 'N/A')[:80]}")
         print(f"    预期: {tc.get('expected', 'N/A')[:80]}")
-        print(f"    非交互模式: 使用 AK/SK 凭证直接执行写操作")
+        print(f"    非交互模式: 使用已通过 env var 设定的 AK/SK 凭证执行写操作")
 
         entry['user_confirmed'] = True
 
@@ -441,6 +454,7 @@ r = {
 }
 print(json.dumps(r, indent=2, ensure_ascii=False))
 PYEOF
+  ensure_test_files_dir "$skill_dir" > /dev/null
   python3 "$summary_py_tmp" "$tmp_json" "$PHASE_NUM" "$PHASE_NAME" "$skill_name" "$ts" "$duration" "$verdict" "$pass_count" "$fail_count" "$skip_count" > "$(phase_file "$skill_dir" 4)"
   rm -f "$summary_py_tmp"
   rm -f "$tmp_json"
@@ -480,7 +494,11 @@ PYEOF
 }
 
 for skill_dir in "$@"; do
-  run_phase4 "$skill_dir" || exit 1
+  run_phase4 "$skill_dir"
+  rc=$?
+  if [ $rc -ne 0 ]; then
+    exit $rc  # propagate exit code (77 for cred request, 1 for other errors)
+  fi
   echo ""
 done
 
