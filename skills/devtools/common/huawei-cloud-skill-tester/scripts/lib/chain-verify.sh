@@ -103,10 +103,36 @@ verdict_summary() {
 
 # === Fresh mode cleanup ===
 
-cleanup_phase_files() {
+# Archive (move, not delete) existing phase files to phases/archive/<timestamp>/
+# so --fresh can reset the chain check while keeping ALL run history.
+# Behavior contract: NEVER deletes. Always moves to archive.
+archive_phase_files() {
   local skill_dir="$1"
-  [ -z "$skill_dir" ] && { fail "cleanup_phase_files: skill_dir 为空"; return 1; }
-  info "🧹 --fresh: 清理 ${skill_dir}/phase-*.json"
-  rm -f "${skill_dir}"/phase-*.json
-  info "✅ 已清理"
+  [ -z "$skill_dir" ] && { fail "archive_phase_files: skill_dir 为空"; return 1; }
+  # Source the helpers if not already loaded
+  type phases_dir &>/dev/null || source "$(dirname "${BASH_SOURCE[0]}")/utils.sh"
+  local phases; phases=$(phases_dir "$skill_dir")
+
+  # Nothing to archive? Done.
+  if ! ls "$phases"/phase-*.json &>/dev/null; then
+    info "🧹 --fresh: phases/ 已空，无需归档"
+    return 0
+  fi
+
+  local archive_dir="$phases/archive/$(date +%Y%m%d-%H%M%S)"
+  mkdir -p "$archive_dir"
+  local count=0
+  for f in "$phases"/phase-*.json; do
+    [ -f "$f" ] || continue
+    mv "$f" "$archive_dir/"
+    count=$((count + 1))
+  done
+  info "📦 --fresh: 归档 $count 个 phase 文件到 $archive_dir (保留全部历史)"
+  return 0
+}
+
+# Backward-compat alias: --fresh used to rm, now archives.
+# Keep the old name as a thin wrapper so any external caller doesn't break.
+cleanup_phase_files() {
+  archive_phase_files "$@"
 }

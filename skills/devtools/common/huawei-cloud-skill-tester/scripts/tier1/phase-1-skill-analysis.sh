@@ -7,6 +7,11 @@ SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 source "$SCRIPT_DIR/lib/utils.sh"
 source "$SCRIPT_DIR/lib/chain-verify.sh"
 
+# Load config and discover available services dynamically
+source "$SCRIPT_DIR/lib/config.sh"
+discover_hcloud_services >/dev/null  # populate cache
+export SERVICES_CLI_COMMA
+
 PHASE_NUM=1
 PHASE_NAME="skill-analysis"
 
@@ -107,9 +112,29 @@ commands = []
 cmd_id = 0
 
 # Helper: detect service from text
+# Uses dynamic service list from config.sh (SERVICES_CLI_FALLBACK covers 36+ services)
+_detect_svc_list = None
+def _get_svc_list():
+    global _detect_svc_list
+    if _detect_svc_list is None:
+        import os
+        # Try comma-joined list from config.sh first
+        comma_list = os.environ.get('SERVICES_CLI_COMMA', '')
+        if comma_list:
+            _detect_svc_list = comma_list.split(',')
+        else:
+            # Fallback to comprehensive static list
+            _detect_svc_list = [
+                'bss', 'ecs', 'vpc', 'evs', 'eip', 'iam', 'rds', 'dns', 'obs', 'ims', 'as', 'elb',
+                'nat', 'cdn', 'cce', 'scm', 'ces', 'rfs', 'ucs', 'dcs', 'kps', 'cfw', 'hss',
+                'secmaster', 'coc', 'aom', 'cts', 'swr', 'cci', 'dds', 'gaussdb', 'ddm', 'drs',
+                'das', 'dli', 'dws', 'mrs', 'smn', 'functiongraph', 'apig', 'vpn', 'dc', 'cc', 'er', 'eg'
+            ]
+    return _detect_svc_list
+
 def detect_service(txt):
     txt_l = txt.lower()
-    for svc in ['bss', 'ecs', 'vpc', 'evs', 'eip', 'iam', 'rds', 'dns', 'obs', 'ims', 'as', 'elb']:
+    for svc in _get_svc_list():
         if svc in txt_l:
             return svc
     return None
@@ -460,6 +485,7 @@ r = {
 }
 print(json.dumps(r, indent=2, ensure_ascii=False))
 PYEOF
+  ensure_test_files_dir "$skill_dir" > /dev/null
   python3 "$summary_py_tmp" "$tmp_json" "$PHASE_NUM" "$PHASE_NAME" "$skill_name" "$ts" "$duration" > "$(phase_file "$skill_dir" 1)"
   rm -f "$summary_py_tmp"
 
