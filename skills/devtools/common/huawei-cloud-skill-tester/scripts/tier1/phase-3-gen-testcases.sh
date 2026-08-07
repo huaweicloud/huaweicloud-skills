@@ -288,6 +288,7 @@ r = {
 }
 print(json.dumps(r, indent=2, ensure_ascii=False))
 PYEOF
+  ensure_test_files_dir "$skill_dir" > /dev/null
   python3 "$summary_py_tmp" "$tmp_json" "$PHASE_NUM" "$PHASE_NAME" "$skill_name" "$ts" "$duration" "$verdict" "$total" > "$(phase_file "$skill_dir" 3)"
   rm -f "$summary_py_tmp"
   rm -f "$tmp_json"

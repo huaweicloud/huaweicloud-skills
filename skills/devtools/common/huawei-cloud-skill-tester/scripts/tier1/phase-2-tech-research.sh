@@ -7,6 +7,12 @@ SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 source "$SCRIPT_DIR/lib/utils.sh"
 source "$SCRIPT_DIR/lib/chain-verify.sh"
 
+# Discover available hcloud CLI services dynamically
+source "$SCRIPT_DIR/lib/config.sh"
+discover_hcloud_services >/dev/null  # populate cache
+SERVICES_CLI_JSON=$(get_cli_services_as_json)
+export SERVICES_CLI_JSON
+
 PHASE_NUM=2
 PHASE_NAME="tech-research"
 
@@ -77,7 +83,10 @@ for cmd in cmds:
     if bss_only:
         entry['cli'] = {'available': False, 'command': None, 'reason': 'BSS not supported by hcloud CLI'}
     else:
-        for svc in ['ecs', 'vpc', 'evs', 'eip', 'ims', 'as', 'elb', 'rds', 'dns', 'obs']:
+        # Load services dynamically from env (set by config.sh discovery)
+        import json as _json
+        cli_services = _json.loads(os.environ.get('SERVICES_CLI_JSON', '[]'))
+        for svc in cli_services:
             if svc in search_text or svc.upper() in search_text:
                 try:
                     r = subprocess.run(
@@ -111,11 +120,12 @@ for cmd in cmds:
 
     # If CLI not available, try SDK
     if not entry['cli']['available']:
-        for svc_pkg, sdk_cls in [
-            ('bss', 'BssClient'), ('ecs', 'EcsClient'), ('vpc', 'VpcClient'),
-            ('evs', 'EvsClient'), ('eip', 'EipClient'), ('iam', 'IamClient'),
-            ('rds', 'RdsClient'), ('dns', 'DnsClient'), ('obs', 'ObsClient')
-        ]:
+        # Extended SDK service map (service_name -> SDK package, Client class)
+        # Loaded from env or use comprehensive default
+        import json as _json2
+        _sdk_map_env = os.environ.get('SERVICES_SDK_MAP_JSON', '{"bss":"BssClient","ecs":"EcsClient","vpc":"VpcClient","evs":"EvsClient","eip":"EipClient","iam":"IamClient","rds":"RdsClient","dns":"DnsClient","obs":"ObsClient","nat":"NatClient","cdn":"CdnClient","cce":"CceClient","ces":"CesClient","dcs":"DcsClient","dds":"DdsClient","mrs":"MrsClient","dli":"DliClient","rfs":"RfsClient","apig":"ApigClient","functiongraph":"FunctionGraphClient","smn":"SmnClient"}')
+        _sdk_map = _json2.loads(_sdk_map_env)
+        for svc_pkg, sdk_cls in _sdk_map.items():
             try:
                 import_cmd = f'from huaweicloudsdk{svc_pkg}.v2 import {sdk_cls}'
                 r = subprocess.run(
@@ -220,6 +230,7 @@ r = {
 }
 print(json.dumps(r, indent=2, ensure_ascii=False))
 PYEOF
+  ensure_test_files_dir "$skill_dir" > /dev/null
   python3 "$summary_py_tmp" "$tmp_json" "$PHASE_NUM" "$PHASE_NAME" "$skill_name" "$ts" "$duration" "$verdict" "$cli_count" "$na_count" > "$(phase_file "$skill_dir" 2)"
   rm -f "$summary_py_tmp"
   rm -f "$tmp_json"
