@@ -22,7 +22,7 @@ for arg in "$@"; do
     SKILLS_LIST="${arg#--skills=}"
   elif [[ "$arg" == --skills ]]; then
     skills_next=true
-  elif [[ "$arg" =~ ^/ || "$arg" =~ ^\. ]]; then
+  elif [[ "$arg" =~ ^/ || "$arg" =~ ^\. || "$arg" =~ ^[A-Za-z]:[/\\] ]]; then
     # Only treat absolute or relative paths as skill paths
     SKILL_PATHS+=("$arg")
   fi
@@ -45,21 +45,26 @@ header "Phase ${PHASE_NUM}: 多Skill编排测试"
 ts=$(timestamp)
 start_ts=$(date +%s)
 
-# === Scan sibling skills if only one skill provided ===
+# === Auto-discover sibling skills (default ON) ===
+# 用户要求: 默认从被测试 skill 的同级目录找其他 huawei-cloud-* skill 做编排。
+# 默认开启; opt-out: WITHOUT_SIBLINGS=1 或 SIBLING_LIMIT=0
 if [ "$SKILL_COUNT" -le 1 ]; then
   target_dir="${SKILL_PATHS[0]}"
   parent_dir=$(dirname "$target_dir")
   target_name=$(basename "$target_dir")
 
-  info "扫描本地 skill 目录: $parent_dir"
-  for sibling in "$parent_dir"/huawei-cloud-*; do
-    [ -d "$sibling" ] || continue
-    sname=$(basename "$sibling")
-    [ "$sname" = "$target_name" ] && continue
+  info "扫描同级兄弟 skill (parent: $parent_dir)"
+  while IFS= read -r sibling; do
+    [ -z "$sibling" ] && continue
     SKILL_PATHS+=("$sibling")
-    info "  发现同目录 skill: $sname"
-  done
+    sname=$(basename "$sibling")
+    info "  发现兄弟 skill: $sname"
+  done < <(discover_siblings "$target_dir" "${SKILL_PATHS[@]}")
   SKILL_COUNT=${#SKILL_PATHS[@]}
+
+  if [ "$SKILL_COUNT" -gt 1 ]; then
+    info "编排模式: ${SKILL_COUNT} skill 组合 (默认扫兄弟)"
+  fi
 fi
 
 # === Branch: downgrade for single skill ===
@@ -76,8 +81,8 @@ if [ "$SKILL_COUNT" -le 1 ]; then
   p1_file=$(phase_file "$local_skill_dir" 1)
   
   # Write Python self-check script to temp file
-  p6s_tmp=$(mktemp)
-  cat > "$p6s_tmp" << 'PYSELF'
+  p5s_tmp=$(mktemp)
+  cat > "$p5s_tmp" << 'PYSELF'
 import json, sys
 
 p1f = sys.argv[1]
@@ -123,49 +128,145 @@ result = {
 print(json.dumps(result, indent=2, ensure_ascii=False))
 PYSELF
 
-  self_check=$(python3 "$p6s_tmp" "$p1_file" "$SKILL_COUNT")
-  rm -f "$p6s_tmp"
+  self_check=$(python3 "$p5s_tmp" "$p1_file" "$SKILL_COUNT")
+  rm -f "$p5s_tmp"
 
   verdict="pass"
   has_ambiguities=$(echo "$self_check" | python3 -c "import json,sys; d=json.load(sys.stdin); print(len(d.get('conflict_scan',{}).get('internal_ambiguities',[]))" 2>/dev/null || echo "0")
   has_cycles=$(echo "$self_check" | python3 -c "import json,sys; d=json.load(sys.stdin); print(len(d.get('conflict_scan',{}).get('cycle_warnings',[])))" 2>/dev/null || echo "0")
   [ "$has_ambiguities" -gt 0 ] || [ "$has_cycles" -gt 0 ] && verdict="partial"
 
-  output_file="${local_skill_dir}/phase-5-summary.json"
+  output_file="$(phases_dir "$local_skill_dir")/phase-5-summary.json"
+  ensure_test_files_dir "$local_skill_dir" > /dev/null
 else
   # === Full orchestration mode ===
-  # Check all skills' Phase 5
-  for sp in "${SKILL_PATHS[@]}"; do
-    sn=$(basename "$sp")
-    check_phase_deps "$sp" 5 "${SKILLS_LIST}" || exit 1
+  # Strict chain check on the target skill only (the one whose phase-4 ran).
+  # Sibling skills (discovered via discover_siblings) often lack phase-1/4
+  # JSONs because they haven't been individually tested. We only soft-warn
+  # for siblings and let the orchestration logic fall back to SKILL.md parsing.
+  check_phase_deps "${SKILL_PATHS[0]}" 5 || exit 1
+  for ((i=1; i<SKILL_COUNT; i++)); do
+    sp="${SKILL_PATHS[$i]}"
+    for p in 1 4; do
+      pf="$(phase_file "$sp" $p)"
+      if [ ! -f "$pf" ]; then
+        warn "兄弟 skill $(basename "$sp") 缺 phase $p: $pf (将 fallback 到 SKILL.md 实时解析)"
+      fi
+    done
   done
 
   info "全量编排模式: ${SKILL_COUNT} 个 skill"
 
   # Read phase-1 data for all skills via Python
   # Write Python script to temp file to avoid quoting issues
-  py_tmp_p6=$(mktemp)
-  cat > "$py_tmp_p6" << 'PYORCH6'
-import json, os, sys
+  py_tmp_p5=$(mktemp)
+  cat > "$py_tmp_p5" << 'PYORCH5'
+import json, os, re, sys
 
 sp_list = sys.argv[1:]
 skill_data = []
+parse_warnings = []
+
+# Phase JSONs live in <skill>-test-files/phases/, not in the skill dir
+def _phases_dir(skill_dir):
+    parent = os.path.dirname(skill_dir)
+    name = os.path.basename(skill_dir)
+    return os.path.join(parent, f"{name}-test-files", "phases")
+
+# Fallback: parse SKILL.md frontmatter + body to extract triggers / resource types
+# Used when phase-1-summary.json doesn't exist (e.g. sibling skills not yet tested).
+# Supports three common trigger declaration patterns found in this repo:
+#   1. `triggers: [a, b, c]` — inline YAML list
+#   2. `triggers:\n  - a\n  - b` — block YAML list
+#   3. `description: |\n  ... Triggers include: "x","y","z"` — embedded in description
+def parse_skill_md(skill_dir):
+    smd = os.path.join(skill_dir, 'SKILL.md')
+    if not os.path.isfile(smd):
+        return None
+    try:
+        with open(smd, encoding='utf-8') as f:
+            content = f.read()
+    except Exception:
+        return None
+
+    # Parse YAML frontmatter block
+    m = re.match(r'^---\s*\n(.*?)\n---', content, re.DOTALL)
+    fm = m.group(1) if m else ''
+
+    triggers = []
+
+    # Pattern 1+2: triggers: [..] OR triggers:\n  - ..
+    m1 = re.search(r'^triggers\s*:\s*\[([^\]]*)\]', fm, re.MULTILINE)
+    if m1:
+        triggers += [x.strip().strip('"').strip("'") for x in m1.group(1).split(',') if x.strip()]
+    else:
+        m2 = re.search(r'^triggers\s*:\s*$', fm, re.MULTILINE)
+        if m2:
+            # Block list — collect "- xxx" lines after it
+            after = fm[m2.end():]
+            for line in after.split('\n'):
+                stripped = line.strip()
+                if stripped.startswith('- '):
+                    triggers.append(stripped[2:].strip().strip('"').strip("'"))
+                elif stripped and not stripped.startswith('#') and ':' in stripped:
+                    break
+
+    # Pattern 3: "Triggers include: ..." in description block
+    if not triggers:
+        m3 = re.search(r'Triggers\s+include\s*[:：]\s*([^\n]+)', fm, re.IGNORECASE)
+        if m3:
+            tail = m3.group(1)
+            # split on commas, quotes, or Chinese commas
+            parts = re.split(r'["\',，；;]+', tail)
+            triggers += [p.strip() for p in parts if p.strip() and len(p.strip()) > 1]
+
+    # Heuristic resource types from full content (tags + body)
+    body = content.lower()
+    rtypes = []
+    for kw in ['rds', 'ecs', 'evs', 'vpc', 'eip', 'obs', 'cdn', 'iam', 'bss', 'cce', 'dms', 'dcs',
+               'functiongraph', 'modelarts', 'ocr', 'sms', 'swr', 'cbr', 'waf', 'hss', 'elb',
+               'nat', 'vpn', 'dws', 'mrs', 'css', 'kms', 'smn', 'apig']:
+        if kw in body and kw not in rtypes:
+            rtypes.append(kw)
+
+    return {
+        'triggers': triggers,
+        'resource_types': rtypes,
+        'commands': [],  # commands are too brittle to parse from SKILL.md; only phase-1 has them
+    }
 
 for sp in sp_list:
     sn = os.path.basename(sp)
-    p1_file = os.path.join(sp, 'phase-1-summary.json')
+    p1_file = os.path.join(_phases_dir(sp), 'phase-1-summary.json')
     if os.path.isfile(p1_file):
-        with open(p1_file) as f:
-            p1 = json.load(f)
-        triggers = p1.get('result', {}).get('metadata', {}).get('triggers', [])
-        resource_types = p1.get('result', {}).get('resource_types', [])
-        commands = p1.get('result', {}).get('commands', [])
-        skill_data.append({
-            'name': sn,
-            'triggers': triggers,
-            'resource_types': resource_types,
-            'commands': commands
-        })
+        try:
+            with open(p1_file, encoding='utf-8') as f:
+                p1 = json.load(f)
+            triggers = p1.get('result', {}).get('metadata', {}).get('triggers', [])
+            resource_types = p1.get('result', {}).get('resource_types', [])
+            commands = p1.get('result', {}).get('commands', [])
+            skill_data.append({
+                'name': sn,
+                'triggers': triggers,
+                'resource_types': resource_types,
+                'commands': commands,
+                'source': 'phase-1',
+            })
+        except Exception as e:
+            parse_warnings.append(f"{sn}: phase-1 JSON 解析失败 ({e})")
+    else:
+        # Sibling skill without phase-1 JSON: parse SKILL.md on the fly
+        parsed = parse_skill_md(sp)
+        if parsed and (parsed['triggers'] or parsed['resource_types']):
+            skill_data.append({
+                'name': sn,
+                'triggers': parsed['triggers'],
+                'resource_types': parsed['resource_types'],
+                'commands': parsed['commands'],
+                'source': 'skill-md-fallback',
+            })
+        else:
+            parse_warnings.append(f"{sn}: SKILL.md 解析失败 (无 triggers/resource_types) — 已跳过")
 
 # === Conflict Scan ===
 conflicts = []
@@ -239,17 +340,18 @@ result = {
     'cleanup': {'resources_cleaned': 0, 'resources_failed': 0}
 }
 print(json.dumps(result, indent=2, ensure_ascii=False))
-PYORCH6
+PYORCH5
 
-  orchestration_result=$(python3 "$py_tmp_p6" "${SKILL_PATHS[@]}")
-  rm -f "$py_tmp_p6"
+  orchestration_result=$(python3 "$py_tmp_p5" "${SKILL_PATHS[@]}")
+  rm -f "$py_tmp_p5"
 
   verdict="pass"
   high_conflicts=$(echo "$orchestration_result" | python3 -c "import json,sys; d=json.load(sys.stdin); print(sum(1 for c in d.get('conflict_scan',{}).get('conflicts',[]) if c.get('severity')=='high'))" 2>/dev/null || echo "0")
 
   [ "$high_conflicts" -gt 0 ] && verdict="fail"
 
-  output_file="${SKILL_PATHS[0]}/phase-5-summary.json"
+  output_file="$(phases_dir "${SKILL_PATHS[0]}")/phase-5-summary.json"
+  ensure_test_files_dir "${SKILL_PATHS[0]}" > /dev/null
 fi
 
 end_ts=$(date +%s)
@@ -257,15 +359,17 @@ duration=$((end_ts - start_ts))
 
 if [ "$SKILL_COUNT" -le 1 ]; then
   # Write self_check to temp file
-  p6_tmp=$(mktemp)
-  echo "$self_check" > "$p6_tmp"
-  p6_py_tmp=$(mktemp)
-  cat > "$p6_py_tmp" << 'P6PY'
-import json, sys
+  p5_tmp=$(mktemp)
+  echo "$self_check" > "$p5_tmp"
+  p5_py_tmp=$(mktemp)
+  cat > "$p5_py_tmp" << 'P5PY'
+import json, os, sys
 data = json.load(open(sys.argv[1]))
 PHASE_NUM = int(sys.argv[2])
 PHASE_NAME = sys.argv[3]
-SKILLS_LIST = sys.argv[4]
+# SKILL_PATHS is a newline-separated list of skill dirs (one per line)
+SKILL_PATHS = sys.argv[4].split('\n') if sys.argv[4] else []
+SKILL_NAMES = [os.path.basename(p) for p in SKILL_PATHS if p.strip()]
 TS = sys.argv[5]
 DURATION = int(sys.argv[6])
 VERDICT = sys.argv[7]
@@ -273,17 +377,19 @@ r = {
     'phase': PHASE_NUM,
     'phase_name': PHASE_NAME,
     'tier': 2,
-    'target': {'type': 'multi_skill', 'skills': [SKILLS_LIST]},
+    'target': {'type': 'multi_skill', 'skills': SKILL_NAMES},
     'timestamp': TS,
     'execution_meta': {'duration_s': DURATION, 'retry_count': 0, 'user_confirmed': False},
     'result': data,
     'summary': {'verdict': VERDICT, 'pass_checks': 1, 'fail_checks': 0, 'warn_checks': 0}
 }
 print(json.dumps(r, indent=2, ensure_ascii=False))
-P6PY
-  write_json "$output_file" "$(python3 "$p6_py_tmp" "$p6_tmp" "$PHASE_NUM" "$PHASE_NAME" "$SKILLS_LIST" "$ts" "$duration" "$verdict")"
-  rm -f "$p6_py_tmp"
-  rm -f "$p6_tmp"
+P5PY
+  # Pass SKILL_PATHS as newline-separated string
+  _paths_arg=$(printf '%s\n' "${SKILL_PATHS[@]}")
+  write_json "$output_file" "$(python3 "$p5_py_tmp" "$p5_tmp" "$PHASE_NUM" "$PHASE_NAME" "$_paths_arg" "$ts" "$duration" "$verdict")"
+  rm -f "$p5_py_tmp"
+  rm -f "$p5_tmp"
   echo "$self_check" | python3 -c "
 import json, sys
 d = json.load(sys.stdin)
@@ -300,15 +406,17 @@ if cyc:
 "
 else
   # Write orchestration_result to temp file
-  p6b_tmp=$(mktemp)
-  echo "$orchestration_result" > "$p6b_tmp"
-  p6b_py_tmp=$(mktemp)
-  cat > "$p6b_py_tmp" << 'P6BPY'
-import json, sys
+  p5b_tmp=$(mktemp)
+  echo "$orchestration_result" > "$p5b_tmp"
+  p5b_py_tmp=$(mktemp)
+  cat > "$p5b_py_tmp" << 'P5BPY'
+import json, os, sys
 data = json.load(open(sys.argv[1]))
 PHASE_NUM = int(sys.argv[2])
 PHASE_NAME = sys.argv[3]
-SKILLS_LIST = sys.argv[4]
+# SKILL_PATHS is a newline-separated list of skill dirs (one per line)
+SKILL_PATHS = sys.argv[4].split('\n') if sys.argv[4] else []
+SKILL_NAMES = [os.path.basename(p) for p in SKILL_PATHS if p.strip()]
 TS = sys.argv[5]
 DURATION = int(sys.argv[6])
 VERDICT = sys.argv[7]
@@ -317,16 +425,18 @@ r = {
     'phase': PHASE_NUM,
     'phase_name': PHASE_NAME,
     'tier': 2,
-    'target': {'type': 'multi_skill', 'skills': [SKILLS_LIST]},
+    'target': {'type': 'multi_skill', 'skills': SKILL_NAMES},
     'timestamp': TS,
     'execution_meta': {'duration_s': DURATION, 'retry_count': 0, 'user_confirmed': False},
     'result': data,
     'summary': {'verdict': VERDICT, 'pass_checks': 1, 'fail_checks': HIGH_CONFLICTS, 'warn_checks': 0}
 }
 print(json.dumps(r, indent=2, ensure_ascii=False))
-P6BPY
-  write_json "$output_file" "$(python3 "$p6b_py_tmp" "$p6b_tmp" "$PHASE_NUM" "$PHASE_NAME" "$SKILLS_LIST" "$ts" "$duration" "$verdict" "$high_conflicts")"
-  rm -f "$p6b_py_tmp"
+P5BPY
+  # Pass SKILL_PATHS as newline-separated string
+  _paths_arg=$(printf '%s\n' "${SKILL_PATHS[@]}")
+  write_json "$output_file" "$(python3 "$p5b_py_tmp" "$p5b_tmp" "$PHASE_NUM" "$PHASE_NAME" "$_paths_arg" "$ts" "$duration" "$verdict" "$high_conflicts")"
+  rm -f "$p5b_py_tmp"
 
   echo ""
   echo "$orchestration_result" | python3 -c "

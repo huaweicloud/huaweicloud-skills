@@ -43,8 +43,10 @@ PYEOF
   dir_pass=$(echo "$checks" | python3 -c "import json,sys; d=json.load(sys.stdin); print(all(d.values()))")
 
   # === Install/Uninstall/Reinstall ===
-  local hermes_skill_dir="${SKILL_PATH_HERMES:-$HOME/.hermes/skills}"
-  local target_dir="$hermes_skill_dir/$skill_name"
+  # install_dir defaults to SKILL_INSTALL_DIR (set in config.sh with auto-detection
+  # of ~/.agents/skills → ~/.hermes/skills → default). Can be overridden via env.
+  local install_dir="${SKILL_INSTALL_DIR:-$HOME/.agents/skills}"
+  local target_dir="$install_dir/$skill_name"
   local is_remote=false
   [[ "$skill_dir" == http://* || "$skill_dir" == https://* ]] && is_remote=true
 
@@ -55,18 +57,23 @@ PYEOF
 
   # --- Install ---
   if $is_remote; then
-    # Remote skill: use hermes skills install
-    local inst_start; inst_start=$(date +%s%N)
-    hermes skills install "$skill_dir" --yes 2>/dev/null && install_status="pass" || install_status="fail"
-    local inst_end; inst_end=$(date +%s%N)
-    install_duration=$(( (inst_end - inst_start) / 1000000 ))
+    # Remote skill: use configurable install command
+    if [ -z "${SKILL_INSTALL_CMD:-}" ]; then
+      info "💡 SKILL_INSTALL_CMD 为空，远程安装已跳过"
+      install_status="skipped"
+    else
+      local inst_start; inst_start=$(date +%s%N)
+      ${SKILL_INSTALL_CMD} install "$skill_dir" --yes 2>/dev/null && install_status="pass" || install_status="fail"
+      local inst_end; inst_end=$(date +%s%N)
+      install_duration=$(( (inst_end - inst_start) / 1000000 ))
+    fi
   elif [ -d "$target_dir" ]; then
-    info "💡 技能已安装于 ~/.hermes/skills/，跳过安装"
+    info "💡 技能已安装于 ${install_dir}，跳过安装"
     install_status="skipped"
   else
     # Local skill: copy directory
     local inst_start; inst_start=$(date +%s%N)
-    mkdir -p "$hermes_skill_dir"
+    mkdir -p "$install_dir"
     cp -r "$skill_dir" "$target_dir" && install_status="pass" || install_status="fail"
     local inst_end; inst_end=$(date +%s%N)
     install_duration=$(( (inst_end - inst_start) / 1000000 ))
@@ -76,10 +83,14 @@ PYEOF
   # --- Uninstall ---
   step "执行卸载测试..."
   if $is_remote; then
-    local uninst_start; uninst_start=$(date +%s%N)
-    hermes skills uninstall "$skill_name" --yes 2>/dev/null && uninstall_status="pass" || uninstall_status="fail"
-    local uninst_end; uninst_end=$(date +%s%N)
-    uninstall_duration=$(( (uninst_end - uninst_start) / 1000000 ))
+    if [ -z "${SKILL_INSTALL_CMD:-}" ]; then
+      uninstall_status="skipped"
+    else
+      local uninst_start; uninst_start=$(date +%s%N)
+      ${SKILL_INSTALL_CMD} uninstall "$skill_name" --yes 2>/dev/null && uninstall_status="pass" || uninstall_status="fail"
+      local uninst_end; uninst_end=$(date +%s%N)
+      uninstall_duration=$(( (uninst_end - uninst_start) / 1000000 ))
+    fi
   elif [ -d "$target_dir" ] && [ -n "$target_dir" ] && [ "$target_dir" != "/" ] && [ "$target_dir" != "$HOME" ]; then
     local uninst_start; uninst_start=$(date +%s%N)
     rm -rf "$target_dir" && uninstall_status="pass" || uninstall_status="fail"
@@ -94,17 +105,21 @@ PYEOF
   # --- Reinstall ---
   step "执行重装测试..."
   if $is_remote; then
-    local reinst_start; reinst_start=$(date +%s%N)
-    hermes skills install "$skill_dir" --yes 2>/dev/null && reinstall_status="pass" || reinstall_status="fail"
-    local reinst_end; reinst_end=$(date +%s%N)
-    reinstall_duration=$(( (reinst_end - reinst_start) / 1000000 ))
+    if [ -z "${SKILL_INSTALL_CMD:-}" ]; then
+      reinstall_status="skipped"
+    else
+      local reinst_start; reinst_start=$(date +%s%N)
+      ${SKILL_INSTALL_CMD} install "$skill_dir" --yes 2>/dev/null && reinstall_status="pass" || reinstall_status="fail"
+      local reinst_end; reinst_end=$(date +%s%N)
+      reinstall_duration=$(( (reinst_end - reinst_start) / 1000000 ))
+    fi
   else
     local reinst_start; reinst_start=$(date +%s%N)
     cp -r "$skill_dir" "$target_dir" && reinstall_status="pass" || reinstall_status="fail"
     local reinst_end; reinst_end=$(date +%s%N)
     reinstall_duration=$(( (reinst_end - reinst_start) / 1000000 ))
   fi
-  [ "$reinstall_status" = "pass" ] && pass "重装成功 (${reinstall_duration}ms)" || fail "重装失败"
+  [ "$reinstall_status" = "pass" ] && pass "重装成功 (${reinstall_duration}ms)" || [ "$reinstall_status" = "skipped" ] || fail "重装失败"
 
   # === Build Result ===
   local dir_pass_bool
@@ -179,6 +194,7 @@ r = {
 }
 print(json.dumps(r, indent=2, ensure_ascii=False))
 PYEOF
+  ensure_test_files_dir "$skill_dir" > /dev/null
   python3 "$summary_py_tmp" "$tmp_json" "$PHASE_NUM" "$PHASE_NAME" "$skill_name" "$ts" "$duration" "$verdict" "$pass_checks" "$fail_checks" > "$(phase_file "$skill_dir" 0)"
   rm -f "$summary_py_tmp"
 

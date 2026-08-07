@@ -1,45 +1,56 @@
 {
+  "_comment": "Reference template for Phase 6 (full-flow) multi-skill scenario derivation. Actual output is in phase-6-summary.json.result.scenario. Single-skill mode (downgraded_single_skill_flow) has a different scenario shape — see verification-method.md § Phase 6.",
   "scenarios": [
     {
-      "name": "场景1: VPC+ECS 资源生命周期",
-      "skills_involved": ["huawei-cloud-vpc-manage", "huawei-cloud-ecs-manage"],
-      "description": "创建VPC → 在VPC内创建ECS → 查询资源 → 释放资源",
+      "_comment": "Multi-skill mode=full, default '命令遍历' fallback when no create/delete commands are detected. Each skill contributes its Phase 4 commands in read-order. steps[i].status='pass' is a derivation marker, NOT an execution result.",
+      "name": "多Skill命令遍历 (N steps)",
+      "skills_involved": ["huawei-cloud-skill-a", "huawei-cloud-skill-b"],
+      "description": "自动推导: 遍历所有 skill 的命令（按 phase-1 capabilities 排序）",
+      "derived_automatically": true,
+      "user_confirmed": false,
       "steps": [
-        {"seq": 1, "skill": "huawei-cloud-vpc-manage", "action": "创建VPC", "expected_resource_type": "vpc"},
-        {"seq": 2, "skill": "huawei-cloud-ecs-manage", "action": "创建ECS(在VPC内)", "expected_resource_type": "ecs_instance"},
-        {"seq": 3, "skill": "huawei-cloud-ecs-manage", "action": "查询ECS", "expected_resource_type": "none"},
-        {"seq": 4, "skill": "huawei-cloud-ecs-manage", "action": "删除ECS", "expected_resource_type": "none"},
-        {"seq": 5, "skill": "huawei-cloud-vpc-manage", "action": "删除VPC", "expected_resource_type": "none"}
+        {
+          "seq": 1,
+          "tc_id": "FF-01",
+          "skill": "huawei-cloud-skill-a",
+          "action": "ListInstances",
+          "status": "pass",
+          "resource_changes": []
+        },
+        {
+          "seq": 2,
+          "tc_id": "FF-02",
+          "skill": "huawei-cloud-skill-a",
+          "action": "ShowQuotas",
+          "status": "pass",
+          "resource_changes": []
+        }
       ]
     },
     {
-      "name": "场景2: EIP完整生命周期",
-      "skills_involved": ["huawei-cloud-eip-manage", "huawei-cloud-ecs-manage"],
-      "description": "创建ECS → 创建EIP → 绑定EIP → 查询 → 解绑 → 删除",
+      "_comment": "Multi-skill mode=full, create→query→delete lifecycle scenario. Only triggered when at least one skill has create OR delete capabilities in Phase 1.",
+      "name": "多Skill资源生命周期 (skill-a, skill-b)",
+      "skills_involved": ["huawei-cloud-skill-a", "huawei-cloud-skill-b"],
+      "description": "自动推导: 依次创建资源 → 查询验证 → 清理释放",
+      "derived_automatically": true,
+      "user_confirmed": false,
       "steps": [
-        {"seq": 1, "skill": "huawei-cloud-ecs-manage", "action": "创建ECS", "expected_resource_type": "ecs_instance"},
-        {"seq": 2, "skill": "huawei-cloud-eip-manage", "action": "创建EIP", "expected_resource_type": "eip"},
-        {"seq": 3, "skill": "huawei-cloud-eip-manage", "action": "绑定EIP到ECS", "expected_resource_type": "none"},
-        {"seq": 4, "skill": "huawei-cloud-ecs-manage", "action": "查询ECS确认绑定", "expected_resource_type": "none"},
-        {"seq": 5, "skill": "huawei-cloud-eip-manage", "action": "解绑EIP", "expected_resource_type": "none"},
-        {"seq": 6, "skill": "huawei-cloud-eip-manage", "action": "删除EIP", "expected_resource_type": "none"}
-      ]
-    },
-    {
-      "name": "场景3: BSS代金券完整生命周期",
-      "skills_involved": ["huawei-cloud-bss-voucher-manage"],
-      "description": "单skill完整闭环：查询代金券 → 删除代金券 → 确认删除 → 统计",
-      "steps": [
-        {"seq": 1, "skill": "huawei-cloud-bss-voucher-manage", "action": "查询代金券列表", "expected_resource_type": "bss_voucher"},
-        {"seq": 2, "skill": "huawei-cloud-bss-voucher-manage", "action": "删除指定代金券", "expected_resource_type": "bss_voucher"},
-        {"seq": 3, "skill": "huawei-cloud-bss-voucher-manage", "action": "确认删除结果", "expected_resource_type": "none"},
-        {"seq": 4, "skill": "huawei-cloud-bss-voucher-manage", "action": "统计代金券概览", "expected_resource_type": "none"}
+        {"seq": 1, "tc_id": "FF-01", "skill": "huawei-cloud-skill-a", "action": "CreateVPC", "status": "pass", "resource_changes": []},
+        {"seq": 2, "tc_id": "FF-02", "skill": "huawei-cloud-skill-b", "action": "CreateECSInVPC", "status": "pass", "resource_changes": []},
+        {"seq": 3, "tc_id": "FF-03", "skill": "huawei-cloud-skill-b", "action": "DescribeECS", "status": "pass", "resource_changes": []},
+        {"seq": 4, "tc_id": "FF-04", "skill": "huawei-cloud-skill-b", "action": "DeleteECS", "status": "pass", "resource_changes": []},
+        {"seq": 5, "tc_id": "FF-05", "skill": "huawei-cloud-skill-a", "action": "DeleteVPC", "status": "pass", "resource_changes": []}
       ]
     }
   ],
   "derivation_metadata": {
     "derived_automatically": true,
-    "source_phases": ["phase-1-summary.json"],
-    "skills_available_for_derivation": []
+    "source_phases": ["phase-1-summary.json", "phase-4-summary.json"],
+    "skills_available_for_derivation": ["huawei-cloud-skill-a", "huawei-cloud-skill-b"],
+    "notes": [
+      "All step status values are 'pass' in derivation mode — execution is opt-in via ALLOW_REAL_E2E=1.",
+      "skills_involved includes every skill discovered via discover_siblings(), not just those with phase-1 JSON.",
+      "Sibling skills without phase-1 JSON (e.g. never individually tested) appear in skills_involved but contribute 0 steps."
+    ]
   }
 }

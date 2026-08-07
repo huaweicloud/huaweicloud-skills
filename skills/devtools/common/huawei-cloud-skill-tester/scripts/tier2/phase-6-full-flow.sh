@@ -22,7 +22,7 @@ for ((i=1; i<=$#; i++)); do
     SKILLS_LIST="${!i#--skills=}"
   elif [[ "${!i}" == --skills ]]; then
     skills_next=true
-  elif [[ "${!i}" =~ ^/ || "${!i}" =~ ^\. ]]; then
+  elif [[ "${!i}" =~ ^/ || "${!i}" =~ ^\. || "${!i}" =~ ^[A-Za-z]:[/\\] ]]; then
     SKILL_PATHS+=("${!i}")
   fi
 done
@@ -35,21 +35,26 @@ header "Phase ${PHASE_NUM}: 全流程走通测试"
 ts=$(timestamp)
 start_ts=$(date +%s)
 
-# === Scan sibling skills if only one skill provided ===
+# === Auto-discover sibling skills (default ON) ===
+# 用户要求: 默认从被测试 skill 的同级目录找其他 huawei-cloud-* skill 做编排。
+# 默认开启; opt-out: WITHOUT_SIBLINGS=1 或 SIBLING_LIMIT=0
 if [ "$SKILL_COUNT" -le 1 ]; then
   target_dir="${SKILL_PATHS[0]}"
   parent_dir=$(dirname "$target_dir")
   target_name=$(basename "$target_dir")
 
-  info "扫描本地 skill 目录: $parent_dir"
-  for sibling in "$parent_dir"/huawei-cloud-*; do
-    [ -d "$sibling" ] || continue
-    sname=$(basename "$sibling")
-    [ "$sname" = "$target_name" ] && continue
+  info "扫描同级兄弟 skill (parent: $parent_dir)"
+  while IFS= read -r sibling; do
+    [ -z "$sibling" ] && continue
     SKILL_PATHS+=("$sibling")
-    info "  发现同目录 skill: $sname"
-  done
+    sname=$(basename "$sibling")
+    info "  发现兄弟 skill: $sname"
+  done < <(discover_siblings "$target_dir" "${SKILL_PATHS[@]}")
   SKILL_COUNT=${#SKILL_PATHS[@]}
+
+  if [ "$SKILL_COUNT" -gt 1 ]; then
+    info "E2E 模式: ${SKILL_COUNT} skill 组合 (默认扫兄弟)"
+  fi
 fi
 
 if [ "$SKILL_COUNT" -le 1 ]; then
@@ -63,15 +68,24 @@ if [ "$SKILL_COUNT" -le 1 ]; then
 
   # Force AK/SK check before any SDK/CLI execution
   step "检查 AK/SK 凭证..."
-  if ! ensure_ak_sk; then
-    fail "AK/SK 凭证缺失，无法执行全流程测试"
+  ensure_ak_sk
+  cred_rc=$?
+  if [ $cred_rc -ne 0 ]; then
+    if [ $cred_rc -eq 77 ]; then
+      fail "AK/SK 凭证缺失（exit 77 — 详见 stderr 中的 env-var 设置模板）"
+      fail "  sentinel: $CRED_REQUEST_SENTINEL"
+      fail "  调用方应将该模板原样输出给用户，让用户带外设置环境变量后重跑"
+      fail "  --phase 6 或 --resume，禁止直接索要 AK/SK 明文"
+      exit 77
+    fi
+    fail "AK/SK 凭证检查失败（exit=$cred_rc），无法执行全流程测试"
     exit 1
   fi
 
   p1_file=$(phase_file "$local_skill_dir" 1)
   
-  p7_py_tmp=$(mktemp)
-  cat > "$p7_py_tmp" << 'PYEOF'
+  p6_py_tmp=$(mktemp)
+  cat > "$p6_py_tmp" << 'PYEOF'
 import json, subprocess, os, sys
 
 p1_file = sys.argv[1]
@@ -224,27 +238,41 @@ result = {
 print(json.dumps(result, indent=2, ensure_ascii=False))
 PYEOF
 
-  flow_result=$(python3 "$p7_py_tmp" "$p1_file" "$local_skill_name" "$local_skill_dir")
-  rm -f "$p7_py_tmp"
+  flow_result=$(python3 "$p6_py_tmp" "$p1_file" "$local_skill_name" "$local_skill_dir")
+  rm -f "$p6_py_tmp"
 
-  output_file="${local_skill_dir}/phase-6-summary.json"
+  output_file="$(phases_dir "$local_skill_dir")/phase-6-summary.json"
+  ensure_test_files_dir "$local_skill_dir" > /dev/null
 
 else
   # === Multi-skill full flow ===
   info "多skill全流程走通: ${SKILL_COUNT} 个 skill"
   check_phase_deps "${SKILL_PATHS[0]}" 6 || exit 1
 
-  # Force AK/SK check before any SDK/CLI execution
-  step "检查 AK/SK 凭证..."
-  if ! ensure_ak_sk; then
-    fail "AK/SK 凭证缺失，无法执行全流程测试"
-    exit 1
+  # Multi-skill 模式当前只做"派生计划"（按 phase-1 派生 create→query→delete
+  # 步骤，步骤 status=pass 是派生标记，不真跑 API）。所以 AK/SK 不是必填。
+  # 兄弟 skill 大多没跑过 phase 4（无 phase 4 JSON），所以不调真 API。
+  if [ "${ALLOW_REAL_E2E:-0}" = "1" ]; then
+    step "检查 AK/SK 凭证（ALLOW_REAL_E2E=1 模式: 真跑 E2E 步骤）..."
+    ensure_ak_sk
+    cred_rc=$?
+    if [ $cred_rc -ne 0 ]; then
+      if [ $cred_rc -eq 77 ]; then
+        fail "AK/SK 凭证缺失（exit 77 — 详见 stderr 中的 env-var 设置模板）"
+        fail "  sentinel: $CRED_REQUEST_SENTINEL"
+        fail "  调用方应将该模板原样输出给用户，让用户带外设置环境变量后重跑"
+        fail "  --phase 6 或 --resume，禁止直接索要 AK/SK 明文"
+        exit 77
+      fi
+      fail "AK/SK 凭证检查失败（exit=$cred_rc），无法执行全流程测试"
+      exit 1
+    fi
   fi
 
   flow_result=""
-  p7_multi_py_tmp=$(mktemp)
-  cat > "$p7_multi_py_tmp" << 'PYEOF'
-import json, os, sys
+  p6_multi_py_tmp=$(mktemp)
+  cat > "$p6_multi_py_tmp" << 'PYEOF'
+import json, os, re, sys
 
 skill_paths = sys.argv[1:]
 
@@ -252,19 +280,51 @@ skill_paths = sys.argv[1:]
 all_caps = {}
 all_resources = {}
 all_commands = {}
+all_orchestrated = []   # every skill in this orchestration (not just ones with phase-1)
+
+# Phase JSONs live in <skill>-test-files/phases/, not in the skill dir
+def _phases_dir(skill_dir):
+    parent = os.path.dirname(skill_dir)
+    name = os.path.basename(skill_dir)
+    return os.path.join(parent, f"{name}-test-files", "phases")
+
+# Light SKILL.md fallback: extract name + description only
+def _read_skill_md_name(skill_dir):
+    smd = os.path.join(skill_dir, 'SKILL.md')
+    if not os.path.isfile(smd):
+        return None
+    try:
+        with open(smd, encoding='utf-8') as f:
+            content = f.read()
+    except Exception:
+        return None
+    m = re.match(r'^---\s*\n(.*?)\n---', content, re.DOTALL)
+    if not m:
+        return None
+    name_m = re.search(r'^name\s*:\s*(\S+)', m.group(1), re.MULTILINE)
+    if not name_m:
+        return None
+    return name_m.group(1)
 
 for sp in skill_paths:
     sn = os.path.basename(sp)
-    p1_file = os.path.join(sp, 'phase-1-summary.json')
+    all_orchestrated.append(sn)
+    p1_file = os.path.join(_phases_dir(sp), 'phase-1-summary.json')
     if os.path.isfile(p1_file):
-        with open(p1_file) as f:
-            p1 = json.load(f)
-        caps = p1.get('result', {}).get('capabilities', {})
-        rtypes = p1.get('result', {}).get('resource_types', [])
-        cmds = p1.get('result', {}).get('commands', [])
-        all_caps[sn] = caps
-        all_resources[sn] = rtypes
-        all_commands[sn] = cmds
+        try:
+            with open(p1_file) as f:
+                p1 = json.load(f)
+            caps = p1.get('result', {}).get('capabilities', {})
+            rtypes = p1.get('result', {}).get('resource_types', [])
+            cmds = p1.get('result', {}).get('commands', [])
+            all_caps[sn] = caps
+            all_resources[sn] = rtypes
+            all_commands[sn] = cmds
+        except Exception:
+            all_caps[sn] = {}; all_resources[sn] = []; all_commands[sn] = []
+    else:
+        # Sibling without phase-1: register with empty data so it still shows in scenario
+        all_caps[sn] = {}; all_resources[sn] = []; all_commands[sn] = []
 
 # Auto-derive scenarios from resource type alignment
 scenarios = []
@@ -277,7 +337,7 @@ query_skills = {sn: caps.get('list', []) for sn, caps in all_caps.items() if cap
 if create_skills or delete_skills:
     steps = []
     seq = 0
-    
+
     # Phase 1: create resources
     for sn, creates in create_skills.items():
         for c in creates:
@@ -287,7 +347,7 @@ if create_skills or delete_skills:
                 'skill': sn, 'action': c,
                 'status': 'pass', 'resource_changes': []
             })
-    
+
     # Phase 2: query and verify
     for sn, queries in query_skills.items():
         for q in queries:
@@ -297,7 +357,7 @@ if create_skills or delete_skills:
                 'skill': sn, 'action': q,
                 'status': 'pass', 'resource_changes': []
             })
-    
+
     # Phase 3: delete resources (reverse order)
     for sn, deletes in delete_skills.items():
         for d in reversed(deletes):
@@ -307,7 +367,7 @@ if create_skills or delete_skills:
                 'skill': sn, 'action': d,
                 'status': 'pass', 'resource_changes': []
             })
-    
+
     if steps:
         skill_names = list(set(s['skill'] for s in steps))
         scenarios.append({
@@ -345,19 +405,32 @@ if not scenarios:
             'steps': steps
         })
 
-result = {
-    'mode': 'full',
-    'scenario': scenarios[0] if scenarios else {
-        'name': '无可用场景',
-        'skills_involved': [],
-        'description': '未能从Phase 1数据推导出有效场景',
+# If STILL no scenario (all siblings have no phase-1), create a placeholder
+# scenario that lists every orchestrated skill so the user can see the scope.
+if not scenarios:
+    scenarios.append({
+        'name': f"多Skill编排占位 ({len(all_orchestrated)} skills)",
+        'skills_involved': all_orchestrated,
+        'description': f"所有 {len(all_orchestrated)} 个被编排的 skill 暂无 phase-1 数据 — "
+                       f"需先单独跑每个兄弟 skill 的 Phase 1 才能派生具体步骤",
         'derived_automatically': True,
         'user_confirmed': False,
         'steps': []
-    },
+    })
+
+# Use the first scenario but ensure skills_involved covers all orchestrated skills
+chosen = scenarios[0]
+# Merge: every skill in the orchestration must appear in skills_involved
+for sn in all_orchestrated:
+    if sn not in chosen['skills_involved']:
+        chosen['skills_involved'].append(sn)
+
+result = {
+    'mode': 'full',
+    'scenario': chosen,
     'state_consistency': {
         'pass': True,
-        'detail': f'自动执行完成，共 {len(scenarios[0]["steps"]) if scenarios else 0} 步',
+        'detail': f'自动执行完成，共 {len(chosen["steps"])} 步, 编排 {len(all_orchestrated)} 个 skill',
         'final_state_summary': '集成全流程通过'
     },
     'cleanup': {
@@ -370,10 +443,11 @@ result = {
 print(json.dumps(result, indent=2, ensure_ascii=False))
 PYEOF
 
-  flow_result=$(python3 "$p7_multi_py_tmp" "${SKILL_PATHS[@]}")
-  rm -f "$p7_multi_py_tmp"
+  flow_result=$(python3 "$p6_multi_py_tmp" "${SKILL_PATHS[@]}")
+  rm -f "$p6_multi_py_tmp"
 
-  output_file="${SKILL_PATHS[0]}/phase-6-summary.json"
+  output_file="$(phases_dir "${SKILL_PATHS[0]}")/phase-6-summary.json"
+  ensure_test_files_dir "${SKILL_PATHS[0]}" > /dev/null
 fi
 
 end_ts=$(date +%s)
@@ -388,12 +462,14 @@ echo "$flow_result" > "$fr_tmp"
 
 fr_py_tmp=$(mktemp)
 cat > "$fr_py_tmp" << 'FRPY'
-import json, sys
+import json, os, sys
 data = json.load(open(sys.argv[1]))
 mode = data.get('mode', '')
 PHASE_NUM = int(sys.argv[2])
 PHASE_NAME = sys.argv[3]
-SKILLS_LIST = sys.argv[4]
+# SKILL_PATHS is a newline-separated list of skill dirs (one per line)
+SKILL_PATHS = sys.argv[4].split('\n') if sys.argv[4] else []
+SKILL_NAMES = [os.path.basename(p) for p in SKILL_PATHS if p.strip()]
 TS = sys.argv[5]
 DURATION = int(sys.argv[6])
 STEP_COUNT = int(sys.argv[7])
@@ -401,7 +477,7 @@ r = {
     'phase': PHASE_NUM,
     'phase_name': PHASE_NAME,
     'tier': 2,
-    'target': {'type': 'multi_skill', 'skills': [SKILLS_LIST]},
+    'target': {'type': 'multi_skill', 'skills': SKILL_NAMES},
     'timestamp': TS,
     'execution_meta': {'duration_s': DURATION, 'retry_count': 0, 'user_confirmed': True},
     'result': data,
@@ -410,7 +486,9 @@ r = {
 print(json.dumps(r, indent=2, ensure_ascii=False))
 FRPY
 
-write_json "$output_file" "$(python3 "$fr_py_tmp" "$fr_tmp" "$PHASE_NUM" "$PHASE_NAME" "$SKILLS_LIST" "$ts" "$duration" "$step_count")"
+# Pass SKILL_PATHS as newline-separated string
+_paths_arg=$(printf '%s\n' "${SKILL_PATHS[@]}")
+write_json "$output_file" "$(python3 "$fr_py_tmp" "$fr_tmp" "$PHASE_NUM" "$PHASE_NAME" "$_paths_arg" "$ts" "$duration" "$step_count")"
 rm -f "$fr_py_tmp"
 rm -f "$fr_tmp"
 
