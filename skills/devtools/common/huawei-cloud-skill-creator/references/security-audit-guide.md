@@ -1,6 +1,6 @@
 # Security Audit Guide — Phase 6 安全审视
 
-> Phase 6 使用 skill-targeted-audit 对生成的 Skill 执行五项安全与质量检查。
+> Phase 6 由 Agent 编排五项安全与质量检查；不得直接调用其他具名 Skill 或其目录下的脚本。
 
 ## 五项检查概览
 
@@ -12,13 +12,9 @@
 | 4 | hwcloud-spec | 华为云规范：frontmatter 字段、章节结构、文件大小 | 内置 |
 | 5 | gitleaks | 凭证泄露：800+ 种 API 密钥、密码、私钥、token 格式 | [GitHub Releases](https://github.com/gitleaks/gitleaks/releases) |
 
-## 执行命令
+## 执行方式
 
-```bash
-python3 scripts/skill_audit.py --target {skill-path}
-```
-
-报告输出到 `{skill-path}/../skill-gate-report-<timestamp>.txt`。
+由 Agent 逐项执行下列工具，汇总结果并生成 `skill-gate-report-<timestamp>.txt`。如果某项工具不可用，应报告缺失依赖，不得将该项标记为通过。
 
 ## 修复策略
 
@@ -57,9 +53,10 @@ markdownlint-cli2 "{skill-path}/**/*.md" --config "{skill-path}/.markdownlint.js
 
 | 规则 | 修复 |
 |------|------|
-| frontmatter.missing.{field} | 补充必需字段：name/description/tags；推荐字段：version |
+| frontmatter.missing.{field} | 补充必需字段：name/description/tags |
+| frontmatter.version-format / version | 移除 version 字段；华为云 Skill 规范 v1.0 不使用该字段 |
 | frontmatter.tags-too-many | 精简标签至 ≤5 个 |
-| section.missing-required | 补充必需章节：概述/前置条件/核心命令/参数确认/参考文档 |
+| section.missing-required | 补充必需章节：概述/前置条件/工作流/核心命令/参数确认/参考文档 |
 | section.missing-recommended | 补充推荐章节：最佳实践/注意事项/验证方法 |
 | size.skill-md-lines | SKILL.md 超 500 行时拆分至 references/ |
 | size.dir-too-large | 目录超 40MB 时拆分大文件 |
