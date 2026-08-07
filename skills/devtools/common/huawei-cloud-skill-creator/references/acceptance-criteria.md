@@ -17,7 +17,16 @@
 | 11 | Resource lifecycle tested (if applicable) | P5 | ⬜ |
 | 12 | Test resources cleaned up | P6 | ⬜ |
 | 13 | Skill spec compliance check passed | P6 | ⬜ |
-| 14 | All 6 phases verified complete | P6 | ⬜ |
+| 14 | Frontmatter name matches directory, description includes triggers, and version is absent | P3/P6 | ⬜ |
+| 15 | CLI-based Skill includes KooCLI format and cli-installation-guide.md | P3/P6 | ⬜ |
+| 16 | IAM, verification, and acceptance reference requirements checked | P3/P6 | ⬜ |
+| 17 | All concrete CLI commands use valid Service/PascalCase operation names and `--cli-region` | P3/P6 | ⬜ |
+| 18 | Total content size ≤40 MB, file count ≤30, and SKILL.md ≤500 lines | P3/P6 | ⬜ |
+| 19 | Every file has one of the 46 allowed extensions | P3/P6 | ⬜ |
+| 20 | PR diff changes no more than one Skill directory | P6 | ⬜ |
+| 21 | Secret, vulnerability, dependency, and insecure-configuration scans passed | P6 | ⬜ |
+| 22 | All 6 phases verified complete | P6 | ⬜ |
+| 23 | No in-session AK/SK entry forms (`hcloud configure set --cli-*-key=...` or `BasicCredentials(ak=..., sk=...)` literal kwargs) outside NEVER context — SEC-002 in `validate-skill.sh` | P3/P6 | ⬜ |
 
 ## Quality Gates
 
