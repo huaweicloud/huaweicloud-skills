@@ -64,6 +64,8 @@ hcloud CES ListAlarms \
 
 ### UpdateAlarm
 
+> ⚠️ **参考 API，本 skill 未封装脚本。** The skill provides no script wrapper for UpdateAlarm (see `SKILL.md → Unsupported Operations`). If you need to modify an alarm threshold/metric, use the Huawei Cloud CES console, or execute the command below manually.
+
 **Function**: Update alarm rule configuration
 
 **API**: `PUT /v1.0/{project_id}/alarms/{alarm_id}`

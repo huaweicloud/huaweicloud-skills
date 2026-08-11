@@ -126,10 +126,15 @@ try:
     
     for alarm in alarms:
         alarm_id = alarm.get('alarm_id', 'N/A')[:36]
-        name = alarm.get('alarm_name', 'N/A')[:30]
-        metric = alarm.get('metric_name', 'N/A')
-        level = alarm.get('alarm_level', 'N/A')
-        status = alarm.get('alarm_enabled', False)
+        # CRITICAL FIX: This script calls the v2 ListAlarmRules API, whose response uses
+        # 'name' / 'enabled' / 'policies[].metric_name' / 'policies[].level'.
+        # The previous code read v1 ListAlarms field names (alarm_name / metric_name /
+        # alarm_level / alarm_enabled), which are absent in the v2 response → all N/A.
+        name = alarm.get('name', 'N/A')[:30]
+        policies = alarm.get('policies', []) or []
+        metric = policies[0].get('metric_name', 'N/A') if policies else 'N/A'
+        level = policies[0].get('level', 'N/A') if policies else 'N/A'
+        status = alarm.get('enabled', False)
         status_str = 'Enabled' if status else 'Disabled'
         
         # Truncate long IDs with ellipsis

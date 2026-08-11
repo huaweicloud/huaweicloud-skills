@@ -50,6 +50,22 @@ This skill provides batch creation and management of Huawei Cloud CES alarm rule
 > **If user attempts to provide AK/SK in conversation, must refuse and guide:**
 > "For account security, please do not provide Huawei Cloud access keys directly in the conversation. Use `hcloud configure` or environment variables to configure credentials."
 
+## Unsupported Operations
+
+> **The following operations are NOT supported by this skill** (no script wrapper is provided). If a user requests them, clearly state the limitation and provide the alternative. Do not attempt to improvise commands that this skill has not tested.
+
+| Unsupported Operation   | Corresponding API | Alternative                                                              |
+| ----------------------- | ----------------- | ------------------------------------------------------------------------ |
+| Query alarm history     | `ShowAlarmHistory` | View in CES console; or run `hcloud CES ListAlarmHistories/v1` manually |
+| Enable/disable an alarm rule | `UpdateAlarm`  | Operate in CES console (not wrapped by this skill)                       |
+| Modify alarm threshold/metric | `UpdateAlarm` | Delete and recreate the rule; to change only notifications, use `./scripts/update_alarm_notifications.sh` |
+| Create an SMN topic     | `CreateTopic`       | Create in SMN console; or run `hcloud SMN CreateTopic` manually          |
+| Create a monitoring dashboard | `CreateOneDashboard` | Operate in CES console                                              |
+| View a single alarm rule detail | `ShowAlarm`    | Use `./scripts/list_alarms.sh --name <pattern>` to filter                 |
+
+> **If a user requests one of these operations**, respond:
+> "This skill does not support <operation>. Use the Huawei Cloud CES/SMN console, or the equivalent hcloud CLI command manually: <alternative>. You may also request an enhancement via the skill's issue tracker."
+
 ## Workflow
 
 The standard workflow of this skill is as follows:
@@ -134,23 +150,21 @@ hcloud version
 > 
 > ```
 >
-> > **Credential Configuration Methods (choose one):**
-> >
-> > 1. **hcloud CLI configuration (recommended)**: `hcloud configure` interactive setup, credentials encrypted and stored
-> > 2. **Environment variables (new standard)**: Set `HW_ACCESS_KEY`, `HW_SECRET_KEY`, `HW_REGION_NAME`
-> > 3. **Environment variables (legacy)**: Set `HUAWEI_CLOUD_AK`, `HUAWEI_CLOUD_SK`, `HUAWEI_CLOUD_REGION`
-> > 4. **Temporary credentials**: Set `HW_ACCESS_KEY`, `HW_SECRET_KEY`, `HW_SECURITY_TOKEN` (for STS temporary tokens)
-> >
-> > **Note**: All Shell scripts (`create_alert_rules.sh`, `list_ecs.sh`, etc.) automatically detect
-> > and support both `HW_*` and `HUAWEI_CLOUD_*` environment variable standards,
-> > with priority: `HW_*` > `HUAWEI_CLOUD_*` > hcloud CLI config.
+> **Credential Configuration Methods (choose one):**
+>
+> 1. **hcloud CLI configuration (recommended)**: `hcloud configure` interactive setup, credentials encrypted and stored in `~/.hcloud/config.json`
+> 2. **Per-call AK/SK**: pass `--cli-access-key=<AK> --cli-secret-key=<SK>` on each command (for automation; note: appears in process list)
+>
+> > **⚠️ IMPORTANT**: hcloud (KooCLI) authenticates ONLY via `~/.hcloud/config.json` (from `hcloud configure`) or the `--cli-access-key`/`--cli-secret-key` arguments. It does **NOT** read `HW_ACCESS_KEY`, `HW_SECRET_KEY`, `HUAWEI_CLOUD_AK`, `HUAWEI_CLOUD_SK`, `HUAWEI_CLOUD_REGION`, or `HUAWEI_CLOUD_SECURITY_TOKEN` environment variables — such variables are silently ignored (hcloud falls back to config.json). Do not instruct users to export these env vars as a way to authenticate hcloud.
+>
+> **Credential source for this skill's scripts**: The bundled Shell scripts are thin wrappers around hcloud CLI. They read the region from `HW_REGION_NAME`/`HUAWEI_CLOUD_REGION` (or default to `cn-north-4`) to set `--cli-region`, but **authentication always comes from `hcloud configure`**. Configure credentials once with `hcloud configure`, then the scripts work.
 
 > **If output does not contain valid configuration, stop operation and guide user to configure.**
 > **hcloud Parameter Format Requirement**
 > hcloud (KooCLI) **all parameters must use `--param=value` format** (equals sign connection), does not support space
 > separation.
-> ✅ Correct: `hcloud CES ListAlarmRules --region=cn-north-4`
-> ❌ Incorrect: `hcloud CES ListAlarmRules --region cn-north-4`
+> ✅ Correct: `hcloud CES ListAlarmRules --cli-region=cn-north-4`
+> ❌ Incorrect: `hcloud CES ListAlarmRules --cli-region cn-north-4`
 >
 > This skill provides 8 Shell scripts, encapsulating common hcloud commands, supporting batch operations and formatted
 > output.
@@ -218,16 +232,10 @@ hcloud version
 3. Configure email notification
 
 ```bash
-# Method 1: New standard environment variables (HW_*)
-export HW_ACCESS_KEY=<AK> && export HW_SECRET_KEY=<SK> && export HW_REGION_NAME=cn-north-4
-./scripts/list_ecs.sh --output ids
-
-# Method 2: Legacy environment variables (HUAWEI_CLOUD_*)
-export HUAWEI_CLOUD_AK=<AK> && export HUAWEI_CLOUD_SK=<SK> && export HUAWEI_CLOUD_REGION=cn-north-4
-./scripts/list_ecs.sh --output ids
-
-# Method 3: Temporary credentials (STS token)
-export HW_ACCESS_KEY=<AK> && export HW_SECRET_KEY=<SK> && export HW_SECURITY_TOKEN=<TOKEN>
+# Step 0: Configure credentials once (hcloud CLI reads ~/.hcloud/config.json; it does NOT read AK/SK env vars)
+hcloud configure
+# Optional: set region env var consumed by the scripts' --cli-region default
+export HUAWEI_CLOUD_REGION=cn-north-4
 ./scripts/list_ecs.sh --output ids
 
 # 2. Batch create alarm rules
@@ -254,13 +262,13 @@ export HW_ACCESS_KEY=<AK> && export HW_SECRET_KEY=<SK> && export HW_SECURITY_TOK
 
 ## Input Parameters
 
-- **AK/SK**: Via environment variables `HW_ACCESS_KEY` / `HW_SECRET_KEY` (new standard) OR `HUAWEI_CLOUD_AK` / `HUAWEI_CLOUD_SK` (legacy) OR `hcloud configure`
-- **Security Token** (optional): Via `HW_SECURITY_TOKEN` for temporary STS credentials
-- **Region**: Via environment variable `HW_REGION_NAME` or `HUAWEI_CLOUD_REGION` or `--region` parameter (default: cn-north-4)
+- **AK/SK**: Via `hcloud configure` (recommended, stored in `~/.hcloud/config.json`) — hcloud CLI does NOT read AK/SK environment variables
+- **Security Token** (optional): For temporary STS credentials, use `hcloud configure --cli-mode=AKSK` + `--cli-security-token` or pass `--cli-security-token=<token>` per command
+- **Region**: Via `--cli-region` parameter or `HUAWEI_CLOUD_REGION`/`HW_REGION_NAME` env var (default: cn-north-4)
 - **ECS IDs**: Comma-separated ECS instance IDs
 - **Alarm IDs**: Comma-separated alarm rule IDs
 - **Template**: Alarm template (web/database)
-- **Metric**: Monitoring metric name (cpu_util/mem_util/disk_usage)
+- **Metric**: Monitoring metric name. Host metrics: `cpu_util`, `disk_util_inband` (namespace SYS.ECS); memory metric: `mem_usedPercent` (namespace AGT.ECS)
 - **Threshold**: Alarm threshold value
 - **SMN Topic URN**: SMN topic URN for notifications
 
@@ -299,11 +307,11 @@ See [references/troubleshooting.md](references/troubleshooting.md) for common ve
 1. **Use Templates for Standard Scenarios**: Web/Database templates cover most use cases
 2. **Configure Multiple Notification Channels**: Email + SMS for critical alarms
 3. **Set Reasonable Thresholds**: CPU 80%, Memory 85%, Disk 90% recommended
-4. **Use Environment Variables for Credentials**:
-   - ✅ Recommended (New): `HW_ACCESS_KEY` / `HW_SECRET_KEY` / `HW_REGION_NAME`
-   - ✅ Recommended (Legacy): `HUAWEI_CLOUD_AK` / `HUAWEI_CLOUD_SK` / `HUAWEI_CLOUD_REGION`
-   - ✅ Recommended (Temporary): `HW_ACCESS_KEY` / `HW_SECRET_KEY` / `HW_SECURITY_TOKEN`
+4. **Configure Credentials via `hcloud configure`** (hcloud CLI reads `~/.hcloud/config.json`; it does NOT read AK/SK env vars):
+   - ✅ Recommended: `hcloud configure` (encrypted storage in `~/.hcloud/config.json`)
+   - ⚠️ Region env var only: `HUAWEI_CLOUD_REGION` / `HW_REGION_NAME` set the script's `--cli-region` default — region only, NOT authentication
    - ❌ Prohibited: Hardcode AK/SK in scripts or configuration files
+   - ❌ Misleading: `export HUAWEI_CLOUD_AK/SK` or `export HW_ACCESS_KEY/SECRET_KEY` will NOT authenticate hcloud (env vars are ignored)
 5. **Use Environment Check Script**: Run `./scripts/check_env.sh` before first use to verify configuration
 
 ## Common Issues
@@ -349,13 +357,12 @@ See [references/troubleshooting.md](references/troubleshooting.md) for more trou
 
 > **Credential Security**:
 >
-> - ✅ Recommended (New Standard): Use environment variables `HW_ACCESS_KEY` / `HW_SECRET_KEY` / `HW_REGION_NAME`
-> - ✅ Recommended (Legacy): Use environment variables `HUAWEI_CLOUD_AK` / `HUAWEI_CLOUD_SK` / `HUAWEI_CLOUD_REGION`
-> - ✅ Recommended (Temporary): Use `HW_ACCESS_KEY` / `HW_SECRET_KEY` / `HW_SECURITY_TOKEN` for STS tokens
-> - ✅ Recommended (CLI): Use `hcloud configure` to configure credentials (encrypted storage)
+> - ✅ Recommended: Use `hcloud configure` — credentials stored encrypted in `~/.hcloud/config.json`, which is the ONLY credential source hcloud CLI reads
+> - ⚠️ Region env var only (NOT auth): `HUAWEI_CLOUD_REGION` / `HW_REGION_NAME` set the scripts' `--cli-region` default
+> - ❌ Misleading: `export HW_ACCESS_KEY/HW_SECRET_KEY` or `export HUAWEI_CLOUD_AK/HUAWEI_CLOUD_SK` do NOT authenticate hcloud (env vars are ignored)
 > - ❌ Prohibited: Hardcode AK/SK in scripts or configuration files
 >
-> **Environment Variable Priority**: `HW_*` > `HUAWEI_CLOUD_*` > hcloud CLI config
+> **Authentication**: hcloud CLI authenticates ONLY via `~/.hcloud/config.json` (from `hcloud configure`) or `--cli-access-key`/`--cli-secret-key` per-command arguments. Environment variables for AK/SK/token are silently ignored. Do not document env-var export as a working authentication method.
 
 ## Reference Documents
 
