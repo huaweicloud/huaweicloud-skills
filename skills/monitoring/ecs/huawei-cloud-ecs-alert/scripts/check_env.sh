@@ -86,37 +86,31 @@ echo ""
 print_step "Step 3/4: Check auth configuration"
 
 # Detect auth source
+# CRITICAL FIX: hcloud CLI authenticates ONLY via ~/.hcloud/config.json (from 'hcloud configure')
+# or --cli-access-key/--cli-secret-key per-call args. It IGNORES HW_*/HUAWEI_CLOUD_* AK/SK env vars.
+# The only reliable auth source to check is 'hcloud configure list'.
 CRED_SOURCE=""
-if [ -n "$HW_ACCESS_KEY" ] && [ -n "$HW_SECRET_KEY" ]; then
-    CRED_SOURCE="HW_* env vars"
-    print_success "HW_* env vars detected (recommended)"
-elif [ -n "$HUAWEI_CLOUD_AK" ] && [ -n "$HUAWEI_CLOUD_SK" ]; then
-    CRED_SOURCE="HUAWEI_CLOUD_* env vars"
-    print_success "HUAWEI_CLOUD_* env vars detected (compatible)"
+if hcloud configure list &> /dev/null; then
+    CRED_SOURCE="hcloud configure"
+    print_success "hcloud configure detected"
 else
-    # Try hcloud configure
-    if hcloud configure list &> /dev/null; then
-        CRED_SOURCE="hcloud configure"
-        print_success "hcloud configure detected"
-    else
-        print_error "No valid auth detected"
-        echo ""
-        echo "Please configure authentication."
-        echo "Run 'hcloud configure' or set environment variables."
-        echo "See SKILL.md for detailed setup instructions."
-        echo ""
-        exit 1
-    fi
+    print_error "No valid auth detected"
+    echo ""
+    echo "Please configure authentication with:"
+    echo "  hcloud configure"
+    echo "See SKILL.md for detailed setup instructions."
+    echo ""
+    exit 1
 fi
 
-# Check region configuration
+# Check region configuration (env vars set the --cli-region default only, NOT authentication)
 if [ -n "$HW_REGION_NAME" ]; then
     REGION="$HW_REGION_NAME"
 elif [ -n "$HUAWEI_CLOUD_REGION" ]; then
     REGION="$HUAWEI_CLOUD_REGION"
 else
     # Get from hcloud configure
-    REGION=$(hcloud configure list 2>/dev/null | grep "^region" | cut -d'=' -f2 | tr -d ' ' || echo "cn-north-4")
+    REGION=$(hcloud configure list 2>/dev/null | grep "\"region\"" | cut -d'"' -f4 | tr -d ' ' || echo "cn-north-4")
 fi
 
 print_success "Region: $REGION"
@@ -125,15 +119,8 @@ echo ""
 # Step 4: Verify API connectivity
 print_step "Step 4/4: Verify API connectivity"
 
-# Set temporary env vars for hcloud
-if [ "$CRED_SOURCE" = "HW_* env vars" ]; then
-    # Map HW_* to HUAWEI_CLOUD_* for hcloud CLI compatibility
-    export HUAWEI_CLOUD_AK="$HW_ACCESS_KEY"
-    export HUAWEI_CLOUD_SK="$HW_SECRET_KEY"
-    export HUAWEI_CLOUD_REGION="$REGION"
-elif [ "$CRED_SOURCE" = "HUAWEI_CLOUD_* env vars" ]; then
-    export HUAWEI_CLOUD_REGION="$REGION"
-fi
+# CRITICAL FIX: hcloud CLI ignores AK/SK env vars. Authentication comes from ~/.hcloud/config.json
+# (configured via 'hcloud configure'), so no env export is needed here — just run the queries.
 
 # Test CES API connectivity
 if hcloud CES ListAlarms --cli-region="$REGION" --limit=1 &> /dev/null; then

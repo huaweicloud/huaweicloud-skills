@@ -184,21 +184,50 @@ main() {
         # Note: New API uses --resources and --policies structure
         # Array indices start from 1, not 0
         # alarm_type must be "MULTI_INSTANCE" for specific resources
-        
+
+        # Determine notification params ONCE based on whether SMN topic is provided.
+        # CRITICAL FIX: --notification_enabled must NOT be set twice (previously a hardcoded
+        # --notification_enabled=false at the start conflicted with the conditional
+        # --notification_enabled=true, causing the API to silently create the rule with
+        # notifications disabled and exit code 0 — no SMN binding, no error surfaced).
+        local NOTIF_ENABLED
+        if [[ -n "$SMN_TOPIC_URN" ]]; then
+            NOTIF_ENABLED=true
+            NOTIF_ARGS=(
+                --ok_notifications.1.notification_list.1="$SMN_TOPIC_URN"
+                --ok_notifications.1.type=notification
+                --alarm_notifications.1.notification_list.1="$SMN_TOPIC_URN"
+                --alarm_notifications.1.type=notification
+            )
+        else
+            NOTIF_ENABLED=false
+            NOTIF_ARGS=()
+        fi
+
         # Execute hcloud command directly (avoid eval with newlines)
         # Capture output to validate (hcloud may return exit code 0 on network errors)
+        # Select namespace by metric: agent-collected metrics (mem_*) live under AGT.ECS,
+        # host-level metrics (cpu_util, disk_util_inband) live under SYS.ECS.
+        # CRITICAL FIX: previously namespace was hardcoded to SYS.ECS, so memory alarms
+        # (mem_usedPercent, an AGT.ECS metric) always failed with ces.0014 whitelist error.
+        local NAMESPACE
+        if [[ "$METRIC" == mem_* ]]; then
+            NAMESPACE="AGT.ECS"
+        else
+            NAMESPACE="SYS.ECS"
+        fi
         local api_result
         api_result=$(hcloud CES CreateAlarmRules \
             --cli-region="$REGION" \
             --name="$alarm_name" \
-            --namespace="SYS.ECS" \
+            --namespace="$NAMESPACE" \
             --type="MULTI_INSTANCE" \
             --enabled=true \
-            --notification_enabled=false \
+            --notification_enabled="$NOTIF_ENABLED" \
             --resources.1.1.name="instance_id" \
             --resources.1.1.value="$ecs_id" \
             --policies.1.metric_name="$METRIC" \
-            --policies.1.namespace="SYS.ECS" \
+            --policies.1.namespace="$NAMESPACE" \
             --policies.1.comparison_operator="$OPERATOR" \
             --policies.1.value="$THRESHOLD" \
             --policies.1.period="$(($PERIOD * 60))" \
@@ -206,21 +235,46 @@ main() {
             --policies.1.unit="%" \
             --policies.1.filter="average" \
             --policies.1.level=2 \
-            ${SMN_TOPIC_URN:+--notification_enabled=true} \
-            ${SMN_TOPIC_URN:+--ok_notifications.1.notification_list.1="$SMN_TOPIC_URN"} \
-            ${SMN_TOPIC_URN:+--ok_notifications.1.type="notification"} \
-            ${SMN_TOPIC_URN:+--alarm_notifications.1.notification_list.1="$SMN_TOPIC_URN"} \
-            ${SMN_TOPIC_URN:+--alarm_notifications.1.type="notification"} \
+            "${NOTIF_ARGS[@]}" \
             2>&1)
-        
+
         if echo "$api_result" | grep -q "NETWORK_ERROR"; then
             echo "✗ Failed to create alarm rule" >&2
             echo "  API response: $api_result" >&2
-        elif echo "$api_result" | grep -qE "\"error\"|\"code\".*\"[A-Z]" 2>/dev/null; then
+        elif echo "$api_result" | grep -qE '"error_code"|"error_msg"|"error"|"code"[[:space:]]*:[[:space:]]*"' 2>/dev/null; then
             echo "✗ Failed to create alarm rule" >&2
             echo "  API response: $api_result" >&2
         else
             echo "✓ Alarm rule created successfully" >&2
+            # Post-create verification: confirm the SMN notification was actually bound.
+            # The API may report success while notification_enabled stays false, which would
+            # silently leave the alarm without any notification — surface this instead of
+            # pretending the notification is configured.
+            if [[ -n "$SMN_TOPIC_URN" ]]; then
+                local alarm_id_from_api
+                alarm_id_from_api=$(echo "$api_result" | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    if not isinstance(d, dict):
+        print('')
+    else:
+        print(d.get('alarm_id', '') or (d.get('alarms') or [{}])[0].get('alarm_id', ''))
+except Exception:
+    print('')
+" 2>/dev/null)
+                local notif_check
+                notif_check=""
+                if [[ -n "$alarm_id_from_api" ]]; then
+                    notif_check=$(hcloud CES ListAlarmRules --cli-region="$REGION" --alarm_id="$alarm_id_from_api" 2>/dev/null)
+                fi
+                if echo "$notif_check" | grep -q '"notification_enabled"[[:space:]]*:[[:space:]]*true'; then
+                    echo "  ✓ SMN notification confirmed enabled" >&2
+                else
+                    echo "  ⚠️ SMN notification could NOT be confirmed (notification_enabled may be false)." >&2
+                    echo "    Alarm rule was created, but verify notification binding in the CES console." >&2
+                fi
+            fi
         fi
         
         echo "" >&2
