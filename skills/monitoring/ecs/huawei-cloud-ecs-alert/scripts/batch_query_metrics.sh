@@ -135,10 +135,20 @@ query_metric() {
     local from_ms=$((from_ts * 1000))
     local to_ms=$((to_ts * 1000))
     
+    # Select namespace by metric: agent-collected metrics (mem_*) live under AGT.ECS,
+    # host-level metrics (cpu_util, disk_util_inband) live under SYS.ECS.
+    # CRITICAL FIX: previously hardcoded to SYS.ECS, so mem_* queries hit the wrong namespace.
+    local namespace
+    if [[ "$metric" == mem_* ]]; then
+        namespace="AGT.ECS"
+    else
+        namespace="SYS.ECS"
+    fi
+
     local raw_result
     raw_result=$(hcloud CES ShowMetricData \
         --cli-region="$region" \
-        --namespace=SYS.ECS \
+        --namespace="$namespace" \
         --metric_name="$metric" \
         --dim.0="instance_id,$ecs_id" \
         --period=300 \
