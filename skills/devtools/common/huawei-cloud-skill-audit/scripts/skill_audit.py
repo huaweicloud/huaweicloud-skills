@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Skill Targeted Audit — skillcheck + markdownlint-cli2 + skillspector + hwcloud-spec + gitleaks"""
 
+from __future__ import annotations
+
 import argparse
 import json
 import os
