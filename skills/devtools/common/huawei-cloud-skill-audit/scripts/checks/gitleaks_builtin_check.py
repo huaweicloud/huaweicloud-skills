@@ -191,6 +191,8 @@ class GitleaksBuiltinCheck(Check):
     def _iter_files(self, skill_dir: Path):
         for p in skill_dir.rglob("*"):
             if p.is_file() and p.suffix.lower() not in BINARY_EXTENSIONS:
+                if p.name in {".gitleaksignore", ".skillspectorignore"}:
+                    continue
                 if not any(part in SKIP_DIRS for part in p.parts):
                     yield p
 

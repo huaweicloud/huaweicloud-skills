@@ -135,10 +135,23 @@ class SkillspectorBuiltinCheck(Check):
     def is_available(self) -> bool:
         return RULES_FILE.exists()
 
+    @staticmethod
+    def _load_skillspectorignore(skill_dir: Path) -> set[str]:
+        ignore_file = skill_dir / ".skillspectorignore"
+        if not ignore_file.exists():
+            return set()
+        try:
+            with open(ignore_file, encoding="utf-8") as f:
+                data = json.load(f)
+            return set(data.keys())
+        except (json.JSONDecodeError, OSError):
+            return set()
+
     def run(self, skill_dir: Path) -> CheckResult:
         self._load_rules()
         if not self._rules:
             return CheckResult(source=self.name, passed=True, raw_output="No rules loaded")
+        ignores = self._load_skillspectorignore(skill_dir)
         issues = []
         for file_path in self._iter_files(skill_dir):
             rel = file_path.relative_to(skill_dir)
@@ -152,6 +165,9 @@ class SkillspectorBuiltinCheck(Check):
                     for pat in rule["patterns"]:
                         m = pat["regex"].search(line)
                         if m:
+                            ignore_key = f"{rule['id']}:{str(rel)}:{line_no}"
+                            if ignore_key in ignores:
+                                break
                             snippet = line.strip()[:80]
                             issues.append(Issue(
                                 rule=rule["id"],
@@ -186,6 +202,8 @@ class SkillspectorBuiltinCheck(Check):
     def _iter_files(self, skill_dir: Path):
         for p in skill_dir.rglob("*"):
             if p.is_file() and p.suffix.lower() not in BINARY_EXTENSIONS:
+                if p.name in {".gitleaksignore", ".skillspectorignore"}:
+                    continue
                 if not any(part in SKIP_DIRS for part in p.parts):
                     yield p
 
