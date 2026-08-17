@@ -1,0 +1,12 @@
+{
+  "example": "Example input for switching the OpenViking embedding model",
+  "skill_name": "huawei-cloud-openviking-embedding-switch",
+  "action": "switch_embedding",
+  "model_name": "bge-small-zh-v1.5",
+  "llama_port": 18200,
+  "target_dimension": 512,
+  "current_provider": "tokenhub",
+  "current_dimension": 1024,
+  "restart_method": "kill + exec (NOT stop/start)",
+  "trigger_words": ["切换OpenViking embedding", "OpenViking embedding模型", "OpenViking向量化模型", "openviking embedding switch", "change openviking embedding model", "配置openviking embedding", "openviking llama embedding", "bge embedding openviking", "切换向量化模型", "OpenViking模型切换"]
+}
