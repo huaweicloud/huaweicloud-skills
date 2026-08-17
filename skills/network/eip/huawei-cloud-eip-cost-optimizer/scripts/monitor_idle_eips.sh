@@ -57,13 +57,35 @@ setup_cron() {
         color_print "$BLUE" "     2. 使用 systemd timer 替代 crontab"
         color_print "$BLUE" "     3. 使用外部调度器（如 Jenkins/CodeArts）定时执行以下命令："
         local script_path="$(cd "$SCRIPT_DIR" && pwd)/monitor_idle_eips.sh"
-        color_print "$BLUE" "        ${script_path} --region ${HW_REGION} --idle-days ${MIN_IDLE_DAYS}"
+        color_print "$BLUE" "        ${script_path} --region ${HW_REGION} --idle-days ${MIN_IDLE_DAYS} ${ALERT_ARGS_STR:-}"
+        return 1
+    fi
+
+    # 校验告警渠道：必须配置 webhook 或 email 之一，否则 cron 空转
+    if [ -z "$WEBHOOK_URL" ] && [ -z "$EMAIL_ADDR" ]; then
+        color_print "$RED" "❌ 未配置告警渠道，无法设置有效的定时监控"
+        color_print "$BLUE" "   定时监控需要至少一个告警接收方，否则执行结果无人查看："
+        color_print "$BLUE" "     --webhook URL  钉钉/企微/Slack webhook（推荐）"
+        color_print "$BLUE" "     --email ADDR   邮件地址"
+        color_print "$BLUE" "   示例："
+        color_print "$BLUE" "     bash monitor_idle_eips.sh --region ${HW_REGION} --idle-days ${MIN_IDLE_DAYS} --setup-cron \\"
+        color_print "$BLUE" "       --webhook 'https://oapi.dingtalk.com/robot/send?access_token=xxx'"
         return 1
     fi
 
     local script_path="$(cd "$SCRIPT_DIR" && pwd)/monitor_idle_eips.sh"
-    # 每天早上 9 点执行
-    local cron_line="0 9 * * * ${script_path} --region ${HW_REGION} --idle-days ${MIN_IDLE_DAYS} ${CRON_MARKER}"
+    # 组装告警参数（cron 行中嵌入）
+    local alert_args=""
+    if [ -n "$WEBHOOK_URL" ]; then
+        alert_args="${alert_args} --webhook '${WEBHOOK_URL}'"
+    fi
+    if [ -n "$EMAIL_ADDR" ]; then
+        alert_args="${alert_args} --email '${EMAIL_ADDR}'"
+    fi
+    ALERT_ARGS_STR="${alert_args}"
+    # 每天早上 9 点执行；导出 PATH 与 hcloud 配置目录以确保 cron 环境可用
+    # 注释说明告警渠道，便于日后检查
+    local cron_line="0 9 * * * PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin HOME=${HOME} ${script_path} --region ${HW_REGION} --idle-days ${MIN_IDLE_DAYS} ${alert_args} ${CRON_MARKER}"
 
     # 检查是否已存在
     if crontab -l 2>/dev/null | grep -qF "$CRON_MARKER"; then
@@ -75,6 +97,11 @@ setup_cron() {
     (crontab -l 2>/dev/null; echo "$cron_line") | crontab -
     color_print "$GREEN" "✅ 已添加 crontab 定时任务：每天 09:00 执行监控"
     color_print "$BLUE" "   命令：${cron_line}"
+    if [ -z "$WEBHOOK_URL" ] && [ -z "$EMAIL_ADDR" ]; then
+        color_print "$YELLOW" "   ⚠️  注意：当前未配置告警渠道，执行结果仅输出到 cron 日志"
+    else
+        color_print "$GREEN" "   🔔 告警渠道已配置：${alert_args}"
+    fi
 }
 
 remove_cron() {
@@ -153,7 +180,11 @@ send_webhook() {
         https://oapi.dingtalk.com/*|https://qyapi.weixin.qq.com/*|https://hooks.slack.com/*|https://*.api.slack.com/*)
             ;; # 允许的 webhook 域名
         *)
-            color_print "$RED" "❌ Webhook URL 不在允许列表中（仅支持钉钉/企微/Slack HTTPS 地址）"
+            color_print "$RED" "❌ Webhook URL 不在允许列表中"
+            color_print "$BLUE" "   仅支持以下 HTTPS 域名："
+            color_print "$BLUE" "     - 钉钉:   https://oapi.dingtalk.com/robot/send?access_token=xxx"
+            color_print "$BLUE" "     - 企微:   https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx"
+            color_print "$BLUE" "     - Slack:  https://hooks.slack.com/services/xxx"
             return 1 ;;
     esac
 
@@ -351,4 +382,15 @@ main() {
     fi
 }
 
+# 退出时自动记录审计日志（覆盖 main 内所有 exit 分支）
+audit_on_exit() {
+    local rc=$?
+    if [ "$rc" -eq 0 ]; then
+        log_audit "monitor" "Idle EIP monitoring for region ${HW_REGION} (threshold: ${MIN_IDLE_DAYS} days)"
+    else
+        log_audit "monitor" "Idle EIP monitoring FAILED for region ${HW_REGION}"
+    fi
+    exit "$rc"
+}
+trap audit_on_exit EXIT
 main

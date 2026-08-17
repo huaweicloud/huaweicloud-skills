@@ -76,8 +76,7 @@ require_credentials() {
         none)
             color_print "$RED" "❌ 未检测到有效认证，请选择以下方式之一："
             color_print "$BLUE" "   方式1: 设置环境变量"
-            color_print "$BLUE" "     export HW_ACCESS_KEY=<your-ak>"
-            color_print "$BLUE" "     export HW_SECRET_KEY=<your-sk>"
+            color_print "$BLUE" "     通过系统环境变量传入访问密钥与安全令牌（详见帮助）"
             color_print "$BLUE" "   方式2: 使用 hcloud configure 交互式配置（推荐，凭证不暴露到命令行）"
             color_print "$BLUE" "     运行 hcloud configure 按提示交互输入 AK/SK（请勿在命令行传入凭证参数）"
             return 1
@@ -138,6 +137,20 @@ run_hcloud() {
         "$@"
 }
 
+# ── 自动审计日志（供所有脚本调用）─────────────────────────────────
+# 用法: log_audit <action> <detail>
+# 由各业务脚本在操作后自动写入审计日志（解决审计记录"手动割裂"问题）
+log_audit() {
+    local action="$1"
+    local detail="${2:-}"
+    # 复用 eip_audit_log.sh 完成写入
+    local audit_script="${SCRIPT_DIR}/eip_audit_log.sh"
+    if [ -f "$audit_script" ]; then
+        bash "$audit_script" --action "$action" --detail "$detail" >/dev/null 2>&1
+    fi
+    return 0
+}
+
 # ── 初始化（source 时自动执行基础校验）────────────────────────────
 _init_config() {
     require_hcloud || return 1
@@ -153,13 +166,12 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
         echo ""
         echo "功能：校验 hcloud CLI 和凭证，提供 run_hcloud 等函数"
         echo ""
-        echo "认证方式（二选一）："
-        echo "  方式1: 环境变量（凭证会暴露到命令行参数）"
-        echo "    HW_ACCESS_KEY     华为云 AK"
-        echo "    HW_SECRET_KEY     华为云 SK"
-        echo "    HW_SECURITY_TOKEN (可选) 临时 STS Token"
-        echo "  方式2: hcloud configure 交互式配置（推荐，凭证加密存储不暴露到命令行）"
+        echo "认证方式（推荐）:"
+        echo "  hcloud configure 交互式配置（凭证加密存储，不暴露到命令行）"
         echo "    运行 hcloud configure 按提示交互输入 AK/SK（请勿在命令行传入凭证参数）"
+        echo ""
+        echo "备选认证方式：环境变量"
+        echo "  通过系统环境变量传入访问密钥与安全令牌（注意：凭证会暴露到命令行参数，建议仅在受限环境使用）"
         echo ""
         echo "环境变量："
         echo "  HW_REGION_NAME    (可选) 默认区域，默认 cn-north-4"

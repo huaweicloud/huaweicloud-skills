@@ -379,4 +379,15 @@ HTMLEOF
     fi
 }
 
+# 退出时自动记录审计日志（覆盖 main 内所有 exit 分支）
+audit_on_exit() {
+    local rc=$?
+    if [ "$rc" -eq 0 ]; then
+        log_audit "report" "EIP cost report for region ${HW_REGION} (format: ${FORMAT})"
+    else
+        log_audit "report" "EIP cost report FAILED for region ${HW_REGION}"
+    fi
+    exit "$rc"
+}
+trap audit_on_exit EXIT
 main

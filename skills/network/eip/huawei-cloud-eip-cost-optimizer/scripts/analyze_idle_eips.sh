@@ -316,7 +316,28 @@ main() {
     done < <(echo "$eips_json" | jq -c '.[]')
 
     if [ "$idle_count" -eq 0 ]; then
-        color_print "$GREEN" "✅ 未发现闲置超过 ${MIN_IDLE_DAYS} 天的 EIP，所有 EIP 都在使用中或闲置时间不足"
+        if [ "$JSON_OUTPUT" = true ]; then
+            # JSON 模式: 输出含 0 闲置的结构化报告
+            jq -n -c \
+                --arg region "$HW_REGION" \
+                --arg timestamp "$(date +%Y-%m-%dT%H:%M:%S%z | sed 's/\(+[0-9]\{2\}\)\([0-9]\{2\}\)/\1:\2/')" \
+                --argjson total "$all_count" \
+                '{
+                    region: $region,
+                    timestamp: $timestamp,
+                    summary: {
+                        total_eips: $total,
+                        idle_eips: 0,
+                        idle_rate: "0.0%",
+                        estimated_monthly_cost_cny: 0.00,
+                        pricing_model: "bandwidth (≈3 CNY/Mbps/month)"
+                    },
+                    idle_eip_details: [],
+                    recommendations: ["当前区域无闲置超过阈值（'"${MIN_IDLE_DAYS}"'天）的 EIP，无需优化"]
+                }' | jq .
+        else
+            color_print "$GREEN" "✅ 未发现闲置超过 ${MIN_IDLE_DAYS} 天的 EIP，所有 EIP 都在使用中或闲置时间不足"
+        fi
         exit 0
     fi
 
@@ -382,4 +403,15 @@ main() {
     fi
 }
 
+# 退出时自动记录审计日志（覆盖 main 内所有 exit 分支）
+audit_on_exit() {
+    local rc=$?
+    if [ "$rc" -eq 0 ]; then
+        log_audit "analyze" "Idle EIP analysis for region ${HW_REGION} (threshold: ${MIN_IDLE_DAYS} days)"
+    else
+        log_audit "analyze" "Idle EIP analysis FAILED for region ${HW_REGION}"
+    fi
+    exit "$rc"
+}
+trap audit_on_exit EXIT
 main

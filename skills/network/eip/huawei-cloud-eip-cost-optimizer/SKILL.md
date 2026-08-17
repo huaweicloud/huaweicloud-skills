@@ -164,7 +164,7 @@ Aggregate EIP cost data, render as HTML or JSON report with savings recommendati
 Periodically check for idle EIPs, send alerts via webhook or email when detected.
 
 ### Audit Log Workflow
-Record all EIP operations (list/analyze/report/monitor) to audit log file for compliance.
+All EIP operations (list/analyze/report/monitor) automatically write to the audit log file for compliance. Each script records its own action on exit. Query history with `--action query-log --days N`.
 
 All EIP operations use hcloud CLI commands:
 
@@ -241,14 +241,16 @@ bash scripts/monitor_idle_eips.sh
 # Custom threshold
 bash scripts/monitor_idle_eips.sh --idle-days 14
 
-# Monitor with webhook alert
-bash scripts/monitor_idle_eips.sh --idle-days 7 --webhook https://hooks.example.com/alert
+# Monitor with webhook alert (only DingTalk/WeCom/Slack HTTPS URLs are allowed)
+bash scripts/monitor_idle_eips.sh --idle-days 7 --webhook "https://oapi.dingtalk.com/robot/send?access_token=YOUR_ACCESS_TOKEN"
 
 # Monitor with email alert
 bash scripts/monitor_idle_eips.sh --idle-days 7 --email admin@example.com
 
-# Set up daily cron job (9:00 AM)
-bash scripts/monitor_idle_eips.sh --setup-cron
+# Set up daily cron job (9:00 AM) - REQUIRES webhook or email, otherwise it's rejected.
+# The cron line embeds the alert parameters so scheduled runs actually notify.
+bash scripts/monitor_idle_eips.sh --region cn-north-4 --idle-days 7 --setup-cron \
+  --webhook "https://oapi.dingtalk.com/robot/send?access_token=YOUR_ACCESS_TOKEN"
 
 # Remove cron job
 bash scripts/monitor_idle_eips.sh --remove-cron
@@ -282,8 +284,14 @@ bash scripts/eip_audit_log.sh --action list --export csv
 # Export audit logs to JSON
 bash scripts/eip_audit_log.sh --action list --export json
 
-# Custom log directory
-bash scripts/eip_audit_log.sh --action list --log-dir /var/log/eip_audit
+# Custom log directory (must NOT be a system dir; will be created if missing)
+bash scripts/eip_audit_log.sh --action list --log-dir ~/eip_audit_logs
+
+# Query audit history for the last 30 days
+bash scripts/eip_audit_log.sh --action query-log --days 30
+
+# Query audit history for a specific action type
+bash scripts/eip_audit_log.sh --action query-log --days 7
 ```
 
 **Audit Log Entry Format** (JSONL, timezone-aware timestamps):
@@ -398,7 +406,7 @@ bash scripts/check_env.sh
 2. **Regular Monitoring**: Set up daily cron jobs with `monitor_idle_eips.sh --setup-cron` to catch idle EIPs early
 3. **Cost Reports**: Generate weekly cost reports with `eip_cost_report.sh --format html` to track optimization progress
 4. **Audit Logging**: Enable audit logging for all EIP operations using `eip_audit_log.sh`
-5. **Multi-Region Management**: Use comma-separated regions `--region cn-north-4,cn-east-3` for cross-region analysis
+5. **Multi-Region List**: `list_eips.sh` supports comma-separated regions `--region cn-north-4,cn-east-3` for cross-region listing. Note: `analyze_idle_eips.sh`, `eip_cost_report.sh`, and `monitor_idle_eips.sh` process a single region each (run once per region for multi-region analysis).
 6. **Webhook Alerts**: Configure webhooks for real-time idle EIP notifications
 7. **Environment Validation**: Always run `check_env.sh` first to verify hcloud CLI and dependencies
 8. **Idle Days Consistency**: Both `analyze_idle_eips.sh` and `monitor_idle_eips.sh` use `--idle-days` parameter with consistent timezone handling
