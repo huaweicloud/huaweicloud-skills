@@ -9,6 +9,11 @@ description: "Based on Huawei Cloud COC (Cloud Operations Center) APIs for scrip
   3. NEVER create temporary script files, prefer inline execution (python -c)
   4. On execution failure, only return error info, do NOT rewrite scripts or print full commands
   5. AK/SK/Token MUST be passed via environment variables, NEVER appear in conversation
+  6. ABSOLUTELY NEVER expose, log, or print AK/SK/Token values in any form - this is a critical security requirement
+  7. Credentials are resolved in priority order: environment variables
+     (HW_ACCESS_KEY, HW_SECRET_KEY, HW_SECURITY_TOKEN, HW_REGION) -> command-line
+     args -> interactive prompt. Prefer environment variables; do NOT pass
+     AK/SK as command-line arguments.
 
 # Huawei Cloud Flexus L Instance COC Skill
 
@@ -73,34 +78,42 @@ python -c "from huaweicloudsdkcoc.v1 import CocClient; print('COC SDK version ve
 **Supported Authentication Methods**:
 
 1. **Credential Acquisition Methods:**
- 	 
- 	 This skill supports obtaining Huawei Cloud credentials through the following methods (in order of priority from high to low):
- 	 
- 	 1. **Environment Variables** (highest priority)
- 	    - `HW_ACCESS_KEY`: Huawei Cloud Access Key AK
- 	    - `HW_SECRET_KEY`: Huawei Cloud Access Key SK
- 	    - `HW_SECURITY_TOKEN`: Security token for temporary credentials
- 	 
- 	 2. **Command Line Parameters** (used when environment variables are not provided)
- 	    - `--ak`: Huawei Cloud Access Key AK
- 	    - `--sk`: Huawei Cloud Access Key SK
- 	    - `--security-token`: Security token for temporary credentials (required when using temporary AK/SK)
- 	 
- 	 3. **Interactive Input** (when neither of the above methods are provided)
- 	    - The program will prompt the user to input credential information such as AK/SK
+   
+   This skill supports obtaining Huawei Cloud credentials through the following methods (in order of priority from high to low):
+   
+   1. **Environment Variables** (highest priority)
+      - `HW_ACCESS_KEY`: Huawei Cloud Access Key AK
+      - `HW_SECRET_KEY`: Huawei Cloud Access Key SK
+      - `HW_SECURITY_TOKEN`: Security token for temporary credentials
+   
+   2. **Command Line Parameters** (used when environment variables are not provided)
+      - `--ak`: Huawei Cloud Access Key AK
+      - `--sk`: Huawei Cloud Access Key SK
+      - `--security-token`: Security token for temporary credentials (required when using temporary AK/SK)
+   
+   3. **Interactive Input** (when neither of the above methods are provided)
+   - The program will prompt the user to input credential information such as AK/SK
 
+```bash
 # Execute script directly (will automatically use environment variables)
 python {baseDir}/scripts/caller.py create --name "test_script" --type SHELL --content "echo hello" --description "Test script"
 ```
 
-2. **Command Line Parameters**:
+2. **Environment Variables** (recommended):
 ```bash
-# Using permanent AK/SK
-python {baseDir}/scripts/caller.py create --ak "your_access_key" --sk "your_secret_key" --region "cn-north-4" --name "test_script" --type SHELL --content "echo hello" --description "Test script"
+export HW_ACCESS_KEY="your_access_key"
+export HW_SECRET_KEY="***"
+# Optional for temporary credentials:
+export HW_SECURITY_TOKEN="your_security_token"
+export HW_REGION="cn-north-4"
 
-# Using temporary AK/SK with security-token
-python {baseDir}/scripts/caller.py create --ak "temporary_ak" --sk "temporary_sk" --security-token "your_security_token" --region "cn-north-4" --name "test_script" --type SHELL --content "echo hello" --description "Test script"
+# Run without --ak/--sk; credentials are read from environment variables
+python {baseDir}/scripts/caller.py create --name "test_script" --type SHELL --content "echo hello" --description "Test script"
 ```
+
+> ⚠️ **Security note**: Passing AK/SK via `--ak "..." --sk "..."` on the command
+> line exposes the credentials in the process list (e.g. `ps aux`). Only do this
+> in a trusted, single-user environment; prefer environment variables or `hcloud configure`.
 
 3. **Interactive Input** (Testing):
 ```bash
@@ -181,51 +194,69 @@ python {baseDir}/scripts/caller.py list
 
 **Create Script**:
 ```bash
-# Using permanent AK/SK
-python {baseDir}/scripts/caller.py create --ak "your_ak" --sk "your_sk" --name "backup_script" --type SHELL --content "echo 'Backup completed'" --description "Data backup script"
+# Set credentials via environment variables (recommended)
+export HW_ACCESS_KEY="your_ak"
+export HW_SECRET_KEY="your_sk"
+# Optional for temporary credentials:
+export HW_SECURITY_TOKEN="your_security_token"
+export HW_REGION="cn-north-4"
 
-# Using temporary AK/SK with security-token
-python {baseDir}/scripts/caller.py create --ak "temporary_ak" --sk "temporary_sk" --security-token "your_security_token" --name "backup_script" --type SHELL --content "echo 'Backup completed'" --description "Data backup script"
+# Run without --ak/--sk; credentials are read from environment variables
+python {baseDir}/scripts/caller.py create --name "backup_script" --type SHELL --content "echo 'Backup completed'" --description "Data backup script"
 ```
 
 **View Script Details**:
 ```bash
-# Using permanent AK/SK
-python {baseDir}/scripts/caller.py show --ak "your_ak" --sk "your_sk" --script-uuid "SC202xxxxxxxx13701c4a8a62"
+export HW_ACCESS_KEY="your_ak"
+export HW_SECRET_KEY="your_sk"
+# Optional for temporary credentials:
+export HW_SECURITY_TOKEN="your_security_token"
 
-# Using temporary AK/SK with security-token
-python {baseDir}/scripts/caller.py show --ak "temporary_ak" --sk "temporary_sk" --security-token "your_security_token" --script-uuid "SC202xxxxxxxx13701c4a8a62"
+python {baseDir}/scripts/caller.py show --script-uuid "SC202xxxxxxxx13701c4a8a62"
 ```
 
 **List Scripts**:
 ```bash
-# Using permanent AK/SK
-python {baseDir}/scripts/caller.py list --ak "your_ak" --sk "your_sk" --page 1 --size 10
+export HW_ACCESS_KEY="your_ak"
+export HW_SECRET_KEY="your_sk"
+# Optional for temporary credentials:
+export HW_SECURITY_TOKEN="your_security_token"
 
-# Using temporary AK/SK with security-token
-python {baseDir}/scripts/caller.py list --ak "temporary_ak" --sk "temporary_sk" --security-token "your_security_token" --page 1 --size 10
+python {baseDir}/scripts/caller.py list --page 1 --size 10
+```
+
+**Delete Script**:
+```bash
+export HW_ACCESS_KEY="your_ak"
+export HW_SECRET_KEY="your_sk"
+# Optional for temporary credentials:
+export HW_SECURITY_TOKEN="your_security_token"
+
+python {baseDir}/scripts/caller.py delete --script-uuid "SC202xxxxxxxx13701c4a8a62"
 ```
 
 ### Script Execution Commands
 
 **Execute Script**:
 ```bash
-# Using permanent AK/SK
-python {baseDir}/scripts/caller.py execute --ak "your_ak" --sk "your_sk" --script-uuid "SC202xxxxxxxx13701c4a8a62" --execute-user root --timeout 300
+export HW_ACCESS_KEY="your_ak"
+export HW_SECRET_KEY="your_sk"
+# Optional for temporary credentials:
+export HW_SECURITY_TOKEN="your_security_token"
 
-# Using temporary AK/SK with security-token
-python {baseDir}/scripts/caller.py execute --ak "temporary_ak" --sk "temporary_sk" --security-token "your_security_token" --script-uuid "SC202xxxxxxxx13701c4a8a62" --execute-user root --timeout 300
+python {baseDir}/scripts/caller.py execute --script-uuid "SC202xxxxxxxx13701c4a8a62" --execute-user root --timeout 300
 ```
 
-**Interactive Execution**: `python {baseDir}/scripts/caller.py execute --ak "your_ak" --sk "your_sk"`
+**Interactive Execution**: `python {baseDir}/scripts/caller.py execute` (credentials are read from environment variables)
 
 **Query Execution Result**:
 ```bash
-# Using permanent AK/SK
-python {baseDir}/scripts/caller.py query --ak "your_ak" --sk "your_sk" --execute-uuid "SCT202xxxxxxxx01af694bf"
+export HW_ACCESS_KEY="your_ak"
+export HW_SECRET_KEY="your_sk"
+# Optional for temporary credentials:
+export HW_SECURITY_TOKEN="your_security_token"
 
-# Using temporary AK/SK with security-token
-python {baseDir}/scripts/caller.py query --ak "temporary_ak" --sk "temporary_sk" --security-token "your_security_token" --execute-uuid "SCT202xxxxxxxx01af694bf"
+python {baseDir}/scripts/caller.py query --execute-uuid "SCT202xxxxxxxx01af694bf"
 ```
 
 ## Parameter Reference
@@ -281,6 +312,12 @@ If environment variables are set, they take priority over command line parameter
 | --page | Page number | No | 1 |
 | --size | Page size | No | 10 |
 
+### delete Command Parameters
+
+| Parameter | Description | Required | Default |
+|-----------|-------------|----------|---------|
+| --script-uuid | Script UUID | Yes | - |
+
 ### query Command Parameters
 
 | Parameter | Description | Required | Default |
@@ -327,15 +364,16 @@ export HW_SECURITY_TOKEN="your_token"  # Optional
 python {baseDir}/scripts/caller.py create --name "test_script" --type SHELL --content "echo hello" --description "Test script"
 ```
 
-Or using command line parameters:
-```bash
-python {baseDir}/scripts/caller.py create --ak "your_ak" --sk "your_sk" --name "test_script" --type SHELL --content "echo hello" --description "Test script"
-```
-
 2. **Execute a script**:
 ```bash
-python {baseDir}/scripts/caller.py execute --ak "your_ak" --sk "your_sk" --script-uuid "SC202xxxxxxxx13701c4a8a62" --execute-user root --timeout 300 --success-rate 100
+export HW_ACCESS_KEY="your_ak"
+export HW_SECRET_KEY="your_sk"
+export HW_SECURITY_TOKEN="your_token"  # Optional
+
+python {baseDir}/scripts/caller.py execute --script-uuid "SC202xxxxxxxx13701c4a8a62" --execute-user root --timeout 300 --success-rate 100
 ```
+
+> ⚠️ Never pass AK/SK via `--ak "..." --sk "..."` command line arguments; they become visible in the process list (e.g. `ps aux`). Always prefer environment variables or `hcloud configure`.
 
 > **Tip**: Refer to the "Parameter Reference" section for complete parameter documentation.
 
@@ -452,13 +490,19 @@ python -c "from huaweicloudsdkcoc.v1 import CocClient; print('SDK installed succ
 
 ### 2. Create Script Verification
 ```bash
-python {baseDir}/scripts/caller.py create --ak "your_ak" --sk "your_sk" --name "test_script" --type SHELL --content "echo hello" --description "Test script" --non-interactive
+export HW_ACCESS_KEY="your_ak"
+export HW_SECRET_KEY="your_sk"
+
+python {baseDir}/scripts/caller.py create --name "test_script" --type SHELL --content "echo hello" --description "Test script" --non-interactive
 # Expected output: Script UUID returned
 ```
 
 ### 3. Execute Script Verification
 ```bash
-python {baseDir}/scripts/caller.py execute --ak "your_ak" --sk "your_sk" --script-uuid "SC202xxxxxxxx13701c4a8a62" --execute-user root --timeout 300 --non-interactive
+export HW_ACCESS_KEY="your_ak"
+export HW_SECRET_KEY="your_sk"
+
+python {baseDir}/scripts/caller.py execute --script-uuid "SC202xxxxxxxx13701c4a8a62" --execute-user root --timeout 300 --non-interactive
 # Expected output: Execution task ID returned
 ```
 
@@ -536,4 +580,6 @@ error: Invalid parameter
 ## Reference Documentation
 
 - [IAM Policy Configuration](references/iam-policies.md)
+- [Verification Method](references/verification-method.md)
+- [Acceptance Criteria](references/acceptance-criteria.md)
 - [Project Dependencies Configuration](scripts/pyproject.toml)

@@ -592,6 +592,52 @@ def get_script_job_batch(
         return _error("UNKNOWN_ERROR", str(e))
 
 
+def delete_script(script_uuid: str, ak: str, sk: str, security_token: str, region: str = "cn-north-4") -> dict[str, Any]:
+    """
+    Delete a custom script from COC.
+
+    Args:
+        script_uuid: Script UUID
+        ak: Huawei Cloud Access Key
+        sk: Huawei Cloud Secret Key
+        security_token: Temporary security token for STS authentication
+        region: COC service region, default cn-north-4
+
+    Returns:
+        {
+            "ok": True,
+            "text": "Script deleted successfully: SC2023102521413701c4a8a62",
+            "result": { Raw API response },
+            "error": None
+        }
+    """
+    if not script_uuid:
+        return _error("INPUT_ERROR", "script_uuid is required")
+
+    try:
+        client = get_client(ak, sk, security_token, region)
+    except ValueError as e:
+        return _error("CONFIG_ERROR", str(e))
+
+    try:
+        request = DeleteScriptRequest()
+        request.script_uuid = script_uuid
+
+        response = client.delete_script(request)
+
+        return {
+            "ok": True,
+            "text": f"Script deleted successfully: {script_uuid}",
+            "result": response,
+            "error": None,
+        }
+
+    except exceptions.ClientRequestException as e:
+        return _error("API_ERROR", f"{e.error_code}: {e.error_msg}")
+    except Exception as e:
+        return _error("UNKNOWN_ERROR", str(e))
+
+
 def _error(code: str, message: str) -> dict:
     """Create error response."""
     return {
