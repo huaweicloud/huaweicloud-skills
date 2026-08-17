@@ -1,0 +1,12 @@
+{
+  "example": "Example input for integrating OpenViking with coding agents",
+  "skill_name": "huawei-cloud-openviking-agent-integration",
+  "action": "integrate",
+  "agent": "opencode",
+  "endpoint": "http://127.0.0.1:1933",
+  "api_key": "",
+  "dry_run": false,
+  "auth": "user must type 'confirm'",
+  "options": ["--agent opencode", "--all", "--dry-run", "--yes"],
+  "trigger_words": ["OpenViking integration", "agent memory binding", "MCP setup", "integrate OpenViking", "unbind OpenViking", "记忆集成", "OpenViking 解绑"]
+}
