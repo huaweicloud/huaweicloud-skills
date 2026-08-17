@@ -31,7 +31,7 @@ This document defines the verification and testing methodology for the `huawei-c
 | List instances | `hcloud RDS ListInstances` | Returns JSON array of instances |
 | List flavors | `hcloud RDS ListFlavors --database_name=MySQL` | Returns available flavors |
 | List datastores | `hcloud RDS ListDatastores --database_name=MySQL` | Returns database versions |
-| Show instance detail | `hcloud RDS ShowInstance --instance_id={id}` | Returns instance details |
+| Show instance detail | `hcloud RDS ListInstances --id={id}` | Returns instance details |
 | List slow logs | `hcloud RDS ListSlowLogs --instance_id={id}` | Returns slow log entries |
 | List error logs | `hcloud RDS ListErrorLogs --instance_id={id}` | Returns error log entries |
 | List configurations | `hcloud RDS ListConfigurations` | Returns parameter groups |

@@ -40,7 +40,7 @@ def get_client(region=None):
     """Build RDS client for specified region."""
     try:
         from huaweicloudsdkrds.v3.rds_client import RdsClient
-        from huaweicloudsdkcore.region.region import Region
+        from huaweicloudsdkrds.v3.region.rds_region import RdsRegion
     except ImportError:
         logger.error("huaweicloudsdkrds not installed")
         sys.exit(1)
@@ -50,7 +50,7 @@ def get_client(region=None):
 
     client = RdsClient.new_builder() \
         .with_credentials(creds) \
-        .with_region(Region.value_of(region)) \
+        .with_region(RdsRegion.value_of(region)) \
         .build()
     return client
 

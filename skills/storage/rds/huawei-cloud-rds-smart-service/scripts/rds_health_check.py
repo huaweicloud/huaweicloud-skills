@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""RDS Smart Service - Health Inspection Script
+"""RDS Smart Service - Basic Health Inspection Script
 
-Performs a comprehensive health check on RDS instances.
+Performs a basic health check on RDS instances: instance status + backup policy.
+NOTE: This is a BASIC check (2 items). It does NOT cover CPU/memory/disk/connection-count/
+replication-lag metrics. For resource/performance indicators, query separately.
 Usage: python3 rds_health_check.py [--instance_id=xxx] [--region=cn-north-4]
 """
 
