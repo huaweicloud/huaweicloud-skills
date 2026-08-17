@@ -77,7 +77,7 @@ hcloud RDS ListDatastores --cli-region=cn-north-4 --database_name=MySQL
 hcloud RDS ShowAvailableVersion --cli-region=cn-north-4 --instance_id={instance_id}
 
 # List engine flavors (available flavors for resizing)
-hcloud RDS ListEngineFlavors --cli-region=cn-north-4 --instance_id={instance_id}
+hcloud RDS ListEngineFlavors --cli-region=cn-north-4 --instance_id={instance_id} --ha_mode=ha --availability_zone_ids=cn-north-4a
 
 # Show instance quotas
 hcloud RDS ShowQuotas --cli-region=cn-north-4
@@ -88,7 +88,7 @@ hcloud RDS ShowQuotas --cli-region=cn-north-4
 ```bash
 # Query slow SQL logs (within last 30 days)
 hcloud RDS ListSlowLogs --cli-region=cn-north-4 --instance_id={instance_id} \
-  --start_date=2024-01-01T00:00:00Z --end_date=2024-01-31T23:59:59Z
+  --start_date=$(date -d '7 days ago' +%Y-%m-%dT00:00:00%z) --end_date=$(date +%Y-%m-%dT%H:%M:%S%z)
 
 # Download slow log file
 hcloud RDS DownloadSlowlog --cli-region=cn-north-4 --instance_id={instance_id} \
@@ -99,36 +99,35 @@ hcloud RDS ListTopSqls --cli-region=cn-north-4 --instance_id={instance_id} --lim
 
 # Query historical TOP SQL
 hcloud RDS ListHistoryTopSqls --cli-region=cn-north-4 --instance_id={instance_id} \
-  --start_date=2024-01-01T00:00:00Z --end_date=2024-01-31T23:59:59Z
+  --start_time=$(($(date -d '7 days ago' +%s)*1000)) --end_time=$(($(date +%s)*1000))
 
 # Query historical wait events
 hcloud RDS ListHistoryWaitEvents --cli-region=cn-north-4 --instance_id={instance_id} \
-  --start_date=2024-01-01T00:00:00Z --end_date=2024-01-31T23:59:59Z
+  --start_time=$(($(date -d '7 days ago' +%s)*1000)) --end_time=$(($(date +%s)*1000))
 
 # Query top objects (tables/indexes with high load)
 hcloud RDS ShowTopObjects --cli-region=cn-north-4 --instance_id={instance_id}
 
 # Set SQL limit (control SQL concurrency)
-hcloud RDS CreateSqlLimit --cli-region=cn-north-4 --instance_id={instance_id} --sql_limit_rule='{"max_concurrency":10}'
+hcloud RDS CreateSqlLimit --cli-region=cn-north-4 --instance_id={instance_id} --db_name={db_name} --max_concurrency=10 --max_waiting=5
 ```
 
 ### 3. Daily O&M — Instance Management
 
 ```bash
 # Restart instance
-hcloud RDS StartInstanceRestartAction --cli-region=cn-north-4 --instance_id={instance_id}
+hcloud RDS StartInstanceRestartAction --cli-region=cn-north-4 --instance_id={instance_id} \
+  --restart.restart_server=true
 
 # Resize flavor (specification change)
-hcloud RDS StartResizeFlavorAction --cli-region=cn-north-4 --instance_id={instance_id} \
-  --flavor_ref={flavor_id}
+hcloud RDS StartResizeFlavorAction --cli-region=cn-north-4 --instance_id={instance_id} --resize_flavor.spec_code={spec_code}
 
 # Enlarge disk volume
 hcloud RDS StartInstanceEnlargeVolumeAction --cli-region=cn-north-4 --instance_id={instance_id} \
-  --volume_size=200
+  --enlarge_volume.size=200
 
 # Reduce disk volume
-hcloud RDS StartInstanceReduceVolumeAction --cli-region=cn-north-4 --instance_id={instance_id} \
-  --volume_size=100
+hcloud RDS StartInstanceReduceVolumeAction --cli-region=cn-north-4 --instance_id={instance_id} --reduce_volume.size=100 --reduce_volume.is_delay=false
 
 # Primary-standby switchover
 hcloud RDS StartFailover --cli-region=cn-north-4 --instance_id={instance_id}
@@ -140,14 +139,13 @@ hcloud RDS SetReadOnlySwitch --cli-region=cn-north-4 --instance_id={instance_id}
 hcloud RDS UpdateInstanceAlias --cli-region=cn-north-4 --instance_id={instance_id} --alias=new_name
 
 # List tasks (async operation status)
-hcloud RDS ListTasks --cli-region=cn-north-4 --start_time=2024-01-01T00:00:00Z --end_time=2024-01-31T23:59:59Z
+hcloud RDS ListTasks --cli-region=cn-north-4 --start_time=$(($(date -d '7 days ago' +%s)*1000)) --end_time=$(($(date +%s)*1000))
 
 # Show task detail
-hcloud RDS ShowTaskDetail --cli-region=cn-north-4 --instance_id={instance_id} --task_id={task_id}
+hcloud RDS ShowTaskDetail --cli-region=cn-north-4 --instance_id={instance_id} --workflow_id={workflow_id} --workflow_name={workflow_name}
 
 # Set auto disk expansion policy
-hcloud RDS SetAutoEnlargePolicy --cli-region=cn-north-4 --instance_id={instance_id} \
-  --switch_status=ON --limit_size=500 --trigger_threshold=90
+hcloud RDS SetAutoEnlargePolicy --cli-region=cn-north-4 --instance_id={instance_id} --switch_option=true --limit_size=500 --trigger_threshold=15
 
 # Show auto disk expansion policy
 hcloud RDS ShowAutoEnlargePolicy --cli-region=cn-north-4 --instance_id={instance_id}
@@ -164,15 +162,14 @@ hcloud RDS ListVolumeInfo --cli-region=cn-north-4 --instance_id={instance_id}
 ```bash
 # Query error logs
 hcloud RDS ListErrorLogs --cli-region=cn-north-4 --instance_id={instance_id} \
-  --start_date=2024-01-01T00:00:00Z --end_date=2024-01-31T23:59:59Z
+  --start_date=$(date -d '7 days ago' +%Y-%m-%dT00:00:00%z) --end_date=$(date +%Y-%m-%dT%H:%M:%S%z)
 
 # Query error logs (v3.1 enhanced)
 hcloud RDS ListErrorLogsNew --cli-region=cn-north-4 --instance_id={instance_id} \
-  --start_date=2024-01-01T00:00:00Z --end_date=2024-01-31T23:59:59Z
+  --start_date=$(date -d '7 days ago' +%Y-%m-%dT00:00:00%z) --end_date=$(date +%Y-%m-%dT%H:%M:%S%z)
 
 # Download error log file
-hcloud RDS DownloadErrorlog --cli-region=cn-north-4 --instance_id={instance_id} \
-  --file_name={file_name}
+hcloud RDS DownloadErrorlog --cli-region=cn-north-4 --instance_id={instance_id}
 
 # Show replication status (primary-standby)
 hcloud RDS ShowReplicationStatus --cli-region=cn-north-4 --instance_id={instance_id}
@@ -181,25 +178,29 @@ hcloud RDS ShowReplicationStatus --cli-region=cn-north-4 --instance_id={instance
 hcloud RDS ShowRecoveryTimeWindow --cli-region=cn-north-4 --instance_id={instance_id}
 
 # List instance diagnosis results
-hcloud RDS ListInstanceDiagnosis --cli-region=cn-north-4
+hcloud RDS ListInstanceDiagnosis --cli-region=cn-north-4 --engine=mysql
 
 # List instance diagnosis info
-hcloud RDS ListInstancesInfoDiagnosis --cli-region=cn-north-4
+hcloud RDS ListInstancesInfoDiagnosis --cli-region=cn-north-4 --engine=mysql --diagnosis=high_pressure
 
 # Query historical sessions
-hcloud RDS ListHistorySessions --cli-region=cn-north-4 --instance_id={instance_id}
+hcloud RDS ListHistorySessions --cli-region=cn-north-4 --instance_id={instance_id} \
+  --start_time=$(($(date -d '7 days ago' +%s)*1000)) --end_time=$(($(date +%s)*1000)) --limit=10 --offset=0
 
 # Intelligent kill session (kill problematic sessions)
-hcloud RDS CreateIntelligentKillSession --cli-region=cn-north-4 --instance_id={instance_id}
+hcloud RDS CreateIntelligentKillSession --cli-region=cn-north-4 --instance_id={instance_id} --auto_add_sql_limit_rule=false
 
 # Show intelligent kill session history
-hcloud RDS ShowIntelligentKillSessionHistory --cli-region=cn-north-4 --instance_id={instance_id}
+hcloud RDS ShowIntelligentKillSessionHistory --cli-region=cn-north-4 --instance_id={instance_id} \
+  --start_time=$(($(date -d '7 days ago' +%s)*1000)) --end_time=$(($(date +%s)*1000)) --page_num=1 --page_size=10
 
 # Show second-level monitoring
 hcloud RDS ShowSecondLevelMonitoring --cli-region=cn-north-4 --instance_id={instance_id}
 
-# Validate instance connection
-hcloud RDS ValidateInstanceConnection --cli-region=cn-north-4 --instance_id={instance_id}
+# Validate instance connection (RDS for SQL Server only; requires user_info)
+hcloud RDS ValidateInstanceConnection --cli-region=cn-north-4 --instance_id={instance_id} \
+  --user_info.login_user_name=dbuser --user_info.login_user_password=*** \
+  --user_info.server_ip=1.2.3.4 --user_info.server_port=3306
 ```
 
 ### 5. Parameter Tuning
@@ -216,26 +217,25 @@ hcloud RDS ShowInstanceConfiguration --cli-region=cn-north-4 --instance_id={inst
 
 # Create parameter group
 hcloud RDS CreateConfiguration --cli-region=cn-north-4 \
-  --name=custom_param_group --datastore={\"type\":\"MySQL\",\"version\":\"8.0\"}
+  --name=custom_param_group --datastore.type=MySQL --datastore.version=8.0
 
 # Update parameter group
 hcloud RDS UpdateConfiguration --cli-region=cn-north-4 --config_id={config_id} \
-  --values='{"key":"value"}'
+  --values.max_connections=100
 
 # Apply parameter group to instance (async)
 hcloud RDS ApplyConfigurationAsync --cli-region=cn-north-4 --config_id={config_id} \
-  --instance_ids='["{instance_id}"]'
+  --instance_ids.1={instance_id}
 
 # Update instance parameter directly
 hcloud RDS UpdateInstanceConfiguration --cli-region=cn-north-4 --instance_id={instance_id} \
-  --values='{"key":"value"}'
+  --values.max_connections=100
 
 # List parameter change history
 hcloud RDS ListInstanceParamHistories --cli-region=cn-north-4 --instance_id={instance_id}
 
 # Compare parameter configurations
-hcloud RDS CompareConfiguration --cli-region=cn-north-4 \
-  --source_config_id={source_id} --target_config_id={target_id}
+hcloud RDS CompareConfiguration --cli-region=cn-north-4 --source_id={source_id} --target_id={target_id}
 ```
 
 ### 6. Backup & Recovery
@@ -246,14 +246,13 @@ hcloud RDS ShowBackupPolicy --cli-region=cn-north-4 --instance_id={instance_id}
 
 # Set backup policy
 hcloud RDS SetBackupPolicy --cli-region=cn-north-4 --instance_id={instance_id} \
-  --backup_policy='{"keep_days":7,"start_time":"00:00-01:00","period":"1,2,3,4,5,6,7"}'
+  --backup_policy.keep_days=7 --backup_policy.start_time=00:00-01:00 --backup_policy.period=1,2,3,4,5,6,7
 
 # Show backup configuration
 hcloud RDS ShowBackupConfig --cli-region=cn-north-4 --instance_id={instance_id}
 
 # Change backup configuration
-hcloud RDS ChangeBackupConfig --cli-region=cn-north-4 --instance_id={instance_id} \
-  --backup_config='{"keep_days":30}'
+hcloud RDS ChangeBackupConfig --cli-region=cn-north-4 --instance_id={instance_id} --default_backup_method=EBACKUP
 
 # List backups
 hcloud RDS ListBackups --cli-region=cn-north-4 --instance_id={instance_id}
@@ -266,29 +265,28 @@ hcloud RDS CreateManualBackup --cli-region=cn-north-4 \
 hcloud RDS DeleteManualBackup --cli-region=cn-north-4 --backup_id={backup_id}
 
 # Batch delete manual backups
-hcloud RDS BatchDeleteManualBackup --cli-region=cn-north-4 \
-  --backup_ids='["{backup_id_1}","{backup_id_2}"]'
+hcloud RDS BatchDeleteManualBackup --cli-region=cn-north-4 --backup_ids.1={backup_id_1} --backup_ids.2={backup_id_2}
 
 # Show backup download link
 hcloud RDS ShowBackupDownloadLink --cli-region=cn-north-4 --backup_id={backup_id}
 
 # Restore to new instance
 hcloud RDS CreateRestoreInstance --cli-region=cn-north-4 \
-  --backup_id={backup_id} --name=restored_instance --flavor_ref={flavor_id}
+  --restore_point.backup_id={backup_id} --name=restored_instance --flavor_ref={flavor_id} \
+  --availability_zone=cn-north-4a,cn-north-4g --volume.size=100 --volume.type=CLOUDSSD
+# 注意: `--password` 与 KooCLI 系统参数同名冲突,无法直接传参。需用 `echo 'b' |` 管道选择"API参数"绕过,或用 `--cli-jsonInput=jsonFile` 传入整份 JSON body。恢复实例磁盘不能小于源实例(报 DBS.200073)。
 
 # Restore to existing instance
-hcloud RDS RestoreToExistingInstance --cli-region=cn-north-4 \
-  --instance_id={instance_id} --backup_id={backup_id}
+hcloud RDS RestoreToExistingInstance --cli-region=cn-north-4 --target.instance_id={target_instance_id} --source.instance_id={source_instance_id} --source.backup_id={backup_id} --source.type=backup
 
 # Restore tables (table-level recovery)
-hcloud RDS RestoreTables --cli-region=cn-north-4 --instance_id={instance_id} \
-  --restore_tables='{"database":"db1","tables":["t1","t2"]}'
+hcloud RDS RestoreTables --cli-region=cn-north-4 --instance_id={instance_id} --restoreTables.1.database={db_name} --restoreTables.1.tables.1.oldName={old_table} --restoreTables.1.tables.1.newName={new_table} --restoreTime=$(($(date -d '1 day ago' +%s)*1000))
 
 # List instance backup summary
 hcloud RDS ListInstanceBackupSummary --cli-region=cn-north-4
 
-# Show backup usage
-hcloud RDS ShowBackupUsage --cli-region=cn-north-4 --instance_id={instance_id}
+# Show backup usage (by engine)
+hcloud RDS ShowBackupUsage --cli-region=cn-north-4 --engine=MySQL
 ```
 
 ### 7. Security Management
@@ -299,21 +297,20 @@ hcloud RDS SetSecurityGroup --cli-region=cn-north-4 --instance_id={instance_id} 
   --security_group_id={sg_id}
 
 # Switch SSL configuration
-hcloud RDS SwitchSsl --cli-region=cn-north-4 --instance_id={instance_id} --ssl_option=ON
+hcloud RDS SwitchSsl --cli-region=cn-north-4 --instance_id={instance_id} --ssl_option=true
 
 # List audit logs
 hcloud RDS ListAuditlogs --cli-region=cn-north-4 --instance_id={instance_id} \
-  --start_time=2024-01-01T00:00:00Z --end_time=2024-01-31T23:59:59Z
+  --start_time=$(date -d '7 days ago' +%Y-%m-%dT00:00:00%z) --end_time=$(date +%Y-%m-%dT%H:%M:%S%z) --limit=10 --offset=0
 
 # Show audit log policy
 hcloud RDS ShowAuditlogPolicy --cli-region=cn-north-4 --instance_id={instance_id}
 
 # Set audit log policy
-hcloud RDS SetAuditlogPolicy --cli-region=cn-north-4 --instance_id={instance_id} \
-  --audit_log_policy='{"keep_days":30}'
+hcloud RDS SetAuditlogPolicy --cli-region=cn-north-4 --instance_id={instance_id} --keep_days=30 --audit_types.1=CREATE_USER
 
 # Show audit log download link
-hcloud RDS ShowAuditlogDownloadLink --cli-region=cn-north-4 --instance_id={instance_id}
+hcloud RDS ShowAuditlogDownloadLink --cli-region=cn-north-4 --instance_id={instance_id} --ids.1={auditlog_id}
 ```
 
 ---
@@ -330,8 +327,10 @@ hcloud RDS <Operation> --cli-region=<region> [--key=value ...]
 | Operation name | PascalCase | `ListInstances`, `ShowBackupPolicy`, `CreateManualBackup` |
 | Region parameter | `--cli-region=<value>` | `--cli-region=cn-north-4` |
 | Simple parameter | `--key=value` | `--instance_id=xxx` |
-| JSON parameter | `--key='{"k":"v"}'` | `--backup_policy='{"keep_days":7}'` |
 | Indexed parameter | `--key.1=value1` | `--instance_ids.1=xxx` |
+| Nested object parameter | `--parent.child=value` | `--backup_policy.keep_days=7`, `--datastore.type=MySQL` |
+
+> **注意**: hcloud CLI 的 body/嵌套参数**不支持**整体 JSON 传参(`--param='{"k":"v"}'` 会报 `仅支持参数 X 的值为 {} 或 []`)。必须按 `--parent.child=value` 拆分传参。数组用下标 `--instance_ids.1=xxx`。
 
 ### SDK Fallback (Python)
 
@@ -404,15 +403,15 @@ curl -X GET "https://rds.cn-north-4.myhuaweicloud.com/v3/{project_id}/instances"
 | `--datastore_type` | No | Filter by engine type | `MySQL` |
 | `--config_id` | Yes (param ops) | Parameter group ID | `xxxxx` |
 | `--backup_id` | Yes (backup ops) | Backup ID | `xxxxx` |
-| `--flavor_ref` | Yes (resize) | Target flavor ID | `rds.mysql.xlarge` |
-| `--start_date` / `--end_date` | Yes (log ops) | Date range (ISO 8601) | `2024-01-01T00:00:00Z` |
-| `--volume_size` | Yes (disk ops) | Target disk size in GB | `200` |
+| `--resize_flavor.spec_code` | Yes (resize) | Target flavor spec code | `rds.mysql.n1.large.4.ha` |
+| `--start_date` / `--end_date` | Yes (log ops) | Date range (ISO 8601, only last 30 days) | `$(date -d '7 days ago' +%Y-%m-%dT00:00:00%z)` |
+| `--enlarge_volume.size` | Yes (disk ops) | Target disk size in GB | `200` |
 
 ### Mutating Operations Requiring User Confirmation
 
 The following operations modify RDS resources and **must** prompt the user for explicit confirmation before execution:
 
-- **Instance**: Restart, Resize, Disk Expand/Reduce, Failover, Stop, Delete
+- **Instance**: Restart, Resize, Disk Expand/Reduce, Failover, Stop（删除实例属高风险操作，本技能不支持，请通过华为云控制台操作）
 - **Backup**: Create Manual Backup, Delete Backup, Restore Instance
 - **Parameter**: Create/Update/Delete Configuration, Apply Configuration, Update Instance Parameter
 - **Security**: Set Security Group, Switch SSL, Set Audit Log Policy
@@ -485,6 +484,10 @@ All command outputs are returned as structured JSON. The skill formats results i
 - All mutating operations (Create/Update/Delete/Restart/Resize/Restore) require explicit user confirmation
 - Credentials (AK/SK) are read from environment variables; hardcoding is prohibited
 - CLI is the primary execution mode; SDK and API are fallbacks for unavailable CLI commands
-- Date format follows ISO 8601: `yyyy-mm-ddThh:mm:ssZ` (e.g., `2024-01-01T00:00:00Z`)
+- Date format: log commands (`--start_date`/`--end_date`) use ISO 8601 **with timezone offset** (e.g., `2026-08-04T00:00:00+0800`); task commands (`--start_time`/`--end_time`) use **UTC epoch milliseconds**
+- **日志/慢SQL 查询仅支持查询当前时间前一个月内的数据**。日期格式使用带时区偏移的 ISO 8601（如 `2026-08-04T00:00:00+0800`），用 `$(date -d '7 days ago' +%Y-%m-%dT00:00:00%z)` 动态生成；**注意不要使用 UTC 的 `Z` 结尾**（`...T00:00:00Z`），实测会导致 `DBS.01010023` 报错。`ListTasks`/`ListHistory*` 等任务类命令的 `--start_time`/`--end_time` 需传 **UTC 毫秒时间戳**（`$(($(date -d '7 days ago' +%s)*1000))`）。**不要照抄过期的静态示例日期**
 - Slow log queries are limited to the last 30 days
 - The skill supports all RDS engines: MySQL, PostgreSQL, SQL Server, MariaDB, GaussDB(for MySQL), TaurusDB
+- **Engine capability limits (MySQL)** — the following read commands return `DBS.280343` (Operation not allowed by the DB engine) on MySQL; they are supported on other engines only, and are not defects in the skill: `ListTopSqls`, `ShowTopObjects`, `ListVolumeInfo`, `ShowAvailableVersion`, `ValidateInstanceConnection` (SQL Server only), `ListHistoryTopSqls`, `ListHistorySessions`, `ListHistoryWaitEvents`. `ShowBackupConfig`/`ShowRecoveryTimeWindow` also return `DBS.280238`/`DBS.280235` on MySQL.
+- **Whitelist permission limits** — `ListInstanceBackupSummary`/`ShowBackupUsage` return `DBS.01280003` (domain not in whitelist); these require whitelist activation from Huawei Cloud.
+- `ListEngineFlavors` requires single AZ (`--availability_zone_ids=cn-north-4a`); comma-separated multi-AZ returns `DBS.280244`.

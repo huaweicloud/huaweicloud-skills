@@ -67,7 +67,7 @@ Verified from `huaweicloudsdkrds` SDK source code (v3).
 | List Backups | GET | `/v3/{project_id}/backups` |
 | Create Manual Backup | POST | `/v3/{project_id}/backups` |
 | Delete Manual Backup | DELETE | `/v3/{project_id}/backups/{backup_id}` |
-| Show Backup Download Link | GET | `/v3/{project_id}/backups/{backup_id}` |
+| Show Backup Download Link | POST | `/v3/{project_id}/backups/{backup_id}/link` |
 | Restore to New Instance | POST | `/v3/{project_id}/instances` (restore mode) |
 | Restore to Existing | POST | `/v3/{project_id}/instances/{instance_id}/action` (restore) |
 | Restore Tables | POST | `/v3/{project_id}/instances/{instance_id}/tables/recovery` |
