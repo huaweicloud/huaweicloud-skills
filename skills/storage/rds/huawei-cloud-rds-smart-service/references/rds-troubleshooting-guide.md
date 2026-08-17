@@ -9,14 +9,16 @@
 **Diagnosis Steps**:
 ```bash
 # Step 1: Check instance status
-hcloud RDS ShowInstance --cli-region=cn-north-4 --instance_id={instance_id}
+hcloud RDS ListInstances --cli-region=cn-north-4 --id={instance_id}
 
 # Step 2: Check error logs for recent errors
 hcloud RDS ListErrorLogs --cli-region=cn-north-4 --instance_id={instance_id} \
-  --start_date=2024-01-01T00:00:00Z --end_date=2024-01-01T23:59:59Z --level=ERROR
+  --start_date=$(date -d '7 days ago' +%Y-%m-%dT00:00:00%z) --end_date=$(date +%Y-%m-%dT%H:%M:%S%z) --level=ERROR
 
 # Step 3: Validate connection
-hcloud RDS ValidateInstanceConnection --cli-region=cn-north-4 --instance_id={instance_id}
+hcloud RDS ValidateInstanceConnection --cli-region=cn-north-4 --instance_id={instance_id} \
+  --user_info.login_user_name=dbuser --user_info.login_user_password=*** \
+  --user_info.server_ip=1.2.3.4 --user_info.server_port=3306
 
 # Step 4: Check replication status (for HA instances)
 hcloud RDS ShowReplicationStatus --cli-region=cn-north-4 --instance_id={instance_id}
@@ -39,11 +41,11 @@ hcloud RDS ListTopSqls --cli-region=cn-north-4 --instance_id={instance_id} --lim
 
 # Step 2: Check slow logs
 hcloud RDS ListSlowLogs --cli-region=cn-north-4 --instance_id={instance_id} \
-  --start_date=2024-01-01T00:00:00Z --end_date=2024-01-01T23:59:59Z
+  --start_date=$(date -d '7 days ago' +%Y-%m-%dT00:00:00%z) --end_date=$(date +%Y-%m-%dT%H:%M:%S%z)
 
 # Step 3: Check wait events
 hcloud RDS ListHistoryWaitEvents --cli-region=cn-north-4 --instance_id={instance_id} \
-  --start_date=2024-01-01T00:00:00Z --end_date=2024-01-01T23:59:59Z
+  --start_time=$(($(date -d '7 days ago' +%s)*1000)) --end_time=$(($(date +%s)*1000))
 
 # Step 4: Check top objects (tables/indexes)
 hcloud RDS ShowTopObjects --cli-region=cn-north-4 --instance_id={instance_id}
@@ -69,11 +71,11 @@ hcloud RDS ShowReplicationStatus --cli-region=cn-north-4 --instance_id={instance
 
 # Step 2: Check error logs for replication errors
 hcloud RDS ListErrorLogs --cli-region=cn-north-4 --instance_id={instance_id} \
-  --start_date=2024-01-01T00:00:00Z --end_date=2024-01-01T23:59:59Z --level=ERROR
+  --start_date=$(date -d '7 days ago' +%Y-%m-%dT00:00:00%z) --end_date=$(date +%Y-%m-%dT%H:%M:%S%z) --level=ERROR
 
 # Step 3: Check slow logs (large transactions cause delay)
 hcloud RDS ListSlowLogs --cli-region=cn-north-4 --instance_id={instance_id} \
-  --start_date=2024-01-01T00:00:00Z --end_date=2024-01-01T23:59:59Z
+  --start_date=$(date -d '7 days ago' +%Y-%m-%dT00:00:00%z) --end_date=$(date +%Y-%m-%dT%H:%M:%S%z)
 ```
 
 **Resolution Actions**:
@@ -111,7 +113,7 @@ hcloud RDS ListVolumeInfo --cli-region=cn-north-4 --instance_id={instance_id}
 ```bash
 # Step 1: List slow logs
 hcloud RDS ListSlowLogs --cli-region=cn-north-4 --instance_id={instance_id} \
-  --start_date=2024-01-01T00:00:00Z --end_date=2024-01-01T23:59:59Z
+  --start_date=$(date -d '7 days ago' +%Y-%m-%dT00:00:00%z) --end_date=$(date +%Y-%m-%dT%H:%M:%S%z)
 
 # Step 2: Analyze TOP SQL
 hcloud RDS ListTopSqls --cli-region=cn-north-4 --instance_id={instance_id} --limit=10
@@ -140,10 +142,10 @@ hcloud RDS ListBackups --cli-region=cn-north-4 --instance_id={instance_id}
 
 # Step 3: Check error logs
 hcloud RDS ListErrorLogs --cli-region=cn-north-4 --instance_id={instance_id} \
-  --start_date=2024-01-01T00:00:00Z --end_date=2024-01-01T23:59:59Z --level=ERROR
+  --start_date=$(date -d '7 days ago' +%Y-%m-%dT00:00:00%z) --end_date=$(date +%Y-%m-%dT%H:%M:%S%z) --level=ERROR
 
 # Step 4: Check task status
-hcloud RDS ListTasks --cli-region=cn-north-4 --start_time=2024-01-01T00:00:00Z --end_time=2024-01-01T23:59:59Z
+hcloud RDS ListTasks --cli-region=cn-north-4 --start_time=$(($(date -d '7 days ago' +%s)*1000)) --end_time=$(($(date +%s)*1000))
 ```
 
 **Resolution Actions**:
@@ -157,7 +159,7 @@ hcloud RDS ListTasks --cli-region=cn-north-4 --start_time=2024-01-01T00:00:00Z -
 ```
 Instance Issue?
 ├── Connection Problem?
-│   ├── Check instance status (ShowInstance)
+│   ├── Check instance status (ListInstances --id)
 │   ├── Check security group (ListErrorLogs)
 │   └── Validate connection (ValidateInstanceConnection)
 ├── Performance Problem?

@@ -7,14 +7,14 @@
 ```bash
 # Query slow logs (last 24 hours)
 hcloud RDS ListSlowLogs --cli-region=cn-north-4 --instance_id={instance_id} \
-  --start_date=2024-01-01T00:00:00Z --end_date=2024-01-01T23:59:59Z
+  --start_date=$(date -d '7 days ago' +%Y-%m-%dT00:00:00%z) --end_date=$(date +%Y-%m-%dT%H:%M:%S%z)
 
 # Query TOP SQL by execution time
 hcloud RDS ListTopSqls --cli-region=cn-north-4 --instance_id={instance_id} --limit=20
 
 # Query historical TOP SQL (last 7 days)
 hcloud RDS ListHistoryTopSqls --cli-region=cn-north-4 --instance_id={instance_id} \
-  --start_date=2024-01-01T00:00:00Z --end_date=2024-01-07T23:59:59Z
+  --start_time=$(($(date -d '7 days ago' +%s)*1000)) --end_time=$(($(date +%s)*1000))
 ```
 
 ### Step 2: Analyze Wait Events
@@ -22,7 +22,7 @@ hcloud RDS ListHistoryTopSqls --cli-region=cn-north-4 --instance_id={instance_id
 ```bash
 # Query wait events to understand bottlenecks
 hcloud RDS ListHistoryWaitEvents --cli-region=cn-north-4 --instance_id={instance_id} \
-  --start_date=2024-01-01T00:00:00Z --end_date=2024-01-01T23:59:59Z
+  --start_time=$(($(date -d '7 days ago' +%s)*1000)) --end_time=$(($(date +%s)*1000))
 ```
 
 **Common Wait Events**:
@@ -93,7 +93,7 @@ hcloud RDS ListTopSqls --cli-region=cn-north-4 --instance_id={instance_id} --lim
 
 # Compare wait events before and after
 hcloud RDS ListHistoryWaitEvents --cli-region=cn-north-4 --instance_id={instance_id} \
-  --start_date=2024-01-02T00:00:00Z --end_date=2024-01-02T23:59:59Z
+  --start_time=$(($(date -d '7 days ago' +%s)*1000)) --end_time=$(($(date +%s)*1000))
 ```
 
 ## Engine-Specific Optimization
