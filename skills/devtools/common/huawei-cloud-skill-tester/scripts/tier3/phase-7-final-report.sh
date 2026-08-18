@@ -125,6 +125,7 @@ def build_phase_1(pd):
         'commands': r.get('commands', []),
         'triggers_count': len(r.get('metadata', {}).get('triggers', [])),
         'commands_count': len(r.get('commands', [])),
+        'doc_checks': r.get('doc_checks', {}),
     }
 
 def build_phase_2(pd):
@@ -157,6 +158,7 @@ def build_phase_4(pd):
         'statistics': r.get('statistics', {}),
         'all_resources_changed': r.get('all_resources_changed', []),
         'manual_test_items': r.get('manual_test_items', []),
+        'doc_gap_issues': r.get('doc_gap_issues', []),
     }
 
 def build_phase_5(pd):
@@ -198,6 +200,47 @@ PHASE_BUILDERS = {
 
 # Aggregate per skill
 all_skills = []
+
+def _phase_reason(p, summ, detail):
+    """#62-008: 构造非 pass phase 的具体原因。"""
+    v = summ.get('verdict', 'unknown')
+    if v == 'pass':
+        return ''
+    fc = summ.get('fail_checks', 0)
+    wc = summ.get('warn_checks', 0)
+    parts = []
+    if fc:
+        parts.append(f"{fc} 项检查未通过")
+    if wc:
+        parts.append(f"{wc} 项警告")
+    if p == 0 and detail:
+        di = detail.get('directory_integrity', {})
+        if not di.get('pass'):
+            bad = [k for k, ok in di.get('checks', {}).items() if not ok]
+            parts.append(f"目录缺: {', '.join(bad)}")
+    if p == 4 and detail:
+        st = detail.get('statistics', {})
+        if st.get('fail', 0):
+            parts.append(f"{st['fail']} 个用例执行失败")
+        if st.get('warn', 0):
+            parts.append(f"{st['warn']} 个用例 warn(参数校验/空输出)")
+        dg = detail.get('doc_gap_issues', [])
+        if dg:
+            parts.append(f"文档缺口 {len(dg)} 处: {', '.join(g.get('param','') for g in dg[:3])}")
+    if p == 1 and detail:
+        mr = detail.get('doc_checks', {}).get('missing_refs', [])
+        if mr:
+            parts.append(f"SKILL.md 引用缺失文件: {', '.join(mr)}")
+        fb = detail.get('doc_checks', {}).get('forbidden_files', [])
+        if fb:
+            parts.append(f"含禁用文件(.bak/.template): {', '.join(fb[:3])}")
+        # phase-1 partial 的常见根因: 命令/触发词提取为空
+        if detail.get('commands_count', 0) == 0:
+            parts.append('未提取到任何命令')
+        if detail.get('triggers_count', 0) == 0:
+            parts.append('未提取到触发词(frontmatter triggers 缺失或为空)')
+    return '; '.join(parts) if parts else v
+
 for sp in skill_paths:
     sn = os.path.basename(sp)
     phases_detail = {}
@@ -252,6 +295,8 @@ for sp in skill_paths:
         phases_summary.append({
             'phase': p, 'name': name_en, 'verdict': summ.get('verdict', 'unknown'),
             'duration_s': meta.get('duration_s', 0), 'summary': one_line,
+            # #62-008: 非 pass 时给出具体原因(fail_checks / warn_checks)
+            'reason': _phase_reason(p, summ, detail),
         })
         phases_detail[str(p)] = detail
     all_skills.append({
@@ -269,6 +314,7 @@ phases_pass = phases_partial = phases_fail = phases_skipped = phases_missing = 0
 total_cases = total_pass = total_fail = total_warn = total_skip = total_error = 0
 total_manual = 0
 total_resources = 0
+total_issues = 0
 overall_verdict = 'pass'  # default
 
 for skill in all_skills:
@@ -279,9 +325,15 @@ for skill in all_skills:
         elif v == 'fail': phases_fail += 1
         elif v == 'skipped': phases_skipped += 1
         elif v == 'missing': phases_missing += 1
+        # #62-011: 统计 phase 级问题(fail_checks)。
+        # 排除 phase 1/4 — 它们的 fail/missing_refs/doc_gap 已在 detail 级计数,
+        # 避免重复计数(审查反馈)。
+        if v in ('partial', 'fail') and ps.get('reason') and ps['phase'] not in (1, 4):
+            total_issues += 1
     # Aggregate from phase 3 + phase 4 detail
     p3 = skill['phases_detail'].get('3')
     p4 = skill['phases_detail'].get('4')
+    p1 = skill['phases_detail'].get('1')
     if p3:
         st = p3.get('statistics', {})
         total_cases += st.get('total', 0)
@@ -294,6 +346,11 @@ for skill in all_skills:
         total_error += st.get('error', 0)
         total_manual += len(p4.get('manual_test_items', []))
         total_resources += len(p4.get('all_resources_changed', []))
+        # #62-011: 用例级失败 + 文档缺口计入问题数
+        total_issues += st.get('fail', 0)
+        total_issues += len(p4.get('doc_gap_issues', []))
+    if p1:
+        total_issues += len(p1.get('doc_checks', {}).get('missing_refs', []))
 
 # Compute overall verdict
 if phases_fail > 0 or total_error > 0:
@@ -321,6 +378,7 @@ summary = {
     'pass_rate': pass_rate,
     'manual_items_count': total_manual,
     'cloud_resources_changed': total_resources,
+    'issues_found': total_issues,
 }
 
 # Auto-generate key findings
@@ -391,6 +449,7 @@ md.append("|--------|-------|")
 md.append(f"| Phases | {summary['phases_pass']} pass / {summary['phases_partial']} partial / {summary['phases_fail']} fail / {summary['phases_skipped']} skipped (of 7) |")
 md.append(f"| Test Cases | total {summary['test_cases_total']} | pass {summary['test_cases_pass']} | fail {summary['test_cases_fail']} | warn {summary['test_cases_warn']} | skip {summary['test_cases_skip']} | error {summary['test_cases_error']} |")
 md.append(f"| Pass Rate | {summary['pass_rate']}% |")
+md.append(f"| Issues Found | {summary.get('issues_found', 0)} (phase 检查失败 + 用例失败 + 文档缺口) |")
 md.append(f"| Manual Items | {summary['manual_items_count']} (need real business data) |")
 md.append(f"| Cloud Resources Changed | {summary['cloud_resources_changed']} (Phase 4 only) |\n")
 
@@ -422,6 +481,9 @@ for skill in all_skills:
         md.append(f"#### Phase {p} — {name_zh} (`{name_en}`)")
         md.append(f"**Verdict:** {icon} {ps['verdict']}  |  **Duration:** {ps['duration_s']}s")
         md.append(f"**Summary:** {ps['summary']}\n")
+        # #62-008: 非 pass 时呈现具体原因
+        if ps.get('reason'):
+            md.append(f"> ⚠️ **原因:** {ps['reason']}\n")
 
         detail = skill['phases_detail'].get(str(p))
         if detail is None:
