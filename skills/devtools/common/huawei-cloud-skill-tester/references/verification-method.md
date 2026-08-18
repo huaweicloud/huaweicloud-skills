@@ -147,8 +147,8 @@ $phase3.result.statistics
 
 ```bash
 # Linux / macOS — 用户在自己的 shell 里 export（不要 echo 给 agent）
-export HUAWEI_ACCESS_KEY="..."
-export HUAWEI_SECRET_KEY="..."
+export HUAWEI_ACCESS_KEY="<your-access-key-id>"
+export HUAWEI_SECRET_KEY="<your-secret-access-key>"
 bash scripts/tier1/phase-4-execute-tests.sh "$WS/skills/$SKILL"
 ```
 
@@ -290,7 +290,7 @@ bash "$env:SCRIPTS\run-test-pipeline.sh" --skills $env:SKILL
 
 ```bash
 # Git Bash — 同上
-HUAWEI_ACCESS_KEY=... HUAWEI_SECRET_KEY=... \
+HUAWEI_ACCESS_KEY=<your-access-key-id> HUAWEI_SECRET_KEY=<your-secret-access-key> \
   bash $SCRIPTS/run-test-pipeline.sh --skills $SKILL
 ```
 

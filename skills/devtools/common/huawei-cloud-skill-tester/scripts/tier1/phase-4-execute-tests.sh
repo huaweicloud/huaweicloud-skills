@@ -63,8 +63,13 @@ PYEOF
 
   # Write Python execution script to temp file
   local py_tmp; py_tmp=$(mktemp)
+  # 共享占位符替换模块(phase-3/4 单一维护点)
+  export PLACEHOLDER_UTILS="$SCRIPT_DIR/lib/placeholder-utils.py"
   cat > "$py_tmp" << 'PYEXEC'
 import json, subprocess, sys, time, os, re
+
+# 加载共享占位符替换逻辑(见 lib/placeholder-utils.py)
+exec(open(os.environ.get('PLACEHOLDER_UTILS', '')).read())
 
 cases_f = sys.argv[1]
 skill_root = sys.argv[2] if len(sys.argv) > 2 else os.path.dirname(os.path.dirname(cases_f))
@@ -88,6 +93,7 @@ for tc in cases:
     entry = {
         'tc_id': tc_id,
         'name': name,
+        'type': tc.get('type', ''),
         'command': tc.get('command', ''),
         'status': 'skip',
         'duration_s': 0,
@@ -96,6 +102,32 @@ for tc in cases:
         'resource_changes': [],
         'user_confirmed': False
     }
+
+    # 兜底: 复用共享 replace_placeholders(与 phase-3 同源, 单一维护点)
+    if tc.get('command'):
+        tc['command'] = replace_placeholders(tc['command'], skill_root)
+        entry['command'] = tc['command']
+
+    # 交互式/模板命令不实际执行 → skip (而非 fail)
+    cmd_chk = tc.get('command', '').strip().lower()
+    _hc = re.match(r'^hcloud\s+(\S+)', cmd_chk)
+    if cmd_chk == 'hcloud' or (_hc and _hc.group(1) in ('configure', 'help', '--help', '-h', '--version')):
+        entry['status'] = 'skip'
+        entry['output_snippet'] = f'交互式/帮助命令 (hcloud {_hc.group(1)}), 非交互模式不可执行, 跳过'
+        skip_count += 1
+        print(f"    ⏭️ SKIP-交互/帮助命令 (hcloud {_hc.group(1)})")
+        exec_results.append(entry)
+        continue
+    if re.search(r'\[\s*--[a-z-]+=\.\.\.', cmd_chk) or re.search(r'\[\s*--key=value', cmd_chk) \
+       or re.search(r'--cli-region=\s*(?:\s|$)', cmd_chk) \
+       or re.search(r'\{endpoint\}|\{url\}|\{host\}|https?://\{', cmd_chk) \
+       or re.search(r'\{[a-z_]+\}', cmd_chk):
+        entry['status'] = 'skip'
+        entry['output_snippet'] = '模板命令(占位符未解析), 跳过'
+        skip_count += 1
+        print(f"    ⏭️ SKIP-模板命令: {tc.get('command', '')[:60]}")
+        exec_results.append(entry)
+        continue
 
     if is_write:
         risk = tc.get('risk_level', 'high')
@@ -128,17 +160,31 @@ for tc in cases:
                 _trunc = int(os.environ.get('OUTPUT_TRUNC_CLI', '1000'))
                 _trunc_err = int(os.environ.get('OUTPUT_TRUNC_ERR', '300'))
                 output = (r.stdout[:_trunc] + r.stderr[:_trunc_err]).strip()
-                status = 'pass' if r.returncode == 0 else 'fail'
-                if r.returncode != 0:
-                    error_detail = (r.stderr[:200] or r.stdout[:200]).strip()
+                if tc.get('type') in ('negative', '负向'):
+                    # 负向用例: 非零退出码 = CLI 正确拒绝未知参数 = pass; 静默接受 = fail
+                    if r.returncode != 0:
+                        status = 'pass'
+                        error_detail = None
+                    else:
+                        status = 'fail'
+                        error_detail = '负向用例: 命令未拒绝未知参数(--invalid-flag-xyz), 报错质量差'
+                    # 负向用例不做 CLI error pattern 复查
                 else:
-                    error_detail = None
-                    # Even with return code 0, check output for CLI error patterns (e.g. hcloud USE_ERROR)
-                    out_lower = output.lower()
-                    _cli_err_patterns = json.loads(os.environ.get('CLI_ERROR_PATTERNS', '[]'))
-                    if any(kw in out_lower for kw in _cli_err_patterns):
-                        status = 'warn'
-                        error_detail = f'CLI returned error in output (rc=0): {output[:200]}'
+                    status = 'pass' if r.returncode == 0 else 'fail'
+                    if r.returncode != 0:
+                        error_detail = (r.stderr[:200] or r.stdout[:200]).strip()
+                    else:
+                        error_detail = None
+                        # Even with return code 0, check output for CLI error patterns (e.g. hcloud USE_ERROR)
+                        out_lower = output.lower()
+                        _cli_err_patterns = json.loads(os.environ.get('CLI_ERROR_PATTERNS', '[]'))
+                        if any(kw in out_lower for kw in _cli_err_patterns):
+                            status = 'warn'
+                            error_detail = f'CLI returned error in output (rc=0): {output[:200]}'
+                        elif not output.strip():
+                            # 输出质量判定(#62-010): 返回码 0 但无任何输出 → 无法确认用户需求被满足
+                            status = 'warn'
+                            error_detail = '返回码 0 但输出为空, 无法确认需求被满足, 建议人工核实'
             else:
                 output = f"命令为空: {cmd_text}"
                 status = 'fail'
@@ -251,6 +297,12 @@ for tc in cases:
                         status = 'fail'
                 except ImportError as e:
                     output = f"SDK导入失败: {str(e)[:200]}"
+                    # ModuleNotFoundError → 环境依赖缺失(非 skill 逻辑错误),
+                    # 明确标注, 提示在 SKILL.md 声明依赖(#53-002)
+                    if 'No module named' in str(e):
+                        _m = re.search(r"No module named '([\w\.]+)'", str(e))
+                        _dep = _m.group(1) if _m else '未知'
+                        output = f"环境依赖缺失: 需安装 {_dep} (pip install {_dep}) — 建议在 SKILL.md 依赖说明中声明"
                     status = 'fail'
                 except Exception as e:
                     output = f"SDK执行失败: {str(e)[:300]}"
@@ -394,6 +446,29 @@ if manual_test_items:
     print(f"{'='*60}")
     print(f"💡 提示: 请提供真实业务数据后手工执行上述命令，或在 templates/test-defaults.json 中配置 request_defaults")
 
+# 文档缺口分析(#007): warn/skip 用例中, SKILL.md 声明了但命令实际不支持的参数
+doc_gap_issues = []
+try:
+    with open(os.path.join(skill_root, 'SKILL.md'), encoding='utf-8') as _md_f:
+        _md_text = _md_f.read()
+except Exception:
+    _md_text = ''
+for r in exec_results:
+    if r.get('status') not in ('warn', 'skip'):
+        continue
+    err = str(r.get('error') or r.get('output_snippet') or '')
+    m = re.search(r'Invalid parameter:?\s*--?([\w-]+)', err) or \
+        re.search(r'Unsupported (?:parameter|option)[^:]*:?\s*--?([\w-]+)', err)
+    if m:
+        flag = '--' + m.group(1).split('=')[0]
+        if flag in _md_text and flag not in [g['param'] for g in doc_gap_issues]:
+            doc_gap_issues.append({
+                'tc_id': r['tc_id'],
+                'param': flag,
+                'detail': f'{flag} 出现在 SKILL.md 中, 但命令执行不被支持 (用例命令: {r.get("command", "")[:80]})'
+            })
+            print(f"    📋 文档缺口: SKILL.md 声明 {flag} 但实际命令不支持 → 建议修正 SKILL.md")
+
 result = {
     'execution_results': exec_results,
     'statistics': {
@@ -405,7 +480,8 @@ result = {
         'pass_rate': pass_rate
     },
     'all_resources_changed': all_resources,
-    'manual_test_items': manual_test_items
+    'manual_test_items': manual_test_items,
+    'doc_gap_issues': doc_gap_issues
 }
 
 print("\n\n---JSON_START---")
