@@ -80,6 +80,7 @@ hcloud configure set --cli-access-key="<your AK>" --cli-secret-key="<your SK>" -
 
 - **`AccessKey Authentication`** and **`AK credential authentication in KooCLI configuration files`** are recommended only for personal use in local testing environments to avoid exposing plaintext AK/SK credentials.
 - For cloud service environments, it is strongly recommended to follow the security requirements in [Huawei Cloud Command Line Tool Service KooCLI](https://support.huaweicloud.com/productdesc-hcli/hcli_26_002.html).
+- If you use a self-built Agent environment, it is recommended to configure Huawei Cloud credentials (HW_ACCESS_KEY and HW_SECRET_KEY) in advance.
 
 ## Issues
 

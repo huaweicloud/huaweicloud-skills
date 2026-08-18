@@ -82,6 +82,7 @@ hcloud configure set --cli-access-key="<your AK> " --cli-secret-key="<yourSK>" -
 
 - **`AccessKey 认证`**和**`KooCLI配置文件的AK凭证认证`**，建议仅在本地测试环境时个人使用，避免明文 AK/SK凭证信息的外泄。
 - 云上环境服务，强烈推荐参考[华为云命令行工具服务KooCLI](https://support.huaweicloud.com/productdesc-hcli/hcli_26_002.html)的安全要求。
+- 若使用自构建的Agent环境，建议提前配置华为云凭据（HW_ACCESS_KEY和HW_SECRET_KEY）。
 
 ## 问题
 
