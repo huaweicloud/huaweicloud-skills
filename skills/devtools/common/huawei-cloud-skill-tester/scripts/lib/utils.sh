@@ -301,6 +301,8 @@ _scan_env_ak_sk() {
 }
 
 # Read AK/SK from hcloud CLI config (returns 0 if both found, exports them)
+# 兼容实际 hcloud 配置格式: mode=AKSK, 字段 accessKeyId/secretAccessKey
+# (也兼容旧格式 mode=devcloud + ak/sk)
 _read_hcloud_config_ak_sk() {
   local hcloud_config="${HCLOUD_CONFIG:-$HOME/.hcloud/config.json}"
   [ -f "$hcloud_config" ] || return 1
@@ -310,9 +312,11 @@ import json, os, sys
 try:
     d=json.load(open(sys.argv[1]))
     for p in d.get('profiles',[]):
-        if p.get('mode','')==os.environ.get('HCLOUD_PROFILE_MODE','devcloud'):
-            print(p.get('ak',''))
-            break
+        if p.get('mode','') in ('AKSK','devcloud','token'):
+            v=p.get('accessKeyId') or p.get('ak') or ''
+            if v:
+                print(v)
+                break
 except Exception: pass
 " "$hcloud_config" 2>/dev/null)
   cfg_sk=$(python3 -c "
@@ -320,9 +324,11 @@ import json, os, sys
 try:
     d=json.load(open(sys.argv[1]))
     for p in d.get('profiles',[]):
-        if p.get('mode','')==os.environ.get('HCLOUD_PROFILE_MODE','devcloud'):
-            print(p.get('sk',''))
-            break
+        if p.get('mode','') in ('AKSK','devcloud','token'):
+            v=p.get('secretAccessKey') or p.get('sk') or ''
+            if v:
+                print(v)
+                break
 except Exception: pass
 " "$hcloud_config" 2>/dev/null)
   if [ -n "$cfg_ak" ] && [ -n "$cfg_sk" ]; then
@@ -469,7 +475,14 @@ cleanup_after_test() {
   for sp in "${all_skill_paths[@]}"; do
     local sn; sn=$(basename "$sp")
     local install_target="$SKILL_INSTALL_DIR/$sn"
-    if [ -d "$install_target" ]; then
+    # 同路径防护: 技能源目录即安装目录时(测试前已安装, 非 Phase 0 复制的副本),
+    # 跳过卸载, 避免 rm -rf 删除技能本身。
+    local rp_sp rp_it
+    rp_sp=$(realpath "$sp" 2>/dev/null || echo "$sp")
+    rp_it=$(realpath "$install_target" 2>/dev/null || echo "$install_target")
+    if [ "$rp_sp" = "$rp_it" ]; then
+      info "  💡 ${sn} 源目录即安装目录，跳过卸载（避免删除技能本身）"
+    elif [ -d "$install_target" ]; then
       step "卸载 ${sn} 从 ${SKILL_INSTALL_DIR}..."
       rm -rf "$install_target"
       pass "  ${SKILL_INSTALL_DIR}/${sn} 已卸载"
@@ -535,9 +548,11 @@ import json, os, sys
 try:
     d=json.load(open(sys.argv[1]))
     for p in d.get('profiles',[]):
-        if p.get('mode','')==os.environ.get('HCLOUD_PROFILE_MODE','devcloud'):
-            print(p.get('ak',''))
-            break
+        if p.get('mode','') in ('AKSK','devcloud','token'):
+            v=p.get('accessKeyId') or p.get('ak') or ''
+            if v:
+                print(v)
+                break
 except Exception: pass
 " "$hcloud_config" 2>/dev/null)
     [ -n "$cfg_ak" ] && return 0

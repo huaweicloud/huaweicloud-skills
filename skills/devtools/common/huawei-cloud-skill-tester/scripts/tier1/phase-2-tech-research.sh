@@ -53,6 +53,33 @@ cmds_f = sys.argv[1]
 cmds = json.load(open(cmds_f))
 results = []
 
+# #62-004: 纯本地工具检测 — 所有命令均不涉及 hcloud/云 API 时,
+# CLI→SDK→API 三级研究无意义, 直接标记 not_applicable, 不走研究流程。
+_cmd_texts = [c.get('command', '') or '' for c in cmds]
+_any_hcloud = any(t.strip().startswith('hcloud ') for t in _cmd_texts)
+_any_sdk = any(('huaweicloudsdk' in t) or ('client.' in t) for t in _cmd_texts)
+if cmds and not _any_hcloud and not _any_sdk:
+    for c in cmds:
+        results.append({
+            'cmd_id': c.get('id', 'CMD-00'),
+            'command': c.get('command', ''),
+            'description': (c.get('description', '') or '')[:100],
+            'recommended_executor': 'script',
+            'risk_level': 'low',
+            'cli': {'available': False, 'command': None, 'reason': '纯本地工具, 不涉及 hcloud CLI'},
+            'sdk': {'available': False, 'package': None, 'method': None, 'api_path': None, 'error': None, 'reason': '纯本地工具, 不涉及华为云 SDK'},
+            'api': {'available': False, 'endpoint': None, 'source': 'not_found', 'reason': '纯本地工具, 不涉及云 API'},
+            'executor_note': '纯本地工具, CLI→SDK→API 三级研究不适用'
+        })
+    summary = {
+        'cli_available': 0, 'sdk_available': 0, 'api_available': 0,
+        'not_available': 0, 'mode': 'not_applicable',
+        'note': '纯本地工具(无 hcloud/云 API 命令), 研究流程跳过'
+    }
+    output = {'research': results, 'summary': summary, 'not_applicable': True}
+    print(json.dumps(output, indent=2, ensure_ascii=False))
+    sys.exit(0)
+
 cli_avail = 0
 sdk_avail = 0
 api_avail = 0

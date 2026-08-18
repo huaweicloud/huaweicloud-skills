@@ -120,6 +120,9 @@ for name in "${SKILL_NAMES[@]}"; do
     ls "${SKILL_PATH:-$SKILL_INSTALL_DIR}" 2>/dev/null | grep huawei-cloud || true
     exit 1
   }
+  # 统一转绝对路径: find_skill_path 在 CWD 存在同名目录时可能返回裸名,
+  # 下游 phase-5/6 只接受绝对/相对路径, 裸名会导致 SKILL_PATHS 为空。
+  path=$(realpath "$path" 2>/dev/null || echo "$path")
   SKILL_PATHS+=("$path")
   info "✅ 找到技能: $name → $path"
 done

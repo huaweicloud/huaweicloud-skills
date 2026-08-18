@@ -266,6 +266,9 @@ for lang, block in all_code_blocks:
             })
 
     elif lang == 'bash' or lang == 'sh' or lang == '':
+        # 合并反斜杠续行: "cmd \ 换行 --args" → "cmd --args" 单行完整命令,
+        # 避免多行命令被拆行后只保留 "cmd \" 导致用例不可执行。
+        block = re.sub(r'\\\s*\n', ' ', block)
         for cl in block.strip().split('\n'):
             cl = cl.strip()
             if not cl or cl.startswith('#') or cl.startswith('$'):
@@ -366,6 +369,28 @@ if os.path.isdir(refs_dir):
         if f.endswith('.md'):
             refs.append('references/%s' % f)
 
+# 文档一致性检查(#003): SKILL.md 中引用的 references/*.md 是否存在
+doc_checks = {'referenced_refs': [], 'missing_refs': []}
+_md_mentions = sorted(set(re.findall(r'references/([\w\-\.]+\.md)', text)))
+doc_checks['referenced_refs'] = ['references/%s' % m for m in _md_mentions]
+for m in _md_mentions:
+    if not os.path.isfile(os.path.join(skill_dir, 'references', m)):
+        doc_checks['missing_refs'].append('references/%s' % m)
+
+# 禁用文件类型检查(issue#37): skill 包不应包含 .bak/.template/.orig/.rej 等
+# 残留/模板文件, 不符合 skill 编写要求。
+_FORBIDDEN_EXT = ('.bak', '.template', '.orig', '.rej', '.swp', '~')
+forbidden_files = []
+for _root, _dirs, _files in os.walk(skill_dir):
+    # 精确匹配路径段中的 .git(避免子串误伤, 如 my.git.repo)
+    if '.git' in _root.split(os.sep):
+        continue
+    for _f in sorted(_files):
+        _low = _f.lower()
+        if _low.endswith(_FORBIDDEN_EXT) or _low.endswith('~'):
+            forbidden_files.append(os.path.join(_root, _f).replace(skill_dir + os.sep, ''))
+doc_checks['forbidden_files'] = forbidden_files
+
 # Also read templates/test-vars.json for SDK/CLI test cases
 test_vars_path = os.path.join(skill_dir, 'templates', 'test-vars.json')
 if os.path.isfile(test_vars_path):
@@ -425,7 +450,8 @@ result = {
     'resource_types': list(set(resource_types)),
     'commands': commands,
     'scripts': scripts,
-    'references': refs
+    'references': refs,
+    'doc_checks': doc_checks
 }
 print(json.dumps(result, indent=2, ensure_ascii=False))
 PYANALYSIS
@@ -494,6 +520,22 @@ PYEOF
   echo ""
   info "提取结果: ${cmd_count} 条命令, ${trig_count} 个触发词, ${res_count} 种资源类型"
   info "写操作: $(echo "$analysis" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('has_write_operations', False))")"
+  # 触发词缺失提示: frontmatter triggers 为空会导致 Phase 1 partial
+  if [ "$trig_count" -eq 0 ]; then
+    warn "⚠️ 未提取到触发词 — SKILL.md frontmatter 缺少 triggers 或为空, Phase 1 判定为 partial"
+  fi
+  # 文档一致性: SKILL.md 引用了但 references/ 下不存在的文件
+  local missing_refs
+  missing_refs=$(echo "$analysis" | python3 -c "import json,sys; d=json.load(sys.stdin); print(' '.join(d.get('doc_checks', {}).get('missing_refs', [])))" 2>/dev/null)
+  if [ -n "$missing_refs" ]; then
+    warn "⚠️ SKILL.md 引用了缺失的 references 文件: $missing_refs"
+  fi
+  # 禁用文件检查(issue#37): .bak/.template 等残留文件
+  local forbidden
+  forbidden=$(echo "$analysis" | python3 -c "import json,sys; d=json.load(sys.stdin); print(' '.join(d.get('doc_checks', {}).get('forbidden_files', [])))" 2>/dev/null)
+  if [ -n "$forbidden" ]; then
+    warn "⚠️ 包含禁用文件类型(.bak/.template 等): $forbidden"
+  fi
   echo ""
   echo "$analysis" | python3 -c "
 import json,sys

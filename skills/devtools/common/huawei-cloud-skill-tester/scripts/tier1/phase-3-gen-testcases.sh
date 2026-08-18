@@ -27,13 +27,20 @@ run_phase3() {
 
   local testcases
   local tc_gen_py_tmp; tc_gen_py_tmp=$(mktemp)
+  # 共享占位符替换模块(phase-3/4 单一维护点)
+  export PLACEHOLDER_UTILS="$SCRIPT_DIR/lib/placeholder-utils.py"
   cat > "$tc_gen_py_tmp" << 'PYEOF'
-import json, sys
+import json, os, sys
+
+# 加载共享占位符替换逻辑(见 lib/placeholder-utils.py)
+exec(open(os.environ.get('PLACEHOLDER_UTILS', '')).read())
 
 with open(sys.argv[1]) as f:
     p1 = json.load(f)
 with open(sys.argv[2]) as f:
     p2 = json.load(f)
+
+skill_dir = sys.argv[3] if len(sys.argv) > 3 else os.getcwd()
 
 caps = p1.get('result', {}).get('capabilities', {})
 research = p2.get('result', {}).get('research', [])
@@ -52,9 +59,14 @@ for r in research:
 
 def make_boundary_cmd(cmd_text, executor):
     """Generate a boundary variant of a command. Use limit=1 (most APIs reject limit=0)."""
+    import re as re2
+    t = cmd_text.strip()
+    low = t.lower()
+    # 无参/帮助/配置类命令不支持 --limit, 边界保持原样(预期正常执行)
+    if re2.match(r'^hcloud\s+(--help|-h|--version|help|version|configure)\b', low):
+        return t
     if executor == 'cli' and cmd_text.startswith('hcloud'):
         if '--limit=' in cmd_text:
-            import re as re2
             return re2.sub(r'--limit=\d+', '--limit=1', cmd_text)
         elif '-limit' not in cmd_text:
             return cmd_text + ' --limit=1'
@@ -79,26 +91,48 @@ def make_boundary_sdk_snippet(snippet, method_name):
     return modified
 
 # If clean commands exist, generate test cases from them
-def replace_placeholders(text):
-    import re, os
-    _region = os.environ.get('HUAWEI_REGION', 'cn-north-4')
-    text = re.sub(r'\{region\}|\{cli_region\}|\{location\}', _region, text)
-    text = re.sub(r'<region>|<cli-region>|<location>', _region, text)
-    text = re.sub(r'\{id\}|\{instance_id\}|\{server_id\}|\{vpc_id\}|\{subnet_id\}|\{flavor_id\}|\{image_id\}|\{config_id\}', 'test-placeholder', text)
-    text = re.sub(r'<id>|<instance_id>|<server_id>|<vpc_id>|<subnet_id>|<flavor_id>|<image_id>|<config_id>', 'test-placeholder', text)
-    text = re.sub(r'--cli-region=\{.*?\}|\{.*?\}', '', text)
-    return text
+# (replace_placeholders 定义在共享模块 lib/placeholder-utils.py, 上方 exec 加载)
+
+def is_template_or_interactive(cmd_text):
+    """识别不可自动执行的模板命令/交互命令: 返回 True 则跳过生成。"""
+    import re
+    t = (cmd_text or '').strip().lower()
+    if not t:
+        return True
+    # 裸 hcloud(模板清理后无操作子命令)
+    if t == 'hcloud':
+        return True
+    # hcloud 帮助/配置类交互命令(无实际操作子命令)。
+    # 注意: 过滤 --version 选项(实际不支持), 但保留 version 子命令(真实可执行)。
+    if re.match(r'^hcloud\s+(--help|-h|--version|help|configure)\b', t):
+        return True
+    # 含 [--key=value ...] 等模板语法
+    if re.search(r'\[\s*--[a-z-]+=\.\.\.', t) or re.search(r'\[\s*--key=value', t):
+        return True
+    # 未解析的 URL/API 模板占位符({endpoint}/https://{...})或残留 {xxx}
+    if re.search(r'\{endpoint\}|\{url\}|\{host\}|https?://\{', t) or re.search(r'\{[a-z_]+\}', t):
+        return True
+    # 残留 <xxx> 占位符(非 shell 重定向, 是未替换模板)
+    if re.search(r'\b(curl|wget)\b.*<[a-z_]+>', t):
+        return True
+    # 残留空 --cli-region=(占位符清理后仍无值)
+    if re.search(r'--cli-region=\s*(?:\s|$)', t):
+        return True
+    return False
 
 if commands and any(c.get('command') for c in commands):
     for cmd in commands:
         tc_f_id += 1
         cmd_text = cmd.get('command', cmd.get('description', ''))
-        cmd_text = replace_placeholders(cmd_text)
+        cmd_text = replace_placeholders(cmd_text, skill_dir)
         # Skip commands that are descriptions without executable code
         if not cmd.get('command') and not cmd.get('command_raw'):
             continue
         # Skip placeholder commands with <...> or [...] that aren't real commands
         if cmd_text and cmd_text.startswith('python3 ') and '<' in cmd_text and '>' in cmd_text:
+            continue
+        # Skip interactive/template commands (hcloud configure, [--key=value ...])
+        if is_template_or_interactive(cmd_text):
             continue
         is_write = cmd.get('is_write', False)
         risk = 'high' if is_write else 'low'
@@ -130,7 +164,7 @@ if commands and any(c.get('command') for c in commands):
         })
         
         # Edge case for read operations: add limit/boundary variant
-        if not is_write and cmd_text:
+        if not is_write and cmd_text and not is_template_or_interactive(cmd_text):
             tc_f_id += 1
             if executor == 'sdk' and method_name:
                 bound_cmd = make_boundary_sdk_snippet(cmd_text, method_name)
@@ -152,6 +186,35 @@ if commands and any(c.get('command') for c in commands):
                 'service': cmd.get('service', ''),
                 'request_class': cmd.get('request_class', '')
             })
+    # 负向用例生成(#005): 对 CLI 命令生成"未知参数"变体, 验证报错质量。
+    # 负向用例预期 CLI 拒绝未知参数(非零退出码 + 错误提示); 若命令静默接受, 则判 fail。
+    # type 用英文 'negative' 作为稳定标识(避免中文硬编码耦合, 展示名仍含"负向")。
+    for cmd in commands:
+        c_text = cmd.get('command', '')
+        if not c_text or not c_text.strip().startswith('hcloud '):
+            continue
+        if cmd.get('is_write', False):
+            continue
+        if is_template_or_interactive(c_text):
+            continue
+        tc_f_id += 1
+        neg_cmd = c_text.strip() + ' --invalid-flag-xyz'
+        functional_cases.append({
+            'id': f'TC-F-{tc_f_id:02d}',
+            'name': f"{cmd.get('description', c_text[:40])}-负向(未知参数)",
+            'type': 'negative',
+            'command': neg_cmd,
+            'expected': 'CLI 应拒绝未知参数并给出错误提示',
+            'is_write': False,
+            'risk_level': 'low',
+            'executor': 'cli',
+            'prerequisites': [],
+            'verification_method': '非零退出码且报错即通过',
+            'dependencies': [],
+            'method_name': '',
+            'service': cmd.get('service', ''),
+            'request_class': ''
+        })
 else:
     # Fallback: generate from capabilities (old behavior)
     for action_type, items in caps.items():
@@ -248,7 +311,7 @@ result = {
 
 print(json.dumps(result, indent=2, ensure_ascii=False))
 PYEOF
-  testcases=$(python3 "$tc_gen_py_tmp" "$p1_file" "$p2_file")
+  testcases=$(python3 "$tc_gen_py_tmp" "$p1_file" "$p2_file" "$skill_dir")
   rm -f "$tc_gen_py_tmp"
 
   local end_ts; end_ts=$(date +%s)
