@@ -1,5 +1,5 @@
 ---
-name: huawei-cloud-hetu-sql-check
+name: huawei-cloud-mrs-hetu-sql-check
 description: |
   Comprehensive SQL statement checking for HetuEngine, supporting two check modes:
   1. Syntax Check - Keyword validation, statement structure verification, clause completeness, HetuEngine syntax compatibility based on Presto/Trino + Hive grammar definitions
@@ -63,7 +63,7 @@ Receive the SQL statement and check mode from the user. If no mode is specified,
 Run the tokenizer to convert SQL text into a Token stream.
 
 ```bash
-python ~/.cac/skills/huawei-cloud-hetu-sql-check/scripts/hetu_sql_tokenizer.py "<sql_text>"
+python ~/.cac/skills/huawei-cloud-mrs-hetu-sql-check/scripts/hetu_sql_tokenizer.py "<sql_text>"
 ```
 
 The tokenizer supports:
@@ -84,7 +84,7 @@ The tokenizer supports:
 Run the parser to generate AST and detect syntax errors.
 
 ```bash
-python ~/.cac/skills/huawei-cloud-hetu-sql-check/scripts/hetu_sql_parser.py "<sql_text>"
+python ~/.cac/skills/huawei-cloud-mrs-hetu-sql-check/scripts/hetu_sql_parser.py "<sql_text>"
 ```
 
 The parser supports major statement types:
@@ -195,7 +195,7 @@ Based on AST and Token stream, execute specification check rules.
 Use the check engine to generate a Markdown format report:
 
 ```bash
-python ~/.cac/skills/huawei-cloud-hetu-sql-check/scripts/hetu_sql_checker.py "<sql_text>" all
+python ~/.cac/skills/huawei-cloud-mrs-hetu-sql-check/scripts/hetu_sql_checker.py "<sql_text>" all
 ```
 
 Report format:
@@ -262,7 +262,7 @@ Each violation entry includes: rule ID, rule name, level, position (line/column)
 For simple SQL checks, run directly:
 
 ```bash
-python ~/.cac/skills/huawei-cloud-hetu-sql-check/scripts/hetu_sql_checker.py "<sql_text>" [syntax|spec|all]
+python ~/.cac/skills/huawei-cloud-mrs-hetu-sql-check/scripts/hetu_sql_checker.py "<sql_text>" [syntax|spec|all]
 ```
 
 Output is in JSON format. For Markdown format report, call in Python:
