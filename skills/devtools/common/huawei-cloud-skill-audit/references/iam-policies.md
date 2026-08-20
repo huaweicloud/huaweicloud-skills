@@ -28,7 +28,7 @@ When auditing a Huawei Cloud skill, the audit checks that the skill's own `refer
 
 | Check | Tool | What It Verifies |
 |-------|------|-----------------|
-| references/iam-policies.md exists | hwcloud-spec | File must exist in the skill directory |
+| references/iam-policies.md exists | skillspector | File must exist in the skill directory |
 | No wildcard permissions | skillspector | No `*:*` or overly broad actions |
 | No hardcoded AK/SK | gitleaks | No credential strings in source files |
 | No sudo/root commands | skillspector | No privilege escalation patterns |

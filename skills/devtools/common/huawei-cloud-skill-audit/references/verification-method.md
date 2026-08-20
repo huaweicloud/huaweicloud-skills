@@ -2,7 +2,7 @@
 
 ## Audit Verification
 
-### Run the five-check audit
+### Run the two-check audit
 
 ```bash
 python3 scripts/skill_audit.py --target /path/to/skill
@@ -11,17 +11,8 @@ python3 scripts/skill_audit.py --target /path/to/skill
 ### Verify each check individually
 
 ```bash
-# skillcheck only
-python3 scripts/skill_audit.py --target /path/to/skill --checks skillcheck
-
-# markdownlint only
-python3 scripts/skill_audit.py --target /path/to/skill --checks markdownlint
-
 # skillspector only
 python3 scripts/skill_audit.py --target /path/to/skill --checks skillspector
-
-# hwcloud-spec only
-python3 scripts/skill_audit.py --target /path/to/skill --checks hwcloud-spec
 
 # gitleaks only
 python3 scripts/skill_audit.py --target /path/to/skill --checks gitleaks
@@ -30,15 +21,7 @@ python3 scripts/skill_audit.py --target /path/to/skill --checks gitleaks
 ### Verify fix after remediation
 
 ```bash
-# Step 1: Auto-fix markdownlint issues
-markdownlint-cli2 "/path/to/skill/**/*.md" --config "/path/to/skill/.markdownlint.json" --fix
-
-# Step 2: Fix non-auto-fixable issues manually (MD036, MD040, references.escape)
-
-# Step 3: Re-run markdownlint --fix to catch new issues
-markdownlint-cli2 "/path/to/skill/**/*.md" --config "/path/to/skill/.markdownlint.json" --fix
-
-# Step 4: Re-run full audit
+# Fix issues per the report's Fix Strategies, then re-run full audit
 python3 scripts/skill_audit.py --target /path/to/skill
 ```
 
