@@ -1,9 +1,8 @@
 ---
 name: huawei-cloud-skill-audit
 description: |
-  Audit Huawei Cloud skills for quality, security, and compliance using a five-check pipeline:
-  skillcheck (agentskills.io spec), markdownlint-cli2 (style), skillspector (AI security),
-  hwcloud-spec (Huawei Cloud SKILL.md spec), and gitleaks (credential leak).
+  Audit Huawei Cloud skills for quality, security, and compliance using a two-check pipeline:
+  skillspector (AI security) and gitleaks (credential leak).
   Generates structured reports with issue details and fix strategies.
   Triggers include: "审计技能","技能审计","检查技能质量","扫描技能问题","技能安全审计",
   "audit skill","check skill quality","scan skills for issues","skill audit",
@@ -33,21 +32,14 @@ Scan a single Huawei Cloud skill directory or a folder of skills, run two securi
 
 ## Prerequisites
 
-1. **Python 3.10+** — Required by skillcheck; Python 3.12+ for external skillspector binary (builtin has no Python version restriction)
-2. **Node.js + npx** — Required by markdownlint-cli2
+1. **Python 3.10+** — for the built-in skillspector and gitleaks checks
+2. **Node.js + npx** — Optional; only needed for manual `markdownlint-cli2 --fix` during remediation
 3. **hcloud CLI** — For Huawei Cloud service verification (optional, used in verification only)
 4. **Huawei Cloud AK/SK** — Not required for audit itself, but needed if verifying skill functionality after audit
 
 skillspector and gitleaks are **built-in** (pure Python) — no external binary or pip install needed. External binaries are used as fallback if available on PATH.
 
-Tools are **auto-installed** on first run (only skillcheck and markdownlint-cli2). If you prefer manual install:
-
-```bash
-pip install skillcheck
-npm install -g markdownlint-cli2
-```
-
-To skip auto-install, use `--no-install` flag.
+To skip fallback auto-install of external binaries, use `--no-install` flag.
 
 ---
 
@@ -83,7 +75,7 @@ Input (skill path or folder)
 | `standard` | All static analyzers (quick + AST + taint tracking) | Medium | CI/CD gate |
 | `deep` | Standard + MCP analysis (least privilege, tool poisoning, rug pull) | Slower | Pre-release full audit |
 
-**Severity filtering applies only to SkillSpector.** gitleaks, hwcloud-spec, skillcheck, and markdownlint always report all findings regardless of scan level.
+**Severity filtering applies only to SkillSpector.** gitleaks always reports all findings regardless of scan level.
 
 ---
 
@@ -121,7 +113,7 @@ python3 scripts/skill_audit.py --target /path/to/skills --scan-level quick
 
 ```bash
 python3 scripts/skill_audit.py --target /path/to/skills --checks skillspector
-python3 scripts/skill_audit.py --target /path/to/skills --skip-checks markdownlint
+python3 scripts/skill_audit.py --target /path/to/skills --skip-checks gitleaks
 ```
 
 ### Run with custom tool paths
@@ -148,10 +140,10 @@ Use `--skip-checks` to exclude specific checks.
 | `--target` | Yes | Single skill dir or parent folder of skills | `/home/user/.hermes/skills/huawei-cloud-ecs-manage` |
 | `--output-dir` | No | Report output directory (default: parent of target) | `--output-dir ./reports` |
 | `--scan-level` | No | Scan depth: critical/high/quick/standard/deep (default: critical) | `--scan-level deep` |
-| `--checks` | No | Comma-separated checks to run (default: all) | `--checks skillspector` |
-| `--markdownlint` | No | markdownlint-cli2 binary path override | `--markdownlint /usr/local/bin/markdownlint-cli2` |
+| `--checks` | No | Comma-separated checks to run (default: all)；可用值仅 `skillspector`,`gitleaks`。与 `--skip-checks` 互斥，不可同时使用 | `--checks skillspector` |
 | `--skillspector` | No | SkillSpector binary path override | `--skillspector /usr/local/bin/skillspector` |
 | `--gitleaks` | No | gitleaks binary path override | `--gitleaks /usr/local/bin/gitleaks` |
+| `--skip-checks` | No | Comma-separated checks to skip；与 `--checks` 互斥，不可同时使用 | `--skip-checks gitleaks` |
 | `--no-install` | No | Skip auto-install of tools | `--no-install` |
 
 ---
@@ -175,30 +167,6 @@ Four sections:
 ---
 
 ## Fix Strategies Reference
-
-### hwcloud-spec (Huawei Cloud SKILL.md Spec)
-
-| Rule | Fix |
-|------|-----|
-| frontmatter.missing.{field} | Add required field: name (match dir name), description (include summary + triggers), tags (<=5); recommended: version (semver like 1.0.0) |
-| frontmatter.name-mismatch | name field value must exactly match the skill directory name |
-| frontmatter.tags-too-many | Reduce tags to 5 or fewer |
-| frontmatter.version-format | version must follow semver format (e.g. 2.0.0) |
-| frontmatter.description-too-short | description should include: feature summary, tech basis, use cases, trigger words |
-| section.missing-required | Add required sections: Overview, Prerequisites, Core Commands, Parameter Confirmation, Reference Documents |
-| section.missing-recommended | Add recommended sections: Output Format, Verification Method, Best Practices, Notes |
-| size.skill-md-lines | SKILL.md exceeds 500 lines — split content into references/ subdirectory |
-| size.dir-too-large | Skill directory exceeds 5MB — split large files into references/ or scripts/ |
-
-### markdownlint-cli2
-
-| Rule | Fix |
-|------|-----|
-| MD013 line-length | Break long lines; or disable for code blocks in .markdownlint.json |
-| MD036 no-emphasis-as-heading | Replace **text** pseudo-headings with ### text real headings |
-| MD031 blanks-around-fences | Add blank lines before/after fenced code blocks |
-| MD007 ul-indent | Fix list indentation to match configured indent (default 4) |
-| MD024 no-duplicate-heading | Add distinguishing suffix or enable siblings_only |
 
 ### skillspector
 
@@ -227,20 +195,10 @@ Four sections:
 
 After running the audit and getting a FAIL, follow this sequence:
 
-1. **Run `markdownlint-cli2 --fix` FIRST** — auto-fixes MD022/MD031/MD032/MD047/MD012/MD009/MD010 and many more.
-   ```bash
-   markdownlint-cli2 "skills/my-skill/**/*.md" --config "skills/my-skill/.markdownlint.json" --fix
-   ```
+1. **Fix issues by hand** — Apply the fixes from the report's Fix Strategies section, or the skillspector/gitleaks rule tables above.
+2. **Re-run the full audit** to verify PASS.
 
-   2. **Fix hwcloud-spec missing sections** — Add required sections by hand (require domain knowledge).
-
-   3. **Fix MD036 (emphasis-as-heading)** — Replace `*text*` or `**text**` pseudo-heading with `### heading` or plain text.
-
-   4. **Fix MD040 (fenced-code-language)** — Replace bare ` ``` ` with ` ```text ` or the appropriate language.
-
-   5. **Run `markdownlint-cli2 --fix` AGAIN** — Catch new issues from manual edits.
-
-   6. **Re-run the full audit** to verify PASS.
+> Markdown style and SKILL.md spec issues are not audited by this skill; use external tools like `markdownlint-cli2 --fix` only if you need to fix markdown style separately.
 
 ---
 
@@ -255,10 +213,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - run: npm install -g markdownlint-cli2
       - name: Run audit
         run: python3 scripts/skill_audit.py --target . --output-dir .
       - name: Upload report
@@ -273,36 +227,12 @@ jobs:
 
 ## Configuration Files
 
-### skillcheck.toml
+The built-in checks use their bundled rule sets — no external config required:
 
-```toml
-[frontmatter]
-extension_fields = [
-    "license",
-    "platforms",
-    "metadata",
-    "prerequisites",
-]
-```
+- `scripts/checks/skillspector_rules.json` — skillspector rules (47 rules / 439 patterns)
+- `scripts/checks/gitleaks_rules.json` — gitleaks rules (222 rules)
 
-### .markdownlint.json
-
-```json
-{
-  "default": true,
-  "MD003": { "style": "atx" },
-  "MD004": { "style": "dash" },
-  "MD013": { "line_length": 200, "code_blocks": false, "tables": false },
-  "MD024": { "siblings_only": true },
-  "MD033": false,
-  "MD034": false,
-  "MD040": false,
-  "MD041": false,
-  "MD046": false,
-  "MD047": false,
-  "MD058": false
-}
-```
+`.markdownlint.json` and `skillcheck.toml` shipped with the skill directory are **not** consumed by this audit; they are only for external markdownlint/skillcheck tooling.
 
 ---
 
@@ -348,10 +278,7 @@ python3 scripts/skill_audit.py --target /path/to/skill
 ### Verify fix
 
 ```bash
-# Auto-fix markdownlint issues
-markdownlint-cli2 "/path/to/skill/**/*.md" --config "/path/to/skill/.markdownlint.json" --fix
-
-# Re-run audit
+# Fix issues from the report's Fix Strategies section, then re-run audit
 python3 scripts/skill_audit.py --target /path/to/skill
 ```
 
@@ -377,8 +304,7 @@ python3 scripts/skill_audit.py --target /path/to/skill
 ## Best Practices
 
 - Run audit before accepting any Huawei Cloud skill contribution
-- Fix markdownlint issues with `--fix` first, then fix non-auto-fixable items manually
-- Always re-run full audit after fixing to verify PASS
+- Fix issues per the report's Fix Strategies, then always re-run full audit to verify PASS
 - For large repos, scan individual skills one at a time to avoid huge reports
 - Run both `huawei-cloud-skill-audit` and `gitcode-security-scanner` for complete security coverage
 
@@ -386,7 +312,8 @@ python3 scripts/skill_audit.py --target /path/to/skill
 
 ## Notes
 
-- Five-check pipeline runs sequentially; each check is independent
+- 本 skill 仅生成审计报告和修复策略，**不自动修改任何技能文件**；修复由用户按报告 Fix Strategies 或 Remediation Workflow 手动执行，修复后需重新运行审计验证
+- Two-check pipeline runs sequentially; each check is independent
 - API endpoints are strictly prohibited from being inferred
 - Credentials (AK/SK) are read from environment variables; hardcoding is prohibited
 - **If AK/SK is missing for post-audit verification, prompt the user; do not skip**
@@ -403,9 +330,8 @@ python3 scripts/skill_audit.py --target /path/to/skill
 |----------|---------|
 | Skill directory does not exist | Report error and terminate |
 | Target has no SKILL.md and no subdirs with SKILL.md | Report error: no skills found |
-| markdownlint-cli2 not found | Auto-install via npm |
+| Built-in rules file missing | Auto-download fallback binary (skillspector/gitleaks) |
 | Python version < 3.12 | External skillspector binary not available; builtin still works |
-| Node/npx not on PATH | Pass --node-bin to specify Node binary directory |
 | Large repo produces huge report | Scan individual skills; use head/tail to read summary |
 | gitleaks false positive | Add to .gitleaksignore file |
 | skillspector exit code 1 | Risk score > 50; treated as finding source, not hard failure |
@@ -416,7 +342,7 @@ python3 scripts/skill_audit.py --target /path/to/skill
 
 - **Two-Check Pipeline** — Each check is independent and contributes to the overall gate verdict
 - **Auto-Install** — Missing tools are installed automatically on first run
-- **Chain Verification** — All five checks must pass for gate verdict PASS
+- **Chain Verification** — All enabled checks must pass for gate verdict PASS
 - **Agent-proof** — Write operations require user confirmation; automatic gate bypassing is not allowed
 - **Data-Driven** — Report is structured text with clear severity levels and fix strategies
 - **Batch Repeatable** — Same skill can be audited repeatedly; --fresh resets
