@@ -1,0 +1,87 @@
+#!/usr/bin/expect -f
+# Kunpeng DevKit WebUI Mode - Interactive Installation Automation Script
+# Usage: ./auto_install_devkit.expect [install_path] [port]
+#
+# This script automates all interactive steps of install.sh -a:
+#   1. Select access mode (username/password)
+#   2. Authorize handling of environment check failures
+#   3. Enter installation path
+#   4. Enter installation port
+#   5. Confirm available port
+#   6. Firewall port confirmation
+#   7. Install assembly dependencies
+#
+# Examples:
+#   Default:           ./auto_install_devkit.expect
+#   Custom path:       ./auto_install_devkit.expect /data/devkit
+#   Custom path+port:  ./auto_install_devkit.expect /data/devkit 9090
+
+set timeout 600
+
+set install_path ""
+set install_port ""
+
+if {$argc >= 1} {
+    set install_path [lindex $argv 0]
+}
+if {$argc >= 2} {
+    set install_port [lindex $argv 1]
+}
+
+spawn bash install.sh -a
+
+expect {
+    "access mode for your installation" {
+        send "1\r"
+        exp_continue
+    }
+    "Do you want to authorize" {
+        send "y\r"
+        exp_continue
+    }
+    "Do you want to set image sources" {
+        send "y\r"
+        exp_continue
+    }
+    "Enter the installation path" {
+        if {$install_path != ""} {
+            send "$install_path\r"
+        } else {
+            send "\r"
+        }
+        exp_continue
+    }
+    "Please enter the installation port" {
+        if {$install_port != ""} {
+            send "$install_port\r"
+        } else {
+            send "\r"
+        }
+        exp_continue
+    }
+    "is available, do you want" {
+        send "y\r"
+        exp_continue
+    }
+    "Do you want to continue" {
+        send "y\r"
+        exp_continue
+    }
+    "Do you want to install the dependencies for assembly" {
+        send "y\r"
+        exp_continue
+    }
+    "Enter the serial number of the plug-in" {
+        send "1,2,3,4,5,6\r"
+        exp_continue
+    }
+    "select the number" {
+        send "1\r"
+        exp_continue
+    }
+    "Enter the serial number" {
+        send "1\r"
+        exp_continue
+    }
+    eof
+}
