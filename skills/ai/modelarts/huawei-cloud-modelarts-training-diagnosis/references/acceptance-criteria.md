@@ -214,8 +214,8 @@ hcloud ModelArts ShowObsUrlOfTrainingJobLogs --cli-region=cn-north-4 --cli-outpu
 - All API calls succeed (HTTP 200)
 - Diagnosis output contains all required sections (Markdown format):
   - `## 诊断结论` (with table containing task/status/fault level)
-  - `## 根因分析` (with confidence level per root cause)
-  - `## 修复建议` or `## 建议补充信息`
+  - `## 根因` (with confidence level per root cause)
+  - `## 修复建议` or `## 后续步骤`
 - Root cause includes confidence level (HIGH/MEDIUM/LOW)
 - Root cause references specific API fields and values
 

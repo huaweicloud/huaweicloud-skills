@@ -333,7 +333,7 @@ hcloud ModelArts ListTrainingJobs --cli-region=cn-north-4
 
 ### Security Constraints
 
-1. **Read-only throughout**: Only call GET APIs; never call Create/Update/Delete/Stop
+1. **Read-only throughout**: Only call GET APIs (except ListTrainingJobs which uses POST for read-only list query); never call Create/Update/Delete/Stop
 2. **No credential leakage**: Never print AK/SK
 3. **User confirmation required**: If fix suggestions involve changes (restart, modify specs), must clearly prompt "requires user confirmation before manual execution"; never auto-execute
 4. **Sensitive information masking**: Logs may contain sensitive info; mask sensitive fields before output (e.g., desensitize IPs, do not print complete tokens)

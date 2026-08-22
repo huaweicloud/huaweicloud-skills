@@ -4,7 +4,7 @@
 Huawei Cloud KooCLI (hcloud) is the official Huawei Cloud command-line tool that supports managing 100+ cloud services. This guide provides complete installation, configuration, and verification processes.
 
 ## Version Requirements
-- **Minimum version**: One major version before the latest major version (e.g., if current is 7.x.x, then not lower than 6.x.x)
+- **Minimum version**: 7.2.2 or higher (required by huawei-cloud-modelarts-training-diagnosis skill)
 - **Latest version**: Refer to https://support.huaweicloud.com/wtsnew-hcli/index.html
 - **Verification command**: `hcloud version`
 - **Update command**: `hcloud update`
