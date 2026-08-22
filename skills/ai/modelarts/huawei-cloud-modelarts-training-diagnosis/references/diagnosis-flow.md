@@ -164,7 +164,7 @@ Match collected information in the following order:
 | ListTrainingJobEvents | <event summary> |
 | ListTrainingJobStages | <stage summary> |
 
-## 建议补充信息
+## 后续步骤
 
 1. 调用 `<API>` 获取 `<field>`（原因：<why this information is needed>）
 2. 手动检查 `<environment/configuration>`（原因：<API 无法获取的信息>）

@@ -154,7 +154,7 @@ Meets one of the following:
 | ListTrainingJobEvents | 无错误事件 |
 | ListTrainingJobStages | 所有阶段状态正常 |
 
-## 建议补充信息
+## 后续步骤
 
 1. 调用 `ShowTrainingJobLogsPreview` 获取完整日志（原因：当前 `message` 字段仅显示 `internal error`，无法定位具体问题）
 2. 手动检查训练容器的环境变量配置（原因：API 无法获取容器内部环境信息）
