@@ -1,5 +1,5 @@
 ---
-name: huawei-cloud-dws-mem-diag
+name: huawei-cloud-dws-dymem-diag
 description: |
   DWS cluster memory high root cause diagnosis skill, based on KooCLI v3.2.0+ and DWS Autopilot MCP Server.
   Automatically collects memory metrics, analyzes root causes (customer-side / system-side), and outputs a standardized diagnosis report.
