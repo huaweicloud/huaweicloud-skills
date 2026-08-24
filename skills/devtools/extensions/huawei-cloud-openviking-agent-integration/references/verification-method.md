@@ -36,6 +36,7 @@ Step-by-step verification for each workflow of the OpenViking agent integration 
 | Template-level write | Template `start.sh` contains the re-injection block (agents: OpenCode, Hermes, KimiCode, OpenClaw) |
 | Backup created | `.bak.<timestamp>` file exists next to each modified config |
 | Post-integration status | `status.sh` shows `template + live` (or documented partial state) |
+| **DeepSeek Harness bundle check** | `grep '@openviking/dsh-memory-plugin' <sandbox>/.dsh/profiles/web/package.json` shows the dependency + `dsh.profile.bundles` entry, and `node_modules/@openviking/dsh-memory-plugin/package.json` exists. Boot check: `dsh --profile web --port 0` starts (`dsh web: http://127.0.0.1:<port>`) and `--dump-config` composes the `openviking-memory` group. |
 | **OpenClaw live endpoint check** | Gateway process has `OPENVIKING_BASE_URL` in env: `tr '\0' '\n' < /proc/$(pgrep -f openclaw-gateway \| head -1)/environ \| grep OPENVIKING`. If missing, sandbox was restarted via `stop+start` without re-running `start.sh` — rebuild via Task 7 procedure. `integrate.sh --agent openclaw --dry-run` detects this automatically. |
 
 ## Task 5/6: Unbind
