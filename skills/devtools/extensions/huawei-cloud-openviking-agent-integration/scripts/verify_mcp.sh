@@ -6,6 +6,7 @@
 # Usage: ./verify_mcp.sh [--endpoint URL] [--api-key KEY]
 # =============================================================================
 set -euo pipefail
+source "$(dirname "$0")/common.sh"
 
 OV_ENDPOINT="${OV_ENDPOINT:-http://127.0.0.1:1933}"
 OV_API_KEY="${OV_API_KEY:-}"
@@ -18,12 +19,6 @@ while [[ $# -gt 0 ]]; do
 done
 
 MCP_URL="${OV_ENDPOINT}/mcp"
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
-
-log_info()  { echo -e "${BLUE}[INFO]${NC} $*"; }
-log_ok()    { echo -e "${GREEN}[OK]${NC} $*"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
-log_warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 
 # Build auth headers
 AUTH_HEADERS=()
