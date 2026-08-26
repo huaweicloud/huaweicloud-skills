@@ -367,6 +367,11 @@ See [Verification Method](references/verification-method.md) for step-by-step ve
 
 The skill workflow is as follows:
 
+0. **⚠️ Billing Confirmation (MANDATORY)** — Before executing any operation, inform the user of potential billing implications and obtain explicit consent:
+   - **UCS is a paid service**: Registering a cluster with UCS incurs management fees. The cluster will be subject to UCS policy governance constraints after registration.
+   - **Policy center costs**: Enabling policy center on a cluster may incur additional governance fees.
+   - Ask the user to confirm: "Do you understand the billing implications and wish to proceed? (yes/no)"
+   - Only proceed if the user explicitly confirms. If the user declines, stop and do not execute any operations.
 1. **Environment Check** — Verify hcloud CLI is installed and AK/SK credentials are configured (see [CLI Installation Guide](references/cli-installation-guide.md))
 2. **Version Compatibility Check** — Call `ListRegisteredClusterVersions` to get the list of K8s versions supported by UCS, and confirm the target cluster version is in the list
 3. **Cluster Registration** — Choose registration method based on cluster type:
