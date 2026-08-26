@@ -5,6 +5,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import *
 
+check_environment()
+
 if os.path.isfile(RUNTIME_PYTHON):
     print("[2/5] \u23ed\ufe0f Already done: mirror already extracted, skip extraction", flush=True)
     sys.exit(0)
