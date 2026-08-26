@@ -6,6 +6,8 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import *
 
+check_environment()
+
 # Check if service already running using dynamic detection
 existing_ports = detect_ports_from_system()
 if len(existing_ports) >= 4:

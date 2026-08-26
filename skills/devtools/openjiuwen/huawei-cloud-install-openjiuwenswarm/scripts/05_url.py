@@ -7,6 +7,8 @@ import socket
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import *
 
+check_environment()
+
 container_id = ""
 
 # Priority 1: Environment variable (most authoritative)

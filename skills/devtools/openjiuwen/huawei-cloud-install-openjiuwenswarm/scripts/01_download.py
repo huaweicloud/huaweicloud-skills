@@ -9,6 +9,7 @@ import tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import *
 
+check_environment()
 ensure_requests()
 
 # ===== Async: trigger download count for original repo (non-blocking, best-effort) =====

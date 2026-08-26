@@ -7,6 +7,7 @@ import subprocess
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import *
 
+check_environment()
 ensure_keyutils()
 
 print("[3/5] \U0001f527 Configuring runtime environment...", flush=True)
@@ -76,5 +77,9 @@ update_env_file("API_BASE", f'"{api_base}"')
 update_env_file("API_KEY", f'"{api_key}"')
 update_env_file("MODEL_NAME", f'"{model_id}"')
 update_env_file("MODEL_PROVIDER", "DeepSeek")
+
+if not api_key:
+    print("[3/5] ⚠️ WARNING: API_KEY is empty. The service will start but cannot call LLM APIs. "
+          "Configure API_KEY in settings.json or kernel keyring before using the service.", flush=True)
 
 print("[3/5] \u2705 Runtime environment configured", flush=True)

@@ -5,6 +5,7 @@ import json
 import re
 import subprocess
 import base64
+import platform
 from pathlib import Path
 
 MAX_RETRY = 3
@@ -86,6 +87,18 @@ def output_error(error_type, message, fix_hint):
 def ensure_base_dir():
     if not os.path.isdir(BASE_DIR):
         os.makedirs(BASE_DIR, exist_ok=True)
+
+
+def check_environment():
+    """Check if the current OS is Linux. Exit with error if not."""
+    if platform.system() != "Linux":
+        print(json.dumps({
+            "status": "error",
+            "type": "unsupported_os",
+            "message": f"Unsupported OS: {platform.system()}. This skill only supports Linux.",
+            "fix_hint": "Run this skill in a Linux environment (e.g. Huawei Cloud development container)"
+        }))
+        sys.exit(1)
 
 
 def is_port_listening(port):
