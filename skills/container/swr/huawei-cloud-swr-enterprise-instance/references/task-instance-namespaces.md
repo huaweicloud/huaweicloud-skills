@@ -2,29 +2,36 @@
 
 ## Overview
 
-SWR enterprise instance namespaces organize repositories within an instance. Unlike basic SWR namespaces, instance namespaces support advanced features like automatic vulnerability scanning and image blocking. This task covers creating, listing, showing, updating, and deleting instance namespaces.
+SWR enterprise instance namespaces organize repositories within an instance.
+Unlike basic SWR namespaces, instance namespaces support advanced features
+like automatic vulnerability scanning and image blocking.
+This task covers creating, listing, showing, updating, and deleting
+instance namespaces.
 
 ## Operations Catalog
 
 | Operation                    | Method | Description              | Key Parameters                                  |
 | ---------------------------- | ------ | ------------------------ | ----------------------------------------------- |
-| `CreateInstanceNamespace`    | POST   | Create namespace             | `--instance_id`, `--namespace_name`, `--metadata.public`, `--metadata.auto_scan`, `--metadata.prevent_vul`, `--metadata.severity` |
-| `ListInstanceNamespaces`     | GET    | List namespaces         | `--instance_id`, `--limit`, `--offset`, `--name`, `--public` |
-| `ShowInstanceNamespace`      | GET    | Show namespace details         | `--instance_id`, `--namespace_name`             |
-| `UpdateInstanceNamespace`    | PUT    | Update namespace             | `--instance_id`, `--namespace_name`, `--metadata.public`, `--metadata.auto_scan`, `--metadata.prevent_vul`, `--metadata.severity`, `--cve_allowlist` |
-| `DeleteInstanceNamespace`    | DELETE | Delete namespace             | `--instance_id`, `--namespace_name`             |
+| `CreateInstanceNamespace`    | POST   | Create namespace         | `--instance_id`, `--namespace_name`, `--metadata.public`, `--metadata.auto_scan`, `--metadata.prevent_vul`, `--metadata.severity` |
+| `ListInstanceNamespaces`     | GET    | List namespaces          | `--instance_id`, `--limit`, `--offset`, `--name`, `--public` |
+| `ShowInstanceNamespace`      | GET    | Show namespace details   | `--instance_id`, `--namespace_name`             |
+| `UpdateInstanceNamespace`    | PUT    | Update namespace         | `--instance_id`, `--namespace_name`, `--metadata.public`, `--metadata.auto_scan`, `--metadata.prevent_vul`, `--metadata.severity`, `--cve_allowlist` |
+| `DeleteInstanceNamespace`    | DELETE | Delete namespace         | `--instance_id`, `--namespace_name`             |
 
 ## Workflows
 
 ### W1: Create a Namespace
 
 **Pre-creation Checklist**:
+
 1. Verify instance is in `Running` status:
+
 ```bash
 hcloud SWR ShowInstance --instance_id=<instance-id> --cli-region=cn-north-4
 ```
-2. Decide namespace visibility (`metadata.public`)
-3. Decide security scanning settings (auto_scan, prevent_vul, severity)
+
+1. Decide namespace visibility (`metadata.public`)
+2. Decide security scanning settings (auto_scan, prevent_vul, severity)
 
 ```bash
 # Create a basic private namespace
@@ -41,6 +48,7 @@ hcloud SWR CreateInstanceNamespace --instance_id=<instance-id> --namespace_name=
 ```
 
 **Namespace Naming Rules**:
+
 - Start with lowercase letter or digit
 - Followed by lowercase letters, digits, dots (`.`), underscores (`_`), or hyphens (`-`)
 - Dots, underscores, hyphens cannot be directly connected (e.g., `a._b` or `a.-b` invalid)
@@ -48,20 +56,12 @@ hcloud SWR CreateInstanceNamespace --instance_id=<instance-id> --namespace_name=
 - Length: 1-64 characters
 
 **Security Scanning Parameters**:
-- `--metadata.auto_scan`: Whether to automatically trigger vulnerability scanning when an image is pushed. Values: `true` or `false`. When enabled, every uploaded image is scanned automatically.
-- `--metadata.prevent_vul`: Whether to block pulling images that contain vulnerabilities above the severity threshold.
-  Values: `true` or `false`. When enabled, `docker pull` will fail for images with vulnerabilities exceeding the threshold.
-- `--metadata.severity`: The vulnerability severity threshold for blocking. Only effective when `prevent_vul=true`. Values: `none`, `low`, `medium`, `high`, `critical`.
 
-**Scanning Workflow**:
-1. Image is pushed to the namespace repository
-2. If `auto_scan=true`, vulnerability scanning starts automatically
-3. Scan results are available via `ShowInstanceArtifact --with_scan_overview=true`
-4. If `prevent_vul=true` and vulnerabilities exceed `severity` threshold, `docker pull` is blocked
-5. Use `StartManualScanning` to trigger a manual scan on existing artifacts
-6. Use `ListInstanceArtifactVulnerabilities` to view detailed vulnerability findings
+- `metadata.auto_scan=true`: Automatically scan images on upload
+- `metadata.prevent_vul=true`: Block pulling images that have vulnerabilities above the severity threshold
+- `metadata.severity`: Vulnerability blocking threshold (`none`, `low`, `medium`, `high`, `critical`)
 
-**CVE Whitelist**: Use `--cve_allowlist.items.[N].cve_id` in `UpdateInstanceNamespace` to allow specific CVEs to bypass blocking, even if their severity exceeds the threshold.
+**Severity Behavior**:
 
 - `none`: Block any image with any vulnerability
 - `low`: Block images with low or higher severity vulnerabilities
@@ -103,6 +103,7 @@ hcloud SWR ShowInstanceNamespace --instance_id=<instance-id> --namespace_name=gr
 ```
 
 **Use Cases**:
+
 - Check namespace visibility (public/private)
 - Verify security scanning settings (auto_scan, prevent_vul, severity)
 - View namespace metadata and configuration
@@ -134,11 +135,14 @@ hcloud SWR UpdateInstanceNamespace --instance_id=<instance-id> --namespace_name=
 ⚠️ **CAUTION**: Deleting a namespace permanently removes ALL repositories and artifacts under it. This is irreversible.
 
 **Pre-deletion Checklist**:
+
 1. List all repositories in the namespace:
+
 ```bash
 hcloud SWR ListInstanceRepositories --instance_id=<instance-id> --namespace_id=<ns-id> --cli-region=cn-north-4
 ```
-2. Confirm with the user that ALL repositories and artifacts will be permanently deleted
+
+1. Confirm with the user that ALL repositories and artifacts will be permanently deleted
 
 ```bash
 hcloud SWR DeleteInstanceNamespace --instance_id=<instance-id> --namespace_name=group-dev --cli-region=cn-north-4

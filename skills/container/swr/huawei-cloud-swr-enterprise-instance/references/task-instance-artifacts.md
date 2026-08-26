@@ -2,24 +2,22 @@
 
 ## Overview
 
-SWR enterprise instance artifacts represent image versions (tags) within repositories. Enterprise instances provide advanced artifact management including vulnerability scanning, build history viewing, and security blocking. This task covers listing, viewing, scanning, and deleting artifacts.
-
-> ⚠️ **Scanning Dependency — HSS Required**: Image vulnerability scanning depends on Huawei Cloud HSS (Host Security Service). The current skill does not support HSS configuration or management.
-> - **Basic edition**: Scanning is not supported. Upgrade to professional edition (`swr.ee.professional`).
-> - **Professional edition**: Scanning requires HSS to be activated. Please enable HSS in the Huawei Cloud console first, then verify scanning works via the SWR enterprise instance console (`https://console.huaweicloud.com/swr-instance`) before using `StartManualScanning` or `ListInstanceArtifactVulnerabilities` in automation.
-> - If scanning fails on a professional edition instance, check HSS service status and activation for the target region.
+SWR enterprise instance artifacts represent image versions (tags) within
+repositories. Enterprise instances provide advanced artifact management
+including vulnerability scanning, build history viewing, and security blocking.
+This task covers listing, viewing, scanning, and deleting artifacts.
 
 ## Operations Catalog
 
 | Operation                            | Method | Description              | Key Parameters                                  |
 | ------------------------------------ | ------ | ------------------------ | ----------------------------------------------- |
-| `ListInstanceArtifacts`              | GET    | List artifact versions         | `--instance_id`, `--namespace_name`, `--repository_name`, `--limit`, `--offset`, `--tags`, `--type` |
-| `ListInstanceAllArtifacts`           | GET    | List all artifact versions     | `--instance_id`, `--limit`, `--marker`          |
-| `ShowInstanceArtifact`               | GET    | Show artifact details         | `--instance_id`, `--namespace_name`, `--repository_name`, `--reference`, `--with_scan_overview` |
-| `ShowInstanceArtifactAddition`       | GET    | Get artifact addition info         | `--instance_id`, `--namespace_name`, `--repository_name`, `--reference`, `--addition` |
-| `ListInstanceArtifactVulnerabilities`| GET    | List artifact vulnerabilities         | `--instance_id`, `--namespace_name`, `--repository_name`, `--reference` |
-| `StartManualScanning`                | POST   | Start manual scanning         | `--instance_id`, `--namespace_name`, `--repository_name`, `--reference` |
-| `DeleteInstanceArtifact`             | DELETE | Delete artifact version             | `--instance_id`, `--namespace_name`, `--repository_name`, `--reference` |
+| `ListInstanceArtifacts`              | GET    | List artifact versions   | `--instance_id`, `--namespace_name`, `--repository_name`, `--limit`, `--offset`, `--tags`, `--type` |
+| `ListInstanceAllArtifacts`           | GET    | List all artifact versions | `--instance_id`, `--limit`, `--marker`          |
+| `ShowInstanceArtifact`               | GET    | Show artifact version details | `--instance_id`, `--namespace_name`, `--repository_name`, `--reference`, `--with_scan_overview` |
+| `ShowInstanceArtifactAddition`       | GET    | Show artifact additional info | `--instance_id`, `--namespace_name`, `--repository_name`, `--reference`, `--addition` |
+| `ListInstanceArtifactVulnerabilities`| GET    | List artifact vulnerabilities | `--instance_id`, `--namespace_name`, `--repository_name`, `--reference` |
+| `StartManualScanning`                | POST   | Start manual artifact scan | `--instance_id`, `--namespace_name`, `--repository_name`, `--reference` |
+| `DeleteInstanceArtifact`             | DELETE | Delete artifact version   | `--instance_id`, `--namespace_name`, `--repository_name`, `--reference` |
 
 ## Workflows
 
@@ -40,19 +38,6 @@ hcloud SWR ListInstanceArtifacts --instance_id=<instance-id> --namespace_name=gr
 ```
 
 ⚠️ **Pagination Note**: `offset` must be 0 or a multiple of `limit` (0, 20, 40...).
-
-**Return Field Descriptions** (ListInstanceArtifacts response):
-
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| `digest` | string | Artifact digest (SHA256) — unique identifier for the image version |
-| `type` | string | Artifact type: `IMAGE` (container image) or `CHART` (Helm chart) |
-| `size` | integer | Artifact size in bytes |
-| `tags` | array | List of tag names associated with the artifact (e.g., `v1.0`, `latest`) |
-| `push_time` | string | Timestamp when the artifact was pushed (UTC) |
-| `pull_time` | string | Timestamp of the last pull operation |
-| `vulnerability_scan_status` | string | Scan status: `Success`, `Failed`, `Ongoing`, `NotStart` |
-| `reference` | string | The digest or tag used to reference this artifact |
 
 ### W2: List All Artifacts Across All Repositories
 
@@ -80,6 +65,7 @@ hcloud SWR ShowInstanceArtifact --instance_id=<instance-id> --namespace_name=gro
 ```
 
 **Key Fields** (response format needs verification):
+
 - Artifact digest (SHA256 hash)
 - Artifact size
 - Push time
@@ -94,6 +80,7 @@ hcloud SWR ShowInstanceArtifactAddition --instance_id=<instance-id> --namespace_
 ```
 
 **Use Cases**:
+
 - View Docker build history layers
 - Check build commands and creation timestamps
 - Debug image build issues
@@ -105,6 +92,7 @@ hcloud SWR ListInstanceArtifactVulnerabilities --instance_id=<instance-id> --nam
 ```
 
 **Use Cases**:
+
 - Review detailed vulnerability report for an artifact
 - Identify specific CVEs affecting an image
 - Determine which vulnerabilities need remediation
@@ -117,6 +105,7 @@ hcloud SWR StartManualScanning --instance_id=<instance-id> --namespace_name=grou
 ```
 
 **Use Cases**:
+
 - Re-scan an image after it was initially pushed without auto-scan
 - Verify vulnerability status before promoting to production
 - Trigger scan after updating vulnerability database
@@ -128,12 +117,15 @@ hcloud SWR StartManualScanning --instance_id=<instance-id> --namespace_name=grou
 ⚠️ **CAUTION**: Deleting an artifact permanently removes the image version. This is irreversible.
 
 **Pre-deletion Checklist**:
+
 1. Verify artifact exists and get its digest:
+
 ```bash
 hcloud SWR ListInstanceArtifacts --instance_id=<instance-id> --namespace_name=group-dev --repository_name=my-app --cli-region=cn-north-4
 ```
-2. Check if artifact is still being used (pulled by running containers)
-3. Confirm with the user that the artifact will be permanently deleted
+
+1. Check if artifact is still being used (pulled by running containers)
+2. Confirm with the user that the artifact will be permanently deleted
 
 ```bash
 hcloud SWR DeleteInstanceArtifact --instance_id=<instance-id> --namespace_name=group-dev --repository_name=my-app --reference=sha256:abc123def456... --cli-region=cn-north-4

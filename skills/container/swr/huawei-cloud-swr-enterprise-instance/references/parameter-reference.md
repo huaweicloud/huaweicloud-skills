@@ -1,6 +1,6 @@
-# Parameter Reference
+# SWR Enterprise Instance - Parameter Reference
 
-### Common Parameters
+## Common Parameters
 
 | Parameter       | Required/Optional | Description                   | Default                              |
 | --------------- | ----------------- | ----------------------------- | ------------------------------------ |
@@ -8,7 +8,7 @@
 | `--instance_id` | Context-dependent | Enterprise instance ID        | N/A                                  |
 | `--project_id`  | Auto-filled       | Project ID                    | Auto from credentials or config      |
 
-### Instance Creation Parameters
+## Instance Creation Parameters
 
 | Parameter                  | Required | Description                | Constraints                                    |
 | -------------------------- | -------- | -------------------------- | ---------------------------------------------- |
@@ -21,11 +21,11 @@
 | `--description`            | No       | Instance description       | Free text                                      |
 | `--enable_intranet_access` | No       | Create internal access     | Default `true`                                 |
 | `--obs_encrypt`            | No       | Enable OBS encryption      | `true` or `false`                              |
-| `--encrypt_type`           | No       | OBS encryption algorithm   | `gm` (GM — Chinese national cryptographic standard), empty for AES-256                 |
+| `--encrypt_type`           | No       | OBS encryption algorithm   | `gm` (Chinese national encryption SM), empty for AES-256 |
 | `--obs_bucket_name`        | No       | Custom OBS bucket name     | If specified, OBS encryption not needed        |
 | `--obs_enc_kms_key_id`     | No       | KMS key ID for OBS         | Required if obs_encrypt=true (no custom bucket) |
 
-### Namespace Parameters
+## Namespace Parameters
 
 | Parameter              | Required | Description              | Constraints                                  |
 | ---------------------- | -------- | ------------------------ | -------------------------------------------- |
@@ -35,7 +35,7 @@
 | `--metadata.prevent_vul` | No     | Block vulnerable images  | `true` or `false`                            |
 | `--metadata.severity`  | No       | Blocking severity level  | `none`, `low`, `medium`, `high`, `critical`  |
 
-### Registry Parameters
+## Registry Parameters
 
 | Parameter                   | Required | Description              | Constraints                                  |
 | --------------------------- | -------- | ------------------------ | -------------------------------------------- |
@@ -50,10 +50,9 @@
 | `--project_id` (body)       | Cond.    | Target project ID        | Required when type=swr-pro-internal          |
 | `--region_id`               | Cond.    | Target region ID         | Required when type=swr-pro-internal          |
 
-### Endpoint Whitelist Parameters
+## Endpoint Whitelist Parameters
 
 | Parameter                    | Required | Description              | Constraints                                  |
 | ---------------------------- | -------- | ------------------------ | -------------------------------------------- |
 | `--ip_list.[N].ip`           | Yes      | IP or CIDR range         | Indexed array format                         |
 | `--ip_list.[N].description`  | No       | Description for IP entry | Indexed array format                         |
-

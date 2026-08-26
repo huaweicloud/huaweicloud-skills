@@ -2,7 +2,10 @@
 
 ## Overview
 
-SWR enterprise instance registries define target repositories for image synchronization (replication). Instance repositories hold container images within namespaces. This task covers registry CRUD operations and repository management.
+SWR enterprise instance registries define target repositories for image
+synchronization (replication). Instance repositories hold container images
+within namespaces. This task covers registry CRUD operations and repository
+management.
 
 ## Part 1: Instance Registries (Sync Targets)
 
@@ -10,11 +13,11 @@ SWR enterprise instance registries define target repositories for image synchron
 
 | Operation                    | Method | Description              | Key Parameters                                  |
 | ---------------------------- | ------ | ------------------------ | ----------------------------------------------- |
-| `CreateInstanceRegistry`     | POST   | Create sync target registry      | `--instance_id`, `--name`, `--type`, `--url`, `--credential.type`, `--credential.access_key`, `--credential.access_secret`, `--insecure` |
-| `ListInstanceRegistries`     | GET    | List registries         | `--instance_id`, `--limit`, `--offset`, `--name`, `--type` |
-| `ShowInstanceRegistry`      | GET    | Show registry details         | `--instance_id`, `--registry_id`                |
-| `UpdateInstanceRegistry`     | PUT    | Update registry             | `--instance_id`, `--registry_id`, `--name`, `--type`, `--url`, `--credential.*`, `--insecure` |
-| `DeleteInstanceRegistry`     | DELETE | Delete registry             | `--instance_id`, `--registry_id`                |
+| `CreateInstanceRegistry`     | POST   | Create sync target registry | `--instance_id`, `--name`, `--type`, `--url`, `--credential.type`, `--credential.access_key`, `--credential.access_secret`, `--insecure` |
+| `ListInstanceRegistries`     | GET    | List sync target registries | `--instance_id`, `--limit`, `--offset`, `--name`, `--type` |
+| `ShowInstanceRegistry`      | GET    | Show sync target registry details | `--instance_id`, `--registry_id`                |
+| `UpdateInstanceRegistry`     | PUT    | Update sync target registry | `--instance_id`, `--registry_id`, `--name`, `--type`, `--url`, `--credential.*`, `--insecure` |
+| `DeleteInstanceRegistry`     | DELETE | Delete sync target registry | `--instance_id`, `--registry_id`                |
 
 ### Workflows
 
@@ -22,21 +25,10 @@ SWR enterprise instance registries define target repositories for image synchron
 
 Registries define external target repositories for image replication/sync.
 
-⚠️ **Security Warning**: Creating a sync target registry stores the target registry's authentication credentials (`access_key`/`access_secret`) on the SWR enterprise instance. These credentials are used for automated image replication and will persist until the registry is updated or deleted. **Before creating a registry**, ensure that:
-- The target registry URL is correct and points to the intended registry
-- The credentials provided have the minimum required permissions for replication (read/pull access)
-- Credentials are not shared or reused from other services with broader permissions
-- The target registry's access policy permits sync operations from this instance
-
-**Confirmation Required**: Confirm the target registry address and credential information before proceeding.
-
 **Pre-creation Checklist**:
+
 1. Verify the target registry URL is accessible
-2. Obtain authentication credentials for the target registry:
-   - For SWR enterprise instances: Call `CreateInstanceLtCredential` on the target instance to get `username` and `password`
-   - For Harbor: Use the Harbor admin credentials or service account
-   - For basic SWR: Use your Huawei Cloud AK/SK or IAM token credentials
-   - The `--credential.access_key` is the username, `--credential.access_secret` is the password
+2. Obtain authentication credentials for the target registry
 3. Decide registry type: `swr-pro` (Harbor), `swr-pro-internal` (SWR enterprise), `huawei-SWR` (basic SWR)
 
 ```bash
@@ -57,11 +49,13 @@ hcloud SWR CreateInstanceRegistry --instance_id=<instance-id> --name=self-signed
 ```
 
 **Registry Types**:
+
 - `swr-pro`: Open-source Harbor registry (third-party)
 - `swr-pro-internal`: Another Huawei Cloud SWR enterprise instance
 - `huawei-SWR`: Basic Huawei Cloud SWR (shared instance)
 
 **Type-Specific Requirements**:
+
 - `swr-pro-internal`: Requires `--instance_id` (body, target instance), `--project_id` (body, target project), `--region_id`
 - `swr-pro` and `huawei-SWR`: No additional required fields
 
@@ -125,11 +119,11 @@ hcloud SWR ListInstanceRegistries --instance_id=<instance-id> --cli-region=cn-no
 
 | Operation                    | Method | Description              | Key Parameters                                  |
 | ---------------------------- | ------ | ------------------------ | ----------------------------------------------- |
-| `ListInstanceRepositories`   | GET    | List repositories         | `--instance_id`, `--namespace_id`, `--limit`, `--offset` |
-| `ListAllInstanceRepositories`| GET    | List all repositories     | `--limit`, `--marker`, `--name`                 |
-| `ShowInstanceRepository`     | GET    | Show repository details         | `--instance_id`, `--namespace_name`, `--repository_name` |
-| `UpdateInstanceRepository`   | PUT    | Update repository             | `--instance_id`, `--namespace_name`, `--repository_name`, `--description` |
-| `DeleteInstanceRepository`   | DELETE | Delete repository                 | `--instance_id`, `--namespace_name`, `--repository_name` |
+| `ListInstanceRepositories`   | GET    | List repositories        | `--instance_id`, `--namespace_id`, `--limit`, `--offset` |
+| `ListAllInstanceRepositories`| GET    | List all instance repositories | `--limit`, `--marker`, `--name`                 |
+| `ShowInstanceRepository`     | GET    | Show repository details  | `--instance_id`, `--namespace_name`, `--repository_name` |
+| `UpdateInstanceRepository`   | PUT    | Update repository        | `--instance_id`, `--namespace_name`, `--repository_name`, `--description` |
+| `DeleteInstanceRepository`   | DELETE | Delete repository        | `--instance_id`, `--namespace_name`, `--repository_name` |
 
 ### Workflows
 
@@ -176,6 +170,7 @@ hcloud SWR ShowInstanceRepository --instance_id=<instance-id> --namespace_name=g
 ```
 
 **Use Cases**:
+
 - Check repository artifact count
 - View repository description
 - Verify repository before updating or deleting
@@ -193,11 +188,14 @@ hcloud SWR UpdateInstanceRepository --instance_id=<instance-id> --namespace_name
 ⚠️ **CAUTION**: Deleting a repository permanently removes ALL artifacts (image versions). This is irreversible.
 
 **Pre-deletion Checklist**:
+
 1. List all artifacts to verify what will be deleted:
+
 ```bash
 hcloud SWR ListInstanceArtifacts --instance_id=<instance-id> --namespace_name=group-dev --repository_name=my-app --cli-region=cn-north-4
 ```
-2. Confirm with the user that all artifacts will be permanently deleted
+
+1. Confirm with the user that all artifacts will be permanently deleted
 
 ```bash
 hcloud SWR DeleteInstanceRepository --instance_id=<instance-id> --namespace_name=group-dev --repository_name=my-app --cli-region=cn-north-4

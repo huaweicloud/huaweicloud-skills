@@ -2,23 +2,28 @@
 
 ## Overview
 
-SWR enterprise instance domains provide custom access URLs for the container registry. Each instance has a default domain assigned by SWR, and you can add custom domains with SSL certificates from SCM (SSL Certificate Manager). This task covers adding, listing, viewing, updating, and deleting custom domains.
+SWR enterprise instance domains provide custom access URLs for the
+container registry. Each instance has a default domain assigned by SWR,
+and you can add custom domains with SSL certificates from SCM
+(SSL Certificate Manager). This task covers adding, listing, viewing,
+updating, and deleting custom domains.
 
 ## Operations Catalog
 
 | Operation            | Method | Description              | Key Parameters                                  |
 | -------------------- | ------ | ------------------------ | ----------------------------------------------- |
-| `AddDomainName`      | POST   | Add domain name                 | `--instance_id`, `--domain_name`, `--certificate_id` |
-| `ListDomainNames`    | GET    | List all domains for instance   | `--instance_id`, `--domain_name`, `--uid`       |
-| `ShowDomainOverview` | GET    | Get tenant overview         | (none instance-specific)                        |
-| `UpdateDomainName`   | PUT    | Update domain                 | `--instance_id`, `--domainname_id`, `--certificate_id` |
-| `DeleteDomainName`   | DELETE | Delete domain                 | `--instance_id`, `--domainname_id`              |
+| `AddDomainName`      | POST   | Add domain               | `--instance_id`, `--domain_name`, `--certificate_id` |
+| `ListDomainNames`    | GET    | List all instance domains | `--instance_id`, `--domain_name`, `--uid`       |
+| `ShowDomainOverview` | GET    | Show tenant overview     | (none instance-specific)                        |
+| `UpdateDomainName`   | PUT    | Update domain            | `--instance_id`, `--domainname_id`, `--certificate_id` |
+| `DeleteDomainName`   | DELETE | Delete domain            | `--instance_id`, `--domainname_id`              |
 
 ## Workflows
 
 ### W1: Add a Custom Domain
 
 **Pre-creation Checklist**:
+
 1. Obtain an SSL certificate from SCM (SSL Certificate Manager) for the domain
 2. Get the SCM certificate ID
 3. Configure DNS to point the domain to the instance endpoint
@@ -36,6 +41,7 @@ hcloud SWR AddDomainName --instance_id=<instance-id> --domain_name=swr.mycompany
 ```
 
 **Domain Naming Rules**:
+
 - Letters, digits, hyphens, and asterisks (wildcard only at start)
 - Hyphens cannot be at start or end of individual strings
 - At least two strings separated by dots
@@ -47,11 +53,13 @@ hcloud SWR AddDomainName --instance_id=<instance-id> --domain_name=swr.mycompany
 **Invalid Examples**: `-registry.example.com` (hyphen at start), `registry-.example.com` (hyphen at end), `**.example.com` (double wildcard)
 
 **SCM Certificate Requirements**:
+
 - The certificate must cover the domain name (exact match or wildcard)
 - The certificate must be issued by a trusted CA
 - The certificate must be active (not expired)
 
 **Post-creation**:
+
 - Configure DNS resolution: point the domain to the instance's public endpoint
 - Verify domain resolves correctly before using it for docker operations
 
@@ -75,6 +83,7 @@ hcloud SWR ListDomainNames --instance_id=<instance-id> --uid=<domain-id> --cli-r
 ```
 
 **Use Cases**:
+
 - Verify custom domain was added correctly
 - Find domain ID for update/delete operations
 - Check domain status (Active, Pending, etc.)
@@ -86,7 +95,9 @@ hcloud SWR ListDomainNames --instance_id=<instance-id> --uid=<domain-id> --cli-r
 hcloud SWR ShowDomainOverview --cli-region=cn-north-4
 ```
 
-⚠️ **Note**: `ShowDomainOverview` is a tenant-level operation that returns overall domain overview for the current tenant, NOT specific to an instance. It provides a summary of domain configuration across the tenant's SWR resources.
+⚠️ **Note**: `ShowDomainOverview` is a tenant-level operation that returns
+overall domain overview for the current tenant, NOT specific to an instance.
+It provides a summary of domain configuration across the tenant's SWR resources.
 
 ### W4: Update Domain Certificate
 
@@ -98,12 +109,14 @@ hcloud SWR UpdateDomainName --instance_id=<instance-id> --domainname_id=<domain-
 ```
 
 **Common Use Cases**:
+
 - Replace expired SSL certificate
 - Switch to a certificate from a different CA
 - Update wildcard certificate coverage
 - Renew certificate before expiration
 
 **Pre-update Checklist**:
+
 1. Obtain a new SCM certificate
 2. Verify the new certificate covers the same domain name
 3. Get the new SCM certificate ID
@@ -118,6 +131,7 @@ hcloud SWR DeleteDomainName --instance_id=<instance-id> --domainname_id=<domain-
 ```
 
 **Pre-deletion Checklist**:
+
 1. Verify no workloads are using the custom domain for image pull/push
 2. Update DNS configuration if needed
 3. Confirm with the user that the domain will be removed

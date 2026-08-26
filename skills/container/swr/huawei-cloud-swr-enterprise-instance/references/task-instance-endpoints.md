@@ -2,26 +2,23 @@
 
 ## Overview
 
-SWR enterprise instance endpoints define network access paths for the registry. Enterprise instances support two types of access: internal VPC endpoints (for within-network access) and public access endpoints (with IP whitelist for controlled external access). This task covers creating, listing, showing, deleting internal endpoints, and managing public access.
-
-**Finding the Instance Access URL**: The instance endpoint URL is NOT returned by `ShowInstance`. To find the access URL:
-1. Call `ShowInstance` to get the instance name and status
-2. The internal access URL format is: `swr.<region>.myhuaweicloud.com` (for shared SWR) or `<instance-name>.swr.<region>.myhuaweicloud.com` (for enterprise instances)
-3. For internal VPC endpoints, the URL is shown in `ListInstanceInternalEndpoints` response (`endpoint.service.name` field)
-4. For public access, the URL is shown in `ShowInstanceEndpointPolicy` response (`endpoint` field)
-5. Use the endpoint URL with `docker login <endpoint-url>` after obtaining credentials
+SWR enterprise instance endpoints define network access paths for the registry.
+Enterprise instances support two types of access: internal VPC endpoints
+(for within-network access) and public access endpoints (with IP whitelist
+for controlled external access). This task covers creating, listing, showing,
+deleting internal endpoints, and managing public access.
 
 ## Operations Catalog
 
 | Operation                        | Method | Description              | Key Parameters                                  |
 | -------------------------------- | ------ | ------------------------ | ----------------------------------------------- |
-| `CreateInstanceInternalEndpoint` | POST   | Create internal endpoint             | `--instance_id`, `--vpc_id`, `--subnet_id`, `--project_id`, `--description` |
-| `ListInstanceInternalEndpoints`  | GET    | List internal endpoints         | `--instance_id`, `--limit`, `--offset`          |
-| `ShowInstanceInternalEndpoint`   | GET    | Show internal endpoint details         | `--instance_id`, `--internal_endpoints_id`      |
-| `DeleteInstanceInternalEndpoint` | DELETE | Delete internal endpoint             | `--instance_id`, `--internal_endpoints_id`      |
-| `CreateInstanceEndpointPolicy`   | POST   | Enable/disable public access       | `--instance_id`, `--enable`                     |
-| `ShowInstanceEndpointPolicy`     | GET    | Get public access info         | `--instance_id`                                 |
-| `UpdateInstanceEndpointPolicy`   | PUT    | Update public access whitelist       | `--instance_id`, `--ip_list.[N].ip`, `--ip_list.[N].description` |
+| `CreateInstanceInternalEndpoint` | POST   | Create internal endpoint | `--instance_id`, `--vpc_id`, `--subnet_id`, `--project_id`, `--description` |
+| `ListInstanceInternalEndpoints`  | GET    | List internal endpoints  | `--instance_id`, `--limit`, `--offset`          |
+| `ShowInstanceInternalEndpoint`   | GET    | Show internal endpoint details | `--instance_id`, `--internal_endpoints_id`      |
+| `DeleteInstanceInternalEndpoint` | DELETE | Delete internal endpoint | `--instance_id`, `--internal_endpoints_id`      |
+| `CreateInstanceEndpointPolicy`   | POST   | Enable or disable public access | `--instance_id`, `--enable`                     |
+| `ShowInstanceEndpointPolicy`     | GET    | Show public access info  | `--instance_id`                                 |
+| `UpdateInstanceEndpointPolicy`   | PUT    | Update public access whitelist | `--instance_id`, `--ip_list.[N].ip`, `--ip_list.[N].description` |
 
 ## Workflows
 
@@ -30,6 +27,7 @@ SWR enterprise instance endpoints define network access paths for the registry. 
 Internal endpoints provide private access to the registry from within a VPC, without traversing the public internet.
 
 **Pre-creation Checklist**:
+
 1. Verify VPC and subnet exist
 2. Verify the VPC/subnet project ID matches the VPC location
 3. Ensure the VPC is in the same region as the instance
@@ -43,13 +41,17 @@ hcloud SWR CreateInstanceInternalEndpoint --instance_id=<instance-id> --vpc_id=<
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--vpc_id` (required, body): VPC ID where access is needed
 - `--subnet_id` (required, body): Subnet ID within the VPC
 - `--project_id` (required, body): Project ID where VPC/subnet reside (may differ from auto-filled path project_id)
 - `--description` (optional, body): Endpoint description
 
-⚠️ **Note**: The body `--project_id` specifies the project where the VPC/subnet reside. This may be different from the instance project. If the VPC/subnet are in the same project as the instance, they can be the same value.
+⚠️ **Note**: The body `--project_id` specifies the project where the
+VPC/subnet reside. This may be different from the instance project.
+If the VPC/subnet are in the same project as the instance, they can be
+the same value.
 
 **Post-creation Verification**:
 
@@ -74,6 +76,7 @@ hcloud SWR ShowInstanceInternalEndpoint --instance_id=<instance-id> --internal_e
 ```
 
 **Use Cases**:
+
 - Get the endpoint URL for docker login configuration
 - Verify endpoint status (active/inactive)
 - Check VPC/subnet mapping for the endpoint
@@ -92,19 +95,13 @@ hcloud SWR DeleteInstanceInternalEndpoint --instance_id=<instance-id> --internal
 
 Public access allows external connections to the instance, controlled by an IP whitelist.
 
-⚠️ **Security Warning**: Enabling public access exposes the SWR enterprise instance to the internet. Without a properly configured IP whitelist, any external client can attempt to access the instance, increasing the risk of unauthorized access or DDoS attacks. **Before enabling public access**, ensure that:
-- An IP whitelist is configured via `UpdateInstanceEndpointPolicy` to restrict access to known IP ranges only
-- The whitelist does not include `0.0.0.0/0` (all IPs) unless absolutely necessary
-- Security group rules and network policies are reviewed for the instance's VPC/subnet
-
-**Confirmation Required**: Confirm that public access is intended and that an IP whitelist will be configured immediately after enabling.
-
 ```bash
 # Enable public access
 hcloud SWR CreateInstanceEndpointPolicy --instance_id=<instance-id> --enable=true --cli-region=cn-north-4
 ```
 
 **Status Constraints**:
+
 - Can only enable when current status is `Disable` or `EnableFailed`
 - Cannot enable if status is `Enable` (already enabled)
 
@@ -122,6 +119,7 @@ hcloud SWR CreateInstanceEndpointPolicy --instance_id=<instance-id> --enable=fal
 ```
 
 **Status Constraints**:
+
 - Can only disable when current status is `Enable` or `DisableFailed`
 - Cannot disable if status is `Disable` (already disabled)
 
@@ -132,6 +130,7 @@ hcloud SWR ShowInstanceEndpointPolicy --instance_id=<instance-id> --cli-region=c
 ```
 
 **Use Cases**:
+
 - Check if public access is enabled or disabled
 - View current IP whitelist configuration
 - Verify whitelist entries before updating
@@ -141,11 +140,14 @@ hcloud SWR ShowInstanceEndpointPolicy --instance_id=<instance-id> --cli-region=c
 ⚠️ **Important**: Whitelist update is a **full replacement** operation. All existing entries are replaced by the new entries provided. To add entries, include all existing ones plus the new ones.
 
 **Pre-update Checklist**:
+
 1. View current whitelist:
+
 ```bash
 hcloud SWR ShowInstanceEndpointPolicy --instance_id=<instance-id> --cli-region=cn-north-4
 ```
-2. Include all existing entries plus any new entries in the update command
+
+1. Include all existing entries plus any new entries in the update command
 
 ```bash
 # Set a single IP whitelist entry
@@ -163,6 +165,7 @@ hcloud SWR UpdateInstanceEndpointPolicy --instance_id=<instance-id> --ip_list.1.
 ```
 
 **IP Whitelist Format**:
+
 - `--ip_list.[N].ip`: IP address or CIDR range (e.g., `10.0.1.100` or `10.0.0.0/8`)
 - `--ip_list.[N].description`: Description for the entry
 - Indexed array format starting from 1
