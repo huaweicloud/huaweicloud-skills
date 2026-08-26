@@ -11,7 +11,7 @@ SWR repository permissions provide granular access control for individual image 
 | `ShowUserRepositoryAuth` | GET | 查询镜像仓库权限       | `--namespace`, `--repository`                   |
 | `CreateUserRepositoryAuth` | POST | 创建镜像仓库权限     | `--namespace`, `--repository`, `--[N].auth`, `--[N].user_id`, `--[N].user_name` |
 | `UpdateUserRepositoryAuth` | PUT | 修改镜像仓库权限      | `--namespace`, `--repository`, `--[N].auth`, `--[N].user_id`, `--[N].user_name` |
-| `DeleteUserRepositoryAuth` | DELETE | 删除镜像仓库权限     | `--namespace`, `--repository`, `--[N].user_id`, `--[N].user_name` |
+| `DeleteUserRepositoryAuth` | DELETE | 删除镜像仓库权限     | `--namespace`, `--repository`, `--[N]=<user_id>` |
 
 ## Workflows
 
@@ -77,8 +77,10 @@ hcloud SWR UpdateUserRepositoryAuth --namespace=pancake --repository=openclaw-sa
 ⚠️ **CAUTION**: Revoking repository permission immediately removes the user's access. **This may cause business interruption — services pulling from this repository will immediately lose access.**
 
 ```bash
-hcloud SWR DeleteUserRepositoryAuth --namespace=pancake --repository=openclaw-sandbox --1.user_id=05949eb5350010e21f85c017722182de --1.user_name=hwstaff_p00506267 --cli-region=cn-north-4
+hcloud SWR DeleteUserRepositoryAuth --namespace=pancake --repository=openclaw-sandbox --1=05949eb5350010e21f85c017722182de --cli-region=cn-north-4
 ```
+
+**⚠️ Parameter Format**: DeleteUserRepositoryAuth takes an array of user ID strings (array<string>), NOT array of objects. Use `--1=<user_id>` (1-based index). Do NOT use `--1.user_id=` or `--1.user_name=` — that format is only for CreateUserRepositoryAuth/UpdateUserRepositoryAuth.
 
 **Post-revoke Verification**:
 

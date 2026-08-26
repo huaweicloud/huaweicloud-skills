@@ -11,7 +11,7 @@ SWR namespace permissions control who can access and manage images within an org
 | `ShowNamespaceAuth` | GET   | 查询组织权限             | `--namespace`                                   |
 | `CreateNamespaceAuth` | POST | 创建组织权限             | `--namespace`, `--[N].auth`, `--[N].user_id`, `--[N].user_name` |
 | `UpdateNamespaceAuth` | PUT  | 修改组织权限             | `--namespace`, `--[N].auth`, `--[N].user_id`, `--[N].user_name` |
-| `DeleteNamespaceAuth` | DELETE | 删除组织权限             | `--namespace`, `--[N].user_id`, `--[N].user_name` |
+| `DeleteNamespaceAuth` | DELETE | 删除组织权限             | `--namespace`, `--[N]=<user_id>` |
 
 ## Workflows
 
@@ -90,8 +90,14 @@ hcloud SWR ShowNamespaceAuth --namespace=pancake --cli-region=cn-north-4
 ⚠️ **CAUTION**: Revoking namespace permission removes access to the namespace AND ALL repositories under it. **This may cause business interruption — any CI/CD pipelines or services using this namespace will immediately lose access.** Verify that no production workloads depend on this access before proceeding.
 
 ```bash
-hcloud SWR DeleteNamespaceAuth --namespace=pancake --1.user_id=05949eb5350010e21f85c017722182de --1.user_name=hwstaff_p00506267 --cli-region=cn-north-4
+# Delete a single user's namespace permission
+hcloud SWR DeleteNamespaceAuth --namespace=pancake --1=05949eb5350010e21f85c017722182de --cli-region=cn-north-4
+
+# Delete multiple users' permissions at once
+hcloud SWR DeleteNamespaceAuth --namespace=pancake --1=<user-id-1> --2=<user-id-2> --cli-region=cn-north-4
 ```
+
+**⚠️ Parameter Format**: DeleteNamespaceAuth takes an array of user ID strings, NOT array of objects. Use `--1=<user_id>` (1-based index). Do NOT use `--1.user_id=` or `--1.user_name=` — that format is only for CreateNamespaceAuth/UpdateNamespaceAuth.
 
 **Pre-revoke Checklist**:
 1. Check if the user has repository-level permissions that should be preserved

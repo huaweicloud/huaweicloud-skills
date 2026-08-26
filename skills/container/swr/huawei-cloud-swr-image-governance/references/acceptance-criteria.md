@@ -131,7 +131,7 @@ Do you want to proceed? (yes/no)
 **Error:** Execute write operations without confirmation
 ```bash
 # Directly executing Create/Update/Delete without user confirmation is prohibited
-hcloud SWR DeleteNamespaceAuth --namespace=pancake --1.user_id=xxx --1.user_name=xxx --cli-region=cn-north-4
+hcloud SWR DeleteNamespaceAuth --namespace=pancake --1=<user-id> --cli-region=cn-north-4
 ```
 
 ## Output Format Standards
