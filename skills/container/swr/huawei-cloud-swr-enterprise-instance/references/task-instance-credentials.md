@@ -2,25 +2,21 @@
 
 ## Overview
 
-SWR enterprise instance credentials provide authentication for accessing the instance registry via Docker CLI or other container tools. Enterprise instances support both long-term credentials (for CI/CD) and temporary credentials (for short-lived access). This task covers creating, listing, enabling/disabling, and deleting credentials.
-
-**Using Credentials with Docker**: After creating credentials, use them with Docker CLI:
-1. Obtain the instance access URL (see `task-instance-endpoints.md` — Finding the Instance Access URL)
-2. Call `CreateInstanceLtCredential` to get `username` and `password` (base64-encoded)
-3. Decode the password if needed: `echo "${CRED_PASSWORD}" | base64 -d` (use environment variable, never inline)
-4. Login: `echo "${DECODED_PASSWORD}" | docker login <endpoint-url> -u <username> --password-stdin`
-5. Push: `docker push <endpoint-url>/<namespace>/<repository>:<tag>`
-6. Pull: `docker pull <endpoint-url>/<namespace>/<repository>:<tag>`
+SWR enterprise instance credentials provide authentication for accessing
+the instance registry via Docker CLI or other container tools.
+Enterprise instances support both long-term credentials (for CI/CD)
+and temporary credentials (for short-lived access).
+This task covers creating, listing, enabling/disabling, and deleting credentials.
 
 ## Operations Catalog
 
 | Operation                    | Method | Description              | Key Parameters                                  |
 | ---------------------------- | ------ | ------------------------ | ----------------------------------------------- |
-| `CreateInstanceLtCredential` | POST   | Create long-term credential         | `--instance_id`, `--name`                       |
-| `CreateInstanceTempCredential` | POST | Get temporary credential         | `--instance_id`                                 |
-| `ListInstanceLtCredentials`  | GET    | List long-term credentials     | `--instance_id`, `--limit`, `--offset`, `--self_only` |
-| `UpdateInstanceLtCredential` | PUT    | Enable/disable long-term credential    | `--instance_id`, `--credential_id`, `--enable`  |
-| `DeleteInstanceLtCredential` | DELETE | Delete long-term credential         | `--instance_id`, `--credential_id`              |
+| `CreateInstanceLtCredential` | POST   | Create long-term credential | `--instance_id`, `--name`                       |
+| `CreateInstanceTempCredential` | POST | Get temporary credential  | `--instance_id`                                 |
+| `ListInstanceLtCredentials`  | GET    | List long-term credentials | `--instance_id`, `--limit`, `--offset`, `--self_only` |
+| `UpdateInstanceLtCredential` | PUT    | Enable/disable long-term credential | `--instance_id`, `--credential_id`, `--enable`  |
+| `DeleteInstanceLtCredential` | DELETE | Delete long-term credential | `--instance_id`, `--credential_id`              |
 
 ## Workflows
 
@@ -40,6 +36,7 @@ hcloud SWR CreateInstanceLtCredential --instance_id=<instance-id> --name=team-ba
 ```
 
 **Credential Naming Rules**:
+
 - Start with lowercase letter or digit
 - Followed by lowercase letters, digits, dots, underscores, or hyphens
 - Dots, underscores, hyphens cannot be directly connected
@@ -47,6 +44,7 @@ hcloud SWR CreateInstanceLtCredential --instance_id=<instance-id> --name=team-ba
 - Length: 1-64 characters
 
 **Post-creation**:
+
 - Response format needs verification — returns credential information including authentication details
 - Store the credential securely; the secret/token is only returned once during creation
 
@@ -62,19 +60,15 @@ hcloud SWR CreateInstanceTempCredential --instance_id=<instance-id> --cli-region
 ```
 
 **Use Cases**:
+
 - Developer testing for a limited time
 - One-time image push or pull
 - Debugging access issues
 
-**Temporary Credential Expiry Handling**:
-- Temporary credentials have a limited validity period (typically 12 hours, subject to IAM token expiration).
-- When a temporary credential expires, `docker push`/`docker pull` operations will fail with authentication errors.
-- To handle expiry in CI/CD pipelines:
-  1. Call `CreateInstanceTempCredential` immediately before each build/deploy step
-  2. Use the returned credentials for `docker login`
-  3. Do not cache temporary credentials — always obtain fresh ones
-- For long-term access, use `CreateInstanceLtCredential` instead (no expiry).
-- Monitor for `401 Unauthorized` errors as an indicator of credential expiry.
+**Post-creation**:
+
+- Response format needs verification — returns temporary authentication details
+- Temporary credentials have limited validity period
 
 ### W3: List Long-term Credentials
 
@@ -90,6 +84,7 @@ hcloud SWR ListInstanceLtCredentials --instance_id=<instance-id> --limit=20 --of
 ```
 
 **Use Cases**:
+
 - Audit all credentials in the instance
 - Verify credential creation was successful
 - Check credential enable/disable status
@@ -108,6 +103,7 @@ hcloud SWR UpdateInstanceLtCredential --instance_id=<instance-id> --credential_i
 ```
 
 **Common Use Cases**:
+
 - Temporarily disable credentials during security incidents
 - Disable credentials for maintenance windows
 - Re-enable after incident resolution
@@ -146,7 +142,7 @@ hcloud SWR CreateInstanceLtCredential --instance_id=<instance-id> --name=ci-cd-p
 # 2. Store the credential secret securely in CI/CD tool (e.g., Jenkins, GitLab CI secrets)
 
 # 3. Use the credential in docker login:
-# echo "${CRED_PASSWORD}" | docker login -u <username_from_response> --password-stdin <instance-endpoint>
+# docker login -u <username_from_response> -p <password_from_response> <instance-endpoint>
 
 # 4. Push images:
 # docker push <instance-endpoint>/namespace/repository:tag

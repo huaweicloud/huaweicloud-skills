@@ -14,7 +14,7 @@ tags: [swr, enterprise-instance, container-registry, registry, domain]
 
 This skill provides lifecycle management capabilities for Huawei Cloud SWR (Software Repository for Container) enterprise instances using the `hcloud` CLI. Enterprise instances provide dedicated, isolated container registry environments with advanced features like security scanning, replication policies, and custom domain support.
 
-> **Note**: Some features mentioned above (e.g., replication policies) are managed via the SWR enterprise instance console, not through this skill's CLI commands. See the **Unsupported Operations** section below for details.
+> **Note**: Some features (e.g., replication policies) are managed via the SWR enterprise instance console, not through CLI. See **Out of Scope** above.
 
 **Architecture**: hcloud CLI → SWR Service API → Instance/Namespace/Registry/Repository/Artifact/Credential/Endpoint/Domain resources
 
@@ -22,6 +22,21 @@ This skill provides lifecycle management capabilities for Huawei Cloud SWR (Soft
 - `huawei-cloud-swr-image-management` - Image lifecycle management (basic SWR namespaces, repos, tags, auth, quotas)
 - `huawei-cloud-swr-image-governance` - Image governance (permissions, retention, sharing, tags, immutable rules)
 - `huawei-cloud-swr-image-automation` - Image automation ops (sync, triggers, domains)
+
+**Out of Scope**:
+
+This skill does **NOT** support the following operations. If the user requests any of these, inform them and suggest the correct skill:
+
+| Operation | Use Instead | Reason |
+|-----------|-------------|--------|
+| Manage basic (non-enterprise) SWR namespaces | `huawei-cloud-swr-image-management` | Basic SWR namespace lifecycle |
+| Push/pull images (docker login/push/pull) | Docker CLI (use this skill to get credentials first) | Docker CLI operation, not API |
+| Build images | CodeArts Build, CCE, or local Docker | SWR is a registry, not a build service |
+| Manage namespace/repo permissions | `huawei-cloud-swr-image-governance` | Permission governance is a separate skill |
+| Create retention/aging policies on basic SWR | `huawei-cloud-swr-image-governance` | Retention governance for basic SWR |
+| Create image sync rules on basic SWR | `huawei-cloud-swr-image-automation` | Sync automation for basic SWR |
+| Create/Delete triggers on basic SWR | `huawei-cloud-swr-image-automation` | Trigger automation for basic SWR |
+| Manage SWR agency delegation for basic SWR | `huawei-cloud-swr-image-governance` | Agency delegation for basic SWR |
 
 - Create and manage SWR enterprise instances
 - Manage instance namespaces with security scanning and vulnerability blocking
@@ -35,15 +50,10 @@ This skill provides lifecycle management capabilities for Huawei Cloud SWR (Soft
 **Typical Use Cases**:
 
 - "Create an SWR enterprise instance for my organization"
-- "List all enterprise instances in my project"
 - "Create a namespace with auto-scan and vulnerability blocking"
 - "Configure a registry for syncing images to another instance"
-- "List repositories and artifacts in my instance"
 - "Get docker login credentials for my instance"
-- "Add a VPC internal endpoint for my instance"
-- "Enable public access with IP whitelist"
-- "Add a custom domain to my instance"
-- "Check instance statistics and resource usage"
+- "Add a VPC internal endpoint or custom domain to my instance"
 
 ## Prerequisites
 
@@ -112,7 +122,13 @@ See [Task: Instance Lifecycle](references/task-instance-lifecycle.md) for detail
 
 ```bash
 # Create an enterprise instance
-hcloud SWR CreateInstance --name=my-instance --spec=swr.ee.professional --charge_mode=postPaid --vpc_id=<vpc-id> --subnet_id=<subnet-id> --enterprise_project_id=0 --cli-region=cn-north-4
+# ⚠️ hcloud CLI CreateInstance has a known bug (duplicate --project_id parameter).
+# Use the Python SDK helper script instead:
+python scripts/swr_instance_helper.py create --name=my-instance --spec=swr.ee.professional \
+    --vpc_id=<vpc-id> --subnet_id=<subnet-id> --enterprise_project_id=0 --cli-region=cn-north-4
+
+# Alternatively, use --cli-jsonInput (see references/common-pitfalls.md Pitfall 15)
+# hcloud SWR CreateInstance --cli-jsonInput=create_instance.json --cli-region=cn-north-4
 
 # List all instances
 hcloud SWR ListInstance --cli-region=cn-north-4
@@ -424,27 +440,16 @@ See [Verification Method](references/verification-method.md) for step-by-step ve
 | DeleteInstanceLtCredential | `hcloud SWR DeleteInstanceLtCredential` | Medium | Deleting a credential immediately revokes access for CI/CD pipelines using it. Recommend disabling the credential first (`UpdateInstanceLtCredential --enable=false`), verifying no active pipelines, then deleting. |
 | CreateInstanceRegistry | `hcloud SWR CreateInstanceRegistry` | Medium | Creating a sync target registry stores the target registry authentication credentials (`access_key`/`access_secret`). Confirm the target registry URL and credential information before proceeding. |
 
-## Unsupported Operations
-
-The following operations are not supported by the SWR enterprise instance API and require alternative approaches:
-
-| Unsupported Operation | Reason | Alternative Approach |
-| -------------------- | ------ | ------------------- |
-| Push images to instance | Docker CLI operation, not an API call | Use `CreateInstanceTempCredential` or `CreateInstanceLtCredential` to get credentials, then `docker login` and `docker push` |
-| Pull images from instance | Docker CLI operation, not an API call | Use `CreateInstanceTempCredential` or `CreateInstanceLtCredential` to get credentials, then `docker login` and `docker pull` |
-| Build images | SWR is a registry, not a build service | Use CodeArts Build, CCE, or local Docker build, then push to SWR |
-| Image replication/sync policies | CLI available but not documented in this skill | Use `hcloud SWR CreateInstanceReplicationPolicy` / `ListInstanceReplicationPolicies` etc., or SWR enterprise instance console (`https://console.huaweicloud.com/swr-instance`) |
-| Instance backup/restore | No backup API available | Use OBS bucket backup for data persistence, or migrate namespaces/repositories manually |
-| Image retention/aging policies | CLI available but not documented in this skill | Use `hcloud SWR CreateInstanceRetentionPolicy` / `ListInstanceRetentionPolicies` etc., or SWR enterprise instance console |
-| Webhook notification configuration | CLI available but not documented in this skill | Use `hcloud SWR CreateInstanceWebhook` / `ListInstanceWebhooks` etc., or SWR enterprise instance console |
-| Image signing policies | CLI available but not documented in this skill | Use `hcloud SWR CreateInstanceSignPolicy` / `ListInstanceSignPolicies` etc., or SWR enterprise instance console |
-| Resource tag management | CLI available but not documented in this skill | Use `hcloud SWR CreateInstanceResourceTags` / `ListInstanceResourceTags` etc., or TMS console |
-| IAM delegation management | Not supported by this skill | Use IAM console to configure delegation. `CheckAgency`/`CreateAgency` in hcloud are for SWR→CCE/CCI direction, not enterprise instance delegation |
-
 ## 工作流
 
 This skill follows a standard workflow for SWR enterprise instance management:
 
+0. **⚠️ Billing Confirmation (MANDATORY)** — Before executing any operation, inform the user of potential billing implications and obtain explicit consent:
+   - **Instance creation incurs hourly costs**: `swr.ee.basic` (~¥0.35/hour) and `swr.ee.professional` (~¥1.05/hour) are paid specs. There is no free tier for enterprise instances.
+   - **Storage costs**: Images stored in enterprise instances incur OBS storage fees.
+   - **Network costs**: Cross-region sync and public access may incur traffic fees.
+   - Ask the user to confirm: "Do you understand the billing implications and wish to proceed? (yes/no)"
+   - Only proceed if the user explicitly confirms. If the user declines, stop and do not execute any operations.
 1. **Prerequisites Check** — Verify hcloud CLI installation and credential configuration
 2. **Instance Identification** — List or show existing instances to obtain `instance_id`
 3. **Operation Execution** — Execute the requested operation (create/update/delete/query)
@@ -458,42 +463,35 @@ All CLI commands use `hcloud SWR <Operation> --param1=value1 --cli-region=<regio
 
 **Key rules**: Use `--key=value` format, always specify `--cli-region`, never expose AK/SK, confirm before write operations, use `--cli-output=json` for structured output.
 
-**Known CLI Limitation**: Some commands (CreateInstance, CreateInstanceInternalEndpoint, CreateInstanceRegistry) have same-name parameter conflicts between path and body. Use `--cli-jsonInput` with `path`/`body` sections to resolve. See [CLI Format Guide](references/cli-format-guide.md) for full details and examples.
+**Known CLI Limitation**: `CreateInstance` has a known hcloud CLI bug (duplicate `--project_id` parameter). Use the Python SDK helper script (`scripts/swr_instance_helper.py`) as the primary method, or `--cli-jsonInput` with `path`/`body` sections as an alternative. Other commands with same-name parameter conflicts (`CreateInstanceInternalEndpoint`, `CreateInstanceRegistry`) can use `--cli-jsonInput`. See [Common Pitfalls](references/common-pitfalls.md) (Pitfall 15) and [CLI Format Guide](references/cli-format-guide.md) for full details.
 
 ## Reference Documents
 
-| Document                                               | Description                              |
-| ------------------------------------------------------ | ---------------------------------------- |
-| [SWR Instance API Guide](references/swr-instance-api-guide.md) | hcloud SWR instance API reference |
-| [Output Format](references/output-format.md)          | Response format examples (Instance, Namespace, Endpoint, Domain, Credential) |
-| [Credential Configuration](references/credential-configuration.md) | Credential setup (long-term AK/SK & temporary AK/SK+SecurityToken) |
-| [IAM Permission Policies](references/iam-policies.md)  | Required permissions and policy JSON     |
-| [Verification Method](references/verification-method.md) | Step-by-step verification              |
-| [Common Pitfalls](references/common-pitfalls.md)       | Troubleshooting guides                   |
-| [Task: Instance Lifecycle](references/task-instance-lifecycle.md) | Instance create, list, show, update config |
-| [Task: Instance Namespaces](references/task-instance-namespaces.md) | Namespace CRUD workflows |
-| [Task: Instance Registries](references/task-instance-registries.md) | Registry CRUD and repositories |
-| [Task: Instance Artifacts](references/task-instance-artifacts.md) | Artifact management and scanning |
-| [Task: Instance Credentials](references/task-instance-credentials.md) | Credential management workflows |
-| [Task: Instance Endpoints](references/task-instance-endpoints.md) | Internal and public access configuration |
-| [Task: Instance Domains](references/task-instance-domains.md) | Custom domain management |
-| [CLI Installation Guide](references/cli-installation-guide.md) | hcloud CLI installation and configuration |
-| [Acceptance Criteria](references/acceptance-criteria.md) | Success criteria for all operations |
+- [Command Reference](references/command-reference.md) — Complete hcloud SWR command reference with examples
+- [Parameter Reference](references/parameter-reference.md) — All API parameters with types and descriptions
+- [SWR Instance API Guide](references/swr-instance-api-guide.md) — hcloud SWR instance API reference
+- [Output Format](references/output-format.md) — Response format examples
+- [Credential Configuration](references/credential-configuration.md) — Credential setup (long-term & temporary AK/SK)
+- [IAM Permission Policies](references/iam-policies.md) — Required permissions and policy JSON
+- [Verification Method](references/verification-method.md) — Step-by-step verification
+- [Common Pitfalls](references/common-pitfalls.md) — Troubleshooting guides
+- [Task: Instance Lifecycle](references/task-instance-lifecycle.md) — Instance create/list/show/update config
+- [Task: Instance Namespaces](references/task-instance-namespaces.md) — Namespace CRUD workflows
+- [Task: Instance Registries](references/task-instance-registries.md) — Registry CRUD and repositories
+- [Task: Instance Artifacts](references/task-instance-artifacts.md) — Artifact management and scanning
+- [Task: Instance Credentials](references/task-instance-credentials.md) — Credential management workflows
+- [Task: Instance Endpoints](references/task-instance-endpoints.md) — Internal and public access configuration
+- [Task: Instance Domains](references/task-instance-domains.md) — Custom domain management
+- [CLI Installation Guide](references/cli-installation-guide.md) — hcloud CLI installation and configuration
+- [Acceptance Criteria](references/acceptance-criteria.md) — Success criteria for all operations
 
 ## Notes
 
-- **Instance deletion is irreversible** — removes ALL namespaces, repositories, artifacts, and data permanently
-- **Namespace deletion is irreversible** — removes all repositories and artifacts under it
-- **Artifact deletion is irreversible** — the image version cannot be recovered
+- **Instance/Namespace/Artifact deletion is irreversible** — removes all data permanently
 - **Default domain cannot be deleted** — only custom domains can be removed
-- **AK/SK must never be hardcoded** — credentials should only be obtained via environment variables
-- **hcloud CLI is the only supported method** — all operations use `hcloud SWR <Operation>` format
+- **AK/SK must never be hardcoded** — use environment variables only
 - **Pagination offset must be multiple of limit** — `offset` must be 0 or a multiple of `limit`
 - **Registry credential.access_secret is sensitive** — never expose or log access secrets
-- **SWR enterprise service must be activated first** — access `https://console.huaweicloud.com/swr-instance` to activate before creating instances
-- **Console access requires direct URL** — the SWR enterprise instance console is not in the main navigation menu; use `https://console.huaweicloud.com/swr-instance`
-- **Spec availability varies by region** — not all specs are available in all regions; verify before creating instances
-- **Instance creation incurs hourly costs** — inform the user of billing implications before creating an instance
 
 ## Common Pitfalls
 

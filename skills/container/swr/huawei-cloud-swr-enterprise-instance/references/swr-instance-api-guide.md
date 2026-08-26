@@ -2,7 +2,11 @@
 
 ## Overview
 
-This document provides API reference information for Huawei Cloud SWR enterprise instance operations using hcloud CLI. All commands follow the standard format: `hcloud SWR <Operation> --param=value --cli-region=<region>`. Enterprise instance operations differ from basic SWR operations — they require `--instance_id` for most operations and use a separate set of API endpoints.
+This document provides API reference information for Huawei Cloud SWR enterprise
+instance operations using hcloud CLI. All commands follow the standard format:
+`hcloud SWR <Operation> --param=value --cli-region=<region>`.
+Enterprise instance operations differ from basic SWR operations — they require
+`--instance_id` for most operations and use a separate set of API endpoints.
 
 ## Authentication
 
@@ -30,30 +34,32 @@ hcloud configure list
 
 ### 1. Create Instance
 
+**⚠️ hcloud CLI Bug**: `hcloud SWR CreateInstance` has a known bug where
+`--project_id` appears as both a path parameter and a body parameter with
+the same name. hcloud CLI rejects duplicate parameters, making this command
+unusable. Use the Python SDK script instead:
+
 ```bash
-# Create basic edition instance
-hcloud SWR CreateInstance --name=my-instance --spec=swr.ee.basic --charge_mode=postPaid --vpc_id=<vpc-id> --subnet_id=<subnet-id> --enterprise_project_id=0 --cli-region=cn-north-4
+# ✅ CORRECT - Use Python SDK script (bypasses hcloud CLI duplicate --project_id bug)
+python scripts/swr_instance_helper.py create --name=my-instance --spec=swr.ee.basic \
+    --vpc_id=<vpc-id> --subnet_id=<subnet-id> --enterprise_project_id=0
 
 # Create professional edition instance with description
-hcloud SWR CreateInstance --name=prod-instance --spec=swr.ee.professional --charge_mode=postPaid --vpc_id=<vpc-id> --subnet_id=<subnet-id> --enterprise_project_id=0 --description="Production enterprise registry" --cli-region=cn-north-4
+python scripts/swr_instance_helper.py create --name=prod-instance --spec=swr.ee.professional \
+    --vpc_id=<vpc-id> --subnet_id=<subnet-id> --enterprise_project_id=0 \
+    --description="Production enterprise registry"
 
 # Create instance with OBS encryption
-hcloud SWR CreateInstance --name=secure-instance --spec=swr.ee.professional --charge_mode=postPaid --vpc_id=<vpc-id> --subnet_id=<subnet-id> --enterprise_project_id=0 --obs_encrypt=true --obs_enc_kms_key_id=<kms-key-id> --cli-region=cn-north-4
+python scripts/swr_instance_helper.py create --name=secure-instance --spec=swr.ee.professional \
+    --vpc_id=<vpc-id> --subnet_id=<subnet-id> --enterprise_project_id=0 \
+    --obs_encrypt=true --obs_enc_kms_key_id=<kms-key-id>
 
-# Create instance with GM (Chinese national cryptographic standard) encryption
-hcloud SWR CreateInstance --name=gm-instance --spec=swr.ee.professional --charge_mode=postPaid --vpc_id=<vpc-id> --subnet_id=<subnet-id> --enterprise_project_id=0 --obs_encrypt=true --encrypt_type=gm --cli-region=cn-north-4
-
-# Create instance without intranet access
-hcloud SWR CreateInstance --name=public-instance --spec=swr.ee.basic --charge_mode=postPaid --vpc_id=<vpc-id> --subnet_id=<subnet-id> --enterprise_project_id=0 --enable_intranet_access=false --cli-region=cn-north-4
-
-# Create instance with custom OBS bucket
-hcloud SWR CreateInstance --name=custom-obs-instance --spec=swr.ee.professional --charge_mode=postPaid --vpc_id=<vpc-id> --subnet_id=<subnet-id> --enterprise_project_id=0 --obs_bucket_name=my-obs-bucket --cli-region=cn-north-4
-
-# Create instance with tags
-hcloud SWR CreateInstance --name=tagged-instance --spec=swr.ee.professional --charge_mode=postPaid --vpc_id=<vpc-id> --subnet_id=<subnet-id> --enterprise_project_id=0 --resource_tags.1.key=Environment --resource_tags.1.value=Production --resource_tags.2.key=Team --resource_tags.2.value=Backend --cli-region=cn-north-4
+# ❌ BROKEN - hcloud CLI CreateInstance fails with "重复的参数:project_id" or "缺少必填参数:project_id"
+# hcloud SWR CreateInstance --name=my-instance --spec=swr.ee.basic ...
 ```
 
 **Parameters**:
+
 - `--name` (required, body): Instance name, 3-48 chars, lowercase start, no consecutive hyphens, cannot end with hyphen
 - `--spec` (required, body): `swr.ee.basic` or `swr.ee.professional`
 - `--charge_mode` (required, body): `postPaid` (on-demand)
@@ -64,7 +70,7 @@ hcloud SWR CreateInstance --name=tagged-instance --spec=swr.ee.professional --ch
 - `--description` (optional, body): Instance description
 - `--enable_intranet_access` (optional, body): Create internal access, default `true`
 - `--obs_encrypt` (optional, body): Enable OBS bucket encryption
-- `--encrypt_type` (optional, body): Encryption algorithm, `gm` for GM (Chinese national cryptographic standard), empty for AES-256
+- `--encrypt_type` (optional, body): Encryption algorithm, `gm` for Chinese national encryption (SM), empty for AES-256
 - `--obs_bucket_name` (optional, body): Custom OBS bucket name (skips OBS encryption config)
 - `--obs_enc_kms_key_id` (optional, body): KMS key ID for OBS encryption
 - `--resource_tags.[N].key` (optional, body): Tag key in indexed format
@@ -89,6 +95,7 @@ hcloud SWR ListInstance --enterprise_project_id=<ep-id> --cli-region=cn-north-4
 ```
 
 **Parameters**:
+
 - `--cli-region` (required): Region ID
 - `--project_id` (required, path, auto-filled): Project ID
 - `--status` (optional): Filter by status (`Initial`, `Creating`, `Running`, `Unavailable`)
@@ -105,6 +112,7 @@ hcloud SWR ShowInstance --instance_id=<instance-id> --cli-region=cn-north-4
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--project_id` (required, path, auto-filled): Project ID
 
@@ -117,6 +125,7 @@ hcloud SWR ShowInstanceConfiguration --instance_id=<instance-id> --cli-region=cn
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--project_id` (required, path, auto-filled): Project ID
 
@@ -133,6 +142,7 @@ hcloud SWR UpdateInstanceConfiguration --instance_id=<instance-id> --anonymous_a
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--anonymous_access` (required, body): Enable/disable anonymous login (`true`/`false`)
 - `--project_id` (required, path, auto-filled): Project ID
@@ -156,6 +166,7 @@ hcloud SWR DeleteInstance --instance_id=<instance-id> --delete_obs=true --delete
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--project_id` (required, path, auto-filled): Project ID
 - `--delete_dns` (optional, body): Whether to delete DNS domain info
@@ -177,6 +188,7 @@ hcloud SWR CreateInstanceNamespace --instance_id=<instance-id> --namespace_name=
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--namespace_name` (required, body): Namespace name, 1-64 chars
 - `--metadata.public` (required, body): Public visibility (`true`/`false`)
@@ -186,6 +198,7 @@ hcloud SWR CreateInstanceNamespace --instance_id=<instance-id> --namespace_name=
 - `--project_id` (required, path, auto-filled): Project ID
 
 **Namespace Naming Rules**:
+
 - Start with lowercase letter or digit
 - Followed by lowercase letters, digits, dots (`.`), underscores (`_`), or hyphens (`-`)
 - Dots, underscores, hyphens cannot be directly connected (e.g., `a._b` is invalid)
@@ -212,6 +225,7 @@ hcloud SWR ListInstanceNamespaces --instance_id=<instance-id> --order_column=upd
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--project_id` (required, path, auto-filled): Project ID
 - `--limit` (optional): Page size, default 10, max 100
@@ -230,6 +244,7 @@ hcloud SWR ShowInstanceNamespace --instance_id=<instance-id> --namespace_name=gr
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--namespace_name` (required, path): Namespace name
 - `--project_id` (required, path, auto-filled): Project ID
@@ -251,6 +266,7 @@ hcloud SWR UpdateInstanceNamespace --instance_id=<instance-id> --namespace_name=
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--namespace_name` (required, path): Namespace name
 - `--metadata.public` (required, body): Public visibility
@@ -271,6 +287,7 @@ hcloud SWR DeleteInstanceNamespace --instance_id=<instance-id> --namespace_name=
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--namespace_name` (required, path): Namespace name
 - `--project_id` (required, path, auto-filled): Project ID
@@ -299,6 +316,7 @@ hcloud SWR CreateInstanceRegistry --instance_id=<instance-id> --name=custom-harb
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Source instance ID
 - `--name` (required, body): Registry display name, 1-64 chars
 - `--type` (required, body): `swr-pro`, `swr-pro-internal`, `huawei-SWR`
@@ -313,7 +331,9 @@ hcloud SWR CreateInstanceRegistry --instance_id=<instance-id> --name=custom-harb
 - `--region_id` (optional, body): Target region (required for `swr-pro-internal`)
 - `--dns_conf.hosts.{*}` (optional, body): DNS host mapping entries
 
-⚠️ **Note**: `--instance_id` appears twice in parameters — once as path parameter (source instance), and once as body parameter (target instance for `swr-pro-internal` type). When using `swr-pro-internal`, both are needed.
+⚠️ **Note**: `--instance_id` appears twice in parameters — once as path
+parameter (source instance), and once as body parameter (target instance
+for `swr-pro-internal` type). When using `swr-pro-internal`, both are needed.
 
 ### 2. List Instance Registries
 
@@ -335,6 +355,7 @@ hcloud SWR ListInstanceRegistries --instance_id=<instance-id> --order_column=upd
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--project_id` (required, path, auto-filled): Project ID
 - `--limit` (optional): Page size, default 10, max 100
@@ -351,6 +372,7 @@ hcloud SWR ShowInstanceRegistry --instance_id=<instance-id> --registry_id=<regis
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--registry_id` (required, path): Registry ID (numeric)
 - `--project_id` (required, path, auto-filled): Project ID
@@ -362,6 +384,7 @@ hcloud SWR UpdateInstanceRegistry --instance_id=<instance-id> --registry_id=<reg
 ```
 
 **Parameters**:
+
 - Same as CreateInstanceRegistry, plus `--registry_id` (required, path) for identifying the registry to update
 - All required body parameters from CreateInstanceRegistry must be provided even for partial updates
 
@@ -372,6 +395,7 @@ hcloud SWR DeleteInstanceRegistry --instance_id=<instance-id> --registry_id=<reg
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--registry_id` (required, path): Registry ID (numeric)
 - `--project_id` (required, path, auto-filled): Project ID
@@ -395,6 +419,7 @@ hcloud SWR ListInstanceRepositories --instance_id=<instance-id> --order_column=u
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--project_id` (required, path, auto-filled): Project ID
 - `--namespace_id` (optional): Filter by namespace ID (numeric)
@@ -417,6 +442,7 @@ hcloud SWR ListAllInstanceRepositories --limit=20 --marker=<next-marker> --cli-r
 ```
 
 **Parameters**:
+
 - `--project_id` (required, path, auto-filled): Project ID
 - `--limit` (optional): Page size, default 100, max 100
 - `--marker` (optional): Pagination marker (use `next_marker` from previous response)
@@ -431,6 +457,7 @@ hcloud SWR ShowInstanceRepository --instance_id=<instance-id> --namespace_name=g
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--namespace_name` (required, path): Namespace name
 - `--repository_name` (required, path): Repository name
@@ -443,6 +470,7 @@ hcloud SWR UpdateInstanceRepository --instance_id=<instance-id> --namespace_name
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--namespace_name` (required, path): Namespace name
 - `--repository_name` (required, path): Repository name
@@ -456,6 +484,7 @@ hcloud SWR DeleteInstanceRepository --instance_id=<instance-id> --namespace_name
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--namespace_name` (required, path): Namespace name
 - `--repository_name` (required, path): Repository name
@@ -482,6 +511,7 @@ hcloud SWR ListInstanceArtifacts --instance_id=<instance-id> --namespace_name=gr
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--namespace_name` (required, path): Namespace name
 - `--repository_name` (required, path): Repository name
@@ -502,6 +532,7 @@ hcloud SWR ListInstanceAllArtifacts --instance_id=<instance-id> --limit=20 --mar
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--project_id` (required, path, auto-filled): Project ID
 - `--limit` (optional): Page size, default 10, max 100
@@ -520,6 +551,7 @@ hcloud SWR ShowInstanceArtifact --instance_id=<instance-id> --namespace_name=gro
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--namespace_name` (required, path): Namespace name
 - `--reference` (required, path): Artifact digest (SHA256 hash)
@@ -534,6 +566,7 @@ hcloud SWR ShowInstanceArtifactAddition --instance_id=<instance-id> --namespace_
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--namespace_name` (required, path): Namespace name
 - `--reference` (required, path): Artifact digest
@@ -548,6 +581,7 @@ hcloud SWR ListInstanceArtifactVulnerabilities --instance_id=<instance-id> --nam
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--namespace_name` (required, path): Namespace name
 - `--reference` (required, path): Artifact digest
@@ -561,6 +595,7 @@ hcloud SWR StartManualScanning --instance_id=<instance-id> --namespace_name=grou
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--namespace_name` (required, path): Namespace name
 - `--reference` (required, path): Artifact digest
@@ -574,6 +609,7 @@ hcloud SWR DeleteInstanceArtifact --instance_id=<instance-id> --namespace_name=g
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--namespace_name` (required, path): Namespace name
 - `--reference` (required, path): Artifact digest
@@ -591,6 +627,7 @@ hcloud SWR CreateInstanceLtCredential --instance_id=<instance-id> --name=my-cred
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--name` (required, body): Credential name, same naming rules as namespace (1-64 chars)
 - `--project_id` (required, path, auto-filled): Project ID
@@ -604,6 +641,7 @@ hcloud SWR CreateInstanceTempCredential --instance_id=<instance-id> --cli-region
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--project_id` (required, path, auto-filled): Project ID
 
@@ -623,6 +661,7 @@ hcloud SWR ListInstanceLtCredentials --instance_id=<instance-id> --limit=20 --of
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--project_id` (required, path, auto-filled): Project ID
 - `--limit` (optional): Page size, default 100, max 100
@@ -640,6 +679,7 @@ hcloud SWR UpdateInstanceLtCredential --instance_id=<instance-id> --credential_i
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--credential_id` (required, path): Credential ID (token_id)
 - `--enable` (required, body): Enable/disable (`true`/`false`)
@@ -652,6 +692,7 @@ hcloud SWR DeleteInstanceLtCredential --instance_id=<instance-id> --credential_i
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--credential_id` (required, path): Credential ID (token_id)
 - `--project_id` (required, path, auto-filled): Project ID
@@ -668,6 +709,7 @@ hcloud SWR CreateInstanceInternalEndpoint --instance_id=<instance-id> --vpc_id=<
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--vpc_id` (required, body): VPC ID
 - `--subnet_id` (required, body): Subnet ID
@@ -686,6 +728,7 @@ hcloud SWR ListInstanceInternalEndpoints --instance_id=<instance-id> --limit=20 
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--project_id` (required, path, auto-filled): Project ID
 - `--limit` (optional): Page size, default 100, max 100
@@ -698,6 +741,7 @@ hcloud SWR ShowInstanceInternalEndpoint --instance_id=<instance-id> --internal_e
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--internal_endpoints_id` (required, path): Endpoint ID
 - `--project_id` (required, path, auto-filled): Project ID
@@ -709,6 +753,7 @@ hcloud SWR DeleteInstanceInternalEndpoint --instance_id=<instance-id> --internal
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--internal_endpoints_id` (required, path): Endpoint ID
 - `--project_id` (required, path, auto-filled): Project ID
@@ -724,11 +769,13 @@ hcloud SWR CreateInstanceEndpointPolicy --instance_id=<instance-id> --enable=fal
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--enable` (required, body): Enable/disable (`true`/`false`)
 - `--project_id` (required, path, auto-filled): Project ID
 
 **Status Constraints**:
+
 - Can only enable when status is `Disable` or `EnableFailed`
 - Can only disable when status is `Enable` or `DisableFailed`
 
@@ -739,6 +786,7 @@ hcloud SWR ShowInstanceEndpointPolicy --instance_id=<instance-id> --cli-region=c
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--project_id` (required, path, auto-filled): Project ID
 
@@ -753,6 +801,7 @@ hcloud SWR UpdateInstanceEndpointPolicy --instance_id=<instance-id> --ip_list.1.
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--ip_list.[N].ip` (required, body): IP or CIDR in indexed format
 - `--ip_list.[N].description` (optional, body): Description in indexed format
@@ -772,12 +821,14 @@ hcloud SWR AddDomainName --instance_id=<instance-id> --domain_name=*.registry.ex
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--domain_name` (required, body): Domain name
 - `--certificate_id` (required, body): SCM certificate ID
 - `--project_id` (required, path, auto-filled): Project ID
 
 **Domain Naming Rules**:
+
 - Letters, digits, hyphens, and asterisks (wildcard only at start)
 - Hyphens cannot be at start or end
 - At least two strings separated by dots
@@ -799,6 +850,7 @@ hcloud SWR ListDomainNames --instance_id=<instance-id> --uid=<domain-id> --cli-r
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--project_id` (required, path, auto-filled): Project ID
 - `--domain_name` (optional): Filter by domain name
@@ -819,6 +871,7 @@ hcloud SWR UpdateDomainName --instance_id=<instance-id> --domainname_id=<domain-
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--domainname_id` (required, path): Domain ID
 - `--certificate_id` (required, body): New SCM certificate ID
@@ -831,6 +884,7 @@ hcloud SWR DeleteDomainName --instance_id=<instance-id> --domainname_id=<domain-
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--domainname_id` (required, path): Domain ID
 - `--project_id` (required, path, auto-filled): Project ID
@@ -846,6 +900,7 @@ hcloud SWR ListInstanceStatistics --instance_id=<instance-id> --cli-region=cn-no
 ```
 
 **Parameters**:
+
 - `--instance_id` (required, path): Instance ID
 - `--project_id` (required, path, auto-filled): Project ID
 
@@ -865,6 +920,7 @@ hcloud SWR ListInstanceJobs --limit=20 --offset=0 --cli-region=cn-north-4
 ```
 
 **Parameters**:
+
 - `--project_id` (required, path, auto-filled): Project ID
 - `--status` (optional): Job status (`Creating`, `Initializing`, `Running`, `Failed`, `Success`)
 - `--limit` (optional): Page size, default 100, max 100
@@ -877,6 +933,7 @@ hcloud SWR ShowInstanceJob --job_id=<job-id> --cli-region=cn-north-4
 ```
 
 **Parameters**:
+
 - `--job_id` (required, path): Job ID
 - `--project_id` (required, path, auto-filled): Project ID
 
@@ -887,37 +944,9 @@ hcloud SWR DeleteInstanceJob --job_id=<job-id> --cli-region=cn-north-4
 ```
 
 **Parameters**:
+
 - `--job_id` (required, path): Job ID
 - `--project_id` (required, path, auto-filled): Project ID
-
-## Instance Audit Log Operations
-
-SWR enterprise instances provide built-in audit logging via the `ListAuditLogs` API. This records image upload and download operations (pull, delete, create) for tracking and compliance — no dependency on CTS required.
-
-### 1. List Audit Logs
-
-```bash
-# List pull (download) audit logs
-hcloud SWR ListAuditLogs --instance_id=<instance-id> --project_id=<project-id> --operation=pull --cli-region=cn-north-4
-
-# List delete audit logs
-hcloud SWR ListAuditLogs --instance_id=<instance-id> --project_id=<project-id> --operation=delete --cli-region=cn-north-4
-
-# List create (upload) audit logs
-hcloud SWR ListAuditLogs --instance_id=<instance-id> --project_id=<project-id> --operation=create --cli-region=cn-north-4
-
-# Paginate results
-hcloud SWR ListAuditLogs --instance_id=<instance-id> --project_id=<project-id> --operation=pull --limit=20 --offset=0 --cli-region=cn-north-4
-```
-
-**Parameters**:
-- `--instance_id` (required, path): Enterprise repository instance ID
-- `--project_id` (required, path): Project ID
-- `--operation` (required, query): Operation type — `pull`, `delete`, or `create`
-- `--limit` (optional): Page size
-- `--offset` (optional): Page offset
-
-> 💡 **Note**: SWR `ListAuditLogs` provides image-level audit trails specific to the SWR enterprise instance. For broader cloud-level audit trails across all services, use Huawei Cloud CTS (Cloud Trace Service).
 
 ## Common Region IDs
 
@@ -949,28 +978,6 @@ hcloud SWR ListAuditLogs --instance_id=<instance-id> --project_id=<project-id> -
 | `RequestLimitExceeded`  | Too many requests           | Add delay between batch requests                  |
 | `DomainNameInvalid`     | Domain naming violation     | Follow domain naming rules                      |
 | `DefaultDomainCannotDelete` | Cannot delete default domain | Only custom domains can be deleted           |
-
-## Unsupported Operations
-
-The following operations are NOT available through the SWR Enterprise Instance API (`hcloud SWR`):
-
-| Operation | Alternative | Notes |
-| --------- | ----------- | ----- |
-| Image push/pull (`docker push`/`docker pull`) | Use `docker` CLI directly | Requires credentials from `CreateInstanceLtCredential` or `CreateInstanceTempCredential` and `docker login` first |
-| Image build (`docker build`) | Use `docker` CLI or CodeArts Build | SWR is a registry, not a build service |
-| Image tag (`docker tag`) | Use `docker` CLI directly | Tagging is a local Docker operation |
-| Image copy/sync between instances | CLI available: `CreateInstanceReplicationPolicy` etc. | Use `hcloud SWR CreateInstanceReplicationPolicy` or SWR enterprise instance console |
-| Image retention/aging policies | CLI available but not documented in this skill | Use `hcloud SWR CreateInstanceRetentionPolicy` / `ListInstanceRetentionPolicies` etc., or SWR enterprise instance console |
-| Webhook management | CLI available but not documented in this skill | Use `hcloud SWR CreateInstanceWebhook` / `ListInstanceWebhooks` etc., or SWR enterprise instance console |
-| Image signing policies | CLI available but not documented in this skill | Use `hcloud SWR CreateInstanceSignPolicy` / `ListInstanceSignPolicies` etc., or SWR enterprise instance console |
-| Resource tag management | CLI available but not documented in this skill | Use `hcloud SWR CreateInstanceResourceTags` / `ListInstanceResourceTags` etc., or TMS console |
-| IAM delegation management | Not supported by this skill | Use IAM console to configure delegation. `CheckAgency`/`CreateAgency` are for SWR→CCE/CCI direction, not enterprise instance delegation |
-| Garbage collection | Not supported via API | Contact Huawei Cloud support for GC operations |
-| Backup/restore instance | Not supported via API | Use CBR or contact support for instance-level backup |
-| RBAC/permission management | Limited to namespace-level `metadata.public` | Fine-grained IAM policies at account level |
-
-**Key Distinction**: `hcloud SWR` commands manage the **instance infrastructure** (create, configure, delete).
-For **image operations** (push, pull, build, tag), use the `docker` CLI after authenticating with SWR credentials.
 
 ## Related Documentation
 

@@ -57,9 +57,15 @@ Expected: Displays list of enterprise instances (may be empty if none created).
 
 Note: Instance creation requires an existing VPC and subnet. This step may incur costs.
 
+**⚠️ hcloud CLI `CreateInstance` has a known bug** (duplicate `--project_id` parameter). Use the Python SDK script instead:
+
 ```bash
-# Create a test instance (requires existing VPC/subnet)
-hcloud SWR CreateInstance --name=test-verify --spec=swr.ee.basic --charge_mode=postPaid --vpc_id=<vpc-id> --subnet_id=<subnet-id> --enterprise_project_id=0 --cli-region=cn-north-4
+# ✅ CORRECT - Create a test instance using Python SDK script
+python scripts/swr_instance_helper.py create --name=test-verify --spec=swr.ee.basic \
+    --vpc_id=<vpc-id> --subnet_id=<subnet-id> --enterprise_project_id=0
+
+# ❌ BROKEN - hcloud CLI CreateInstance fails with duplicate --project_id error
+# hcloud SWR CreateInstance --name=test-verify ...
 ```
 
 Expected: Instance creation initiated (asynchronous).
