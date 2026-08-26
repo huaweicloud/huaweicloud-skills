@@ -142,6 +142,12 @@ See [IAM Permission Policies](references/iam-policies.md) for complete policy JS
 
 ## 工作流
 
+0. **⚠️ Billing Confirmation (MANDATORY)** — Before executing any operation, inform the user of potential billing implications and obtain explicit consent:
+   - **Cross-region sync**: Image sync between regions incurs cross-region traffic fees. Auto-sync (`syncAuto=true`) continuously replicates images, generating ongoing traffic costs.
+   - **Trigger execution**: Triggers that deploy to CCE/CCI may incur compute costs on the target clusters.
+   - **Storage costs**: Synced images consume storage in both source and target regions.
+   - Ask the user to confirm: "Do you understand the billing implications and wish to proceed? (yes/no)"
+   - Only proceed if the user explicitly confirms. If the user declines, stop and do not execute any operations.
 1. **Confirm parameters** — Review the confirmation table above; confirm the risk level and key parameters with the user before any write operation
 2. **Query sync regions** — `ListSyncRegions` to retrieve available cross-region sync targets
 3. **Configure sync** — `CreateImageSyncRepo` (auto-sync) or `CreateManualImageSyncRepo` (one-time manual sync)
