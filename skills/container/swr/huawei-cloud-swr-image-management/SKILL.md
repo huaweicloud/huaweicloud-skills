@@ -40,6 +40,12 @@ This skill provides lifecycle management capabilities for Huawei Cloud SWR (Soft
 
 ## 工作流
 
+0. **⚠️ Billing Confirmation (MANDATORY)** — Before executing any operation, inform the user of potential billing implications and obtain explicit consent:
+   - **SWR basic service**: The basic SWR service is free within quotas. Exceeding namespace or repository quotas may require upgrading to enterprise instances (which incur costs).
+   - **Storage costs**: Image storage in SWR consumes OBS storage. Large images or many tags increase storage costs.
+   - **Traffic costs**: Frequent image pulls/pushes, especially cross-region, may incur network traffic fees.
+   - Ask the user to confirm: "Do you understand the billing implications and wish to proceed? (yes/no)"
+   - Only proceed if the user explicitly confirms. If the user declines, stop and do not execute any operations.
 1. **Parse user request** — identify the SWR operation (namespace, repository, tag, auth, quota)
 2. **Verify prerequisites** — check hcloud CLI installation and credential configuration
 3. **Confirm parameters** — display the operation, target resources, and parameters to the user for confirmation
