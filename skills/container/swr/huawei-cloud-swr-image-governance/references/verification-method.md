@@ -68,7 +68,7 @@ Expected: New user appears in `others_auths` with auth level 1.
 
 ```bash
 # Clean up: revoke permission
-hcloud SWR DeleteNamespaceAuth --namespace=<your-namespace> --1.user_id=<user-id> --1.user_name=<user-name> --cli-region=cn-north-4
+hcloud SWR DeleteNamespaceAuth --namespace=<your-namespace> --1=<user-id> --cli-region=cn-north-4
 ```
 
 Expected: Permission revoked successfully.
@@ -150,4 +150,4 @@ Expected: Returns accessories object with `total` and `accessories` fields.
 | 10 | List shared domains       | `hcloud SWR ListRepoDomains --namespace=<ns> --repository=<repo> --cli-region=cn-north-4` | ☐ |
 | 11 | List retention rules      | `hcloud SWR ListRetentions --namespace=<ns> --repository=<repo> --cli-region=cn-north-4` | ☐ |
 | 12 | List repo accessories     | `hcloud SWR ListRepoAccessories --namespace=<ns> --repository=<repo> --cli-region=cn-north-4` | ☐ |
-| 13 | Delete namespace auth     | `hcloud SWR DeleteNamespaceAuth --namespace=<ns> --1.user_id=<id> --1.user_name=<name> --cli-region=cn-north-4` | ☐ |
+| 13 | Delete namespace auth     | `hcloud SWR DeleteNamespaceAuth --namespace=<ns> --1=<user-id> --cli-region=cn-north-4` | ☐ |

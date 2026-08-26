@@ -21,6 +21,24 @@ This skill provides governance capabilities for Huawei Cloud SWR (Software Repos
 - `huawei-cloud-swr-image-automation` - Image automation ops (sync, triggers, domains)
 - `huawei-cloud-swr-enterprise-instance` - Enterprise instance management
 
+**Out of Scope**:
+
+This skill does **NOT** support the following operations. If the user requests any of these, inform them and suggest the correct skill:
+
+| Operation | Use Instead | Reason |
+|-----------|-------------|--------|
+| Create/Delete/List namespaces | `huawei-cloud-swr-image-management` | Namespace lifecycle, not governance |
+| Create/Delete repositories or tags | `huawei-cloud-swr-image-management` | Repo/tag lifecycle, not governance |
+| Push/pull images (docker login) | `huawei-cloud-swr-image-management` | Image operations, not governance |
+| Create authorization tokens | `huawei-cloud-swr-image-management` | Token management, not governance |
+| List SWR quotas | `huawei-cloud-swr-image-management` | Quota query, not governance |
+| Create image sync rules | `huawei-cloud-swr-image-automation` | Sync is automation, not governance |
+| Create/Delete triggers | `huawei-cloud-swr-image-automation` | Triggers are automation, not governance |
+| Start security scans | `huawei-cloud-swr-image-automation` | Scanning is automation, not governance |
+| Create immutable (不可变) rules | N/A (not supported by any current skill) | Use Huawei Cloud SWR console |
+| View audit logs | Use Huawei Cloud console or CES | Audit logs are not governance operations |
+| Create/Delete enterprise instances | `huawei-cloud-swr-enterprise-instance` | Instance lifecycle, not governance |
+
 **Capabilities**:
 - Grant, query, modify, and revoke namespace-level permissions
 - Grant, query, modify, and revoke repository-level permissions
@@ -43,14 +61,20 @@ This skill provides governance capabilities for Huawei Cloud SWR (Software Repos
 
 ## Workflow
 
+0. **⚠️ Billing Confirmation (MANDATORY)** — Before executing any operation, inform the user of potential billing implications and obtain explicit consent:
+   - **Governance operations**: Permission management, retention rules, and sharing configuration are free. However, retention rules that delete images reduce storage costs, while shared download domains may increase traffic costs.
+   - **Agency delegation**: Creating SWR agency delegation does not incur direct costs but enables cross-service operations that may have billing implications.
+   - Ask the user to confirm: "Do you understand the billing implications and wish to proceed? (yes/no)"
+   - Only proceed if the user explicitly confirms. If the user declines, stop and do not execute any operations.
 1. **Parse user request** — identify the governance operation (permissions, retention, domains, sharing, agency)
-2. **Verify prerequisites** — check hcloud CLI installation and credential configuration
-3. **Confirm parameters** — display the operation, target resources, and parameters to the user for confirmation
-4. **Execute read operations** — for query operations (Show, List, Check), run hcloud CLI directly
-5. **Confirm write operations** — for write operations (Create, Update, Delete), prompt user confirmation before execution (see [Parameter Confirmation](#参数确认))
-6. **Parse and format output** — extract relevant fields, format as table or structured output
-7. **Report results** — present results with context (e.g., permission changes, retention rule details)
-8. **Suggest next actions** — recommend related operations (e.g., after granting permission, suggest verifying with Show)
+2. **Check scope** — if the requested operation is listed in [Out of Scope](#out-of-scope), inform the user and suggest the correct skill. Do not execute the operation.
+3. **Verify prerequisites** — check hcloud CLI installation and credential configuration
+4. **Confirm parameters** — display the operation, target resources, and parameters to the user for confirmation
+5. **Execute read operations** — for query operations (Show, List, Check), run hcloud CLI directly
+6. **Confirm write operations** — for write operations (Create, Update, Delete), prompt user confirmation before execution (see [Parameter Confirmation](#参数确认))
+7. **Parse and format output** — extract relevant fields, format as table or structured output
+8. **Report results** — present results with context (e.g., permission changes, retention rule details)
+9. **Suggest next actions** — recommend related operations (e.g., after granting permission, suggest verifying with Show)
 
 ### 参数确认
 
@@ -210,13 +234,16 @@ hcloud SWR CreateNamespaceAuth --namespace=pancake --1.auth=7 --1.user_id=05949e
 # Update namespace permission for a user
 hcloud SWR UpdateNamespaceAuth --namespace=pancake --1.auth=3 --1.user_id=05949eb5350010e21f85c017722182de --1.user_name=hwstaff_p00506267 --cli-region=cn-north-4
 
-# Revoke namespace permission for a user
-hcloud SWR DeleteNamespaceAuth --namespace=pancake --1.user_id=05949eb5350010e21f85c017722182de --1.user_name=hwstaff_p00506267 --cli-region=cn-north-4
+# Revoke namespace permission for a user (DELETE uses array<string>, not array<object>)
+hcloud SWR DeleteNamespaceAuth --namespace=pancake --1=05949eb5350010e21f85c017722182de --cli-region=cn-north-4
 ```
 
 **Auth Values**: `7` = manage (full control), `3` = edit (push/pull), `1` = read (pull only)
 
-**⚠️ Array-Style Parameters**: Permission operations use `--[N].auth`, `--[N].user_id`, `--[N].user_name` format where `[N]` is the array index (starting from 1). For a single user, use `--1.auth=7 --1.user_id=xxx --1.user_name=xxx`. See [Common Pitfalls](references/common-pitfalls.md) for details.
+**⚠️ Array-Style Parameters**: Permission operations use different array formats:
+- **Create/Update** (array<object>): Use `--[N].auth`, `--[N].user_id`, `--[N].user_name` format where `[N]` is the array index (starting from 1). For a single user, use `--1.auth=7 --1.user_id=xxx --1.user_name=xxx`.
+- **Delete** (array<string>): Use `--[N]=<user_id>` format — the array element is directly a user ID string. For a single user, use `--1=<user_id>`. Do NOT use `--1.user_id=` or `--1.user_name=` for Delete operations.
+See [Common Pitfalls](references/common-pitfalls.md) for details.
 
 ### 2. Repository Permissions
 
@@ -232,8 +259,8 @@ hcloud SWR CreateUserRepositoryAuth --namespace=pancake --repository=openclaw-sa
 # Update repository permission for a user
 hcloud SWR UpdateUserRepositoryAuth --namespace=pancake --repository=openclaw-sandbox --1.auth=3 --1.user_id=05949eb5350010e21f85c017722182de --1.user_name=hwstaff_p00506267 --cli-region=cn-north-4
 
-# Revoke repository permission for a user
-hcloud SWR DeleteUserRepositoryAuth --namespace=pancake --repository=openclaw-sandbox --1.user_id=05949eb5350010e21f85c017722182de --1.user_name=hwstaff_p00506267 --cli-region=cn-north-4
+# Revoke repository permission for a user (DELETE uses array<string>, not array<object>)
+hcloud SWR DeleteUserRepositoryAuth --namespace=pancake --repository=openclaw-sandbox --1=05949eb5350010e21f85c017722182de --cli-region=cn-north-4
 ```
 
 **Auth Values**: Same as namespace permissions: `7` = manage, `3` = edit, `1` = read
