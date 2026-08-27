@@ -455,6 +455,7 @@
     "test_cases_skip": <int>,
     "test_cases_error": <int>,
     "pass_rate": <float, 0~100, 一位小数>,
+    "adjusted_pass_rate": <float, 0~100, 一位小数, 纳入问题扣分后的通过率>,
     "manual_items_count": <int>,
     "cloud_resources_changed": <int>
   },
@@ -592,7 +593,7 @@
 > | 规则 | 说明 |
 > |------|------|
 > | 默认行为 | 扫描兄弟 skill（除自己外） |
-> | 排除 | `*-test-files`、`huawei-cloud-skill-tester`、`huawei-cloud-skill-creator`、`huawei-cloud-new-tester`、无 SKILL.md 的目录 |
+> | 排除 | `*-test-files`、`*skill-tester*`、`*skill-creator*`、`*new-tester*`、无 SKILL.md 的目录 |
 > | 数量上限 | `SIBLING_LIMIT`（默认 5；0 = 关闭） |
 > | opt-out | `--no-siblings` / `WITHOUT_SIBLINGS=1` / `SIBLING_LIMIT=0` |
 > | 排序 | 目录顺序（glob `huawei-cloud-*`） |

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # phase-1-skill-analysis.sh — 功能提取
 # 读取 SKILL.md，提取 metadata、commands、capabilities、resource_types
-set -uo pipefail
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 source "$SCRIPT_DIR/lib/utils.sh"
@@ -83,6 +83,26 @@ if desc_match:
             triggers = re.findall(r'\'([^\']*)\'', trig_raw)
         if not triggers:
             triggers = [t.strip().strip(',').strip().strip('"').strip("'") for t in trig_raw.replace(',', ' ').split() if t.strip()]
+
+# Also check frontmatter Trigger: / Triggers: field (some skills use this instead of "Triggers include:")
+if not triggers:
+    _trig_line = re.search(r'^[Tt]rigger[s]?\s*:\s*(.+)$', yaml_text, re.MULTILINE)
+    if _trig_line:
+        _trig_raw = _trig_line.group(1).strip()
+        if _trig_raw.startswith('[') and _trig_raw.endswith(']'):
+            triggers = [t.strip().strip('"').strip("'") for t in _trig_raw[1:-1].split(',') if t.strip()]
+        else:
+            triggers = [t.strip().strip('"').strip("'") for t in re.split(r'[,;]', _trig_raw) if t.strip()]
+
+# Fallback: use tags as triggers if no explicit triggers found (ISSUE-003)
+if not triggers and tags:
+    triggers = list(tags)
+
+# Fallback: extract keywords from description text if still no triggers
+if not triggers and desc_text:
+    _desc_kw = re.findall(r'"([^"]{2,40})"', desc_text)
+    if _desc_kw:
+        triggers = _desc_kw[:10]
 
 # Extract capabilities by looking for sections
 cap_list = []
@@ -316,6 +336,13 @@ if not commands:
                 continue
             clean_cmd = re.sub(r'<[^>]+>', '', cmd_text).strip()
             clean_cmd = re.sub(r'\s+', ' ', clean_cmd)
+            # Skip entries that are not real executable commands (ISSUE-001:
+            # parameter names like kubectl, --bin-dir, bin in backticks were
+            # extracted as independent script paths, causing all test cases to fail)
+            if not (clean_cmd.startswith('hcloud ') or clean_cmd.startswith('python3 ')
+                   or clean_cmd.startswith('bash ') or clean_cmd.startswith('curl ')
+                   or clean_cmd.startswith('from ') or clean_cmd.startswith('sh ')):
+                continue
             exe = 'cli'
             if clean_cmd.startswith('hcloud '):
                 exe = 'cli'
@@ -333,6 +360,72 @@ if not commands:
                 'executor': exe,
                 'is_write': is_write
             })
+
+# Scan references/*.md for additional commands (ISSUE-008: some skills put
+# command variants in references/ docs, not in SKILL.md body).
+_refs_dir = os.path.join(skill_dir, 'references')
+if os.path.isdir(_refs_dir):
+    for _rf in sorted(os.listdir(_refs_dir)):
+        if not _rf.endswith('.md'):
+            continue
+        try:
+            with open(os.path.join(_refs_dir, _rf), encoding='utf-8') as _rf_f:
+                _ref_text = _rf_f.read()
+        except Exception:
+            continue
+        _bt3 = chr(96) * 3
+        _ref_blocks = re.findall(_bt3 + r'(\w+)?\s*\n(.*?)' + _bt3, _ref_text, re.DOTALL)
+        for _lang, _block in _ref_blocks:
+            _lang = (_lang or '').lower().strip()
+            _block = re.sub(r'\\\s*\n', ' ', _block)
+            if _lang in ('python', 'py'):
+                _mc = re.findall(r'(?:response\s*=\s*)?client\.(\w+)\s*\(', _block)
+                for _mn in _mc:
+                    _svc = detect_service(_block) or 'bss'
+                    _req_cls = ''.join(w.capitalize() for w in _mn.split('_')) + 'Request'
+                    _snippet = build_sdk_snippet(_svc, _mn, _req_cls, _block)
+                    _sig = _snippet[:200]
+                    if _sig and not any(c.get('command', '')[:200] == _sig for c in commands):
+                        cmd_id += 1
+                        commands.append({
+                            'id': 'CMD-%02d' % cmd_id,
+                            'source': 'references/%s-python-block' % _rf,
+                            'description': '%s (SDK)' % _mn,
+                            'command': _snippet,
+                            'executor': 'sdk',
+                            'is_write': any(kw in _mn.lower() for kw in ['create', 'delete', 'update', 'reclaim', 'destroy']),
+                            'method_name': _mn,
+                            'service': _svc,
+                            'request_class': _req_cls
+                        })
+            elif _lang in ('bash', 'sh', ''):
+                for _cl in _block.strip().split('\n'):
+                    _cl = _cl.strip()
+                    if not _cl or _cl.startswith('#') or _cl.startswith('$'):
+                        continue
+                    if _cl.startswith('python3 ') and 'scripts/' in _cl:
+                        if not any(c.get('command', '') == _cl for c in commands):
+                            cmd_id += 1
+                            commands.append({
+                                'id': 'CMD-%02d' % cmd_id,
+                                'source': 'references/%s-bash-block' % _rf,
+                                'description': _cl[:80],
+                                'command': _cl,
+                                'executor': 'script',
+                                'is_write': any(kw in _cl.lower() for kw in ['create', 'delete', 'update', 'destroy', 'activate', 'reclaim'])
+                            })
+                    elif _cl.startswith('hcloud '):
+                        _clean = re.sub(r'<[^>]+>', '', _cl).strip()
+                        if not any(c.get('command', '') == _clean for c in commands):
+                            cmd_id += 1
+                            commands.append({
+                                'id': 'CMD-%02d' % cmd_id,
+                                'source': 'references/%s-bash-block' % _rf,
+                                'description': _clean[:80],
+                                'command': _clean,
+                                'executor': 'cli',
+                                'is_write': any(kw in _cl.lower() for kw in ['create', 'delete', 'update', 'destroy'])
+                            })
 
 # Detect resource types
 resource_types = []
@@ -457,8 +550,10 @@ print(json.dumps(result, indent=2, ensure_ascii=False))
 PYANALYSIS
 
   local analysis
+  set +e
   analysis=$(python3 "$py_tmp" "$sk_file" "$skill_dir")
   local analysis_rc=$?
+  set -e
   rm -f "$py_tmp"
 
   if [ $analysis_rc -ne 0 ]; then
@@ -552,7 +647,30 @@ if trigs:
 "
 }
 
-for skill_dir in "$@"; do
+# Parse args: getopts for -s, pre-filter --skill (getopts can't handle --long)
+SKILL_DIRS=()
+_rest=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --skill) SKILL_DIRS+=("$2"); shift 2 ;;
+    --skill=*) SKILL_DIRS+=("${1#--skill=}"); shift ;;
+    --help|-h) echo "用法: $(basename "$0") [-s <dir>]... [--skill <dir>]... [<dir>...]"; exit 0 ;;
+    *) _rest+=("$1"); shift ;;
+  esac
+done
+set -- ${_rest[@]+"${_rest[@]}"}
+OPTIND=1
+while getopts ":s:h" opt; do
+  case $opt in
+    s) SKILL_DIRS+=("$OPTARG") ;;
+    h) echo "用法: $(basename "$0") [-s <dir>]... [--skill <dir>]... [<dir>...]"; exit 0 ;;
+    \?) ;;
+  esac
+done
+shift $((OPTIND-1))
+for arg in "$@"; do SKILL_DIRS+=("$arg"); done
+
+for skill_dir in "${SKILL_DIRS[@]}"; do
   run_phase1 "$skill_dir" || exit 1
   echo ""
 done

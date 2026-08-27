@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # phase-6-full-flow.sh — 全流程走通测试
 # 自动推导场景链 → 用户确认 → 端到端执行 → 状态验证 → 清理
-set -uo pipefail
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 source "$SCRIPT_DIR/lib/utils.sh"
@@ -10,23 +10,33 @@ source "$SCRIPT_DIR/lib/chain-verify.sh"
 PHASE_NUM=6
 PHASE_NAME="full-flow"
 
-# Parse args
+# Parse args: getopts for -s, pre-filter --skills (getopts can't handle --long)
 SKILLS_LIST=""
 SKILL_PATHS=()
-skills_next=false
-for ((i=1; i<=$#; i++)); do
-  if $skills_next; then
-    SKILLS_LIST="${!i}"
-    skills_next=false
-  elif [[ "${!i}" == --skills=* ]]; then
-    SKILLS_LIST="${!i#--skills=}"
-  elif [[ "${!i}" == --skills ]]; then
-    skills_next=true
-  elif [[ "${!i}" =~ ^/ || "${!i}" =~ ^\. || "${!i}" =~ ^[A-Za-z]:[/\\] ]]; then
-    SKILL_PATHS+=("${!i}")
+_rest=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --skills) SKILLS_LIST="$2"; shift 2 ;;
+    --skills=*) SKILLS_LIST="${1#--skills=}"; shift ;;
+    --help|-h) echo "用法: $(basename "$0") [-s <list>] [--skills <list>] [<dir>...]"; exit 0 ;;
+    *) _rest+=("$1"); shift ;;
+  esac
+done
+set -- ${_rest[@]+"${_rest[@]}"}
+OPTIND=1
+while getopts ":s:h" opt; do
+  case $opt in
+    s) SKILLS_LIST="$OPTARG" ;;
+    h) echo "用法: $(basename "$0") [-s <list>] [--skills <list>] [<dir>...]"; exit 0 ;;
+    \?) ;;
+  esac
+done
+shift $((OPTIND-1))
+for arg in "$@"; do
+  if [[ "$arg" =~ ^/ || "$arg" =~ ^\. || "$arg" =~ ^[A-Za-z]:[/\\] ]]; then
+    SKILL_PATHS+=("$arg")
   fi
 done
-unset skills_next
 
 SKILL_COUNT=${#SKILL_PATHS[@]}
 
@@ -68,8 +78,10 @@ if [ "$SKILL_COUNT" -le 1 ]; then
 
   # Force AK/SK check before any SDK/CLI execution
   step "检查 AK/SK 凭证..."
+  set +e
   ensure_ak_sk
   cred_rc=$?
+  set -e
   if [ $cred_rc -ne 0 ]; then
     if [ $cred_rc -eq 77 ]; then
       fail "AK/SK 凭证缺失（exit 77 — 详见 stderr 中的 env-var 设置模板）"
@@ -213,6 +225,15 @@ for step in steps:
         step['status'] = 'skip'
         step['output'] = '未找到匹配命令'
 
+# Compute step statistics for verdict (ISSUE-004: all steps failing should
+# not result in pass verdict)
+_step_total = len(steps)
+_step_pass = sum(1 for s in steps if s.get('status') == 'pass')
+_step_fail = sum(1 for s in steps if s.get('status') == 'fail')
+_step_skip = sum(1 for s in steps if s.get('status') == 'skip')
+# state_consistency is True only if no steps failed (skips are acceptable)
+_state_ok = _step_fail == 0 and _step_total > 0
+
 result = {
     'mode': 'downgraded_single_skill_flow',
     'scenario': {
@@ -224,15 +245,21 @@ result = {
         'steps': steps
     },
     'state_consistency': {
-        'pass': True,
-        'detail': '单技能闭环，状态一致',
-        'final_state_summary': '功能点全部走通'
+        'pass': _state_ok,
+        'detail': f'{_step_pass}/{_step_total} 步通过, {_step_fail} 步失败, {_step_skip} 步跳过',
+        'final_state_summary': '功能点全部走通' if _state_ok else f'{_step_fail} 步失败, 需排查'
     },
     'cleanup': {
         'verdict': 'pass',
         'resources_cleaned': 0,
         'resources_failed': 0,
         'manual_required': []
+    },
+    'step_stats': {
+        'total': _step_total,
+        'pass': _step_pass,
+        'fail': _step_fail,
+        'skip': _step_skip
     }
 }
 print(json.dumps(result, indent=2, ensure_ascii=False))
@@ -254,8 +281,10 @@ else
   # 兄弟 skill 大多没跑过 phase 4（无 phase 4 JSON），所以不调真 API。
   if [ "${ALLOW_REAL_E2E:-0}" = "1" ]; then
     step "检查 AK/SK 凭证（ALLOW_REAL_E2E=1 模式: 真跑 E2E 步骤）..."
+    set +e
     ensure_ak_sk
     cred_rc=$?
+    set -e
     if [ $cred_rc -ne 0 ]; then
       if [ $cred_rc -eq 77 ]; then
         fail "AK/SK 凭证缺失（exit 77 — 详见 stderr 中的 env-var 设置模板）"
@@ -450,6 +479,13 @@ PYEOF
   ensure_test_files_dir "${SKILL_PATHS[0]}" > /dev/null
 fi
 
+# Safety net: if Python script crashed and flow_result is empty or invalid JSON,
+# generate a fallback result so phase-6-summary.json is always valid. (T-ISSUE-001)
+if ! printf '%s' "$flow_result" | python3 -c "import json,sys; json.load(sys.stdin)" 2>/dev/null; then
+  warn "⚠️ Phase 6 Python 脚本输出为空或非 JSON，生成降级结果"
+  flow_result='{"mode":"downgraded_single_skill_flow","scenario":{"name":"降级流程 (Python 脚本异常)","skills_involved":[],"description":"Python 脚本执行失败，生成降级结果","derived_automatically":false,"user_confirmed":false,"steps":[]},"state_consistency":{"pass":false,"detail":"Python 脚本异常，无法验证状态一致性","final_state_summary":"降级"},"cleanup":{"verdict":"pass","resources_cleaned":0,"resources_failed":0,"manual_required":[]}}'
+fi
+
 end_ts=$(date +%s)
 duration=$((end_ts - start_ts))
 
@@ -473,6 +509,18 @@ SKILL_NAMES = [os.path.basename(p) for p in SKILL_PATHS if p.strip()]
 TS = sys.argv[5]
 DURATION = int(sys.argv[6])
 STEP_COUNT = int(sys.argv[7])
+# Compute verdict from step statistics (ISSUE-004: all steps failing should
+# not be pass). For single-skill mode, check step_stats; for multi-skill
+# mode (derivation only), all steps have status='pass' as derivation markers.
+_step_stats = data.get('step_stats', {})
+_spass = _step_stats.get('pass', 0)
+_sfail = _step_stats.get('fail', 0)
+if _sfail > 0 and _spass == 0:
+    _verdict = 'fail'
+elif _sfail > 0:
+    _verdict = 'partial'
+else:
+    _verdict = 'pass'
 r = {
     'phase': PHASE_NUM,
     'phase_name': PHASE_NAME,
@@ -481,7 +529,7 @@ r = {
     'timestamp': TS,
     'execution_meta': {'duration_s': DURATION, 'retry_count': 0, 'user_confirmed': True},
     'result': data,
-    'summary': {'verdict': 'pass', 'pass_checks': STEP_COUNT, 'fail_checks': 0, 'warn_checks': 0}
+    'summary': {'verdict': _verdict, 'pass_checks': _spass, 'fail_checks': _sfail, 'warn_checks': _step_stats.get('skip', 0)}
 }
 print(json.dumps(r, indent=2, ensure_ascii=False))
 FRPY

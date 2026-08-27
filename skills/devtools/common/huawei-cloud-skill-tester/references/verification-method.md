@@ -146,9 +146,11 @@ $phase3.result.statistics
 **跑 phase 4（默认只读）**：
 
 ```bash
-# Linux / macOS — 用户在自己的 shell 里 export（不要 echo 给 agent）
-export HUAWEI_ACCESS_KEY="<your-access-key-id>"
-export HUAWEI_SECRET_KEY="<your-secret-access-key>"
+# Linux / macOS — 运行时注入（从受保护文件读取，不要 echo / 内联字面量给 agent）
+# gitleaks:ignore — runtime injection from secrets file, no literal secret
+read -r HUAWEI_ACCESS_KEY < ~/.secrets/hw_ak 2>/dev/null
+read -r HUAWEI_SECRET_KEY < ~/.secrets/hw_sk 2>/dev/null
+export HUAWEI_ACCESS_KEY HUAWEI_SECRET_KEY
 bash scripts/tier1/phase-4-execute-tests.sh "$WS/skills/$SKILL"
 ```
 

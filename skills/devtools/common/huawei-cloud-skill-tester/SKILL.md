@@ -227,7 +227,7 @@ bash scripts/tier2/phase-6-full-flow.sh --skill "huawei-cloud-rds-intelligent-se
 
 - `templates/phase-report-schema.json` — JSON Schema for `phase-N-summary.json` (N=0..6)
 - `templates/test-case-schema.json` — JSON Schema for individual test cases (`TC-F-*` / `TC-A-*` / `OF-*` / `FF-*`)
-- `templates/scenario-template.json` — Reference example for Phase 6 multi-skill scenario derivation
+- `templates/scenario-example.json` — Reference example for Phase 6 multi-skill scenario derivation
 
 ---
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # phase-4-execute-tests.sh — 用例执行
 # 只读自动执行，写操作逐条用户确认
-set -uo pipefail
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 source "$SCRIPT_DIR/lib/utils.sh"
@@ -20,8 +20,10 @@ run_phase4() {
 
   # Force AK/SK check before any SDK/CLI execution
   step "检查 AK/SK 凭证..."
+  set +e
   ensure_ak_sk
   cred_rc=$?
+  set -e
   if [ $cred_rc -ne 0 ]; then
     if [ $cred_rc -eq 77 ]; then
       # Credentials required but not provided — env-var template has been
@@ -143,12 +145,10 @@ for tc in cases:
     try:
         if executor_type == 'cli':
             cmd_text = tc.get('command', tc.get('description', ''))
-            # Clean up placeholders: {region} → cn-north-4, {id} → etc.
-            _region = os.environ.get('HUAWEI_REGION', 'cn-north-4')
-            cmd_text = re.sub(r'<r>|<region>|\{region\}|\{cli_region\}', _region, cmd_text)
-            cmd_text = re.sub(r'<id>|<server_id>|<vpc_id>|<subnet_id>|<flavor_id>|<image_id>|\{id\}|\{instance_id\}', '', cmd_text)
-            cmd_text = re.sub(r'<[^>]+>|\{[^}]+\}', '', cmd_text)
-            cmd_text = re.sub(r'--cli-region=\{\w+\}', '', cmd_text)
+            # replace_placeholders already ran at the top of the loop (line 108),
+            # handling {region}, <region>, /path/to/xxx, {id}, [--key=value ...], etc.
+            # The redundant regex cleanup below was removed to avoid double-processing
+            # conflicts that corrupt multi-line commands and strip valid params.
             # Remove leading/trailing pipes and whitespace that might leak from table extraction
             cmd_text = cmd_text.strip().lstrip('|').strip()
             if cmd_text and len(cmd_text) > 5:
@@ -213,7 +213,7 @@ for tc in cases:
                     sdk_tmp.close()
                     r = subprocess.run(
                         ['python3', sdk_tmp.name],
-                        capture_output=True, text=True, timeout=60,
+                        capture_output=True, text=True, timeout=int(os.environ.get('TIMEOUT_SDK', '60')),
                         env=os.environ
                     )
                     output = (r.stdout[:2000] + '\n' + r.stderr[:500]).strip()
@@ -316,7 +316,7 @@ for tc in cases:
                 script_args = ' '.join(script_part.split()[1:]) if len(script_part.split()) > 1 else ''
                 if os.path.isfile(script_path):
                     full_cmd = f'python3 {script_path} {script_args}'.strip()
-                    r = subprocess.run(['bash', '-c', full_cmd], capture_output=True, text=True, timeout=60, env=os.environ)
+                    r = subprocess.run(['bash', '-c', full_cmd], capture_output=True, text=True, timeout=int(os.environ.get('TIMEOUT_SDK', '60')), env=os.environ)
                     output = (r.stdout[:1000] + '\n' + r.stderr[:500]).strip()
                     status = 'pass' if r.returncode == 0 else 'fail'
                 else:
@@ -328,7 +328,7 @@ for tc in cases:
                 if not os.path.isfile(script_path):
                     script_path = os.path.join(skill_root, 'scripts', os.path.basename(script_part))
                 if os.path.isfile(script_path):
-                    r = subprocess.run(['bash', script_path, skill_root], capture_output=True, text=True, timeout=60)
+                    r = subprocess.run(['bash', script_path, skill_root], capture_output=True, text=True, timeout=int(os.environ.get('TIMEOUT_SDK', '60')))
                     output = (r.stdout[:1000] + '\n' + r.stderr[:500]).strip()
                     status = 'pass' if r.returncode == 0 else 'fail'
                 else:
@@ -340,7 +340,7 @@ for tc in cases:
             if cmd_text.strip() and len(cmd_text) > 10:
                 r = subprocess.run(
                     ['bash', '-c', cmd_text],
-                    capture_output=True, text=True, timeout=30,
+                    capture_output=True, text=True, timeout=int(os.environ.get('TIMEOUT_CLI', '30')),
                     env={**__import__('os').environ}
                 )
                 output = (r.stdout[:500] + r.stderr[:200]).strip()
@@ -373,7 +373,7 @@ for tc in cases:
                 missing_params = []
                 for m in re.finditer(r'(\w+)\s+cannot be none|(\w+)\s+cannot be empty|missing\s+(\w+)|field required.*?(\w+)', err_text):
                     missing_params.append(m.group(1) or m.group(2) or m.group(3) or m.group(4))
-                # Also extract from request.XXX = '' pattern in command
+                # Also extract from request.PARAM = '' pattern in command
                 cmd_text = tc.get('command', '')
                 for m in re.finditer(r'request\.(\w+)\s*=\s*[\'\"]{2}', cmd_text):
                     missing_params.append(m.group(1))
@@ -569,9 +569,34 @@ PYEOF
   fi
 }
 
-for skill_dir in "$@"; do
+# Parse args: getopts for -s, pre-filter --skill (getopts can't handle --long)
+SKILL_DIRS=()
+_rest=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --skill) SKILL_DIRS+=("$2"); shift 2 ;;
+    --skill=*) SKILL_DIRS+=("${1#--skill=}"); shift ;;
+    --help|-h) echo "用法: $(basename "$0") [-s <dir>]... [--skill <dir>]... [<dir>...]"; exit 0 ;;
+    *) _rest+=("$1"); shift ;;
+  esac
+done
+set -- ${_rest[@]+"${_rest[@]}"}
+OPTIND=1
+while getopts ":s:h" opt; do
+  case $opt in
+    s) SKILL_DIRS+=("$OPTARG") ;;
+    h) echo "用法: $(basename "$0") [-s <dir>]... [--skill <dir>]... [<dir>...]"; exit 0 ;;
+    \?) ;;
+  esac
+done
+shift $((OPTIND-1))
+for arg in "$@"; do SKILL_DIRS+=("$arg"); done
+
+for skill_dir in "${SKILL_DIRS[@]}"; do
+  set +e
   run_phase4 "$skill_dir"
   rc=$?
+  set -e
   if [ $rc -ne 0 ]; then
     exit $rc  # propagate exit code (77 for cred request, 1 for other errors)
   fi

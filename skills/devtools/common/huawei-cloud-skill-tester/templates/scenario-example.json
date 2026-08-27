@@ -1,5 +1,5 @@
 {
-  "_comment": "Reference template for Phase 6 (full-flow) multi-skill scenario derivation. Actual output is in phase-6-summary.json.result.scenario. Single-skill mode (downgraded_single_skill_flow) has a different scenario shape — see verification-method.md § Phase 6.",
+  "_comment": "Reference example for Phase 6 (full-flow) multi-skill scenario derivation. Actual output is in phase-6-summary.json.result.scenario. Single-skill mode (downgraded_single_skill_flow) has a different scenario shape — see verification-method.md § Phase 6.",
   "scenarios": [
     {
       "_comment": "Multi-skill mode=full, default '命令遍历' fallback when no create/delete commands are detected. Each skill contributes its Phase 4 commands in read-order. steps[i].status='pass' is a derivation marker, NOT an execution result.",

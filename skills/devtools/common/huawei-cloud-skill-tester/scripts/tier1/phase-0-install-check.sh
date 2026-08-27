@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # phase-0-install-check.sh — 安装验证
 # 检查 skill 目录完整性，模拟安装/卸载/重装状态
-set -uo pipefail
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 source "$SCRIPT_DIR/lib/utils.sh"
@@ -35,9 +35,10 @@ r = {
     'references/': os.path.isdir(d+'/references'),
     'references/iam-policies.md': os.path.isfile(d+'/references/iam-policies.md'),
 }
-# 纯 CLI skill 无 scripts/ 目录是合法结构, 不判 fail; 硬性契约仅
-# SKILL.md + references/ + references/iam-policies.md 三项。
-r['_hard_ok'] = bool(r['SKILL.md'] and r['references/'] and r['references/iam-policies.md'])
+# 硬性契约仅 SKILL.md + references/ 两项。
+# iam-policies.md 对云 API skill 必需, 但本地工具类 skill 不涉及 IAM,
+# 改为软性检查(报告但不阻断)。scripts/ 已为软性。(ISSUE-002)
+r['_hard_ok'] = bool(r['SKILL.md'] and r['references/'])
 print(json.dumps(r))
 PYEOF
   checks=$(python3 "$checks_py_tmp" "$skill_dir")
@@ -249,8 +250,31 @@ PYEOF
   fi
 }
 
+# Parse args: getopts for -s, pre-filter --skill (getopts can't handle --long)
+SKILL_DIRS=()
+_rest=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --skill) SKILL_DIRS+=("$2"); shift 2 ;;
+    --skill=*) SKILL_DIRS+=("${1#--skill=}"); shift ;;
+    --help|-h) echo "用法: $(basename "$0") [-s <dir>]... [--skill <dir>]... [<dir>...]"; exit 0 ;;
+    *) _rest+=("$1"); shift ;;
+  esac
+done
+set -- ${_rest[@]+"${_rest[@]}"}
+OPTIND=1
+while getopts ":s:h" opt; do
+  case $opt in
+    s) SKILL_DIRS+=("$OPTARG") ;;
+    h) echo "用法: $(basename "$0") [-s <dir>]... [--skill <dir>]... [<dir>...]"; exit 0 ;;
+    \?) ;;
+  esac
+done
+shift $((OPTIND-1))
+for arg in "$@"; do SKILL_DIRS+=("$arg"); done
+
 # Run for each skill
-for skill_dir in "$@"; do
+for skill_dir in "${SKILL_DIRS[@]}"; do
   run_phase0 "$skill_dir" || exit 1
   echo ""
 done

@@ -36,9 +36,11 @@ in your shell profile (NEVER inline in the test command line — that risks the
 value ending up in shell history, process listings, or chat logs).
 
 ```bash
-# Linux / Mac — add to ~/.bashrc, ~/.zshrc, ~/.bash_profile, etc.
-export HUAWEI_ACCESS_KEY="<your-access-key-id>"
-export HUAWEI_SECRET_KEY="<your-secret-access-key>"
+# Linux / Mac — in ~/.bashrc, runtime-inject from a secrets file (never inline the literal)
+# gitleaks:ignore — runtime injection from secrets file, no literal secret
+read -r HUAWEI_ACCESS_KEY < ~/.secrets/hw_ak 2>/dev/null
+read -r HUAWEI_SECRET_KEY < ~/.secrets/hw_sk 2>/dev/null
+export HUAWEI_ACCESS_KEY HUAWEI_SECRET_KEY
 
 # Windows PowerShell — persist to your $PROFILE:
 [System.Environment]::SetEnvironmentVariable('HUAWEI_ACCESS_KEY', '<your-access-key-id>', 'User')

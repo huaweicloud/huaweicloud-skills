@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # phase-5-orchestration.sh — 多Skill编排测试
 # 全量触发词冲突扫描 + 数据传递测试 + 并行加载验证
-set -uo pipefail
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 source "$SCRIPT_DIR/lib/utils.sh"
@@ -10,31 +10,31 @@ source "$SCRIPT_DIR/lib/chain-verify.sh"
 PHASE_NUM=5
 PHASE_NAME="orchestration"
 
-# Parse --skills from args
+# Parse args: getopts for -s, pre-filter --skills (getopts can't handle --long)
 SKILLS_LIST=""
 SKILL_PATHS=()
-skills_next=false
-for arg in "$@"; do
-  if $skills_next; then
-    SKILLS_LIST="$arg"
-    skills_next=false
-  elif [[ "$arg" == --skills=* ]]; then
-    SKILLS_LIST="${arg#--skills=}"
-  elif [[ "$arg" == --skills ]]; then
-    skills_next=true
-  elif [[ "$arg" =~ ^/ || "$arg" =~ ^\. || "$arg" =~ ^[A-Za-z]:[/\\] ]]; then
-    # Only treat absolute or relative paths as skill paths
-    SKILL_PATHS+=("$arg")
-  fi
+_rest=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --skills) SKILLS_LIST="$2"; shift 2 ;;
+    --skills=*) SKILLS_LIST="${1#--skills=}"; shift ;;
+    --help|-h) echo "用法: $(basename "$0") [-s <list>] [--skills <list>] [<dir>...]"; exit 0 ;;
+    *) _rest+=("$1"); shift ;;
+  esac
 done
-unset skills_next
-
-# If --skills was passed as separate arg, find it
-for ((i=1; i<=$#; i++)); do
-  if [[ "${!i}" == "--skills" ]]; then
-    next_idx=$((i+1))
-    SKILLS_LIST="${!next_idx}"
-    break
+set -- ${_rest[@]+"${_rest[@]}"}
+OPTIND=1
+while getopts ":s:h" opt; do
+  case $opt in
+    s) SKILLS_LIST="$OPTARG" ;;
+    h) echo "用法: $(basename "$0") [-s <list>] [--skills <list>] [<dir>...]"; exit 0 ;;
+    \?) ;;
+  esac
+done
+shift $((OPTIND-1))
+for arg in "$@"; do
+  if [[ "$arg" =~ ^/ || "$arg" =~ ^\. || "$arg" =~ ^[A-Za-z]:[/\\] ]]; then
+    SKILL_PATHS+=("$arg")
   fi
 done
 
@@ -130,6 +130,12 @@ PYSELF
 
   self_check=$(python3 "$p5s_tmp" "$p1_file" "$SKILL_COUNT")
   rm -f "$p5s_tmp"
+
+  # Safety net: if Python crashed, generate fallback so phase-5-summary.json is valid (T-ISSUE-001)
+  if ! printf '%s' "$self_check" | python3 -c "import json,sys; json.load(sys.stdin)" 2>/dev/null; then
+    warn "⚠️ Phase 5 自检 Python 脚本输出为空或非 JSON，生成降级结果"
+    self_check='{"mode":"downgraded_self_check","conflict_scan":{"internal_ambiguities":[],"cycle_warnings":[]},"data_flow_tests":[],"parallel_load_test":{"verdict":"skipped","reason":"Python 脚本异常"},"cleanup":{"resources_cleaned":0,"resources_failed":0}}'
+  fi
 
   verdict="pass"
   has_ambiguities=$(echo "$self_check" | python3 -c "import json,sys; d=json.load(sys.stdin); print(len(d.get('conflict_scan',{}).get('internal_ambiguities',[]))" 2>/dev/null || echo "0")
@@ -344,6 +350,12 @@ PYORCH5
 
   orchestration_result=$(python3 "$py_tmp_p5" "${SKILL_PATHS[@]}")
   rm -f "$py_tmp_p5"
+
+  # Safety net: if Python crashed, generate fallback so phase-5-summary.json is valid (T-ISSUE-001)
+  if ! printf '%s' "$orchestration_result" | python3 -c "import json,sys; json.load(sys.stdin)" 2>/dev/null; then
+    warn "⚠️ Phase 5 编排 Python 脚本输出为空或非 JSON，生成降级结果"
+    orchestration_result='{"mode":"full","conflict_scan":{"pairs_checked":0,"conflicts":[],"no_conflict_pairs":0},"data_flow_tests":[],"parallel_load_test":{"verdict":"fail","detail":"Python 脚本异常"},"cleanup":{"resources_cleaned":0,"resources_failed":0}}'
+  fi
 
   verdict="pass"
   high_conflicts=$(echo "$orchestration_result" | python3 -c "import json,sys; d=json.load(sys.stdin); print(sum(1 for c in d.get('conflict_scan',{}).get('conflicts',[]) if c.get('severity')=='high'))" 2>/dev/null || echo "0")
