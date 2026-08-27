@@ -34,7 +34,8 @@ CLI 从环境变量读取认证信息：
 # 设置必要的环境变量
 # ⚠️ NEVER commit real keys. Use a secrets manager or .env file.
 export HUAWEI_ACCESS_KEY="your-access-key-id"
-export HUAWEI_SECRET_KEY="your-secret-access-key"
+# Enter the secret access key silently (input is hidden, not saved to shell history)
+read -rs HUAWEI_SECRET_KEY; export HUAWEI_SECRET_KEY
 export HUAWEI_REGION="cn-north-4"
 ```
 

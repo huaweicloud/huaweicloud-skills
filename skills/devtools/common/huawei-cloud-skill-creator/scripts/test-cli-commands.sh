@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
+set -euo pipefail
 # ============================================================================
 # CLI Functional Test Script for Huawei Cloud Skills Creator v2
 # ============================================================================
-# Usage: bash test-cli-commands.sh <skill-path> [--region <region>] [--executor cli|sdk|api|auto]
+# Usage: bash test-cli-commands.sh [-s <skill-path>] [-r <region>] [-e cli|sdk|api|auto] [-o <file>] [-i]
+#   -s  Target Skill directory path (required; may also be passed positionally for backward compat)
+#   -r  Region (default: cn-north-4)
+#   -e  Executor mode (default: auto)
+#   -o  Output report file
+#   -i  Insecure (skip SSL verification)
 #
 # Extracts test cases from templates/test-vars.json, then:
 #   1. Executes each test case with CLI→SDK→API fallback
@@ -11,25 +17,43 @@
 #   4. Generates references/test-report.md with results
 # ============================================================================
 
-set -uo pipefail
 
-SKILL_PATH="${1:?Usage: bash test-cli-commands.sh <skill-path> [--region <region>] [--executor cli|sdk|api|auto]}"
-shift || true
-
+SKILL_PATH=""
 REGION="cn-north-4"
 EXECUTOR="auto"
 OUTPUT_FILE=""
 INSECURE=false
 
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --region) REGION="$2"; shift 2 ;;
-    --executor) EXECUTOR="$2"; shift 2 ;;
-    --output) OUTPUT_FILE="$2"; shift 2 ;;
-    --insecure) INSECURE=true; shift ;;
-    *) echo "Unknown option: $1"; exit 1 ;;
+usage() {
+  echo "Usage: bash test-cli-commands.sh [-s <skill-path>] [-r <region>] [-e cli|sdk|api|auto] [-o <file>] [-i]" >&2
+  echo "  -s  Target Skill directory path (required; may also be passed positionally)" >&2
+  echo "  -r  Region (default: cn-north-4)" >&2
+  echo "  -e  Executor mode (default: auto)" >&2
+  echo "  -o  Output report file" >&2
+  echo "  -i  Insecure (skip SSL verification)" >&2
+}
+
+while getopts ":s:r:e:o:i" opt; do
+  case "$opt" in
+    s) SKILL_PATH="$OPTARG" ;;
+    r) REGION="$OPTARG" ;;
+    e) EXECUTOR="$OPTARG" ;;
+    o) OUTPUT_FILE="$OPTARG" ;;
+    i) INSECURE=true ;;
+    \?) echo "Unknown option: -$OPTARG" >&2; usage; exit 1 ;;
+    :) echo "Option -$OPTARG requires an argument" >&2; usage; exit 1 ;;
   esac
 done
+shift $((OPTIND - 1))
+# Backward-compat: accept skill path as a trailing positional argument
+if [ -z "$SKILL_PATH" ] && [ $# -gt 0 ]; then
+  SKILL_PATH="$1"
+fi
+
+if [ -z "$SKILL_PATH" ]; then
+  usage
+  exit 1
+fi
 
 if [ ! -d "$SKILL_PATH" ]; then
   echo "[FATAL] Skill directory not found: $SKILL_PATH"
@@ -222,8 +246,9 @@ echo "=========================================="
 echo ""
 
 if [ ! -f "$TEST_VARS" ]; then
-  echo "[WARN] No templates/test-vars.json found at $TEST_VARS"
-  record "(no test vars)" "N/A" "⏭️ 跳过" "templates/test-vars.json 不存在"
+  echo "[FATAL] templates/test-vars.json not found at $TEST_VARS — no tests executed"
+  record "(no test vars)" "N/A" "❌ 失败" "templates/test-vars.json 不存在"
+  exit 1
 else
   # Parse test cases from JSON
   TC_COUNT=$(python3 -c "import sys,json; d=json.load(open(sys.argv[1])); print(len(d.get('test_cases',[])))" "$TEST_VARS" 2>/dev/null || echo "0")
@@ -236,11 +261,11 @@ else
     echo ""
 
     for i in $(seq 0 $((TC_COUNT - 1))); do
-      TC_ID=$(python3 -c "import sys,json; d=json.load(open(sys.argv[1])); i=int(sys.argv[2]); print(d['test_cases'][i].get('id','TC-%02d'%(i+1)))" "$TEST_VARS" "$i" 2>/dev/null)
-      TC_NAME=$(python3 -c "import sys,json; d=json.load(open(sys.argv[1])); i=int(sys.argv[2]); print(d['test_cases'][i].get('name',''))" "$TEST_VARS" "$i" 2>/dev/null)
-      TC_CMD=$(python3 -c "import sys,json; d=json.load(open(sys.argv[1])); i=int(sys.argv[2]); print(d['test_cases'][i].get('command',''))" "$TEST_VARS" "$i" 2>/dev/null)
-      TC_TYPE=$(python3 -c "import sys,json; d=json.load(open(sys.argv[1])); i=int(sys.argv[2]); print(d['test_cases'][i].get('type','syntax'))" "$TEST_VARS" "$i" 2>/dev/null)
-      TC_EXEC=$(python3 -c "import sys,json; d=json.load(open(sys.argv[1])); i=int(sys.argv[2]); print(d['test_cases'][i].get('executor','auto'))" "$TEST_VARS" "$i" 2>/dev/null)
+      TC_ID=$(python3 -c "import sys,json; d=json.load(open(sys.argv[1])); i=int(sys.argv[2]); print(d['test_cases'][i].get('id','TC-%02d'%(i+1)))" "$TEST_VARS" "$i" 2>/dev/null) || true
+      TC_NAME=$(python3 -c "import sys,json; d=json.load(open(sys.argv[1])); i=int(sys.argv[2]); print(d['test_cases'][i].get('name',''))" "$TEST_VARS" "$i" 2>/dev/null) || true
+      TC_CMD=$(python3 -c "import sys,json; d=json.load(open(sys.argv[1])); i=int(sys.argv[2]); print(d['test_cases'][i].get('command',''))" "$TEST_VARS" "$i" 2>/dev/null) || true
+      TC_TYPE=$(python3 -c "import sys,json; d=json.load(open(sys.argv[1])); i=int(sys.argv[2]); print(d['test_cases'][i].get('type','syntax'))" "$TEST_VARS" "$i" 2>/dev/null) || true
+      TC_EXEC=$(python3 -c "import sys,json; d=json.load(open(sys.argv[1])); i=int(sys.argv[2]); print(d['test_cases'][i].get('executor','auto'))" "$TEST_VARS" "$i" 2>/dev/null) || true
 
       echo "--- [$TC_ID] $TC_NAME ---"
       echo "  Command: $TC_CMD"
@@ -259,6 +284,14 @@ else
 
       # Substitute {region} placeholder
       CMD_FINAL="${TC_CMD//\{region\}/$REGION}"
+
+      # Reject commands with unresolved template placeholders ({Service}, {endpoint}, etc.)
+      if printf '%s' "$CMD_FINAL" | grep -qE '\{[A-Za-z_]+\}'; then
+        record "$CMD_FINAL" "$TC_TYPE" "⛔ 需人工验证" "命令含未替换的模板占位符，未执行"
+        echo "  ⛔ MANUAL VERIFICATION NEEDED: unresolved placeholder in command"
+        echo ""
+        continue
+      fi
 
       case "$ACTIVE_EXEC" in
         cli)
@@ -280,8 +313,7 @@ else
                 echo "  ⚠ CLI failed → trying SDK fallback"
                 if [ "$SDK_AVAILABLE" = true ]; then
                   # Extract svc/op from command
-                  local svc_op
-                  svc_op=$(echo "$CMD_FINAL" | grep -oP 'hcloud \K[A-Z][A-Za-z0-9]* [A-Z][A-Za-z0-9]*' | head -1)
+                  svc_op=$(echo "$CMD_FINAL" | grep -oP 'hcloud \K[A-Z][A-Za-z0-9]* [A-Z][A-Za-z0-9]*' | head -1) || true
                   if [ -n "$svc_op" ]; then
                     read -r svc op <<< "$svc_op"
                     sdk_result=$(run_sdk_test "$svc" "$op" "$REGION" 2>&1) || true
@@ -304,14 +336,19 @@ else
                 ;;
             esac
           else
-            # Non-hcloud command, just try running it
-            result=$(bash -c "$CMD_FINAL" 2>&1 || true)
-            if [ -n "$result" ] && ! echo "$result" | grep -qiE "error|not found|failed"; then
-              record "$CMD_FINAL" "CLI $TC_TYPE" "✅ 通过" "executed"
-              echo "  ✅ PASS (CLI)"
+            # Non-hcloud command: enforce allowlist before execution
+            if ! validate_command "$CMD_FINAL"; then
+              record "$CMD_FINAL" "CLI $TC_TYPE" "⛔ 需人工验证" "非白名单命令，未执行"
+              echo "  ⛔ MANUAL VERIFICATION NEEDED: command not in allowlist"
             else
-              record "$CMD_FINAL" "CLI $TC_TYPE" "❌ 失败" "$(echo "$result" | head -1)"
-              echo "  ❌ FAIL"
+              result=$(bash -c "$CMD_FINAL" 2>&1 || true)
+              if [ -n "$result" ] && ! echo "$result" | grep -qiE "error|not found|failed"; then
+                record "$CMD_FINAL" "CLI $TC_TYPE" "✅ 通过" "executed"
+                echo "  ✅ PASS (CLI)"
+              else
+                record "$CMD_FINAL" "CLI $TC_TYPE" "❌ 失败" "$(echo "$result" | head -1)"
+                echo "  ❌ FAIL"
+              fi
             fi
           fi
           ;;
@@ -342,9 +379,20 @@ else
               fi
             fi
           else
-            result=$(bash -c "$CMD_FINAL" 2>&1 || true)
-            record "$CMD_FINAL" "SDK $TC_TYPE" "✅ 通过" "executed"
-            echo "  ✅ PASS (executed as script)"
+            # Non-SDK command: enforce allowlist before execution
+            if ! validate_command "$CMD_FINAL"; then
+              record "$CMD_FINAL" "SDK $TC_TYPE" "⛔ 需人工验证" "非白名单命令，未执行"
+              echo "  ⛔ MANUAL VERIFICATION NEEDED: command not in allowlist"
+            else
+              result=$(bash -c "$CMD_FINAL" 2>&1 || true)
+              if [ -n "$result" ] && ! echo "$result" | grep -qiE "error|not found|failed"; then
+                record "$CMD_FINAL" "SDK $TC_TYPE" "✅ 通过" "executed as script"
+                echo "  ✅ PASS (executed as script)"
+              else
+                record "$CMD_FINAL" "SDK $TC_TYPE" "❌ 失败" "$(echo "$result" | head -1)"
+                echo "  ❌ FAIL"
+              fi
+            fi
           fi
           ;;
         api)

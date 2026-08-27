@@ -17,7 +17,7 @@ tags: [huawei-cloud, skill-creator, cli, sdk, devops]
 
 ## Overview
 
-The Huawei Cloud Skill Creator v2 is based on a six-phase strict pipeline: starting with Socratic Q&A requirements analysis, followed by technical research (CLI→SDK→API three-level fallback), document generation, test preparation, detailed testing, resource cleanup and compliance check, ultimately generating a complete skill package that conforms to the Huawei Cloud Skill Specification.
+The Huawei Cloud Skill Creator v2 is based on a six-phase strict pipeline: starting with Socratic Q&A requirements analysis, followed by technical research (CLI→SDK→API three-level fallback), document generation, test preparation, detailed testing, resource cleanup and compliance check, ultimately generating a complete skill package that conforms to the Huawei Cloud Skill Specification. It only creates/packages skills — it does not directly operate cloud resources (no creating/deleting/modifying ECS, VPC, OBS, etc.); use it to generate a management Skill or use another dedicated management Skill for cloud-resource operations.
 
 ## Pre-check: Huawei Cloud Credentials Required
 
@@ -45,9 +45,9 @@ If no valid profile exists, **STOP** here.
 2. **Output** the following copy-paste ready env-var setup block to the user (fill in real values **outside** of this session, never in chat). The Agent must **NEVER** ask the user to type the AK/SK value in the conversation — only emit the template below:
 
    ```bash
-   # Set Huawei Cloud AK/SK in your shell profile, then reload or 'source' it.
+   # Set Huawei Cloud credentials. The secret key is entered silently when prompted.
    export HUAWEI_ACCESS_KEY="<your-access-key-id>"
-   export HUAWEI_SECRET_KEY="<your-secret-access-key>"
+   read -rs HUAWEI_SECRET_KEY; export HUAWEI_SECRET_KEY
    export HUAWEI_REGION="cn-north-4"
    ```
 
@@ -76,7 +76,7 @@ If **none** of the above are available when Phase 4/5 testing starts, prompt the
 
 1. **hcloud CLI** installed and authenticated — Reference: https://support.huaweicloud.com/qs-hcli/hcli_02_003.html
    - Authentication verified via the **Pre-check** above (`hcloud configure list`).
-2. **Python 3.8+** with `huaweicloudsdk` packages available — SDK Reference: https://console.huaweicloud.com/apiexplorer/#/sdkcenter
+2. **Python 3.8+** with `huaweicloudsdk` packages — install on demand: `pip install huaweicloudsdkcore huaweicloudsdkecs`. Verify with `python3 -c "import huaweicloudsdkcore"` before Phase 2/4/5. SDK Reference: https://console.huaweicloud.com/apiexplorer/#/sdkcenter
 3. **Node.js + npx** available
 4. **Huawei Cloud AK/SK** — Auto-scan all environment variables prefixed `HUAWEI` / `HW` / `HWC` matching `ACCESS_KEY` / `_AK` / `SECRET_KEY` / `_SK`. Hardcoding AK/SK in scripts, docs, or command lines is **forbidden**.
 5. **API Reference**: https://console.huaweicloud.com/apiexplorer/#/openapi
@@ -227,7 +227,7 @@ Generate Skill files based on Phase 2 conclusions:
 11. **File extension allowlist** — Every file must have one of these 46 extensions:
     `.md`, `.mdx`, `.txt`, `.json`, `.json5`, `.yaml`, `.yml`, `.toml`, `.js`, `.cjs`, `.mjs`, `.ts`, `.tsx`, `.jsx`, `.py`, `.sh`, `.ps1`, `.psm1`, `.psd1`, `.r`, `.rb`, `.go`, `.rs`, `.swift`, `.kt`, `.java`, `.cs`, `.cpp`, `.c`, `.h`, `.hpp`, `.sql`, `.csv`, `.tsv`, `.ini`, `.cfg`, `.conf`, `.env`, `.properties`, `.dat`, `.xml`, `.html`, `.css`, `.scss`, `.sass`, `.svg`.
     Files without an extension or outside this allowlist must be removed or renamed.
-12. **Change scope** — A pull request must change only one Skill directory. Use `BASE_REF=<base-ref> bash scripts/validate-skill.sh {skill-path}` to validate the PR diff when a base ref is available.
+12. **Change scope** — A pull request must change only one Skill directory. Use `bash scripts/validate-skill.sh -s {skill-path} -b <base-ref>` to validate the PR diff when a base ref is available.
 
 **🛑 Strictly prohibited from generating hallucinated URIs / fabricated API paths. Feature points not verified in Phase 2 must not have specific commands written.**
 
@@ -264,7 +264,7 @@ Generate Skill files based on Phase 2 conclusions:
 
       ```bash
       export HUAWEI_ACCESS_KEY="<your-access-key-id>"
-      export HUAWEI_SECRET_KEY="<your-secret-access-key>"
+      read -rs HUAWEI_SECRET_KEY; export HUAWEI_SECRET_KEY
       export HUAWEI_REGION="cn-north-4"
       ```
 
@@ -422,8 +422,10 @@ hcloud <Service> <Operation> --cli-region=<region> [--key=value ...]
 
 | Command | Purpose |
 |---------|---------|
-| `bash scripts/validate-skill.sh {path}` | Phase 3/6: Structure and Huawei Cloud specification validation |
-| `bash scripts/test-cli-commands.sh {path} --executor {cli\|sdk\|api}` | Phase 4/5: Functional testing |
+| `bash scripts/validate-skill.sh -s {path}` | Phase 3/6: Structure and Huawei Cloud specification validation |
+| `bash scripts/test-cli-commands.sh -s {path} -e {cli\|sdk\|api}` | Phase 4/5: Functional testing |
+
+> test-cli-commands.sh 仅执行白名单命令（hcloud/python3/curl/bash 开头），其他命令被拒绝且不会执行。validate-skill.sh 对不存在的 skill 目录会明确报错（exit 1）。
 
 ## Parameter Confirmation
 
@@ -446,6 +448,7 @@ hcloud <Service> <Operation> --cli-region=<region> [--key=value ...]
 | Attempting to infer API via path pattern (e.g., inferring claim-vouchers from coupons) | ❌ Strictly prohibited. It doesn't exist |
 | Resource creation test fails | Analyze error cause (permissions/quota/parameters) → Fix and retry |
 | Resource release fails | Retry 3 times, if still failing, inform user to clean up manually |
+| templates/test-vars.json missing when running tests | test-cli-commands.sh reports FATAL and exits 1 (no tests executed). Re-run Phase 4 to generate templates/test-vars.json before testing |
 | User refuses resource lifecycle testing | Inform user: resource lifecycle testing is a required step and cannot be skipped; if user still refuses, terminate process |
 | Phase 6 finds missing phases | Restart from the missing phase until all 6 phases are complete |
 | SDK has method but actual API path unknown | Read SDK source `grep _http_info {service}_client.py` to get real path |
@@ -459,15 +462,15 @@ hcloud <Service> <Operation> --cli-region=<region> [--key=value ...]
 
 ### Specification Compliance Verification
 ```bash
-bash scripts/validate-skill.sh {skill-path}
+bash scripts/validate-skill.sh -s {skill-path}
 # Check against 华为云Skill检查规范 item by item
 ```
 
 ### Functional Testing
 ```bash
-bash scripts/test-cli-commands.sh {skill-path} --executor cli   # CLI priority
-bash scripts/test-cli-commands.sh {skill-path} --executor sdk   # SDK fallback
-bash scripts/test-cli-commands.sh {skill-path} --executor api   # API fallback
+bash scripts/test-cli-commands.sh -s {skill-path} -e cli   # CLI priority
+bash scripts/test-cli-commands.sh -s {skill-path} -e sdk   # SDK fallback
+bash scripts/test-cli-commands.sh -s {skill-path} -e api   # API fallback
 ```
 
 ### Six-Phase Completeness Check

@@ -23,7 +23,7 @@ test -f phase-2-summary.json && echo "✅ Phase 2 complete" || echo "❌ Phase 2
 ### Phase 3 Verification
 ```bash
 # Validate generated skill structure
-bash scripts/validate-skill.sh {skill-path}
+bash scripts/validate-skill.sh -s {skill-path}
 
 # Verify required files exist
 for f in SKILL.md references/iam-policies.md; do
@@ -34,7 +34,7 @@ done
 ### Phase 4 Verification
 ```bash
 # Run test cases
-bash scripts/test-cli-commands.sh {skill-path} --executor {cli|sdk|api}
+bash scripts/test-cli-commands.sh -s {skill-path} -e {cli|sdk|api}
 ```
 
 ### Phase 5 Verification
