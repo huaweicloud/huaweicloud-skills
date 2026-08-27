@@ -29,7 +29,7 @@
     {
       "id": "TC-04",
       "name": "SDK 只读操作测试",
-      "command": "python3 -c \"... SDK call with limit=1 ...\"",
+      "command": "python3 -c \"from huaweicloudsdk{service_lower}.v2 import {Service}Client, {Operation}Request; print('SDK OK')\"",
       "expected": "返回正常数据",
       "type": "readonly",
       "executor": "sdk"
@@ -40,9 +40,11 @@
       "command": "curl -X GET https://{endpoint}/{path}?limit=1",
       "expected": "HTTP 200",
       "type": "readonly",
-      "executor": "api"
+      "executor": "api",
+      "endpoint_example": "bss.cn-north-4.myhuaweicloud.com",
+      "path_example": "v2.0/promotions/coupons"
     }
   ],
   "env_vars_required": ["以 HUAWEI/HW/HWC 开头的环境变量中匹配 AK/SK 的键值对"],
-  "notes": "使用前请将 {Service}/{Operation}/{region}/{endpoint} 等占位符替换为实际值"
+  "notes": "使用前请将 {Service}/{Operation}/{region}/{endpoint}/{path}/{service_lower} 等占位符替换为实际值。{endpoint} 需替换为完整域名（不含 https://），例如 bss.cn-north-4.myhuaweicloud.com；参见各 TC 的 endpoint_example/path_example 示例值。未替换的占位符会被 test-cli-commands.sh 拦截并标记为需人工验证，不会执行。"
 }

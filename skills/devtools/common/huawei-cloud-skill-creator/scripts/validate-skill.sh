@@ -1,8 +1,26 @@
 #!/usr/bin/env bash
 # validate-skill.sh — Validate Huawei Cloud Skill structure against 华为云Skill检查规范
+# Usage: bash validate-skill.sh [-s <skill-dir>] [-b <base-ref>]
+#   -s  Skill directory to validate (default: . ; may also be passed positionally)
+#   -b  Base git ref for PR diff scope check (equivalent to legacy BASE_REF env var)
 set -euo pipefail
 
-SKILL_DIR="${1:-.}"
+SKILL_DIR="."
+
+while getopts ":s:b:" opt; do
+  case "$opt" in
+    s) SKILL_DIR="$OPTARG" ;;
+    b) BASE_REF="$OPTARG" ;;
+    \?) echo "Unknown option: -$OPTARG" >&2; exit 1 ;;
+    :) echo "Option -$OPTARG requires an argument" >&2; exit 1 ;;
+  esac
+done
+shift $((OPTIND - 1))
+# Backward-compat: accept skill dir as a trailing positional argument
+if [ $# -gt 0 ]; then
+  SKILL_DIR="$1"
+fi
+
 PASS=0
 FAIL=0
 WARN=0
@@ -20,6 +38,7 @@ echo "============================================"
 echo ""
 echo "--- Critical Checks ---"
 
+[ ! -d "$SKILL_DIR" ] && { echo "[FATAL] Skill directory not found: $SKILL_DIR"; exit 1; }
 [ -f "$SKILL_DIR/SKILL.md" ] && pass "SKILL.md exists" || fail "SKILL.md missing"
 
 if [ -f "$SKILL_DIR/SKILL.md" ]; then
