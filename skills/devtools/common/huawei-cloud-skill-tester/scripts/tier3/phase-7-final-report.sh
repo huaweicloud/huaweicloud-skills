@@ -3,7 +3,7 @@
 # 合并 Phase 0~6 的所有 JSON，输出结构化报告（markdown + JSON）。
 # 报告结构：先总结（TL;DR）→ 详细报告（per-phase，含该 phase 产生的用例和执行结果）→ 附件。
 # 同 Phase 4 一样，产物写到 <skill>-test-files/reports/report-<ts>/。
-set -uo pipefail
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 source "$SCRIPT_DIR/lib/utils.sh"
@@ -12,32 +12,37 @@ source "$SCRIPT_DIR/lib/chain-verify.sh"
 PHASE_NUM=7
 PHASE_NAME="final-report"
 
-# Parse args
+# Parse args: getopts for -s/-o, pre-filter --skills/--output (getopts can't handle --long)
 SKILLS_LIST=""
 SKILL_PATHS=()
 OUTPUT_DIR=""
-skills_next=false
-output_next=false
+_rest=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --skills) SKILLS_LIST="$2"; shift 2 ;;
+    --skills=*) SKILLS_LIST="${1#--skills=}"; shift ;;
+    --output) OUTPUT_DIR="$2"; shift 2 ;;
+    --output=*) OUTPUT_DIR="${1#--output=}"; shift ;;
+    --help|-h) echo "用法: $(basename "$0") [-s <list>] [-o <dir>] [--skills <list>] [--output <dir>] [<dir>...]"; exit 0 ;;
+    *) _rest+=("$1"); shift ;;
+  esac
+done
+set -- ${_rest[@]+"${_rest[@]}"}
+OPTIND=1
+while getopts ":s:o:h" opt; do
+  case $opt in
+    s) SKILLS_LIST="$OPTARG" ;;
+    o) OUTPUT_DIR="$OPTARG" ;;
+    h) echo "用法: $(basename "$0") [-s <list>] [-o <dir>] [--skills <list>] [--output <dir>] [<dir>...]"; exit 0 ;;
+    \?) ;;
+  esac
+done
+shift $((OPTIND-1))
 for arg in "$@"; do
-  if $skills_next; then
-    SKILLS_LIST="$arg"
-    skills_next=false
-  elif $output_next; then
-    OUTPUT_DIR="$arg"
-    output_next=false
-  elif [[ "$arg" == --skills=* ]]; then
-    SKILLS_LIST="${arg#--skills=}"
-  elif [[ "$arg" == --output=* ]]; then
-    OUTPUT_DIR="${arg#--output=}"
-  elif [[ "$arg" == --skills ]]; then
-    skills_next=true
-  elif [[ "$arg" == --output ]]; then
-    output_next=true
-  elif [[ "$arg" =~ ^/ || "$arg" =~ ^\. || "$arg" =~ ^[A-Za-z]:[/\\] ]]; then
+  if [[ "$arg" =~ ^/ || "$arg" =~ ^\. || "$arg" =~ ^[A-Za-z]:[/\\] ]]; then
     SKILL_PATHS+=("$arg")
   fi
 done
-unset skills_next output_next
 
 header "Phase ${PHASE_NUM}: 最终报告"
 
@@ -360,6 +365,14 @@ elif phases_partial > 0 or total_fail > 0 or phases_missing > 0:
 
 pass_rate = round(total_pass / total_cases * 100, 1) if total_cases > 0 else 0
 
+# Adjusted pass rate: factors in issues found beyond test case failures
+# (phase-level issues, doc gaps, missing refs). Test case failures are
+# already reflected in pass_rate, so only deduct for non-test-case issues
+# to avoid double-counting. 5 points deducted per non-test-case issue.
+# (TESTER-ISSUE-011: pass_rate should not be 100% when issues are found)
+non_test_issues = max(0, total_issues - total_fail)
+adjusted_pass_rate = max(0.0, round(pass_rate - non_test_issues * 5, 1))
+
 summary = {
     'verdict': overall_verdict,
     'verdict_label': {'pass': '✅ PASS', 'partial': '⚠️ PARTIAL', 'fail': '❌ FAIL'}.get(overall_verdict, overall_verdict),
@@ -376,6 +389,7 @@ summary = {
     'test_cases_skip': total_skip,
     'test_cases_error': total_error,
     'pass_rate': pass_rate,
+    'adjusted_pass_rate': adjusted_pass_rate,
     'manual_items_count': total_manual,
     'cloud_resources_changed': total_resources,
     'issues_found': total_issues,
@@ -448,7 +462,7 @@ md.append("| Metric | Value |")
 md.append("|--------|-------|")
 md.append(f"| Phases | {summary['phases_pass']} pass / {summary['phases_partial']} partial / {summary['phases_fail']} fail / {summary['phases_skipped']} skipped (of 7) |")
 md.append(f"| Test Cases | total {summary['test_cases_total']} | pass {summary['test_cases_pass']} | fail {summary['test_cases_fail']} | warn {summary['test_cases_warn']} | skip {summary['test_cases_skip']} | error {summary['test_cases_error']} |")
-md.append(f"| Pass Rate | {summary['pass_rate']}% |")
+md.append(f"| Pass Rate | {summary['pass_rate']}% (adjusted: {summary['adjusted_pass_rate']}% with {summary.get('issues_found', 0)} issues) |")
 md.append(f"| Issues Found | {summary.get('issues_found', 0)} (phase 检查失败 + 用例失败 + 文档缺口) |")
 md.append(f"| Manual Items | {summary['manual_items_count']} (need real business data) |")
 md.append(f"| Cloud Resources Changed | {summary['cloud_resources_changed']} (Phase 4 only) |\n")
@@ -719,7 +733,8 @@ print(f"     JSON: {json_path}")
 print(f"     MD:   {md_path}")
 print(f"\n  📊 Summary:")
 print(f"     Phases: {summary['phases_pass']} pass / {summary['phases_partial']} partial / {summary['phases_fail']} fail (of {summary['phases_total']})")
-print(f"     Test cases: {summary['test_cases_total']} total, {summary['test_cases_pass']} pass ({summary['pass_rate']}%)")
+print(f"     Test cases: {summary['test_cases_total']} total, {summary['test_cases_pass']} pass ({summary['pass_rate']}%, adjusted {summary['adjusted_pass_rate']}%)")
+print(f"     Issues found: {summary.get('issues_found', 0)}")
 print(f"     Manual items: {summary['manual_items_count']}")
 print(f"     Verdict: {summary['verdict_label']}")
 PYREPORT

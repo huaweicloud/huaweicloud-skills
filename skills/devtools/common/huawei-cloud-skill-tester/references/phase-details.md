@@ -279,7 +279,7 @@ Opt-tune: --sibling-limit N (默认 5 个兄弟)
 排除规则:
   - 自己 (target skill)
   - *-test-files (测试 artifacts 目录)
-  - huawei-cloud-skill-tester, huawei-cloud-skill-creator, huawei-cloud-new-tester (meta skills)
+  - *skill-tester*, *skill-creator*, *new-tester* (meta skills, pattern match)
   - 缺 SKILL.md 的目录
 ```
 

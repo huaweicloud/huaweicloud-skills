@@ -1,7 +1,17 @@
 #!/usr/bin/env bash
 # config.sh — Centralized configuration for Huawei Cloud Skill Tester
 # All hardcoded defaults are collected here. Override any value via environment variable.
-set -uo pipefail
+set -euo pipefail
+
+# Standalone execution: parse args via getopts (no-op when sourced by other scripts)
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  while getopts ":h" opt; do
+    case $opt in
+      h) echo "用法: source $(basename "$0")  # 作为库 source；直接执行仅打印配置"; exit 0 ;;
+      \?) exit 1 ;;
+    esac
+  done
+fi
 
 # ── Region ──
 # Default Huawei Cloud region for CLI/SDK operations
@@ -42,14 +52,19 @@ SKILL_PATH_HCLOUD="${SKILL_PATH_HCLOUD:-$SKILL_INSTALL_DIR/huawei-cloud}"
 HCLOUD_CONFIG="${HCLOUD_CONFIG:-$HOME/.hcloud/config.json}"
 
 # ── Skill install command (Phase 0 install/uninstall for remote skills) ──
-# Default: "hermes skills install/uninstall <args>".
-# Override when using a different agent runtime, e.g.:
-#   SKILL_INSTALL_CMD="my-runtime skills" bash run-test-pipeline.sh ...
-# Set to empty string ("") to skip real installation — Phase 0 will then
-# mark remote-skill install/uninstall/reinstall as "skipped".
+# Auto-detect agent runtime: hermes / npx / opencode.
+# Override via SKILL_INSTALL_CMD env var. Set to "" to skip real installation.
 # Note: ${VAR-default} (no colon) lets an empty string disable the command,
 # distinct from the unset case which uses the default.
-SKILL_INSTALL_CMD="${SKILL_INSTALL_CMD-hermes skills}"
+if [ -z "${SKILL_INSTALL_CMD:-}" ]; then
+  if command -v hermes >/dev/null 2>&1; then
+    SKILL_INSTALL_CMD="hermes skills"
+  elif command -v npx >/dev/null 2>&1; then
+    SKILL_INSTALL_CMD="npx skills"
+  else
+    SKILL_INSTALL_CMD=""
+  fi
+fi
 
 # ── Timeouts (seconds) ──
 TIMEOUT_CLI="${TIMEOUT_CLI:-30}"

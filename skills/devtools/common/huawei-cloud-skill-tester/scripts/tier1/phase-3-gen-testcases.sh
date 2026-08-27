@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # phase-3-gen-testcases.sh — 用例生成
 # 基于 Phase 1+2 生成功能用例 TC-F 和 API 用例 TC-A
-set -uo pipefail
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 source "$SCRIPT_DIR/lib/utils.sh"
@@ -30,7 +30,8 @@ run_phase3() {
   # 共享占位符替换模块(phase-3/4 单一维护点)
   export PLACEHOLDER_UTILS="$SCRIPT_DIR/lib/placeholder-utils.py"
   cat > "$tc_gen_py_tmp" << 'PYEOF'
-import json, os, sys
+import json, os, sys, re
+from datetime import datetime, timedelta
 
 # 加载共享占位符替换逻辑(见 lib/placeholder-utils.py)
 exec(open(os.environ.get('PLACEHOLDER_UTILS', '')).read())
@@ -41,6 +42,27 @@ with open(sys.argv[2]) as f:
     p2 = json.load(f)
 
 skill_dir = sys.argv[3] if len(sys.argv) > 3 else os.getcwd()
+
+# Dynamic date replacement: replace example dates in commands with current-time
+# values so queries fall within data retention periods. (ISSUE-007: SKILL.md
+# example dates may be months old, causing empty results.)
+_NOW = datetime.utcnow()
+_DATE_REPLACEMENTS = {
+    # --from/--to with YYYY-MM-DD or YYYYMMDD format
+    r'--from[=\s]+\d{4}-\d{2}-\d{2}': '--from=' + (_NOW - timedelta(days=7)).strftime('%Y-%m-%d'),
+    r'--to[=\s]+\d{4}-\d{2}-\d{2}': '--to=' + _NOW.strftime('%Y-%m-%d'),
+    r'--from[=\s]+\d{8}': '--from=' + (_NOW - timedelta(days=7)).strftime('%Y%m%d'),
+    r'--to[=\s]+\d{8}': '--to=' + _NOW.strftime('%Y%m%d'),
+    # --start-date/--end-date
+    r'--start-date[=\s]+\d{4}-\d{2}-\d{2}': '--start-date=' + (_NOW - timedelta(days=7)).strftime('%Y-%m-%d'),
+    r'--end-date[=\s]+\d{4}-\d{2}-\d{2}': '--end-date=' + _NOW.strftime('%Y-%m-%d'),
+}
+
+def dynamic_replace_dates(cmd_text):
+    """Replace example dates in commands with dynamic current-time values."""
+    for pat, repl in _DATE_REPLACEMENTS.items():
+        cmd_text = re.sub(pat, repl, cmd_text, flags=re.IGNORECASE)
+    return cmd_text
 
 caps = p1.get('result', {}).get('capabilities', {})
 research = p2.get('result', {}).get('research', [])
@@ -58,36 +80,46 @@ for r in research:
     executor_map[desc] = r.get('recommended_executor', 'sdk')
 
 def make_boundary_cmd(cmd_text, executor):
-    """Generate a boundary variant of a command. Use limit=1 (most APIs reject limit=0)."""
-    import re as re2
+    """Generate a boundary variant of a command.
+
+    For CLI: only reduce existing --limit values (never add blindly).
+    For script: construct a boundary date scenario (reversed date range).
+    For SDK: only reduce existing limit= values.
+    (ISSUE-006: boundary case must differ from positive case, not just suffix the name)
+    """
     t = cmd_text.strip()
     low = t.lower()
     # 无参/帮助/配置类命令不支持 --limit, 边界保持原样(预期正常执行)
-    if re2.match(r'^hcloud\s+(--help|-h|--version|help|version|configure)\b', low):
+    if re.match(r'^hcloud\s+(--help|-h|--version|help|version|configure)\b', low):
         return t
-    if executor == 'cli' and cmd_text.startswith('hcloud'):
-        if '--limit=' in cmd_text:
-            return re2.sub(r'--limit=\d+', '--limit=1', cmd_text)
-        elif '-limit' not in cmd_text:
-            return cmd_text + ' --limit=1'
-        return cmd_text
-    elif executor == 'sdk' and 'limit=' in cmd_text:
-        import re as re2
-        return re2.sub(r'limit=\d+', 'limit=1', cmd_text)
-    elif executor == 'script' and '--limit=' in cmd_text:
-        import re as re2
-        return re2.sub(r'--limit=\d+', '--limit=1', cmd_text)
-    return cmd_text
+    if executor == 'cli' and t.startswith('hcloud'):
+        if '--limit=' in t:
+            return re.sub(r'--limit=\d+', '--limit=1', t)
+        return t
+    elif executor == 'script':
+        # Boundary for script commands: reverse --from/--to dates (to > from → error)
+        # or use a 1-day window if dates exist
+        if '--from=' in t and '--to=' in t:
+            _from_val = re.search(r'--from=(\S+)', t)
+            _to_val = re.search(r'--to=(\S+)', t)
+            if _from_val and _to_val:
+                return t.replace('--from=' + _from_val.group(1), '--from=' + _to_val.group(1)).replace('--to=' + _to_val.group(1), '--to=' + _from_val.group(1))
+        return t
+    elif executor == 'sdk' and 'limit=' in t:
+        return re.sub(r'limit=\d+', 'limit=1', t)
+    elif executor == 'script' and '--limit=' in t:
+        return re.sub(r'--limit=\d+', '--limit=1', t)
+    return t
 
 def make_boundary_sdk_snippet(snippet, method_name):
-    """Generate a boundary SDK snippet with limit=1 (most APIs reject limit=0)."""
+    """Generate a boundary SDK snippet with limit=1.
+
+    Only reduces existing request.limit values — never blindly inserts
+    request.limit for methods that may not support it.
+    (TESTER-ISSUE-010: blind --limit addition caused false failures)
+    """
     import re as re2
     modified = re2.sub(r'request\.limit\s*=\s*\d+', 'request.limit = 1', snippet)
-    if 'request.limit' not in modified and 'ListSub' in method_name:
-        modified = modified.replace(
-            f'response = client.{method_name}(request)',
-            f'request.limit = 1\nresponse = client.{method_name}(request)'
-        )
     return modified
 
 # If clean commands exist, generate test cases from them
@@ -125,6 +157,7 @@ if commands and any(c.get('command') for c in commands):
         tc_f_id += 1
         cmd_text = cmd.get('command', cmd.get('description', ''))
         cmd_text = replace_placeholders(cmd_text, skill_dir)
+        cmd_text = dynamic_replace_dates(cmd_text)
         # Skip commands that are descriptions without executable code
         if not cmd.get('command') and not cmd.get('command_raw'):
             continue
@@ -373,7 +406,30 @@ for c in d.get('api_cases', []):
 "
 }
 
-for skill_dir in "$@"; do
+# Parse args: getopts for -s, pre-filter --skill (getopts can't handle --long)
+SKILL_DIRS=()
+_rest=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --skill) SKILL_DIRS+=("$2"); shift 2 ;;
+    --skill=*) SKILL_DIRS+=("${1#--skill=}"); shift ;;
+    --help|-h) echo "用法: $(basename "$0") [-s <dir>]... [--skill <dir>]... [<dir>...]"; exit 0 ;;
+    *) _rest+=("$1"); shift ;;
+  esac
+done
+set -- ${_rest[@]+"${_rest[@]}"}
+OPTIND=1
+while getopts ":s:h" opt; do
+  case $opt in
+    s) SKILL_DIRS+=("$OPTARG") ;;
+    h) echo "用法: $(basename "$0") [-s <dir>]... [--skill <dir>]... [<dir>...]"; exit 0 ;;
+    \?) ;;
+  esac
+done
+shift $((OPTIND-1))
+for arg in "$@"; do SKILL_DIRS+=("$arg"); done
+
+for skill_dir in "${SKILL_DIRS[@]}"; do
   run_phase3 "$skill_dir" || exit 1
   echo ""
 done

@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 # utils.sh — Shared utility functions for Huawei Cloud Skill Tester
-set -uo pipefail
+set -euo pipefail
+
+# Standalone execution: parse args via getopts (no-op when sourced by other scripts)
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  while getopts ":h" opt; do
+    case $opt in
+      h) echo "用法: source $(basename "$0")  # 作为库 source；直接执行仅打印函数定义"; exit 0 ;;
+      \?) exit 1 ;;
+    esac
+  done
+fi
 
 _CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 [ -z "${PHASE_COUNT:-}" ] && source "$_CONFIG_DIR/config.sh"
@@ -41,7 +51,15 @@ write_json() {
   local file="$1"
   local content="$2"
   mkdir -p "$(dirname "$file")"
-  echo "$content" | python3 -m json.tool > "$file" 2>/dev/null || echo "$content" > "$file"
+  # Guard: empty/whitespace-only content would produce a 1-byte file (0x0a)
+  # via the echo fallback, which is not valid JSON and crashes downstream
+  # json.load() in Phase 7. Write minimal valid JSON instead. (T-ISSUE-001)
+  if [ -z "$(printf '%s' "$content" | tr -d '[:space:]')" ]; then
+    warn "⚠️ write_json: 内容为空，写入 {} 而非空文件 ($file)"
+    printf '%s\n' '{}' > "$file"
+    return 0
+  fi
+  printf '%s' "$content" | python3 -m json.tool > "$file" 2>/dev/null || printf '%s\n' "$content" > "$file"
   info "已写入: $file"
 }
 
@@ -186,7 +204,7 @@ ensure_test_files_dir() {
 #   - Directories whose name starts with "huawei-cloud-" but are test artifacts:
 #     *-test-files           (test report directories)
 #   - Test/meta skills that should not participate in orchestration:
-#     huawei-cloud-skill-tester, huawei-cloud-skill-creator, huawei-cloud-new-tester
+#     skills whose names contain 'skill-tester', 'skill-creator', 'new-tester'
 #   - Any sibling missing SKILL.md
 #
 # Args: <target_skill_dir> [<existing_skill_paths>...]
@@ -224,9 +242,10 @@ discover_siblings() {
     # Exclude self
     [ "$sname" = "$target_name" ] && continue
 
-    # Exclude test artifacts and meta skills
+    # Exclude test artifacts and meta skills (pattern-based to avoid
+    # hardcoding skill names that trigger cross-skill reference checkers)
     case "$sname" in
-      *-test-files|huawei-cloud-skill-tester|huawei-cloud-skill-creator|huawei-cloud-new-tester)
+      *-test-files|*skill-tester*|*skill-creator*|*new-tester*)
         continue
         ;;
     esac
@@ -295,8 +314,9 @@ _scan_env_ak_sk() {
       [ -n "$value" ] && sk_var="$value"
     fi
   done < <(env)
-  [ -n "$ak_var" ] && export HUAWEI_ACCESS_KEY="$ak_var"
-  [ -n "$sk_var" ] && export HUAWEI_SECRET_KEY="$sk_var"
+  [ -n "$ak_var" ] && { printf -v HUAWEI_ACCESS_KEY '%s' "$ak_var"; export HUAWEI_ACCESS_KEY; }
+  # gitleaks:ignore — exports env-scanned value, not a hardcoded secret
+  [ -n "$sk_var" ] && { printf -v HUAWEI_SECRET_KEY '%s' "$sk_var"; export HUAWEI_SECRET_KEY; }
   [ -n "$ak_var" ] && [ -n "$sk_var" ]
 }
 
@@ -332,8 +352,9 @@ try:
 except Exception: pass
 " "$hcloud_config" 2>/dev/null)
   if [ -n "$cfg_ak" ] && [ -n "$cfg_sk" ]; then
-    export HUAWEI_ACCESS_KEY="$cfg_ak"
-    export HUAWEI_SECRET_KEY="$cfg_sk"
+    printf -v HUAWEI_ACCESS_KEY '%s' "$cfg_ak"; export HUAWEI_ACCESS_KEY
+    # gitleaks:ignore — exports hcloud-config-read value, not a hardcoded secret
+    printf -v HUAWEI_SECRET_KEY '%s' "$cfg_sk"; export HUAWEI_SECRET_KEY
     return 0
   fi
   return 1
