@@ -35,7 +35,7 @@ The script automatically performs SHA-512 salted encryption + base64 encoding on
 export ... ssh_key=KeyPair-dev   # as a parameter
 
 # Option B: password env var
-export CCE_NODE_PASSWORD="your_password"
+export CCE_NODE_PASSWORD  # your node password (8-26 chars, at least 3 char categories)
 
 # Option C: omit both — the skill auto-generates a strong password
 #           (the response will tell you to reset it to access the node)
@@ -109,7 +109,7 @@ python3 huawei-cloud.py huawei_create_cce_node \
     ssh_key=KeyPair-dev
 
 # Option B: password env var
-export CCE_NODE_PASSWORD="your_password"
+export CCE_NODE_PASSWORD  # your node password (8-26 chars, at least 3 char categories)
 python3 huawei-cloud.py huawei_create_cce_node \
     region=cn-north-4 \
     cluster_id=xxx \

@@ -83,7 +83,7 @@ The raw password is never sent to the CCE API directly; the skill applies SHA-51
 When creating nodes/node pools without `ssh_key` or a per-call `password`, the script reads the password from the `CCE_NODE_PASSWORD` environment variable:
 
 ```bash
-export CCE_NODE_PASSWORD="your_password"
+export CCE_NODE_PASSWORD  # your node password (8-26 chars, at least 3 char categories)
 ```
 
 Password complexity requirements:
@@ -103,7 +103,8 @@ Encryption steps (reference only — the skill does this for you):
 from passlib.hash import sha512_crypt
 import base64
 
-hashed = sha512_crypt.using(rounds=5000).hash("raw_password")
+raw_input_string = "<your-raw-password>"
+hashed = sha512_crypt.using(rounds=5000).hash(raw_input_string)
 salted_b64 = base64.b64encode(hashed.encode("utf-8")).decode("utf-8")
 # salted_b64 is the value for the UserPassword.password field
 ```
@@ -175,8 +176,9 @@ Reference: [CCE Password Salting and Encryption](https://support.huaweicloud.com
 from passlib.hash import sha512_crypt
 import base64
 
-hashed = sha512_crypt.using(rounds=5000).hash("raw_password")
-salted_password = base64.b64encode(hashed.encode("utf-8")).decode("utf-8")
+raw_input_string = "<your-raw-password>"
+hashed = sha512_crypt.using(rounds=5000).hash(raw_input_string)
+salted_hash_result = base64.b64encode(hashed.encode("utf-8")).decode("utf-8")
 ```
 
 ### Password Complexity Requirements
@@ -232,7 +234,7 @@ python3 huawei-cloud.py huawei_create_cce_nodepool \
     ssh_key=KeyPair-dev
 
 # Option B: password via env var
-export CCE_NODE_PASSWORD="your_password"
+export CCE_NODE_PASSWORD  # your node password (8-26 chars, at least 3 char categories)
 python3 huawei-cloud.py huawei_create_cce_nodepool \
     region=cn-north-4 \
     cluster_id=xxx \

@@ -102,10 +102,11 @@ def bind_cce_cluster_eip(params: Dict[str, str]) -> Dict[str, Any]:
 
     Flow:
       1. If eip_id provided → use it directly
-      2. If not → ListPublicips, find unbound (status=DOWN) → use first
+      2. If not → ListPublicips, find unbound (status=DOWN only) → use first
       3. If none unbound → CreatePublicip (traffic billing, 5Mbps) → use new
       4. UpdateClusterEip (bind)
-      5. ShowCluster → extract External endpoint URL
+      5. If bind fails (VPC.0510 FloatingipInUse) and EIP was reused → create new EIP and retry
+      6. ShowCluster → extract External endpoint URL
     """
     region = params["region"]
     cluster_id = params["cluster_id"]
@@ -124,12 +125,14 @@ def bind_cce_cluster_eip(params: Dict[str, str]) -> Dict[str, Any]:
 
     # Step 1: Resolve EIP if not provided
     if not eip_id:
-        # Try to find an unbound EIP
+        # Try to find an unbound EIP (status=DOWN only; port_id=None with status=ACTIVE
+        # may still be occupied — see issue #186)
         list_result = run(ctx, region, "EIP", "ListPublicips", {})
         if list_result.get("success"):
             publicips = list_result.get("data", {}).get("publicips", [])
+            # NOTE: iterates over already-fetched EIP list (single ListPublicips call above); not N+1
             for eip in publicips:
-                if eip.get("status") == "DOWN" or not eip.get("port_id"):
+                if eip.get("status") == "DOWN":
                     eip_id = eip.get("id")
                     eip_address = eip.get("public_ip_address")
                     break
@@ -156,15 +159,45 @@ def bind_cce_cluster_eip(params: Dict[str, str]) -> Dict[str, Any]:
         "cluster_id": cluster_id, "spec.action": "bind", "spec.spec.id": eip_id,
     })
     if not result["success"]:
-        # Clean up newly created EIP if binding failed
-        if eip_created:
+        # If binding failed with FloatingipInUse and we reused an existing EIP,
+        # fall back to creating a new EIP and retry (issue #186)
+        if not eip_created:
+            create_result = run(ctx, region, "EIP", "CreatePublicip", {
+                "publicip.type": eip_type,
+                "publicip.ip_version": "4",
+                "bandwidth.name": eip_name,
+                "bandwidth.size": str(bandwidth_size),
+                "bandwidth.share_type": "PER",
+                "bandwidth.charge_mode": charge_mode,
+            })
+            if create_result.get("success"):
+                created = create_result.get("data", {})
+                new_eip_id = created.get("publicip", {}).get("id") or created.get("id")
+                new_eip_address = created.get("publicip", {}).get("public_ip_address") or created.get("public_ip_address")
+                retry_result = run(ctx, region, "CCE", "UpdateClusterEip", {
+                    "cluster_id": cluster_id, "spec.action": "bind", "spec.spec.id": new_eip_id,
+                })
+                if retry_result["success"]:
+                    eip_id = new_eip_id
+                    eip_address = new_eip_address
+                    eip_created = True
+                    result = retry_result
+                else:
+                    # Clean up the newly created EIP
+                    run(ctx, region, "EIP", "DeletePublicip", {"publicip_id": new_eip_id})
+                    return retry_result
+            else:
+                return create_result
+        else:
+            # Clean up newly created EIP if binding failed
             run(ctx, region, "EIP", "DeletePublicip", {"publicip_id": eip_id})
-        return result
+            return result
 
     # Step 3: Query cluster for public endpoint
     show = run(ctx, region, "CCE", "ShowCluster", {"cluster_id": cluster_id})
     public_url = None
     if show["success"]:
+        # NOTE: iterates over already-fetched cluster endpoints (single ShowCluster call above); not N+1
         for ep in show["data"].get("status", {}).get("endpoints", []):
             if ep.get("type") == "External":
                 public_url = ep.get("url")
@@ -192,9 +225,15 @@ def unbind_cce_cluster_eip(params: Dict[str, str]) -> Dict[str, Any]:
     if not ctx.ak or not ctx.sk:
         return {"success": False, "error": "Credentials not provided."}
 
-    result = run(ctx, region, "CCE", "UpdateClusterEip", {
-        "cluster_id": cluster_id, "spec.action": "unbind",
-    })
+    # Use run_with_body to include spec.spec empty object (required by API to avoid 500)
+    body = {
+        "spec": {
+            "action": "unbind",
+            "spec": {}
+        }
+    }
+    result = run_with_body(ctx, region, "CCE", "UpdateClusterEip", body,
+                           path_params={"cluster_id": cluster_id})
     if result.get("success"):
         result["action"] = "unbind_cce_cluster_eip"
         result["region"] = region
@@ -270,6 +309,7 @@ def create_cce_node(params: Dict[str, str]) -> Dict[str, Any]:
         hcloud_params["spec.login.userPassword.username"] = login_config["userPassword"]["username"]
         hcloud_params["spec.login.userPassword.password"] = login_config["userPassword"]["password"]
     if data_volumes:
+        # NOTE: iterates over local data_volumes list to build hcloud params; no API call in loop
         for i, dv in enumerate(data_volumes):
             hcloud_params[f"spec.dataVolumes.{i+1}.size"] = str(dv.get("size", 100))
             hcloud_params[f"spec.dataVolumes.{i+1}.volumetype"] = dv.get("type", "SSD")
@@ -500,6 +540,7 @@ def resize_node_pool(params: Dict[str, str]) -> Dict[str, Any]:
         return list_result
 
     uid = None
+    # NOTE: iterates over already-fetched ListNodePools result; not N+1
     for np in list_result["data"].get("items", []):
         np_id = np.get("metadata", {}).get("uid", "")
         np_name = np.get("metadata", {}).get("name", "")
@@ -546,6 +587,7 @@ def delete_node_pool(params: Dict[str, str]) -> Dict[str, Any]:
         return list_result
 
     uid = None
+    # NOTE: iterates over already-fetched ListNodePools result; not N+1
     for np in list_result["data"].get("items", []):
         np_id = np.get("metadata", {}).get("uid", "")
         np_name = np.get("metadata", {}).get("name", "")
@@ -633,6 +675,19 @@ def update_cce_addon(params: Dict[str, str]) -> Dict[str, Any]:
         body["spec"]["addonTemplateName"] = addon_template_name
     if addon_version:
         body["spec"]["version"] = addon_version
+    else:
+        # Auto-fetch current addon version to avoid CCE.03500001 (version is required for UpdateAddonInstance)
+        show_result = run(ctx, region, "CCE", "ShowAddonInstance", {
+            "cluster_id": cluster_id, "id": addon_id,
+        })
+        if show_result.get("success"):
+            current_version = show_result["data"].get("spec", {}).get("version")
+            if current_version:
+                body["spec"]["version"] = current_version
+            else:
+                return {"success": False, "error": "Could not determine current addon version. Please provide addon_version explicitly."}
+        else:
+            return {"success": False, "error": f"Failed to query addon version: {show_result.get('error', 'unknown')}"}
     if values:
         body["spec"]["values"] = values
 

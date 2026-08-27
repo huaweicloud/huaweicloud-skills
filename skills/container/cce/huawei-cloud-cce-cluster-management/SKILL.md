@@ -86,12 +86,12 @@ Credentials are resolved from parameters or environment variables (process-level
 
 ```bash
 # Permanent
-export HW_ACCESS_KEY="your-access-key-id"
-export HW_SECRET_KEY="your-secret-access-key"
+export HW_ACCESS_KEY  # your access key ID
+export HW_SECRET_KEY  # your secret access key
 export HW_REGION_NAME="cn-north-4"
 
 # Temporary (add security token)
-export HW_SECURITY_TOKEN="your-security-token"
+export HW_SECURITY_TOKEN  # your security token
 ```
 
 ### Node Login Password Security
@@ -155,13 +155,13 @@ The skill detects existing environment variables before passing credentials to s
 ```bash
 # Set credentials at session level (the skill detects these and skips
 # passing them as explicit CLI arguments to hcloud/kubectl-cce)
-export HW_ACCESS_KEY="your-access-key-id"
-export HW_SECRET_KEY="your-secret-access-key"
+export HW_ACCESS_KEY  # your access key ID
+export HW_SECRET_KEY  # your secret access key
 export HW_REGION_NAME="cn-north-4"
 # Optional, for temporary credentials:
-export HW_SECURITY_TOKEN="your-security-token"
+export HW_SECURITY_TOKEN  # your security token
 # Optional, for node login when ssh_key is not used:
-export CCE_NODE_PASSWORD="your-password"
+export CCE_NODE_PASSWORD  # your node password (8-26 chars, at least 3 char categories)
 ```
 
 ### IAM Permission Policies
@@ -297,6 +297,8 @@ Before executing any command, confirm the following parameters with the user:
 | `huawei_cce_node_drain` | Cordon + evict all pods from node | 🟠 High | **Yes** |
 | `huawei_cce_node_status` | Query node scheduling status | 🟢 Low | No |
 
+> **Node ID note:** `huawei_delete_cce_node` requires the node **UID** (from `huawei_list_cce_nodes` → `metadata.uid`), not the node name. Using a name instead of UID will return an error.
+
 Node scheduling operations (`cordon`, `uncordon`, `drain`, `status`) are executed via **kubectl cce** — the kubectl-cce plugin connects to the CCE API Gateway using AK/SK credentials. **No cluster EIP or manual kubeconfig required**. The plugin handles cordon, eviction, PodDisruptionBudget (PDB) compliance, and DaemonSet pod skipping natively.
 
 `huawei_cce_node_drain` follows **standard drain semantics**: it first cordons the node, then evicts all resident pods (excluding DaemonSet pods) via the k8s Eviction API, which respects `PodDisruptionBudget` (PDB). Pods blocked by PDB will be reported in the `failed_pods` field.
@@ -320,7 +322,7 @@ Node scheduling operations (`cordon`, `uncordon`, `drain`, `status`) are execute
 - `everest` - Storage driver
 
 > **Addon notes (from E2E verification):**
-> - `huawei_get_cce_addon_detail` and `huawei_uninstall_cce_addon` require the addon **UID** (from `huawei_list_cce_addons` → `metadata.uid`), not the addon name.
+> - `huawei_get_cce_addon_detail`, `huawei_uninstall_cce_addon`, and `huawei_update_cce_addon` all require the addon **UID** (from `huawei_list_cce_addons` → `metadata.uid`), not the addon name. Using a name instead of UID will return error CCE.03400001.
 > - Addon status is in the `status.status` field (e.g., `running`, `upgrading`, `abnormal`), not `spec.status`.
 > - After `huawei_update_cce_addon`, the addon may enter `upgrading` state. Wait for it to return to `running` before performing subsequent operations (e.g., uninstall).
 
@@ -398,6 +400,7 @@ See [verification-method.md](references/verification-method.md) for detailed ver
 | [troubleshooting.md](references/troubleshooting.md) | Troubleshooting guide |
 | [cce-api-guide.md](references/cce-api-guide.md) | hcloud operation reference |
 | [cce-cluster-parameters.md](references/cce-cluster-parameters.md) | Cluster/nodepool creation parameters |
+| [cli-installation-guide.md](references/cli-installation-guide.md) | CLI installation and configuration guide |
 
 ---
 

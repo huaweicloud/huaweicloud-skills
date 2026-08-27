@@ -118,7 +118,7 @@ python3 huawei-cloud.py huawei_create_cce_nodepool \
     ssh_key=KeyPair-dev
 
 # Option B: password env var
-export CCE_NODE_PASSWORD="your_password"
+export CCE_NODE_PASSWORD  # your node password (8-26 chars, at least 3 char categories)
 python3 huawei-cloud.py huawei_create_cce_nodepool \
     region=cn-north-4 \
     cluster_id=xxx \

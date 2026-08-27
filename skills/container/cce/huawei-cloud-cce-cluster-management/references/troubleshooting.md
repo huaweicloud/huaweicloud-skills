@@ -106,7 +106,7 @@ python3 huawei-cloud.py huawei_resize_cce_nodepool \
 **Solutions:**
 ```bash
 # Option A: set a compliant password env var
-export CCE_NODE_PASSWORD="${NODE_PASSWORD}"  # 8-26 chars, >=3 categories
+export CCE_NODE_PASSWORD  # from $NODE_PASSWORD (8-26 chars, at least 3 char categories)
 python3 huawei-cloud.py huawei_create_cce_nodepool ...
 
 # Option B: pass an ssh_key (preferred when available)
@@ -244,8 +244,18 @@ curl -sSL https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/lat
 
 **Error Message:** `Addon not found` or similar 404 error.
 
-**Cause:** `huawei_get_cce_addon_detail` (`ShowAddonInstance`) and `huawei_uninstall_cce_addon` (`DeleteAddonInstance`) require the addon **UID**, not the addon name.
+**Cause:** `huawei_get_cce_addon_detail` (`ShowAddonInstance`), `huawei_uninstall_cce_addon` (`DeleteAddonInstance`), and `huawei_update_cce_addon` (`UpdateAddonInstance`) all require the addon **UID**, not the addon name. Using a name returns error CCE.03400001.
 
 **Solutions:**
 - Call `huawei_list_cce_addons` first to get the addon list.
 - Use the `metadata.uid` field (not `metadata.name`) as the `addon_id` parameter.
+
+### 16. DeleteNode returns error when using node name instead of UID
+
+**Error Message:** `Node not found` or similar 404/400 error (e.g., CCE.03400001).
+
+**Cause:** `huawei_delete_cce_node` (`DeleteNode`) requires the node **UID**, not the node name.
+
+**Solutions:**
+- Call `huawei_list_cce_nodes` first to get the node list.
+- Use the `metadata.uid` field (not `metadata.name`) as the `node_id` parameter.
