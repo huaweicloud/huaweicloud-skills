@@ -59,7 +59,7 @@ while [[ $# -gt 0 ]]; do
             echo "Options:"
             echo "  --ecs-ids, -i IDS     List of ECS instance IDs (comma-separated)"
             echo "  --metric, -m METRIC   Monitoring metric (cpu_util, memory_util, disk_util, etc.)"
-            echo "  --period, -p PERIOD   Time range (1h, 24h, 7d, 30d)"
+            echo "  --period, -p PERIOD   Time range (1h, 24h, 7d, 30d, default: 1h)"
             echo "  --format, -f FORMAT   Output format: table (default), json, csv"
             echo "  --region, -r REGION   Huawei Cloud region (default: cn-north-4)"
             echo "  --help, -h            Show this help message"
@@ -246,7 +246,7 @@ try:
     datapoints = data.get('datapoints', [])
 
     if not datapoints:
-        print('  No data available')
+        print('  No data available (ECS ID may not exist, or metric not collected yet)')
     else:
         values = [dp.get('average', 0) for dp in datapoints]
         avg_val = sum(values) / len(values) if values else 0

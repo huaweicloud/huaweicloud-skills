@@ -3,9 +3,20 @@ name: huawei-cloud-ecs-alert
 description: |
   Automate batch creation and management of Huawei Cloud CES alarm rules for ECS instances using hcloud CLI v7.2.2+.
   Use this skill to: (1) batch create alarms with templates (web/database), (2) update SMN notifications, (3) query ECS metrics and alarm lists.
-  Trigger: "ECS alert", "create alert", "list alarms", "CPU alert", "memory alert", "ECS monitoring", "监控告警", "创建告警", "ECS 监控", "告警规则", "查询告警"
+triggers:
+  - "ECS alert"
+  - "create alert"
+  - "list alarms"
+  - "CPU alert"
+  - "memory alert"
+  - "ECS monitoring"
+  - "监控告警"
+  - "创建告警"
+  - "ECS 监控"
+  - "告警规则"
+  - "查询告警"
 tags: [huawei-cloud, ecs, ces, alert, monitoring]
-version: 1.0.1
+version: 1.0.2
 ---
 
 # Huawei Cloud ECS Alert Automation
@@ -179,7 +190,7 @@ hcloud version
 > | `create_alert_rules.sh`         | Batch create alarm rules                | `hcloud CES CreateAlarmRules`       |
 > | `batch_query_metrics.sh`        | Batch query monitoring data             | `hcloud CES ShowMetricData`           |
 > | `list_subscriptions.sh`         | Query SMN topics and subscriptions      | `hcloud SMN ListTopics/Subscriptions` |
-> | `manage_notifications.sh`       | Manage SMN subscriptions                | `hcloud SMN Subscribe/Unsubscribe`    |
+> | `manage_notifications.sh`       | Manage SMN subscriptions                | `hcloud SMN AddSubscription / BatchDeleteSubscriptions` |
 > | `update_alarm_notifications.sh` | Update alarm notification configuration | `hcloud CES UpdateAlarmNotifications` |
 >
 > **Usage Examples:**
@@ -190,14 +201,14 @@ hcloud version
 > 
 > ./scripts/list_ecs.sh                          # Query all ECS
 > ./scripts/list_ecs.sh --name ecs-001           # Filter by name
-> ./scripts/list_ecs.sh --output json            # Output as JSON
-> ./scripts/list_ecs.sh --output ids             # Output only ECS ID list
+> ./scripts/list_ecs.sh --format json            # Output as JSON
+> ./scripts/list_ecs.sh --format ids             # Output only ECS ID list
 > 
 > # Query alarm rules
 > 
 > ./scripts/list_alarms.sh                       # Query all alarms
-> ./scripts/list_alarms.sh --name-pattern "cpu.*"  # Filter by name pattern
-> ./scripts/list_alarms.sh --output ids          # Output only alarm IDs
+> ./scripts/list_alarms.sh --name "cpu.*"  # Filter by name pattern
+> ./scripts/list_alarms.sh --format ids          # Output only alarm IDs
 > 
 > # Create alarm rules
 > 
@@ -206,9 +217,9 @@ hcloud version
 > ./scripts/create_alert_rules.sh --template web --ecs-ids ecs-001 --smn-topic-urn
 > urn:smn:cn-north-4:xxx:ECS_ALARM_NOTIFY
 > ./scripts/create_alert_rules.sh --template web --ecs-ids ecs-001 --dry-run  # Dry run
-> 
-> ```bash
-> 
+>
+> ```
+>
 > </details>
 
 ## Core Capabilities
@@ -236,7 +247,7 @@ hcloud version
 hcloud configure
 # Optional: set region env var consumed by the scripts' --cli-region default
 export HUAWEI_CLOUD_REGION=cn-north-4
-./scripts/list_ecs.sh --output ids
+./scripts/list_ecs.sh --format ids
 
 # 2. Batch create alarm rules
 ./scripts/create_alert_rules.sh --template web --ecs-ids ecs-001,ecs-002,ecs-003
@@ -256,7 +267,7 @@ export HUAWEI_CLOUD_REGION=cn-north-4
   --metric cpu_util \
   --from 2024-01-01T10:00:00Z \
   --to 2024-01-01T11:00:00Z \
-  --output table
+  --format table
 
 ```
 
@@ -296,7 +307,7 @@ export HUAWEI_CLOUD_REGION=cn-north-4
 
 After executing any operation, verify using the following methods:
 
-1. **List Alarms**: `./scripts/list_alarms.sh --name-pattern <pattern>`
+1. **List Alarms**: `./scripts/list_alarms.sh --name <pattern>`
 2. **Query Metrics**: `./scripts/batch_query_metrics.sh --ecs-ids <ids> --metric cpu_util`
 3. **Check Notifications**: `./scripts/list_subscriptions.sh`
 

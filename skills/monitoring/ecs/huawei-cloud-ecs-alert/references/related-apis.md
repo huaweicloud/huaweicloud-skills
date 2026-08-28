@@ -143,7 +143,7 @@ hcloud SMN ListTopics --cli-region=cn-north-4
 
 ```
 
-### Subscribe
+### AddSubscription
 
 **Function**: Subscribe endpoint to topic
 
@@ -152,26 +152,26 @@ hcloud SMN ListTopics --cli-region=cn-north-4
 **hcloud Command**:
 
 ```bash
-hcloud SMN Subscribe \
+hcloud SMN AddSubscription \
   --cli-region=cn-north-4 \
-  --topic-urn=urn:smn:cn-north-4:xxx:topic-name \
+  --topic_urn=urn:smn:cn-north-4:xxx:topic-name \
   --protocol=email \
   --endpoint=user@example.com
 
 ```
 
-### Unsubscribe
+### BatchDeleteSubscriptions
 
-**Function**: Unsubscribe endpoint from topic
+**Function**: Unsubscribe endpoint(s) from topic
 
-**API**: `DELETE /v2/{project_id}/notifications/topics/{topic_urn}/subscriptions/{subscription_urn}`
+**API**: `DELETE /v2/{project_id}/notifications/topics/{topic_urn}/subscriptions`
 
 **hcloud Command**:
 
 ```bash
-hcloud SMN Unsubscribe \
+hcloud SMN BatchDeleteSubscriptions \
   --cli-region=cn-north-4 \
-  --subscription-urn=urn:smn:cn-north-4:xxx:topic-name:subscription-001
+  --subscription_urns.1.subscription_urn=urn:smn:cn-north-4:xxx:topic-name:subscription-001
 
 ```
 
