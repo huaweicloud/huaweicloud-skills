@@ -48,7 +48,7 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Options:"
             echo "  --name, -n NAME     Filter alarms by name (supports partial match)"
-            echo "  --format, -f FORMAT Output format: table (default), json"
+            echo "  --format, -f FORMAT Output format: table (default), json, ids"
             echo "  --region, -r REGION Huawei Cloud region (default: cn-north-4)"
             echo "  --help, -h          Show this help message"
             exit 0
@@ -82,7 +82,7 @@ main() {
     result=$(hcloud CES ListAlarmRules \
         --cli-region="$REGION" \
         --limit="$PAGE_SIZE" \
-        ${NAME_FILTER:+--alarm_name="$NAME_FILTER"} \
+        ${NAME_FILTER:+--name="$NAME_FILTER"} \
         2>/dev/null)
     
     # Validate hcloud output before parsing
@@ -99,6 +99,19 @@ main() {
     
     if [[ "$OUTPUT_FORMAT" == "json" ]]; then
         echo "$result"
+    elif [[ "$OUTPUT_FORMAT" == "ids" ]]; then
+        # Output only alarm ID list
+        echo "$result" | python3 -c "
+import sys, json
+try:
+    data = json.loads(sys.stdin.read())
+    alarms = data.get('alarms', [])
+    ids = [alarm.get('alarm_id', '') for alarm in alarms if alarm.get('alarm_id')]
+    for id_ in ids:
+        print(id_)
+except Exception:
+    sys.exit(1)
+"
     else
         # Parse and display as table
         echo "================================================================================"

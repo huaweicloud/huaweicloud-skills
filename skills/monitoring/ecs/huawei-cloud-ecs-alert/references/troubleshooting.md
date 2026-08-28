@@ -11,12 +11,12 @@ This document provides solutions for common issues encountered when using the CE
 **Solution**:
 
 ```bash
-# Install KooCLI
-curl -o hcloud_install.sh https://hwcloudcli.obs.cn-north-4.myhuaweicloud.com/cli/latest/hcloud_install.sh
+# Install KooCLI via automatic script (recommended)
+curl -o hcloud_install.sh https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/hcloud_install.sh
 bash hcloud_install.sh
 
-# Or install via pip
-pip install hcloud
+# Note: KooCLI (hcloud) has no official pip package. The third-party `hcloud`
+# package on PyPI is a different, unrelated library and will NOT install the CLI.
 
 ```
 
@@ -27,8 +27,9 @@ pip install hcloud
 **Solution**:
 
 ```bash
-# Upgrade KooCLI
-pip install --upgrade hcloud
+# Upgrade KooCLI (re-run the install script, it updates in place)
+curl -o hcloud_install.sh https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/hcloud_install.sh
+bash hcloud_install.sh
 
 # Verify version
 hcloud version
@@ -59,16 +60,17 @@ hcloud configure list
 
 **Solution**:
 
-1. Check IAM permissions - ensure CES FullAccess is granted
+1. Check IAM permissions — ensure CES FullAccess, ECS ReadOnlyAccess, and SMN FullAccess are granted
 2. Verify AK/SK credentials are correct
 3. Check region parameter matches the resource location
 
 ```bash
-# Verify IAM permissions
-hcloud IAM ListPermissions
-
 # Check resource region
 hcloud ECS ListServersDetails --cli-region=cn-north-4
+
+# Verify CES/SMN access
+hcloud CES ListAlarmRules --cli-region=cn-north-4 --limit=1
+hcloud SMN ListTopics --cli-region=cn-north-4
 
 ```
 
@@ -127,7 +129,7 @@ hcloud CES ListMetrics --namespace=SYS.ECS --cli-region=cn-north-4
 hcloud ECS ListServersDetails --cli-region=cn-north-4
 
 # Verify instance ID is correct
-./scripts/list_ecs.sh --output ids
+./scripts/list_ecs.sh --format ids
 
 # Wait 5-10 minutes and retry
 ./scripts/batch_query_metrics.sh --ecs-ids ecs-001 --metric cpu_util
@@ -162,7 +164,9 @@ hcloud SMN ListTopics --cli-region=cn-north-4
 # Correct format: urn:smn:region:account-id:topic-name
 
 # Check SMN permissions
-hcloud IAM ListAttachedGroupPolicies --group-id=<group-id>
+# Use CES/SMN APIs to verify access instead (IAM ListPermissions is unavailable)
+hcloud SMN ListTopics --cli-region=cn-north-4
+hcloud CES ListAlarmRules --cli-region=cn-north-4 --limit=1
 
 ```
 
@@ -205,7 +209,7 @@ bash scripts/list_ecs.sh
 
 **Solution**:
 
-- Check `--output` parameter (table/json/ids)
+- Check `--format` parameter (table/json/ids)
 - Verify jq is installed for JSON processing
 - Check script has correct hcloud parameter format (--param=value)
 
@@ -219,10 +223,10 @@ bash scripts/list_ecs.sh
 
 ```bash
 # ✅ Correct
-hcloud CES ListAlarms --region=cn-north-4
+hcloud CES ListAlarmRules --cli-region=cn-north-4
 
 # ❌ Incorrect
-hcloud CES ListAlarms --region cn-north-4
+hcloud CES ListAlarmRules --region cn-north-4
 
 ```
 

@@ -29,22 +29,27 @@ REMARK="ECS CPU Alarm Notification"
 REGION="cn-north-4"
 
 # Parse command-line arguments
+HAS_ARGS=false
 while [[ $# -gt 0 ]]; do
     case $1 in
         --email|-e)
             ENDPOINT="$2"
+            HAS_ARGS=true
             shift 2
             ;;
         --topic-urn)
             TOPIC_URN="$2"
+            HAS_ARGS=true
             shift 2
             ;;
         --remark)
             REMARK="$2"
+            HAS_ARGS=true
             shift 2
             ;;
         --region|-r)
             REGION="$2"
+            HAS_ARGS=true
             shift 2
             ;;
         --help|-h)
@@ -78,8 +83,36 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# If any CLI args were provided, validate required params (non-interactive mode)
+if [[ "$HAS_ARGS" == true ]]; then
+    if [[ -z "$ENDPOINT" ]]; then
+        echo "Error: --email is required in non-interactive mode" >&2
+        echo "Usage: $0 --email user@example.com --topic-urn <URN>" >&2
+        echo "Or run without arguments for interactive mode." >&2
+        exit 1
+    fi
+fi
+
 # If email is not provided, prompt for interactive input
 if [ -z "$ENDPOINT" ]; then
+    # Check if running non-interactively (no terminal)
+    if [ ! -t 0 ]; then
+        echo "❌ Error: Email address is required (--email <address>)" >&2
+        echo "" >&2
+        echo "Usage: $0 --email <email> --topic-urn <urn>" >&2
+        echo "" >&2
+        echo "Required parameters:" >&2
+        echo "  --email, -e EMAIL    Email address to receive alarms" >&2
+        echo "  --topic-urn URN      SMN topic URN" >&2
+        echo "" >&2
+        echo "Optional parameters:" >&2
+        echo "  --remark TEXT        Subscription remark" >&2
+        echo "  --region, -r REGION  Huawei Cloud region (default: cn-north-4)" >&2
+        echo "" >&2
+        echo "Example:" >&2
+        echo "  $0 --email user@example.com --topic-urn urn:smn:cn-north-4:xxx:ECS_ALARM" >&2
+        exit 1
+    fi
     echo "=========================================="
     echo "SMN Email Subscription Creation"
     echo "=========================================="

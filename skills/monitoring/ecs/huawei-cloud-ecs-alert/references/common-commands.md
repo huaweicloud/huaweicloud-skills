@@ -62,11 +62,11 @@ hcloud SMN ListTopics --cli-region=cn-north-4
 
 ```bash
 # Linux/macOS - Use official installation script
-curl -o hcloud_install.sh https://hwcloudcli.obs.cn-north-4.myhuaweicloud.com/cli/latest/hcloud_install.sh
+curl -o hcloud_install.sh https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/hcloud_install.sh
 bash hcloud_install.sh
 
-# Or install via pip
-pip install hcloud
+# Note: KooCLI (hcloud) has no official pip package. The third-party `hcloud`
+# package on PyPI is a different, unrelated library and will NOT install the CLI.
 ```
 
 ### Authentication Failure (401/403)

@@ -51,16 +51,17 @@ To use this skill, the following IAM policies must be granted:
 
 ### Via CLI
 
+IAM policy binding is best done via the Huawei Cloud Console (recommended) or the IAM API directly:
+
 ```bash
-# Add CES FullAccess to user
-hcloud IAM AttachGroupToUser --user-id=<user-id> --group-id=<ces-fullaccess-group-id>
+# List available policies
+hcloud IAM ListPoliciesV5 --cli-region=cn-north-4
 
-# Add ECS ReadOnlyAccess to user
-hcloud IAM AttachGroupToUser --user-id=<user-id> --group-id=<ecs-readonly-group-id>
-
-# Add SMN FullAccess to user
-hcloud IAM AttachGroupToUser --user-id=<user-id> --group-id=<smn-fullaccess-group-id>
+# Alternative: use the IAM APIs to attach policies
+hcloud IAM AttachUserPolicyV5 --user-id=<user-id> --policy-id=<policy-id> --cli-region=cn-north-4
 ```
+
+> **Note**: IAM policy management via CLI requires IAM-specific permissions and may vary by hcloud version. For most users, the Huawei Cloud Console is the recommended method.
 
 ## Custom Policy (Optional)
 

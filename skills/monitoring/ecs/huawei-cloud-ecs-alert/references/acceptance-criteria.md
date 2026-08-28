@@ -9,7 +9,7 @@ This document defines the acceptance criteria for the Huawei Cloud ECS Alert ski
 | # | Criterion | Verification Method |
 |---|-----------|---------------------|
 | 1.1 | hcloud CLI v7.2.2+ is installed | `hcloud --version` |
-| 1.2 | Huawei Cloud credentials are configured (hcloud configure or env vars) | `hcloud IAM ListUsers` |
+| 1.2 | Huawei Cloud credentials are configured (hcloud configure or env vars) | `hcloud IAM KeystoneListUsers` |
 | 1.3 | Python 3.8+ is available | `python3 --version` |
 | 1.4 | jq is installed for JSON parsing | `jq --version` |
 
