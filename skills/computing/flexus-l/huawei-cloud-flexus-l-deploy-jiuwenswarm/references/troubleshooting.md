@@ -43,37 +43,46 @@ echo $HUAWEICLOUD_SDK_SK
 # Check COC task status
 python scripts/query_coc_status.py --uuid <execute_uuid>
 
-# Manually check instance status
-curl -H "X-Auth-Token: <token>" https://rms.cn-north-4.myhuaweicloud.com/v1/resource-manager/domains/{domain_id}/resources
+# Manually check instance status (via KooCLI)
+hcloud RMS ListAllResources --cli-region=cn-north-4 --cli-domain-id=<domain_id> --type=hcss.l-instance --cli-output=json
 ```
 
 ### 3. Web Service Unaccessible
 
-**Symptoms**:
-- Cannot access http://{ip}:5173
-- Connection refused
-- Timeout
+**Symptoms**: Cannot access http://{ip}:5173, connection refused or timeout.
 
-**Troubleshooting Steps**:
-1. Check security group rules (port 5173 open)
-2. Confirm service is started
-3. Check firewall settings
-4. Verify port listening
+**Root Cause A: .env variable name mismatch (port bound to 127.0.0.1)**
 
-**Solutions**:
+The service reads `FRONTEND_HOST` for host binding, NOT `JIUWENSWARM_HOST`. If the
+wrong variable is used, the service defaults to `127.0.0.1` (localhost only).
+
+| .env Variable        | Default             | Required Value |
+| :------------------- | :------------------ | :------------- |
+| `FRONTEND_HOST`      | `localhost` (127.0.0.1) | `0.0.0.0`   |
+| `FRONTEND_PORT`      | `5173`              | `5173`         |
+| `WEB_HOST`           | `127.0.0.1`         | `0.0.0.0`      |
+| `AGENT_SERVER_HOST`  | `127.0.0.1`         | `0.0.0.0`      |
+| `GATEWAY_HOST`       | `127.0.0.1`         | `0.0.0.0`      |
+
+**Diagnose & Fix**:
+
 ```bash
-# Check service status
-systemctl status jiuwenswarm
+# Check port binding — 127.0.0.1 means wrong, 0.0.0.0 means correct
+ss -tlnp | grep 5173
 
-# Check port listening
-netstat -tlnp | grep 5173
-
-# View service logs
-journalctl -u jiuwenswarm --no-pager | tail -50
-
-# Check firewall
-ufw status
+# Fix: update .env and restart
+sed -i 's/^JIUWENSWARM_HOST=.*/FRONTEND_HOST=0.0.0.0/' /root/.jiuwenswarm/config/.env
+sed -i 's/^JIUWENSWARM_PORT=.*/FRONTEND_PORT=5173/' /root/.jiuwenswarm/config/.env
+echo -e "WEB_HOST=0.0.0.0\nAGENT_SERVER_HOST=0.0.0.0\nGATEWAY_HOST=0.0.0.0" >> /root/.jiuwenswarm/config/.env
+systemctl restart jiuwenswarm && sleep 10
+ss -tlnp | grep 5173  # verify 0.0.0.0
 ```
+
+**Root Cause B: Security group not allowing port 5173**
+
+If ports are on `0.0.0.0` but `curl <public_ip>:5173` times out while `curl localhost:5173` returns 200, the Huawei Cloud security group is blocking inbound traffic.
+
+**Fix**: Login to [Flexus L Console](https://console.huaweicloud.com/smb/?/resource/list) → instance details → Security/Network → add inbound TCP rule for port `5173`.
 
 ### 4. Service Startup Failed
 
@@ -226,3 +235,4 @@ If the issue persists, collect the following information and contact Huawei Clou
 5. Update deployment documentation
 6. Document issue and solution
 ```
+

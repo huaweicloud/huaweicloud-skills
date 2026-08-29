@@ -27,6 +27,7 @@ try:
         get_huaweicloud_credentials,
         get_coc_client,
         coc_query_execution,
+        rms_list_all_resources,
         print_header,
         print_success,
         print_error,
@@ -39,39 +40,21 @@ except ImportError as e:
     sys.exit(1)
 
 def query_instance_by_ip(public_ip, ak, sk, region, security_token=None):
-    from huaweicloudsdkcore.auth.credentials import GlobalCredentials, BasicCredentials
-    from huaweicloudsdkrms.v1 import RmsClient
-    from huaweicloudsdkrms.v1.region.rms_region import RmsRegion
+    try:
+        # Query via KooCLI: RMS is a global service, always use the unified cn-north-4
+        # endpoint. Query Flexus L instances across ALL regions: the instance may be
+        # created in a region different from the passed-in region, so do not filter by
+        # region_id here; the actual region is read from the RMS entity below.
+        resources = rms_list_all_resources(resource_type="hcss.l-instance", limit=200)
 
-    # RMS requires GlobalCredentials
-    if security_token:
-        credentials = GlobalCredentials(ak, sk).with_security_token(security_token)
-    else:
-        credentials = GlobalCredentials(ak, sk)
-    
-    client = RmsClient.new_builder() \
-        .with_credentials(credentials) \
-        .with_region(RmsRegion.value_of(region)) \
-        .build()
+        for r in resources:
+            name = r.get('name', '') or r.get('resource_name', '')
+            instance_id = r.get('id', '') or r.get('resource_id', '')
+            props = r.get('properties') or {}
 
-    from huaweicloudsdkrms.v1 import model
-    request = model.ListAllResourcesRequest()
-    request.region_id = region
-    request.type = "hcss.l-instance"
-    request.limit = 200
+            ip = None
+            ecs_instance_id = None
 
-    response = client.list_all_resources(request)
-    resources = response.resources if hasattr(response, 'resources') else []
-
-    for r in resources:
-        name = getattr(r, 'name', '') or getattr(r, 'resource_name', '')
-        instance_id = getattr(r, 'id', '') or getattr(r, 'resource_id', '')
-        props = getattr(r, 'properties', None)
-
-        ip = None
-        ecs_instance_id = None
-
-        if props:
             resources_list = props.get('resources', [])
             for res in resources_list:
                 if isinstance(res, dict):
@@ -85,15 +68,17 @@ def query_instance_by_ip(public_ip, ak, sk, region, security_token=None):
                             if key == 'associate_instance_id':
                                 ecs_instance_id = value
 
-        if ip == public_ip:
-            return {
-                'instance_name': name,
-                'instance_id': instance_id,
-                'ecs_instance_id': ecs_instance_id,
-                'public_ip': ip,
-                'region': region,
-                'status': props.get('status') if props else 'UNKNOWN'
-            }
+            if ip == public_ip:
+                return {
+                    'instance_name': name,
+                    'instance_id': instance_id,
+                    'ecs_instance_id': ecs_instance_id,
+                    'public_ip': ip,
+                    'region': r.get('region_id', '') or region,
+                    'status': props.get('status') if props else 'UNKNOWN'
+                }
+    except Exception as e:
+        log.error(f"Failed to query Flexus L instance information: {e}")
 
     return None
 
@@ -274,7 +259,7 @@ update_param() {
     
     if grep -q "^[[:space:]]*$key=" "$env_file"; then
         # Parameter exists, update its value
-        sed -i "s|^\s*$key=.*|$key=\"$value\"|" "$env_file"
+        sed -i "s|^\\s*$key=.*|$key=\"$value\"|" "$env_file"
         echo "[INFO] Updated $key"
     else
         # Parameter doesn't exist, add to end of file

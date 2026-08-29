@@ -4,7 +4,7 @@
 
 When any command fails due to permission errors, follow this process:
 
-1. **Read this document** - Read `references/iam_policies.md`
+1. **Read this document** - Read `references/iam-policies.md`
 2. **Display required permissions** - Show users the required permission list and policy JSON from this file
 3. **Guide authorization** - Guide users to create custom policies in the IAM console and grant permissions
 4. **Pause execution** - Wait for user confirmation that permissions have been granted before continuing

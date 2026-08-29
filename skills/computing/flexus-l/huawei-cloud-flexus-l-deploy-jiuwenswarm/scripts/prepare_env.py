@@ -7,6 +7,7 @@ This is the first phase in the JiuwenSwarm deployment workflow.
 
 import os
 import sys
+import shutil
 import logging
 from pathlib import Path
 
@@ -16,28 +17,15 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 log = logging.getLogger(__name__)
 
 try:
-    import requests
-except ImportError:
-    log.error("requests module not installed. Please run: pip install requests")
-    sys.exit(1)
-
-try:
-    from huaweicloudsdkcore.signer.signer import Signer
-    from huaweicloudsdkcore.sdk_request import SdkRequest
-except ImportError:
-    log.error("huaweicloudsdkcore module not installed. Please run: pip install huaweicloudsdkcore")
-    sys.exit(1)
-
-try:
     from huaweicloudsdkcore.auth.credentials import GlobalCredentials
     from huaweicloudsdkcoc.v1.region.coc_region import CocRegion
     from huaweicloudsdkcoc.v1 import CocClient
 except ImportError:
-    log.error("Huawei Cloud SDK modules not installed. Please run: pip install huaweicloudsdkcoc huaweicloudsdkrms")
+    log.error("Huawei Cloud SDK modules not installed. Please run: pip install huaweicloudsdkcoc")
     sys.exit(1)
 
 sys.path.insert(0, str(Path(__file__).parent))
-from utils import get_huaweicloud_credentials
+from utils import get_huaweicloud_credentials, hcloud_json
 
 def check_credentials():
     print("\n" + "=" * 60)
@@ -48,19 +36,19 @@ def check_credentials():
         AK, SK, REGION, SECURITY_TOKEN = get_huaweicloud_credentials()
     except ValueError as e:
         print(f"[ERROR] {e}")
-        print("\nSet command:")
-        print("  Windows: set HUAWEICLOUD_SDK_AK=your_ak && set HUAWEICLOUD_SDK_SK=your_sk && set HUAWEICLOUD_REGION=cn-north-4")
+        print("\nOption 1 - Configure hcloud (recommended):")
+        print("  hcloud configure set --cli-mode=AKSK --cli-region=cn-north-4 --cli-access-key=YOUR_AK --cli-secret-key=YOUR_SK")
+        print("\nOption 2 - Set environment variables:")
         print("  Linux/Mac: export HUAWEICLOUD_SDK_AK=your_ak && export HUAWEICLOUD_SDK_SK=your_sk && export HUAWEICLOUD_REGION=cn-north-4")
+        print("  Windows: set HUAWEICLOUD_SDK_AK=your_ak && set HUAWEICLOUD_SDK_SK=your_sk && set HUAWEICLOUD_REGION=cn-north-4")
         print("\nFor temporary security credentials (STS token), also set:")
-        print("  Windows: set HUAWEICLOUD_SDK_SECURITY_TOKEN=your_token")
         print("  Linux/Mac: export HUAWEICLOUD_SDK_SECURITY_TOKEN=your_token")
+        print("  Windows: set HUAWEICLOUD_SDK_SECURITY_TOKEN=your_token")
         return False, None, None, None, None
 
-    print(f"[OK] AK: {AK[:4]}...{AK[-4:]}")
-    print(f"[OK] SK: {SK[:4]}...{SK[-4:]}")
+    print(f"[OK] AK: {AK[:2]}...{AK[-2:]}")
+    print(f"[OK] SK: {SK[:2]}...{SK[-2:]}")
     print(f"[OK] Region: {REGION}")
-    if SECURITY_TOKEN:
-        print(f"[OK] Using temporary security credentials (STS token)")
     return True, AK, SK, REGION, SECURITY_TOKEN
 
 def check_dependencies():
@@ -69,8 +57,7 @@ def check_dependencies():
     modules = {
         'requests': 'requests',
         'huaweicloudsdkcore': 'huaweicloudsdkcore',
-        'huaweicloudsdkcoc': 'huaweicloudsdkcoc',
-        'huaweicloudsdkrms': 'huaweicloudsdkrms'
+        'huaweicloudsdkcoc': 'huaweicloudsdkcoc'
     }
 
     all_ok = True
@@ -82,6 +69,14 @@ def check_dependencies():
             print(f"[ERROR] {key} not installed. Please run: pip install {module_name}")
             all_ok = False
 
+    # KooCLI (hcloud) is a standalone binary, not a Python package
+    if shutil.which("hcloud"):
+        print("[OK] hcloud (KooCLI)")
+    else:
+        print("[ERROR] hcloud (KooCLI) not found in PATH. Please install KooCLI:")
+        print("        https://support.huaweicloud.com/usermanual-hcli/hcli_03_001.html")
+        all_ok = False
+
     return all_ok
 
 def verify_credentials(ak, sk, region, security_token=None):
@@ -89,58 +84,21 @@ def verify_credentials(ak, sk, region, security_token=None):
     print(f"[INFO] Region: {region}")
 
     try:
-        from huaweicloudsdkcore.signer.signer import Signer
-        from huaweicloudsdkcore.sdk_request import SdkRequest
-        from huaweicloudsdkcore.auth.credentials import BasicCredentials
-        import uuid
-
-        # 使用SDK原生凭据，原生支持security_token
-        credentials = BasicCredentials(ak, sk)
-        if security_token:
-            credentials.with_security_token(security_token)
-
-        signer = Signer(credentials)
-
-        iam_endpoint = f"https://iam.{region}.myhuaweicloud.com/v3/projects"
-
-        request = SdkRequest()
-        request.method = "GET"
-        request.schema = "https"
-        request.host = f"iam.{region}.myhuaweicloud.com"
-        request.resource_path = "/v3/projects"
-        request.body = ""
-        request.header_params = {
-            "Content-Type": "application/json",
-            "Client-Request-Id": str(uuid.uuid4())
+        # Verify via KooCLI: use `hcloud IAM KeystoneListProjects` to confirm the
+        # AK/SK (and STS token, if any) are valid. Credentials are passed through
+        # environment variables so they never appear on the command line.
+        extra_env = {
+            "HUAWEICLOUD_SDK_AK": ak,
+            "HUAWEICLOUD_SDK_SK": sk,
+            "HUAWEICLOUD_REGION": region,
         }
-        request.query_params = []
-
-        signed_request = signer.sign(request)
-
-        headers = {}
-        for key, value in signed_request.header_params.items():
-            if isinstance(value, bytes):
-                headers[key] = value.decode('iso-8859-1')
-            else:
-                headers[key] = str(value)
-        
-        # 临时凭据手动补充X-Security-Token请求头（原生SDK签名后不会自动加，需主动注入）
         if security_token:
-            headers["X-Security-Token"] = security_token
-
-        resp = requests.get(iam_endpoint, headers=headers, timeout=30)
-
-        if resp.status_code == 200:
-            print("[OK] Credentials verification successful!")
-            return True
-        else:
-            print(f"[ERROR] Credentials verification failed: HTTP {resp.status_code}, Resp:{resp.text}")
-            return False
-
+            extra_env["HUAWEICLOUD_SDK_SECURITY_TOKEN"] = security_token
+        hcloud_json(["IAM", "KeystoneListProjects", "--cli-region=cn-north-4"], extra_env=extra_env)
+        print("[OK] Credentials verification successful!")
+        return True
     except Exception as e:
         print(f"[ERROR] Credentials verification exception: {e}")
-        import traceback
-        traceback.print_exc()
         return False
 
 def main():
@@ -167,3 +125,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

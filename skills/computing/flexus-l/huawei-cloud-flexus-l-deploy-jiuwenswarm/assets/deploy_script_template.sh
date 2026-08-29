@@ -80,8 +80,11 @@ API_KEY=your-api-key-here
 MODEL_NAME=gpt-4
 MODEL_PROVIDER=openai
 
-JIUWENSWARM_HOST=0.0.0.0
-JIUWENSWARM_PORT=5173
+FRONTEND_HOST=0.0.0.0
+FRONTEND_PORT=5173
+WEB_HOST=0.0.0.0
+AGENT_SERVER_HOST=0.0.0.0
+GATEWAY_HOST=0.0.0.0
 JIUWENSWARM_LOG_LEVEL=INFO
 ENVEOL
 
@@ -228,7 +231,7 @@ log_info "Waiting for service to start..."
 sleep 15
 
 log_info "Checking port listening..."
-if netstat -tln | grep -q ':5173'; then
+if ss -tln | grep -q ':5173'; then
     log_success "Port 5173 is listening"
 else
     log_error "Port 5173 is not listening"
