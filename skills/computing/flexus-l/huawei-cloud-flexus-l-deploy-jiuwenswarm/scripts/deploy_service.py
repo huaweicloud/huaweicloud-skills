@@ -28,6 +28,7 @@ try:
         coc_query_execution,
         coc_create_script,
         coc_execute_script,
+        rms_list_all_resources,
         print_header,
         print_success,
         print_error,
@@ -60,42 +61,24 @@ def get_credentials():
     return AK, SK, REGION, SECURITY_TOKEN
 
 def query_instance_by_ip(public_ip):
-    from huaweicloudsdkcore.auth.credentials import GlobalCredentials, BasicCredentials
-    from huaweicloudsdkrms.v1 import RmsClient
-    from huaweicloudsdkrms.v1.region.rms_region import RmsRegion
-
     # Get credentials
     ak, sk, region, security_token = get_credentials()
-    
-    # RMS requires GlobalCredentials
-    if security_token:
-        credentials = GlobalCredentials(ak, sk).with_security_token(security_token)
-    else:
-        credentials = GlobalCredentials(ak, sk)
-    
-    client = RmsClient.new_builder() \
-        .with_credentials(credentials) \
-        .with_region(RmsRegion.value_of(region)) \
-        .build()
 
-    from huaweicloudsdkrms.v1 import model
-    request = model.ListAllResourcesRequest()
-    request.region_id = region
-    request.type = "hcss.l-instance"
-    request.limit = 200
+    try:
+        # Query via KooCLI: RMS is a global service, always use the unified cn-north-4
+        # endpoint. Query Flexus L instances across ALL regions: the instance may be
+        # created in a region different from the passed-in region, so do not filter by
+        # region_id here; the actual region is read from the RMS entity below.
+        resources = rms_list_all_resources(resource_type="hcss.l-instance", limit=200)
 
-    response = client.list_all_resources(request)
-    resources = response.resources if hasattr(response, 'resources') else []
+        for r in resources:
+            name = r.get('name', '') or r.get('resource_name', '')
+            instance_id = r.get('id', '') or r.get('resource_id', '')
+            props = r.get('properties') or {}
 
-    for r in resources:
-        name = getattr(r, 'name', '') or getattr(r, 'resource_name', '')
-        instance_id = getattr(r, 'id', '') or getattr(r, 'resource_id', '')
-        props = getattr(r, 'properties', None)
+            ip = None
+            ecs_instance_id = None
 
-        ip = None
-        ecs_instance_id = None
-
-        if props:
             resources_list = props.get('resources', [])
             for res in resources_list:
                 if isinstance(res, dict):
@@ -109,15 +92,17 @@ def query_instance_by_ip(public_ip):
                             if key == 'associate_instance_id':
                                 ecs_instance_id = value
 
-        if ip == public_ip:
-            return {
-                'instance_name': name,
-                'instance_id': instance_id,
-                'ecs_instance_id': ecs_instance_id,
-                'public_ip': ip,
-                'region': region,
-                'status': props.get('status') if props else 'UNKNOWN'
-            }
+            if ip == public_ip:
+                return {
+                    'instance_name': name,
+                    'instance_id': instance_id,
+                    'ecs_instance_id': ecs_instance_id,
+                    'public_ip': ip,
+                    'region': r.get('region_id', '') or region,
+                    'status': props.get('status') if props else 'UNKNOWN'
+                }
+    except Exception as e:
+        print_error(f"Failed to query Flexus L instance information: {e}")
 
     return None
 
@@ -135,7 +120,7 @@ def get_deploy_script():
             return f.read()
     return None
 
-def execute_script_via_coc(client, instance_id, ecs_instance_id, script_content):
+def execute_script_via_coc(client, instance_id, ecs_instance_id, script_content, region):
     from huaweicloudsdkcoc.v1.model.create_script_request import CreateScriptRequest
     from huaweicloudsdkcoc.v1.model.add_script_model import AddScriptModel
     from huaweicloudsdkcoc.v1.model.script_properties_model import ScriptPropertiesModel
@@ -168,9 +153,6 @@ def execute_script_via_coc(client, instance_id, ecs_instance_id, script_content)
 
         execute_param = ScriptExecuteParam(timeout=1799, success_rate=100, execute_user="root")
 
-        # Get credentials
-        _, _, region, _ = get_credentials()
-        
         instance = ExecuteResourceInstance(
             resource_id=instance_id,
             region_id=region,
@@ -211,17 +193,17 @@ def get_script_job_status(client, execute_uuid):
     if result.get("ok"):
         job_info = result.get("result", {})
         
-        # 确保状态字段存在
+        # Ensure status field exists
         status = job_info.get('status', 'UNKNOWN')
         job_info['status'] = status
         
-        # 添加统计信息（如果API没有提供，则计算）
+        # Add statistics (calculate if API doesn't provide them)
         total_count = job_info.get('total_count', 0)
         success_count = job_info.get('success_count', 0)
         fail_count = job_info.get('fail_count', 0)
         processing_count = job_info.get('processing_count', 0)
         
-        # 如果API没有提供统计信息，根据状态计算
+        # If API doesn't provide statistics, calculate based on status
         if total_count == 0:
             if status == 'FINISHED':
                 success_count = 1
@@ -239,7 +221,7 @@ def get_script_job_status(client, execute_uuid):
                 fail_count = 0
                 processing_count = 1
         
-        # 计算进度
+        # Calculate progress
         if total_count > 0:
             progress = (success_count + fail_count) / total_count * 100
             job_info['progress'] = f"{progress:.1f}%"
@@ -254,37 +236,37 @@ def get_script_job_status(client, execute_uuid):
         
         return job_info
     else:
-        # 查询失败，返回错误信息
+        # Query failed, return error message
         error_info = result.get("error", {})
-        log.error(f"状态查询失败: {error_info.get('message', '未知错误')}")
-        log.error(f"错误码: {error_info.get('code', 'UNKNOWN')}")
+        log.error(f"Status query failed: {error_info.get('message', 'Unknown error')}")
+        log.error(f"Error code: {error_info.get('code', 'UNKNOWN')}")
         return None
 
-def deploy_jiuwenswarm(instance_id, ecs_instance_id, public_ip, wait=True, timeout=EXECUTION_TIMEOUT):
+def deploy_jiuwenswarm(instance_id, ecs_instance_id, public_ip, region, wait=True, timeout=EXECUTION_TIMEOUT):
     print_header("Phase 4: COC Remote Deployment of JiuwenSwarm Service")
 
     client = get_coc_client()
 
     deploy_script = get_deploy_script()
     if not deploy_script:
-        print_error("无法读取部署脚本模板")
+        print_error("Failed to read deployment script template")
         return None
 
-    print_info(f"在实例 {public_ip} 上执行JiuwenSwarm部署脚本...")
-    print_info(f"脚本类型: shell")
-    print_info(f"超时时间: {timeout}秒 ({timeout/60:.0f}分钟)")
+    print_info(f"Executing JiuwenSwarm deployment script on instance {public_ip}...")
+    print_info(f"Script type: shell")
+    print_info(f"Timeout: {timeout} seconds ({timeout/60:.0f} minutes)")
 
-    result = execute_script_via_coc(client, instance_id, ecs_instance_id, deploy_script)
+    result = execute_script_via_coc(client, instance_id, ecs_instance_id, deploy_script, region)
 
     if not result:
-        print_error("部署任务提交失败")
+        print_error("Deployment task submission failed")
         return None
 
     execute_uuid = None
     if hasattr(result, 'data'):
         execute_uuid = result.data
 
-    print_info("部署任务已提交")
+    print_info("Deployment task submitted")
     print_info(f"Execute UUID: {execute_uuid}")
 
     result_file = Path(__file__).parent / "coc_deploy_result.json"
@@ -294,10 +276,10 @@ def deploy_jiuwenswarm(instance_id, ecs_instance_id, public_ip, wait=True, timeo
             'instance_id': instance_id,
             'public_ip': public_ip
         }, f, indent=2, ensure_ascii=False)
-    print_info(f"部署结果已保存到: {result_file}")
+    print_info(f"Deployment result saved to: {result_file}")
 
     if wait:
-        print_info(f"等待部署完成 (超时: {timeout}秒)...")
+        print_info(f"Waiting for deployment to complete (timeout: {timeout} seconds)...")
         print("=" * 60)
 
         start_time = time.time()
@@ -384,7 +366,7 @@ def deploy_jiuwenswarm(instance_id, ecs_instance_id, public_ip, wait=True, timeo
                             print_info(f"... (Output truncated, total {len(output)} characters)")
 
                     print_info("="*50)
-                    return None  # 返回None表示执行失败
+                    return None  # Return None to indicate execution failure
 
             time.sleep(EXECUTION_INTERVAL)
 
@@ -399,7 +381,7 @@ def parse_args():
     parser.add_argument('--ecs-instance-id', type=str, help='ECS instance ID')
     parser.add_argument('--ip', type=str, help='Instance public IP address')
     parser.add_argument('--wait', action='store_true', default=True, help='Wait for deployment to complete')
-    parser.add_argument('--timeout', type=int, default=1800, help='Timeout in seconds')
+    parser.add_argument('--timeout', type=int, default=1799, help='Timeout in seconds (must be < 1800 per COC API limit)')
     return parser.parse_args()
 
 def main():
@@ -417,7 +399,8 @@ def main():
         instance_info = {
             'instance_id': args.instance_id,
             'ecs_instance_id': args.ecs_instance_id,
-            'public_ip': args.ip
+            'public_ip': args.ip,
+            'region': REGION
         }
     elif args.ip:
         print(f"[INFO] Querying instance info by public IP: {args.ip}")
@@ -432,15 +415,19 @@ def main():
             print("[INFO] Please specify --instance-id and --ip parameters, or ensure new_instance_info.json exists")
             sys.exit(1)
 
+    instance_region = instance_info.get('region', REGION)
+
     print(f"\nInstance Info:")
     print(f"  - Instance ID: {instance_info['instance_id']}")
     print(f"  - ECS Instance ID: {instance_info['ecs_instance_id']}")
     print(f"  - Public IP: {instance_info['public_ip']}")
+    print(f"  - Region: {instance_region}")
 
     execute_uuid = deploy_jiuwenswarm(
         instance_info['instance_id'],
         instance_info['ecs_instance_id'],
         instance_info['public_ip'],
+        instance_region,
         args.wait,
         args.timeout
     )

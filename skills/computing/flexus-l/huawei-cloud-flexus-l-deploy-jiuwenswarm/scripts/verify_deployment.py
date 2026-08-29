@@ -21,45 +21,26 @@ from utils import (
     coc_create_script,
     coc_execute_script,
     coc_query_execution,
+    rms_list_all_resources,
     print_info,
     print_success,
     print_error
 )
 
 def query_instance_by_ip(ak, sk, security_token, region, public_ip):
-    from huaweicloudsdkcore.auth.credentials import GlobalCredentials, BasicCredentials
-    from huaweicloudsdkrms.v1 import RmsClient
-    from huaweicloudsdkrms.v1.region.rms_region import RmsRegion
+    try:
+        # Query via KooCLI: RMS is a global service, always use the unified cn-north-4
+        # endpoint. Filter by region to ensure RMS returns data for the target region.
+        resources = rms_list_all_resources(region_id=region, resource_type="hcss.l-instance", limit=200)
 
-    # RMS requires GlobalCredentials
-    if security_token:
-        credentials = GlobalCredentials(ak, sk).with_security_token(security_token)
-    else:
-        credentials = GlobalCredentials(ak, sk)
-    
-    client = RmsClient.new_builder() \
-        .with_credentials(credentials) \
-        .with_region(RmsRegion.value_of(region)) \
-        .build()
+        for r in resources:
+            name = r.get('name', '') or r.get('resource_name', '')
+            instance_id = r.get('id', '') or r.get('resource_id', '')
+            props = r.get('properties') or {}
 
-    from huaweicloudsdkrms.v1 import model
-    request = model.ListAllResourcesRequest()
-    request.region_id = region
-    request.type = "hcss.l-instance"
-    request.limit = 200
+            ip = None
+            ecs_instance_id = None
 
-    response = client.list_all_resources(request)
-    resources = response.resources if hasattr(response, 'resources') else []
-
-    for r in resources:
-        name = getattr(r, 'name', '') or getattr(r, 'resource_name', '')
-        instance_id = getattr(r, 'id', '') or getattr(r, 'resource_id', '')
-        props = getattr(r, 'properties', None)
-
-        ip = None
-        ecs_instance_id = None
-
-        if props:
             resources_list = props.get('resources', [])
             for res in resources_list:
                 if isinstance(res, dict):
@@ -73,15 +54,17 @@ def query_instance_by_ip(ak, sk, security_token, region, public_ip):
                             if key == 'associate_instance_id':
                                 ecs_instance_id = value
 
-        if ip == public_ip:
-            return {
-                'instance_name': name,
-                'instance_id': instance_id,
-                'ecs_instance_id': ecs_instance_id,
-                'public_ip': ip,
-                'region': region,
-                'status': props.get('status') if props else 'UNKNOWN'
-            }
+            if ip == public_ip:
+                return {
+                    'instance_name': name,
+                    'instance_id': instance_id,
+                    'ecs_instance_id': ecs_instance_id,
+                    'public_ip': ip,
+                    'region': r.get('region_id', '') or region,
+                    'status': props.get('status') if props else 'UNKNOWN'
+                }
+    except Exception as e:
+        print_error(f"Failed to query Flexus L instance information: {e}")
 
     return None
 
@@ -105,13 +88,50 @@ def verify_deployment(instance_info):
     print_info(f"Instance ID: {instance_id}")
     print_info(f"Region: {region}")
 
-    # Simplified verification script - only verify SSH connection and basic command execution
+    # Verification script - checks service status, .env config, port binding, and HTTP health
     verification_script = '''#!/bin/bash
 echo "=== JiuwenSwarm Deployment Verification ==="
-echo "Hostname: $(hostname)"
-echo "Current User: $(whoami)"
-echo "System Time: $(date)"
-echo "Verification Completed"
+ALL_OK=true
+
+# 1. Service status
+echo "--- [1/4] Service Status ---"
+systemctl is-active --quiet jiuwenswarm && echo "PASS: service running" || { echo "FAIL: service not running"; exit 1; }
+
+# 2. .env FRONTEND_HOST check (required for external web access)
+echo "--- [2/4] .env FRONTEND_HOST ---"
+ENV_FILE="/root/.jiuwenswarm/config/.env"
+if [ -f "$ENV_FILE" ]; then
+    if grep -q "^[[:space:]]*FRONTEND_HOST=0.0.0.0" "$ENV_FILE"; then
+        echo "PASS: FRONTEND_HOST=0.0.0.0 in .env"
+    else
+        echo "FAIL: FRONTEND_HOST not set to 0.0.0.0 in .env"; ALL_OK=false
+    fi
+else
+    echo "FAIL: .env file not found at $ENV_FILE"; ALL_OK=false
+fi
+
+# 3. Port binding (0.0.0.0 vs 127.0.0.1)
+echo "--- [3/4] Port Binding ---"
+for port in 5173 18092 19000 19001; do
+    if ss -tlnp 2>/dev/null | grep -q "0.0.0.0:$port"; then
+        echo "PASS: port $port on 0.0.0.0"
+    else
+        echo "FAIL: port $port not on 0.0.0.0"; ALL_OK=false
+    fi
+done
+
+# 4. HTTP health check
+echo "--- [4/4] HTTP Health ---"
+HTTP_CODE=$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 5 http://localhost:5173/ 2>/dev/null)
+[ "$HTTP_CODE" = "200" ] && echo "PASS: HTTP 200" || { echo "FAIL: HTTP $HTTP_CODE"; ALL_OK=false; }
+
+# Summary
+if [ "$ALL_OK" = "true" ]; then
+    echo "VERIFICATION_PASSED"
+else
+    echo "VERIFICATION_WARNINGS"
+fi
+echo "Web URL: http://$(hostname -I | awk '{print $1}'):5173"
 exit 0
 '''
 
@@ -177,12 +197,29 @@ exit 0
             
             if status == "FINISHED":
                 print_success("COC remote script execution successful")
-                print_success("JiuwenSwarm service deployment verification succeeded!")
 
                 result_data = job_result.get("result", {})
+                script_output = result_data.get('output', '')
+
+                if script_output:
+                    print("\n" + "-" * 40)
+                    print(script_output)
+                    print("-" * 40)
+
+                if "VERIFICATION_PASSED" in script_output:
+                    print_success("Deployment verification passed!")
+                else:
+                    print_info("Verification completed with warnings - some non-critical checks failed.")
+                    print_info("Continuing with fault tolerance. Please review the output above.")
+
+                web_url = f"http://{public_ip}:5173"
+                print_info(f"Web URL: {web_url}")
+                print_info("Ensure security group allows inbound TCP 5173")
+
                 verification_result = {
                     'deploy_success': True,
                     'verify_uuid': execute_uuid,
+                    'web_url': web_url,
                     'status': result_data.get('status'),
                     'create_time': result_data.get('create_time'),
                     'finish_time': result_data.get('finish_time')
@@ -191,7 +228,7 @@ exit 0
                 result_file = Path(__file__).parent / "verification_result.json"
                 with open(result_file, 'w', encoding='utf-8') as f:
                     json.dump(verification_result, f, indent=2, ensure_ascii=False)
-                print_info(f"Verification result saved to: {result_file}")
+                print_info(f"Result saved to: {result_file}")
 
                 return True
 

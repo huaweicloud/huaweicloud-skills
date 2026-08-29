@@ -39,9 +39,10 @@
 - [ ] Service started successfully
 
 ### Phase 5: Verify Deployment
-- [ ] Port 5173 listening
-- [ ] Service health check passed
-- [ ] Web interface accessible
+- [ ] All ports bound to 0.0.0.0: 5173, 18092, 19000, 19001
+- [ ] Local health check passed (curl localhost:5173 returns 200)
+- [ ] Security group allows inbound TCP 5173
+- [ ] Web interface accessible from external IP (http://{public_ip}:5173)
 
 ### Phase 6: Model Configuration
 - [ ] API_BASE configured
@@ -58,7 +59,7 @@
 
 - [ ] Service auto-start configured correctly
 - [ ] Log files generated normally
-- [ ] Security group rules correct
+- [ ] Security group allows port 5173
 - [ ] Backup strategy configured
 
 ## Rollback Checks

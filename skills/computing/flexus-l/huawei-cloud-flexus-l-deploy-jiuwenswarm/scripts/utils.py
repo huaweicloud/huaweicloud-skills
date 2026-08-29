@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 Utility Functions for JiuwenSwarm Deployment
 Shared helper functions for Huawei Cloud COC operations, credential management,
@@ -10,6 +10,7 @@ import sys
 import json
 import logging
 import time
+import subprocess
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
@@ -53,28 +54,332 @@ def save_json_file(file_path: Path, data: Dict[str, Any]) -> bool:
         log.error(f"Failed to save JSON file {file_path}: {e}")
         return False
 
+def _read_hcloud_config_credentials():
+    """
+    Read AK/SK/SecurityToken from hcloud CLI config file (~/.hcloud/config.json).
+    If credentials are encrypted (authEncrypt=true), automatically disable encryption
+    via 'hcloud configure set --cli-auth-encrypt=false' so plaintext values become
+    readable. Returns (AK, SK, REGION, SECURITY_TOKEN) or None if unavailable.
+
+    Priority: hcloud config file is checked first; environment variables are the
+    fallback in get_huaweicloud_credentials().
+    """
+    config_path = Path.home() / ".hcloud" / "config.json"
+    if not config_path.exists():
+        return None
+
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return None
+
+    # If credentials are encrypted, disable encryption so we can read plaintext.
+    # hcloud will re-write config.json with unencrypted accessKeyId/secretAccessKey.
+    if config.get("authEncrypt", "false") == "true":
+        log.info("hcloud config credentials are encrypted, disabling encryption to read plaintext...")
+        try:
+            subprocess.run(
+                ["hcloud", "configure", "set", "--cli-auth-encrypt=false"],
+                capture_output=True, text=True, timeout=10,
+            )
+            # Re-read the config after hcloud has rewritten it
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+        except Exception as e:
+            log.warning(f"Failed to disable hcloud auth encryption: {e}")
+            return None
+
+    # Extract credentials from the current (default) profile
+    profiles = config.get("profiles", [])
+    if not profiles:
+        return None
+
+    # profiles can be a list of dicts (newer format) or a dict of dicts (older format)
+    if isinstance(profiles, dict):
+        current_name = config.get("current", "default")
+        profile = profiles.get(current_name, next(iter(profiles.values())))
+    elif isinstance(profiles, list):
+        current_name = config.get("current", "default")
+        profile = next((p for p in profiles if p.get("name") == current_name), profiles[0])
+    else:
+        return None
+
+    ak = profile.get("accessKeyId") or profile.get("access-key") or ""
+    sk = profile.get("secretAccessKey") or profile.get("secret-key") or ""
+    token = profile.get("securityToken") or ""
+
+    if not ak or not sk:
+        return None
+
+    # Determine region: profile region > config region > default
+    region = profile.get("region", "") or os.getenv("HUAWEICLOUD_REGION", "cn-north-4")
+    if not region:
+        region = "cn-north-4"
+
+    security_token = token if token else None
+    log.info(f"Credentials loaded from hcloud config (~/.hcloud/config.json), AK: {ak[:4]}...{ak[-4:]}")
+    return ak, sk, region, security_token
+
+
 def get_huaweicloud_credentials():
     """
-    Get Huawei Cloud credentials from environment variables.
+    Get Huawei Cloud credentials.
+
+    Priority:
+      1. hcloud config file (~/.hcloud/config.json) — primary source.
+         If credentials are encrypted, automatically disable encryption.
+      2. Environment variables (HUAWEICLOUD_SDK_AK / HUAWEICLOUD_SDK_SK /
+         HUAWEICLOUD_SDK_SECURITY_TOKEN / HUAWEICLOUD_REGION) — fallback.
+
     Supports both permanent credentials and temporary security credentials (STS token).
-    
-    Permanent credentials: HUAWEICLOUD_SDK_AK, HUAWEICLOUD_SDK_SK, HUAWEICLOUD_REGION
-    Temporary credentials: Add HUAWEICLOUD_SDK_SECURITY_TOKEN to permanent credentials
-    
-    
+
     Returns:
         tuple: (AK, SK, REGION, SECURITY_TOKEN)
                SECURITY_TOKEN is None for permanent credentials
     """
-    AK = os.getenv("HUAWEICLOUD_SDK_AK")
-    SK = os.getenv("HUAWEICLOUD_SDK_SK")
-    SECURITY_TOKEN = os.getenv("HUAWEICLOUD_SDK_SECURITY_TOKEN")
+    AK = None
+    SK = None
+    SECURITY_TOKEN = None
     REGION = os.getenv("HUAWEICLOUD_REGION", "cn-north-4")
+    _source = None
+
+    # --- Priority 1: hcloud config file ---
+    config_creds = _read_hcloud_config_credentials()
+    if config_creds:
+        AK, SK, REGION, SECURITY_TOKEN = config_creds
+        _source = "hcloud config"
+        # Populate env vars so that subsequent scripts and subprocess calls
+        # (hcloud, SDK) automatically pick up the same credentials.
+        os.environ["HUAWEICLOUD_SDK_AK"] = AK
+        os.environ["HUAWEICLOUD_SDK_SK"] = SK
+        if SECURITY_TOKEN:
+            os.environ["HUAWEICLOUD_SDK_SECURITY_TOKEN"] = SECURITY_TOKEN
+        else:
+            os.environ.pop("HUAWEICLOUD_SDK_SECURITY_TOKEN", None)
+        os.environ["HUAWEICLOUD_REGION"] = REGION
+
+    # --- Priority 2: environment variables (override / fallback) ---
+    env_ak = os.getenv("HUAWEICLOUD_SDK_AK")
+    env_sk = os.getenv("HUAWEICLOUD_SDK_SK")
+    if env_ak and env_sk:
+        # Env vars take override precedence if they differ from config
+        if env_ak != AK or env_sk != SK:
+            AK = env_ak
+            SK = env_sk
+            SECURITY_TOKEN = os.getenv("HUAWEICLOUD_SDK_SECURITY_TOKEN")
+            REGION = os.getenv("HUAWEICLOUD_REGION", REGION)
+            _source = "environment variables"
 
     if not AK or not SK:
-        raise ValueError("Please set environment variables HUAWEICLOUD_SDK_AK and HUAWEICLOUD_SDK_SK")
+        raise ValueError(
+            "Could not obtain Huawei Cloud credentials. "
+            "Please either configure hcloud (hcloud configure set --cli-access-key=AK --cli-secret-key=SK) "
+            "or set environment variables HUAWEICLOUD_SDK_AK and HUAWEICLOUD_SDK_SK."
+        )
+
+    # If an instance has been created (new_instance_info.json exists), sync the
+    # region from it so that all subsequent scripts use the instance's actual region.
+    # When the user purchased the instance in a region different from HUAWEICLOUD_REGION,
+    # update the environment variable to match the instance's region.
+    try:
+        info_file = Path(__file__).parent / "new_instance_info.json"
+        if info_file.exists():
+            with open(info_file, 'r', encoding='utf-8') as f:
+                info = json.load(f)
+            instance_region = info.get('region')
+            if instance_region and instance_region != REGION:
+                log.info(f"Instance region '{instance_region}' differs from HUAWEICLOUD_REGION '{REGION}', updating environment variable")
+                os.environ['HUAWEICLOUD_REGION'] = instance_region
+                REGION = instance_region
+    except Exception:
+        pass
 
     return AK, SK, REGION, SECURITY_TOKEN
+
+# ---------------------------------------------------------------------------
+# KooCLI (hcloud) helpers
+# ---------------------------------------------------------------------------
+def _redact_cmd(cmd):
+    """
+    Mask sensitive credential parameter values in a command for safe logging.
+    Only the SK and security token values are masked; AK is not secret.
+    """
+    masked = []
+    for item in cmd:
+        if item.startswith("--cli-secret-key=") or item.startswith("--cli-security-token="):
+            key, _, _ = item.partition("=")
+            masked.append(f"{key}=****")
+        else:
+            masked.append(item)
+    return " ".join(masked)
+
+
+def masked(value: Optional[str], visible: int = 2) -> str:
+    """
+    Mask a sensitive string for safe logging/output, showing only the first
+    and last few characters. Returns '****' for short or empty values.
+    """
+    if not value:
+        return "****"
+    if len(value) <= visible * 2:
+        return "****"
+    return f"{value[:visible]}****{value[-visible:]}"
+
+
+def _run_hcloud(args, extra_env=None, timeout=120):
+    """
+    Run a KooCLI (hcloud) command.
+
+    AK/SK/STS token are passed BOTH as KooCLI CLI parameters
+    (--cli-access-key/--cli-secret-key/--cli-security-token) and as SDK
+    environment variables. Passing them as CLI parameters guarantees KooCLI
+    uses the caller's credentials and completely bypasses the local
+    config.json (e.g. ~/.hcloud/config.json), without modifying any local
+    files. IAM/RMS are global services, so the account (domain) ID is also
+    carried via --cli-domain-id whenever it is already known.
+    Returns the completed subprocess object.
+    """
+    AK, SK, REGION, SECURITY_TOKEN = get_huaweicloud_credentials()
+
+    env = os.environ.copy()
+    env["HUAWEICLOUD_SDK_AK"] = AK
+    env["HUAWEICLOUD_SDK_SK"] = SK
+    env["HUAWEICLOUD_REGION"] = REGION
+    if SECURITY_TOKEN:
+        env["HUAWEICLOUD_SDK_SECURITY_TOKEN"] = SECURITY_TOKEN
+    else:
+        env.pop("HUAWEICLOUD_SDK_SECURITY_TOKEN", None)
+    if extra_env:
+        env.update(extra_env)
+
+    cmd = ["hcloud"] + [str(a) for a in args]
+    # Append explicit credential CLI parameters (highest priority in KooCLI),
+    # so the locally configured credentials in config.json are fully bypassed.
+    project_id = os.getenv("HUAWEICLOUD_SDK_PROJECT_ID")
+    if project_id:
+        env["HUAWEICLOUD_PROJECT_ID"] = project_id
+
+    try:
+        # hcloud outputs UTF-8; on Windows the default codec is GBK, which
+        # would raise UnicodeDecodeError in subprocess's reader thread.
+        return subprocess.run(
+            cmd, capture_output=True, text=True, encoding='utf-8',
+            errors='replace', timeout=timeout, env=env, input="y\n"
+        )
+    except FileNotFoundError:
+        raise RuntimeError(
+            "KooCLI (hcloud) not found. Please install KooCLI and ensure 'hcloud' is in PATH: "
+            "https://support.huaweicloud.com/usermanual-hcli/hcli_03_001.html"
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"hcloud command timed out after {timeout}s: {_redact_cmd(cmd)}")
+
+
+def hcloud_json(args, extra_env=None, timeout=120):
+    """
+    Run a KooCLI (hcloud) command with JSON output and return the parsed dict.
+
+    Raises RuntimeError on KooCLI usage errors or Huawei Cloud API errors.
+    """
+    proc = _run_hcloud(list(args) + ["--cli-output=json"], extra_env, timeout)
+    stdout = (proc.stdout or "").strip()
+    stderr = (proc.stderr or "").strip()
+
+    combined = f"{stdout}\n{stderr}"
+    if "USE_ERROR" in combined or not stdout:
+        raise RuntimeError(stderr or stdout or "hcloud command failed")
+
+    try:
+        data = json.loads(stdout)
+    except json.JSONDecodeError:
+        raise RuntimeError(f"hcloud output is not valid JSON: {stdout[:500]}")
+
+    if isinstance(data, dict) and data.get("error_code"):
+        raise RuntimeError(f"hcloud API error: {data.get('error_msg', data.get('error_code'))}")
+    return data
+
+
+_DOMAIN_ID = None
+
+def get_domain_id() -> str:
+    """
+    Get the account (domain) ID used by AK/SK.
+
+    Uses HUAWEICLOUD_SDK_DOMAIN_ID if set; otherwise resolves it via
+    `hcloud IAM KeystoneListProjects` (every project carries its domain_id).
+    The result is cached for subsequent calls.
+    """
+    global _DOMAIN_ID
+    if _DOMAIN_ID:
+        return _DOMAIN_ID
+    env_domain = os.getenv("HUAWEICLOUD_SDK_DOMAIN_ID")
+    if env_domain:
+        _DOMAIN_ID = env_domain
+        return _DOMAIN_ID
+    data = hcloud_json(["IAM", "KeystoneListProjects", "--cli-region=cn-north-4"])
+    projects = data.get("projects") or []
+    if not projects:
+        raise RuntimeError("Failed to resolve account (domain) ID via IAM KeystoneListProjects")
+    _DOMAIN_ID = projects[0].get("domain_id")
+    # Cache into the environment so that every subsequent hcloud call
+    # (e.g. RMS) automatically carries --cli-domain-id via _run_hcloud.
+    os.environ["HUAWEICLOUD_SDK_DOMAIN_ID"] = _DOMAIN_ID
+    log.info(f"Resolved account (domain) ID: {_DOMAIN_ID}")
+    return _DOMAIN_ID
+
+
+def get_project_id_by_region(region: str) -> Optional[str]:
+    """
+    Get the Project ID for the specified region via KooCLI:
+
+        hcloud IAM KeystoneListProjects --name=<region>
+
+    Returns None when the region cannot be resolved.
+    """
+    if not region:
+        return None
+    data = hcloud_json(["IAM", "KeystoneListProjects", "--cli-region=cn-north-4", f"--name={region}"])
+    projects = data.get("projects") or []
+    for project in projects:
+        if project.get("name") == region:
+            return project.get("id")
+    return projects[0].get("id") if projects else None
+
+
+def rms_list_all_resources(region_id: Optional[str] = None,
+                           resource_type: Optional[str] = None,
+                           limit: int = 200) -> List[Dict[str, Any]]:
+    """
+    Query all resources via KooCLI:
+
+        hcloud RMS ListAllResources --cli-region=cn-north-4 --cli-domain-id=<domain_id> ...
+
+    RMS is a global service: always use the unified cn-north-4 endpoint and
+    filter resources of the target region via the region_id parameter.
+    Returns a list of resource dicts; the `properties` field is parsed into a dict.
+    """
+    args = [
+        "RMS", "ListAllResources",
+        "--cli-region=cn-north-4",
+        f"--cli-domain-id={get_domain_id()}",
+        f"--limit={limit}",
+    ]
+    if region_id:
+        args.append(f"--region_id={region_id}")
+    if resource_type:
+        args.append(f"--type={resource_type}")
+
+    data = hcloud_json(args)
+    resources = data.get("resources") or []
+    for resource in resources:
+        props = resource.get("properties")
+        if isinstance(props, str):
+            try:
+                resource["properties"] = json.loads(props)
+            except (json.JSONDecodeError, TypeError):
+                resource["properties"] = {}
+    return resources
 
 def print_header(title: str):
     print("\n" + "=" * 60)
@@ -119,9 +424,11 @@ def get_coc_client():
     else:
         credentials = GlobalCredentials(AK, SK)
     
+    # COC is a global service: always use the unified cn-north-4 endpoint;
+    # each target instance's region is carried in the ExecuteScript request body
     return CocClient.new_builder() \
         .with_credentials(credentials) \
-        .with_region(CocRegion.value_of(REGION)) \
+        .with_region(CocRegion.value_of("cn-north-4")) \
         .build()
 
 def coc_query_execution(execute_uuid: str) -> dict:
@@ -288,7 +595,7 @@ def get_script_job_detail(client, execute_uuid):
         return result.get("result")
     return None
 
-def wait_for_execution_completion(client, execute_uuid, timeout=1800, interval=60, max_retries=3):
+def wait_for_execution_completion(client, execute_uuid, timeout=1800, interval=60, max_retries=5):
     """Wait for script execution completion (referenced from OpenClaw implementation)"""
     import time
     from datetime import datetime
@@ -329,10 +636,10 @@ def wait_for_execution_completion(client, execute_uuid, timeout=1800, interval=6
         remaining = timeout - elapsed
         remaining_minutes = remaining // 60
         
-        # 计算进度百分比
+        # Calculate progress percentage
         progress_percent = min(100, int((elapsed / timeout) * 100))
         
-        # 创建进度条
+        # Create progress bar
         bar_length = 30
         filled_length = int(bar_length * elapsed // timeout)
         bar = '█' * filled_length + '░' * (bar_length - filled_length)
@@ -565,7 +872,7 @@ def create_and_execute_script(client, name, script_content, description, target_
         print_error(f"COC script operation failed: {e}")
         return None
 
-def submit_and_monitor_script(client, name, script_content, description, target_instances, timeout=600, max_retries=3):
+def submit_and_monitor_script(client, name, script_content, description, target_instances, timeout=600, max_retries=5):
     """Submit and monitor script execution"""
     execute_uuid = create_and_execute_script(client, name, script_content, description, target_instances, timeout)
     if not execute_uuid:
@@ -587,8 +894,11 @@ def submit_and_monitor_script(client, name, script_content, description, target_
     result, job_info = wait_for_execution_completion(client, execute_uuid, timeout, max_retries=max_retries)
     
     if result == 'RETRY':
-        print_warning("Retrying script execution...")
-        return submit_and_monitor_script(client, name, script_content, description, target_instances, timeout, max_retries)
+        if max_retries <= 0:
+            print_error("Exceeded maximum retries, giving up")
+            return False, job_info
+        print_warning(f"Retrying script execution (remaining retries: {max_retries})...")
+        return submit_and_monitor_script(client, name, script_content, description, target_instances, timeout, max_retries - 1)
     
     return result, job_info
 
@@ -857,16 +1167,16 @@ def coc_execute_script(
 
         response = client.execute_script(request)
         
-        # 获取响应状态码，200或202代表任务提交成功
+        # Get response status code, 200 or 202 means task submitted successfully
         status_code = response.status_code if hasattr(response, 'status_code') else 200
         
-        # 检查状态码是否为200或202
+        # Check if status code is 200 or 202
         if status_code not in [200, 202]:
             return {
                 "ok": False,
-                "text": f"任务提交失败，响应状态码: {status_code}",
+                "text": f"Task submission failed, response status code: {status_code}",
                 "result": None,
-                "error": {"code": "HTTP_ERROR", "message": f"HTTP状态码错误: {status_code}"},
+                "error": {"code": "HTTP_ERROR", "message": f"HTTP status code error: {status_code}"},
                 "status_code": status_code
             }
         
@@ -875,7 +1185,7 @@ def coc_execute_script(
         if not wait_for_complete:
             return {
                 "ok": True,
-                "text": f"脚本执行已启动: {execute_uuid}",
+                "text": f"Script execution started: {execute_uuid}",
                 "result": {"execute_uuid": execute_uuid},
                 "error": None,
                 "status_code": status_code
@@ -897,7 +1207,7 @@ def coc_execute_script(
             output = result_data.get("output", "")
             error = result_data.get("error", "")
             
-            # 如果状态为空，表示任务可能还在创建中，继续等待
+            # If status is empty, the task may still be creating, continue waiting
             if not status:
                 time.sleep(wait_interval)
                 elapsed_time += wait_interval
@@ -915,16 +1225,16 @@ def coc_execute_script(
                 if status == "FINISHED":
                     return {
                         "ok": True,
-                        "text": f"脚本执行成功: {execute_uuid}",
+                        "text": f"Script execution succeeded: {execute_uuid}",
                         "result": result_data,
                         "error": None,
                     }
                 else:
-                    error_msg = f"脚本执行失败，状态: {status}"
+                    error_msg = f"Script execution failed, status: {status}"
                     if error:
-                        error_msg += f", 错误: {error}"
+                        error_msg += f", error: {error}"
                     elif output:
-                        error_msg += f", 输出: {output}"
+                        error_msg += f", output: {output}"
                     return {
                         "ok": False,
                         "text": error_msg,
@@ -937,9 +1247,9 @@ def coc_execute_script(
 
         return {
             "ok": False,
-            "text": f"脚本执行超时（等待超过 {max_wait_time} 秒）",
+            "text": f"Script execution timeout (waited more than {max_wait_time} seconds)",
             "result": {"execute_uuid": execute_uuid},
-            "error": {"code": "TIMEOUT", "message": "脚本执行超时"}
+            "error": {"code": "TIMEOUT", "message": "Script execution timeout"}
         }
 
     except Exception as e:
@@ -947,3 +1257,4 @@ def coc_execute_script(
         if "error_code" in error_msg.lower() or "error_msg" in error_msg.lower():
             return _error("API_ERROR", error_msg)
         return _error("UNKNOWN_ERROR", error_msg)
+

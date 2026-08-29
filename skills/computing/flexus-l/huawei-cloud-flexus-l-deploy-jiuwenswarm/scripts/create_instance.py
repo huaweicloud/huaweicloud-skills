@@ -29,73 +29,44 @@ except ImportError:
 
 FLEXUS_API_ENDPOINT = "https://hcss.cn-north-4.myhuaweicloud.com/v1/light-instances"
 
+# Supported regions and their display names
+SUPPORTED_REGIONS = {
+    "cn-north-4": "华北-北京四",
+    "cn-east-3": "华东-上海一",
+    "cn-south-1": "华南-广州",
+    "cn-southwest-2": "西南-贵阳一"
+}
+
+# Region prefix mapping: hf. for most regions, ahf. for Guiyang (cn-southwest-2)
+REGION_SPEC_PREFIX = {
+    "cn-north-4": "hf.",
+    "cn-east-3": "hf.",
+    "cn-south-1": "hf.",
+    "cn-southwest-2": "ahf."
+}
+
 sys.path.insert(0, str(Path(__file__).parent))
-from utils import get_huaweicloud_credentials
+from utils import get_huaweicloud_credentials, get_project_id_by_region, rms_list_all_resources, masked
 
-
-def get_project_id_by_region(ak: str, sk: str, security_token: Optional[str], region: str) -> Optional[str]:
-    """Get Project ID for a specified region"""
-    iam_endpoint = "https://iam.myhuaweicloud.com/v3/projects"
-    
-    try:
-        from huaweicloudsdkcore.signer.signer import Signer
-        from huaweicloudsdkcore.sdk_request import SdkRequest
-        from huaweicloudsdkcore.auth.credentials import BasicCredentials, GlobalCredentials
-
-        if security_token:
-            credentials = BasicCredentials(ak, sk).with_security_token(security_token)
-        else:
-            credentials = BasicCredentials(ak, sk)
-        signer = Signer(credentials)
-        
-        request = SdkRequest()
-        request.method = "GET"
-        request.schema = "https"
-        request.host = "iam.myhuaweicloud.com"
-        request.resource_path = "/v3/projects"
-        request.body = ""
-        request.header_params = {
-            "Content-Type": "application/json",
-            "Client-Request-Id": str(uuid.uuid4())
-        }
-        if security_token:
-            request.header_params["X-Security-Token"] = security_token
-        request.query_params = []
-        
-        signed_request = signer.sign(request)
-        
-        headers = {}
-        for key, value in signed_request.header_params.items():
-            if isinstance(value, bytes):
-                headers[key] = value.decode('iso-8859-1')
-            else:
-                headers[key] = str(value)
-        
-        resp = requests.get(iam_endpoint, headers=headers, timeout=30)
-        if resp.status_code == 200:
-            data = resp.json()
-            projects = data.get('projects', [])
-            if projects:
-                for project in projects:
-                    project_name = project.get('name', '')
-                    if project_name == region:
-                        return project.get('id')
-                return projects[0].get('id')
-        return None
-    except Exception as e:
-        print(f"Failed to get Project ID: {e}")
-        return None
 
 def get_flexus_flavors_for_region(region: str):
+    """
+    Get flexus flavors for a specific region.
+    Beijing/Shanghai/Guangzhou use hf. prefix, Guiyang uses ahf. prefix.
+    
+    Available flavors:
+    - 2c-4g-50g: 2 vCPU, 4GB RAM, 50GB disk (hf.large.2.3m.linux / ahf.large.2.3m.linux)
+    - 2c-4g-70g: 2 vCPU, 4GB RAM, 70GB disk (hf.medium.1.linux / ahf.medium.1.linux)
+    - 4c-8g-180g: 4 vCPU, 8GB RAM, 180GB disk (hf.xlarge.1.linux / ahf.xlarge.1.linux)
+    """
+    prefix = REGION_SPEC_PREFIX.get(region, "hf.")
     return {
-        "small": "hf.small.1.linux",
-        "medium": "hf.medium.1.linux",
-        "large": "hf.large.1.linux",
-        "xlarge": "hf.xlarge.1.linux",
-        "2xlarge": "hf.2xlarge.1.linux"
+        "2c-4g-50g": f"{prefix}large.2.3m.linux",
+        "2c-4g-70g": f"{prefix}medium.1.linux",
+        "4c-8g-180g": f"{prefix}xlarge.1.linux"
     }
 
-def create_flexus_l_instance(ak, sk, security_token, project_id, region, instance_name, flavor="medium", wait=True, timeout=600):
+def create_flexus_l_instance(ak, sk, security_token, project_id, region, instance_name, flavor="2c-4g-50g", wait=True, timeout=600):
     flavors = get_flexus_flavors_for_region(region)
     flavor_ref = flavors.get(flavor)
     if not flavor_ref:
@@ -115,16 +86,11 @@ def create_flexus_l_instance(ak, sk, security_token, project_id, region, instanc
         "purchase_quantity": 1,
         "description": f"JiuwenSwarm deployment - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         "is_auto_renew": True,
-        "is_auto_pay": True,
-        "extra_resources": [
-            {"type": "evs", "size": 50},
-            {"type": "cbr", "size": 50},
-            {"type": "hss"}
-        ]
+        "is_auto_pay": True
     }
 
     if not project_id:
-        project_id = get_project_id_by_region(ak, sk, security_token, region)
+        project_id = get_project_id_by_region(region)
         if not project_id:
             raise ValueError(f"Failed to get Project ID for region {region}")
 
@@ -139,7 +105,8 @@ def create_flexus_l_instance(ak, sk, security_token, project_id, region, instanc
 
     signer = Signer(credentials)
 
-    parsed_url = urlparse(FLEXUS_API_ENDPOINT)
+    endpoint = FLEXUS_API_ENDPOINT
+    parsed_url = urlparse(endpoint)
     body_str = json.dumps(request_body, ensure_ascii=False, separators=(',', ':'))
 
     request = SdkRequest()
@@ -154,6 +121,8 @@ def create_flexus_l_instance(ak, sk, security_token, project_id, region, instanc
         "X-Id": "/v1/light-instances",
         "X-Project-Id": project_id
     }
+    if security_token:
+        request.header_params["X-Security-Token"] = security_token
     request.query_params = []
 
     signed_request = signer.sign(request)
@@ -164,12 +133,8 @@ def create_flexus_l_instance(ak, sk, security_token, project_id, region, instanc
             headers[key] = value.decode('iso-8859-1')
         else:
             headers[key] = str(value)
-    
-    # Manually add X-Security-Token header for temporary credentials (not automatically added by SDK signing)
-    if security_token:
-        headers["X-Security-Token"] = security_token
 
-    resp = requests.post(FLEXUS_API_ENDPOINT, headers=headers, data=body_str, timeout=30)
+    resp = requests.post(endpoint, headers=headers, data=body_str, timeout=30)
 
     if resp.status_code in [200, 201, 202]:
         result = resp.json()
@@ -180,89 +145,46 @@ def create_flexus_l_instance(ak, sk, security_token, project_id, region, instanc
         log.error(f"Instance creation failed: HTTP {resp.status_code}, {resp.text}")
         return None
 
-def query_instance_status(ak, sk, security_token, region, resource_id):
-    from huaweicloudsdkcore.auth.credentials import GlobalCredentials
-    from huaweicloudsdkrms.v1 import RmsClient
-    from huaweicloudsdkrms.v1.region.rms_region import RmsRegion
-
-    # RMS requires GlobalCredentials
-    if security_token:
-        credentials = GlobalCredentials(ak, sk).with_security_token(security_token)
-    else:
-        credentials = GlobalCredentials(ak, sk)
-    
-    client = RmsClient.new_builder() \
-        .with_credentials(credentials) \
-        .with_region(RmsRegion.value_of(region)) \
-        .build()
-
-    from huaweicloudsdkrms.v1 import model
-    request = model.ListAllResourcesRequest()
-    request.region_id = region
-    request.type = "hcss.l-instance"
-    request.limit = 200
-
-    response = client.list_all_resources(request)
-    resources = response.resources if hasattr(response, 'resources') else []
+def query_instance_status(region, resource_id):
+    # Query via KooCLI: RMS is a global service, always use the unified cn-north-4
+    # endpoint and filter resources of the target region via the region_id parameter.
+    resources = rms_list_all_resources(region_id=region, resource_type="hcss.l-instance", limit=200)
 
     for r in resources:
-        rid = getattr(r, 'id', '') or getattr(r, 'resource_id', '')
+        rid = r.get('id', '') or r.get('resource_id', '')
         if rid == resource_id:
-            props = getattr(r, 'properties', None)
-            if props:
-                return props.get('status', 'UNKNOWN')
-            return 'UNKNOWN'
+            props = r.get('properties') or {}
+            return props.get('status', 'UNKNOWN')
 
     return None
 
-def get_instance_info(ak, sk, security_token, region, resource_id):
-    from huaweicloudsdkcore.auth.credentials import GlobalCredentials
-    from huaweicloudsdkrms.v1 import RmsClient
-    from huaweicloudsdkrms.v1.region.rms_region import RmsRegion
-
-    # RMS requires GlobalCredentials
-    if security_token:
-        credentials = GlobalCredentials(ak, sk).with_security_token(security_token)
-    else:
-        credentials = GlobalCredentials(ak, sk)
-    
-    client = RmsClient.new_builder() \
-        .with_credentials(credentials) \
-        .with_region(RmsRegion.value_of(region)) \
-        .build()
-
-    from huaweicloudsdkrms.v1 import model
-    request = model.ListAllResourcesRequest()
-    request.region_id = region
-    request.type = "hcss.l-instance"
-    request.limit = 200
-
-    response = client.list_all_resources(request)
-    resources = response.resources if hasattr(response, 'resources') else []
+def get_instance_info(region, resource_id):
+    # Query via KooCLI: RMS is a global service, always use the unified cn-north-4
+    # endpoint and filter resources of the target region via the region_id parameter.
+    resources = rms_list_all_resources(region_id=region, resource_type="hcss.l-instance", limit=200)
 
     for r in resources:
-        rid = getattr(r, 'id', '') or getattr(r, 'resource_id', '')
+        rid = r.get('id', '') or r.get('resource_id', '')
         if rid == resource_id:
-            name = getattr(r, 'name', '') or getattr(r, 'resource_name', '')
+            name = r.get('name', '') or r.get('resource_name', '')
             instance_id = rid
-            props = getattr(r, 'properties', None)
+            props = r.get('properties') or {}
 
             public_ip = None
             ecs_instance_id = None
 
-            if props:
-                resources_list = props.get('resources', [])
-                for res in resources_list:
-                    if isinstance(res, dict):
-                        attrs = res.get('resource_attributes', [])
-                        for attr in attrs:
-                            if isinstance(attr, dict):
-                                key = attr.get('key')
-                                value = attr.get('value')
-                                if key == 'public_ip_address':
-                                    public_ip = value
-                                if key == 'associate_instance_id':
-                                    ecs_instance_id = value
+            resources_list = props.get('resources', [])
+            for res in resources_list:
+                if isinstance(res, dict):
+                    attrs = res.get('resource_attributes', [])
+                    for attr in attrs:
+                        if isinstance(attr, dict):
+                            key = attr.get('key')
+                            value = attr.get('value')
+                            if key == 'public_ip_address':
+                                public_ip = value
+                            if key == 'associate_instance_id':
+                                ecs_instance_id = value
 
             return {
                 'instance_name': name,
@@ -275,14 +197,50 @@ def get_instance_info(ak, sk, security_token, region, resource_id):
 
     return None
 
+def interactive_select_region():
+    """Interactive region selection menu"""
+    print("\n" + "=" * 60)
+    print("  Select Region to Create Instance")
+    print("=" * 60)
+    print("\nAvailable regions:")
+    region_list = list(SUPPORTED_REGIONS.items())
+    for idx, (code, name) in enumerate(region_list, 1):
+        print(f"  {idx}. {name} ({code})")
+    print(f"  {len(region_list) + 1}. Use environment variable HUAWEICLOUD_REGION default")
+
+    while True:
+        try:
+            choice = input(f"\nEnter your choice (1-{len(region_list) + 1}): ").strip()
+            if not choice:
+                print("[INFO] Using default region from environment variable")
+                return None
+            idx = int(choice)
+            if 1 <= idx <= len(region_list):
+                selected = region_list[idx - 1][0]
+                print(f"[INFO] Selected region: {region_list[idx - 1][1]} ({selected})")
+                return selected
+            elif idx == len(region_list) + 1:
+                print("[INFO] Using default region from environment variable")
+                return None
+            else:
+                print(f"[ERROR] Invalid choice, please enter 1-{len(region_list) + 1}")
+        except ValueError:
+            print(f"[ERROR] Invalid input, please enter a number (1-{len(region_list) + 1})")
+
 def show_confirmation(instance_name, flavor, region):
     flavor_display = {
-        "small": "small (1 vCPU, 2GB RAM)",
-        "medium": "medium (2 vCPU, 4GB RAM)",
-        "large": "large (4 vCPU, 8GB RAM)",
-        "xlarge": "xlarge (8 vCPU, 16GB RAM)",
-        "2xlarge": "2xlarge (16 vCPU, 32GB RAM)"
+        "2c-4g-50g": "2 vCPU 4GB 50GB",
+        "2c-4g-70g": "2 vCPU 4GB 70GB",
+        "4c-8g-180g": "4 vCPU 8GB 180GB"
     }
+
+    flavor_cost = {
+        "2c-4g-50g": "Estimated 60 CNY/month",
+        "2c-4g-70g": "Estimated 100 CNY/month",
+        "4c-8g-180g": "Estimated 170 CNY/month"
+    }
+
+    region_display = SUPPORTED_REGIONS.get(region, region)
 
     print("\n" + "=" * 60)
     print("  ⚠️ Cloud Resource Creation Confirmation")
@@ -291,8 +249,8 @@ def show_confirmation(instance_name, flavor, region):
     print("Instance Specification:")
     print(f"  - Name: {instance_name}")
     print(f"  - Flavor: {flavor_display.get(flavor, flavor)}")
-    print(f"  - Region: {region}")
-    print(f"  - Estimated Cost: ~100 CNY/month (actual price subject to Huawei Cloud pricing)\n")
+    print(f"  - Region: {region_display} ({region})")
+    print(f"  - Estimated Cost: {flavor_cost.get(flavor, 'Estimated 60 CNY/month')}, actual price subject to Huawei Cloud official website\n")
     print("Resources will be created immediately after confirmation.")
     print("=" * 60)
     print("\nPlease enter 'confirm' or 'yes' to continue:")
@@ -304,8 +262,8 @@ def show_confirmation(instance_name, flavor, region):
 def parse_args():
     parser = argparse.ArgumentParser(description='Create Flexus L Instance')
     parser.add_argument('--name', type=str, default=f"jiuwenSwarm-{datetime.now().strftime('%Y%m%d%H%M%S')}", help='Instance name')
-    parser.add_argument('--flavor', type=str, default='medium', choices=['small', 'medium', 'large', 'xlarge', '2xlarge'], help='Instance flavor')
-    parser.add_argument('--region', type=str, default='cn-north-4', help='Region (cn-north-4 only)')
+    parser.add_argument('--flavor', type=str, default='2c-4g-50g', choices=['2c-4g-50g', '2c-4g-70g', '4c-8g-180g'], help='Instance flavor (2c-4g-50g: ~60 CNY/month, 2c-4g-70g: ~100 CNY/month, 4c-8g-180g: ~170 CNY/month)')
+    parser.add_argument('--region', type=str, default=None, choices=list(SUPPORTED_REGIONS.keys()), help='Region to create instance in. If not specified, interactive selection will be shown.')
     parser.add_argument('--wait', action='store_true', help='Wait for instance creation to complete')
     parser.add_argument('--timeout', type=int, default=600, help='Timeout in seconds')
     parser.add_argument('--confirm', action='store_true', help='Skip confirmation prompt')
@@ -324,32 +282,40 @@ def main():
         print(f"[ERROR] {e}")
         sys.exit(1)
 
-    # Validate region - only cn-north-4 is supported
-    if args.region != 'cn-north-4':
-        print(f"[ERROR] Only cn-north-4 region is supported, current region: {args.region}")
-        print("[INFO] Please use --region cn-north-4 or use the default value")
+    # Interactive region selection if --region not provided
+    target_region = args.region
+    if target_region is None:
+        selected = interactive_select_region()
+        if selected is not None:
+            target_region = selected
+        else:
+            # Use environment variable default
+            target_region = REGION
+            print(f"[INFO] Using environment default region: {target_region}")
+
+    # Validate region - check if it's in supported regions
+    if target_region not in SUPPORTED_REGIONS:
+        print(f"[ERROR] Unsupported region: {target_region}")
+        print(f"[INFO] Supported regions: {', '.join(SUPPORTED_REGIONS.keys())}")
         sys.exit(1)
 
-    if SECURITY_TOKEN:
-        print(f"[INFO] Using temporary security credentials (STS token)")
-
     if not args.confirm:
-        if not show_confirmation(args.name, args.flavor, args.region):
+        if not show_confirmation(args.name, args.flavor, target_region):
             print("\n[INFO] User cancelled operation")
             sys.exit(0)
 
     print(f"\n[INFO] Starting to create Flexus L instance...")
     print(f"[INFO] Instance name: {args.name}")
     print(f"[INFO] Flavor: {args.flavor}")
-    print(f"[INFO] Region: {args.region}")
+    print(f"[INFO] Region: {target_region}")
 
-    project_id = get_project_id_by_region(AK, SK, SECURITY_TOKEN, args.region)
+    project_id = get_project_id_by_region(target_region)
     if not project_id:
         print("[ERROR] Failed to get Project ID")
         sys.exit(1)
     print(f"[INFO] Project ID: {project_id}")
 
-    order_id = create_flexus_l_instance(AK, SK, SECURITY_TOKEN, project_id, args.region, args.name, args.flavor, args.wait, args.timeout)
+    order_id = create_flexus_l_instance(AK, SK, SECURITY_TOKEN, project_id, target_region, args.name, args.flavor, args.wait, args.timeout)
     if not order_id:
         print("[ERROR] Instance creation request failed")
         sys.exit(1)
@@ -358,7 +324,7 @@ def main():
 
     result_file = Path(__file__).parent / "instance_order.json"
     with open(result_file, 'w', encoding='utf-8') as f:
-        json.dump({'order_id': order_id, 'instance_name': args.name, 'flavor': args.flavor, 'region': args.region}, f, indent=2)
+        json.dump({'order_id': order_id, 'instance_name': args.name, 'flavor': args.flavor, 'region': target_region}, f, indent=2)
     print(f"[INFO] Order information saved to: {result_file}")
 
     if args.wait:
@@ -373,40 +339,19 @@ def main():
             elapsed += interval
 
             try:
-                from huaweicloudsdkcore.auth.credentials import GlobalCredentials, BasicCredentials
-                from huaweicloudsdkrms.v1 import RmsClient
-                from huaweicloudsdkrms.v1.region.rms_region import RmsRegion
-                from huaweicloudsdkrms.v1 import model
-
-                if SECURITY_TOKEN:
-                    credentials = GlobalCredentials(AK, SK).with_security_token(SECURITY_TOKEN)
-                else:
-                    credentials = GlobalCredentials(AK, SK)
-                
-                client = RmsClient.new_builder() \
-                    .with_credentials(credentials) \
-                    .with_region(RmsRegion.value_of(args.region)) \
-                    .build()
-
-                request = model.ListAllResourcesRequest()
-                request.region_id = args.region
-                request.type = "hcss.l-instance"
-                request.limit = 200
-
-                response = client.list_all_resources(request)
-                resources = response.resources if hasattr(response, 'resources') else []
+                resources = rms_list_all_resources(region_id=target_region, resource_type="hcss.l-instance", limit=200)
 
                 for r in resources:
-                    name = getattr(r, 'name', '') or getattr(r, 'resource_name', '')
+                    name = r.get('name', '') or r.get('resource_name', '')
                     if name == args.name:
-                        resource_id = getattr(r, 'id', '') or getattr(r, 'resource_id', '')
-                        props = getattr(r, 'properties', None)
-                        status = props.get('status') if props else 'UNKNOWN'
+                        resource_id = r.get('id', '') or r.get('resource_id', '')
+                        props = r.get('properties') or {}
+                        status = props.get('status', 'UNKNOWN')
                         print(f"[{elapsed}s] Instance status: {status}")
 
                         if status == 'RUNNING':
                             print("\n[SUCCESS] Instance created successfully!")
-                            instance_info = get_instance_info(AK, SK, SECURITY_TOKEN, args.region, resource_id)
+                            instance_info = get_instance_info(target_region, resource_id)
                             if instance_info:
                                 info_file = Path(__file__).parent / "new_instance_info.json"
                                 with open(info_file, 'w', encoding='utf-8') as f:
@@ -426,7 +371,7 @@ def main():
         print("[ERROR] Instance creation timeout")
         sys.exit(1)
 
-    print("\n[INFO] Instance creation request submitted, use RMS API to query instance status")
+    print("\n[INFO] Instance creation request submitted, use RMS CLI (hcloud RMS ListAllResources) to query instance status")
     print("Next step: Run install_deps.py for COC remote dependency installation")
 
 if __name__ == "__main__":

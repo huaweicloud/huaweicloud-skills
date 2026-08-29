@@ -35,6 +35,7 @@ try:
         coc_query_execution,
         coc_create_script,
         coc_execute_script,
+        rms_list_all_resources,
         print_header,
         print_success,
         print_error,
@@ -207,59 +208,41 @@ def check_job_status(execute_uuid):
         return job_info
 
 def query_instance_by_ip(public_ip):
-    """Query Flexus L instance information by public IP"""
+    """Query Flexus L instance information by public IP via RMS CLI"""
+    # Get credentials (also keeps REGION in sync with the created instance)
     try:
-        from huaweicloudsdkcore.auth.credentials import GlobalCredentials, BasicCredentials
-        from huaweicloudsdkrms.v1 import RmsClient
-        from huaweicloudsdkrms.v1.region.rms_region import RmsRegion
-        from huaweicloudsdkrms.v1 import model
-    except ImportError:
-        log.error("huaweicloudsdkrms module not installed. Please run: pip install huaweicloudsdkrms")
+        AK, SK, REGION, SECURITY_TOKEN = get_huaweicloud_credentials()
+    except ValueError as e:
+        log.error(f"Failed to get Huawei Cloud credentials: {e}")
         return None
 
-    # Get credentials
-    AK, SK, REGION, SECURITY_TOKEN = get_huaweicloud_credentials()
-    
-    # RMS requires GlobalCredentials
-    if SECURITY_TOKEN:
-        credentials = GlobalCredentials(AK, SK).with_security_token(SECURITY_TOKEN)
-    else:
-        credentials = GlobalCredentials(AK, SK)
-    client = RmsClient.new_builder() \
-        .with_credentials(credentials) \
-        .with_region(RmsRegion.value_of(REGION)) \
-        .build()
-
-    request = model.ListAllResourcesRequest()
-    request.region_id = REGION
-    request.type = "hcss.l-instance"  # Flexus L instance type
-    request.limit = 200
-
     try:
-        response = client.list_all_resources(request)
-        resources = response.resources if hasattr(response, 'resources') else []
+        # Query via KooCLI: RMS is a global service, always use the unified cn-north-4
+        # endpoint. Query Flexus L instances across ALL regions: the instance may be
+        # created in a region different from HUAWEICLOUD_REGION, so do not filter by
+        # region_id here; the actual region is read from the RMS entity below.
+        resources = rms_list_all_resources(resource_type="hcss.l-instance", limit=200)
 
         for r in resources:
-            name = getattr(r, 'name', '') or getattr(r, 'resource_name', '')
-            instance_id = getattr(r, 'id', '') or getattr(r, 'resource_id', '')
-            props = getattr(r, 'properties', None)
+            name = r.get('name', '') or r.get('resource_name', '')
+            instance_id = r.get('id', '') or r.get('resource_id', '')
+            props = r.get('properties') or {}
 
             ip = None
             ecs_instance_id = None
 
-            if props:
-                resources_list = props.get('resources', [])
-                for res in resources_list:
-                    if isinstance(res, dict):
-                        attrs = res.get('resource_attributes', [])
-                        for attr in attrs:
-                            if isinstance(attr, dict):
-                                key = attr.get('key')
-                                value = attr.get('value')
-                                if key == 'public_ip_address':
-                                    ip = value
-                                if key == 'associate_instance_id':
-                                    ecs_instance_id = value
+            resources_list = props.get('resources', [])
+            for res in resources_list:
+                if isinstance(res, dict):
+                    attrs = res.get('resource_attributes', [])
+                    for attr in attrs:
+                        if isinstance(attr, dict):
+                            key = attr.get('key')
+                            value = attr.get('value')
+                            if key == 'public_ip_address':
+                                ip = value
+                            if key == 'associate_instance_id':
+                                ecs_instance_id = value
 
             if ip == public_ip:
                 return {
@@ -267,7 +250,7 @@ def query_instance_by_ip(public_ip):
                     'instance_id': instance_id,
                     'ecs_instance_id': ecs_instance_id,
                     'public_ip': ip,
-                    'region': REGION,
+                    'region': r.get('region_id', '') or REGION,
                     'status': props.get('status') if props else 'UNKNOWN',
                     'instance_type': 'Flexus L Instance'
                 }
@@ -468,8 +451,8 @@ install_system_dependencies() {
             update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
             update-alternatives --set python3 /usr/bin/python3.11
             
-            # Ensure pip points to correct Python version
-            python3.11 -m pip install --upgrade pip --break-system-packages
+            # Ensure pip points to correct Python version (python3 now points to python3.11 via update-alternatives)
+            python3 -m pip install --upgrade pip --break-system-packages
             log_success "Python 3.11 installation completed"
         else
             log_warning "Non-Ubuntu system, please ensure Python 3.11+ is installed"
@@ -532,9 +515,9 @@ setup_python_environment() {
         rm -rf "$venv_dir"
     fi
     
-    # Create virtual environment - use python3.11 to ensure correct version
+    # Create virtual environment - use python3 (points to python3.11 after update-alternatives, or system python >= 3.11)
     log_info "Creating Python virtual environment..."
-    python3.11 -m venv "$venv_dir"
+    python3 -m venv "$venv_dir"
     
     # Activate virtual environment
     source "$venv_dir/bin/activate"
@@ -587,7 +570,6 @@ main() {
     # Verify installation
     log_info "Verifying installation..."
     echo "  - Python version: $(python3 --version 2>&1)"
-    echo "  - Python3.11 version: $(python3.11 --version 2>&1)"
     echo "  - pip version: $(pip3 --version 2>&1 | head -1)"
     echo "  - Node.js version: $(node --version 2>&1)"
     echo "  - npm version: $(npm --version 2>&1)"
@@ -880,13 +862,7 @@ def main():
     try:
         AK, SK, REGION, SECURITY_TOKEN = get_huaweicloud_credentials()
     except ValueError as e:
-        print_error(str(e))
-        print("\nSet command:")
-        print("  Windows: set HUAWEICLOUD_SDK_AK=your_ak && set HUAWEICLOUD_SDK_SK=your_sk && set HUAWEICLOUD_REGION=cn-north-4")
-        print("  Linux/Mac: export HUAWEICLOUD_SDK_AK=your_ak && export HUAWEICLOUD_SDK_SK=your_sk && export HUAWEICLOUD_REGION=cn-north-4")
-        print("\nFor temporary security credentials (STS token), also set:")
-        print("  Windows: set HUAWEICLOUD_SDK_SECURITY_TOKEN=your_token")
-        print("  Linux/Mac: export HUAWEICLOUD_SDK_SECURITY_TOKEN=your_token")
+        print_error(f"Failed to get Huawei Cloud credentials: {e}")
         sys.exit(1)
 
     # Get instance information
@@ -924,7 +900,6 @@ def main():
 
     # Install dependencies
     result = install_dependencies(instance_info)
-    print(f" result: {result}")
     if result:
         # Save execution result
         result_file = Path(__file__).parent / "deps_install_result.json"

@@ -135,7 +135,7 @@ def query_single_job(execute_uuid, verbose=False):
 
     if verbose and job_info.get('output'):
         output = job_info['output']
-        print_info("\n脚本输出:")
+        print_info("\nScript Output:")
         print("-" * 60)
         print(output[:3000] if len(output) > 3000 else output)
         if len(output) > 3000:
@@ -175,12 +175,14 @@ def wait_for_job(execute_uuid, timeout=1800, interval=60):
         interval=interval
     )
 
-    if success:
-        print_success("任务执行成功!")
+    if success is True:
+        print_success("Task executed successfully!")
+    elif success == 'RETRY':
+        print_warning("Task encountered transient error, not auto-retried, recommend re-querying")
     elif job_info:
-        print_error("任务执行失败或超时")
+        print_error("Task execution failed or timed out")
     else:
-        print_error("任务执行状态未知")
+        print_error("Task execution status unknown")
 
     return success, job_info
 
@@ -271,7 +273,7 @@ Usage Examples:
 
     if args.wait:
         success, job_info = wait_for_job(execute_uuid, args.timeout, args.interval)
-        sys.exit(0 if success else 1)
+        sys.exit(0 if success is True else 1)
     else:
         job_info = query_single_job(execute_uuid, verbose=args.verbose)
         if job_info:
