@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "huawei-cloud-ecs-dsh-deploy"
+version = "1.0.0"
+description = "Huawei Cloud Flexus X Instance Deployment - DeepSeek Harness (dsh)"
+requires-python = ">=3.8"
+license = "Apache-2.0"
+
+[project.scripts]
+deploy-dsh = "deploy_dsh:main"
+query-regions = "query_regions:main"
+
+[project.dependencies]
+huaweicloudsdkcore = ">=3.1.70"
+huaweicloudsdkecs = ">=3.1.70"
+huaweicloudsdkcoc = ">=3.1.70"
+requests = ">=2.31.0"
