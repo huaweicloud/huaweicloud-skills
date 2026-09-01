@@ -2,16 +2,32 @@
 
 Query MaaS usage statistics via the ShowStatistics API. Data is consistent with the Huawei Cloud console.
 
+## Table of Contents
+
+- [API Information](#api-information)
+- [Script: maas_rest_usage_stats.py](#script-maas_rest_usage_statspy)
+  - [Required Parameters](#required-parameters)
+  - [Optional Parameters](#optional-parameters)
+  - [Usage Examples](#usage-examples)
+- [Time Range Handling](#time-range-handling)
+- [service_type Values](#service_type-values)
+- [Execution Steps](#execution-steps)
+- [Response Fields](#response-fields)
+- [Error Rate Calculation](#error-rate-calculation)
+- [References](#references)
+
+---
+
 ## API Information
 
 - **API**: `POST /v1/{project_id}/maas/monitoring/show-statistics`
 - **Endpoint**: `modelarts.{region}.myhuaweicloud.com` (dynamically assembled)
 - **Region limitation**: Only supports Southwest-Guiyang-1 (cn-southwest-2)
-- **Auth**: AK/SK signing (SDK-HMAC-SHA256), via huaweicloudsdkcore `Signer`
+- **Auth**: AK/SK signing (SDK-HMAC-SHA256), via huaweicloudsdkcore `Signer`. Supports temporary AK/SK + Security Token (`X-Security-Token` header).
 - **API Doc**: https://support.huaweicloud.com/api-maas/ShowStatistics.html
 - **Rate limit**: Total requests ≤ 1000/min, per-user ≤ 200/min
 
-> **Important: Default region is cn-southwest-2**
+> **⚠️ Important: Default region is cn-southwest-2**
 > MaaS ShowStatistics API only supports Southwest-Guiyang-1 region (cn-southwest-2).
 
 ---
@@ -29,7 +45,7 @@ Query via MaaS ShowStatistics API. The script automatically handles:
 |-----------|-------------|
 | `--from` | Start date in YYYY-MM-DD format |
 | `--to` | End date in YYYY-MM-DD format |
-| Credentials | Environment variables (`HW_ACCESS_KEY`, `HW_SECRET_KEY`) or `--credentials-file` |
+| Credentials | Environment variables (`HW_ACCESS_KEY`, `HW_SECRET_KEY`, `HW_SECURITY_TOKEN`) or `--credentials-file` |
 
 ### Optional Parameters
 
@@ -45,9 +61,15 @@ Query via MaaS ShowStatistics API. The script automatically handles:
 ### Usage Examples
 
 ```bash
-# Environment variables
+# Permanent AK/SK (environment variables)
 export HW_ACCESS_KEY=<your-ak>
 export HW_SECRET_KEY=<your-sk>
+python3 scripts/maas_rest_usage_stats.py --from 2026-05-08 --to 2026-05-21
+
+# Temporary AK/SK + Security Token
+export HW_ACCESS_KEY=<your-temp-ak>
+export HW_SECRET_KEY=<your-temp-sk>
+export HW_SECURITY_TOKEN=<your-security-token>
 python3 scripts/maas_rest_usage_stats.py --from 2026-05-08 --to 2026-05-21
 
 # Credentials file (supports: one-per-line, comma-separated, KEY=VALUE)
@@ -85,7 +107,7 @@ python3 scripts/maas_rest_usage_stats.py --from 2026-05-08 --to 2026-05-21 --raw
 
 > **Default time range:** If not specified, default to last 7 days.
 
-> **30-day data retention:** API only retains 30 days of statistics. The script automatically segments queries exceeding 30 days and aggregates results.
+> **⚠️ 30-day data retention:** API only retains 30 days of statistics. The script automatically segments queries exceeding 30 days and aggregates results.
 
 ---
 
@@ -97,17 +119,26 @@ python3 scripts/maas_rest_usage_stats.py --from 2026-05-08 --to 2026-05-21 --raw
 | 2 | Preset Service (model service enabled on "Preset Service" tab) **[Default]** |
 | 4 | Custom Endpoint (endpoint service created on "Custom Endpoint" tab) |
 
-> **Note**: API doc says 3=Custom Endpoint, but the actual API only supports [1, 2, 4]. Using 3 returns a 400 error.
+> **⚠️ Note**: API doc says 3=Custom Endpoint, but the actual API only supports [1, 2, 4]. Using 3 returns a 400 error.
 
 ---
 
 ## Execution Steps
 
-**Step 1: Run the script**
+**Step 1: Run the script (permanent AK/SK)**
 
 ```bash
 export HW_ACCESS_KEY=<your-ak>
 export HW_SECRET_KEY=<your-sk>
+python3 scripts/maas_rest_usage_stats.py --from 2026-05-08 --to 2026-05-21
+```
+
+**Step 1: Run the script (temporary AK/SK + Security Token)**
+
+```bash
+export HW_ACCESS_KEY=<your-temp-ak>
+export HW_SECRET_KEY=<your-temp-sk>
+export HW_SECURITY_TOKEN=<your-security-token>
 python3 scripts/maas_rest_usage_stats.py --from 2026-05-08 --to 2026-05-21
 ```
 
@@ -156,7 +187,7 @@ Error rate = Total errors / Total requests × 100%
 
 | Document | Description |
 |----------|-------------|
-| [maas_rest_usage_stats.py](scripts/maas_rest_usage_stats.py) | ShowStatistics API usage statistics script |
+| [maas_rest_usage_stats.py](../scripts/maas_rest_usage_stats.py) | ShowStatistics API usage statistics script |
 | [related-apis.md](related-apis.md) | API and parameter details |
 | [maas-metrics.md](maas-metrics.md) | MaaS monitoring metrics reference |
 | [troubleshooting.md](troubleshooting.md) | Troubleshooting and practical experience |

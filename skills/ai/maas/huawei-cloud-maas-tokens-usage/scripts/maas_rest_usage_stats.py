@@ -6,17 +6,26 @@ API doc: https://support.huaweicloud.com/api-maas/ShowStatistics.html
 POST /v1/{project_id}/maas/monitoring/show-statistics
 
 Endpoint: modelarts.{region}.myhuaweicloud.com
-Auth: AK/SK signing (SDK-HMAC-SHA256)
+Auth: AK/SK signing (SDK-HMAC-SHA256), supports temporary AK/SK + Security Token
 Token unit: response values are in thousands, actual = value x 1000
 
 Environment variables:
-    HW_ACCESS_KEY: Huawei Cloud AK
-    HW_SECRET_KEY: Huawei Cloud SK
+    HW_ACCESS_KEY: Huawei Cloud AK (permanent or temporary)
+    HW_SECRET_KEY: Huawei Cloud SK (permanent or temporary)
+    HW_SECURITY_TOKEN: Security token (required for temporary AK/SK)
 
 Usage:
+    # Permanent AK/SK
     export HW_ACCESS_KEY=your_ak
     export HW_SECRET_KEY=your_sk
     python3 maas_rest_usage_stats.py --from 2026-05-08 --to 2026-05-21
+
+    # Temporary AK/SK + Security Token
+    export HW_ACCESS_KEY=your_temp_ak
+    export HW_SECRET_KEY=your_temp_sk
+    export HW_SECURITY_TOKEN=your_security_token
+    python3 maas_rest_usage_stats.py --from 2026-05-08 --to 2026-05-21
+
     python3 maas_rest_usage_stats.py --from 2026-05-08 --to 2026-05-21 --service-type 1
     python3 maas_rest_usage_stats.py --from 2026-05-08 --to 2026-05-21 --service-type 4
     python3 maas_rest_usage_stats.py --from 2026-05-08 --to 2026-05-21 --infer-type batch
@@ -29,12 +38,9 @@ import sys
 from datetime import datetime, timezone, timedelta
 
 import requests
-import urllib3
 
 from huaweicloudsdkcore.signer.signer import Signer
 from huaweicloudsdkcore.sdk_request import SdkRequest
-
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 SERVICE_TYPE_MAP = {
     1: "My Service",
@@ -58,12 +64,17 @@ class _Creds:
         self.sk = sk
 
 
-def _sign_and_request(method, host, resource_path, query_params, headers, body, ak, sk):
+def _sign_and_request(method, host, resource_path, query_params, headers, body, ak, sk, security_token=None):
     signer = Signer(_Creds(ak, sk))
     if isinstance(body, str):
         body = body.encode("utf-8")
     elif body is None:
         body = b""
+
+    # Add security token header for temporary credentials
+    if security_token:
+        headers = dict(headers)
+        headers["X-Security-Token"] = security_token
 
     req = SdkRequest(
         method=method,
@@ -82,14 +93,14 @@ def _sign_and_request(method, host, resource_path, query_params, headers, body, 
         req_headers[k] = v
 
     url = f"https://{host}{signed_req.uri}"
-    return requests.request(method, url, headers=req_headers, data=body, verify=False, timeout=30)
+    return requests.request(method, url, headers=req_headers, data=body, verify=True, timeout=30)
 
 
-def get_project_id(ak, sk, region):
+def get_project_id(ak, sk, region, security_token=None):
     iam_host = f"iam.{region}.myhuaweicloud.com"
     resp = _sign_and_request(
         "GET", iam_host, "/v3/projects", [("name", region)],
-        {"Content-Type": "application/json"}, None, ak, sk,
+        {"Content-Type": "application/json"}, None, ak, sk, security_token,
     )
     if resp.status_code == 200:
         projects = resp.json().get("projects", [])
@@ -98,12 +109,12 @@ def get_project_id(ak, sk, region):
     raise RuntimeError(f"Failed to get project_id: {resp.status_code} {resp.text[:300]}")
 
 
-def show_statistics(endpoint, project_id, ak, sk, body):
+def show_statistics(endpoint, project_id, ak, sk, body, security_token=None):
     resource_path = f"/v1/{project_id}/maas/monitoring/show-statistics"
     body_bytes = json.dumps(body).encode("utf-8")
     resp = _sign_and_request(
         "POST", endpoint, resource_path, [],
-        {"Content-Type": "application/json"}, body_bytes, ak, sk,
+        {"Content-Type": "application/json"}, body_bytes, ak, sk, security_token,
     )
     if resp.status_code == 200:
         return resp.json()
@@ -132,6 +143,7 @@ def main():
 
     ak = os.environ.get("HW_ACCESS_KEY", "")
     sk = os.environ.get("HW_SECRET_KEY", "")
+    security_token = os.environ.get("HW_SECURITY_TOKEN", "")
 
     if (not ak or not sk) and args.credentials_file:
         try:
@@ -145,16 +157,22 @@ def main():
                         ak = val
                     elif key == "HW_SECRET_KEY" and not sk:
                         sk = val
+                    elif key == "HW_SECURITY_TOKEN" and not security_token:
+                        security_token = val
                 elif "," in line:
                     parts = [p.strip() for p in line.split(",")]
                     if not ak and len(parts) >= 1:
                         ak = parts[0]
                     if not sk and len(parts) >= 2:
                         sk = parts[1]
+                    if not security_token and len(parts) >= 3:
+                        security_token = parts[2]
             if not ak and len(lines) >= 1:
                 ak = lines[0]
             if not sk and len(lines) >= 2:
                 sk = lines[1]
+            if not security_token and len(lines) >= 3:
+                security_token = lines[2]
         except FileNotFoundError:
             print(f"Error: Credentials file not found: {args.credentials_file}", file=sys.stderr)
             sys.exit(1)
@@ -162,6 +180,7 @@ def main():
     if not ak or not sk:
         print("Error: Credentials not found. Provide AK/SK via:", file=sys.stderr)
         print("  1. Environment variables: export HW_ACCESS_KEY=xxx && export HW_SECRET_KEY=xxx", file=sys.stderr)
+        print("     For temporary credentials: also export HW_SECURITY_TOKEN=xxx", file=sys.stderr)
         print("  2. Credentials file: --credentials-file <path>", file=sys.stderr)
         sys.exit(1)
 
@@ -172,7 +191,7 @@ def main():
     from_dt = datetime.strptime(args.from_date, "%Y-%m-%d").replace(tzinfo=local_tz)
     to_dt = datetime.strptime(args.to_date, "%Y-%m-%d").replace(tzinfo=local_tz)
 
-    project_id = get_project_id(ak, sk, region)
+    project_id = get_project_id(ak, sk, region, security_token)
 
     svc_name = SERVICE_TYPE_MAP.get(args.service_type, str(args.service_type))
 
@@ -207,7 +226,7 @@ def main():
         body = dict(base_body)
         body["start_time"] = int(seg_from.timestamp() * 1000)
         body["end_time"] = int(seg_to.timestamp() * 1000)
-        data = show_statistics(endpoint, project_id, ak, sk, body)
+        data = show_statistics(endpoint, project_id, ak, sk, body, security_token)
         total_req += data.get("total_request_count", 0)
         total_err += data.get("total_error_count", 0)
         total_token += data.get("total_token", 0)

@@ -1,5 +1,19 @@
 # MaaS Monitoring Metrics Reference
 
+Response metrics and enum values for the MaaS ShowStatistics API.
+
+## Table of Contents
+
+- [MaaS ShowStatistics API](#maas-showstatistics-api)
+  - [API](#api)
+  - [Response Metrics](#response-metrics)
+  - [service_type Values](#service_type-values)
+  - [infer_type Values](#infer_type-values)
+  - [Limitations](#limitations)
+- [References](#references)
+
+---
+
 ## MaaS ShowStatistics API
 
 ### API
@@ -26,7 +40,7 @@
 | 2 | Preset Service (model service enabled on "Preset Service" tab) |
 | 4 | Custom Endpoint (endpoint service created on "Custom Endpoint" tab) |
 
-> **Note**: API doc says 3=Custom Endpoint, but the actual API only supports [1, 2, 4].
+> **⚠️ Note**: API doc says 3=Custom Endpoint, but the actual API only supports [1, 2, 4].
 
 ### infer_type Values
 
@@ -40,8 +54,11 @@
 - Only retains 30 days of statistics data
 - API rate limit: total requests ≤ 1000/min, per-user ≤ 200/min
 
+---
+
 ## References
 
 | Document | Description |
 |----------|-------------|
 | [related-apis.md](related-apis.md) | API and parameter details |
+| [task-query-tokens-usage.md](task-query-tokens-usage.md) | Task 1 detailed steps |
