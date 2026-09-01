@@ -189,9 +189,15 @@ def run_with_body(
     query_params: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Execute hcloud with complex nested body via --cli-jsonInput."""
+    # Ensure project_id is in path_params (needed for path-based APIs;
+    # --cli-jsonInput path params take priority over CLI args)
+    effective_path = dict(path_params) if path_params else {}
+    if ctx.project_id and "project_id" not in effective_path:
+        effective_path["project_id"] = ctx.project_id
+
     json_input = {}
-    if path_params:
-        json_input["path"] = path_params
+    if effective_path:
+        json_input["path"] = effective_path
     if query_params:
         json_input["query"] = query_params
     json_input["body"] = body
