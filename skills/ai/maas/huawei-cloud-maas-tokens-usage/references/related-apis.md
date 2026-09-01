@@ -1,12 +1,27 @@
 # Related APIs
 
+MaaS ShowStatistics API reference for the tokens usage query workflow.
+
+## Table of Contents
+
+- [MaaS ShowStatistics API](#maas-showstatistics-api)
+  - [API Information](#api-information)
+  - [Request Parameters](#request-parameters)
+  - [Response Parameters](#response-parameters)
+  - [Request Example](#request-example)
+  - [Response Example](#response-example)
+  - [Python Script Invocation](#python-script-invocation)
+- [References](#references)
+
+---
+
 ## MaaS ShowStatistics API
 
 ### API Information
 
 - **API**: `POST /v1/{project_id}/maas/monitoring/show-statistics`
 - **Endpoint**: `modelarts.{region}.myhuaweicloud.com` (dynamically assembled)
-- **Auth**: AK/SK signing (SDK-HMAC-SHA256)
+- **Auth**: AK/SK signing (SDK-HMAC-SHA256). Supports temporary AK/SK + Security Token via `X-Security-Token` header.
 - **API Doc**: https://support.huaweicloud.com/api-maas/ShowStatistics.html
 - **Rate limit**: Total requests ≤ 1000/min, per-user ≤ 200/min
 
@@ -63,13 +78,24 @@
 ### Python Script Invocation
 
 ```bash
+# Permanent AK/SK
 export HW_ACCESS_KEY=<your-ak>
 export HW_SECRET_KEY=<your-sk>
 python3 scripts/maas_rest_usage_stats.py --from 2026-05-08 --to 2026-05-21
+
+# Temporary AK/SK + Security Token
+export HW_ACCESS_KEY=<your-temp-ak>
+export HW_SECRET_KEY=<your-temp-sk>
+export HW_SECURITY_TOKEN=<your-security-token>
+python3 scripts/maas_rest_usage_stats.py --from 2026-05-08 --to 2026-05-21
 ```
+
+---
 
 ## References
 
 | Document | Description |
 |----------|-------------|
 | [MaaS ShowStatistics API](https://support.huaweicloud.com/api-maas/ShowStatistics.html) | Official API documentation |
+| [task-query-tokens-usage.md](task-query-tokens-usage.md) | Task 1 detailed steps |
+| [maas-metrics.md](maas-metrics.md) | MaaS monitoring metrics reference |
