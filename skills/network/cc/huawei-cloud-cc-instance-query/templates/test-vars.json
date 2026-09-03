@@ -1,0 +1,64 @@
+{
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "List Cloud Connections",
+      "command": "hcloud CC ListCloudConnections --cli-region=cn-north-4 --domain_id=<DOMAIN_ID> --limit=1",
+      "expected": "Returns JSON with cloud_connections array (may be empty if no connections exist)"
+    },
+    {
+      "id": "TC-02",
+      "name": "List Bandwidth Packages",
+      "command": "hcloud CC ListBandwidthPackages --cli-region=cn-north-4 --domain_id=<DOMAIN_ID> --limit=1",
+      "expected": "Returns JSON with bandwidth_packages array"
+    },
+    {
+      "id": "TC-03",
+      "name": "List Inter-Region Bandwidths",
+      "command": "hcloud CC ListInterRegionBandwidths --cli-region=cn-north-4 --domain_id=<DOMAIN_ID> --limit=1",
+      "expected": "Returns JSON with inter_region_bandwidths array"
+    },
+    {
+      "id": "TC-04",
+      "name": "List Network Instances",
+      "command": "hcloud CC ListNetworkInstances --cli-region=cn-north-4 --domain_id=<DOMAIN_ID> --limit=1",
+      "expected": "Returns JSON with network_instances array"
+    },
+    {
+      "id": "TC-05",
+      "name": "List Cloud Connection Routes",
+      "command": "hcloud CC ListCloudConnectionRoutes --cli-region=cn-north-4 --domain_id=<DOMAIN_ID> --limit=1",
+      "expected": "Returns JSON with cloud_connection_routes array"
+    },
+    {
+      "id": "TC-06",
+      "name": "Show Cloud Connection (by ID)",
+      "command": "hcloud CC ShowCloudConnection --cli-region=cn-north-4 --domain_id=<DOMAIN_ID> --id=<CLOUD_CONNECTION_ID>",
+      "expected": "Returns JSON with single cloud connection details matching the requested ID"
+    },
+    {
+      "id": "TC-07",
+      "name": "Show Bandwidth Package (by ID)",
+      "command": "hcloud CC ShowBandwidthPackage --cli-region=cn-north-4 --domain_id=<DOMAIN_ID> --id=<BANDWIDTH_PACKAGE_ID>",
+      "expected": "Returns JSON with single bandwidth package details"
+    },
+    {
+      "id": "TC-08",
+      "name": "Show Inter-Region Bandwidth (by ID)",
+      "command": "hcloud CC ShowInterRegionBandwidth --cli-region=cn-north-4 --domain_id=<DOMAIN_ID> --id=<INTER_REGION_BW_ID>",
+      "expected": "Returns JSON with single inter-region bandwidth details"
+    },
+    {
+      "id": "TC-09",
+      "name": "Show Network Instance (by ID)",
+      "command": "hcloud CC ShowNetworkInstance --cli-region=cn-north-4 --domain_id=<DOMAIN_ID> --id=<NETWORK_INSTANCE_ID>",
+      "expected": "Returns JSON with single network instance details"
+    },
+    {
+      "id": "TC-10",
+      "name": "Show Cloud Connection Route (by ID)",
+      "command": "hcloud CC ShowCloudConnectionRoutes --cli-region=cn-north-4 --domain_id=<DOMAIN_ID> --id=<ROUTE_ID>",
+      "expected": "Returns JSON with single route details"
+    }
+  ]
+}
