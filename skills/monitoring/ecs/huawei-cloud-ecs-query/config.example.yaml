@@ -1,0 +1,48 @@
+# 华为云 ECS 查询技能 - 配置文件示例
+# 将此文件复制到 ~/.huawei-ecs/config.yaml 并填入你的凭证信息
+
+# 认证方式：aksk 或 token
+auth_method: aksk
+
+# ==============================
+# AK/SK 认证配置（推荐）
+# ==============================
+# 在华为云控制台获取：右上角用户名 → 我的凭证 → 访问密钥
+ak: "your-access-key-id"
+sk: "your-secret-access-key"
+
+# 项目ID：在"我的凭证"页面查看
+project_id: "your-project-id"
+
+# ==============================
+# Token 认证配置（当 auth_method 为 token 时使用）
+# ==============================
+# username: "your-username"
+# password: "your-password"
+# domain_id: "your-domain-id"  # 租户ID/账号名
+
+# ==============================
+# 通用配置
+# ==============================
+# 默认区域（常见区域见下方注释）
+region: "cn-north-4"
+
+# 默认输出格式：table 或 json
+output_format: "table"
+
+# ==============================
+# 华为云常见区域列表
+# ==============================
+# cn-north-4    华北-北京四
+# cn-north-1    华北-北京一
+# cn-east-3     华东-上海一
+# cn-east-2     华东-上海二
+# cn-south-1    华南-广州
+# cn-southwest-2  西南-贵阳一
+# cn-north-2    华北-北京二
+# ap-southeast-1  中国-香港
+# ap-southeast-2  亚太-新加坡
+# ap-southeast-3  亚太-曼谷
+# af-north-1    非洲-约翰内斯堡
+# la-north-2    拉美北-墨西哥城一
+# sa-brazil-1   拉美南-圣保罗一

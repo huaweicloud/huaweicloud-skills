@@ -1,0 +1,89 @@
+{
+  "skill_id": "huawei-cloud-ecs-query",
+  "version": "v1.0.0",
+  "updated_at": "2026-08-27T18:00:00+00:00",
+  "summary": "修复评测 BUG：签名算法与官方 SDK 对齐（payload hash/URI 尾部斜杠/headers 排序），触发词收窄排除写操作，show-server/server-status 增加 server_id 获取指引。",
+  "entries": [
+    {
+      "id": "ev_94cc6972",
+      "source": "execution_failure",
+      "timestamp": "2026-08-26T08:19:18.185597+00:00",
+      "context": "[execution_failure] Tool execution error: [182504] todo tool invoke failed, error='[182503] todo tool validation invalid, error='Todo sequential update rejected. Cannot advance later tasks while earlier tasks are still pending. Mark earlier tasks completed, cancelled, or in_progress (one at a time) first.\nBlocked pending tasks:\n  - [4] id",
+      "change": {
+        "section": "Instructions",
+        "action": "append",
+        "content": "### 查询实例详情\n\n```bash\npython scripts/ecs_query.py show-server --server-id <server_id> --config config.yaml\n```\n\n> **注意**：`--server-id` 参数直接跟在 `show-server` 子命令之后，无需额外位置参数。",
+        "target": "body",
+        "keywords": [
+          "show-server",
+          "server-id",
+          "命令示例",
+          "笔误",
+          "ecs_query.py",
+          "查询详情",
+          "CLI",
+          "usage"
+        ],
+        "summary": "查询实例详情命令示例有笔误，show-server后多了一个无效的<1，应直接跟--server-id参数"
+      },
+      "applied": false,
+      "score": 0.65,
+      "summary": "查询实例详情命令示例有笔误，show-server后多了一个无效的<1，应直接跟--server-id参数",
+      "root_cause": "SKILL.md中查询实例详情的命令示例show-server后多了一个无效的<1标记，导致命令格式不正确",
+      "usage_stats": {
+        "times_presented": 0,
+        "times_used": 0,
+        "times_positive": 0,
+        "times_negative": 0
+      },
+      "review_status": "suggest"
+    },
+    {
+      "id": "ev_682f39b8",
+      "source": "execution_failure",
+      "timestamp": "2026-08-26T08:19:18.185717+00:00",
+      "context": "[execution_failure] Tool execution error: [182504] todo tool invoke failed, error='[182503] todo tool validation invalid, error='Todo sequential update rejected. Cannot advance later tasks while earlier tasks are still pending. Mark earlier tasks completed, cancelled, or in_progress (one at a time) first.\nBlocked pending tasks:\n  - [4] id",
+      "change": {
+        "section": "Instructions",
+        "action": "append",
+        "content": "### 表格格式\n\n实例列表以表格形式展示，包含以下列：\n\n| 列名 | 说明 |\n|------|------|\n| ID | 服务器ID |\n| Name | 服务器名称 |\n| Status | 运行状态 |\n| Flavor | 规格类型 |\n| vCPU | 虚拟CPU核数 |\n| RAM(MB) | 内存大小 |\n| Private IP | 私有IP地址 |\n| Public IP | 弹性公网IP |\n| Created | 创建时间 |\n| AZ | 可用区 |",
+        "target": "body",
+        "keywords": [
+          "Private IP",
+          "乱码",
+          "表格说明",
+          "输出格式",
+          "私有IP",
+          "table",
+          "output",
+          "encoding"
+        ],
+        "summary": "表格输出说明中Private IP列描述有乱码字符，应修正为正常的中文说明"
+      },
+      "applied": false,
+      "score": 0.65,
+      "summary": "表格输出说明中Private IP列描述有乱码字符，应修正为正常的中文说明",
+      "root_cause": "SKILL.md中表格格式说明的Private IP列描述包含乱码字符，影响用户理解",
+      "usage_stats": {
+        "times_presented": 0,
+        "times_used": 0,
+        "times_positive": 0,
+        "times_negative": 0
+      },
+      "review_status": "suggest"
+    },
+    {
+      "id": "ev_bugfix_418_2",
+      "source": "test_report",
+      "timestamp": "2026-08-27T18:00:00+00:00",
+      "context": "[test4] BUG-001/002/003 fix",
+      "change": {
+        "section": "Scripts",
+        "action": "modify",
+        "content": "auth.py signature aligned with huaweicloudsdkcore; ecs_query.py adds server_id hint"
+      },
+      "applied": true,
+      "summary": "fix BUG-001/002/003 from test report"
+    }
+  ]
+}
