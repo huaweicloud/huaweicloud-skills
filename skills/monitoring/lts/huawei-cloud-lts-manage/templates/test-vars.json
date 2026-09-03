@@ -1,0 +1,187 @@
+{
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "List log groups",
+      "command": "hcloud LTS ListLogGroups --cli-region={region} --project_id={project_id}",
+      "expected": "JSON response with log_groups array",
+      "result": "PASS"
+    },
+    {
+      "id": "TC-02",
+      "name": "List log streams",
+      "command": "hcloud LTS ListLogStreams --cli-region={region} --project_id={project_id} --log_group_name={log_group_name}",
+      "expected": "JSON response with log_streams array",
+      "result": "PASS"
+    },
+    {
+      "id": "TC-03",
+      "name": "Query log stream index",
+      "command": "hcloud LTS ListLogStreamIndex --cli-region={region} --project_id={project_id} --group_id={group_id} --stream_id={stream_id}",
+      "expected": "JSON response with index configuration",
+      "result": "PASS"
+    },
+    {
+      "id": "TC-04",
+      "name": "List transfer tasks",
+      "command": "hcloud LTS ListTransfers --cli-region={region} --project_id={project_id}",
+      "expected": "JSON response with transfers array",
+      "result": "PASS"
+    },
+    {
+      "id": "TC-05",
+      "name": "List keyword alarm rules",
+      "command": "hcloud LTS ListKeywordsAlarmRules --cli-region={region} --project_id={project_id}",
+      "expected": "JSON response with alarm rules",
+      "result": "PASS"
+    },
+    {
+      "id": "TC-06",
+      "name": "List SQL alarm rules",
+      "command": "hcloud LTS ListSqlAlarmRules --cli-region={region} --project_id={project_id}",
+      "expected": "JSON response with SQL alarm rules",
+      "result": "PASS"
+    },
+    {
+      "id": "TC-07",
+      "name": "Query alarm history",
+      "command": "hcloud LTS ListActiveOrHistoryAlarms --cli-region={region} --project_id={project_id} --domain_id={domain_id} --type=history_alert --whether_custom_field=false --time_range=30 --limit=10",
+      "expected": "JSON response with alarm history",
+      "result": "PASS",
+      "note": "type must be active_alert/history_alert; whether_custom_field=false requires time_range"
+    },
+    {
+      "id": "TC-08",
+      "name": "Search logs by keyword",
+      "command": "hcloud LTS ListLogs --cli-region={region} --project_id={project_id} --log_group_id={log_group_id} --log_stream_id={log_stream_id} --start_time={start_time} --end_time={end_time} --keywords=ERROR --limit=10 --is_desc=true",
+      "expected": "JSON response with matching log entries",
+      "result": "PASS"
+    },
+    {
+      "id": "TC-09",
+      "name": "Get log context",
+      "command": "hcloud LTS ListLogContext --cli-region={region} --project_id={project_id} --log_group_id={log_group_id} --log_stream_id={log_stream_id} --__time__={timestamp} --line_num={line_num} --backwards_size=5 --forwards_size=5",
+      "expected": "JSON response with surrounding log lines",
+      "result": "PASS"
+    },
+    {
+      "id": "TC-10",
+      "name": "Get log histogram",
+      "command": "hcloud LTS ListLogHistogram --cli-region={region} --project_id={project_id} --group_id={group_id} --stream_id={stream_id} --start_time={start_time} --end_time={end_time} --key_word=ERROR --step_interval=3600000",
+      "expected": "JSON response with time distribution",
+      "result": "PASS"
+    },
+    {
+      "id": "TC-11",
+      "name": "Query structured logs with SQL",
+      "command": "hcloud LTS ListQueryStructuredLogs --cli-region={region} --project_id={project_id} --log_group_id={log_group_id} --log_stream_id={log_stream_id} --start_time={start_time} --end_time={end_time} --sql_expression=\"select * where level like '%ERROR%'\"",
+      "expected": "JSON response with structured log results",
+      "result": "PASS"
+    },
+    {
+      "id": "TC-12",
+      "name": "List struct templates",
+      "command": "hcloud LTS ListStructTemplate --cli-region={region} --project_id={project_id}",
+      "expected": "JSON response with struct templates",
+      "result": "PASS"
+    },
+    {
+      "id": "TC-13",
+      "name": "Create log group (write - requires confirm)",
+      "command": "hcloud LTS CreateLogGroup --cli-region={region} --project_id={project_id} --log_group_name=test-lts-group --ttl_in_days=7",
+      "expected": "JSON response with new log group ID",
+      "result": "SKIP"
+    },
+    {
+      "id": "TC-14",
+      "name": "Create log stream (write - requires confirm)",
+      "command": "hcloud LTS CreateLogStream --cli-region={region} --project_id={project_id} --log_group_id={log_group_id} --log_stream_name=test-stream --ttl_in_days=7",
+      "expected": "JSON response with new log stream ID",
+      "result": "SKIP"
+    },
+    {
+      "id": "TC-15",
+      "name": "Create full-text index (write - requires confirm)",
+      "command": "hcloud LTS CreateLogStreamIndex --cli-region={region} --project_id={project_id} --group_id={group_id} --stream_id={stream_id} --logStreamId={stream_id} --fullTextIndex.enable=true --fullTextIndex.caseSensitive=false --fullTextIndex.includeChinese=true --fullTextIndex.tokenizer= ",
+      "expected": "JSON response with index configuration",
+      "result": "SKIP"
+    },
+    {
+      "id": "TC-16",
+      "name": "Create OBS transfer (write - requires confirm)",
+      "command": "hcloud LTS CreateTransfer --cli-region={region} --project_id={project_id} --log_group_id={log_group_id} --log_streams.1.log_stream_id={stream_id} --log_streams.1.log_stream_name={stream_name} --log_transfer_info.log_transfer_type=OBS --log_transfer_info.log_transfer_mode=cycle --log_transfer_info.log_storage_format=RAW --log_transfer_info.log_transfer_status=ENABLE --log_transfer_info.log_transfer_detail.obs_bucket_name={bucket_name} --log_transfer_info.log_transfer_detail.obs_period=5 --log_transfer_info.log_transfer_detail.obs_period_unit=min",
+      "expected": "JSON response with transfer ID",
+      "result": "SKIP"
+    },
+    {
+      "id": "TC-17",
+      "name": "Create keyword alarm rule (write - requires confirm)",
+      "command": "hcloud LTS CreateKeywordsAlarmRule --cli-region={region} --project_id={project_id} --domain_id={domain_id} --keywords_alarm_rule_name=test-alarm --keywords_alarm_level=Major --keywords_requests.1.log_group_id={group_id} --keywords_requests.1.log_stream_id={stream_id} --keywords_requests.1.keywords=ERROR --keywords_requests.1.condition=>= --keywords_requests.1.number=1 --keywords_requests.1.search_time_range=5 --keywords_requests.1.search_time_range_unit=minute --frequency.type=CRON --frequency.cron_expr=\"0 */5 * * * *\" --notification_frequency=5",
+      "expected": "JSON response with alarm rule ID",
+      "result": "SKIP"
+    },
+    {
+      "id": "TC-18",
+      "name": "Create SQL alarm rule (write - requires confirm)",
+      "command": "hcloud LTS CreateSqlAlarmRule --cli-region={region} --project_id={project_id} --domain_id={domain_id} --sql_alarm_rule_name=test-sql-alarm --sql_alarm_level=Major --sql_requests.1.log_group_id={group_id} --sql_requests.1.log_stream_id={stream_id} --sql_requests.1.sql=\"select count(*) where level='ERROR'\" --sql_requests.1.search_time_range=5 --sql_requests.1.search_time_range_unit=minute --condition_expression=>=1 --frequency.type=CRON --frequency.cron_expr=\"0 */5 * * * *\" --notification_frequency=5",
+      "expected": "JSON response with alarm rule ID",
+      "result": "SKIP"
+    },
+    {
+      "id": "TC-19",
+      "name": "Update log group TTL (write - requires confirm)",
+      "command": "hcloud LTS UpdateLogGroup --cli-region={region} --project_id={project_id} --log_group_id={log_group_id} --ttl_in_days=30",
+      "expected": "JSON response confirming TTL update",
+      "result": "SKIP"
+    },
+    {
+      "id": "TC-20",
+      "name": "Update log stream TTL (write - requires confirm)",
+      "command": "hcloud LTS UpdateLogStream --cli-region={region} --project_id={project_id} --log_group_id={log_group_id} --log_stream_id={log_stream_id} --ttl_in_days=30 --whether_log_storage=true",
+      "expected": "JSON response confirming update",
+      "result": "SKIP"
+    },
+    {
+      "id": "TC-21",
+      "name": "Update alarm rule status (write - requires confirm)",
+      "command": "hcloud LTS UpdateAlarmRuleStatus --cli-region={region} --project_id={project_id} --alarm_rule_id={alarm_rule_id} --status=STOPPING --type=keywords",
+      "expected": "JSON response confirming status change",
+      "result": "SKIP"
+    },
+    {
+      "id": "TC-22",
+      "name": "Delete log group (destructive - requires confirm)",
+      "command": "hcloud LTS DeleteLogGroup --cli-region={region} --project_id={project_id} --log_group_id={log_group_id}",
+      "expected": "JSON response confirming deletion",
+      "result": "SKIP"
+    },
+    {
+      "id": "TC-23",
+      "name": "Delete log stream (destructive - requires confirm)",
+      "command": "hcloud LTS DeleteLogStream --cli-region={region} --project_id={project_id} --log_group_id={log_group_id} --log_stream_id={log_stream_id}",
+      "expected": "JSON response confirming deletion",
+      "result": "SKIP"
+    },
+    {
+      "id": "TC-24",
+      "name": "Delete transfer (destructive - requires confirm)",
+      "command": "hcloud LTS DeleteTransfer --cli-region={region} --project_id={project_id} --log_transfer_id={transfer_id}",
+      "expected": "JSON response confirming deletion",
+      "result": "SKIP"
+    },
+    {
+      "id": "TC-25",
+      "name": "Delete keyword alarm rule (destructive - requires confirm)",
+      "command": "hcloud LTS DeleteKeywordsAlarmRule --cli-region={region} --project_id={project_id} --keywords_alarm_rule_id={alarm_rule_id}",
+      "expected": "JSON response confirming deletion",
+      "result": "SKIP"
+    },
+    {
+      "id": "TC-26",
+      "name": "Delete SQL alarm rule (destructive - requires confirm)",
+      "command": "hcloud LTS DeleteSqlAlarmRule --cli-region={region} --project_id={project_id} --sql_alarm_rule_id={alarm_rule_id}",
+      "expected": "JSON response confirming deletion",
+      "result": "SKIP"
+    }
+  ]
+}
