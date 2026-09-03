@@ -297,3 +297,35 @@ groups = data.get('groups') or data.get('data') or []
 | **OBS** | ❌ `ModelArts.6702` | ✅ (main volume only, needs `pool_id`) | ❌ silently fails |
 | **OBSFS** | ❌ `ModelArts.6702` | ✅ (main volume, needs `pool_id`) | ✅ (DYNAMIC mount, no dew_secret needed) |
 | **EFS** | untested | ✅ (per docs, needs SFS Turbo ID + `pool_id`) | untested |
+
+---
+
+## 14. BSS 询价注意事项 (Pricing Inquiry)
+
+**相关 API**: `BSS ListOnDemandResourceRatings` — 用于 CreateNotebook / StartNotebook 前的按需询价
+
+### 14.1 BSS API region 固定为 cn-north-1
+
+BSS（运营）API 的 endpoint 固定在 `cn-north-1`，与目标资源所在 region 无关。目标资源的 region 通过 `product_infos.N.region` 参数指定。
+
+```bash
+# 正确：BSS API 用 cn-north-1，目标资源 region 在 product_infos 中指定
+hcloud BSS ListOnDemandResourceRatings --cli-region=cn-north-1 \
+  --product_infos.1.region=cn-north-4 ...
+```
+
+### 14.2 Notebook flavor ID 直接作为 resource_spec
+
+与资源池不同（资源池需要通过 `ListResourceFlavors` 获取 `billingCode`），Notebook 的 `flavorId`（通过 `ListFlavors` 获取）直接作为 BSS 询价的 `resource_spec` 参数，无需额外转换。
+
+### 14.3 询价必须先于创建/启动
+
+> ⚠️ **强制要求**：在调用 `CreateNotebook` 或 `StartNotebook` 前，**必须**先完成 BSS 询价并向用户展示费用。未询价直接创建/启动属于违规操作。
+
+### 14.4 usage_measure_id 必须为 4
+
+`usage_measure_id` 必须为 `4`（小时），不是 `1`（元）。`1` 是货币单位，`4` 是时长单位（小时）。ModelArts 按需计费以小时为单位。
+
+### 14.5 resource_size 和 size_measure_id 为必填
+
+ModelArts 虚拟计算实例在 BSS 中被归类为线性产品，必须指定资源容量。`resource_size=1` 表示 1 个实例，`size_measure_id=14` 表示度量单位为"个"。省略这些参数会导致询价失败。

@@ -28,15 +28,54 @@ hcloud ModelArts ShowNotebook --cli-region={region} --id={instance_id}
 
 > ⚠️ **Requires user confirmation** — This operation creates a resource that may incur charges.
 
+**前置条件**：
+1. **ModelArts 委托（agency）已配置** — 否则报 `ModelArts.6701`。在控制台「模型训练服务 → 全局配置」中配置委托。
+2. **镜像与规格架构匹配** — 使用 `ListImage` 和 `ListFlavors` 查询，确保 `arch` 字段一致（详见 known-issues #9）。
+
+**方式一：OBS/OBSFS 作为主存储（CLI 直接支持）**
+
 ```bash
 hcloud ModelArts CreateNotebook --cli-region={region} \
   --image_id={image_id} \
   --name={instance_name} \
-  --volume.category=EVS \
-  --volume.ownership=PRIVATE \
-  --volume.size={size_gb} \
-  --flavor_id={flavor_id}
+  --volume.category=OBS \
+  --volume.ownership=DEDICATED \
+  --volume.uri=obs://{bucket_name}/ \
+  --volume.mount_path=/home/ma-user/work/ \
+  --volume.dew_secret_name={dew_secret_name} \
+  --flavor={flavor_id}
 ```
+
+> 注意：CLI 参数名是 `--flavor`（非 `flavor_id`）、`--volume.capacity`（非 `volume.size`）。`--volume.ownership` 仅支持 `MANAGED|DEDICATED`（非 `PRIVATE`）。CLI `--volume.category` 仅支持 `OBS|OBSFS|EFS`，不支持 `EVS`。
+
+**方式二：EVS 作为系统盘（需 `--cli-jsonInput` 绕过 CLI 枚举限制）**
+
+EVS 被 CLI 参数枚举拒绝，必须使用 JSON 文件方式（详见 known-issues #1/#10）：
+
+```json
+// create-notebook.json
+{
+  "body": {
+    "name": "my-notebook",
+    "flavor": "modelarts.vm.cpu.2u",
+    "image_id": "{image_id}",
+    "volume": {
+      "category": "EVS",
+      "ownership": "MANAGED",
+      "capacity": 5,
+      "mount_path": "/home/ma-user/work/"
+    }
+  }
+}
+```
+
+```bash
+hcloud ModelArts CreateNotebook --cli-region={region} \
+  --project_id={project_id} \
+  --cli-jsonInput=create-notebook.json
+```
+
+> ⚠️ 使用 `--cli-jsonInput` 时必须显式传 `--project_id`，自动解析不生效。JSON 必须用 `{"body":{...}}` 包裹。
 
 #### Update Notebook Instance
 
@@ -85,6 +124,7 @@ hcloud ModelArts ShowLease --cli-region={region} --id={instance_id}
 > ⚠️ **Requires user confirmation**
 
 ```bash
+# type 仅支持小写 timing|idle（与 ShowLease 查询返回的大写 TIMING 不同）
 hcloud ModelArts RenewLease --cli-region={region} --id={instance_id} --duration={duration} --type={type}
 ```
 
@@ -148,6 +188,7 @@ hcloud ModelArts ListImage --cli-region={region} [--limit=10] [--offset=0] [--na
 > ⚠️ **Requires user confirmation**
 
 ```bash
+# arch 仅支持大写 X86_64|AARCH64（与 ListImage/ShowImage 查询返回的小写 x86_64 不同）
 hcloud ModelArts RegisterImage --cli-region={region} \
   --swr_path={swr_path} \
   [--arch={arch}] \
@@ -252,6 +293,12 @@ hcloud ModelArts ListDynamicStorages --cli-region={region} --instance_id={instan
 #### Attach Dynamic Storage
 
 > ⚠️ **Requires user confirmation**
+
+**前置条件**：
+1. **实例必须为 RUNNING 状态** — STOPPED 状态挂载报 `ModelArts.6958`
+2. **mount_path 必须以 `/data/` 开头且带结尾斜杠** — 如 `/data/my-data/`；不带结尾斜杠报 `ModelArts.6785`
+3. **uri 需带结尾斜杠** — 如 `obs://bucket/`
+4. **仅支持 POSIX 桶（并行文件系统）** — OBJECT 桶报 `ModelArts.6772`（详见 known-issues #13）
 
 ```bash
 hcloud ModelArts AttachDynamicStorage --cli-region={region} \
