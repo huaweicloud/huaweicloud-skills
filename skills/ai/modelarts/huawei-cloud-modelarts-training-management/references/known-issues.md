@@ -24,8 +24,23 @@ JSON file must wrap the body in a `{"body": {...}}` envelope:
       "description": "Training job description"
     },
     "spec": {
-      "config": [...]
-    }
+      "resource": {
+        "flavor_id": "modelarts.vm.cpu.8u",
+        "node_count": 1
+      }
+    },
+    "tasks": [
+      {
+        "role": "worker",
+        "task_resource": {
+          "flavor_id": "modelarts.vm.cpu.8u",
+          "node_count": 1
+        },
+        "algorithm": {
+          "id": "{algorithm_id}"
+        }
+      }
+    ]
   }
 }
 ```
@@ -45,14 +60,15 @@ hcloud ModelArts CreateTrainingJob --cli-region={region} --cli-jsonInput=@/path/
 
 ### 3. Indexed Parameters
 
-**Issue**: Some parameters require indexed format (e.g., `config.1.worker_num`).
+**Issue**: Some parameters require indexed format (e.g., `tasks.1.task_resource.node_count`).
 
 **Workaround**: Use dot notation with indices:
 ```bash
 hcloud ModelArts CreateTrainingJob --cli-region={region} \
+  --kind=job \
   --metadata.name=my-job \
-  --spec.config.1.worker_num=1 \
-  --spec.config.1.flavor_id=modelarts.bm.gpu.v100
+  --spec.resource.flavor_id=modelarts.vm.cpu.8u \
+  --spec.resource.node_count=1
 ```
 
 For complex indexed params, prefer `--cli-jsonInput`.
@@ -342,4 +358,32 @@ hcloud ModelArts CreateSaveImageJob --cli-region={region} \
 hcloud ModelArts ShowSaveImageJob --cli-region={region} \
   --training_job_id={id} --task_id=worker-0
 # Returns: status=ACTIVE, message="BuildImage,True,Commit successfully|PushImage,True,Push successfully"
+```
+
+### 27. CreateAlgorithm OBS Code Directory Prerequisite
+
+**Issue**: `CreateAlgorithm` requires the OBS code directory (`--job_config.code_dir`) to exist and be accessible. Without this prerequisite, the API returns errors:
+- `ModelArts.2773`: OBS code directory not found or not accessible
+- `ModelArts.2758`: Code startup file path is invalid
+- `ModelArts.2810`: Custom image query failure (invalid `image_url`)
+
+**Workaround**: Before calling `CreateAlgorithm`, ensure the OBS code directory is properly prepared:
+
+1. **Using OBS code directory**: Upload training code to an OBS bucket. The directory must exist and be accessible. `ma_algo_configs/defaultConfigs.json` is optional (provides default algorithm configuration but is not required):
+   ```
+   obs://{bucket}/{code-dir}/
+   ├── train.py
+   └── ma_algo_configs/          # optional
+       └── defaultConfigs.json   # optional
+   ```
+
+2. **Using custom image**: Alternatively, provide a valid SWR image URL via `--job_config.engine.image_url` instead of `code_dir`/`boot_file`.
+
+```bash
+# Verify OBS path exists before creating algorithm
+hcloud OBS ListObjects --bucket={bucket} --prefix={code-dir}/
+
+# Then create algorithm
+hcloud ModelArts CreateAlgorithm --cli-region={region} \
+  --cli-jsonInput=/path/to/create-algorithm.json
 ```

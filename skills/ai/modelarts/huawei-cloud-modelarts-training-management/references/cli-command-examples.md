@@ -9,27 +9,152 @@
 
 ### 1.1 CreateTrainingJob — 创建训练作业
 
+> **API**: `POST /v2/{project_id}/training-jobs` (v2 API — uses `kind`/`metadata`/`spec`/`tasks` structure)
+
+> **Complex params**: This API requires `--cli-jsonInput` with a JSON file. The v2 API structure is significantly different from v1 — do NOT use `job_name`/`config` fields.
+
 ```bash
 hcloud ModelArts CreateTrainingJob --cli-region={region} \
-  --job_name=my-training-job \
-  --job_desc="Training job description" \
-  --workspace_id=0 \
-  --config.1.worker_num=1 \
-  --config.1.algorithm.id={algorithm_id} \
-  --config.1.algorithm.version=1.0.0 \
-  --config.1.flavor_id=modelarts.bm.gpu.v100 \
-  --config.1.parameter.1.key=learning_rate \
-  --config.1.parameter.1.value=0.001 \
-  --config.1.inputs.1.name=data_url \
-  --config.1.inputs.1.value=obs://my-bucket/training-data/ \
-  --config.1.outputs.1.name=train_url \
-  --config.1.outputs.1.value=obs://my-bucket/output/
+  --cli-jsonInput=/path/to/create-training-job.json
 ```
 
-> **Complex params**: For complex nested parameters, use `--cli-jsonInput=/path/to/create-job.json`:
-> ```json
-> {"body": {"job_name": "my-job", "config": [{"worker_num": 1, "algorithm": {"id": "xxx", "version": "1.0.0"}, "flavor_id": "modelarts.bm.gpu.v100"}]}}
-> ```
+**JSON file structure (v2 API)**:
+
+```json
+{
+  "body": {
+    "kind": "job",
+    "metadata": {
+      "name": "my-training-job",
+      "description": "Training job description",
+      "workspace_id": "0"
+    },
+    "algorithm": {
+      "id": "{algorithm_id}"
+    },
+    "spec": {
+      "resource": {
+        "flavor_id": "modelarts.vm.cpu.8u",
+        "node_count": 1
+      }
+    },
+    "tasks": [
+      {
+        "role": "worker",
+        "task_resource": {
+          "flavor_id": "modelarts.vm.cpu.8u",
+          "node_count": 1
+        },
+        "algorithm": {
+          "id": "{algorithm_id}"
+        }
+      }
+    ]
+  }
+}
+```
+
+**Required fields**:
+
+| Field | Description |
+|-------|-------------|
+| `kind` | Job type: `job` (normal), `autosearch_job`, `hetero_job`, etc. |
+| `metadata.name` | Training job name (1-64 chars, alphanumeric + `_-`) |
+| `algorithm.id` | Algorithm UUID from algorithm management |
+| `spec.resource.flavor_id` | Resource flavor ID (e.g., `modelarts.vm.cpu.8u`, `modelarts.bm.gpu.v100`) |
+| `spec.resource.node_count` | Number of nodes (default: 1) |
+| `tasks[].role` | Task role (e.g., `worker`) |
+| `tasks[].task_resource.flavor_id` | Flavor ID for the task |
+| `tasks[].task_resource.node_count` | Node count for the task |
+| `tasks[].algorithm.id` | Algorithm ID for the task |
+
+**Optional fields**:
+
+| Field | Description |
+|-------|-------------|
+| `metadata.description` | Job description (max 256 chars) |
+| `metadata.workspace_id` | Workspace ID (default: `0`) |
+| `spec.resource.pool_id` | Dedicated resource pool ID (omit for public pool) |
+| `tasks[].algorithm.inputs[].name` | Data input channel name |
+| `tasks[].algorithm.inputs[].remote.obs.obs_url` | Input OBS path (e.g., `/bucket/data/`) |
+| `tasks[].algorithm.outputs[].name` | Data output channel name |
+| `tasks[].algorithm.outputs[].remote.obs.obs_url` | Output OBS path (e.g., `/bucket/output/`) |
+
+**Example with data inputs/outputs**:
+
+```json
+{
+  "body": {
+    "kind": "job",
+    "metadata": {
+      "name": "my-training-job",
+      "description": "Training with data channels",
+      "workspace_id": "0"
+    },
+    "algorithm": {
+      "id": "{algorithm_id}"
+    },
+    "spec": {
+      "resource": {
+        "flavor_id": "modelarts.bm.gpu.v100",
+        "node_count": 1
+      }
+    },
+    "tasks": [
+      {
+        "role": "worker",
+        "task_resource": {
+          "flavor_id": "modelarts.bm.gpu.v100",
+          "node_count": 1
+        },
+        "algorithm": {
+          "id": "{algorithm_id}",
+          "inputs": [
+            {
+              "name": "data_url",
+              "remote": {
+                "obs": {
+                  "obs_url": "/my-bucket/training-data/"
+                }
+              }
+            }
+          ],
+          "outputs": [
+            {
+              "name": "train_url",
+              "remote": {
+                "obs": {
+                  "obs_url": "/my-bucket/output/"
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
+```
+
+> **Dedicated resource pool**: Add `spec.resource.pool_id` and `tasks[].task_resource.pool_id` to use a dedicated pool instead of the public pool.
+
+**Console URL (post-creation)**:
+
+After CreateTrainingJob succeeds, construct and display the ModelArts console URL for direct access to the job details page:
+
+```
+https://console.huaweicloud.com/modelarts/?region={region}#/training/detail/{job_id}
+```
+
+- `{region}`: the `--cli-region` value used in the command
+- `{job_id}`: the `metadata.id` field from the CreateTrainingJob response JSON
+
+> **Important**: Use `#/training/detail/{job_id}` (new console). Do NOT use `#/trainingJobs/details/{job_id}` (deprecated old console).
+
+Example:
+```
+https://console.huaweicloud.com/modelarts/?region=cn-north-4#/training/detail/39cefbeb-0d86-46cb-a55a-fe6a62f3529b
+```
 
 ### 1.2 ListTrainingJobs — 查询训练作业列表
 
@@ -54,11 +179,39 @@ hcloud ModelArts ListTrainingJobs --cli-region={region} \
 | `--search_type` | No | Search field type |
 | `--search_value` | No | Search keyword |
 
+**Console URL (post-query)**:
+
+After ListTrainingJobs succeeds, display the ModelArts console URL for the training job list page:
+
+```
+https://console.huaweicloud.com/modelarts/?region={region}#/training
+```
+
+- `{region}`: the `--cli-region` value used in the command
+
+Example:
+```
+https://console.huaweicloud.com/modelarts/?region=cn-north-4#/training
+```
+
 ### 1.3 ShowTrainingJobDetails — 查询训练作业详情
 
 ```bash
 hcloud ModelArts ShowTrainingJobDetails --cli-region={region} \
   --training_job_id={training_job_id}
+```
+
+**Console URL (post-query)**:
+
+After ShowTrainingJobDetails succeeds, display the ModelArts console URL for the job detail page:
+
+```
+https://console.huaweicloud.com/modelarts/?region={region}#/training/detail/{training_job_id}
+```
+
+Example:
+```
+https://console.huaweicloud.com/modelarts/?region=cn-north-4#/training/detail/39cefbeb-0d86-46cb-a55a-fe6a62f3529b
 ```
 
 ### 1.4 StopTrainingJob — 终止训练作业
@@ -172,17 +325,50 @@ hcloud ModelArts ListJobs --cli-region={region} \
 
 ### 2.1 CreateAlgorithm — 创建算法
 
+> **⚠️ Prerequisite**: The OBS code directory (`--job_config.code_dir`) must exist and be accessible. Alternatively, use a valid custom image (`--job_config.engine.image_url`). Without these, the API returns:
+> - `ModelArts.2773`: OBS code directory not found or not accessible
+> - `ModelArts.2758`: Code startup file path is invalid
+> - `ModelArts.2810`: Custom image query failure (invalid image)
+>
+> Note: `ma_algo_configs/defaultConfigs.json` is optional — it provides default algorithm configuration but is not required.
+
 ```bash
 # ⚠️ Write operation — requires user confirmation
 # Complex nested params — use --cli-jsonInput
+# Prerequisite: OBS code directory must exist and be accessible
 hcloud ModelArts CreateAlgorithm --cli-region={region} \
   --cli-jsonInput=/path/to/create-algorithm.json
 ```
 
 > JSON example:
 > ```json
-> {"body": {"name": "my-algorithm", "description": "Algorithm desc", "code_dir": "obs://my-bucket/code/", "boot_file": "obs://my-bucket/code/train.py", "engine_id": "xxx", "parameters": [{"name": "learning_rate", "value": "0.001", "description": "Learning rate"}]}}
+> {
+>   "body": {
+>     "metadata": {
+>       "name": "my-algorithm",
+>       "description": "Algorithm desc"
+>     },
+>     "job_config": {
+>       "code_dir": "obs://my-bucket/code/",
+>       "boot_file": "obs://my-bucket/code/train.py",
+>       "engine": {
+>         "engine_name": "PyTorch",
+>         "engine_version": "pytorch_1.8.0-cuda_10.2-py_3.7-ubuntu_18.04-x86_64"
+>       },
+>       "parameters": [
+>         {"name": "learning_rate", "value": "0.001", "description": "Learning rate"}
+>       ]
+>     }
+>   }
+> }
 > ```
+>
+> **⚠️ Common mistakes** (flat structure will fail):
+> | # | Wrong | Correct | Reason |
+> |---|-------|---------|--------|
+> | 1 | `body.name` | `body.metadata.name` | Name must be nested under `metadata` |
+> | 2 | `body.code_dir` | `body.job_config.code_dir` | Code paths must be nested under `job_config` |
+> | 3 | `body.engine_id` | `body.job_config.engine.engine_name` + `engine_version` | `engine_id` is invalid; must use `engine_name` + `engine_version` |
 
 ### 2.2 ListAlgorithms — 查询算法列表
 
@@ -526,8 +712,13 @@ hcloud ModelArts CreateSaveImageJob --cli-region={region} \
 
 ```bash
 hcloud ModelArts ShowSaveImageJob --cli-region={region} \
-  --job_id={job_id}
+  --training_job_id={training_job_id} --task_id={task_id}
 ```
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `--training_job_id` | Yes | Training job ID |
+| `--task_id` | Yes | Task ID (e.g., `worker-0`) |
 
 ---
 
@@ -536,11 +727,13 @@ hcloud ModelArts ShowSaveImageJob --cli-region={region} \
 ### Indexed Parameters
 
 ```bash
-# Multiple config items
---config.1.worker_num=1 \
---config.1.flavor_id=modelarts.bm.gpu.v100 \
---config.2.worker_num=2 \
---config.2.flavor_id=modelarts.bm.gpu.v100
+# Multiple tasks (v2 API)
+--tasks.1.role=worker \
+--tasks.1.task_resource.flavor_id=modelarts.vm.cpu.8u \
+--tasks.1.task_resource.node_count=1 \
+--tasks.2.role=worker \
+--tasks.2.task_resource.flavor_id=modelarts.bm.gpu.v100 \
+--tasks.2.task_resource.node_count=2
 
 # Multiple tags
 --tags.1.key=env \
