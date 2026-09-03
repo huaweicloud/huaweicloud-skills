@@ -1,0 +1,78 @@
+{
+  "region": "cn-north-4",
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "ListLogGroups - Query all log groups",
+      "command": "hcloud LTS ListLogGroups --cli-region=cn-north-4",
+      "expected": "Returns list of log groups",
+      "type": "query"
+    },
+    {
+      "id": "TC-02",
+      "name": "ListHostGroup - Query host groups",
+      "command": "hcloud LTS ListHostGroup --cli-region=cn-north-4",
+      "expected": "Returns list of host groups",
+      "type": "query"
+    },
+    {
+      "id": "TC-03",
+      "name": "ListHost offline - Find offline hosts",
+      "command": "hcloud LTS ListHost --cli-region=cn-north-4 --filter.host_status=offline",
+      "expected": "Returns offline hosts (collection broken)",
+      "type": "query"
+    },
+    {
+      "id": "TC-04",
+      "name": "ListHost error - Find error-state hosts",
+      "command": "hcloud LTS ListHost --cli-region=cn-north-4 --filter.host_status=error",
+      "expected": "Returns error-state hosts",
+      "type": "query"
+    },
+    {
+      "id": "TC-05",
+      "name": "ListAccessConfig - Query collection configs",
+      "command": "hcloud LTS ListAccessConfig --cli-region=cn-north-4",
+      "expected": "Returns access configs",
+      "type": "query"
+    },
+    {
+      "id": "TC-06",
+      "name": "ListTransfers - Query OBS transfers",
+      "command": "hcloud LTS ListTransfers --cli-region=cn-north-4 --log_transfer_type=OBS",
+      "expected": "Returns OBS transfer configs",
+      "type": "query"
+    },
+    {
+      "id": "TC-07",
+      "name": "ListTopnTrafficStatistics - TOP-N traffic",
+      "command": "hcloud LTS ListTopnTrafficStatistics --cli-region=cn-north-4 --resource_type=log_stream --topn=5 --start_time=1704067200000 --end_time=1704153600000 --search_list.1=write --sort_by=write --is_desc=true --filter.log_group_id=test",
+      "expected": "Returns TOP-N traffic stats",
+      "type": "query"
+    },
+    {
+      "id": "TC-08",
+      "name": "ListTimeLineTrafficStatistics - Timeline traffic",
+      "command": "hcloud LTS ListTimeLineTrafficStatistics --cli-region=cn-north-4 --resource_type=tenant --search_type=write --start_time=1704067200000 --end_time=1704153600000 --period=1 --timezone=Asia/Shanghai",
+      "expected": "Returns timeline traffic stats",
+      "type": "query"
+    },
+    {
+      "id": "TC-09",
+      "name": "CreateTransfer - Create OBS transfer (requires confirmation)",
+      "command": "hcloud LTS CreateTransfer --cli-region=cn-north-4 --log_group_id={group_id} --log_streams.1.log_stream_id={stream_id} --log_transfer_info.log_transfer_type=OBS --log_transfer_info.log_transfer_mode=cycle --log_transfer_info.log_transfer_status=ENABLE --log_transfer_info.log_storage_format=RAW --log_transfer_info.log_transfer_detail.obs_bucket_name={bucket} --log_transfer_info.log_transfer_detail.obs_period=5 --log_transfer_info.log_transfer_detail.obs_period_unit=min",
+      "expected": "Creates OBS transfer task",
+      "type": "create",
+      "requires_confirmation": true,
+      "cost_warning": true
+    },
+    {
+      "id": "TC-10",
+      "name": "DeleteTransfer - Delete transfer (requires confirmation)",
+      "command": "hcloud LTS DeleteTransfer --cli-region=cn-north-4 --log_transfer_id={transfer_id}",
+      "expected": "Deletes transfer config",
+      "type": "delete",
+      "requires_confirmation": true
+    }
+  ]
+}
