@@ -1,0 +1,213 @@
+# LakeWatch API 调用配置文件
+# 密码字段需加密后存储
+
+# ==================== 常用配置 ====================
+
+# LakeWatch 服务连接配置
+server:
+  host: "xxx.xxx.xxx.xxx"
+  port: 28950
+  scheme: "https"
+  # HTTP 请求超时（秒），默认 60；
+  timeout: 60
+
+# 认证配置
+auth:
+  username: "adminlakewatch"
+  # 密码需加密后填入，使用 --encrypt-password 命令加密
+  # 注意：Linux SCC 加密在不同集群间不通用；Windows AES 加密需将 .aes_key 文件一同迁移才能在另一台机器解密
+  encrypted_password: ""
+
+# ==================== 其他配置 ====================
+
+
+# Token 缓存配置
+token:
+  # 缓存目录，为空则使用系统临时目录下 lakewatch_token 子目录（Win: %TEMP%\lakewatch_token, Linux: /tmp/lakewatch_token）
+  cache_dir: ""
+  # 有效期（秒），默认1天
+  ttl: 86400
+
+# 加密组件配置
+# Linux: 自动使用 CryptoAPI（生产环境，密钥由安全组件管理）
+# Windows: 自动使用 AES-256-CBC（开发环境，密钥存本地 .aes_key 文件）
+crypto:
+  # ---------------- CryptoAPI 配置（Linux） ----------------
+  bin_path: "/usr/local/seccomponent/bin/CryptoAPI"
+  # SCC_CONF 路径，为空则从环境变量 SCC_CONF 读取
+  scc_conf: ""
+  # ----------------   AES 配置（Windows）   ----------------
+  # 密钥文件路径，为空则默认使用脚本同目录下的 .aes_key（首次加密时自动生成）
+  aes_key_file: ""
+  # --- SSL 配置 ---
+  # 是否跳过 SSL 证书验证，仅自签名证书的内网环境设为 true
+  verify_ssl: false
+  # 自定义 CA 证书路径，为空则使用系统默认证书
+  ca_cert: ""
+
+# ==================== API配置 ====================
+# API 接口定义
+# 每个接口包含: desc, method, path, timeout, required_params, optional_params
+# desc: 接口描述
+# method: GET 或 POST
+# path: 接口路径，支持 {param} 占位符
+# timeout: HTTP 请求超时（秒），不配置则使用 server.timeout
+# required_params: 必填参数列表
+# optional_params: 可选参数列表
+# param_rules: 参数校验规则（可选），未配置的参数不校验
+#   type: str(默认) | int | enum | path
+#   str 类型: pattern(正则), error(自定义报错)
+#   int 类型: min, max
+#   enum 类型: values(允许值列表)
+#   path 类型: prefix(路径前缀限制)
+# request_body: POST 请求体字段映射（key: 参数名, value: 对应JSON字段名）
+apis:
+  get_token:
+    desc: "获取认证Token（内部接口，Token获取已内置，无需手动调用）"
+    method: "POST"
+    path: "/lakewatch/v1/system/get-token"
+    # username/password 由配置文件 auth 节点自动提供
+    required_params: []
+    optional_params: []
+
+  collect_alarm_node_res_data:
+    desc: "收集告警节点资源数据（strategyName: system-load/memory-usage/disk-space等）"
+    method: "POST"
+    path: "/lakewatch/v1/data-agent-lw/{cluster_id}/collect-alarm-node-res-data/{strategy_name}"
+    timeout: 90
+    required_params:
+      - cluster_id
+      - strategy_name
+    optional_params:
+      - env
+      - alarm_id
+      - service_name
+      - role_name
+      - node_name
+    request_body:
+      alarm_id: "alarmId"
+      service_name: "serviceName"
+      role_name: "roleName"
+      node_name: "nodeName"
+      env: "env"
+
+  collect_alarm_log_data:
+    desc: "收集告警日志数据"
+    method: "POST"
+    path: "/lakewatch/v1/data-agent-lw/{cluster_id}/collect-alarm-log-data"
+    timeout: 90
+    required_params:
+      - cluster_id
+      - alarm_time
+      - log_directory
+      - log_file_name
+      - keywords
+      - log_type
+    optional_params:
+      - alarm_id
+      - service_name
+      - role_name
+      - node_name
+      - alarm_duration_minutes
+      - log_type
+      - log_keywords
+      - time_format
+      - file_compress_format
+      - time_pattern
+    param_rules:
+      alarm_time:
+        type: str
+        pattern: "^\\d{4}/\\d{2}/\\d{2} \\d{2}:\\d{2}:\\d{2} GMT[+-]\\d{2}:\\d{2}$"
+        error: "alarm_time 格式必须为 yyyy/MM/dd HH:mm:ss GMT+X:XX"
+      log_directory:
+        type: path
+        prefix: "/var/log/"
+      log_file_name:
+        type: str
+        pattern: "^[^/\\\\]+$"
+        error: "log_file_name 不允许包含路径分隔符 / 或 \\"
+      log_type:
+        type: enum
+        values: ["local", "hdfs"]
+      alarm_duration_minutes:
+        type: int
+        min: 1
+    request_body:
+      alarm_id: "alarmId"
+      service_name: "serviceName"
+      role_name: "roleName"
+      node_name: "nodeName"
+      alarm_time: "alarmTime"
+      alarm_duration_minutes: "alarmDurationMinutes"
+      log_directory: "logDirectory"
+      log_file_name: "logFileName"
+      log_type: "logType"
+      log_keywords: "logKeywords"
+      time_format: "timeFormat"
+      file_compress_format: "fileCompressFormat"
+      time_pattern: "timePattern"
+      keywords: "keywords"
+
+  access_manager_get:
+    # 没有调试，后面需要进行调试
+    desc: "代理调用MRS Manager GET接口（如审计配置查询、集群信息查询等）。查询参数直接放在target_url中，如 api/v2/audits?limit=1"
+    method: "GET"
+    path: "/lakewatch/v1/data-agent-lw/{cluster_id}/manager-access/{target_url}"
+    timeout: 30
+    required_params:
+      - cluster_id
+      - target_url
+    optional_params: []
+
+  query_alarm_skill:
+    desc: "查询告警诊断Skill内容"
+    method: "GET"
+    path: "/lakewatch/v1/data-agent-lw/{cluster_id}/query-alarm-skill/{alarm_sequence_id}"
+    required_params:
+      - cluster_id
+      - alarm_sequence_id
+    optional_params: []
+
+  query-node-ip:
+    desc: "查询节点名称对应的节点IP"
+    method: "GET"
+    path: "/lakewatch/v1/data-agent-lw/{cluster_id}/query-node-ip/{node_name}"
+    required_params:
+      - cluster_id
+      - node_name
+    optional_params: [ ]
+
+  query-management-node-info:
+    desc: "查询集群主备节点的名称"
+    method: "GET"
+    path: "/lakewatch/v1/data-agent-lw/{cluster_id}/query-management-node-info"
+    required_params:
+      - cluster_id
+    optional_params: [ ]
+
+  query-alarm-info:
+    desc: "根据告警流水号获取告警信息"
+    method: "GET"
+    path: "/lakewatch/v1/data-agent-lw/{cluster_id}/query-alarm-info/{alarm_sequence_id}"
+    required_params:
+      - cluster_id
+      - alarm_sequence_id
+    optional_params: [ ]
+
+  manager-access-get:
+    desc: "获取MRS 集群web页面相关结果的响应数据"
+    method: "GET"
+    path: "/{cluster_id}/manager-access/{*target_url}"
+    required_params:
+      - cluster_id
+      - target_url
+    optional_params: [ ]
+
+  manager-access-post:
+    desc: "获取MRS 集群web页面相关结果的响应数据"
+    method: "POST"
+    path: "/{cluster_id}/manager-access/{*target_url}"
+    required_params:
+      - cluster_id
+      - target_url
+    optional_params: [ ]
