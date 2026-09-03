@@ -30,14 +30,81 @@ User Request → Agent → hcloud ModelArts <Operation> --cli-region={region} [-
 - **Lease Management**: Query and renew notebook leases
 - **Tag Management**: Create, delete, query notebook tags
 
+### Scope
+
+本 skill **仅支持** ModelArts Notebook 实例管理（31 个 API），涵盖上述 7 个功能域。
+
+**不支持**以下 ModelArts 能力，相关请求请使用对应 skill：
+- 推理服务（在线服务、批量服务）— 使用推理服务管理 skill
+- DevServer（开发环境）— 使用 DevServer 管理 skill
+- 模型管理（导入/导出/发布模型）— 使用模型管理 skill
+- 训练作业（创建/管理训练任务）— 使用训练作业管理 skill
+- 自动搜索、超参调优 — 使用自动搜索 skill
+
 ---
 
 ## Prerequisites
 
 1. **hcloud CLI** installed and authenticated — Reference: https://support.huaweicloud.com/qs-hcli/hcli_02_003.html
-2. **Huawei Cloud AK/SK** configured via hcloud or environment variables
+2. **Huawei Cloud AK/SK** configured via hcloud (see Security & Credential Check below)
 3. **ModelArts service** enabled in the target region
 4. **IAM permissions** — See [references/iam-policies.md](references/iam-policies.md)
+
+### Security & Credential Check
+
+> **⚠️ CRITICAL: This section defines the agent's security boundary. Follow it strictly.**
+
+#### 🔒 Security Rules (MANDATORY)
+
+- 🚫 **NEVER** read, echo, or print AK/SK values (e.g., `cat ~/.hcloud/config.json`, `echo $HW_ACCESS_KEY` is FORBIDDEN)
+- 🚫 **NEVER** read or cat credential files such as `~/.hcloud/config.json` or any file that may contain secrets
+- 🚫 **NEVER** ask the user to input AK/SK directly in the conversation or command line
+- 🚫 **NEVER** execute `hcloud configure set --cli-access-key=... --cli-secret-key=...` — credential configuration is the *user's responsibility*, done outside the agent session
+- 🚫 **NEVER** pass `--cli-access-key`/`--cli-secret-key` on **every API call** — they will be exposed in process listings (`ps aux`) for the entire request duration
+- ✅ **ALWAYS** use `hcloud configure list` to check credential status (presence check only, not values)
+- ✅ If no valid profile exists, **STOP** and instruct the user to configure credentials outside this session
+- ✅ **Recommend** using IAM user with minimal permissions instead of main account
+
+#### ✅ Agent Credential Check (the ONLY acceptable check)
+
+```bash
+# Step 1: Check credential status — presence only, not values
+hcloud configure list
+```
+
+- ✅ **Expected**: Shows a valid profile with `mode: AKSK`
+- ❌ **If empty/invalid** → Guide the user with the 3-step process below:
+
+  **Step-by-step guidance (copy-paste for the user):**
+
+  > *"No valid credentials found. Please follow these 3 steps in your terminal:"*
+  >
+  > **① Get your AK/SK**
+  > Log in to [Huawei Cloud Console](https://console.huaweicloud.com) → IAM → Access Keys. If you don't have one, click "Create Access Key" and save it securely.
+  >
+  > **② Run this in your terminal (one-time setup):**
+  > ```bash
+  > hcloud configure set --cli-access-key=<YOUR_AK> --cli-secret-key=<YOUR_SK>
+  > ```
+  > *(Replace `<YOUR_AK>` and `<YOUR_SK>` with the values from step ①)*
+  >
+  > **③ Come back and tell me "configured"**, I'll verify it works.
+  >
+  > *Note: The `configure set` command stores your credentials in `~/.hcloud/config.json`. After that, all hcloud commands use them automatically — no need to pass AK/SK again.*
+  >
+  > *Agent: DO NOT execute any `configure set` command yourself.*
+
+#### 🔧 User's Responsibility (for documentation, NOT agent execution)
+
+The user configures credentials **outside the agent session** (in their own terminal):
+
+```bash
+# One-time setup — run this in your terminal, NOT in the agent chat
+HISTCONTROL=ignorespace
+ hcloud configure set --cli-access-key=<YOUR_AK> --cli-secret-key=<YOUR_SK>
+```
+
+> ⚠️ **Note**: hcloud CLI does **NOT** read `HW_ACCESS_KEY`/`HW_SECRET_KEY` environment variables (those are for Python SDK only). `hcloud configure set` is the only supported credential configuration method.
 
 ---
 
@@ -64,9 +131,30 @@ hcloud ModelArts <Operation> --cli-region={region} [--key=value ...]
 
 > `{region}` must be replaced with the actual region, e.g., `cn-north-4`. Do NOT hardcode the region.
 
+### Step 2.5: Consult Known Issues (Write Operations Only)
+
+> **Before executing any write operation**, read [references/known-issues.md](references/known-issues.md) and check for known pitfalls, parameter corrections, and required workarounds for the target API.
+
+Common workarounds to apply:
+
+| API | Issue | Workaround |
+|-----|-------|------------|
+| CreateNotebook (EVS) | CLI rejects `--volume.category=EVS` | Use `--cli-jsonInput` with `{"body":{...}}` wrapper + explicit `--project_id` |
+| CreateNotebook | Param name `flavor_id` wrong | Use `--flavor` |
+| CreateNotebook | Param name `volume.size` wrong | Use `--volume.capacity` |
+| CreateNotebook | `ownership=PRIVATE` invalid | Use `MANAGED` or `DEDICATED` |
+| AttachDynamicStorage | STOPPED instance rejected | Ensure instance is `RUNNING` |
+| AttachDynamicStorage | `mount_path` format | Must start with `/data/` and end with `/` |
+| RegisterImage | `arch` case mismatch | Use uppercase `X86_64`/`AARCH64` |
+| RenewLease | `type` case mismatch | Use lowercase `timing`/`idle` |
+
+> This step is **mandatory** for all write operations. Skipping it may result in CLI parameter errors or API failures that are already documented.
+
 ### Step 3: Handle Write Operations
 
-For all write operations (Create/Update/Delete/Start/Stop/Attach/Detach/Register/Sync/Renew), **prompt the user for confirmation before execution**.
+For all write operations (Create/Update/Delete/Start/Stop/Attach/Detach/Register/Sync/Renew), **prompt the user for confirmation before execution**. For chargeable operations (CreateNotebook, StartNotebook), **inquire BSS pricing first** to inform the user of costs. See [references/pricing-inquiry.md](references/pricing-inquiry.md) for the pricing inquiry workflow.
+
+> **删除类操作交互指引**：当用户请求删除标签（DeleteNotebookTags）、删除镜像分组（DeleteImageGroup）等操作但**未指定具体对象**时，必须先查询当前对象列表（如 `ShowNotebookTags` / `ListImageGroup`），向用户展示并确认要删除哪个对象，确认后再执行。避免因上下文不明确导致误删。
 
 ---
 
@@ -157,6 +245,7 @@ client = ModelArtsClient.new_builder() \
 | [references/api-paths.md](references/api-paths.md) | REST API paths from SDK source |
 | [references/cli-installation-guide.md](references/cli-installation-guide.md) | CLI installation and authentication guide |
 | [references/known-issues.md](references/known-issues.md) | Known issues and workarounds |
+| [references/pricing-inquiry.md](references/pricing-inquiry.md) | BSS pricing inquiry guide for chargeable operations |
 
 ## Known Issues (Summary)
 
@@ -185,6 +274,8 @@ client = ModelArtsClient.new_builder() \
 - All 31 API interfaces are available via `hcloud ModelArts` CLI
 - SDK fallback available via `huaweicloudsdkmodelarts` v1 if CLI encounters issues
 - Region is specified via `--cli-region` and should NOT be hardcoded
-- `--project_id` is auto-resolved from credentials if omitted
+- `--project_id` is auto-resolved from credentials if omitted (but **must be explicit** when using `--cli-jsonInput`)
 - All write operations (Create/Update/Delete/Start/Stop/Attach/Detach/Register/Sync/Renew) require user confirmation before execution
+- Chargeable operations (CreateNotebook, StartNotebook) require BSS pricing inquiry to inform users of costs before execution
 - API paths verified from SDK source `_http_info` `resource_path` — no inferred endpoints
+- No hardcoded AK/SK in any file — credentials managed by hcloud via `hcloud configure list/set`
