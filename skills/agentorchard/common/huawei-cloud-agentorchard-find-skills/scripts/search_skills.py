@@ -8,8 +8,8 @@ from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
 from urllib.parse import urlencode
 
-DEFAULT_API_BASE = "https://devdata.huaweicloud.com/rest/modelarts/user_system"
-DETAIL_URL_BASE = "https://pangu.huaweicloud.com/gallery/asset-detail.html"
+DEFAULT_API_BASE = "https://devdata.huaweicloud.com/rest/aiasset/user_system"
+DETAIL_URL_BASE = "https://pangu.huaweicloud.com/gallery/asset-detail-page.html"
 HTTP_TIMEOUT = 10
 
 
