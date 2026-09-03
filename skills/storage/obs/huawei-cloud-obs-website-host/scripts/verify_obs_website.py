@@ -210,6 +210,11 @@ def main() -> int:
         default=str(Path.home() / ".obsutilconfig"),
         help="obsutil config file path for optional bucket SDK check (default: ~/.obsutilconfig)",
     )
+    parser.add_argument(
+        "--https",
+        action="store_true",
+        help="Also verify the endpoint over HTTPS (typically with a custom domain with a bound certificate)",
+    )
     args = parser.parse_args()
 
     raw_domain = args.domain.strip()
@@ -234,6 +239,8 @@ def main() -> int:
 
     path_prefix = parsed.path.rstrip("/")
     scheme_bases = [("http", f"http://{host_port}{path_prefix}")]
+    if args.https:
+        scheme_bases.append(("https", f"https://{host_port}{path_prefix}"))
     raw_site = scheme_bases[0][1]
 
     checks: list[dict[str, object]] = []

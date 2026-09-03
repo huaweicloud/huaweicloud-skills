@@ -38,6 +38,26 @@ def build_parser() -> argparse.ArgumentParser:
         default=str(Path.home() / ".obsutilconfig"),
         help="obsutil config file path (default: ~/.obsutilconfig)",
     )
+    p.add_argument(
+        "--certificate",
+        default="",
+        help="HTTPS certificate (PEM) to attach to the custom domain. Requires --private-key and --certificate-name.",
+    )
+    p.add_argument(
+        "--private-key",
+        default="",
+        help="Private key (PEM) matching --certificate. Requires --certificate and --certificate-name.",
+    )
+    p.add_argument(
+        "--certificate-name",
+        default="",
+        help="Certificate name (3-63 chars) for the custom domain HTTPS binding.",
+    )
+    p.add_argument(
+        "--certificate-id",
+        default="",
+        help="CCM certificate ID (16 chars) from Cloud Certificate Manager, alternative to PEM direct upload.",
+    )
     return p
 
 
@@ -71,12 +91,47 @@ def pick_credential(cli_val: str, env_val: str, cfg: dict[str, str], cfg_keys: t
     return ""
 
 
+def build_cert_info(
+    name: str, certificate: str, private_key: str, certificate_id: str
+) -> dict[str, str]:
+    cert_info: dict[str, str] = {"name": name}
+    if certificate or private_key:
+        if not certificate or not private_key:
+            raise SystemExit(
+                "--certificate and --private-key must be provided together "
+                "when attaching a PEM certificate"
+            )
+        cert_info["certificate"] = certificate
+        cert_info["privateKey"] = private_key
+    elif certificate_id:
+        cert_info["certificateId"] = certificate_id
+    else:
+        raise SystemExit(
+            "--certificate-name requires either --certificate/--private-key "
+            "or --certificate-id"
+        )
+    return cert_info
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
     custom_domain = args.custom_domain.strip()
     if not custom_domain:
         parser.error("--custom-domain must not be blank")
+
+    cert_info: dict[str, str] | None = None
+    if args.certificate_name:
+        if not (3 <= len(args.certificate_name) <= 63):
+            parser.error("--certificate-name must be 3-63 characters long")
+        if args.certificate_id and len(args.certificate_id) != 16:
+            parser.error("--certificate-id must be a 16-character CCM certificate ID")
+        cert_info = build_cert_info(
+            args.certificate_name.strip(),
+            args.certificate,
+            args.private_key,
+            args.certificate_id.strip(),
+        )
 
     cfg = read_obsutil_config(args.obsutil_config)
     access_key = pick_credential(
@@ -142,7 +197,12 @@ def main() -> int:
             website = WebsiteConfiguration(indexDocument=index_doc)
         website_resp = client.setBucketWebsite(args.bucket_name, website)
 
-        custom_domain_resp = client.setBucketCustomDomain(args.bucket_name, custom_domain)
+        if cert_info:
+            custom_domain_resp = client.setBucketCustomDomain(
+                args.bucket_name, custom_domain, certificateInfo=cert_info
+            )
+        else:
+            custom_domain_resp = client.setBucketCustomDomain(args.bucket_name, custom_domain)
     except Exception as exc:  # noqa: BLE001
         print(f"OBS configuration failed: {exc}", file=sys.stderr)
         return 1
@@ -162,7 +222,8 @@ def main() -> int:
         )
         return 1
 
-    print("ok")
+    https_mode = " with HTTPS certificate" if cert_info else ""
+    print(f"ok: website hosting configured, custom domain {custom_domain} registered{https_mode}")
     return 0
 
 
