@@ -1,0 +1,33 @@
+{
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "ListGlobalConnectionBandwidths",
+      "command": "hcloud CC ListGlobalConnectionBandwidths --cli-region=cn-north-4 --domain_id=<account_id> --limit=2",
+      "expected": "Response contains globalconnection_bandwidths array and page_info object",
+      "type": "list"
+    },
+    {
+      "id": "TC-02",
+      "name": "ListGlobalConnectionBandwidthConfigs",
+      "command": "hcloud CC ListGlobalConnectionBandwidthConfigs --cli-region=cn-north-4 --domain_id=<account_id>",
+      "expected": "Response contains configs object with quotas, charge_mode, services, gcbSizeRange",
+      "type": "config"
+    },
+    {
+      "id": "TC-03",
+      "name": "ListSupportBindingConnectionBandwidths",
+      "command": "hcloud CC ListSupportBindingConnectionBandwidths --cli-region=cn-north-4 --domain_id=<account_id> --binding_service=CC --limit=2",
+      "expected": "Response contains globalconnection_bandwidths array and page_info object",
+      "type": "list"
+    },
+    {
+      "id": "TC-04",
+      "name": "ShowGlobalConnectionBandwidth",
+      "command": "hcloud CC ShowGlobalConnectionBandwidth --cli-region=cn-north-4 --domain_id=<account_id> --id=<gcb_id>",
+      "expected": "Response contains GCB details with id, name, size, type, admin_state, and bound instance info",
+      "type": "show",
+      "note": "Requires a valid GCB ID from TC-01 results"
+    }
+  ]
+}
