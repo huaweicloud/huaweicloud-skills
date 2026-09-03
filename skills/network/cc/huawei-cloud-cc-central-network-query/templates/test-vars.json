@@ -1,0 +1,46 @@
+{
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "List Central Network Instances",
+      "command": "hcloud CC ListCentralNetworks --cli-region={region} --domain_id={domain_id} --limit=5",
+      "expected": "JSON response with central_networks array"
+    },
+    {
+      "id": "TC-02",
+      "name": "Show Central Network Instance",
+      "command": "hcloud CC ShowCentralNetwork --cli-region={region} --domain_id={domain_id} --central_network_id={central_network_id}",
+      "expected": "JSON response with id, name, state, planes, connections fields"
+    },
+    {
+      "id": "TC-03",
+      "name": "List Central Network Attachments",
+      "command": "hcloud CC ListCentralNetworkAttachments --cli-region={region} --domain_id={domain_id} --central_network_id={central_network_id} --limit=5",
+      "expected": "JSON response with attachments array, each having attachment_instance_type"
+    },
+    {
+      "id": "TC-04a",
+      "name": "Show ER Route Table Attachment",
+      "command": "hcloud CC ShowCentralNetworkErRouteTableAttachment --cli-region={region} --domain_id={domain_id} --central_network_id={central_network_id} --er_route_table_attachment_id={attachment_id}",
+      "expected": "JSON response with ER route table attachment detail"
+    },
+    {
+      "id": "TC-04b",
+      "name": "Show GDGW Attachment",
+      "command": "hcloud CC ShowCentralNetworkGdgwAttachment --cli-region={region} --domain_id={domain_id} --central_network_id={central_network_id} --gdgw_attachment_id={attachment_id}",
+      "expected": "JSON response with GDGW attachment detail"
+    },
+    {
+      "id": "TC-05",
+      "name": "List Central Network Connections",
+      "command": "hcloud CC ListCentralNetworkConnections --cli-region={region} --domain_id={domain_id} --central_network_id={central_network_id} --limit=5",
+      "expected": "JSON response with connections array"
+    },
+    {
+      "id": "TC-06",
+      "name": "Show Single Connection via ID filter",
+      "command": "hcloud CC ListCentralNetworkConnections --cli-region={region} --domain_id={domain_id} --central_network_id={central_network_id} --id.1={connection_id}",
+      "expected": "JSON response with single connection in connections array"
+    }
+  ]
+}
