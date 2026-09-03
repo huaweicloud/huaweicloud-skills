@@ -1,6 +1,9 @@
 ---
 name: huawei-cloud-obs-website-host
 description: Configure Huawei Cloud OBS static website hosting with Python SDK and a custom domain. Use when the user needs to enable or repair OBS website hosting, set index or error pages, expose an existing bucket for public website access through a custom domain, or connect that domain through Huawei Cloud DNS when Huawei manages the zone. Triggers include OBS static website hosting, website endpoint, index page, error page, public-read bucket website access, custom domain CNAME, Huawei Cloud DNS, setBucketWebsite. 中文触发词包括：OBS 静态网站托管、网站托管、自定义域名解析。
+tags:
+  - static-site-hosting
+  - obs-website-hosting
 ---
 
 # Huawei Cloud OBS Website Host
@@ -10,6 +13,7 @@ description: Configure Huawei Cloud OBS static website hosting with Python SDK a
 Configure an existing Huawei Cloud OBS bucket for static website hosting with Huawei Cloud OBS Python SDK and register a custom domain for the site.
 
 Use this skill when the user wants to:
+
 - enable or repair OBS static website hosting
 - set an index document or error document
 - make the site reachable through a custom domain backed by the OBS static website endpoint
@@ -43,6 +47,7 @@ If the user does not have a custom domain prepared:
 ## Required Inputs
 
 Collect these before making changes:
+
 - `region`
 - `bucket_name`
 - `custom_domain` (**required** — see Security Compliance section above)
@@ -56,13 +61,13 @@ Assume static website files are already uploaded by the user.
 
 The skill depends on the following runtime/tooling components:
 
-- Python 3.8+ (required for `scripts/set_obs_website_sdk.py` and `scripts/verify_obs_website.py`)
+- Python 3.10+ (required for `scripts/set_obs_website_sdk.py` and `scripts/verify_obs_website.py`)
 - Huawei OBS Python SDK package: `esdk-obs-python`
 - `obsutil` (for generating and maintaining `.obsutilconfig` credential config)
 - Huawei Cloud AK/SK credentials (from `.obsutilconfig`)
 - Network access to OBS endpoint and website endpoint
 - `hcloud` CLI (required only when this skill manages Huawei Cloud DNS record operations)
-
+- dig / nslookup (optional)
 
 Install command:
 
@@ -76,6 +81,7 @@ Load `references/cli-installation-guide.md` when hcloud CLI or obsutil installat
 Load `references/hcloud-dns-obs-website.md` when creating or managing DNS CNAME records for OBS static website custom domains (step-by-step guide with hcloud `DNS CreateRecordSet` commands).
 
 Security note:
+
 - Never hardcode AK/SK in scripts or checked-in files.
 - Prefer environment variables for SDK scripts and secure local profile storage for CLI use.
 
@@ -84,6 +90,7 @@ Security note:
 Load `references/cli-installation-guide.md` when you need obsutil installation or `.obsutilconfig` setup guidance.
 
 The Python SDK helper script (`scripts/set_obs_website_sdk.py`) reads credentials by default from:
+
 1. CLI flags (`--access-key`, `--secret-key`, `--security-token`)
 2. Environment variables (`HW_ACCESS_KEY`, `HW_SECRET_KEY`, `HW_SECURITY_TOKEN`)
 3. `.obsutilconfig`
@@ -91,6 +98,7 @@ The Python SDK helper script (`scripts/set_obs_website_sdk.py`) reads credential
 If `ak`/`sk` are empty across all sources, the script must stop and ask the user to fill missing keys in `.obsutilconfig` (or provide CLI/env credentials).
 
 Credential check rule:
+
 - Only report presence/absence of keys (`ak`, `sk`, `securitytoken`).
 - Never print credential values during checks.
 - Never print full lines from `.obsutilconfig` to console.
@@ -150,6 +158,7 @@ if (-not (Test-Path $cfg)) {
 ```
 
 Do not use:
+
 - `cat ~/.obsutilconfig`
 - `grep -E "ak|sk|token" ~/.obsutilconfig`
 
@@ -204,6 +213,7 @@ python scripts/verify_obs_website.py \
 `obs endpoint` is auto-built as `https://obs.<region>.myhuaweicloud.com`.
 
 Pass/Fail rules:
+
 - `PASS`: `headBucket` is `2xx` and region matches (or region cannot be returned but bucket is reachable with `2xx`).
 - `FAIL`: `headBucket` non-`2xx`, `getBucketLocation` non-`2xx`, or explicit region mismatch.
 
@@ -240,11 +250,13 @@ curl -s -o /dev/null -w "%{http_code}\n" "$site_url/<index_document>"
 ```
 
 Pass/Fail rules:
+
 - `200` on `root_path` and `index_document`: anonymous read is working.
 - `403`: treat as two possible issues that must both be reported to the user: anonymous/public read is not enabled (ACL/policy issue), or the AK/SK used for SDK verification/configuration lacks required IAM permissions.
 - `404`: object path/name issue (for example, `index.html` missing or key path mismatch), not an anonymous-permission success.
 
 When `403` appears, treat setup as failed and tell the user both common possibilities:
+
 - bucket/object is not public-read for website access
 - AK/SK lacks required IAM permissions for OBS operations
 
@@ -253,6 +265,7 @@ Provide remediation via `references/iam-policies.md`.
 ## Response Shape
 
 Always return:
+
 1. Input summary
 2. Actions performed
 3. Verification results
@@ -270,6 +283,8 @@ When DNS is externally managed, also include a short DNS handoff section that te
 - If Huawei Cloud DNS changes are required for completion but the zone is unknown, ask for the zone instead of guessing.
 - Do not use the regular bucket endpoint as the final website result.
 - If the bucket name contains dots, warn that HTTPS access can be problematic.
+- If the user requires HTTPS access, success must be verified over `https://` (use `verify_obs_website.py --https`), which requires a certificate bound to the custom domain via `setBucketCustomDomain(..., certificateInfo=...)`. OBS supports HTTPS only on a custom domain and only with international (general) certificates, not SM (national crypto) certificates.
+- Never print or echo private key material passed via `--private-key`.
 - `obsutil` is allowed only for managing `~/.obsutilconfig`; do not use it to configure website hosting.
 - Do not perform any object upload actions in this skill.
 - Especially during verification, use read-only checks only; never upload test files.
@@ -295,8 +310,9 @@ Load `references/hcloud-dns-obs-website.md` for step-by-step DNS CNAME configura
 ## Scripts
 
 Use scripts only for repeatable checks and verification. Keep command output human-readable and focused on success/failure.
-- `scripts/set_obs_website_sdk.py <bucket_name> <endpoint> --custom-domain <domain> [--index-document <name>] [--error-document <name>]` applies static website hosting settings through the OBS SDK, registers the required custom domain, and reads credentials from CLI args, env vars, or `~/.obsutilconfig`.
-- `scripts/verify_obs_website.py --bucket-name <name> --region <region> [--domain <custom_domain>] [--index-document <name>] [--json]` verifies endpoint DNS/HTTP behavior and also performs a read-only bucket existence + region check (`headBucket` + `getBucketLocation`). If `--domain` is provided, that custom domain is the final verification target; otherwise it auto-builds the default website URL as `http://<bucket>.obs.<region>.myhuaweicloud.com`. The OBS API endpoint remains `https://obs.<region>.myhuaweicloud.com`. It prints structured sections (`Input summary`, `Actions performed`, `Verification results`, `Remediation steps`) so agent responses can directly reuse them.
+
+- `scripts/set_obs_website_sdk.py <bucket_name> <endpoint> --custom-domain <domain> [--index-document <name>] [--error-document <name>]` applies static website hosting settings through the OBS SDK, registers the required custom domain, and reads credentials from CLI args, env vars, or `~/.obsutilconfig`. OBS supports HTTPS on a custom domain via `setBucketCustomDomain(..., certificateInfo=...)`. To bind a certificate, use `--certificate-name` together with either `--certificate` + `--private-key` (direct PEM) or `--certificate-id` (CCM certificate). Only international (general) certificates are supported, not SM (national crypto) certificates.
+- `scripts/verify_obs_website.py --bucket-name <name> --region <region> [--domain <custom_domain>] [--index-document <name>] [--https] [--json]` verifies endpoint DNS/HTTP behavior and also performs a read-only bucket existence + region check (`headBucket` + `getBucketLocation`). If `--domain` is provided, that custom domain is the final verification target; otherwise it auto-builds the default website URL as `http://<bucket>.obs.<region>.myhuaweicloud.com`. Add `--https` to also verify the endpoint over TLS (typically with a custom domain that has a bound certificate). The OBS API endpoint remains `https://obs.<region>.myhuaweicloud.com`. It prints structured sections (`Input summary`, `Actions performed`, `Verification results`, `Remediation steps`) so agent responses can directly reuse them.
 
 ## Validation Rules
 
