@@ -1,0 +1,17 @@
+{
+  "test_cases": [
+    {"id": "TC-01", "name": "List host status", "command": "hcloud HSS ListHostStatus --cli-region={region} --limit=10 --offset=0", "expected": "JSON response with host list", "result": "PASS"},
+    {"id": "TC-02", "name": "Show host statistics", "command": "hcloud HSS ShowHostsStatistics --cli-region={region}", "expected": "JSON response with host statistics", "result": "PASS"},
+    {"id": "TC-03", "name": "List vulnerabilities", "command": "hcloud HSS ListVulnerabilities --cli-region={region} --limit=10 --offset=0", "expected": "JSON response with vulnerability list", "result": "PASS"},
+    {"id": "TC-04", "name": "Show vulnerability statistics", "command": "hcloud HSS ShowVulStatics --cli-region={region}", "expected": "JSON response with vulnerability statistics", "result": "PASS"},
+    {"id": "TC-05", "name": "Show baseline overview", "command": "hcloud HSS ShowBaselineOverview --cli-region={region}", "expected": "JSON response with baseline overview", "result": "PASS"},
+    {"id": "TC-06", "name": "Show baseline statistics", "command": "hcloud HSS ShowBaselineStatistic --cli-region={region}", "expected": "JSON response with baseline statistics", "result": "PASS"},
+    {"id": "TC-07", "name": "List event handle history", "command": "hcloud HSS ListEventHandleHistory --cli-region={region} --limit=10 --offset=0", "expected": "JSON response with event history list", "result": "PASS"},
+    {"id": "TC-08", "name": "List trojan alerts (av_1004)", "command": "hcloud HSS ListEventHandleHistory --cli-region={region} --event_class_ids.1=av_1004 --limit=10 --offset=0", "expected": "JSON response with trojan alert events", "result": "PASS"},
+    {"id": "TC-09", "name": "List brute-force alerts", "command": "hcloud HSS ListEventHandleHistory --cli-region={region} --event_class_ids.1=login_0001 --event_class_ids.2=login_0002 --limit=10 --offset=0", "expected": "JSON response with brute-force events", "result": "PASS"},
+    {"id": "TC-10", "name": "List weak password users", "command": "hcloud HSS ListWeakPasswordUsers --cli-region={region} --limit=10 --offset=0", "expected": "JSON response with weak password detection results", "result": "PASS"},
+    {"id": "TC-11", "name": "List common login IPs", "command": "hcloud HSS ListLoginCommonIp --cli-region={region}", "expected": "JSON response with common login IP list", "result": "PASS"},
+    {"id": "TC-12", "name": "List common login locations", "command": "hcloud HSS ListLoginCommonLocation --cli-region={region}", "expected": "JSON response with common login location list", "result": "PASS"},
+    {"id": "TC-13", "name": "Show risk score", "command": "hcloud HSS ShowRiskScore --cli-region={region}", "expected": "JSON response with risk score", "result": "PASS"}
+  ]
+}
