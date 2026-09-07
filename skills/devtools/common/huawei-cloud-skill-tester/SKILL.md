@@ -116,9 +116,8 @@ Tier 3: Final Report
 
 This testing framework uses `bash` scripts as the primary execution mode, not direct `hcloud` CLI commands. However, when executing test cases, the framework constructs `hcloud` CLI commands in the following format:
 
-```bash
-hcloud <Service> <Operation> --cli-region={region} [--param1=value1 ...]
-```
+> Format template — illustrative, NOT an executable command:
+> `hcloud <Service> <Operation> --cli-region={region} [--param1=value1 ...]`
 
 **Format Rules:**
 
@@ -132,9 +131,8 @@ hcloud <Service> <Operation> --cli-region={region} [--param1=value1 ...]
 
 For OBS service, the framework uses `hcloud obs` (obsutil) subsystem:
 
-```bash
-hcloud obs <command> [args...] [options...]
-```
+> Format template — illustrative, NOT an executable command:
+> `hcloud obs <command> [args...] [options...]`
 
 ---
 
@@ -203,6 +201,61 @@ bash scripts/tier2/phase-6-full-flow.sh --skill "huawei-cloud-rds-intelligent-se
 | `ALLOW_WRITES` | `0` | When `1`, Phase 4/6 write cases actually execute against the live API (default is skip) |
 | `HUAWEI_REGION` | `cn-north-4` | Huawei Cloud region |
 | `HUAWEI_ACCESS_KEY` / `HUAWEI_SECRET_KEY` | — | Required for Phase 4/6 SDK/CLI execution; any `HUAWEI*` / `HW*` / `HWC*` prefixed AK/SK env var is also accepted |
+| `SKILL_QUALITY_ENDPOINT` | `https://skillsapi.developer.myhuaweicloud.com/api/quality/report` | Quality-report server URL (see Quality Reporting below) |
+| `SKILL_QUALITY_NAME` | auto (`huawei-cloud-skill-tester`) | Skill name reported to the operations console; read by the SDK when `report()` has no explicit `skill_name` |
+| `SKILL_QUALITY_DISABLE` | `0` | Set to `1` to disable quality reporting entirely (local debugging) |
+| `SKILL_QUALITY_TIMEOUT` | `3` | Report HTTP timeout in seconds (non-blocking) |
+| `SKILL_QUALITY_TRIGGER` | `workflow` | Trigger type reported (`agent` / `workflow` / `auto` / `manual`) |
+| `SKILL_QUALITY_ALLOW_ANONYMOUS` | `1` | Allow degraded anonymous reporting when no AK/SK is available (exit 77 / `C01` events remain countable); `0` keeps the legacy skip-without-credentials behavior |
+
+---
+
+## Quality Reporting
+
+This Skill integrates [skill_quality_sdk.py](scripts/skill_quality_sdk.py) (vendored,
+zero third-party dependency) for execution quality reporting. Every `run-test-pipeline.sh`
+run automatically reports one record — **skill name (`huawei-cloud-skill-tester`),
+status (`success` / `sys_fail`), error code, cost (seconds), skills under test, and
+output directory** — to the skillsopr operations console, enabling usage/statistics
+counting of the tester itself.
+
+### Integration
+
+- **Bash entry point (`scripts/run-test-pipeline.sh`):** the `report_quality` function
+  is wired into the `EXIT`/`INT`/`TERM` trap, so every pipeline exit path reports:
+  - exit `0` → `status=success`
+  - exit `77` → `status=sys_fail`, `error_code=C01` (AK/SK credentials missing)
+  - any other non-zero exit → `status=sys_fail`, `error_code=B01`
+- The report is **fire-and-forget** (background process, 3s HTTP timeout): reporting
+  failure or latency never blocks, changes, or fails the testing pipeline.
+- The SDK is Python 3 stdlib only; `python3` is already a hard prerequisite.
+
+### Authentication & degraded reporting
+
+- The SDK reads AK/SK with the same fallback chain as the tester itself
+  (`lib/utils.sh`): `HUAWEI_ACCESS_KEY` / `HUAWEI_SECRET_KEY` first, then
+  `SKILL_QUALITY_AK/SK` and other `HUAWEI*` / `HW*` / `HWC*` variants —
+  so a tester run that has valid credentials always reports authenticated.
+- When **no AK/SK is available** (e.g. the exit-77 credential-missing path), the SDK
+  degrades to a direct anonymous POST to the APIG public endpoint and marks the
+  payload `unauthenticated=1` (default `SKILL_QUALITY_ALLOW_ANONYMOUS=1`). This keeps
+  `C01` / `sys_fail` events structurally reachable — they would otherwise be silently
+  dropped because the IAM token (which itself needs credentials) can never be obtained.
+  Set `SKILL_QUALITY_ALLOW_ANONYMOUS=0` to restore the legacy skip-without-credentials
+  behavior.
+
+### Error Code Convention
+
+| Prefix | Category | Examples |
+|--------|----------|---------|
+| U | User input | U01 missing param, U03 no data found |
+| C | Configuration | C01 missing AK/SK/env |
+| N | Network | N01 timeout, N02 connection refused |
+| B | Code bug | B01 null pointer, B04 version mismatch |
+| P | Platform | P01 scheduler error, P02 resource insufficient |
+
+Reporting is non-blocking and fails silently — it never interrupts the Skill main flow.
+Disable via `SKILL_QUALITY_DISABLE=1` for local testing.
 
 ---
 
@@ -217,6 +270,7 @@ bash scripts/tier2/phase-6-full-flow.sh --skill "huawei-cloud-rds-intelligent-se
 - `references/verification-method.md` — How to manually verify each phase (PowerShell + Git Bash)
 - `references/phase-details.md` — 各 Phase 完整实现规范（步骤、判定标准、JSON 字段）
 - `references/agent-protocol.md` — 凭证请求协议（AK/SK 缺失时的完整处理流程）
+- `scripts/skill_quality_sdk.py` — Vendored execution-quality reporting SDK (see Quality Reporting)
 
 ### 配套参考
 
