@@ -1,0 +1,26 @@
+region_name         = "cn-north-4"
+security_group_name = "demo-security-group"
+security_group_rule_configurations = [
+  # Allow ICMP only from a documented placeholder CIDR. Replace with your approved source CIDR.
+  {
+    direction        = "ingress"
+    ethertype        = "IPv4"
+    protocol         = "icmp"
+    ports            = null
+    remote_ip_prefix = "203.0.113.10/32"
+  },
+  # Allow HTTPS only from a documented placeholder CIDR. Do not expose management ports to the public internet.
+  {
+    direction        = "ingress"
+    ethertype        = "IPv4"
+    protocol         = "tcp"
+    ports            = "443"
+    remote_ip_prefix = "203.0.113.10/32"
+  },
+  # Allow all IPv4 egress traffic
+  {
+    direction        = "egress"
+    ethertype        = "IPv4"
+    remote_ip_prefix = "0.0.0.0/0"
+  },
+]

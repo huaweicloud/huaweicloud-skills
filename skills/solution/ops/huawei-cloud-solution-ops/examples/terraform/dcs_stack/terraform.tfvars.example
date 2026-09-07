@@ -1,0 +1,9 @@
+region_name         = "cn-north-4"
+vpc_name            = "demo-dcs-vpc"
+subnet_name         = "demo-dcs-subnet"
+subnet_cidr         = "192.168.1.0/24"
+subnet_gateway_ip   = "192.168.1.1"
+instance_name       = "demo-dcs"
+instance_capacity   = 1
+instance_engine_version = "7.0"
+# Required secret input: provide TF_VAR_instance_password at runtime; never store it in this file.

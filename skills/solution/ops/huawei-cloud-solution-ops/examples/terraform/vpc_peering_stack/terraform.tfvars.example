@@ -1,0 +1,15 @@
+region_name = "cn-north-4"
+
+vpc_configurations = [
+  {
+    vpc_name    = "demo-source-vpc"
+    vpc_cidr    = "192.168.0.0/18"
+    subnet_name = "demo-source-subnet"
+  },
+  {
+    vpc_name    = "demo-target-vpc"
+    vpc_cidr    = "192.168.128.0/18"
+    subnet_name = "demo-target-subnet"
+  }
+]
+peering_connection_name = "demo-vpc-peering"

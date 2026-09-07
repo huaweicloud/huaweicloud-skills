@@ -1,0 +1,9 @@
+[
+  {
+    "question": "在获得明确确认后修改指定云服务器的名称。",
+    "relevant_apis": [
+      "ECS-UpdateServer"
+    ],
+    "type": "update"
+  }
+]

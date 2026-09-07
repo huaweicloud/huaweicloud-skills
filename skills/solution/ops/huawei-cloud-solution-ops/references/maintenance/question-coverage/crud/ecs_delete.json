@@ -1,0 +1,9 @@
+[
+  {
+    "question": "在获得明确确认后删除指定的云服务器。",
+    "relevant_apis": [
+      "ECS-DeleteServers"
+    ],
+    "type": "delete"
+  }
+]

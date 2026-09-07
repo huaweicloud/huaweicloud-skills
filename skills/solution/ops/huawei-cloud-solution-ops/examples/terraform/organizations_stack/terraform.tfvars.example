@@ -1,0 +1,4 @@
+region_name = "cn-north-4"
+name        = "demo-member-account"
+email       = "member-account@example.com"
+description = "Created by huaweicloud-skill Terraform example"

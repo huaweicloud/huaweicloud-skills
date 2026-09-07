@@ -1,0 +1,8 @@
+region_name         = "cn-north-4"
+vpc_name            = "demo-apig-vpc"
+subnet_name         = "demo-apig-subnet"
+subnet_cidr         = "192.168.1.0/24"
+subnet_gateway_ip   = "192.168.1.1"
+security_group_name = "demo-apig-secgroup"
+instance_name       = "demo-apig"
+plugin_name         = "demo-proxy-cache-plugin"

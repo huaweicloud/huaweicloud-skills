@@ -1,0 +1,6 @@
+region_name         = "cn-north-4"
+vpc_name            = "demo-mysql-vpc"
+subnet_name         = "demo-mysql-subnet"
+security_group_name = "demo-mysql-sg"
+rds_name            = "demo-mysql-rds"
+# Required secret input: provide TF_VAR_rds_password at runtime; never store it in this file.

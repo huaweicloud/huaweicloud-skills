@@ -1,0 +1,38 @@
+{
+  "path": {
+    "project_id": "<project_id>"
+  },
+  "body": {
+    "server": {
+      "name": "<server_name>",
+      "availability_zone": "<availability_zone>",
+      "flavorRef": "<flavor_id>",
+      "imageRef": "<image_id>",
+      "vpcid": "<vpc_id>",
+      "nics": [
+        {
+          "subnet_id": "<subnet_id>"
+        }
+      ],
+      "security_groups": [
+        {
+          "id": "<security_group_id>"
+        }
+      ],
+      "root_volume": {
+        "volumetype": "<root_volume_type>"
+      },
+      "publicip": {
+        "eip": {
+          "iptype": "<eip_type>",
+          "bandwidth": {
+            "sharetype": "PER",
+            "size": 5
+          }
+        }
+      },
+      "key_name": "<key_name>",
+      "count": 1
+    }
+  }
+}

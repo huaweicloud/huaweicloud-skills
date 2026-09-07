@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "description": "Machine-readable input, evidence, output, and risk contracts for selected high-value scenario routes.",
+  "contract_fields": [
+    "id",
+    "required_inputs",
+    "optional_inputs",
+    "evidence_requirements",
+    "output_sections",
+    "risk_boundaries"
+  ],
+  "contracts": [
+    {
+      "id": "obs-static-website-hosting",
+      "required_inputs": [
+        "region",
+        "bucket_name",
+        "website_entry_document"
+      ],
+      "optional_inputs": [
+        "custom_domain",
+        "dns_zone_or_record",
+        "cdn_domain",
+        "https_certificate_id"
+      ],
+      "evidence_requirements": [
+        "Bucket region, endpoint, website configuration, and object accessibility are read back.",
+        "Custom-domain DNS/CNAME and HTTPS certificate deployment are verified when used.",
+        "A bounded HTTP request distinguishes website, permission, origin, and DNS failures."
+      ],
+      "output_sections": [
+        "selected_architecture",
+        "configuration_evidence",
+        "access_verification",
+        "risk_and_next_steps"
+      ],
+      "risk_boundaries": [
+        "Bucket policy, ACL, website configuration, CDN, DNS, and certificate changes require explicit confirmation.",
+        "Do not expose object data, access keys, or secret policy values in results."
+      ]
+    },
+    {
+      "id": "observability-readiness",
+      "required_inputs": [
+        "target_service_or_resource_scope",
+        "region",
+        "observation_window"
+      ],
+      "optional_inputs": [
+        "metric_namespace",
+        "metric_name",
+        "dimensions",
+        "log_group_or_stream",
+        "alarm_id"
+      ],
+      "evidence_requirements": [
+        "Resource state, metric namespace/dimensions, and time range are identified before drawing a health conclusion.",
+        "Log and alarm evidence is narrowed to the declared workload and time window.",
+        "Missing telemetry is reported as a coverage gap rather than a healthy result."
+      ],
+      "output_sections": [
+        "scope_and_context",
+        "signal_evidence",
+        "health_or_gap_assessment",
+        "next_read_only_or_guarded_step"
+      ],
+      "risk_boundaries": [
+        "Do not create or modify alarms without an explicit confirmation flow.",
+        "Treat log content, trace identifiers, and alarm payloads as potentially sensitive."
+      ]
+    },
+    {
+      "id": "audit-and-cost-governance",
+      "required_inputs": [
+        "account_or_project_scope",
+        "region_scope",
+        "review_goal"
+      ],
+      "optional_inputs": [
+        "tag_or_owner_filter",
+        "idle_threshold",
+        "billing_period",
+        "resource_types"
+      ],
+      "evidence_requirements": [
+        "Inventory, lifecycle state, binding state, and tag evidence are kept together for each candidate.",
+        "Billing facts, period, scope, and money basis are stated before cost conclusions are made.",
+        "Dependencies and rollback checks are captured before a teardown recommendation."
+      ],
+      "output_sections": [
+        "scope_and_inventory_summary",
+        "candidate_evidence",
+        "cost_or_governance_assessment",
+        "review_required_actions"
+      ],
+      "risk_boundaries": [
+        "Idle candidates are not deletion authorization.",
+        "Billing, trace, tag, and resource identifiers must be summarized or redacted when sensitive."
+      ]
+    },
+    {
+      "id": "container-image-deployment",
+      "required_inputs": [
+        "target_platform",
+        "region",
+        "image_repository_and_tag_or_digest",
+        "namespace",
+        "network_and_exposure_intent"
+      ],
+      "optional_inputs": [
+        "vpc_id",
+        "subnet_id",
+        "security_group_id",
+        "deployment_or_workload_name",
+        "service_name",
+        "resource_requests_and_limits",
+        "log_and_metric_destination"
+      ],
+      "evidence_requirements": [
+        "Image identity and pull authorization are verified without exposing credentials.",
+        "Namespace, network, workload, Service/Ingress, logs, and metrics are checked in dependency order.",
+        "Workload readiness is followed by endpoint or protocol evidence before declaring the application available."
+      ],
+      "output_sections": [
+        "deployment_scope",
+        "dependency_and_preflight_evidence",
+        "workload_and_access_verification",
+        "risk_gates_and_next_steps"
+      ],
+      "risk_boundaries": [
+        "Network, workload, Service, Secret, Ingress, and public exposure changes require explicit confirmation.",
+        "Do not return image-pull credentials, Secret values, or tokens."
+      ]
+    }
+  ]
+}

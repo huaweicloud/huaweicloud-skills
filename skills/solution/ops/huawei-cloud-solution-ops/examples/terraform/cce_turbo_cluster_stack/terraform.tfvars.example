@@ -1,0 +1,8 @@
+region_name          = "cn-north-4"
+vpc_name             = "demo-cce-turbo-vpc"
+cluster_subnet_name  = "demo-cce-cluster-subnet"
+eni_subnet_name      = "demo-cce-eni-subnet"
+cluster_name         = "demo-cce-turbo"
+cluster_flavor_id    = "cce.s1.small"
+cluster_version      = null
+create_eip           = true

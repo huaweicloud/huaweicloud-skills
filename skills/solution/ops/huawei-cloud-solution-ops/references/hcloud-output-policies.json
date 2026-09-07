@@ -1,0 +1,332 @@
+{
+  "schema_version": 1,
+  "defaults": {
+    "max_parsed_json_chars": 12000,
+    "sample_items": 3,
+    "sample_fields": 12,
+    "sample_string_chars": 240
+  },
+  "operations": {
+    "IMS:ListImages": {
+      "mode": "summary",
+      "risk_class": "large_catalog",
+      "default_limit": {
+        "param": "limit",
+        "value": 20
+      },
+      "sample_fields": [
+        "id",
+        "name",
+        "status",
+        "visibility",
+        "__platform",
+        "__imagetype",
+        "os_version",
+        "min_disk",
+        "min_ram",
+        "created_at"
+      ]
+    },
+    "IMS:GlanceListImages": {
+      "mode": "summary",
+      "risk_class": "large_catalog",
+      "default_limit": {
+        "param": "limit",
+        "value": 20
+      }
+    },
+    "ECS:ListFlavors": {
+      "mode": "summary",
+      "risk_class": "large_catalog",
+      "default_limit": {
+        "param": "limit",
+        "value": 20
+      },
+      "sample_fields": [
+        "id",
+        "name",
+        "vcpus",
+        "ram",
+        "disk",
+        "os_extra_specs"
+      ]
+    },
+    "ECS:ListFlavorSellPolicies": {
+      "mode": "summary",
+      "risk_class": "large_catalog",
+      "default_limit": {
+        "param": "limit",
+        "value": 20
+      },
+      "sample_fields": [
+        "flavor_id",
+        "flavor_name",
+        "availability_zone",
+        "availability_zone_id",
+        "sell_status",
+        "sell_mode",
+        "spot_options",
+        "interruption_policy"
+      ]
+    },
+    "ECS:ListServersDetails": {
+      "mode": "summary",
+      "risk_class": "tenant_scale_list",
+      "default_limit": {
+        "param": "limit",
+        "value": 20
+      },
+      "sample_fields": [
+        "id",
+        "name",
+        "status",
+        "flavor",
+        "addresses",
+        "created",
+        "updated"
+      ]
+    },
+    "DNS:ListRecordSets": {
+      "mode": "summary",
+      "risk_class": "tenant_scale_list",
+      "default_limit": {
+        "param": "limit",
+        "value": 50
+      },
+      "sample_fields": [
+        "id",
+        "name",
+        "type",
+        "status",
+        "zone_id",
+        "records",
+        "ttl"
+      ]
+    },
+    "LTS:ListLogs": {
+      "mode": "summary",
+      "risk_class": "log_records",
+      "default_limit": {
+        "param": "limit",
+        "value": 50
+      },
+      "required_all": [
+        "log_group_id",
+        "log_stream_id",
+        "start_time",
+        "end_time"
+      ],
+      "sample_fields": [
+        "time",
+        "__time__",
+        "host_name",
+        "level",
+        "message"
+      ]
+    },
+    "CTS:ListTraces": {
+      "mode": "summary",
+      "risk_class": "audit_records",
+      "default_limit": {
+        "param": "limit",
+        "value": 50
+      },
+      "sample_fields": [
+        "trace_id",
+        "trace_name",
+        "trace_type",
+        "service_type",
+        "resource_type",
+        "resource_name",
+        "trace_rating",
+        "time"
+      ]
+    },
+    "CFW:ListAccessControlLogs": {
+      "mode": "summary",
+      "risk_class": "security_logs",
+      "default_limit": {
+        "param": "limit",
+        "value": 50
+      }
+    },
+    "CFW:ListAttackLogs": {
+      "mode": "summary",
+      "risk_class": "security_logs",
+      "default_limit": {
+        "param": "limit",
+        "value": 50
+      }
+    },
+    "CFW:ListFlowLogs": {
+      "mode": "summary",
+      "risk_class": "security_logs",
+      "default_limit": {
+        "param": "limit",
+        "value": 50
+      }
+    },
+    "CES:BatchListMetricData": {
+      "mode": "summary",
+      "risk_class": "time_series"
+    },
+    "CES:BatchListSpecifiedMetricData": {
+      "mode": "summary",
+      "risk_class": "time_series"
+    },
+    "CES:ShowMetricData": {
+      "mode": "summary",
+      "risk_class": "time_series"
+    },
+    "RMS:ListAllResources": {
+      "mode": "summary",
+      "risk_class": "account_wide_resources",
+      "default_limit": {
+        "param": "limit",
+        "value": 50
+      }
+    },
+    "RMS:ListResources": {
+      "mode": "summary",
+      "risk_class": "account_wide_resources",
+      "default_limit": {
+        "param": "limit",
+        "value": 50
+      }
+    },
+    "COC:ListResources": {
+      "mode": "summary",
+      "risk_class": "account_wide_resources",
+      "default_limit": {
+        "param": "limit",
+        "value": 50
+      }
+    },
+    "CCI:listCoreV1PodForAllNamespaces": {
+      "mode": "summary",
+      "risk_class": "all_namespace_workloads",
+      "default_limit": {
+        "param": "limit",
+        "value": 50
+      }
+    },
+    "CCI:listNamespacedPods": {
+      "mode": "summary",
+      "risk_class": "workload_objects"
+    },
+    "CCI:listCoreV1NamespacedPod": {
+      "mode": "summary",
+      "risk_class": "workload_objects",
+      "default_limit": {
+        "param": "limit",
+        "value": 50
+      }
+    },
+    "CCI:listCoreV1NamespacedEvent": {
+      "mode": "summary",
+      "risk_class": "workload_events",
+      "default_limit": {
+        "param": "limit",
+        "value": 50
+      }
+    },
+    "CCI:listMetricsV1beta1NamespacedPodMetrics": {
+      "mode": "summary",
+      "risk_class": "workload_metrics",
+      "default_limit": {
+        "param": "limit",
+        "value": 50
+      }
+    },
+    "SWR:ListRepositoryTags": {
+      "mode": "summary",
+      "risk_class": "repository_catalog",
+      "default_limit": {
+        "param": "limit",
+        "value": 50
+      },
+      "sample_fields": [
+        "name",
+        "tag",
+        "digest",
+        "size",
+        "created",
+        "updated"
+      ]
+    },
+    "CodeArtsRepo:ShowFileContent": {
+      "mode": "file-only",
+      "risk_class": "file_content"
+    },
+    "CodeArtsRepo:ShowFileRaw": {
+      "mode": "file-only",
+      "risk_class": "file_content"
+    },
+    "CodeArtsRepo:ShowReadmeFile": {
+      "mode": "file-only",
+      "risk_class": "file_content"
+    },
+    "CodeArtsRepo:DownloadArchive": {
+      "mode": "file-only",
+      "risk_class": "archive_content"
+    },
+    "CodeArtsRepo:ShowRepositoryArchive": {
+      "mode": "file-only",
+      "risk_class": "archive_content"
+    },
+    "RDS:DownloadErrorlog": {
+      "mode": "file-only",
+      "risk_class": "log_download"
+    },
+    "RDS:DownloadSlowlog": {
+      "mode": "file-only",
+      "risk_class": "log_download"
+    },
+    "DDS:DownloadErrorlog": {
+      "mode": "file-only",
+      "risk_class": "log_download"
+    },
+    "DDS:DownloadSlowlog": {
+      "mode": "file-only",
+      "risk_class": "log_download"
+    }
+  },
+  "families": [
+    {
+      "id": "content-or-download",
+      "operation_pattern": "^(Download|Export)|(?:FileContent|FileRaw|RepositoryArchive|CommitFileDiff|DiffLines|BlameLines|BuildLog|WebhookLog)$",
+      "mode": "file-only",
+      "risk_class": "content_or_download"
+    },
+    {
+      "id": "logs-events-history",
+      "operation_pattern": "(?:List|Search|Query|Show|Read).*(?:Logs?|Traces?|Events?|Incidents?|Alerts?|History|Histories|Auditlogs?|Slowlogs?|Errorlogs?)$",
+      "mode": "summary",
+      "risk_class": "logs_events_history"
+    },
+    {
+      "id": "time-series",
+      "services": [
+        "CES",
+        "AOM"
+      ],
+      "operation_pattern": "(?:MetricData|TimeSeries|Samples|Datapoints)",
+      "mode": "summary",
+      "risk_class": "time_series"
+    },
+    {
+      "id": "account-records",
+      "services": [
+        "BSS",
+        "RMS",
+        "COC",
+        "CONFIG",
+        "SECMASTER",
+        "HSS"
+      ],
+      "operation_pattern": "^(?:List|Search|Query|RunAggregate|CollectAll|ShowResourceHistory)",
+      "mode": "summary",
+      "risk_class": "account_wide_records"
+    }
+  ]
+}

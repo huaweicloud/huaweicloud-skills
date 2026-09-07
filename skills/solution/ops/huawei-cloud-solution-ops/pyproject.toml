@@ -1,0 +1,10 @@
+[tool.huaweicloud-skill]
+test-command = "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover tests"
+
+[tool.ruff]
+line-length = 140
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]

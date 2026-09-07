@@ -1,0 +1,166 @@
+{
+  "schema_version": 1,
+  "description": "Optional human/live validation metadata for generated hcloud catalog services. Keep the generated catalog metadata-only; store confidence and dry-run evidence here.",
+  "services": {
+    "AOS": {
+      "confidence": "catalog-derived",
+      "operations": {
+        "ListPrivateHooks": {
+          "confidence": "live-read-smoked",
+          "last_smoke": {
+            "result_bucket": "command_shape_ok",
+            "evidence_summary": "Read-only command executed successfully through hcloud_safe_exec."
+          }
+        }
+      }
+    },
+    "CBR": {
+      "confidence": "catalog-derived",
+      "operations": {
+        "ListAgent": {
+          "confidence": "live-read-smoked",
+          "last_smoke": {
+            "result_bucket": "command_shape_ok",
+            "evidence_summary": "Read-only command executed successfully through hcloud_safe_exec."
+          }
+        }
+      }
+    },
+    "DCS": {
+      "confidence": "catalog-derived",
+      "operations": {
+        "ListAvailableZones": {
+          "confidence": "live-read-smoked",
+          "last_smoke": {
+            "result_bucket": "command_shape_ok",
+            "evidence_summary": "Read-only command executed successfully through hcloud_safe_exec."
+          }
+        },
+        "ListMaintenanceWindows": {
+          "confidence": "live-read-smoked",
+          "last_smoke": {
+            "result_bucket": "command_shape_ok",
+            "evidence_summary": "Read-only command executed successfully through hcloud_safe_exec."
+          }
+        }
+      }
+    },
+    "CodeArtsRepo": {
+      "confidence": "catalog-derived",
+      "operations": {
+        "ListCurrentUserRepositories": {
+          "confidence": "live-read-smoked",
+          "last_smoke": {
+            "result_bucket": "command_shape_ok",
+            "evidence_summary": "Read-only command executed successfully through hcloud_safe_exec."
+          }
+        },
+        "ListGroups": {
+          "confidence": "live-read-smoked",
+          "last_smoke": {
+            "result_bucket": "command_shape_ok",
+            "evidence_summary": "Read-only command executed successfully through hcloud_safe_exec."
+          }
+        }
+      }
+    },
+    "DLI": {
+      "confidence": "catalog-derived",
+      "operations": {
+        "ListAuthInfo": {
+          "confidence": "live-read-smoked",
+          "last_smoke": {
+            "result_bucket": "command_shape_ok",
+            "evidence_summary": "Read-only command executed successfully through hcloud_safe_exec."
+          }
+        },
+        "ListCatalogs": {
+          "confidence": "live-read-smoked",
+          "last_smoke": {
+            "result_bucket": "command_shape_ok",
+            "evidence_summary": "Read-only command executed successfully through hcloud_safe_exec."
+          }
+        }
+      }
+    },
+    "ModelArts": {
+      "confidence": "catalog-derived",
+      "operations": {
+        "ListAlgorithms": {
+          "confidence": "live-read-smoked",
+          "last_smoke": {
+            "result_bucket": "command_shape_ok",
+            "evidence_summary": "Read-only command executed successfully through hcloud_safe_exec."
+          }
+        }
+      }
+    },
+    "RFS": {
+      "confidence": "catalog-derived",
+      "operations": {
+        "ListPrivateHooks": {
+          "confidence": "live-read-smoked",
+          "last_smoke": {
+            "result_bucket": "command_shape_ok",
+            "evidence_summary": "Read-only command executed successfully through hcloud_safe_exec."
+          }
+        },
+        "ListPrivateModules": {
+          "confidence": "live-read-smoked",
+          "last_smoke": {
+            "result_bucket": "command_shape_ok",
+            "evidence_summary": "Read-only command executed successfully through hcloud_safe_exec."
+          }
+        }
+      }
+    },
+    "UCS": {
+      "confidence": "catalog-derived",
+      "operations": {
+        "ListAddonTemplates": {
+          "confidence": "live-read-smoked",
+          "last_smoke": {
+            "result_bucket": "command_shape_ok",
+            "evidence_summary": "Read-only command executed successfully through hcloud_safe_exec."
+          }
+        },
+        "ListPolicyDefinitions": {
+          "confidence": "live-read-smoked",
+          "last_smoke": {
+            "result_bucket": "command_shape_ok",
+            "evidence_summary": "Read-only command executed successfully through hcloud_safe_exec."
+          }
+        },
+        "ListManagedClusters": {
+          "confidence": "catalog-derived",
+          "unsupported_optional_args": [
+            "limit"
+          ],
+          "last_shape_check": {
+            "result_bucket": "command_shape_error",
+            "evidence_summary": "KooCLI 7.2.2 help for UCS ListManagedClusters lists --unimported but not --limit, and live shape check rejects --limit."
+          }
+        }
+      }
+    },
+    "WAF": {
+      "confidence": "catalog-derived",
+      "operations": {
+        "ListAntileakagePolicyRules": {
+          "confidence": "live-read-smoked",
+          "last_smoke": {
+            "result_bucket": "command_shape_ok",
+            "evidence_summary": "Read-only command executed successfully through hcloud_safe_exec."
+          }
+        },
+        "ListInstance": {
+          "confidence": "live-read-smoked",
+          "last_smoke": {
+            "result_bucket": "command_shape_ok",
+            "evidence_summary": "Read-only command executed successfully through hcloud_safe_exec."
+          }
+        }
+      }
+    }
+  }
+}

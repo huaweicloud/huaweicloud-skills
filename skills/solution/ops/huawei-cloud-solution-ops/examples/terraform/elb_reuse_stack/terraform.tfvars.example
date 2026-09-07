@@ -1,0 +1,8 @@
+region_name      = "cn-north-4"
+loadbalancer_id  = "replace-with-existing-elb-id"
+backend_address  = "replace-with-backend-private-ip"
+backend_subnet_id = "replace-with-backend-ipv4-subnet-id"
+
+listener_name         = "demo-reuse-listener"
+listener_port         = 80
+backend_protocol_port = 8080

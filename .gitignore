@@ -1,1 +1,5 @@
 __pycache__/
+
+# Generated Terraform files for the solution operations skill only.
+/skills/solution/ops/huawei-cloud-solution-ops/**/.terraform.lock.hcl
+/skills/solution/ops/huawei-cloud-solution-ops/**/.terraform/

@@ -1,0 +1,4 @@
+region_name   = "cn-north-4"
+cluster_id    = "replace-with-existing-cce-cluster-id"
+cluster_name  = ""
+addon_version = "replace-with-coredns-version-matching-your-cluster"

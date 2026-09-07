@@ -1,0 +1,5 @@
+region_name   = "cn-north-4"
+bucket_name   = "your-unique-obs-bucket-name"
+environment   = "dev"
+sse_algorithm = "AES256"
+# kms_key_id  = "your-kms-key-id"

@@ -1,0 +1,7 @@
+region_name       = "cn-north-4"
+vpc_name          = "demo-nat-vpc"
+vpc_cidr          = "192.168.0.0/16"
+subnet_name       = "demo-nat-subnet"
+subnet_cidr       = "192.168.1.0/24"
+subnet_gateway_ip = "192.168.1.1"
+nat_gateway_name  = "demo-nat-gateway"

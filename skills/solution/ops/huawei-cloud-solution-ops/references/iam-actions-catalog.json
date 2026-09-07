@@ -1,0 +1,617 @@
+{
+  "schema_version": 1,
+  "description": "Best-effort IAM action hints for hcloud permission troubleshooting. Verify the exact policy syntax against Huawei Cloud IAM documentation and tenant-side custom policies before requesting changes.",
+  "matching_notes": [
+    "Use operation-level entries first.",
+    "If an operation is not listed, use service default_readonly_actions or default_change_actions only as a starting point.",
+    "Enterprise project, region/project scope, service enablement, agency trust, SCP, and custom deny policies can still block a request even when the action appears allowed."
+  ],
+  "services": {
+    "BSS": {
+      "permission_scope": "global-account",
+      "default_readonly_actions": [
+        "bss:bill:view",
+        "bss:cost:view"
+      ],
+      "operations": {
+        "ShowCustomerMonthlySum": {
+          "risk": "readonly",
+          "required_actions": [
+            "bss:bill:view"
+          ],
+          "notes": "Monthly bill summary. Use BSS region cn-north-1; this operation does not accept X-Language, and cli-lang is only a KooCLI profile setting."
+        },
+        "ListCosts": {
+          "risk": "readonly",
+          "required_actions": [
+            "bss:cost:view"
+          ],
+          "notes": "Cost analysis read. Confirm account scope, time range, and enterprise project scope before live execution."
+        },
+        "ListCustomerBillsMonthlyBreakDown": {
+          "risk": "readonly",
+          "required_actions": [
+            "bss:bill:view"
+          ],
+          "notes": "Bill breakdown can expose sensitive cost identifiers; summarize results before display."
+        },
+        "ListResourceRecords": {
+          "risk": "readonly",
+          "required_actions": [
+            "bss:bill:view"
+          ],
+          "notes": "Resource-level bill records can expose resource identifiers; use protected-identifier redaction."
+        }
+      }
+    },
+    "CBR": {
+      "permission_scope": "project",
+      "default_readonly_actions": [
+        "cbr:vaults:list",
+        "cbr:backups:list",
+        "cbr:policies:list"
+      ],
+      "operations": {
+        "ListVault": {
+          "risk": "readonly",
+          "required_actions": [
+            "cbr:vaults:list"
+          ]
+        },
+        "ListBackups": {
+          "risk": "readonly",
+          "required_actions": [
+            "cbr:backups:list"
+          ]
+        },
+        "ListPolicies": {
+          "risk": "readonly",
+          "required_actions": [
+            "cbr:policies:list"
+          ]
+        }
+      }
+    },
+    "CES": {
+      "permission_scope": "project",
+      "default_readonly_actions": [
+        "ces:metrics:list",
+        "ces:alarms:list"
+      ],
+      "default_change_actions": [
+        "ces:alarms:create",
+        "ces:alarms:update"
+      ],
+      "operations": {
+        "ListMetrics": {
+          "risk": "readonly",
+          "required_actions": [
+            "ces:metrics:list"
+          ],
+          "notes": "Metric discovery only; Agent-backed ECS memory metrics may live under AGT.ECS instead of SYS.ECS."
+        },
+        "ListAlarmRules": {
+          "risk": "readonly",
+          "required_actions": [
+            "ces:alarms:list"
+          ]
+        },
+        "CreateAlarmRules": {
+          "risk": "change",
+          "required_actions": [
+            "ces:alarms:create"
+          ],
+          "notes": "Planner-only in this skill until explicit guarded flow support is added."
+        }
+      }
+    },
+    "CTS": {
+      "permission_scope": "project",
+      "default_readonly_actions": [
+        "cts:tracker:list",
+        "cts:trace:list"
+      ],
+      "operations": {
+        "ListTrackers": {
+          "risk": "readonly",
+          "required_actions": [
+            "cts:tracker:list"
+          ]
+        },
+        "ListTraces": {
+          "risk": "readonly",
+          "required_actions": [
+            "cts:trace:list"
+          ]
+        }
+      }
+    },
+    "DNS": {
+      "permission_scope": "global-or-project",
+      "default_readonly_actions": [
+        "dns:zones:list",
+        "dns:recordsets:list"
+      ],
+      "default_change_actions": [
+        "dns:recordsets:create",
+        "dns:recordsets:update",
+        "dns:recordsets:delete"
+      ],
+      "operations": {
+        "ListPublicZones": {
+          "risk": "readonly",
+          "required_actions": [
+            "dns:zones:list"
+          ]
+        },
+        "ListRecordSets": {
+          "risk": "readonly",
+          "required_actions": [
+            "dns:recordsets:list"
+          ]
+        },
+        "CreateRecordSet": {
+          "risk": "change",
+          "required_actions": [
+            "dns:recordsets:create"
+          ]
+        }
+      }
+    },
+    "ECS": {
+      "permission_scope": "project",
+      "default_readonly_actions": [
+        "ecs:cloudServers:list",
+        "ecs:servers:get",
+        "ecs:jobs:get"
+      ],
+      "default_change_actions": [
+        "ecs:cloudServers:create",
+        "ecs:cloudServers:update",
+        "ecs:cloudServers:delete"
+      ],
+      "operations": {
+        "ListCloudServers": {
+          "risk": "readonly",
+          "required_actions": [
+            "ecs:cloudServers:list"
+          ],
+          "notes": "Use for broad ECS inventory and status checks."
+        },
+        "ListServersDetails": {
+          "risk": "readonly",
+          "required_actions": [
+            "ecs:cloudServers:list"
+          ],
+          "notes": "Often equivalent inventory surface for server details."
+        },
+        "ShowServer": {
+          "risk": "readonly",
+          "required_actions": [
+            "ecs:servers:get"
+          ]
+        },
+        "ShowJob": {
+          "risk": "readonly",
+          "required_actions": [
+            "ecs:jobs:get"
+          ],
+          "notes": "Job terminal state is not application readiness."
+        },
+        "CreateServers": {
+          "risk": "change",
+          "required_actions": [
+            "ecs:cloudServers:create"
+          ],
+          "notes": "Also requires dependent VPC, IMS, KPS, EVS/EIP permissions depending on the request body."
+        },
+        "DeleteServers": {
+          "risk": "destructive",
+          "required_actions": [
+            "ecs:cloudServers:delete"
+          ]
+        }
+      }
+    },
+    "EIP": {
+      "permission_scope": "project",
+      "default_readonly_actions": [
+        "vpc:publicIps:list",
+        "vpc:publicIps:get"
+      ],
+      "default_change_actions": [
+        "vpc:publicIps:create",
+        "vpc:publicIps:update",
+        "vpc:publicIps:delete"
+      ],
+      "operations": {
+        "ListPublicips": {
+          "risk": "readonly",
+          "required_actions": [
+            "vpc:publicIps:list"
+          ]
+        },
+        "ShowPublicip": {
+          "risk": "readonly",
+          "required_actions": [
+            "vpc:publicIps:get"
+          ]
+        },
+        "UpdatePublicip": {
+          "risk": "change",
+          "required_actions": [
+            "vpc:publicIps:update"
+          ]
+        },
+        "DeletePublicip": {
+          "risk": "destructive",
+          "required_actions": [
+            "vpc:publicIps:delete"
+          ]
+        }
+      }
+    },
+    "ELB": {
+      "permission_scope": "project",
+      "default_readonly_actions": [
+        "elb:loadbalancers:list",
+        "elb:listeners:list",
+        "elb:pools:list",
+        "elb:members:list"
+      ],
+      "default_change_actions": [
+        "elb:loadbalancers:create",
+        "elb:listeners:create",
+        "elb:pools:create",
+        "elb:members:create"
+      ],
+      "operations": {
+        "ListLoadbalancers": {
+          "risk": "readonly",
+          "required_actions": [
+            "elb:loadbalancers:list"
+          ]
+        },
+        "ShowLoadBalancer": {
+          "risk": "readonly",
+          "required_actions": [
+            "elb:loadbalancers:get"
+          ]
+        },
+        "ListListeners": {
+          "risk": "readonly",
+          "required_actions": [
+            "elb:listeners:list"
+          ]
+        },
+        "ListPools": {
+          "risk": "readonly",
+          "required_actions": [
+            "elb:pools:list"
+          ]
+        },
+        "ListMembers": {
+          "risk": "readonly",
+          "required_actions": [
+            "elb:members:list"
+          ]
+        }
+      }
+    },
+    "EVS": {
+      "permission_scope": "project",
+      "default_readonly_actions": [
+        "evs:volumes:list",
+        "evs:volumes:get"
+      ],
+      "default_change_actions": [
+        "evs:volumes:create",
+        "evs:volumes:attach",
+        "evs:volumes:delete"
+      ],
+      "operations": {
+        "ListVolumes": {
+          "risk": "readonly",
+          "required_actions": [
+            "evs:volumes:list"
+          ]
+        },
+        "ShowVolume": {
+          "risk": "readonly",
+          "required_actions": [
+            "evs:volumes:get"
+          ]
+        }
+      }
+    },
+    "IMS": {
+      "permission_scope": "project",
+      "default_readonly_actions": [
+        "ims:images:list",
+        "ims:images:get"
+      ],
+      "operations": {
+        "ListImages": {
+          "risk": "readonly",
+          "required_actions": [
+            "ims:images:list"
+          ],
+          "notes": "Large output; prefer filters and result files."
+        },
+        "GlanceShowImage": {
+          "risk": "readonly",
+          "required_actions": [
+            "ims:images:get"
+          ]
+        }
+      }
+    },
+    "KPS": {
+      "permission_scope": "project",
+      "default_readonly_actions": [
+        "kps:keypairs:list",
+        "kps:keypairs:get"
+      ],
+      "default_change_actions": [
+        "kps:keypairs:create",
+        "kps:keypairs:delete"
+      ],
+      "operations": {
+        "ListKeypairs": {
+          "risk": "readonly",
+          "required_actions": [
+            "kps:keypairs:list"
+          ]
+        },
+        "ListKeypairDetail": {
+          "risk": "readonly",
+          "required_actions": [
+            "kps:keypairs:get"
+          ]
+        },
+        "CreateKeypair": {
+          "risk": "change",
+          "required_actions": [
+            "kps:keypairs:create"
+          ],
+          "notes": "Returned private key is sensitive and must be saved to a restricted local artifact."
+        }
+      }
+    },
+    "LTS": {
+      "permission_scope": "project",
+      "default_readonly_actions": [
+        "lts:groups:list",
+        "lts:streams:list",
+        "lts:logs:list"
+      ],
+      "operations": {
+        "ListLogGroups": {
+          "risk": "readonly",
+          "required_actions": [
+            "lts:groups:list"
+          ]
+        },
+        "ListLogStreams": {
+          "risk": "readonly",
+          "required_actions": [
+            "lts:streams:list"
+          ]
+        },
+        "ListLogs": {
+          "risk": "readonly-sensitive",
+          "required_actions": [
+            "lts:logs:list"
+          ],
+          "notes": "Application logs may contain sensitive data; keep ranges and keywords narrow."
+        }
+      }
+    },
+    "NAT": {
+      "permission_scope": "project",
+      "default_readonly_actions": [
+        "nat:natGateways:list",
+        "nat:snatRules:list",
+        "nat:dnatRules:list"
+      ],
+      "operations": {
+        "ListNatGateways": {
+          "risk": "readonly",
+          "required_actions": [
+            "nat:natGateways:list"
+          ]
+        },
+        "ListNatGatewaySnatRules": {
+          "risk": "readonly",
+          "required_actions": [
+            "nat:snatRules:list"
+          ]
+        },
+        "ListNatGatewayDnatRules": {
+          "risk": "readonly",
+          "required_actions": [
+            "nat:dnatRules:list"
+          ]
+        }
+      }
+    },
+    "OBS": {
+      "permission_scope": "account-or-bucket",
+      "default_readonly_actions": [
+        "obs:bucket:ListAllMyBuckets",
+        "obs:bucket:HeadBucket",
+        "obs:bucket:GetBucketLocation",
+        "obs:bucket:GetBucketPolicy",
+        "obs:bucket:GetLifecycleConfiguration"
+      ],
+      "default_change_actions": [
+        "obs:bucket:PutBucketPolicy",
+        "obs:bucket:PutLifecycleConfiguration",
+        "obs:object:PutObject",
+        "obs:object:DeleteObject"
+      ],
+      "operations": {
+        "ListBuckets": {
+          "risk": "readonly",
+          "required_actions": [
+            "obs:bucket:ListAllMyBuckets"
+          ],
+          "notes": "OBS uses obsutil/hcloud obs adapter, not ordinary OpenAPI command shape."
+        },
+        "GetBucketLifecycle": {
+          "risk": "readonly",
+          "required_actions": [
+            "obs:bucket:GetLifecycleConfiguration"
+          ]
+        },
+        "PutBucketLifecycle": {
+          "risk": "change",
+          "required_actions": [
+            "obs:bucket:PutLifecycleConfiguration"
+          ],
+          "notes": "Planner-only in this skill unless explicitly routed through OBS change planner and user confirmation."
+        }
+      }
+    },
+    "RDS": {
+      "permission_scope": "project",
+      "default_readonly_actions": [
+        "rds:instances:list",
+        "rds:instances:get",
+        "rds:backups:list",
+        "rds:configurations:get"
+      ],
+      "operations": {
+        "ListInstances": {
+          "risk": "readonly",
+          "required_actions": [
+            "rds:instances:list"
+          ]
+        },
+        "ShowInstance": {
+          "risk": "readonly",
+          "required_actions": [
+            "rds:instances:get"
+          ]
+        },
+        "ListBackups": {
+          "risk": "readonly",
+          "required_actions": [
+            "rds:backups:list"
+          ]
+        },
+        "ShowConfiguration": {
+          "risk": "readonly",
+          "required_actions": [
+            "rds:configurations:get"
+          ]
+        }
+      }
+    },
+    "SCM": {
+      "permission_scope": "project",
+      "default_readonly_actions": [
+        "scm:certificates:list",
+        "scm:certificates:get"
+      ],
+      "operations": {
+        "ListCertificates": {
+          "risk": "readonly",
+          "required_actions": [
+            "scm:certificates:list"
+          ]
+        },
+        "ShowCertificate": {
+          "risk": "readonly",
+          "required_actions": [
+            "scm:certificates:get"
+          ]
+        }
+      }
+    },
+    "TMS": {
+      "permission_scope": "project",
+      "default_readonly_actions": [
+        "tms:resources:list",
+        "tms:predefineTags:list"
+      ],
+      "operations": {
+        "ListResource": {
+          "risk": "readonly",
+          "required_actions": [
+            "tms:resources:list"
+          ]
+        },
+        "ListPredefineTags": {
+          "risk": "readonly",
+          "required_actions": [
+            "tms:predefineTags:list"
+          ]
+        }
+      }
+    },
+    "VPC": {
+      "permission_scope": "project",
+      "default_readonly_actions": [
+        "vpc:vpcs:list",
+        "vpc:vpcs:get",
+        "vpc:subnets:list",
+        "vpc:securityGroups:list",
+        "vpc:securityGroupRules:list"
+      ],
+      "default_change_actions": [
+        "vpc:securityGroupRules:create",
+        "vpc:securityGroupRules:update",
+        "vpc:securityGroupRules:delete",
+        "vpc:vpcs:create",
+        "vpc:subnets:create"
+      ],
+      "operations": {
+        "ListVpcs": {
+          "risk": "readonly",
+          "required_actions": [
+            "vpc:vpcs:list"
+          ]
+        },
+        "ShowVpc": {
+          "risk": "readonly",
+          "required_actions": [
+            "vpc:vpcs:get"
+          ]
+        },
+        "ListSubnets": {
+          "risk": "readonly",
+          "required_actions": [
+            "vpc:subnets:list"
+          ]
+        },
+        "ListSecurityGroups": {
+          "risk": "readonly",
+          "required_actions": [
+            "vpc:securityGroups:list"
+          ]
+        },
+        "ListSecurityGroupRules": {
+          "risk": "readonly",
+          "required_actions": [
+            "vpc:securityGroupRules:list"
+          ],
+          "notes": "Required before reusing an existing security group in ECS create plans."
+        },
+        "ShowSecurityGroupRule": {
+          "risk": "readonly",
+          "required_actions": [
+            "vpc:securityGroupRules:get"
+          ]
+        },
+        "CreateSecurityGroupRule": {
+          "risk": "change",
+          "required_actions": [
+            "vpc:securityGroupRules:create"
+          ],
+          "notes": "If this is denied, do not retry blindly; consider existing rule evidence and documented security-group reuse boundaries."
+        }
+      }
+    }
+  }
+}

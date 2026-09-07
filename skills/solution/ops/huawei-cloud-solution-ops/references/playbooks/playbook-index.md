@@ -1,0 +1,151 @@
+# Huawei CLI Playbooks
+
+这里收纳的是面向具体任务的执行手册。优先按用户当前目标选一个最贴近的 playbook，再回到 `references/workflow.md` 补通用规则。
+
+## 索引
+
+- `ecs-create-readiness.md`
+  - 创建 ECS 前的依赖确认、规格和售卖策略检查。
+- `ecs-ssh-access-readiness.md`
+  - 创建 Linux ECS 前后的 SSH 登录凭证闭环和登录验收。
+- `coc-readiness.md`
+  - 判断 COC/远程命令可用性，并在不可用时收敛到 SSH、cloud-init、重装/重建等受控 fallback。
+- `entry-level-web-hosting.md`
+  - 为小白用户、小企业和低预算网站场景选择 OBS 静态站、Flexus L/轻量服务器或 ECS 路径。
+- `web-application-production-readiness.md`
+  - 为生产 Web/API 上线串联计算、ELB、RDS、VPC、安全组、DNS/CDN/SCM/WAF、观测、备份和成本证据。
+- `obs-static-website-hosting.md`
+  - OBS 静态网站托管、自定义域名、CNAME、匿名访问、备案证据边界和 403/404 排障。
+- `flexus-l-readiness.md`
+  - Flexus L/轻量服务器选型、费用确认、创建/续费/退订边界和验收要求。
+- `ecs-inventory.md`
+  - 查询当前 scope 下的 ECS 实例并整理成可读摘要。
+- `ecs-user-data-service-readiness.md`
+  - 用 cloud-init/user_data 安装并启动 ECS 内服务，生成可验收 readiness。
+- `elb-http-backend-readiness.md`
+  - 创建和排查 HTTP ELB 后端，处理 member `CONNECT_FAILED` / `OFFLINE`。
+- `eip-public-ip-readiness.md`
+  - 创建、绑定、解绑或查询 EIP 后验证公网 IP 状态和绑定关系。
+- `eip-cost-optimization.md`
+  - 识别未绑定、高带宽、缺 owner/tag 的 EIP 成本候选，并进入回收评审。
+- `evs-volume-readiness.md`
+  - 创建、挂载或扩容 EVS 云硬盘后区分云侧状态和 ECS 内文件系统状态。
+- `rds-instance-readiness.md`
+  - 创建或修改 RDS 后验证实例状态、规格、备份和连接探测。
+- `nat-gateway-readiness.md`
+  - 查询或调整 NAT 网关、DNAT/SNAT 规则前确认网关、规则和连通性边界。
+- `cce-cluster-readiness.md`
+  - 查询 CCE 集群和节点状态，并区分云侧状态、kubeconfig 和 Kubernetes 层验收。
+- `cce-cloud-native-assessment.md`
+  - CCE/云原生环境评估，覆盖集群、节点、插件、工作负载、网络、观测、安全、韧性和成本证据。
+- `cci-workload-readiness.md`
+  - CCI namespace、Network、Deployment/Pod、Service、公网入口和日志监控 readiness。
+- `swr-image-readiness.md`
+  - SWR namespace、repository、tag、登录凭证、推送/拉取权限和镜像清理边界。
+- `dws-diagnostic-method.md`
+  - DWS CPU、内存和 I/O 排障的范围、采样语义、证据归因和报告方法。
+- `functiongraph-readiness.md`
+  - FunctionGraph 函数、runtime、handler、触发器、LTS 日志和调用副作用边界。
+- `maas-usage-governance.md`
+  - MaaS token、请求数、错误率和 ShowStatistics 查询计划的安全治理手册。
+- `cdn-domain-readiness.md`
+  - 查询 CDN 域名、源站、证书和缓存配置，并记录 CDN CLI region 限制。
+- `dns-zone-record-readiness.md`
+  - 查询 DNS zone/record，修改前确认记录、TTL 和解析影响。
+- `scm-certificate-readiness.md`
+  - 查询证书、证书详情和部署目标，保护证书材料和私钥边界。
+- `ces-metric-readiness.md`
+  - 查询云监控指标前确认 namespace、dimension、period 和时间范围。
+- `ecs-monitoring-troubleshooting.md`
+  - 排查 ECS 监控指标为空、内存指标命名不匹配和 CES 告警创建前置证据。
+- `observability-readiness.md`
+  - 用资源状态、CES 指标、CES alarm planner 和 LTS 只读日志建立可观测证据链，并覆盖 ModelArts 训练作业的渐进诊断。
+- `cts-audit-readiness.md`
+  - CTS 审计 trail、trace、关键事件通知和 OBS 投递检查候选手册。
+- `tms-tag-governance.md`
+  - TMS 标签 taxonomy、资源标签覆盖和成本分摊治理候选手册。
+- `cbr-backup-posture.md`
+  - CBR vault、backup、policy、protectable resource 备份姿态候选手册。
+- `rms-config-governance.md`
+  - RMS 资源清单、policy state 和 aggregator 治理候选手册。
+- `config-governance-readiness.md`
+  - Config resource recorder、policy、conformance pack 和资源合规候选手册。
+- `lts-log-readiness.md`
+  - LTS log group、stream、transfer 和有限窗口日志查询候选手册。
+- `dcs-readiness.md`
+  - DCS curated 只读 readiness、实例配置和风险边界手册。
+- `rfs-stack-readiness.md`
+  - RFS curated stack、template、execution plan 只读检查手册。
+- `ucs-fleet-readiness.md`
+  - UCS curated fleet、cluster、policy 和 addon 只读检查手册。
+- `waf-policy-readiness.md`
+  - WAF 晋级 curated 前的 host、policy、rule 和 event 候选手册。
+- `codeartsrepo-readiness.md`
+  - CodeArtsRepo 晋级 curated 前的仓库、分支、成员和合并请求候选手册。
+- `dli-readiness.md`
+  - DLI 晋级 curated 前的权限、catalog、database、queue 和 SQL 检查候选手册。
+- `billing-cost-governance.md`
+  - Billing/Cost request spec、账单权限、数据新鲜度和隐私边界治理手册。
+- `docker-remote-api-readiness.md`
+  - 安装 Docker、开放 Remote API 并用协议探测验证 daemon。
+- `obs-boundary.md`
+  - 记录 OBS 的 `hcloud obs`/obsutil 专用路线，避免生成不可验证的 `hcloud OBS Operation` 命令。
+- `resource-idempotency-reconcile.md`
+  - 按资源名做幂等选择和修复，避免重复创建同名资源。
+- `../live-regression-runbook.md`
+  - 真实账号回归计划，列出核心场景、用户输入、风险和验收标准。
+- `iam-context-bootstrap.md`
+  - 在执行云侧业务前先确认当前 profile、region、project 和认证上下文。
+- `iam-permission-diagnostics.md`
+  - 归类 403、AccessDenied、Forbidden、Unauthorized 等权限错误并输出缺失 action/scope。
+- `ims-image-discovery.md`
+  - 创建 ECS 前的镜像发现路径和当前环境约束。
+- `kps-keypair-discovery.md`
+  - 创建 ECS 或 SSH 登录前的密钥对发现与风险检查。
+- `vpc-network-readiness.md`
+  - 面向网络前置条件的 readiness 检查方法。
+- `vpc-resource-discovery.md`
+  - 面向 VPC、子网、安全组等资源的 discovery 路径。
+
+## 选择建议
+
+- 目标是查现网 ECS：先看 `ecs-inventory.md`
+- 目标是创建 ECS：先看 `ecs-create-readiness.md`，需要登录机器时同时看 `ecs-ssh-access-readiness.md`
+- 目标是低成本网站、静态站或轻量服务器选型：先看 `entry-level-web-hosting.md`
+- 目标是生产 Web/API 上线、域名 HTTPS、ELB、RDS、WAF/CDN 或多服务入口闭环：先看 `web-application-production-readiness.md`
+- 目标是 OBS 静态网站、自定义域名或 403/404 排障：先看 `obs-static-website-hosting.md` 和 `obs-boundary.md`
+- 目标是网站/App 备案、公安备案或经营性许可规则判断：先看 `obs-static-website-hosting.md` 的规则证据边界，不使用静态知识库直接下结论
+- 目标是 Flexus L/轻量服务器购买、续费或退订：先看 `flexus-l-readiness.md`
+- 目标需要进入机器内执行命令或 COC 不可用：先看 `coc-readiness.md` 和 `ecs-ssh-access-readiness.md`
+- 目标是修复或续跑已有命名资源：先看 `resource-idempotency-reconcile.md`
+- 目标是 ECS 上部署 Web/Docker 服务：同时看 `ecs-user-data-service-readiness.md`
+- 目标是 ELB 后端健康：先看 `elb-http-backend-readiness.md`
+- 目标是 EIP 绑定和公网入口：先看 `eip-public-ip-readiness.md`
+- 目标是 EIP 闲置、未绑定、公网费用或带宽成本：先看 `eip-cost-optimization.md` 和 `billing-cost-governance.md`
+- 目标是云硬盘挂载或扩容：先看 `evs-volume-readiness.md`
+- 目标是 RDS 实例可用性：先看 `rds-instance-readiness.md`
+- 目标是 NAT 出入口映射：先看 `nat-gateway-readiness.md`
+- 目标是 CCE 集群和节点状态：先看 `cce-cluster-readiness.md`
+- 目标是 CCE 环境评估、Kubernetes 集群体检、云原生成熟度或生产 readiness：先看 `cce-cloud-native-assessment.md`
+- 目标是 SWR 镜像仓库、镜像 tag、镜像推送/拉取或 ImagePullBackOff：先看 `swr-image-readiness.md`
+- 目标是 DWS、数据库慢查询、CPU/IO/内存压力或 SQL 诊断：先看 `dws-diagnostic-method.md`
+- 目标是 CCI/云容器实例部署容器：先看 `cci-workload-readiness.md`，同时看 `swr-image-readiness.md`
+- 目标是 FunctionGraph/函数计算/无服务器触发器：先看 `functiongraph-readiness.md`
+- 目标是 MaaS token 用量、词元统计、请求数、错误率或使用治理：先看 `maas-usage-governance.md`
+- 目标是 CDN 域名或源站：先看 `cdn-domain-readiness.md`
+- 目标是 DNS 解析：先看 `dns-zone-record-readiness.md`
+- 目标是证书：先看 `scm-certificate-readiness.md`
+- 目标是监控指标：先看 `ces-metric-readiness.md`
+- 目标是 ECS 内存/磁盘/Agent 指标查不到或 CES 告警指标不存在：先看 `ecs-monitoring-troubleshooting.md`
+- 目标是综合判断资源健康、闲置或生产可用性：先看 `observability-readiness.md`
+- 目标是 ModelArts 训练失败、训练卡住或任务长时间无进展：先看 `observability-readiness.md` 的 ModelArts 渐进诊断
+- 目标是审计操作记录或事件追踪：先看 `cts-audit-readiness.md`
+- 目标是标签治理、成本分摊或资源归属：先看 `tms-tag-governance.md`
+- 目标是备份、恢复点或 vault 姿态：先看 `cbr-backup-posture.md`
+- 目标是资源合规、policy state 或跨账号 aggregator：按 `rms-config-governance.md` 或 `config-governance-readiness.md` 进入
+- 目标是日志发现或有限窗口日志查询：先看 `lts-log-readiness.md`
+- 目标是账单、成本分析或资源消费记录：先看 `billing-cost-governance.md`，只生成 request spec，不直接请求真实账单
+- 卡在上下文或认证：先看 `iam-context-bootstrap.md`
+- 卡在 403、AccessDenied、Forbidden 或权限模板：先看 `iam-permission-diagnostics.md`
+- 卡在镜像、密钥对或网络依赖：按 `ims`、`kps`、`vpc` 对应 playbook 进入
+- 目标涉及 OBS：先看 `obs-boundary.md`，只读查询走 `hcloud_obs_readonly.py`，写类操作先走 `hcloud_obs_change_plan.py`

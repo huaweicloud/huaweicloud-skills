@@ -1,0 +1,252 @@
+{
+  "schema_version": 1,
+  "description": "Curated operations for the hcloud_sdk_readonly.py convenience runner. This registry does not limit task-specific SDK programs written by an Agent.",
+  "boundaries": {
+    "scope": "hcloud_sdk_readonly_only",
+    "backend": "sdk",
+    "backend_preference": "hcloud_then_sdk",
+    "default_mode": "plan",
+    "generic_mutations_allowed_by_this_runner": false,
+    "agent_authored_sdk_outside_registry_allowed": true,
+    "source_preference": "installed_package_then_explicit_maintenance_source"
+  },
+  "operations": [
+    {
+      "service": "ECS",
+      "sdk_operation": "ListFlavors",
+      "hcloud_operation": "ListFlavors",
+      "requires_sdk_package": "huaweicloudsdkecs",
+      "purpose": "Use SDK request metadata to validate flavor query parameters and provide an optional stable read-only supplement for ECS flavor discovery.",
+      "value": [
+        "request_types",
+        "query_params",
+        "region_endpoint",
+        "stable_readonly_query"
+      ],
+      "risk": "low",
+      "read_only_required": true,
+      "execute_allowed": true,
+      "fallback": {
+        "runner": "scripts/hcloud_resource_query.py",
+        "operation": "ListFlavors",
+        "mode": "plan"
+      },
+      "evidence": [
+        "unit-test"
+      ],
+      "manual_smoke": "required-before-production-execute",
+      "status": "curated"
+    },
+    {
+      "service": "ECS",
+      "sdk_operation": "ShowServer",
+      "hcloud_operation": "ShowServer",
+      "requires_sdk_package": "huaweicloudsdkecs",
+      "purpose": "Use SDK path parameter metadata and region endpoints to improve ECS instance readiness readback.",
+      "value": [
+        "request_types",
+        "path_params",
+        "region_endpoint",
+        "stable_readonly_query"
+      ],
+      "risk": "low",
+      "read_only_required": true,
+      "execute_allowed": true,
+      "fallback": {
+        "runner": "scripts/hcloud_resource_query.py",
+        "operation": "ShowServer",
+        "mode": "plan"
+      },
+      "evidence": [
+        "unit-test"
+      ],
+      "manual_smoke": "required-before-production-execute",
+      "status": "curated"
+    },
+    {
+      "service": "IMS",
+      "sdk_operation": "ListImages",
+      "hcloud_operation": "ListImages",
+      "requires_sdk_package": "huaweicloudsdkims",
+      "purpose": "Use SDK request metadata to validate image discovery filters before selecting an ECS image.",
+      "value": [
+        "request_types",
+        "query_params",
+        "pagination",
+        "region_endpoint",
+        "stable_readonly_query"
+      ],
+      "risk": "low",
+      "read_only_required": true,
+      "execute_allowed": true,
+      "fallback": {
+        "runner": "scripts/hcloud_resource_query.py",
+        "operation": "ListImages",
+        "mode": "plan"
+      },
+      "evidence": [
+        "unit-test"
+      ],
+      "manual_smoke": "required-before-production-execute",
+      "status": "curated"
+    },
+    {
+      "service": "VPC",
+      "sdk_operation": "ShowVpc",
+      "hcloud_operation": "ShowVpc",
+      "requires_sdk_package": "huaweicloudsdkvpc",
+      "purpose": "Use SDK path metadata to improve VPC canonical resource readback before network changes.",
+      "value": [
+        "request_types",
+        "path_params",
+        "region_endpoint",
+        "stable_readonly_query"
+      ],
+      "risk": "low",
+      "read_only_required": true,
+      "execute_allowed": true,
+      "fallback": {
+        "runner": "scripts/hcloud_resource_query.py",
+        "operation": "ShowVpc",
+        "mode": "plan"
+      },
+      "evidence": [
+        "unit-test"
+      ],
+      "manual_smoke": "required-before-production-execute",
+      "status": "curated"
+    },
+    {
+      "service": "ELB",
+      "sdk_operation": "ShowLoadBalancer",
+      "hcloud_operation": "ShowLoadBalancer",
+      "requires_sdk_package": "huaweicloudsdkelb",
+      "purpose": "Use SDK readback metadata to improve ELB state verification and endpoint hints.",
+      "value": [
+        "request_types",
+        "path_params",
+        "region_endpoint",
+        "stable_readonly_query"
+      ],
+      "risk": "low",
+      "read_only_required": true,
+      "execute_allowed": true,
+      "fallback": {
+        "runner": "scripts/hcloud_resource_query.py",
+        "operation": "ShowLoadBalancer",
+        "mode": "plan"
+      },
+      "evidence": [
+        "unit-test"
+      ],
+      "manual_smoke": "required-before-production-execute",
+      "status": "curated"
+    },
+    {
+      "service": "RDS",
+      "sdk_operation": "ShowInstanceConfiguration",
+      "hcloud_operation": "ShowInstanceConfiguration",
+      "requires_sdk_package": "huaweicloudsdkrds",
+      "purpose": "Use SDK path and header metadata to improve RDS configuration readback during database readiness checks.",
+      "value": [
+        "request_types",
+        "path_params",
+        "region_endpoint",
+        "stable_readonly_query"
+      ],
+      "risk": "low",
+      "read_only_required": true,
+      "execute_allowed": true,
+      "fallback": {
+        "runner": "scripts/hcloud_resource_query.py",
+        "operation": "ShowInstanceConfiguration",
+        "mode": "plan"
+      },
+      "evidence": [
+        "unit-test"
+      ],
+      "manual_smoke": "required-before-production-execute",
+      "status": "curated"
+    },
+    {
+      "service": "CES",
+      "sdk_operation": "ListMetrics",
+      "hcloud_operation": "ListMetrics",
+      "requires_sdk_package": "huaweicloudsdkces",
+      "purpose": "Use SDK metric query metadata to improve observability evidence discovery.",
+      "value": [
+        "request_types",
+        "query_params",
+        "pagination",
+        "region_endpoint",
+        "stable_readonly_query"
+      ],
+      "risk": "low",
+      "read_only_required": true,
+      "execute_allowed": true,
+      "fallback": {
+        "runner": "scripts/hcloud_resource_query.py",
+        "operation": "ListMetrics",
+        "mode": "plan"
+      },
+      "evidence": [
+        "unit-test"
+      ],
+      "manual_smoke": "required-before-production-execute",
+      "status": "curated"
+    },
+    {
+      "service": "CCE",
+      "sdk_operation": "ShowCluster",
+      "hcloud_operation": "ShowCluster",
+      "requires_sdk_package": "huaweicloudsdkcce",
+      "purpose": "Use SDK cluster readback metadata to improve container platform readiness checks.",
+      "value": [
+        "request_types",
+        "path_params",
+        "query_params",
+        "region_endpoint",
+        "stable_readonly_query"
+      ],
+      "risk": "low",
+      "read_only_required": true,
+      "execute_allowed": true,
+      "fallback": {
+        "runner": "scripts/hcloud_resource_query.py",
+        "operation": "ShowCluster",
+        "mode": "plan"
+      },
+      "evidence": [
+        "unit-test"
+      ],
+      "manual_smoke": "required-before-production-execute",
+      "status": "curated"
+    },
+    {
+      "service": "CTS",
+      "sdk_operation": "ListTraces",
+      "hcloud_operation": "ListTraces",
+      "requires_sdk_package": "huaweicloudsdkcts",
+      "purpose": "Use SDK trace query metadata to improve audit evidence planning while keeping execution behind privacy review.",
+      "value": [
+        "request_types",
+        "query_params",
+        "pagination",
+        "region_endpoint"
+      ],
+      "risk": "medium",
+      "read_only_required": true,
+      "execute_allowed": false,
+      "fallback": {
+        "runner": "scripts/hcloud_resource_query.py",
+        "operation": "ListTraces",
+        "mode": "plan"
+      },
+      "evidence": [
+        "unit-test"
+      ],
+      "manual_smoke": "privacy-review-required-before-execute",
+      "status": "candidate"
+    }
+  ]
+}

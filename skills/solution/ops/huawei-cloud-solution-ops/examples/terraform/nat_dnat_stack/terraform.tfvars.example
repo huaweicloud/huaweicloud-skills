@@ -1,0 +1,10 @@
+region_name       = "cn-north-4"
+vpc_name          = "demo-dnat-vpc"
+vpc_cidr          = "192.168.0.0/16"
+subnet_name       = "demo-dnat-subnet"
+subnet_cidr       = "192.168.1.0/24"
+subnet_gateway_ip = "192.168.1.1"
+nat_gateway_name  = "demo-dnat-gateway"
+instance_name     = "demo-dnat-ecs"
+# Required secret input: provide TF_VAR_admin_password at runtime; never store it in this file.
+ingress_cidr      = "203.0.113.10/32"

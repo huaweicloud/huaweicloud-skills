@@ -1,0 +1,18 @@
+region_name         = "cn-north-4"
+vpc_name            = "demo-vpcep-vpc"
+vpc_cidr            = "192.168.0.0/16"
+subnet_name         = "demo-vpcep-subnet"
+subnet_cidr         = "192.168.1.0/24"
+subnet_gateway_ip   = "192.168.1.1"
+security_group_name = "demo-vpcep-secgroup"
+instance_name       = "demo-vpcep-ecs"
+key_pair_name       = "your-keypair"
+endpoint_service_name = "demo-endpoint-service"
+endpoint_name         = "demo-endpoint"
+
+endpoint_service_port_mapping = [
+  {
+    service_port  = 8080
+    terminal_port = 8080
+  }
+]

@@ -1,0 +1,1003 @@
+{
+  "schema_version": 1,
+  "description": "Optional natural-language scenario router for broad or ambiguous Huawei Cloud goals. Routes to local registry, playbooks, hcloud, SDK, and Terraform candidates without external skill dependencies.",
+  "scenarios": [
+    {
+      "id": "maas-model-api-calls",
+      "name": "MaaS model API calls",
+      "category": "ai",
+      "description": "Plan and call Huawei Cloud MaaS APIs for large language models, image understanding, image generation, image editing, and video generation.",
+      "triggers": [
+        "maas",
+        "模型即服务",
+        "大模型",
+        "llm",
+        "文本生成",
+        "对话",
+        "openai兼容",
+        "openai compatible",
+        "图像理解",
+        "图片生成",
+        "图像生成",
+        "图片编辑",
+        "生图",
+        "视频生成",
+        "文生视频",
+        "图生视频",
+        "参考生视频",
+        "首尾帧",
+        "api key"
+      ],
+      "services": [
+        "MAAS"
+      ],
+      "primary_playbooks": [
+        "references/playbooks/maas-api-readiness.md"
+      ],
+      "guides": [
+        "references/maas-model-calls.md"
+      ],
+      "planners": [
+        "scripts/maas_models.py",
+        "scripts/maas_chat.py",
+        "scripts/maas_image_generation.py",
+        "scripts/maas_video_generation.py",
+        "scripts/hcloud_environment_doctor.py"
+      ],
+      "sdk_supplements": [],
+      "terraform_candidate": false
+    },
+    {
+      "id": "maas-usage-governance",
+      "name": "MaaS usage governance",
+      "category": "ai",
+      "description": "Plan MaaS token usage, request count, error count, error rate, ShowStatistics, credential, permission, and cost-governance checks; live statistics calls require explicit --execute.",
+      "triggers": [
+        "maas 用量",
+        "maas usage",
+        "token 用量",
+        "token统计",
+        "token 统计",
+        "tokens usage",
+        "词元",
+        "词元用量",
+        "总 token",
+        "prompt token",
+        "completion token",
+        "请求次数",
+        "请求数",
+        "错误数",
+        "错误率",
+        "showstatistics",
+        "show statistics",
+        "使用统计",
+        "用量统计",
+        "maas 监控",
+        "api 调用量",
+        "模型调用量",
+        "大模型成本"
+      ],
+      "services": [
+        "MAAS",
+        "ModelArts",
+        "BSS"
+      ],
+      "primary_playbooks": [
+        "references/playbooks/maas-usage-governance.md",
+        "references/playbooks/maas-api-readiness.md",
+        "references/playbooks/billing-cost-governance.md",
+        "references/playbooks/iam-permission-diagnostics.md"
+      ],
+      "guides": [
+        "references/maas-model-calls.md"
+      ],
+      "planners": [
+        "scripts/maas_usage_request_plan.py",
+        "scripts/hcloud_environment_doctor.py",
+        "scripts/hcloud_context_inspect.py"
+      ],
+      "sdk_supplements": [],
+      "terraform_candidate": false,
+      "skip_standard_followups": true
+    },
+    {
+      "id": "modelarts-training-diagnosis",
+      "name": "ModelArts training diagnosis",
+      "category": "ai",
+      "description": "Diagnose failed, stalled, or no-progress ModelArts training jobs through job details, stages, events, bounded task logs, and explicit evidence gaps.",
+      "triggers": [
+        "modelarts",
+        "modelarts 训练",
+        "训练作业失败",
+        "训练任务失败",
+        "训练作业卡住",
+        "训练任务卡住",
+        "训练无进展",
+        "training job"
+      ],
+      "services": [
+        "ModelArts",
+        "OBS",
+        "LTS"
+      ],
+      "primary_playbooks": [
+        "references/playbooks/observability-readiness.md",
+        "references/playbooks/lts-log-readiness.md",
+        "references/playbooks/iam-permission-diagnostics.md"
+      ],
+      "guides": [],
+      "planners": [
+        "scripts/hcloud_resource_discovery.py",
+        "scripts/hcloud_resource_query.py",
+        "scripts/hcloud_lts_readonly.py"
+      ],
+      "sdk_supplements": [],
+      "terraform_candidate": false,
+      "skip_standard_followups": true
+    },
+    {
+      "id": "environment-doctor",
+      "name": "Environment setup and tool readiness",
+      "category": "environment",
+      "description": "Check local KooCLI, profile, credentials, SDK, Terraform, obsutil, MaaS key, and proxy readiness without installing or calling cloud APIs.",
+      "triggers": [
+        "环境",
+        "安装",
+        "配置",
+        "setup",
+        "install",
+        "doctor",
+        "koocli",
+        "hcloud",
+        "cli",
+        "sdk",
+        "terraform",
+        "obsutil",
+        "maas",
+        "api key",
+        "凭证",
+        "认证"
+      ],
+      "services": [],
+      "primary_playbooks": [
+        "references/auth-and-context.md",
+        "references/terraform-workflow.md"
+      ],
+      "guides": [],
+      "planners": [
+        "scripts/hcloud_environment_doctor.py",
+        "scripts/hcloud_context_inspect.py",
+        "scripts/hcloud_terraform_context_inspect.py"
+      ],
+      "sdk_supplements": [],
+      "terraform_candidate": false
+    },
+    {
+      "id": "terraform-operations",
+      "name": "Terraform import, drift, and remote state",
+      "category": "iac",
+      "description": "Plan Terraform import, drift review, remote state, backend, state safety, and hcloud readback without automatically changing state or applying infrastructure changes.",
+      "triggers": [
+        "terraform",
+        "tofu",
+        "opentofu",
+        "iac",
+        "tf",
+        "import",
+        "terraform import",
+        "导入",
+        "纳管",
+        "drift",
+        "漂移",
+        "remote state",
+        "远程状态",
+        "backend",
+        "state",
+        "状态文件",
+        "state rm",
+        "state mv",
+        "migrate-state"
+      ],
+      "services": [
+        "TERRAFORM"
+      ],
+      "primary_playbooks": [
+        "references/terraform-workflow.md",
+        "references/terraform/operations.md",
+        "references/terraform/generation-guardrails.md",
+        "references/terraform/interop-with-hcloud.md",
+        "references/terraform/provider-validation.md"
+      ],
+      "guides": [
+        "references/terraform/terraform-assets.md",
+        "references/terraform/data-source-selection-guide.md",
+        "references/terraform/troubleshooting.md"
+      ],
+      "planners": [
+        "scripts/hcloud_terraform_context_inspect.py",
+        "scripts/hcloud_terraform_router.py",
+        "scripts/hcloud_terraform_operations_plan.py",
+        "scripts/hcloud_resource_discovery.py",
+        "scripts/hcloud_resource_query.py"
+      ],
+      "sdk_supplements": [],
+      "terraform_candidate": false,
+      "skip_standard_followups": true
+    },
+    {
+      "id": "permission-diagnostics",
+      "name": "IAM permission diagnostics",
+      "category": "security",
+      "description": "Classify hcloud 403, AccessDenied, Forbidden, Unauthorized, region/project scope, enterprise project, SCP, and missing IAM action failures before retrying or escalating privileges.",
+      "triggers": [
+        "权限",
+        "授权",
+        "403",
+        "accessdenied",
+        "access denied",
+        "forbidden",
+        "unauthorized",
+        "not authorized",
+        "permission denied",
+        "iam",
+        "scp",
+        "企业项目",
+        "agency",
+        "委托",
+        "bss",
+        "coc",
+        "obs 403",
+        "permission"
+      ],
+      "services": [
+        "IAM",
+        "BSS",
+        "COC",
+        "OBS",
+        "CCE",
+        "CES",
+        "ECS",
+        "EIP",
+        "VPC",
+        "RDS"
+      ],
+      "primary_playbooks": [
+        "references/playbooks/iam-context-bootstrap.md",
+        "references/playbooks/iam-permission-diagnostics.md",
+        "references/playbooks/billing-cost-governance.md",
+        "references/playbooks/coc-readiness.md",
+        "references/playbooks/obs-boundary.md"
+      ],
+      "guides": [
+        "references/auth-and-context.md"
+      ],
+      "planners": [
+        "scripts/hcloud_context_inspect.py",
+        "scripts/hcloud_safe_exec.py",
+        "scripts/hcloud_environment_doctor.py"
+      ],
+      "sdk_supplements": [],
+      "terraform_candidate": false,
+      "skip_standard_followups": true
+    },
+    {
+      "id": "ecs-compute-readiness",
+      "name": "ECS compute readiness",
+      "category": "compute",
+      "description": "Prepare, query, create-plan, and verify ECS instances, flavors, images, keypairs, jobs, and SSH readiness.",
+      "triggers": [
+        "ecs",
+        "云服务器",
+        "弹性云服务器",
+        "机器",
+        "主机",
+        "服务器",
+        "云主机",
+        "虚拟机",
+        "部署到机器",
+        "返回公网 IP",
+        "返回IP",
+        "实例",
+        "flavor",
+        "规格",
+        "image",
+        "镜像",
+        "ssh",
+        "server"
+      ],
+      "services": [
+        "ECS",
+        "IMS",
+        "KPS",
+        "VPC",
+        "EIP"
+      ],
+      "primary_playbooks": [
+        "references/playbooks/ecs-create-readiness.md",
+        "references/playbooks/ecs-ssh-access-readiness.md",
+        "references/playbooks/ecs-user-data-service-readiness.md",
+        "references/playbooks/eip-public-ip-readiness.md",
+        "references/playbooks/coc-readiness.md",
+        "references/playbooks/ims-image-discovery.md",
+        "references/playbooks/kps-keypair-discovery.md"
+      ],
+      "guides": [
+        "references/guides/ecs.md",
+        "references/guides/vpc.md"
+      ],
+      "planners": [
+        "scripts/hcloud_resource_discovery.py",
+        "scripts/hcloud_resource_query.py",
+        "scripts/hcloud_ecs_create_plan.py",
+        "scripts/hcloud_eip_change_flow.py",
+        "scripts/hcloud_guarded_change_flow.py"
+      ],
+      "sdk_supplements": [
+        "ECS:ListFlavors",
+        "ECS:ShowServer",
+        "IMS:ListImages"
+      ],
+      "terraform_candidate": true
+    },
+    {
+      "id": "functiongraph-serverless-readiness",
+      "name": "FunctionGraph serverless readiness",
+      "category": "compute",
+      "description": "Plan, query, and troubleshoot FunctionGraph functions, runtime, handler, code package, custom image, triggers, logs, VPC, agency, invocation, and downstream side effects.",
+      "triggers": [
+        "functiongraph",
+        "fgs",
+        "函数",
+        "函数计算",
+        "无服务器",
+        "serverless",
+        "trigger",
+        "触发器",
+        "timer",
+        "定时器",
+        "apig",
+        "obs trigger",
+        "invoke",
+        "调用函数",
+        "custom image",
+        "自定义镜像",
+        "lts log",
+        "函数日志"
+      ],
+      "services": [
+        "FunctionGraph",
+        "SWR",
+        "OBS",
+        "APIG",
+        "LTS",
+        "VPC",
+        "IAM"
+      ],
+      "primary_playbooks": [
+        "references/playbooks/functiongraph-readiness.md",
+        "references/playbooks/swr-image-readiness.md",
+        "references/playbooks/lts-log-readiness.md",
+        "references/playbooks/iam-permission-diagnostics.md",
+        "references/playbooks/vpc-network-readiness.md",
+        "references/playbooks/obs-boundary.md"
+      ],
+      "guides": [],
+      "planners": [
+        "scripts/hcloud_resource_discovery.py",
+        "scripts/hcloud_resource_query.py",
+        "scripts/hcloud_service_change_plan.py",
+        "scripts/hcloud_safe_exec.py"
+      ],
+      "sdk_supplements": [],
+      "terraform_candidate": true
+    },
+    {
+      "id": "obs-static-website-hosting",
+      "name": "OBS static website hosting",
+      "category": "storage",
+      "description": "Prepare OBS static website hosting with bucket naming, website endpoint, custom domain, CNAME, DNS, anonymous access, CDN handoff, and 403/404 troubleshooting.",
+      "triggers": [
+        "obs",
+        "对象存储",
+        "静态网站",
+        "静态站",
+        "网站托管",
+        "website hosting",
+        "website endpoint",
+        "bucket",
+        "桶",
+        "自定义域名",
+        "custom domain",
+        "cname",
+        "dns",
+        "备案",
+        "icp",
+        "icp备案",
+        "公安备案",
+        "公安联网备案",
+        "经营性许可",
+        "403",
+        "404",
+        "cdn"
+      ],
+      "services": [
+        "OBS",
+        "DNS",
+        "CDN",
+        "SCM"
+      ],
+      "primary_playbooks": [
+        "references/playbooks/obs-static-website-hosting.md",
+        "references/playbooks/obs-boundary.md",
+        "references/playbooks/dns-zone-record-readiness.md",
+        "references/playbooks/cdn-domain-readiness.md",
+        "references/playbooks/scm-certificate-readiness.md"
+      ],
+      "guides": [
+        "references/guides/obs.md"
+      ],
+      "planners": [
+        "scripts/hcloud_environment_doctor.py",
+        "scripts/hcloud_obs_readonly.py",
+        "scripts/hcloud_obs_change_plan.py",
+        "scripts/hcloud_resource_discovery.py",
+        "scripts/hcloud_resource_query.py"
+      ],
+      "sdk_supplements": [],
+      "terraform_candidate": true
+    },
+    {
+      "id": "entry-level-web-hosting",
+      "name": "Entry-level website hosting",
+      "category": "compute",
+      "description": "Route low-cost website goals to OBS static hosting, CDN/DNS, or simple ECS/Flexus-style compute readiness before overbuilding.",
+      "triggers": [
+        "便宜",
+        "低成本",
+        "小白",
+        "小企业",
+        "静态站",
+        "静态网站",
+        "网站",
+        "站点",
+        "网页",
+        "页面",
+        "独立站",
+        "flexus",
+        "flexus l",
+        "轻量服务器",
+        "轻量应用服务器",
+        "obs",
+        "cdn"
+      ],
+      "services": [
+        "OBS",
+        "CDN",
+        "DNS",
+        "ECS",
+        "EIP",
+        "FLEXUS-L"
+      ],
+      "primary_playbooks": [
+        "references/playbooks/entry-level-web-hosting.md",
+        "references/playbooks/obs-static-website-hosting.md",
+        "references/playbooks/flexus-l-readiness.md",
+        "references/playbooks/static-site-generated-assets-readiness.md",
+        "references/playbooks/obs-boundary.md",
+        "references/playbooks/ecs-create-readiness.md",
+        "references/playbooks/ecs-user-data-service-readiness.md",
+        "references/playbooks/eip-public-ip-readiness.md",
+        "references/playbooks/coc-readiness.md",
+        "references/playbooks/dns-zone-record-readiness.md"
+      ],
+      "guides": [
+        "references/guides/obs.md",
+        "references/guides/ecs.md"
+      ],
+      "planners": [
+        "scripts/hcloud_environment_doctor.py",
+        "scripts/hcloud_obs_readonly.py",
+        "scripts/hcloud_obs_change_plan.py",
+        "scripts/hcloud_ecs_create_plan.py",
+        "scripts/hcloud_eip_change_flow.py",
+        "scripts/hcloud_guarded_change_flow.py"
+      ],
+      "sdk_supplements": [],
+      "terraform_candidate": true
+    },
+    {
+      "id": "web-application-production-readiness",
+      "name": "Web application production readiness",
+      "category": "solution",
+      "description": "Close a production Web/API launch across compute, ELB, RDS, VPC/security groups, DNS, HTTPS certificates, CDN/WAF, observability, backup, and cost evidence.",
+      "triggers": [
+        "web 应用",
+        "web应用",
+        "web api",
+        "api 服务",
+        "业务系统",
+        "电商",
+        "商城",
+        "购物车",
+        "订单",
+        "支付",
+        "库存",
+        "用户登录",
+        "管理后台",
+        "后台任务",
+        "服务端",
+        "后端",
+        "生产",
+        "上线",
+        "上线闭环",
+        "发布",
+        "高可用",
+        "三层架构",
+        "公网入口",
+        "https",
+        "tls",
+        "域名接入",
+        "证书",
+        "rds",
+        "数据库",
+        "elb",
+        "负载均衡",
+        "waf",
+        "cdn",
+        "健康检查"
+      ],
+      "services": [
+        "ECS",
+        "FLEXUS-L",
+        "ELB",
+        "RDS",
+        "VPC",
+        "EIP",
+        "DNS",
+        "CDN",
+        "SCM",
+        "WAF",
+        "CES",
+        "LTS",
+        "CTS",
+        "CBR",
+        "TMS",
+        "OBS"
+      ],
+      "primary_playbooks": [
+        "references/playbooks/web-application-production-readiness.md",
+        "references/playbooks/entry-level-web-hosting.md",
+        "references/playbooks/ecs-create-readiness.md",
+        "references/playbooks/ecs-user-data-service-readiness.md",
+        "references/playbooks/coc-readiness.md",
+        "references/playbooks/elb-http-backend-readiness.md",
+        "references/playbooks/rds-instance-readiness.md",
+        "references/playbooks/vpc-network-readiness.md",
+        "references/playbooks/eip-public-ip-readiness.md",
+        "references/playbooks/dns-zone-record-readiness.md",
+        "references/playbooks/scm-certificate-readiness.md",
+        "references/playbooks/cdn-domain-readiness.md",
+        "references/playbooks/waf-policy-readiness.md",
+        "references/playbooks/observability-readiness.md",
+        "references/playbooks/billing-cost-governance.md",
+        "references/playbooks/cbr-backup-posture.md"
+      ],
+      "guides": [
+        "references/guides/ecs.md",
+        "references/guides/elb.md",
+        "references/guides/rds.md",
+        "references/guides/vpc.md",
+        "references/guides/observability.md"
+      ],
+      "planners": [
+        "scripts/hcloud_account_inventory.py",
+        "scripts/hcloud_resource_discovery.py",
+        "scripts/hcloud_resource_query.py",
+        "scripts/hcloud_service_change_plan.py",
+        "scripts/hcloud_guarded_change_flow.py",
+        "scripts/hcloud_closure_plan.py",
+        "scripts/hcloud_acceptance_closure.py",
+        "scripts/hcloud_observability_plan.py"
+      ],
+      "sdk_supplements": [
+        "ECS:ShowServer",
+        "ELB:ShowLoadBalancer",
+        "RDS:ShowInstanceConfiguration",
+        "VPC:ShowVpc"
+      ],
+      "terraform_candidate": true
+    },
+    {
+      "id": "container-image-deployment",
+      "name": "Container image deployment",
+      "category": "container",
+      "description": "Plan, query, and troubleshoot SWR-backed container image deployment to CCE or CCI with namespace, repository, tag, network, service exposure, logs, metrics, and pull permission evidence.",
+      "triggers": [
+        "swr",
+        "镜像仓库",
+        "容器镜像",
+        "docker",
+        "image",
+        "镜像推送",
+        "推送镜像",
+        "镜像拉取",
+        "拉取镜像",
+        "imagepullbackoff",
+        "pull image",
+        "部署镜像",
+        "部署容器",
+        "发布容器",
+        "workload",
+        "deployment",
+        "pod",
+        "service",
+        "cci",
+        "云容器实例",
+        "容器实例",
+        "无服务器容器"
+      ],
+      "services": [
+        "SWR",
+        "CCE",
+        "CCI",
+        "VPC",
+        "EIP",
+        "ELB",
+        "DNS",
+        "CES",
+        "LTS"
+      ],
+      "primary_playbooks": [
+        "references/playbooks/swr-image-readiness.md",
+        "references/playbooks/cci-workload-readiness.md",
+        "references/playbooks/cce-cluster-readiness.md",
+        "references/playbooks/vpc-network-readiness.md",
+        "references/playbooks/eip-public-ip-readiness.md",
+        "references/playbooks/elb-http-backend-readiness.md",
+        "references/playbooks/observability-readiness.md",
+        "references/playbooks/lts-log-readiness.md"
+      ],
+      "guides": [
+        "references/guides/cce.md",
+        "references/guides/vpc.md",
+        "references/guides/observability.md"
+      ],
+      "planners": [
+        "scripts/hcloud_cci_workload_plan.py",
+        "scripts/hcloud_resource_discovery.py",
+        "scripts/hcloud_resource_query.py",
+        "scripts/hcloud_service_change_plan.py",
+        "scripts/hcloud_closure_plan.py",
+        "scripts/hcloud_acceptance_closure.py"
+      ],
+      "sdk_supplements": [
+        "CCE:ShowCluster"
+      ],
+      "terraform_candidate": true
+    },
+    {
+      "id": "network-readiness",
+      "name": "VPC and public access readiness",
+      "category": "network",
+      "description": "Discover VPC, subnet, security group, EIP, NAT, ELB, DNS, and public access dependencies before exposing workloads.",
+      "triggers": [
+        "vpc",
+        "subnet",
+        "子网",
+        "安全组",
+        "security group",
+        "eip",
+        "公网",
+        "elb",
+        "负载均衡",
+        "dns",
+        "nat",
+        "端口"
+      ],
+      "services": [
+        "VPC",
+        "EIP",
+        "ELB",
+        "NAT",
+        "DNS"
+      ],
+      "primary_playbooks": [
+        "references/playbooks/vpc-network-readiness.md",
+        "references/playbooks/vpc-resource-discovery.md",
+        "references/playbooks/eip-public-ip-readiness.md",
+        "references/playbooks/elb-http-backend-readiness.md",
+        "references/playbooks/dns-zone-record-readiness.md",
+        "references/playbooks/nat-gateway-readiness.md"
+      ],
+      "guides": [
+        "references/guides/vpc.md",
+        "references/guides/elb.md"
+      ],
+      "planners": [
+        "scripts/hcloud_resource_discovery.py",
+        "scripts/hcloud_resource_query.py",
+        "scripts/hcloud_eip_change_flow.py",
+        "scripts/hcloud_guarded_change_flow.py"
+      ],
+      "sdk_supplements": [
+        "VPC:ShowVpc",
+        "ELB:ShowLoadBalancer"
+      ],
+      "terraform_candidate": true
+    },
+    {
+      "id": "database-readiness",
+      "name": "Database readiness and governance",
+      "category": "database",
+      "description": "Plan and verify RDS/DCS/database configuration, backup posture, connectivity evidence, and safe review before changes.",
+      "triggers": [
+        "rds",
+        "database",
+        "数据库",
+        "mysql",
+        "postgresql",
+        "dcs",
+        "redis",
+        "备份",
+        "backup",
+        "参数组",
+        "configuration"
+      ],
+      "services": [
+        "RDS",
+        "DCS",
+        "CBR",
+        "VPC"
+      ],
+      "primary_playbooks": [
+        "references/playbooks/rds-instance-readiness.md",
+        "references/playbooks/dcs-readiness.md",
+        "references/playbooks/cbr-backup-posture.md"
+      ],
+      "guides": [
+        "references/guides/rds.md",
+        "references/guides/governance.md"
+      ],
+      "planners": [
+        "scripts/hcloud_resource_discovery.py",
+        "scripts/hcloud_resource_query.py",
+        "scripts/hcloud_closure_plan.py"
+      ],
+      "sdk_supplements": [
+        "RDS:ShowInstanceConfiguration"
+      ],
+      "terraform_candidate": true
+    },
+    {
+      "id": "observability-readiness",
+      "name": "Observability and service health",
+      "category": "governance",
+      "description": "Collect resource state, CES metrics, LTS log metadata, alarms, and readiness evidence before declaring workloads healthy or idle.",
+      "triggers": [
+        "监控",
+        "metric",
+        "metrics",
+        "ces",
+        "日志",
+        "lts",
+        "alarm",
+        "告警",
+        "指标",
+        "内存指标",
+        "指标不存在",
+        "查不到指标",
+        "无数据",
+        "mem_used_percent",
+        "mem_usedpercent",
+        "mem_usedPercent",
+        "mem_util",
+        "sys.ecs",
+        "agt.ecs",
+        "agent",
+        "telescope",
+        "health",
+        "readiness",
+        "可观测"
+      ],
+      "services": [
+        "CES",
+        "LTS",
+        "ECS",
+        "ELB"
+      ],
+      "primary_playbooks": [
+        "references/playbooks/observability-readiness.md",
+        "references/playbooks/ecs-monitoring-troubleshooting.md",
+        "references/playbooks/ces-metric-readiness.md",
+        "references/playbooks/lts-log-readiness.md"
+      ],
+      "guides": [
+        "references/guides/observability.md"
+      ],
+      "planners": [
+        "scripts/hcloud_resource_discovery.py",
+        "scripts/hcloud_observability_plan.py",
+        "scripts/hcloud_ces_alarm_plan.py",
+        "scripts/hcloud_lts_readonly.py"
+      ],
+      "sdk_supplements": [
+        "CES:ListMetrics"
+      ],
+      "terraform_candidate": false
+    },
+    {
+      "id": "audit-and-cost-governance",
+      "name": "Audit, cost, tag, and teardown governance",
+      "category": "governance",
+      "description": "Inventory resources, classify idle candidates, plan teardown review, and collect CTS/TMS/Billing/backup evidence.",
+      "triggers": [
+        "治理",
+        "管云",
+        "审计",
+        "cts",
+        "trace",
+        "tag",
+        "tms",
+        "账单",
+        "billing",
+        "cost",
+        "成本",
+        "闲置",
+        "eip",
+        "公网ip",
+        "弹性公网ip",
+        "未绑定eip",
+        "未绑定",
+        "扣费",
+        "费用",
+        "带宽",
+        "公网费用",
+        "回收",
+        "teardown"
+      ],
+      "services": [
+        "CTS",
+        "TMS",
+        "BSS",
+        "CBR",
+        "RMS",
+        "Config",
+        "EIP"
+      ],
+      "primary_playbooks": [
+        "references/playbooks/cts-audit-readiness.md",
+        "references/playbooks/tms-tag-governance.md",
+        "references/playbooks/billing-cost-governance.md",
+        "references/playbooks/eip-cost-optimization.md",
+        "references/playbooks/cbr-backup-posture.md"
+      ],
+      "guides": [
+        "references/guides/governance.md"
+      ],
+      "planners": [
+        "scripts/hcloud_resource_discovery.py",
+        "scripts/hcloud_account_inventory.py",
+        "scripts/hcloud_idle_audit.py",
+        "scripts/hcloud_billing_result_summarize.py",
+        "scripts/hcloud_teardown_plan.py",
+        "scripts/hcloud_closure_plan.py"
+      ],
+      "sdk_supplements": [
+        "CTS:ListTraces"
+      ],
+      "terraform_candidate": false
+    },
+    {
+      "id": "dws-performance-diagnosis",
+      "name": "DWS performance diagnosis",
+      "category": "database",
+      "description": "Diagnose DWS CPU, memory, and I/O pressure through node scope, sampling semantics, SQL/session/process correlation, and evidence-bounded attribution.",
+      "triggers": [
+        "dws",
+        "gaussdb dws",
+        "数据仓库性能",
+        "dws cpu",
+        "dws 内存",
+        "dws io",
+        "dws i/o",
+        "dws 慢查询"
+      ],
+      "services": [
+        "DWS",
+        "CES",
+        "LTS"
+      ],
+      "primary_playbooks": [
+        "references/playbooks/dws-diagnostic-method.md",
+        "references/playbooks/observability-readiness.md",
+        "references/playbooks/lts-log-readiness.md"
+      ],
+      "guides": [],
+      "planners": [
+        "scripts/hcloud_resource_discovery.py",
+        "scripts/hcloud_resource_query.py",
+        "scripts/hcloud_observability_plan.py",
+        "scripts/hcloud_lts_readonly.py"
+      ],
+      "sdk_supplements": [],
+      "terraform_candidate": false,
+      "skip_standard_followups": true
+    },
+    {
+      "id": "container-readiness",
+      "name": "CCE and container platform readiness",
+      "category": "container",
+      "description": "Discover CCE/CCI clusters, UCS fleets, nodes, network dependencies, metrics, workloads, and policy-governance readiness.",
+      "triggers": [
+        "cce",
+        "cci",
+        "ucs",
+        "多集群",
+        "集群纳管",
+        "fleet",
+        "policy instance",
+        "swr",
+        "kubernetes",
+        "k8s",
+        "云原生",
+        "云原生评估",
+        "环境评估",
+        "集群评估",
+        "集群体检",
+        "成熟度",
+        "生产 readiness",
+        "容器",
+        "云容器实例",
+        "容器实例",
+        "镜像仓库",
+        "集群",
+        "cluster",
+        "node",
+        "节点",
+        "nodepool",
+        "节点池",
+        "addon",
+        "插件",
+        "rbac",
+        "kubeconfig",
+        "pod",
+        "ingress"
+      ],
+      "services": [
+        "CCE",
+        "CCI",
+        "UCS",
+        "SWR",
+        "VPC",
+        "ELB",
+        "CES"
+      ],
+      "primary_playbooks": [
+        "references/playbooks/cce-cloud-native-assessment.md",
+        "references/playbooks/cce-cluster-readiness.md",
+        "references/playbooks/cci-workload-readiness.md",
+        "references/playbooks/ucs-fleet-readiness.md",
+        "references/playbooks/swr-image-readiness.md",
+        "references/playbooks/vpc-network-readiness.md",
+        "references/playbooks/observability-readiness.md",
+        "references/playbooks/billing-cost-governance.md",
+        "references/playbooks/iam-permission-diagnostics.md"
+      ],
+      "guides": [
+        "references/guides/cce.md",
+        "references/guides/vpc.md",
+        "references/guides/observability.md"
+      ],
+      "planners": [
+        "scripts/hcloud_cce_assessment_plan.py",
+        "scripts/hcloud_resource_discovery.py",
+        "scripts/hcloud_resource_query.py",
+        "scripts/hcloud_closure_plan.py"
+      ],
+      "sdk_supplements": [
+        "CCE:ShowCluster"
+      ],
+      "terraform_candidate": true
+    }
+  ]
+}

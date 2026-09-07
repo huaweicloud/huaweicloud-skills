@@ -1,0 +1,13 @@
+region_name         = "cn-north-4"
+vpc_name            = "demo-vpc"
+vpc_cidr            = "192.168.0.0/16"
+subnet_name         = "demo-subnet"
+subnet_cidr         = "192.168.1.0/24"
+subnet_gateway_ip   = "192.168.1.1"
+security_group_name = "demo-secgroup"
+instance_name       = "demo-ecs"
+image_name          = "Ubuntu 20.04 server 64bit"
+key_pair_name       = "your-keypair"
+ssh_allowed_cidr    = "203.0.113.10/32"
+system_disk_type    = "SAS"
+system_disk_size    = 40

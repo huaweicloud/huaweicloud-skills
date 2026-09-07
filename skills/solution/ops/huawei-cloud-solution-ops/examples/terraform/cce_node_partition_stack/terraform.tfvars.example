@@ -1,0 +1,8 @@
+region_name                   = "cn-north-4"
+cluster_id                    = "replace-with-existing-cce-turbo-cluster-id"
+partition_name                = "demo-partition"
+partition_public_border_group = "replace-with-public-border-group"
+partition_subnet_id           = "replace-with-partition-subnet-id"
+container_subnet_ids          = ["replace-with-container-ipv4-subnet-id"]
+node_pool_name                = "demo-partition-node-pool"
+node_key_pair_name            = "replace-with-existing-keypair-name"

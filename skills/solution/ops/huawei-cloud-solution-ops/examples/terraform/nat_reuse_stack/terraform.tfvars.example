@@ -1,0 +1,9 @@
+region_name         = "cn-north-4"
+nat_gateway_id      = "replace-with-existing-nat-gateway-id"
+snat_floating_ip_id = "replace-with-existing-eip-id"
+snat_subnet_id      = "replace-with-existing-subnet-id"
+
+enable_dnat                = false
+dnat_port_id               = ""
+dnat_external_service_port = 8080
+dnat_internal_service_port = 80

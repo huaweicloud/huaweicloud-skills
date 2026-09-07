@@ -1,0 +1,17 @@
+region_name        = "cn-north-4"
+resource_spec_code = "waf.professional"
+charging_mode      = "prePaid"
+period_unit        = "month"
+period             = 1
+domain_name        = "example.com"
+
+origin_servers = [
+  {
+    client_protocol = "HTTPS"
+    server_protocol = "HTTP"
+    address         = "192.0.2.10"
+    port            = 80
+    type            = "ipv4"
+    weight          = 1
+  }
+]
