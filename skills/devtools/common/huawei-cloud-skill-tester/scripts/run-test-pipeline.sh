@@ -151,10 +151,76 @@ elif [ "$MODE" = "phase" ] && [ -n "$START_PHASE" ]; then
   info "从指定 Phase $START_PHASE 开始"
 fi
 
-# === Trap: ensure cleanup on exit ===
+# === Skill Quality Reporting (SDK) ===
+# Vendored scripts/skill_quality_sdk.py reports this tester run
+# (usage count + status + cost) to the skillsopr operations console.
+# Fire-and-forget: report failure never blocks or changes the pipeline result.
+# Config env vars: SKILL_QUALITY_DISABLE=1 disables reporting (local debug),
+# SKILL_QUALITY_ENDPOINT overrides the report server, SKILL_QUALITY_TIMEOUT
+# sets the HTTP timeout (default 3s), SKILL_QUALITY_NAME sets the reported
+# skill name (default huawei-cloud-skill-tester; the SDK falls back to it when
+# skill_name is not passed explicitly), SKILL_QUALITY_ALLOW_ANONYMOUS=1
+# (default) lets credential-less runs (exit 77 / C01) still report via the
+# public endpoint with the payload marked unauthenticated. See SKILL.md
+# "Quality Reporting".
+report_quality() {
+  local rc="$1"
+  local cost_s="$2"
+  local sdk_py="$SCRIPT_DIR/skill_quality_sdk.py"
+  [ -f "$sdk_py" ] || { warn "⚠️ skill_quality_sdk.py 不存在，跳过质量上报"; return 0; }
+
+  local status="success" error_code="" error_msg=""
+  if [ "$rc" -ne 0 ]; then
+    status="sys_fail"
+    if [ "$rc" -eq 77 ]; then
+      error_code="C01"
+      error_msg="AK/SK credentials missing (exit 77)"
+    else
+      error_code="B01"
+      error_msg="tester pipeline failed with exit code $rc"
+    fi
+  fi
+
+  info "上报 tester 运行质量 (status=$status, cost=${cost_s}s) ..."
+  SKILL_QUALITY_NAME="${SKILL_QUALITY_NAME:-huawei-cloud-skill-tester}" \
+  SKILL_QUALITY_TRIGGER="${SKILL_QUALITY_TRIGGER:-workflow}" \
+  SKILL_QUALITY_ALLOW_ANONYMOUS="${SKILL_QUALITY_ALLOW_ANONYMOUS:-1}" \
+  python3 - "$SCRIPT_DIR" "$rc" "$status" "$error_code" "$error_msg" "$cost_s" "$SKILLS_LIST" "$OUTPUT_DIR" "$MODE" "${START_PHASE:-}" <<'PYEOF' &
+import os, sys
+sys.path.insert(0, sys.argv[1])
+from skill_quality_sdk import report  # noqa: E402
+rc, status, error_code, error_msg = int(sys.argv[2]), sys.argv[3], sys.argv[4] or None, sys.argv[5] or None
+cost_s, skills_list, output_dir, mode, start_phase = sys.argv[6], sys.argv[7], sys.argv[8], sys.argv[9], sys.argv[10]
+report(
+    skill_name=None,  # 未显式传入 → SDK 回落 SKILL_QUALITY_NAME 环境变量(默认 huawei-cloud-skill-tester)
+    status=status,
+    error_code=error_code,
+    error_msg=error_msg,
+    cost_ms=int(float(cost_s) * 1000) if cost_s else None,
+    input_param={
+        "skills": skills_list,
+        "mode": mode,
+        "output_dir": output_dir,
+        "phase": start_phase,
+    },
+    output_result={
+        "pipeline": "three-track-eight-phase",
+        "exit_code": rc,
+    },
+)
+PYEOF
+  return 0
+}
+
+# === Trap: ensure cleanup + quality report on exit ===
 cleanup_on_exit() {
   local rc=$?
+  local cost_s=0
+  if [ -n "${TOTAL_START:-}" ]; then
+    cost_s=$(( $(date +%s) - TOTAL_START ))
+  fi
   echo ""
+  report_quality "$rc" "$cost_s"
   cleanup_after_test "${SKILL_PATHS[@]}"
   exit $rc
 }
