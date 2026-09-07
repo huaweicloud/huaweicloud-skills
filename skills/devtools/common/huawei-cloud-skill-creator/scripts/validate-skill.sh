@@ -67,19 +67,22 @@ if [ -f "$SKILL_DIR/SKILL.md" ]; then
     # === SEC-001 — Hardcoded AK/SK literal values ===
     # Pattern: any of access_key / secret_key / ak / sk paired with a literal
     # value (>=8 chars, alphanumeric/base64-ish). Matches e.g.
-    #     HUAWEI_ACCESS_KEY="abcd1234..."
-    #     secret_key: 'abcd1234...'
-    #     "ak": "abcd1234..."
+    #     HUAWEI_ACCESS_KEY="<your-access-key-id>"
+    #     secret_key: '<your-secret-access-key>'
+    #     "ak": "<your-ak-value>"
     # Whitelist: NEVER / FORBIDDEN / 禁止 contexts (skill prose explaining
     # what NOT to do) and placeholder templates (your-*, example,
     # placeholder, replace-me, <YOUR_*).
+    # Comment-only lines (bash # / HTML <!-- -->) are excluded: they are
+    # documentation, not executable or in-band credential material, and the
+    # validator's own pattern docs (this block) must not self-trigger.
     _ak="access[_-]?key"
     _sk="secret[_-]?key"
     _pair="(^|[^[:alnum:]_])(ak|sk)"
     _value="[[:space:]]*[:=][[:space:]]*['\"]?[[:alnum:]_+/=-]{8,}"
     _sec001_pattern="(${_ak}|${_sk}|${_pair})${_value}"
     _sec001_whitelist='\b(forbidden|never|prohibit|禁止|不得|不应|检测|detection|scan|pattern|your[-_]|example|placeholder|replace-me)\b|<YOUR|<your'
-    if grep -RniE "${_sec001_pattern}" "$SKILL_DIR" 2>/dev/null | grep -viE "${_sec001_whitelist}" > /dev/null; then
+    if grep -RHniE "${_sec001_pattern}" "$SKILL_DIR" 2>/dev/null | grep -vE ':[0-9]+:[[:space:]]*(#|<!--)' | grep -viE "${_sec001_whitelist}" > /dev/null; then
         fail "[SEC-001] Possible hardcoded AK/SK literal values found" || true
     else
         pass "[SEC-001] No hardcoded AK/SK literal values"
@@ -87,20 +90,22 @@ if [ -f "$SKILL_DIR/SKILL.md" ]; then
 
     # === SEC-002 — In-session AK/SK entry forms ===
     # Pattern: 'hcloud configure set ... --cli-(access|secret)-key=...'
-    # AND 'BasicCredentials(..., access_key=..., secret_key=..., ak=..., sk=...)'
-    # Both are in-band secret-entry forms that put AK/SK on a command
+    # AND basic-credentials literal kwargs (access_key=..., secret_key=...,
+    # ak=..., sk=...) inside a BasicCredentials(...) call — both are
+    # in-band secret-entry forms that put AK/SK on a command
     # line / SDK kwarg, contradicting the Pre-check contract:
     #   'NEVER ask the user to type or paste AK/SK in chat; user must
     #    set env vars in shell profile out-of-band and re-run.'
     # Whitelist: lines that contain the patterns inside NEVER / Do NOT
     # / 禁止 / forbidden contexts (prose warnings about the anti-pattern
-    # are allowed). Strict-mode design: one process-level pass with
-    # the whitelist applied; false-positive tolerance is intentional.
+    # are allowed). Comment-only lines (bash # / HTML <!-- -->) are
+    # excluded — the validator's own pattern docs must not self-trigger.
+    # Strict-mode design: one process-level pass with the whitelist applied.
     _hcloud_cfg_set='hcloud[[:space:]]+configure[[:space:]]+set[[:space:]]+.*--cli-(access|secret)-key[[:space:]]*='
     _basic_creds_literal='BasicCredentials[[:space:]]*\([^)]*(access_key|secret_key|ak[[:space:]]*=|sk[[:space:]]*=)'
     _sec002_pattern="${_hcloud_cfg_set}|${_basic_creds_literal}"
     _sec002_whitelist="${_sec001_whitelist}|literal"
-    if grep -RniE "${_sec002_pattern}" "$SKILL_DIR" 2>/dev/null | grep -viE "${_sec002_whitelist}" > /dev/null; then
+    if grep -RHniE "${_sec002_pattern}" "$SKILL_DIR" 2>/dev/null | grep -vE ':[0-9]+:[[:space:]]*(#|<!--)' | grep -viE "${_sec002_whitelist}" > /dev/null; then
         fail "[SEC-002] In-session AK/SK entry form detected outside NEVER context (hcloud configure set --cli-*-key= or BasicCredentials literal kwargs)" || true
     else
         pass "[SEC-002] No in-session AK/SK entry forms outside NEVER context"

@@ -51,11 +51,7 @@ If no valid profile exists, **STOP** here.
    export HUAWEI_REGION="cn-north-4"
    ```
 
-   Optional alternative — only as an interactive out-of-band step (Agent must NOT invoke this with literal values):
-
-   ```bash
-   hcloud configure    # interactive; prompts for AK/SK in the user's terminal
-   ```
+   Optional alternative (interactive out-of-band step only, never with literal values): `hcloud configure` — prompts for AK/SK in the user's terminal
 3. After the user confirms they have configured env vars (or run `hcloud configure`), re-run `hcloud configure list`. If the profile is valid → resume Phase 1. If still missing → terminate, do not proceed.
 
 > **Reuse the active CLI profile for all subsequent `hcloud` and `huaweicloudsdk` calls.** Do not print or hardcode secrets. Do not replace this gate with `obsutil config`, `hcloud configure set` with literal arguments, SDK credentials constructors filled with literal strings (for example, the SDK's `BasicCredentials` built from string literals rather than env vars), or any other in-session secret-entry flow.
@@ -161,15 +157,9 @@ Research feature point N
 
 **Tips for finding SDK client source paths:**
 ```bash
-# Method 1: Find package installation path
-python3 -c "import huaweicloudsdk{service}.v2 as m; import os; print(os.path.dirname(m.__file__))"
-
-# Method 2: Find all _http_info methods (show all API endpoints)
-grep "_http_info" <path>/{service}_client.py
-
-# Method 3: View API path for a specific method
-grep -A8 "_{method}_http_info" <path>/{service}_client.py
-# The "resource_path" key in output is the real REST endpoint
+python3 -c "import huaweicloudsdk{service}.v2 as m; import os; print(os.path.dirname(m.__file__))"  # package path
+grep "_http_info" <path>/{service}_client.py                                                          # all API endpoints
+grep -A8 "_{method}_http_info" <path>/{service}_client.py                                             # "resource_path" = real REST endpoint
 ```
 
 **Output:** `phase-2-summary.json` — Execution mode (CLI/SDK/API/⛔) and corresponding command/code/API path for each feature point
@@ -185,18 +175,7 @@ Generate Skill files based on Phase 2 conclusions:
 3. **Frontmatter** — Include `name`, `description` with a feature summary and trigger conditions, and no more than five `tags`. Do not generate a `version` field.
 4. **Create directory structure:**
    ```text
-   skills/{skill-name}/
-   ├── SKILL.md
-   ├── references/
-   │   ├── iam-policies.md              (Required)
-   │   ├── cli-installation-guide.md    (Required when CLI is used)
-   │   ├── verification-method.md       (Recommended)
-   │   ├── dataflow-diagram.md          (Recommended)
-   │   └── acceptance-criteria.md       (Recommended)
-   ├── scripts/
-   │   └── test-cli-commands.sh
-   └── templates/
-       └── test-vars.json
+   skills/{skill-name}/  → SKILL.md, references/ (iam-policies.md required; cli-installation-guide.md required when CLI is used; verification-method.md / dataflow-diagram.md / acceptance-criteria.md recommended), scripts/test-cli-commands.sh, templates/test-vars.json
    ```
 5. **SKILL.md content generation rules:**
 
@@ -245,30 +224,16 @@ Generate Skill files based on Phase 2 conclusions:
    | SDK cases | One case per SDK call | `list_sub_customer_coupons(limit=1)` |
    | API cases | One case per user-provided endpoint | `curl -X GET {endpoint}` |
 
-2. **Save test cases as JSON** → `templates/test-vars.json`
-
+2. **Save test cases as JSON** → `templates/test-vars.json`:
    ```json
-   {
-     "test_cases": [
-       {"id": "TC-01", "name": "...", "command": "...", "expected": "..."},
-       ...
-     ]
-   }
+   {"test_cases": [{"id": "TC-01", "name": "...", "command": "...", "expected": "..."}]}
    ```
 
 3. **Show all test cases to the user for confirmation**
 
 4. **Run tests:**
     - Read AK/SK from environment variables: 自动扫描所有以 `HUAWEI` / `HW` / `HWC` 开头的环境变量，匹配其中含 `ACCESS_KEY` / `_AK` / `SECRET_KEY` / `_SK` 的键值对
-    - **If no valid AK/SK env var or CLI profile is detected, output the env-var setup template below and STOP — never ask the user to type AK/SK in chat. The user fills in real values out-of-band and re-runs the Pre-check:**
-
-      ```bash
-      export HUAWEI_ACCESS_KEY="<your-access-key-id>"
-      read -rs HUAWEI_SECRET_KEY; export HUAWEI_SECRET_KEY
-      export HUAWEI_REGION="cn-north-4"
-      ```
-
-      If the user cannot / will not provide env vars, **terminate the process**. Strictly prohibited from skipping credential-required steps.
+    - **If no valid AK/SK env var or CLI profile is detected, re-run the Pre-check env-var setup template (see Pre-check → Verification Steps) and STOP — never ask the user to type AK/SK in chat.** If the user cannot / will not provide env vars, **terminate the process**. Strictly prohibited from skipping credential-required steps.
     - Execute test cases one by one
     - **Before executing mutating commands (Create/Update/Delete), must prompt the user and wait for confirmation**
 
@@ -293,22 +258,12 @@ Generate Skill files based on Phase 2 conclusions:
 **Dependency:** Phase 4 test preparation completed (phase-4-summary.json exists)
 
 1. **Full regression:** Execute all test cases generated in Phase 4
-
-2. **Resource lifecycle testing** (applicable to Skills involving resource creation/modification/deletion):
-   - Create resource → Verify creation succeeded (query to confirm)
-   - Runtime query → Verify resource status is correct
-   - Destroy resource → Verify resource release
+2. **Resource lifecycle testing** (Skills involving resource creation/modification/deletion):
+   - Create resource → verify creation succeeded (query to confirm) → runtime query → destroy resource → verify release
    - Test report outputs information on created/modified/deleted resources
    - **Prompt the user and wait for confirmation before each step**
-
-3. **Management-type Skills**:
-   - If CRUD operations are involved → End-to-end full testing
-   - If query-only → Output query results to test report
-
-4. **Report generation:**
-   - Test results aggregated by case
-   - Detailed record of resource changes
-   - Detailed error information for failed cases
+3. **Management-type Skills**: CRUD → end-to-end full testing; query-only → output query results to test report
+4. **Report generation:** Test results aggregated by case; detailed resource-change records; detailed error info for failed cases
 
 **Output:** `phase-5-summary.json` — Detailed test results + resource operation records
 
@@ -391,7 +346,17 @@ Generate Skill files based on Phase 2 conclusions:
 
    **All phases complete → Creation done. Missing phases → Restart from the missing phase.**
 
-6. **Clean up phase summary files:** After completeness check passes, delete all `phase-*-summary.json` files under the skill directory
+6. **Report skill creation via the common reporting SDK (Mandatory):** After the completeness check fully passes, report this creator usage through the common skill reporting SDK (huawei-cloud-skill-reporter). This call is what counts the creator's usage statistics.
+
+   ```bash
+   bash scripts/report-skill-created.sh {skill-name} "{skill-path}"
+   ```
+
+   - The script delegates to the huawei-cloud-skill-reporter standalone CLI (`report.mjs`) — the single source of truth for URL / IP / payload logic (same SDK integrated by `skill-auto-test-pr/run-pipeline.sh`).
+   - **Fire-and-forget:** the report never blocks or fails the creation flow. If the SDK is not installed or the network is unreachable, the script prints a WARNING and still exits 0.
+   - This step is mandatory and cannot be skipped — the SDK statistics for the creator depend on it.
+
+7. **Clean up phase summary files:** After completeness check passes, delete all `phase-*-summary.json` files under the skill directory
 
    ```bash
     # Execute after final completeness check passes
@@ -403,6 +368,16 @@ Generate Skill files based on Phase 2 conclusions:
    **Note:** Only perform cleanup after the completeness check **fully passes**. If there are missing phases, do not clean up; restart from the missing phase.
 
 **Output:** `phase-6-summary.json` — Final creation report + compliance check results + security audit conclusion
+
+## Skill Usage Reporting (通用上报 SDK)
+
+The creator reports its own usage through the common skill reporting SDK (`huawei-cloud-skill-reporter`) every time a skill creation completes. This telemetry is used to count creator usage statistics.
+
+- **SDK entry point:** the `huawei-cloud-skill-reporter` standalone CLI (`report.mjs`, run via `node report.mjs <skill> <status> [request] [result]`), resolved by `scripts/report-skill-created.sh`
+- **Reported skill:** always `huawei-cloud-skill-creator` (this skill), `status=success`, `request="created skill: <skill-name>"`, `result=<skill-path>`
+- **Integration point:** mandatory Phase 6 step 6 — `bash scripts/report-skill-created.sh {skill-name} "{skill-path}"`
+- **Failure handling:** fire-and-forget; a missing SDK or network error is logged as a WARNING and never blocks the six-phase pipeline
+- **Overrides:** `HUAWEI_CLOUD_SKILL_REPORT_URL` overrides the report endpoint (forwarded to `report.mjs`)
 
 ## KooCLI Command Format Standard
 
@@ -424,6 +399,7 @@ hcloud <Service> <Operation> --cli-region=<region> [--key=value ...]
 |---------|---------|
 | `bash scripts/validate-skill.sh -s {path}` | Phase 3/6: Structure and Huawei Cloud specification validation |
 | `bash scripts/test-cli-commands.sh -s {path} -e {cli\|sdk\|api}` | Phase 4/5: Functional testing |
+| `bash scripts/report-skill-created.sh {skill-name} "{skill-path}"` | Phase 6: Report creator usage via the common skill reporting SDK (huawei-cloud-skill-reporter) |
 
 > test-cli-commands.sh 仅执行白名单命令（hcloud/python3/curl/bash 开头），其他命令被拒绝且不会执行。validate-skill.sh 对不存在的 skill 目录会明确报错（exit 1）。
 
@@ -455,6 +431,7 @@ hcloud <Service> <Operation> --cli-region=<region> [--key=value ...]
 | BSS service SDK initialization fails (GlobalCredentials) | BSS is global and must use `GlobalCredentials` with `with_endpoints`, not `BasicCredentials` with `with_region` |
 | list_sub_customer_coupons query returns 400 | BSS limit parameter maximum is 100, not the default 200 |
 | Phase 6 security audit FAIL | Fix issues from the audit report, then have the Agent rerun the audit until it passes |
+| Reporter SDK not installed (report.mjs missing) | `report-skill-created.sh` prints a WARNING and exits 0 — creation flow continues; do not skip the six-phase pipeline over a telemetry failure |
 | skill-scanner false positive | Use `<!-- skill-scanner:ignore -->` comment annotation, or exclude in .secrets.baseline |
 | gitleaks false positive | Add to `.gitleaksignore` file |
 
@@ -494,33 +471,16 @@ Have the Agent orchestrate the tools listed in `references/security-audit-guide.
 - `references/related-commands.md` — Command quick reference
 - `references/security-audit-guide.md` — Phase 6 five-tool security audit and remediation guide
 
-## Best Practices
+## Notes & Design Principles
 
-- During Phase 1 requirements analysis, try to cover all functional dimensions to avoid rework in later phases
-- In Phase 2 technical research, prioritize CLI, then SDK, and API last; do not use SDK when CLI is available
-- In Phase 2, read SDK `_http_info` to get real API paths; strictly prohibited from inferring
-- In Phase 4/5 testing, mutating operations (Create/Update/Delete) must be confirmed by the user before execution
-- If Phase 6 compliance check fails, fix the issues first, then re-verify; do not skip
-
-## Notes
-
-- Six-phase pipeline strictly follows sequential order; no phase may be skipped
-- API endpoints are only allowed from SDK source `_http_info` or Huawei Cloud API Explorer; strictly prohibited from inferring via naming patterns
-- **Pre-check is a hard gate.** Credentials (AK/SK) are sourced from environment variables or active CLI profile — never read, echoed, hardcoded, or entered through `hcloud configure set` with literal values
-- **If AK/SK is not set after running the Pre-check, output the env-var setup template (`export HUAWEI_ACCESS_KEY=...` / `export HUAWEI_SECRET_KEY=...`) for the user to fill out-of-band. NEVER ask the user to paste AK/SK into chat. If the user does not configure, terminate the process. Strictly prohibited from skipping any step that requires credentials**
-- BSS service SDK must use GlobalCredentials + with_endpoints; BasicCredentials must not be used
-- Resources created during resource lifecycle testing must be cleaned up in Phase 6 to avoid leftovers
-- When the Phase 6 security audit fails, CRITICAL/ERROR level issues must be fixed and the Agent must rerun the audit
-- skill-scanner only detects known cloud API key formats; common passwords/Chinese keyword credentials require gitleaks supplementary detection
-- The skillPath in skills-lock.json is: skills/devtools/common/huawei-cloud-skill-creator/SKILL.md
-
-## Design Principles
-
-- **Six-Phase Strict Pipeline** — Phases are chain-dependent and cannot be skipped
-- **Phase 2 No API Inference** — API endpoints only from SDK source `_http_info` or Huawei Cloud API Explorer; strictly prohibited from guessing via naming patterns
-- **Phase 3 Generate Based on Facts** — CLI commands / SDK scripts / API endpoints generated per Phase 2 conclusions; no endpoint → mark ⛔
-- **Phase 4/5 Real Execution** — Every command must be actually executed and verified; if it fails, fallback or mark
-- **Phase 6 Double Check** — Resource cleanup + specification compliance + six-phase completeness
-- **Credential Security** — No hardcoded AK/SK, read from environment variables, write operations require user confirmation
-- **Credentials Mandatory** — If AK/SK is missing, output the env-var setup template (`export HUAWEI_ACCESS_KEY=...` / `export HUAWEI_SECRET_KEY=...`) and let the user fill it out-of-band. **Never** ask the user to paste AK/SK into chat. If the user does not configure, terminate process. Strictly prohibited from skipping
-- **Least Privilege** — iam-policies.md provides least-privilege policy JSON
+- **Six-phase strict pipeline** — phases are chain-dependent, sequential, and cannot be skipped
+- **Phase 2 No API Inference** — endpoints only from SDK `_http_info` or API Explorer; never guess via naming patterns
+- **Phase 3 Generate Based on Facts** — commands/scripts/endpoints per Phase 2 conclusions; no endpoint → mark ⛔
+- **Phase 4/5 Real Execution** — every command actually executed and verified; mutating operations (Create/Update/Delete) require user confirmation first
+- **Phase 6 Double Check** — resource cleanup + specification compliance + six-phase completeness; fix failures first, then re-verify
+- **Credential Security** — no hardcoded AK/SK; read from env vars (`HUAWEI_*/HW_*/HWC_*` with `ACCESS_KEY`/`_AK`/`SECRET_KEY`/`_SK`) or active CLI profile; never entered via `hcloud configure set` with literal values
+- **Credentials Mandatory** — if AK/SK missing after the Pre-check, output the env-var setup template for out-of-band fill; never ask the user to paste AK/SK into chat; if still unconfigured, terminate
+- **BSS SDK** must use GlobalCredentials + with_endpoints, not BasicCredentials with with_region
+- **Cleanup** — resources created during lifecycle testing must be released in Phase 6
+- **Security audit** — CRITICAL/ERROR findings fixed and re-audited; skill-scanner only detects known cloud API key formats, so gitleaks supplements for common passwords/Chinese credentials
+- **Least privilege** — iam-policies.md provides least-privilege policy JSON; the skillPath in skills-lock.json is `skills/devtools/common/huawei-cloud-skill-creator/SKILL.md`
