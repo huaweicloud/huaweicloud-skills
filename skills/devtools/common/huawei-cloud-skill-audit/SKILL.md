@@ -145,6 +145,48 @@ Use `--skip-checks` to exclude specific checks.
 | `--gitleaks` | No | gitleaks binary path override | `--gitleaks /usr/local/bin/gitleaks` |
 | `--skip-checks` | No | Comma-separated checks to skip；与 `--checks` 互斥，不可同时使用 | `--skip-checks gitleaks` |
 | `--no-install` | No | Skip auto-install of tools | `--no-install` |
+| `SKILL_QUALITY_ENDPOINT` | No | Quality-report server URL (see Quality Reporting below) | `https://skillsapi.developer.myhuaweicloud.com/api/quality/report` |
+| `SKILL_QUALITY_DISABLE` | No | Set to `1` to disable quality reporting entirely (local debugging) | `0` |
+| `SKILL_QUALITY_TIMEOUT` | No | Report HTTP timeout in seconds (non-blocking) | `3` |
+| `SKILL_QUALITY_TRIGGER` | No | Trigger type reported (`agent` / `workflow` / `auto` / `manual`) | `agent` |
+
+---
+
+## Quality Reporting
+
+This Skill integrates [skill_quality_sdk.py](scripts/skill_quality_sdk.py) (vendored,
+zero third-party dependency) for execution quality reporting. Every `skill_audit.py`
+run automatically reports one record — **skill name (`huawei-cloud-skill-audit`),
+status (`success` / `biz_fail` / `sys_fail`), error code, cost, target path,
+scan level, checks, and findings count** — to the skillsopr operations console,
+enabling usage/statistics counting of the audit skill itself.
+
+### Integration
+
+- **Entry script (`scripts/skill_audit.py`):** the entire audit flow runs inside a
+  `quality_context` block (imported from the vendored SDK), which reports on every
+  exit path:
+  - audit completed (report written) → `status=success`
+  - target not found → `status=biz_fail`, `error_code=U01`
+  - invalid `--checks` / `--skip-checks` combination → `status=biz_fail`, `error_code=U02`
+  - no skill found under target → `status=biz_fail`, `error_code=U03`
+  - any uncaught exception during the audit → `status=sys_fail` with inferred error code
+- The report is **fire-and-forget** (3s HTTP timeout): reporting failure or latency
+  never blocks, changes, or fails the audit itself.
+- The SDK is Python 3 stdlib only; `python3` is already a hard prerequisite.
+
+### Error Code Convention
+
+| Prefix | Category | Examples |
+|--------|----------|---------|
+| U | User input | U01 missing param, U02 bad param, U03 no data found |
+| C | Configuration | C01 missing AK/SK/env |
+| N | Network | N01 timeout, N02 connection refused |
+| B | Code bug | B01 null pointer, B04 version mismatch |
+| P | Platform | P01 scheduler error, P02 resource insufficient |
+
+Reporting is non-blocking and fails silently — it never interrupts the Skill main flow.
+Disable via `SKILL_QUALITY_DISABLE=1` for local testing.
 
 ---
 
@@ -298,6 +340,7 @@ python3 scripts/skill_audit.py --target /path/to/skill
 - `references/acceptance-criteria.md` — Acceptance criteria for audit PASS
 - `references/security-audit-guide.md` — Security audit guide and fix strategies
 - `references/gitcode-security-scanner.md` — Complementary scanner usage guide
+- `scripts/skill_quality_sdk.py` — Vendored execution-quality reporting SDK (see Quality Reporting)
 
 ---
 
