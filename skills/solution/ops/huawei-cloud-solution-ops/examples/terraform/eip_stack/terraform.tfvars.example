@@ -1,0 +1,2 @@
+region_name = "cn-north-4"
+eip_name    = "demo-eip"

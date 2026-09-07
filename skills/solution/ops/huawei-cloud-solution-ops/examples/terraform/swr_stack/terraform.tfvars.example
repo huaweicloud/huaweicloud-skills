@@ -1,0 +1,4 @@
+region_name         = "cn-north-4"
+organization_name   = "demo-org"
+repository_name     = "demo-repo"
+repository_category = "linux"

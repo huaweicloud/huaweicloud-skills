@@ -1,0 +1,771 @@
+{
+  "version": 1,
+  "services": {
+    "ECS": {
+      "coverage": "high",
+      "default_region_required": true,
+      "query_operations": [
+        "ListCloudServers",
+        "ListServersDetails",
+        "ListFlavors",
+        "ListFlavorSellPolicies",
+        "ListLaunchTemplateVersions",
+        "ListRecycleBinServers",
+        "ListResizeFlavors",
+        "ListScheduledEvents",
+        "ListServerAzInfo",
+        "ListServerGroups",
+        "ListServerTags",
+        "ListTemplates"
+      ],
+      "resource_query_operations": [
+        "ListServerBlockDevices",
+        "ListServerInterfaces",
+        "ListServerVolumeAttachments",
+        "ShowJob",
+        "ShowResetPasswordFlag",
+        "ShowServer",
+        "ShowServerBlockDevice",
+        "ShowServerGroup",
+        "ShowServerLimits",
+        "ShowServerPassword",
+        "ShowServerRemoteConsole",
+        "ShowServerTags"
+      ],
+      "change_operations": [
+        "CreateServers",
+        "CreatePostPaidServers"
+      ],
+      "planner": "scripts/hcloud_ecs_create_plan.py",
+      "job_verifier": "scripts/hcloud_ecs_wait_job.py",
+      "resource_verifier": "scripts/hcloud_ecs_verify_active.py",
+      "playbooks": [
+        "references/playbooks/ecs-create-readiness.md",
+        "references/playbooks/ecs-ssh-access-readiness.md",
+        "references/playbooks/ecs-inventory.md",
+        "references/playbooks/ecs-user-data-service-readiness.md"
+      ],
+      "official_docs": [
+        "https://support.huaweicloud.com/intl/zh-cn/api-ecs/ecs_02_0101.html"
+      ],
+      "known_limits": [
+        "ShowJob success is not full ECS completion; server ACTIVE verification is required.",
+        "Linux SSH access requires a preselected credential path: key_name with local private key, or adminPass saved before submit.",
+        "Creation dependency discovery still relies on IAM, VPC, IMS, and KPS readiness paths.",
+        "Resource-scoped list operations such as ListServerInterfaces require target IDs and are intentionally not generic discovery operations."
+      ]
+    },
+    "IAM": {
+      "coverage": "medium",
+      "default_region_required": false,
+      "query_operations": [
+        "ShowProjectDetailsAndStatus"
+      ],
+      "resource_query_operations": [],
+      "change_operations": [],
+      "planner": null,
+      "job_verifier": null,
+      "resource_verifier": null,
+      "playbooks": [
+        "references/playbooks/iam-context-bootstrap.md"
+      ],
+      "official_docs": [
+        "https://support.huaweicloud.com/intl/zh-cn/"
+      ],
+      "known_limits": [
+        "Current skill guidance focuses on authentication and context discovery, not IAM mutations."
+      ]
+    },
+    "VPC": {
+      "coverage": "medium",
+      "default_region_required": true,
+      "query_operations": [
+        "CountFirewallsByTags",
+        "CountPortsByTags",
+        "ListAddressGroup",
+        "ListAddressGroupsDependency",
+        "ListApiVersion",
+        "ListFirewall",
+        "ListFirewallTags",
+        "ListFirewallsByTags",
+        "ListFlowLogs",
+        "ListPortTags",
+        "ListPorts",
+        "ListPortsByTags",
+        "ListPrivateips",
+        "ListRouteTables",
+        "ListSecurityGroupRules",
+        "ListSecurityGroupTags",
+        "ListVpcs",
+        "ListVpcsByTags",
+        "ListSubnets",
+        "ListSubnetsByTags",
+        "ListSecurityGroups",
+        "ListSecurityGroupsByTags",
+        "ListSubNetworkInterfaces",
+        "ListSubnetTags",
+        "ListTrafficMirrorFilterRules",
+        "ListTrafficMirrorFilters",
+        "ListTrafficMirrorSessions",
+        "ListVirsubnetCidrReservations",
+        "ListVirsubnets",
+        "ListVpcPeerings",
+        "ListVpcRoutes",
+        "ListVpcTags"
+      ],
+      "resource_query_operations": [
+        "ShowVpc",
+        "ShowSubnet",
+        "ShowSecurityGroup",
+        "ShowSecurityGroupRule",
+        "ShowPort"
+      ],
+      "change_operations": [
+        "CreateVpc",
+        "UpdateVpc",
+        "DeleteVpc",
+        "CreateSubnet",
+        "UpdateSubnet",
+        "DeleteSubnet",
+        "CreateSecurityGroup",
+        "UpdateSecurityGroup",
+        "DeleteSecurityGroup",
+        "CreateSecurityGroupRule",
+        "DeleteSecurityGroupRule",
+        "CreateVpcPeering",
+        "UpdateVpcPeering",
+        "DeleteVpcPeering"
+      ],
+      "planner": "scripts/hcloud_service_change_plan.py",
+      "change_flow": "scripts/hcloud_guarded_change_flow.py",
+      "job_verifier": null,
+      "resource_verifier": "scripts/hcloud_resource_verify.py",
+      "playbooks": [
+        "references/playbooks/vpc-network-readiness.md",
+        "references/playbooks/vpc-resource-discovery.md"
+      ],
+      "official_docs": [
+        "https://support.huaweicloud.com/intl/zh-cn/"
+      ],
+      "known_limits": [
+        "Use as list-only discovery unless operation metadata is available in the local hcloud cache.",
+        "VPC mutations are planner-only until hcloud dry-run or official operation help confirms exact parameters."
+      ]
+    },
+    "IMS": {
+      "coverage": "medium",
+      "default_region_required": true,
+      "query_operations": [
+        "ListImages",
+        "ListImagesTags",
+        "ListOsVersions",
+        "ListTags",
+        "ListVersions"
+      ],
+      "resource_query_operations": [
+        "GlanceShowImage",
+        "GlanceShowImageMember",
+        "ShowImageMember",
+        "ShowJob"
+      ],
+      "change_operations": [],
+      "planner": null,
+      "job_verifier": null,
+      "resource_verifier": null,
+      "playbooks": [
+        "references/playbooks/ims-image-discovery.md"
+      ],
+      "official_docs": [
+        "https://support.huaweicloud.com/intl/zh-cn/"
+      ],
+      "known_limits": [
+        "Use as image discovery support for ECS planning; do not assume mutation coverage."
+      ]
+    },
+    "KPS": {
+      "coverage": "medium",
+      "default_region_required": true,
+      "query_operations": [
+        "ListKeypairs"
+      ],
+      "resource_query_operations": [
+        "ListKeypairDetail"
+      ],
+      "change_operations": [],
+      "planner": null,
+      "job_verifier": null,
+      "resource_verifier": null,
+      "playbooks": [
+        "references/playbooks/kps-keypair-discovery.md"
+      ],
+      "official_docs": [
+        "https://support.huaweicloud.com/intl/zh-cn/"
+      ],
+      "known_limits": [
+        "Use ListKeypairs as keypair discovery support for ECS planning; key creation and private key handling need a dedicated risk gate."
+      ]
+    },
+    "EIP": {
+      "coverage": "medium",
+      "default_region_required": true,
+      "query_operations": [
+        "CountEipAvailableResources",
+        "CountPublicIp",
+        "CountPublicIpInstance",
+        "ListBandwidth",
+        "ListBandwidthPkg",
+        "ListBandwidthRuleV3",
+        "ListBandwidths",
+        "ListBandwidthsLimit",
+        "ListCommonPools",
+        "ListEipBandwidths",
+        "ListProjectGeipBindings",
+        "ListPublicipPool",
+        "ListPublicipPoolTypes",
+        "ListPublicipTags",
+        "ListPublicips",
+        "ListPublicipsByTags",
+        "ListQuotas",
+        "ListShareBandwidthTypes",
+        "ListTenantVpcIgws"
+      ],
+      "resource_query_operations": [
+        "NeutronShowFloatingIp",
+        "ShowBandwidth",
+        "ShowInternalVpcIgw",
+        "ShowPublicip",
+        "ShowPublicipPool",
+        "ShowPublicipTags",
+        "ShowPublicIpType",
+        "ShowResourcesJobDetail"
+      ],
+      "change_operations": [
+        "CreatePublicip",
+        "UpdatePublicip",
+        "DeletePublicip",
+        "BatchDeletePublicIp",
+        "CreateSharedBandwidth",
+        "UpdateBandwidth",
+        "DeleteSharedBandwidth",
+        "NeutronCreateFloatingIp",
+        "NeutronUpdateFloatingIp",
+        "NeutronDeleteFloatingIp"
+      ],
+      "planner": "scripts/hcloud_service_change_plan.py",
+      "change_flow": "scripts/hcloud_eip_change_flow.py",
+      "job_verifier": null,
+      "resource_verifier": "scripts/hcloud_resource_verify.py",
+      "playbooks": [
+        "references/playbooks/eip-public-ip-readiness.md"
+      ],
+      "official_docs": [
+        "https://support.huaweicloud.com/intl/zh-cn/"
+      ],
+      "known_limits": [
+        "EIP metadata in KooCLI may not include operation detail files, so generated discovery commands omit optional parameters unless metadata confirms support.",
+        "Generic service changes remain planner-first. Use scripts/hcloud_eip_change_flow.py for guarded dry-run/submit/ShowPublicip verification, and execute submit only after explicit confirmation."
+      ]
+    },
+    "ELB": {
+      "coverage": "low",
+      "default_region_required": true,
+      "query_operations": [
+        "CountPreoccupyIpNum",
+        "ListAllMembers",
+        "ListApiVersions",
+        "ListAvailabilityZones",
+        "ListCertificates",
+        "ListFeatureConfigs",
+        "ListFlavors",
+        "ListHealthMonitors",
+        "ListIpGroups",
+        "ListJobs",
+        "ListL7Policies",
+        "ListL7Rules",
+        "ListListeners",
+        "ListLoadBalancers",
+        "ListLoadbalancers",
+        "ListPools",
+        "ListQuotaDetails",
+        "ListSecurityPolicies",
+        "ListWhitelists"
+      ],
+      "resource_query_operations": [
+        "ListMembers",
+        "ShowCertificate",
+        "ShowHealthMonitor",
+        "ShowListener",
+        "ShowLoadBalancer",
+        "ShowLoadBalancerStatus",
+        "ShowMember",
+        "ShowPool"
+      ],
+      "change_operations": [
+        "CreateLoadBalancer",
+        "UpdateLoadBalancer",
+        "DeleteLoadBalancer",
+        "CreateListener",
+        "UpdateListener",
+        "DeleteListener",
+        "CreatePool",
+        "UpdatePool",
+        "DeletePool",
+        "CreateMember",
+        "UpdateMember",
+        "DeleteMember",
+        "CreateHealthMonitor",
+        "UpdateHealthMonitor",
+        "DeleteHealthMonitor"
+      ],
+      "planner": "scripts/hcloud_service_change_plan.py",
+      "change_flow": "scripts/hcloud_guarded_change_flow.py",
+      "job_verifier": null,
+      "resource_verifier": "scripts/hcloud_resource_verify.py",
+      "playbooks": [
+        "references/playbooks/elb-http-backend-readiness.md"
+      ],
+      "official_docs": [
+        "https://support.huaweicloud.com/intl/zh-cn/"
+      ],
+      "known_limits": [
+        "Local KooCLI metadata currently finds the ELB service but no cached operation detail files.",
+        "Some validation references require load balancer, listener, pool, or member IDs; resolve required IDs before execution.",
+        "ELB mutations are planner-only until hcloud dry-run or official operation help confirms exact parameters."
+      ]
+    },
+    "EVS": {
+      "coverage": "low",
+      "default_region_required": true,
+      "query_operations": [
+        "CinderListAvailabilityZones",
+        "CinderListQuotas",
+        "CinderListVolumeTransfers",
+        "CinderListVolumeTypes",
+        "ListSnapshots",
+        "ListVersions",
+        "ListVolumes",
+        "ListVolumesByTags",
+        "ListVolumeTags"
+      ],
+      "resource_query_operations": [
+        "ShowJob",
+        "ShowSnapshot",
+        "ShowVolume",
+        "ShowVolumeTags"
+      ],
+      "change_operations": [
+        "CreateVolume",
+        "UpdateVolume",
+        "DeleteVolume",
+        "ResizeVolume",
+        "RetypeVolume",
+        "CreateSnapshot",
+        "UpdateSnapshot",
+        "DeleteSnapshot"
+      ],
+      "planner": "scripts/hcloud_service_change_plan.py",
+      "change_flow": "scripts/hcloud_guarded_change_flow.py",
+      "job_verifier": null,
+      "resource_verifier": "scripts/hcloud_resource_verify.py",
+      "playbooks": [
+        "references/playbooks/evs-volume-readiness.md"
+      ],
+      "official_docs": [
+        "https://support.huaweicloud.com/intl/zh-cn/"
+      ],
+      "known_limits": [
+        "Local KooCLI metadata currently finds the EVS service but no cached operation detail files.",
+        "Volume attachment, resize, format, and delete flows remain outside generic read-only discovery.",
+        "EVS mutations are planner-only until hcloud dry-run or official operation help confirms exact parameters."
+      ]
+    },
+    "NAT": {
+      "coverage": "low",
+      "default_region_required": true,
+      "query_operations": [
+        "ListNatGatewayByTag",
+        "ListNatGatewayDnatRules",
+        "ListNatGateways",
+        "ListNatGatewaySnatRules",
+        "ListNatGatewayTag",
+        "ListPrivateDnats",
+        "ListPrivateNats",
+        "ListPrivateNatsByTags",
+        "ListPrivateNatTags",
+        "ListPrivateSnats",
+        "ListTransitIps",
+        "ListTransitIpsByTags",
+        "ListTransitIpTags"
+      ],
+      "resource_query_operations": [
+        "ShowNatGateway",
+        "ShowNatGatewayDnatRule",
+        "ShowNatGatewaySnatRule"
+      ],
+      "change_operations": [
+        "CreateNatGateway",
+        "UpdateNatGateway",
+        "DeleteNatGateway",
+        "CreateNatGatewayDnatRule",
+        "UpdateNatGatewayDnatRule",
+        "DeleteNatGatewayDnatRule"
+      ],
+      "planner": "scripts/hcloud_service_change_plan.py",
+      "change_flow": "scripts/hcloud_guarded_change_flow.py",
+      "job_verifier": null,
+      "resource_verifier": "scripts/hcloud_resource_verify.py",
+      "playbooks": [
+        "references/playbooks/nat-gateway-readiness.md"
+      ],
+      "official_docs": [
+        "https://support.huaweicloud.com/intl/zh-cn/"
+      ],
+      "known_limits": [
+        "Local KooCLI metadata currently finds the NAT service but no cached operation detail files.",
+        "Create, bind, update, and delete NAT flows are planner-only until hcloud dry-run or official operation help confirms exact parameters."
+      ]
+    },
+    "RDS": {
+      "coverage": "low",
+      "default_region_required": true,
+      "query_operations": [
+        "DownloadErrorlog",
+        "DownloadSlowlog",
+        "ListApiVersionNew",
+        "ListAuditlogs",
+        "ListBackups",
+        "ListConfigurations",
+        "ListDatabases",
+        "ListDatastores",
+        "ListDbUsers",
+        "ListDrInfos",
+        "ListDrRelations",
+        "ListEngineFlavors",
+        "ListErrorLogs",
+        "ListFlavors",
+        "ListFlavorsResize",
+        "ListInstanceDiagnosis",
+        "ListInstances",
+        "ListInstanceTags",
+        "ListJobInfo",
+        "ListProjectTags",
+        "ListRecycleInstances",
+        "ListRestoreTimes",
+        "ListSlowLogFile",
+        "ListSlowLogs",
+        "ListSlowLogStatistics",
+        "ListStorageTypes",
+        "SearchQueryScaleComputeFlavors",
+        "SearchQueryScaleFlavors"
+      ],
+      "resource_query_operations": [
+        "ShowAuditlogPolicy",
+        "ShowAutoEnlargePolicy",
+        "ShowBackupPolicy",
+        "ShowConfiguration",
+        "ShowDnsName",
+        "ShowDomainName",
+        "ShowInstanceConfiguration"
+      ],
+      "change_operations": [
+        "CreateInstance",
+        "UpdateInstanceName",
+        "DeleteInstance",
+        "StartResizeFlavorAction",
+        "CreateDatabase",
+        "DeleteDatabase",
+        "CreateDbUser",
+        "DeleteDbUser",
+        "SetBackupPolicy",
+        "UpdateConfiguration",
+        "UpdateInstanceConfiguration"
+      ],
+      "planner": "scripts/hcloud_service_change_plan.py",
+      "change_flow": "scripts/hcloud_guarded_change_flow.py",
+      "job_verifier": null,
+      "resource_verifier": "scripts/hcloud_resource_verify.py",
+      "playbooks": [
+        "references/playbooks/rds-instance-readiness.md"
+      ],
+      "official_docs": [
+        "https://support.huaweicloud.com/intl/zh-cn/"
+      ],
+      "known_limits": [
+        "Local KooCLI metadata currently finds the RDS service but no cached operation detail files.",
+        "Many RDS detail reads require instance IDs and engine-specific parameters; generic discovery should start from ListInstances.",
+        "RDS mutations are planner-only until hcloud dry-run or official operation help confirms exact parameters."
+      ]
+    },
+    "CCE": {
+      "coverage": "low",
+      "default_region_required": true,
+      "query_operations": [
+        "ListClusters"
+      ],
+      "resource_query_operations": [
+        "ListNodes",
+        "ShowCluster"
+      ],
+      "change_operations": [],
+      "planner": null,
+      "job_verifier": null,
+      "resource_verifier": "scripts/hcloud_resource_verify.py",
+      "playbooks": [
+        "references/playbooks/cce-cluster-readiness.md"
+      ],
+      "official_docs": [
+        "https://support.huaweicloud.com/intl/zh-cn/"
+      ],
+      "known_limits": [
+        "Local KooCLI metadata currently finds the CCE service but no cached operation detail files.",
+        "Cluster creation, kubeconfig handling, and workload deployment are not covered by this skill yet."
+      ]
+    },
+    "CDN": {
+      "coverage": "low",
+      "default_region_required": false,
+      "supported_cli_regions": [
+        "cn-north-1",
+        "ap-southeast-1"
+      ],
+      "preferred_cli_region": "cn-north-1",
+      "query_operations": [
+        "ListDomains"
+      ],
+      "resource_query_operations": [
+        "ShowDomainDetail"
+      ],
+      "change_operations": [
+        "CreateDomain",
+        "UpdateDomainFullConfig",
+        "UpdateDomainOrigin",
+        "DeleteDomain"
+      ],
+      "planner": "scripts/hcloud_service_change_plan.py",
+      "change_flow": "scripts/hcloud_guarded_change_flow.py",
+      "job_verifier": null,
+      "resource_verifier": "scripts/hcloud_resource_verify.py",
+      "playbooks": [
+        "references/playbooks/cdn-domain-readiness.md"
+      ],
+      "official_docs": [
+        "https://support.huaweicloud.com/intl/zh-cn/"
+      ],
+      "known_limits": [
+        "Local KooCLI metadata currently finds the CDN service but no cached operation detail files.",
+        "KooCLI CDN ListDomains rejects cn-north-4; use a supported CLI region such as cn-north-1 or ap-southeast-1 for discovery.",
+        "CDN domain creation, certificate binding, and cache rule changes are planner-only until hcloud dry-run or official operation help confirms exact parameters."
+      ]
+    },
+    "DNS": {
+      "coverage": "low",
+      "default_region_required": false,
+      "query_operations": [
+        "ListPublicZones",
+        "ListRecordSets"
+      ],
+      "resource_query_operations": [
+        "ShowPublicZone",
+        "ShowRecordSet"
+      ],
+      "change_operations": [
+        "CreateRecordSet",
+        "UpdateRecordSet",
+        "DeleteRecordSet"
+      ],
+      "planner": "scripts/hcloud_service_change_plan.py",
+      "change_flow": "scripts/hcloud_guarded_change_flow.py",
+      "job_verifier": null,
+      "resource_verifier": "scripts/hcloud_resource_verify.py",
+      "playbooks": [
+        "references/playbooks/dns-zone-record-readiness.md"
+      ],
+      "official_docs": [
+        "https://support.huaweicloud.com/intl/zh-cn/"
+      ],
+      "known_limits": [
+        "Local KooCLI metadata currently finds the DNS service but no cached operation detail files.",
+        "Record creation and deletion need explicit zone resolution and confirmation; currently planner-only until hcloud dry-run or official operation help confirms exact parameters."
+      ]
+    },
+    "SCM": {
+      "coverage": "low",
+      "default_region_required": false,
+      "query_operations": [
+        "ListCertificates"
+      ],
+      "resource_query_operations": [
+        "ShowCertificate"
+      ],
+      "change_operations": [
+        "ApplyCertificate",
+        "PushCertificate",
+        "DeleteCertificate"
+      ],
+      "planner": "scripts/hcloud_service_change_plan.py",
+      "change_flow": "scripts/hcloud_guarded_change_flow.py",
+      "job_verifier": null,
+      "resource_verifier": "scripts/hcloud_resource_verify.py",
+      "playbooks": [
+        "references/playbooks/scm-certificate-readiness.md"
+      ],
+      "official_docs": [
+        "https://support.huaweicloud.com/intl/zh-cn/"
+      ],
+      "known_limits": [
+        "Local KooCLI metadata currently finds the SCM service but no cached operation detail files.",
+        "Certificate application, issuance validation, and deployment are planner-only until hcloud dry-run or official operation help confirms exact parameters."
+      ]
+    },
+    "OBS": {
+      "coverage": "low",
+      "default_region_required": false,
+      "query_runner": "scripts/hcloud_obs_readonly.py",
+      "resource_query_runner": "scripts/hcloud_obs_readonly.py",
+      "query_operations": [
+        "ListBuckets"
+      ],
+      "resource_query_operations": [
+        "GetBucketLifecycle",
+        "GetBucketPolicy",
+        "StatBucket"
+      ],
+      "change_operations": [
+        "CreateBucket",
+        "DeleteBucket",
+        "PutBucketLifecycle",
+        "DeleteBucketLifecycle",
+        "PutBucketPolicy",
+        "DeleteBucketPolicy"
+      ],
+      "planner": "scripts/hcloud_obs_change_plan.py",
+      "job_verifier": null,
+      "resource_verifier": null,
+      "playbooks": [
+        "references/playbooks/obs-boundary.md"
+      ],
+      "official_docs": [
+        "https://support.huaweicloud.com/intl/zh-cn/"
+      ],
+      "known_limits": [
+        "OBS is exposed through KooCLI integrated obsutil command shape `hcloud obs`, not the normal `hcloud <Service> <Operation>` metadata path.",
+        "OBS output is text-oriented obsutil output rather than standard OpenAPI JSON.",
+        "Bucket and lifecycle changes are planner-only and require separate confirmation; no generic OpenAPI dry-run is assumed."
+      ]
+    },
+    "CES": {
+      "coverage": "low",
+      "default_region_required": true,
+      "query_operations": [
+        "ListMetrics"
+      ],
+      "resource_query_operations": [],
+      "change_operations": [],
+      "planner": null,
+      "job_verifier": null,
+      "resource_verifier": null,
+      "playbooks": [
+        "references/playbooks/ces-metric-readiness.md"
+      ],
+      "official_docs": [
+        "https://support.huaweicloud.com/intl/zh-cn/"
+      ],
+      "known_limits": [
+        "Local KooCLI metadata currently finds the CES service but no cached operation detail files.",
+        "Metric dimensions and time ranges must be resolved from the target service before execution."
+      ]
+    },
+    "DCS": {
+      "coverage": "medium",
+      "default_region_required": true,
+      "query_operations": [
+        "ListAvailableZones",
+        "ListInstances",
+        "ListMaintenanceWindows"
+      ],
+      "resource_query_operations": [
+        "ListBackupRecords",
+        "ListConfigurations",
+        "ListDiagnosisTasks"
+      ],
+      "change_operations": [],
+      "planner": null,
+      "job_verifier": null,
+      "resource_verifier": null,
+      "playbooks": [
+        "references/playbooks/dcs-readiness.md"
+      ],
+      "official_docs": [
+        "https://support.huaweicloud.com/intl/zh-cn/"
+      ],
+      "known_limits": [
+        "DCS is curated for read-only readiness and target-scoped instance checks.",
+        "Instance creation, deletion, failover, parameter changes, and account changes are not registered for generic submit; add dedicated guarded flows before enabling mutations.",
+        "Target-scoped checks such as ListConfigurations require an explicit instance_id."
+      ]
+    },
+    "RFS": {
+      "coverage": "medium",
+      "default_region_required": true,
+      "query_operations": [
+        "ListPrivateHooks",
+        "ListPrivateModules",
+        "ListPrivateProviders",
+        "ListStacks"
+      ],
+      "resource_query_operations": [
+        "GetStackMetadata",
+        "GetStackTemplate",
+        "ListExecutionPlans",
+        "ListStackResources"
+      ],
+      "change_operations": [],
+      "planner": null,
+      "job_verifier": null,
+      "resource_verifier": null,
+      "playbooks": [
+        "references/playbooks/rfs-stack-readiness.md"
+      ],
+      "official_docs": [
+        "https://support.huaweicloud.com/intl/zh-cn/"
+      ],
+      "known_limits": [
+        "RFS is curated for read-only stack, template, module, hook, and execution-plan checks.",
+        "Stack apply, continue, rollback, template, and stack-set mutations are not registered for generic submit; add dedicated guarded flows before enabling mutations.",
+        "Target-scoped checks such as GetStackMetadata and ListStackResources require explicit stack_name or execution plan parameters."
+      ]
+    },
+    "UCS": {
+      "coverage": "medium",
+      "default_region_required": true,
+      "query_operations": [
+        "ListAddonTemplates",
+        "ListClusterGroup",
+        "ListManagedClusters",
+        "ListPolicyDefinitions"
+      ],
+      "resource_query_operations": [
+        "ListAddonInstances",
+        "ShowCluster",
+        "ShowClusterGroup",
+        "ShowPolicyDefinition"
+      ],
+      "change_operations": [],
+      "planner": null,
+      "job_verifier": null,
+      "resource_verifier": null,
+      "playbooks": [
+        "references/playbooks/ucs-fleet-readiness.md"
+      ],
+      "official_docs": [
+        "https://support.huaweicloud.com/intl/zh-cn/"
+      ],
+      "known_limits": [
+        "UCS is curated for read-only fleet, cluster, policy, and addon checks.",
+        "Federation, policy, addon, kubeconfig, and cluster access mutations are not registered for generic submit; add dedicated guarded flows before enabling mutations.",
+        "ListManagedClusters omits --limit because KooCLI 7.2.2 rejects that optional flag even though catalog metadata exposes it.",
+        "Do not persist kubeconfig tokens or cluster credentials in final output."
+      ]
+    }
+  }
+}

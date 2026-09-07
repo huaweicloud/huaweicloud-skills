@@ -1,0 +1,10 @@
+region_name             = "cn-north-4"
+vpc_name                = "demo-web-vpc"
+subnet_name             = "demo-web-subnet"
+web_security_group_name = "demo-web-sg"
+db_security_group_name  = "demo-db-sg"
+web_ingress_cidr        = "203.0.113.10/32"
+instance_name           = "demo-web-ecs"
+rds_name                = "demo-web-rds"
+# Required secret inputs: provide TF_VAR_admin_password and TF_VAR_rds_password at runtime.
+loadbalancer_name       = "demo-web-elb"

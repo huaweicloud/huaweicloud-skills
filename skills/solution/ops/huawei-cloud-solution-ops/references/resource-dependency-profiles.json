@@ -1,0 +1,443 @@
+{
+  "schema_version": 1,
+  "description": "华为云高频资源变更的前置依赖、删除阻断项、关联资源和回读证据。该文件不执行命令、不选择工作流，也不持久化任务状态。",
+  "profiles": {
+    "ECS.server.create": {
+      "id": "ECS.server.create",
+      "service": "ECS",
+      "resource_kind": "server",
+      "lifecycle": "create",
+      "applies_to_operations": ["CreateServers", "CreatePostPaidServers"],
+      "completeness": "bounded_high_confidence",
+      "prerequisites": [
+        {"id": "network", "service": "VPC", "resource_kind": "vpc_and_subnet", "relationship": "must_exist_and_share_region", "must_resolve_before_submit": true, "discovery_operations": ["ListVpcs", "ListSubnets"], "verification_operations": ["ShowVpc", "ShowSubnet"]},
+        {"id": "security", "service": "VPC", "resource_kind": "security_group", "relationship": "must_exist", "must_resolve_before_submit": true, "discovery_operations": ["ListSecurityGroups"], "verification_operations": ["ShowSecurityGroup"]},
+        {"id": "image", "service": "IMS", "resource_kind": "image", "relationship": "must_be_available_in_region", "must_resolve_before_submit": true, "discovery_operations": ["ListImages"], "verification_operations": ["GlanceShowImage"]},
+        {"id": "flavor", "service": "ECS", "resource_kind": "flavor", "relationship": "must_be_sellable_in_region_and_az", "must_resolve_before_submit": true, "discovery_operations": ["ListFlavors", "ListFlavorSellPolicies"], "verification_operations": []},
+        {"id": "credential", "service": "KPS", "resource_kind": "keypair_or_password", "relationship": "one_login_path_must_be_selected", "must_resolve_before_submit": true, "discovery_operations": ["ListKeypairs"], "verification_operations": ["ListKeypairDetail"]}
+      ],
+      "blockers": [],
+      "related_resources": [
+        {"service": "EIP", "resource_kind": "public_ip", "relationship": "optional_public_entry", "post_change_readback_required": true, "verification_operations": ["ShowPublicip"]},
+        {"service": "EVS", "resource_kind": "volume", "relationship": "system_and_data_storage", "post_change_readback_required": true, "verification_operations": ["ShowVolume"]}
+      ],
+      "verification": {"target_readback": {"operations": ["ShowServer", "ListServersDetails"], "success_states": ["ACTIVE"]}, "business_acceptance_is_separate": true},
+      "evidence_sources": ["service_registry", "ecs_create_readiness_playbook", "official_sdk_schema"]
+    },
+    "ECS.server.delete": {
+      "id": "ECS.server.delete",
+      "service": "ECS",
+      "resource_kind": "server",
+      "lifecycle": "delete",
+      "applies_to_operations": ["DeleteServers"],
+      "completeness": "bounded_high_confidence",
+      "prerequisites": [],
+      "blockers": [],
+      "related_resources": [
+        {"service": "EIP", "resource_kind": "public_ip", "relationship": "may_remain_after_server_delete", "post_change_readback_required": true, "verification_operations": ["ShowPublicip", "ListPublicips"]},
+        {"service": "EVS", "resource_kind": "volume", "relationship": "data_volume_may_become_available_instead_of_deleted", "post_change_readback_required": true, "verification_operations": ["ShowVolume", "ListVolumes"]},
+        {"service": "ELB", "resource_kind": "member", "relationship": "may_reference_server_or_private_ip", "post_change_readback_required": true, "verification_operations": ["ListAllMembers", "ListMembers"]},
+        {"service": "VPC", "resource_kind": "port", "relationship": "server_network_interface", "post_change_readback_required": true, "verification_operations": ["ListPorts", "ShowPort"]}
+      ],
+      "verification": {"target_readback": {"operations": ["ShowServer", "ListServersDetails"], "expected": "not_found", "list_absence_requires_complete_pagination": true}, "business_acceptance_is_separate": false},
+      "evidence_sources": ["ecs_guide", "operation_behavior_profile", "official_sdk_schema"]
+    },
+    "VPC.vpc.create": {
+      "id": "VPC.vpc.create",
+      "service": "VPC",
+      "resource_kind": "vpc",
+      "lifecycle": "create",
+      "applies_to_operations": ["CreateVpc"],
+      "completeness": "bounded_high_confidence",
+      "prerequisites": [
+        {"id": "region_project", "service": "IAM", "resource_kind": "regional_project_context", "relationship": "must_match_target_region", "must_resolve_before_submit": true, "discovery_operations": ["KeystoneListProjects"], "verification_operations": []},
+        {"id": "cidr", "service": "VPC", "resource_kind": "cidr", "relationship": "must_not_overlap_planned_connected_networks", "must_resolve_before_submit": true, "discovery_operations": ["ListVpcs"], "verification_operations": []}
+      ],
+      "blockers": [],
+      "related_resources": [],
+      "verification": {"target_readback": {"operations": ["ShowVpc", "ListVpcs"], "expected": "present_with_matching_name_and_cidr", "success_states": ["ACTIVE"]}, "business_acceptance_is_separate": false},
+      "evidence_sources": ["vpc_network_readiness_playbook", "generated_hcloud_catalog", "official_sdk_schema"]
+    },
+    "VPC.subnet.create": {
+      "id": "VPC.subnet.create",
+      "service": "VPC",
+      "resource_kind": "subnet",
+      "lifecycle": "create",
+      "applies_to_operations": ["CreateSubnet"],
+      "completeness": "bounded_high_confidence",
+      "prerequisites": [
+        {"id": "parent_vpc", "service": "VPC", "resource_kind": "vpc", "relationship": "must_exist", "must_resolve_before_submit": true, "discovery_operations": ["ListVpcs"], "verification_operations": ["ShowVpc"]},
+        {"id": "cidr", "service": "VPC", "resource_kind": "cidr", "relationship": "must_fit_parent_and_not_overlap", "must_resolve_before_submit": true, "discovery_operations": ["ListSubnets"], "verification_operations": []}
+      ],
+      "blockers": [],
+      "related_resources": [],
+      "verification": {"target_readback": {"operations": ["ShowSubnet", "ListSubnets"], "expected": "present_with_matching_vpc_cidr_gateway_and_az"}, "business_acceptance_is_separate": false},
+      "evidence_sources": ["vpc_network_readiness_playbook", "generated_hcloud_catalog"]
+    },
+    "VPC.subnet.delete": {
+      "id": "VPC.subnet.delete",
+      "service": "VPC",
+      "resource_kind": "subnet",
+      "lifecycle": "delete",
+      "applies_to_operations": ["DeleteSubnet"],
+      "completeness": "bounded_non_exhaustive",
+      "prerequisites": [],
+      "blockers": [
+        {"service": "VPC", "resource_kind": "port", "relationship": "may_consume_subnet_address", "must_resolve_before_submit": true, "discovery_operations": ["ListPorts"], "verification_operations": ["ShowPort"]},
+        {"service": "ECS", "resource_kind": "server_interface", "relationship": "may_use_subnet", "must_resolve_before_submit": true, "discovery_operations": ["ListCloudServers"], "verification_operations": ["ListServerInterfaces"]},
+        {"service": "NAT", "resource_kind": "nat_rule_or_gateway", "relationship": "may_reference_subnet", "must_resolve_before_submit": true, "discovery_operations": ["ListNatGateways", "ListNatGatewayDnatRules", "ListNatGatewaySnatRules"], "verification_operations": []}
+      ],
+      "related_resources": [],
+      "verification": {"target_readback": {"operations": ["ShowSubnet", "ListSubnets"], "expected": "not_found", "list_absence_requires_complete_pagination": true}, "business_acceptance_is_separate": false},
+      "evidence_sources": ["vpc_resource_discovery_playbook", "service_guides"]
+    },
+    "VPC.vpc.delete": {
+      "id": "VPC.vpc.delete",
+      "service": "VPC",
+      "resource_kind": "vpc",
+      "lifecycle": "delete",
+      "applies_to_operations": ["DeleteVpc"],
+      "completeness": "bounded_non_exhaustive",
+      "prerequisites": [],
+      "blockers": [
+        {"service": "VPC", "resource_kind": "subnet", "relationship": "child_resource", "must_resolve_before_submit": true, "discovery_operations": ["ListSubnets"], "verification_operations": ["ShowSubnet"]},
+        {"service": "VPC", "resource_kind": "port", "relationship": "resource_attachment", "must_resolve_before_submit": true, "discovery_operations": ["ListPorts"], "verification_operations": ["ShowPort"]},
+        {"service": "VPC", "resource_kind": "vpc_peering", "relationship": "may_reference_vpc", "must_resolve_before_submit": true, "discovery_operations": ["ListVpcPeerings"], "verification_operations": []},
+        {"service": "NAT", "resource_kind": "nat_gateway", "relationship": "may_belong_to_vpc", "must_resolve_before_submit": true, "discovery_operations": ["ListNatGateways"], "verification_operations": ["ShowNatGateway"]}
+      ],
+      "related_resources": [
+        {"service": "ELB", "resource_kind": "load_balancer", "relationship": "may_use_vpc_or_subnet", "post_change_readback_required": false, "verification_operations": ["ListLoadBalancers"]},
+        {"service": "RDS", "resource_kind": "database_instance", "relationship": "may_use_vpc_or_subnet", "post_change_readback_required": false, "verification_operations": ["ListInstances"]}
+      ],
+      "verification": {"target_readback": {"operations": ["ShowVpc", "ListVpcs"], "expected": "not_found", "list_absence_requires_complete_pagination": true}, "business_acceptance_is_separate": false},
+      "evidence_sources": ["vpc_resource_discovery_playbook", "service_guides"]
+    },
+    "EIP.public_ip.create": {
+      "id": "EIP.public_ip.create",
+      "service": "EIP",
+      "resource_kind": "public_ip",
+      "lifecycle": "create",
+      "applies_to_operations": ["CreatePublicip"],
+      "completeness": "bounded_high_confidence",
+      "prerequisites": [
+        {"id": "ip_type", "service": "EIP", "resource_kind": "public_ip_type", "relationship": "must_be_available_in_region", "must_resolve_before_submit": true, "discovery_operations": ["ShowPublicIpType", "ListPublicipPoolTypes"], "verification_operations": []},
+        {"id": "bandwidth", "service": "EIP", "resource_kind": "bandwidth_product", "relationship": "must_match_charge_and_share_mode", "must_resolve_before_submit": true, "discovery_operations": ["ListShareBandwidthTypes", "ListBandwidthsLimit"], "verification_operations": []}
+      ],
+      "blockers": [],
+      "related_resources": [],
+      "verification": {"target_readback": {"operations": ["ShowPublicip", "ListPublicips"], "success_states": ["DOWN", "ACTIVE"]}, "business_acceptance_is_separate": true},
+      "evidence_sources": ["eip_public_ip_readiness_playbook", "official_sdk_schema"]
+    },
+    "EIP.public_ip.delete": {
+      "id": "EIP.public_ip.delete",
+      "service": "EIP",
+      "resource_kind": "public_ip",
+      "lifecycle": "delete",
+      "applies_to_operations": ["DeletePublicip", "BatchDeletePublicIp"],
+      "completeness": "bounded_high_confidence",
+      "prerequisites": [],
+      "blockers": [
+        {"service": "ECS", "resource_kind": "server_binding", "relationship": "public_ip_may_be_bound", "must_resolve_before_submit": true, "discovery_operations": ["ListCloudServers"], "verification_operations": ["ShowServer"]},
+        {"service": "ELB", "resource_kind": "load_balancer_binding", "relationship": "public_ip_may_be_bound", "must_resolve_before_submit": true, "discovery_operations": ["ListLoadBalancers"], "verification_operations": ["ShowLoadBalancer"]},
+        {"service": "NAT", "resource_kind": "nat_binding", "relationship": "public_ip_may_be_used_by_rule", "must_resolve_before_submit": true, "discovery_operations": ["ListNatGateways", "ListNatGatewayDnatRules", "ListNatGatewaySnatRules"], "verification_operations": []}
+      ],
+      "related_resources": [
+        {"service": "DNS", "resource_kind": "recordset", "relationship": "may_point_to_public_address", "post_change_readback_required": true, "verification_operations": ["ListRecordSets", "ShowRecordSet"]},
+        {"service": "EIP", "resource_kind": "bandwidth", "relationship": "billing_resource_may_require_separate_readback", "post_change_readback_required": true, "verification_operations": ["ShowBandwidth", "ListBandwidths"]}
+      ],
+      "verification": {"target_readback": {"operations": ["ShowPublicip", "ListPublicips"], "expected": "not_found", "list_absence_requires_complete_pagination": true}, "business_acceptance_is_separate": false},
+      "evidence_sources": ["eip_cost_optimization_playbook", "operation_behavior_profile"]
+    },
+    "ELB.load_balancer.create": {
+      "id": "ELB.load_balancer.create",
+      "service": "ELB",
+      "resource_kind": "load_balancer",
+      "lifecycle": "create",
+      "applies_to_operations": ["CreateLoadBalancer"],
+      "completeness": "bounded_high_confidence",
+      "prerequisites": [
+        {"service": "VPC", "resource_kind": "vpc_and_subnet", "relationship": "must_exist_and_match_backend_network", "must_resolve_before_submit": true, "discovery_operations": ["ListVpcs", "ListSubnets"], "verification_operations": ["ShowVpc", "ShowSubnet"]},
+        {"service": "ELB", "resource_kind": "availability_zone_and_flavor", "relationship": "must_be_available", "must_resolve_before_submit": true, "discovery_operations": ["ListAvailabilityZones", "ListFlavors"], "verification_operations": []}
+      ],
+      "blockers": [],
+      "related_resources": [
+        {"service": "EIP", "resource_kind": "public_ip", "relationship": "optional_public_entry", "post_change_readback_required": true, "verification_operations": ["ShowPublicip"]}
+      ],
+      "verification": {"target_readback": {"operations": ["ShowLoadBalancer", "ShowLoadBalancerStatus"], "success_states": ["ACTIVE"]}, "business_acceptance_is_separate": true},
+      "evidence_sources": ["elb_http_backend_readiness_playbook", "official_sdk_schema"]
+    },
+    "ELB.load_balancer.delete": {
+      "id": "ELB.load_balancer.delete",
+      "service": "ELB",
+      "resource_kind": "load_balancer",
+      "lifecycle": "delete",
+      "applies_to_operations": ["DeleteLoadBalancer", "BatchDeleteLoadbalancers"],
+      "completeness": "bounded_high_confidence",
+      "prerequisites": [],
+      "blockers": [
+        {"service": "ELB", "resource_kind": "listener", "relationship": "child_resource", "must_resolve_before_submit": true, "discovery_operations": ["ListListeners"], "verification_operations": ["ShowListener"]},
+        {"service": "ELB", "resource_kind": "pool", "relationship": "child_or_associated_resource", "must_resolve_before_submit": true, "discovery_operations": ["ListPools"], "verification_operations": ["ShowPool"]}
+      ],
+      "related_resources": [
+        {"service": "EIP", "resource_kind": "public_ip", "relationship": "may_be_detached_or_deleted_by_explicit_option", "post_change_readback_required": true, "verification_operations": ["ShowPublicip"]}
+      ],
+      "verification": {"target_readback": {"operations": ["ShowLoadBalancer", "ListLoadBalancers"], "expected": "not_found", "list_absence_requires_complete_pagination": true}, "business_acceptance_is_separate": false},
+      "evidence_sources": ["elb_guide", "elb_http_backend_readiness_playbook"]
+    },
+    "ELB.listener.delete": {
+      "id": "ELB.listener.delete",
+      "service": "ELB",
+      "resource_kind": "listener",
+      "lifecycle": "delete",
+      "applies_to_operations": ["DeleteListener"],
+      "completeness": "bounded_non_exhaustive",
+      "prerequisites": [],
+      "blockers": [
+        {"service": "ELB", "resource_kind": "l7_policy", "relationship": "may_reference_listener", "must_resolve_before_submit": true, "discovery_operations": ["ListL7Policies"], "verification_operations": []}
+      ],
+      "related_resources": [
+        {"service": "ELB", "resource_kind": "pool", "relationship": "default_pool_may_remain", "post_change_readback_required": true, "verification_operations": ["ShowPool", "ListPools"]}
+      ],
+      "verification": {"target_readback": {"operations": ["ShowListener", "ListListeners"], "expected": "not_found", "list_absence_requires_complete_pagination": true}, "business_acceptance_is_separate": false},
+      "evidence_sources": ["elb_guide", "generated_hcloud_catalog"]
+    },
+    "ELB.pool.delete": {
+      "id": "ELB.pool.delete",
+      "service": "ELB",
+      "resource_kind": "pool",
+      "lifecycle": "delete",
+      "applies_to_operations": ["DeletePool", "BatchDeletePools"],
+      "completeness": "bounded_high_confidence",
+      "prerequisites": [],
+      "blockers": [
+        {"service": "ELB", "resource_kind": "member", "relationship": "child_resource", "must_resolve_before_submit": true, "discovery_operations": ["ListMembers", "ListAllMembers"], "verification_operations": ["ShowMember"]},
+        {"service": "ELB", "resource_kind": "health_monitor", "relationship": "sibling_blocker_attached_to_pool", "must_resolve_before_submit": true, "discovery_operations": ["ListHealthMonitors"], "verification_operations": ["ShowHealthMonitor"]}
+      ],
+      "related_resources": [
+        {"service": "ELB", "resource_kind": "listener", "relationship": "may_reference_pool", "post_change_readback_required": false, "verification_operations": ["ShowListener", "ListListeners"]}
+      ],
+      "verification": {"target_readback": {"operations": ["ShowPool", "ListPools"], "expected": "not_found", "list_absence_requires_complete_pagination": true}, "business_acceptance_is_separate": false},
+      "evidence_sources": ["elb_guide", "official_sdk_error_lessons"]
+    },
+    "ELB.member.create": {
+      "id": "ELB.member.create",
+      "service": "ELB",
+      "resource_kind": "member",
+      "lifecycle": "create",
+      "applies_to_operations": ["CreateMember"],
+      "completeness": "bounded_high_confidence",
+      "prerequisites": [
+        {"service": "ELB", "resource_kind": "pool", "relationship": "must_exist", "must_resolve_before_submit": true, "discovery_operations": ["ListPools"], "verification_operations": ["ShowPool"]},
+        {"service": "ECS", "resource_kind": "backend_service", "relationship": "address_port_and_service_must_be_compatible", "must_resolve_before_submit": true, "discovery_operations": ["ListCloudServers"], "verification_operations": ["ShowServer"]},
+        {"service": "VPC", "resource_kind": "subnet_and_security_group", "relationship": "must_allow_health_and_listener_traffic", "must_resolve_before_submit": true, "discovery_operations": ["ListSubnets", "ListSecurityGroups"], "verification_operations": ["ShowSubnet", "ShowSecurityGroup"]}
+      ],
+      "blockers": [],
+      "related_resources": [],
+      "verification": {"target_readback": {"operations": ["ShowMember", "ListMembers"], "success_states": ["ONLINE"]}, "business_acceptance_is_separate": true},
+      "evidence_sources": ["elb_http_backend_readiness_playbook", "elb_guide"]
+    },
+    "ELB.member.delete": {
+      "id": "ELB.member.delete",
+      "service": "ELB",
+      "resource_kind": "member",
+      "lifecycle": "delete",
+      "applies_to_operations": ["DeleteMember"],
+      "completeness": "bounded_high_confidence",
+      "prerequisites": [],
+      "blockers": [],
+      "related_resources": [
+        {"service": "ELB", "resource_kind": "pool", "relationship": "backend_capacity_and_health_change", "post_change_readback_required": true, "verification_operations": ["ShowPool", "ListMembers"]},
+        {"service": "ECS", "resource_kind": "backend_service", "relationship": "service_may_remain_running_but_leave_the_pool", "post_change_readback_required": false, "verification_operations": ["ShowServer"]}
+      ],
+      "verification": {"target_readback": {"operations": ["ShowMember", "ListMembers"], "expected": "not_found", "list_absence_requires_complete_pagination": true}, "business_acceptance_is_separate": true, "additional_acceptance": ["remaining_backend_capacity", "listener_protocol_health"]},
+      "evidence_sources": ["elb_guide", "official_sdk_schema"]
+    },
+    "ELB.health_monitor.create": {
+      "id": "ELB.health_monitor.create",
+      "service": "ELB",
+      "resource_kind": "health_monitor",
+      "lifecycle": "create",
+      "applies_to_operations": ["CreateHealthMonitor"],
+      "completeness": "bounded_high_confidence",
+      "prerequisites": [
+        {"service": "ELB", "resource_kind": "pool", "relationship": "must_exist_and_have_compatible_protocol", "must_resolve_before_submit": true, "discovery_operations": ["ListPools"], "verification_operations": ["ShowPool"]},
+        {"service": "ECS", "resource_kind": "backend_service", "relationship": "probe_port_path_and_expected_code_must_match_service", "must_resolve_before_submit": true, "discovery_operations": ["ListCloudServers"], "verification_operations": []}
+      ],
+      "blockers": [],
+      "related_resources": [],
+      "verification": {"target_readback": {"operations": ["ShowHealthMonitor", "ListHealthMonitors"], "expected": "present_with_matching_pool_protocol_interval_and_timeout"}, "business_acceptance_is_separate": true, "additional_acceptance": ["member_health_state", "backend_probe_response"]},
+      "evidence_sources": ["elb_http_backend_readiness_playbook", "elb_guide", "official_sdk_schema"]
+    },
+    "ELB.health_monitor.delete": {
+      "id": "ELB.health_monitor.delete",
+      "service": "ELB",
+      "resource_kind": "health_monitor",
+      "lifecycle": "delete",
+      "applies_to_operations": ["DeleteHealthMonitor"],
+      "completeness": "bounded_high_confidence",
+      "prerequisites": [],
+      "blockers": [],
+      "related_resources": [
+        {"service": "ELB", "resource_kind": "pool", "relationship": "pool_remains_but_loses_active_health_probe", "post_change_readback_required": true, "verification_operations": ["ShowPool", "ListMembers"]}
+      ],
+      "verification": {"target_readback": {"operations": ["ShowHealthMonitor", "ListHealthMonitors"], "expected": "not_found", "list_absence_requires_complete_pagination": true}, "business_acceptance_is_separate": true, "additional_acceptance": ["pool_traffic_behavior_without_health_monitor"]},
+      "evidence_sources": ["elb_guide", "official_sdk_schema"]
+    },
+    "EVS.volume.create": {
+      "id": "EVS.volume.create",
+      "service": "EVS",
+      "resource_kind": "volume",
+      "lifecycle": "create",
+      "applies_to_operations": ["CreateVolume"],
+      "completeness": "bounded_high_confidence",
+      "prerequisites": [
+        {"service": "EVS", "resource_kind": "availability_zone_and_volume_type", "relationship": "must_be_available", "must_resolve_before_submit": true, "discovery_operations": ["CinderListAvailabilityZones", "CinderListVolumeTypes"], "verification_operations": []},
+        {"service": "ECS", "resource_kind": "server", "relationship": "optional_attach_target_must_match_az", "must_resolve_before_submit": false, "discovery_operations": ["ListCloudServers"], "verification_operations": ["ShowServer"]}
+      ],
+      "blockers": [],
+      "related_resources": [],
+      "verification": {"target_readback": {"operations": ["ShowVolume", "ListVolumes"], "success_states": ["available", "in-use"]}, "business_acceptance_is_separate": true},
+      "evidence_sources": ["evs_volume_readiness_playbook", "official_sdk_schema"]
+    },
+    "EVS.volume.delete": {
+      "id": "EVS.volume.delete",
+      "service": "EVS",
+      "resource_kind": "volume",
+      "lifecycle": "delete",
+      "applies_to_operations": ["DeleteVolume"],
+      "completeness": "bounded_high_confidence",
+      "prerequisites": [],
+      "blockers": [
+        {"service": "ECS", "resource_kind": "volume_attachment", "relationship": "volume_must_be_detached", "must_resolve_before_submit": true, "discovery_operations": ["ListCloudServers"], "verification_operations": ["ListServerVolumeAttachments", "ShowServerBlockDevice"]}
+      ],
+      "related_resources": [
+        {"service": "EVS", "resource_kind": "snapshot_or_backup", "relationship": "data_recovery_evidence", "post_change_readback_required": false, "verification_operations": ["ListSnapshots", "ShowSnapshot"]}
+      ],
+      "verification": {"target_readback": {"operations": ["ShowVolume", "ListVolumes"], "expected": "not_found", "list_absence_requires_complete_pagination": true}, "business_acceptance_is_separate": false},
+      "evidence_sources": ["evs_volume_readiness_playbook", "official_sdk_schema"]
+    },
+    "EVS.volume.resize": {
+      "id": "EVS.volume.resize",
+      "service": "EVS",
+      "resource_kind": "volume",
+      "lifecycle": "resize",
+      "applies_to_operations": ["ResizeVolume", "BatchResizeVolumes"],
+      "completeness": "bounded_high_confidence",
+      "prerequisites": [
+        {"service": "EVS", "resource_kind": "volume", "relationship": "must_exist_and_new_size_must_be_greater", "must_resolve_before_submit": true, "discovery_operations": ["ListVolumes"], "verification_operations": ["ShowVolume"]}
+      ],
+      "blockers": [],
+      "related_resources": [
+        {"service": "ECS", "resource_kind": "guest_partition_and_filesystem", "relationship": "cloud_volume_resize_does_not_expand_guest_filesystem", "post_change_readback_required": true, "verification_operations": []}
+      ],
+      "verification": {"target_readback": {"operations": ["ShowVolume", "ListVolumes"], "expected": "size_matches_requested_new_size"}, "business_acceptance_is_separate": true, "additional_acceptance": ["guest_partition_size", "guest_filesystem_size", "mount_and_write_check"]},
+      "evidence_sources": ["evs_volume_readiness_playbook", "official_sdk_schema"]
+    },
+    "NAT.gateway.create": {
+      "id": "NAT.gateway.create",
+      "service": "NAT",
+      "resource_kind": "nat_gateway",
+      "lifecycle": "create",
+      "applies_to_operations": ["CreateNatGateway"],
+      "completeness": "bounded_high_confidence",
+      "prerequisites": [
+        {"service": "VPC", "resource_kind": "vpc_and_subnet", "relationship": "must_exist", "must_resolve_before_submit": true, "discovery_operations": ["ListVpcs", "ListSubnets"], "verification_operations": ["ShowVpc", "ShowSubnet"]}
+      ],
+      "blockers": [],
+      "related_resources": [
+        {"service": "EIP", "resource_kind": "public_ip_or_bandwidth", "relationship": "required_by_public_snat_or_dnat_path", "post_change_readback_required": true, "verification_operations": ["ShowPublicip", "ShowBandwidth"]}
+      ],
+      "verification": {"target_readback": {"operations": ["ShowNatGateway", "ListNatGateways"], "success_states": ["ACTIVE"]}, "business_acceptance_is_separate": true},
+      "evidence_sources": ["nat_gateway_readiness_playbook", "official_sdk_schema"]
+    },
+    "NAT.gateway.delete": {
+      "id": "NAT.gateway.delete",
+      "service": "NAT",
+      "resource_kind": "nat_gateway",
+      "lifecycle": "delete",
+      "applies_to_operations": ["DeleteNatGateway"],
+      "completeness": "bounded_high_confidence",
+      "prerequisites": [],
+      "blockers": [
+        {"service": "NAT", "resource_kind": "dnat_rule", "relationship": "child_resource", "must_resolve_before_submit": true, "discovery_operations": ["ListNatGatewayDnatRules"], "verification_operations": ["ShowNatGatewayDnatRule"]},
+        {"service": "NAT", "resource_kind": "snat_rule", "relationship": "child_resource", "must_resolve_before_submit": true, "discovery_operations": ["ListNatGatewaySnatRules"], "verification_operations": ["ShowNatGatewaySnatRule"]}
+      ],
+      "related_resources": [
+        {"service": "EIP", "resource_kind": "public_ip", "relationship": "may_remain_billable_after_gateway_delete", "post_change_readback_required": true, "verification_operations": ["ShowPublicip"]}
+      ],
+      "verification": {"target_readback": {"operations": ["ShowNatGateway", "ListNatGateways"], "expected": "not_found", "list_absence_requires_complete_pagination": true}, "business_acceptance_is_separate": false},
+      "evidence_sources": ["nat_gateway_readiness_playbook", "generated_hcloud_catalog"]
+    },
+    "RDS.instance.create": {
+      "id": "RDS.instance.create",
+      "service": "RDS",
+      "resource_kind": "database_instance",
+      "lifecycle": "create",
+      "applies_to_operations": ["CreateInstance"],
+      "completeness": "bounded_high_confidence",
+      "prerequisites": [
+        {"service": "VPC", "resource_kind": "vpc_subnet_security_group", "relationship": "must_exist_and_match_region", "must_resolve_before_submit": true, "discovery_operations": ["ListVpcs", "ListSubnets", "ListSecurityGroups"], "verification_operations": ["ShowVpc", "ShowSubnet", "ShowSecurityGroup"]},
+        {"service": "RDS", "resource_kind": "datastore_flavor_storage_az", "relationship": "must_be_supported_as_one_combination", "must_resolve_before_submit": true, "discovery_operations": ["ListDatastores", "ListFlavors", "ListStorageTypes"], "verification_operations": []}
+      ],
+      "blockers": [],
+      "related_resources": [],
+      "verification": {"target_readback": {"operations": ["ListInstances"], "success_states": ["ACTIVE"]}, "business_acceptance_is_separate": true, "additional_acceptance": ["network_reachability", "database_authentication", "backup_policy"]},
+      "evidence_sources": ["rds_instance_readiness_playbook", "official_sdk_schema"]
+    },
+    "RDS.instance.delete": {
+      "id": "RDS.instance.delete",
+      "service": "RDS",
+      "resource_kind": "database_instance",
+      "lifecycle": "delete",
+      "applies_to_operations": ["DeleteInstance", "BatchDeleteInstance"],
+      "completeness": "bounded_risk_gates",
+      "prerequisites": [
+        {"id": "backup", "service": "RDS", "resource_kind": "backup_or_export", "relationship": "data_recovery_plan_must_be_confirmed", "must_resolve_before_submit": true, "discovery_operations": ["ListBackups", "ListRestoreTimes"], "verification_operations": []},
+        {"id": "owner", "service": "RDS", "resource_kind": "business_ownership", "relationship": "owner_and_maintenance_window_must_be_confirmed", "must_resolve_before_submit": true, "discovery_operations": ["ListInstanceTags"], "verification_operations": []}
+      ],
+      "blockers": [],
+      "related_resources": [
+        {"service": "DNS", "resource_kind": "recordset", "relationship": "may_point_to_database_endpoint", "post_change_readback_required": true, "verification_operations": ["ListRecordSets"]},
+        {"service": "EIP", "resource_kind": "public_ip", "relationship": "may_remain_or_require_separate_release", "post_change_readback_required": true, "verification_operations": ["ShowPublicip"]}
+      ],
+      "verification": {"target_readback": {"operations": ["ListInstances"], "expected": "not_found", "list_absence_requires_complete_pagination": true}, "business_acceptance_is_separate": false},
+      "evidence_sources": ["rds_instance_readiness_playbook", "rds_guide"]
+    },
+    "DNS.recordset.change": {
+      "id": "DNS.recordset.change",
+      "service": "DNS",
+      "resource_kind": "recordset",
+      "lifecycle": "create_update_delete",
+      "applies_to_operations": ["CreateRecordSet", "UpdateRecordSet", "DeleteRecordSet"],
+      "completeness": "bounded_high_confidence",
+      "prerequisites": [
+        {"service": "DNS", "resource_kind": "zone", "relationship": "must_exist_and_match_record_name", "must_resolve_before_submit": true, "discovery_operations": ["ListPublicZones"], "verification_operations": ["ShowPublicZone"]}
+      ],
+      "blockers": [],
+      "related_resources": [
+        {"service": "EIP", "resource_kind": "public_ip", "relationship": "record_target_may_be_public_ip", "post_change_readback_required": false, "verification_operations": ["ShowPublicip"]},
+        {"service": "ELB", "resource_kind": "load_balancer", "relationship": "record_target_may_be_load_balancer", "post_change_readback_required": false, "verification_operations": ["ShowLoadBalancer"]}
+      ],
+      "verification": {"target_readback": {"operations": ["ShowRecordSet", "ListRecordSets"], "create_update_success_states": ["ACTIVE"], "delete_expected": "not_found"}, "business_acceptance_is_separate": true, "additional_acceptance": ["authoritative_dns_answer", "ttl_propagation", "application_protocol"]},
+      "evidence_sources": ["dns_zone_record_readiness_playbook", "official_sdk_schema"]
+    },
+    "OBS.bucket.delete": {
+      "id": "OBS.bucket.delete",
+      "service": "OBS",
+      "resource_kind": "bucket",
+      "lifecycle": "delete",
+      "applies_to_operations": ["DeleteBucket"],
+      "completeness": "bounded_high_confidence",
+      "prerequisites": [],
+      "blockers": [
+        {"service": "OBS", "resource_kind": "object_version_delete_marker_or_multipart_upload", "relationship": "bucket_must_be_empty", "must_resolve_before_submit": true, "adapter": "hcloud_obs_or_obsutil", "discovery_operations": [], "discovery_actions": ["list_objects", "list_versions_and_delete_markers", "list_multipart_uploads"], "verification_operations": []}
+      ],
+      "related_resources": [
+        {"service": "DNS", "resource_kind": "recordset", "relationship": "may_point_to_bucket_or_cdn_domain", "post_change_readback_required": true, "verification_operations": ["ListRecordSets"]},
+        {"service": "CDN", "resource_kind": "domain", "relationship": "may_use_bucket_as_origin", "post_change_readback_required": true, "verification_operations": ["ListDomains"]}
+      ],
+      "verification": {"target_readback": {"operations": ["StatBucket", "ListBuckets"], "expected": "not_found", "adapter": "scripts/hcloud_obs_readonly.py"}, "business_acceptance_is_separate": false},
+      "evidence_sources": ["obs_boundary_playbook", "obs_guide"]
+    }
+  }
+}

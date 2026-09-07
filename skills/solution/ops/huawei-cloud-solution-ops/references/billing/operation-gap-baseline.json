@@ -1,0 +1,895 @@
+{
+  "schema_version": 1,
+  "description": "Portable normalized BSS operation baseline for local gap analysis.",
+  "upstream": {
+    "repository": "https://github.com/huaweicloud/huaweicloud-skills",
+    "source_files": [
+      "skills/bss/billing/huawei-cloud-billing-scout/references/related-commands.md",
+      "skills/bss/billing/huawei-cloud-business-tf-support/references/bss/guide.md",
+      "skills/bss/billing/huawei-cloud-business-tf-support/scripts/bss"
+    ]
+  },
+  "official_operations": [
+    {
+      "operation": "ListCities",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_cities.py",
+          "title": "Query City List"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_cities.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListConsumeSubCustomers",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        }
+      ]
+    },
+    {
+      "operation": "ListConversions",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_conversions.py",
+          "title": "Query Measurement Unit Conversion Information"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_conversions.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListCosts",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_costs.py",
+          "title": "Query Cost List"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_costs.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListCounties",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_counties.py",
+          "title": "Query District/County List"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_counties.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListCouponQuotasRecords",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        }
+      ]
+    },
+    {
+      "operation": "ListCustomerAccountChangeRecords",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_customer_account_change_records.py",
+          "title": "Query Customer Account Transaction Details"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_customer_account_change_records.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListCustomerBillsFeeRecords",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_customer_bills_fee_records.py",
+          "title": "Query Customer Bill Fee Records"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_customer_bills_fee_records.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListCustomerBillsMonthlyBreakDown",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_customer_bills_monthly_break_down.py",
+          "title": "Query Customer Bill Monthly Amortization Details"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_customer_bills_monthly_break_down.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListCustomerCouponChangeRecords",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_customer_coupon_change_records.py",
+          "title": "Query Customer Coupon Transaction Details"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_customer_coupon_change_records.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListCustomerOnDemandResources",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        }
+      ]
+    },
+    {
+      "operation": "ListCustomerOrders",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_customer_orders.py",
+          "title": "Query Customer Order List"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_customer_orders.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListCustomersBalancesDetail",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        }
+      ]
+    },
+    {
+      "operation": "ListCustomerselfResourceRecordDetails",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_customerself_resource_record_details.py",
+          "title": "Query Customer Resource Consumption Record Details"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_customerself_resource_record_details.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListCustomerselfResourceRecords",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_customerself_resource_records.py",
+          "title": "Query Customer Resource Consumption Records"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_customerself_resource_records.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListEnterpriseMultiAccount",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_enterprise_multi_account.py",
+          "title": "Query Enterprise Multi-Account Recoverable Balance"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_enterprise_multi_account.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListEnterpriseOrganizations",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_enterprise_organizations.py",
+          "title": "Query Enterprise Organization Node List"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_enterprise_organizations.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListEnterpriseSubCustomers",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_enterprise_sub_customers.py",
+          "title": "Query Enterprise Sub-Customer List"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_enterprise_sub_customers.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListFreeResourceInfos",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_free_resource_infos.py",
+          "title": "Query Free Resource Information List"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_free_resource_infos.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListFreeResourceUsages",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_free_resource_usages.py",
+          "title": "Query Free Resource Usage"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_free_resource_usages.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListFreeResourcesUsageRecords",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_free_resources_usage_records.py",
+          "title": "Query Free Resource Usage Records"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_free_resources_usage_records.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListIndirectPartners",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        }
+      ]
+    },
+    {
+      "operation": "ListIssuedCouponQuotas",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        }
+      ]
+    },
+    {
+      "operation": "ListIssuedPartnerCoupons",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        }
+      ]
+    },
+    {
+      "operation": "ListMeasureUnits",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_measure_units.py",
+          "title": "Query Measurement Unit List"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_measure_units.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListMultiAccountRetrieveCoupons",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_multi_account_retrieve_coupons.py",
+          "title": "Query Enterprise Multi-Account Recoverable Cash Coupons"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_multi_account_retrieve_coupons.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListMultiAccountTransferCoupons",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_multi_account_transfer_coupons.py",
+          "title": "Query Enterprise Multi-Account Transferable Cash Coupons"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_multi_account_transfer_coupons.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListOnDemandResourceRatings",
+      "sources": [
+        {
+          "source": "business_support_query_guide",
+          "script": "list_on_demand_resource_ratings.py",
+          "title": "On-Demand Resource Pricing"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_on_demand_resource_ratings.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListOrderCouponsByOrderId",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        }
+      ]
+    },
+    {
+      "operation": "ListOrderDiscounts",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        }
+      ]
+    },
+    {
+      "operation": "ListPartnerAccountChangeRecords",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        }
+      ]
+    },
+    {
+      "operation": "ListPartnerAdjustRecords",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        }
+      ]
+    },
+    {
+      "operation": "ListPartnerBalances",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        }
+      ]
+    },
+    {
+      "operation": "ListPartnerCouponsRecord",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        }
+      ]
+    },
+    {
+      "operation": "ListPayPerUseCustomerResources",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_pay_per_use_customer_resources.py",
+          "title": "Query Pay-Per-Use Customer Resource List"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_pay_per_use_customer_resources.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListProvinces",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_provinces.py",
+          "title": "Query Province List"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_provinces.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListQuotaCoupons",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        }
+      ]
+    },
+    {
+      "operation": "ListRateOnPeriodDetail",
+      "sources": [
+        {
+          "source": "business_support_query_guide",
+          "script": "list_rate_on_period_detail.py",
+          "title": "Yearly/Monthly Pricing"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_rate_on_period_detail.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListRenewRateOnPeriod",
+      "sources": [
+        {
+          "source": "business_support_query_guide",
+          "script": "list_renew_rate_on_period.py",
+          "title": "Query Yearly/Monthly Product Renewal Pricing"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_renew_rate_on_period.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListResourceTypes",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_resource_types.py",
+          "title": "Query Resource Type List"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_resource_types.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListResourceUsage",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_resource_usage.py",
+          "title": "Query Resource Usage"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_resource_usage.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListResourceUsageSummary",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_resource_usage_summary.py",
+          "title": "Query Resource Usage Summary"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_resource_usage_summary.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListServiceResources",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_service_resources.py",
+          "title": "Query Service Resource List"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_service_resources.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListServiceTypes",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_service_types.py",
+          "title": "Query Service Type List"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_service_types.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListStoredValueCards",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_stored_value_cards.py",
+          "title": "Query Stored Value Card List"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_stored_value_cards.py"
+        }
+      ]
+    },
+    {
+      "operation": "ListSubCustomerBillDetail",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        }
+      ]
+    },
+    {
+      "operation": "ListSubCustomerCoupons",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        }
+      ]
+    },
+    {
+      "operation": "ListSubCustomerNewTag",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        }
+      ]
+    },
+    {
+      "operation": "ListSubCustomers",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        }
+      ]
+    },
+    {
+      "operation": "ListSubcustomerMonthlyBills",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        }
+      ]
+    },
+    {
+      "operation": "ListUsageTypes",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "list_usage_types.py",
+          "title": "Query Usage Type List"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "list_usage_types.py"
+        }
+      ]
+    },
+    {
+      "operation": "ShowCustomerAccountBalances",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "show_customer_account_balances.py",
+          "title": "Query Customer Account Balance"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "show_customer_account_balances.py"
+        }
+      ]
+    },
+    {
+      "operation": "ShowCustomerMonthlySum",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "show_customer_monthly_sum.py",
+          "title": "Query Customer Monthly Summary Bill"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "show_customer_monthly_sum.py"
+        }
+      ]
+    },
+    {
+      "operation": "ShowCustomerOrderDetails",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "show_customer_order_details.py",
+          "title": "Query Customer Order Details"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "show_customer_order_details.py"
+        }
+      ]
+    },
+    {
+      "operation": "ShowMultiAccountTransferAmount",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "show_multi_account_transfer_amount.py",
+          "title": "Query Enterprise Multi-Account Transferable Balance"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "show_multi_account_transfer_amount.py"
+        }
+      ]
+    },
+    {
+      "operation": "ShowRefundOrderDetails",
+      "sources": [
+        {
+          "source": "billing_scout_related_commands"
+        },
+        {
+          "source": "business_support_query_guide",
+          "script": "show_refund_order_details.py",
+          "title": "Query Refund Order Details"
+        },
+        {
+          "source": "business_support_query_scripts",
+          "script": "show_refund_order_details.py"
+        }
+      ]
+    }
+  ],
+  "statistics": {
+    "billing_scout_operation_count": 53,
+    "business_query_operation_count": 37,
+    "pricing_operation_count": 2
+  },
+  "pricing_operations": [
+    "ListOnDemandResourceRatings",
+    "ListRateOnPeriodDetail"
+  ],
+  "pricing_helpers": [
+    {
+      "script": "inquiry_elb.py",
+      "title": "ELB Dedicated Pricing"
+    },
+    {
+      "script": "inquiry_nat.py",
+      "title": "NAT Gateway Dedicated Pricing"
+    },
+    {
+      "script": "inquiry_dcs.py",
+      "title": "DCS Distributed Cache Dedicated Pricing"
+    }
+  ],
+  "pricing_matrix": [
+    {
+      "service": "Elastic Cloud Server (ECS)",
+      "billing_mode": "On-demand, Period",
+      "on_demand": "`--preset ecs`",
+      "period": "`--preset ecs`"
+    },
+    {
+      "service": "Elastic Volume Service (EVS)",
+      "billing_mode": "On-demand, Period",
+      "on_demand": "`--preset evs`",
+      "period": "`--preset evs`"
+    },
+    {
+      "service": "Elastic IP - Bandwidth (EIP-BW)",
+      "billing_mode": "On-demand, Period",
+      "on_demand": "`--preset eip-bw`",
+      "period": "`--preset eip-bw`"
+    },
+    {
+      "service": "Elastic IP - Traffic (EIP-Flow)",
+      "billing_mode": "On-demand",
+      "on_demand": "`--preset eip-flow`",
+      "period": "-"
+    },
+    {
+      "service": "Elastic IP (EIP-IP)",
+      "billing_mode": "On-demand, Period",
+      "on_demand": "`--preset eip-ip`",
+      "period": "`--preset eip-ip`"
+    },
+    {
+      "service": "Virtual Private Cloud (VPC)",
+      "billing_mode": "On-demand",
+      "on_demand": "`--preset vpc`",
+      "period": "-"
+    },
+    {
+      "service": "Elastic Load Balance (ELB)",
+      "billing_mode": "On-demand, Period",
+      "on_demand": "`inquiry_elb.py`",
+      "period": "`inquiry_elb.py`"
+    },
+    {
+      "service": "NAT Gateway (NAT)",
+      "billing_mode": "On-demand, Period",
+      "on_demand": "`inquiry_nat.py`",
+      "period": "`inquiry_nat.py`"
+    },
+    {
+      "service": "Object Storage Service (OBS)",
+      "billing_mode": "On-demand",
+      "on_demand": "`--preset obs`",
+      "period": "-"
+    },
+    {
+      "service": "Scalable File Service (SFS)",
+      "billing_mode": "On-demand, Period",
+      "on_demand": "`--preset sfs`",
+      "period": "`--preset sfs`"
+    },
+    {
+      "service": "Virtual Private Network (VPN)",
+      "billing_mode": "On-demand, Period",
+      "on_demand": "`--preset vpn`",
+      "period": "`--preset vpn`"
+    },
+    {
+      "service": "Cloud Eye (CES)",
+      "billing_mode": "On-demand",
+      "on_demand": "`--preset ces`",
+      "period": "-"
+    },
+    {
+      "service": "Image Management Service (IMS)",
+      "billing_mode": "On-demand",
+      "on_demand": "`--preset ims`",
+      "period": "-"
+    },
+    {
+      "service": "Bare Metal Server (BMS)",
+      "billing_mode": "Period",
+      "on_demand": "-",
+      "period": "`--preset bms`"
+    }
+  ]
+}

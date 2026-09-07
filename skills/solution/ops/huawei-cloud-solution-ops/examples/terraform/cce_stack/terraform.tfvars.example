@@ -1,0 +1,9 @@
+region_name       = "cn-north-4"
+vpc_name          = "demo-cce-vpc"
+vpc_cidr          = "192.168.0.0/16"
+subnet_name       = "demo-cce-subnet"
+subnet_cidr       = "192.168.1.0/24"
+subnet_gateway_ip = "192.168.1.1"
+cluster_name      = "demo-cce-cluster"
+cluster_type      = "VirtualMachine"
+create_eip        = true

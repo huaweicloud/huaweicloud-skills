@@ -1,0 +1,570 @@
+{
+  "schema_version": 1,
+  "doc_version": "2026-06-19",
+  "provider": "Huawei Cloud MaaS",
+  "endpoint_host": "api.modelarts-maas.com",
+  "source_docs": [
+    "Curated from Huawei Cloud MaaS online documentation. See official_docs for portable source URLs."
+  ],
+  "official_docs": [
+    {
+      "topic": "MaaS documentation index",
+      "url": "https://support.huaweicloud.com/maas/index.html"
+    },
+    {
+      "topic": "Model list",
+      "url": "https://support.huaweicloud.com/model-call-maas/usermanual_maas_0008.html"
+    },
+    {
+      "topic": "Text generation overview",
+      "url": "https://support.huaweicloud.com/model-call-maas/model-call-004.html"
+    },
+    {
+      "topic": "Text generation API details",
+      "url": "https://support.huaweicloud.com/model-call-maas/model-call-005.html"
+    },
+    {
+      "topic": "Text generation examples",
+      "url": "https://support.huaweicloud.com/model-call-maas/model-call-006.html"
+    },
+    {
+      "topic": "Text generation notes",
+      "url": "https://support.huaweicloud.com/model-call-maas/model-call-008.html"
+    },
+    {
+      "topic": "Image understanding",
+      "url": "https://support.huaweicloud.com/model-call-maas/model-call-011.html"
+    },
+    {
+      "topic": "Image generation overview",
+      "url": "https://support.huaweicloud.com/model-call-maas/model-call-012.html"
+    },
+    {
+      "topic": "Video generation overview",
+      "url": "https://support.huaweicloud.com/model-call-maas/model-call-063.html"
+    },
+    {
+      "topic": "Text-to-video",
+      "url": "https://support.huaweicloud.com/model-call-maas/model-call-064.html"
+    },
+    {
+      "topic": "Image-to-video",
+      "url": "https://support.huaweicloud.com/model-call-maas/model-call-065.html"
+    },
+    {
+      "topic": "Reference-to-video",
+      "url": "https://support.huaweicloud.com/model-call-maas/model-call-066.html"
+    },
+    {
+      "topic": "First/last-frame video",
+      "url": "https://support.huaweicloud.com/model-call-maas/model-call-067.html"
+    },
+    {
+      "topic": "MaaS standard API V2",
+      "url": "https://support.huaweicloud.com/model-call-maas/model-call-019.html"
+    },
+    {
+      "topic": "OpenAI-compatible API",
+      "url": "https://support.huaweicloud.com/model-call-maas/model-call-021.html"
+    },
+    {
+      "topic": "Image generation API",
+      "url": "https://support.huaweicloud.com/model-call-maas/model-call-023.html"
+    },
+    {
+      "topic": "Model API call specification",
+      "url": "https://support.huaweicloud.com/model-call-maas/model-call-017.html"
+    },
+    {
+      "topic": "API overview",
+      "url": "https://support.huaweicloud.com/api-maas/api-maas-0002.html"
+    }
+  ],
+  "boundary": "This local catalog is a curated runtime aid. MaaS console and GET /v2/models remain the live availability source.",
+  "api_endpoints": {
+    "chat_standard_v2": "/v2/chat/completions",
+    "chat_vision_v1": "/v1/chat/completions",
+    "chat_openai_compatible": "/openai/v1/chat/completions",
+    "models": "/v2/models",
+    "image_generation": "/v1/images/generations",
+    "video_generation": "/v1/video/generations"
+  },
+  "auth": {
+    "type": "bearer_api_key",
+    "env": [
+      "MAAS_API_KEY",
+      "MODELARTS_MAAS_API_KEY"
+    ],
+    "notes": [
+      "API Key is created in the MaaS console under 管理与统计 > API Key 管理 > 创建API Key.",
+      "API Key is shown only once; if lost, create a new API Key.",
+      "A maximum of 30 valid API Keys can exist per account.",
+      "API Key is region-scoped and does not support cross-region use.",
+      "A newly created API Key may need a few minutes before it becomes effective.",
+      "Do not use MaaS Token Plan endpoints as generic API-call quota."
+    ]
+  },
+  "models": [
+    {
+      "name": "GLM-5",
+      "model": "glm-5",
+      "model_type": "text",
+      "capabilities": [
+        "text",
+        "thinking",
+        "function_call",
+        "prefix"
+      ],
+      "api_styles": [
+        "standard-v2",
+        "openai-compatible",
+        "anthropic-compatible"
+      ],
+      "region": [
+        "西南-贵阳一"
+      ],
+      "context_length": "198K",
+      "max_input": "192K",
+      "max_output": "64K"
+    },
+    {
+      "name": "GLM-5.1",
+      "model": "glm-5.1",
+      "model_type": "text",
+      "capabilities": [
+        "text",
+        "thinking",
+        "function_call",
+        "prefix"
+      ],
+      "api_styles": [
+        "standard-v2",
+        "openai-compatible",
+        "anthropic-compatible"
+      ],
+      "region": [
+        "西南-贵阳一"
+      ],
+      "context_length": "198K",
+      "max_input": "192K",
+      "max_output": "128K"
+    },
+    {
+      "name": "GLM-5.2",
+      "model": "glm-5.2",
+      "model_type": "text",
+      "capabilities": [
+        "text",
+        "thinking",
+        "function_call",
+        "prefix"
+      ],
+      "api_styles": [
+        "standard-v2",
+        "openai-compatible",
+        "anthropic-compatible"
+      ],
+      "region": [
+        "西南-贵阳一"
+      ],
+      "context_length": "198K",
+      "max_input": "192K",
+      "max_output": "128K"
+    },
+    {
+      "name": "Kimi-K2.6",
+      "model": "kimi-k2.6",
+      "model_type": "text",
+      "capabilities": [
+        "text",
+        "thinking",
+        "function_call",
+        "prefix"
+      ],
+      "api_styles": [
+        "standard-v2",
+        "openai-compatible",
+        "anthropic-compatible"
+      ],
+      "region": [
+        "西南-贵阳一"
+      ],
+      "context_length": "256K",
+      "max_input": "256K",
+      "max_output": "96K"
+    },
+    {
+      "name": "DeepSeek-V4-Pro",
+      "model": "deepseek-v4-pro",
+      "model_type": "text",
+      "capabilities": [
+        "text",
+        "thinking",
+        "function_call",
+        "prefix"
+      ],
+      "api_styles": [
+        "standard-v2",
+        "openai-compatible"
+      ],
+      "region": [
+        "西南-贵阳一"
+      ],
+      "context_length": "1M",
+      "max_input": "1M",
+      "max_output": "128K"
+    },
+    {
+      "name": "DeepSeek-V4-Flash",
+      "model": "deepseek-v4-flash",
+      "model_type": "text",
+      "capabilities": [
+        "text",
+        "thinking",
+        "function_call",
+        "prefix"
+      ],
+      "api_styles": [
+        "standard-v2",
+        "openai-compatible"
+      ],
+      "region": [
+        "西南-贵阳一"
+      ],
+      "context_length": "1M",
+      "max_input": "1M",
+      "max_output": "128K"
+    },
+    {
+      "name": "DeepSeek-V3.2",
+      "model": "deepseek-v3.2",
+      "model_type": "text",
+      "capabilities": [
+        "text",
+        "thinking",
+        "function_call",
+        "prefix"
+      ],
+      "api_styles": [
+        "standard-v2",
+        "openai-compatible"
+      ],
+      "region": [
+        "西南-贵阳一"
+      ],
+      "context_length": "160K",
+      "notes": [
+        "Used as the default text model in maas_chat.py."
+      ]
+    },
+    {
+      "name": "Qwen3-235B-A22B",
+      "model": "qwen3-235b-a22b",
+      "model_type": "text",
+      "capabilities": [
+        "text",
+        "thinking",
+        "function_call",
+        "prefix"
+      ],
+      "api_styles": [
+        "standard-v2",
+        "openai-compatible",
+        "v1-chat"
+      ],
+      "region": [
+        "西南-贵阳一"
+      ],
+      "context_length": "128K",
+      "max_input": "124K",
+      "max_output": "32K"
+    },
+    {
+      "name": "Qwen2.5-VL-72B",
+      "model": "qwen2.5-vl-72b",
+      "model_type": "vision",
+      "capabilities": [
+        "vision",
+        "image_understanding",
+        "text"
+      ],
+      "api_styles": [
+        "v1-chat"
+      ],
+      "region": [
+        "西南-贵阳一"
+      ],
+      "context_length": "48K",
+      "max_input": "文本48K; 图片10MB Base64",
+      "max_output": "16K",
+      "input_image_formats": [
+        "png",
+        "jpeg",
+        "jpg",
+        "webp",
+        "bmp",
+        "tiff"
+      ]
+    },
+    {
+      "name": "Qwen_Image",
+      "model": "qwen-image",
+      "model_type": "image_generation",
+      "capabilities": [
+        "image_generation",
+        "text_to_image"
+      ],
+      "api_styles": [
+        "v1-images-generations"
+      ],
+      "region": [
+        "西南-贵阳一"
+      ],
+      "default_rate_limit": "RPM 144",
+      "notes": [
+        "Default image model in compatibility helper."
+      ]
+    },
+    {
+      "name": "Qwen-Image-Edit 20250913",
+      "model": "qwen_image_edit",
+      "model_type": "image_generation",
+      "capabilities": [
+        "image_generation",
+        "image_edit"
+      ],
+      "api_styles": [
+        "v1-images-generations"
+      ],
+      "region": [
+        "西南-贵阳一"
+      ],
+      "input_image_formats": [
+        "png",
+        "jpeg",
+        "jpg",
+        "webp",
+        "bmp",
+        "tiff"
+      ]
+    },
+    {
+      "name": "Qwen-Image-Edit 20251028",
+      "model": "qwen-image-edit-2509",
+      "model_type": "image_generation",
+      "capabilities": [
+        "image_generation",
+        "image_edit",
+        "multi_image_edit"
+      ],
+      "api_styles": [
+        "v1-images-generations"
+      ],
+      "region": [
+        "西南-贵阳一"
+      ],
+      "input_image_formats": [
+        "png",
+        "jpeg",
+        "jpg",
+        "webp",
+        "bmp",
+        "tiff"
+      ]
+    },
+    {
+      "name": "Wan2.2-T2V-A14B",
+      "model": "Wan2.2-T2V-A14B",
+      "model_type": "video_generation",
+      "capabilities": [
+        "video_generation",
+        "text_to_video"
+      ],
+      "api_styles": [
+        "v1-video-generations"
+      ],
+      "region": [
+        "西南-贵阳一"
+      ],
+      "prompt_limit": "1000 chars",
+      "durations": [
+        3,
+        5
+      ],
+      "fps": [
+        16,
+        24,
+        30
+      ],
+      "sizes": [
+        "832x480",
+        "480x832",
+        "1280x720",
+        "720x1280",
+        "1920x1080",
+        "1080x1920"
+      ]
+    },
+    {
+      "name": "Wan2.2-I2V-A14B",
+      "model": "Wan2.2-I2V-A14B",
+      "model_type": "video_generation",
+      "capabilities": [
+        "video_generation",
+        "image_to_video"
+      ],
+      "api_styles": [
+        "v1-video-generations"
+      ],
+      "region": [
+        "西南-贵阳一"
+      ],
+      "prompt_limit": "1000 chars",
+      "input_image_limit": "8MB Base64",
+      "input_image_formats": [
+        "jpg",
+        "png",
+        "webp",
+        "jpeg",
+        "bmp"
+      ],
+      "durations": [
+        3,
+        5
+      ]
+    },
+    {
+      "name": "ViduQ3-Turbo T2V",
+      "model": "vidu/viduq3-turbo_text2video",
+      "model_type": "video_generation",
+      "capabilities": [
+        "video_generation",
+        "text_to_video"
+      ],
+      "api_styles": [
+        "v1-video-generations"
+      ],
+      "region": [
+        "西南-贵阳一"
+      ],
+      "prompt_limit": "5000 chars",
+      "duration_range": "1-16s",
+      "size_separator": "*"
+    },
+    {
+      "name": "ViduQ3-Turbo I2V",
+      "model": "vidu/viduq3-turbo_img2video",
+      "model_type": "video_generation",
+      "capabilities": [
+        "video_generation",
+        "image_to_video"
+      ],
+      "api_styles": [
+        "v1-video-generations"
+      ],
+      "region": [
+        "西南-贵阳一"
+      ],
+      "prompt_limit": "5000 chars",
+      "input_image_limit": "50MB Base64",
+      "duration_range": "1-16s",
+      "size_separator": "*"
+    },
+    {
+      "name": "PixVerse V6 T2V",
+      "model": "pixverse/pixverse-v6-t2v",
+      "model_type": "video_generation",
+      "capabilities": [
+        "video_generation",
+        "text_to_video"
+      ],
+      "api_styles": [
+        "v1-video-generations"
+      ],
+      "region": [
+        "西南-贵阳一"
+      ],
+      "prompt_limit": "2048 chars",
+      "duration_range": "1-15s",
+      "resolution_values": [
+        "360p",
+        "540p",
+        "720p",
+        "1080p"
+      ],
+      "ratio_values": [
+        "16:9",
+        "9:16",
+        "4:3",
+        "3:4",
+        "1:1",
+        "2:3",
+        "3:2",
+        "21:9"
+      ]
+    },
+    {
+      "name": "PixVerse V6 I2V",
+      "model": "pixverse/pixverse-v6-it2v",
+      "model_type": "video_generation",
+      "capabilities": [
+        "video_generation",
+        "image_to_video"
+      ],
+      "api_styles": [
+        "v1-video-generations"
+      ],
+      "region": [
+        "西南-贵阳一"
+      ],
+      "prompt_limit": "2048 chars",
+      "input_image_limit": "50MB public URL",
+      "resolution_values": [
+        "360p",
+        "540p",
+        "720p",
+        "1080p"
+      ]
+    },
+    {
+      "name": "PixVerse V6 KF2V",
+      "model": "pixverse/pixverse-v6-kf2v",
+      "model_type": "video_generation",
+      "capabilities": [
+        "video_generation",
+        "keyframe_to_video"
+      ],
+      "api_styles": [
+        "v1-video-generations"
+      ],
+      "region": [
+        "西南-贵阳一"
+      ],
+      "input_media_types": [
+        "first_frame",
+        "last_frame"
+      ]
+    },
+    {
+      "name": "PixVerse V6 R2V",
+      "model": "pixverse/pixverse-v6-r2v",
+      "model_type": "video_generation",
+      "capabilities": [
+        "video_generation",
+        "reference_to_video"
+      ],
+      "api_styles": [
+        "v1-video-generations"
+      ],
+      "region": [
+        "西南-贵阳一"
+      ],
+      "input_media_types": [
+        "image_url"
+      ],
+      "notes": [
+        "Reference images must be public URLs in the documented PixVerse examples."
+      ]
+    }
+  ]
+}

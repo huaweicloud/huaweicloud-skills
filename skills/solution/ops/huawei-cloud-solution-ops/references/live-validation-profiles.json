@@ -1,0 +1,204 @@
+{
+  "schema_version": 1,
+  "description": "Service-level live validation profiles for moving curated high-frequency services from planner/readback coverage toward live-validated curated evidence.",
+  "profile_contract": {
+    "target_tier": "live_validated_curated",
+    "planner_boundary": "The planner must not execute hcloud, probe networks, create resources, import Terraform state, or read secrets.",
+    "required_fields": [
+      "current_status",
+      "tenant_goals",
+      "risk",
+      "required_inputs",
+      "hcloud_readback_operations",
+      "acceptance_evidence",
+      "probe_candidates",
+      "promotion_gates"
+    ]
+  },
+  "services": {
+    "ECS": {
+      "current_status": "curated",
+      "target_tier": "live_validated_curated",
+      "tenant_goals": ["build_cloud", "use_cloud", "manage_cloud"],
+      "risk": ["billable_compute", "public_access_if_eip", "guest_runtime_boundary"],
+      "required_inputs": ["region", "server_id"],
+      "optional_inputs": ["project_id", "job_id", "public_ip", "private_ip", "probe_url", "application_port", "ssh_source_cidr", "log_scope"],
+      "hcloud_readback_operations": [
+        {"service": "ECS", "operation": "ListCloudServers", "purpose": "Discover servers in the selected region/project."},
+        {"service": "ECS", "operation": "ListServersDetails", "purpose": "Collect bounded server inventory and status evidence."},
+        {"service": "ECS", "operation": "ShowServer", "required_inputs": ["server_id"], "purpose": "Read back target status, flavor, image, addresses, security groups, and metadata."},
+        {"service": "ECS", "operation": "ListServerInterfaces", "required_inputs": ["server_id"], "purpose": "Read back NIC, subnet, and port linkage."},
+        {"service": "ECS", "operation": "ListServerVolumeAttachments", "required_inputs": ["server_id"], "purpose": "Read back attached boot/data disks."}
+      ],
+      "acceptance_evidence": [
+        {"id": "server_readback", "layer": "cloud_control_plane", "required_inputs": ["server_id"], "description": "ShowServer proves the target server exists and records ACTIVE/ERROR/SHUTOFF state, addresses, flavor, image, and security group linkage."},
+        {"id": "job_terminal", "layer": "cloud_control_plane", "any_of_inputs": ["job_id"], "description": "For create/rebuild/resize flows, job terminal success must be captured separately from later resource readiness."},
+        {"id": "ssh_or_guest_access", "layer": "guest_runtime", "any_of_inputs": ["ssh_source_cidr", "private_ip", "public_ip"], "description": "Guest-level readiness such as SSH, COC, or application process checks must stay separate from ECS ACTIVE."},
+        {"id": "application_probe", "layer": "protocol_or_network", "any_of_inputs": ["probe_url", "application_port"], "description": "User-facing application readiness requires a bounded HTTP/TCP probe or equivalent application health evidence."}
+      ],
+      "probe_candidates": [
+        {"type": "http", "evidence_id": "application_probe", "requires_any_of_inputs": ["probe_url"], "description": "HTTP/HTTPS health URL through the intended user path."},
+        {"type": "tcp", "evidence_id": "application_probe", "requires_inputs": ["application_port"], "requires_any_of_inputs": ["public_ip", "private_ip"], "description": "TCP reachability to the approved application or admin port."}
+      ],
+      "promotion_gates": [
+        {"id": "cloud_readback_complete", "required_evidence": ["server_readback"], "description": "Target server readback is captured from hcloud."},
+        {"id": "job_not_confused_with_ready", "required_evidence": ["job_terminal"], "description": "Async job evidence is present when a job is part of the flow and is not reported as business readiness by itself."},
+        {"id": "user_path_verified", "required_evidence": ["application_probe"], "description": "A protocol or application path has been verified when the task claims user-facing readiness."}
+      ],
+      "blockers": ["No live validation without isolated account/project and approved target IDs.", "Do not collect or print SSH private keys or passwords."]
+    },
+    "VPC": {
+      "current_status": "curated",
+      "target_tier": "live_validated_curated",
+      "tenant_goals": ["build_cloud", "use_cloud", "manage_cloud"],
+      "risk": ["network_reachability", "security_group_exposure", "shared_dependency"],
+      "required_inputs": ["region", "vpc_id"],
+      "optional_inputs": ["project_id", "subnet_id", "security_group_id", "security_group_rule_id", "remote_ip_prefix", "port_range_min", "target_resource_id", "probe_url"],
+      "hcloud_readback_operations": [
+        {"service": "VPC", "operation": "ListVpcs", "purpose": "Discover VPCs in the selected region/project."},
+        {"service": "VPC", "operation": "ListSubnets", "purpose": "Discover subnets and CIDR boundaries."},
+        {"service": "VPC", "operation": "ListSecurityGroups", "purpose": "Discover security group inventory."},
+        {"service": "VPC", "operation": "ListSecurityGroupRules", "purpose": "Discover current ingress/egress rules."},
+        {"service": "VPC", "operation": "ShowVpc", "required_inputs": ["vpc_id"], "purpose": "Read back the target VPC."},
+        {"service": "VPC", "operation": "ShowSubnet", "required_inputs": ["subnet_id"], "purpose": "Read back the target subnet when subnet scope matters."},
+        {"service": "VPC", "operation": "ShowSecurityGroup", "required_inputs": ["security_group_id"], "purpose": "Read back the target security group."},
+        {"service": "VPC", "operation": "ShowSecurityGroupRule", "required_inputs": ["security_group_rule_id"], "purpose": "Read back the exact security group rule."}
+      ],
+      "acceptance_evidence": [
+        {"id": "vpc_subnet_readback", "layer": "cloud_control_plane", "required_inputs": ["vpc_id"], "any_of_inputs": ["subnet_id"], "description": "Read back the target VPC and, when relevant, subnet CIDR/AZ/gateway evidence."},
+        {"id": "security_group_rule_readback", "layer": "cloud_control_plane", "any_of_inputs": ["security_group_id", "security_group_rule_id"], "description": "Read back direction, protocol, port range, source CIDR, and target attachment context."},
+        {"id": "entry_path_probe", "layer": "protocol_or_network", "any_of_inputs": ["probe_url", "target_resource_id"], "description": "Verify the intended ECS, EIP, or ELB path from the approved source and expected protocol/port."}
+      ],
+      "probe_candidates": [
+        {"type": "http", "evidence_id": "entry_path_probe", "requires_any_of_inputs": ["probe_url"], "description": "HTTP/HTTPS probe for the network path affected by the rule."},
+        {"type": "tcp", "evidence_id": "entry_path_probe", "requires_inputs": ["port_range_min"], "requires_any_of_inputs": ["target_resource_id"], "description": "TCP probe to the intended target after rule readback."}
+      ],
+      "promotion_gates": [
+        {"id": "network_readback_complete", "required_evidence": ["vpc_subnet_readback", "security_group_rule_readback"], "description": "Cloud-side network and rule state are read back."},
+        {"id": "cidr_guard_respected", "required_inputs": ["remote_ip_prefix"], "description": "Source CIDR is explicit and sensitive ports are not opened broadly."},
+        {"id": "entry_path_verified", "required_evidence": ["entry_path_probe"], "description": "Network change claims are backed by a target path probe when reachability is the user goal."}
+      ],
+      "blockers": ["Do not open SSH/Web common ports to 0.0.0.0/0 automatically.", "Shared security groups require attachment impact review before change claims."]
+    },
+    "EIP": {
+      "current_status": "curated",
+      "target_tier": "live_validated_curated",
+      "tenant_goals": ["build_cloud", "use_cloud", "manage_cloud"],
+      "risk": ["public_exposure", "billable_public_ip", "binding_dependency"],
+      "required_inputs": ["region", "publicip_id"],
+      "optional_inputs": ["project_id", "target_resource_id", "target_port_id", "bandwidth_id", "probe_url", "public_ip", "security_group_id", "billing_scope"],
+      "hcloud_readback_operations": [
+        {"service": "EIP", "operation": "ListPublicips", "purpose": "Discover EIP inventory, binding, status, and idle candidates."},
+        {"service": "EIP", "operation": "ShowPublicip", "required_inputs": ["publicip_id"], "purpose": "Read back public IP address, bandwidth, status, and binding target."},
+        {"service": "EIP", "operation": "ShowBandwidth", "required_inputs": ["bandwidth_id"], "purpose": "Read back bandwidth policy when bandwidth cost or throttling is in scope."}
+      ],
+      "acceptance_evidence": [
+        {"id": "publicip_readback", "layer": "cloud_control_plane", "required_inputs": ["publicip_id"], "description": "Read back public IP status, address, bandwidth, billing mode, and current binding target."},
+        {"id": "binding_target_readback", "layer": "cloud_control_plane", "any_of_inputs": ["target_resource_id", "target_port_id"], "description": "Verify the exact ECS port, ELB, NAT, or other target resource that owns the EIP binding."},
+        {"id": "public_protocol_probe", "layer": "protocol_or_network", "any_of_inputs": ["probe_url", "public_ip"], "description": "Probe the expected public protocol through the EIP after security group evidence is collected."},
+        {"id": "cost_retention_review", "layer": "governance", "any_of_inputs": ["billing_scope", "bandwidth_id"], "description": "Record whether idle or unbound EIP resources still incur retention/bandwidth cost."}
+      ],
+      "probe_candidates": [
+        {"type": "http", "evidence_id": "public_protocol_probe", "requires_any_of_inputs": ["probe_url"], "description": "HTTP/HTTPS probe through the EIP-backed entry path."},
+        {"type": "tcp", "evidence_id": "public_protocol_probe", "requires_any_of_inputs": ["public_ip"], "description": "TCP probe to an approved public port after CIDR review."}
+      ],
+      "promotion_gates": [
+        {"id": "publicip_readback_complete", "required_evidence": ["publicip_readback"], "description": "EIP status and binding are read back."},
+        {"id": "public_entry_verified", "required_evidence": ["binding_target_readback", "public_protocol_probe"], "description": "Public entry readiness is paired with binding and protocol evidence."},
+        {"id": "cost_boundary_reviewed", "required_evidence": ["cost_retention_review"], "description": "Idle/unbound cost posture is not inferred from resource status alone."}
+      ],
+      "blockers": ["Do not report an EIP as reachable from ShowPublicip alone.", "Release/unbind remains a separate explicitly approved teardown action."]
+    },
+    "OBS": {
+      "current_status": "curated",
+      "target_tier": "live_validated_curated",
+      "tenant_goals": ["build_cloud", "use_cloud", "manage_cloud"],
+      "risk": ["public_bucket_exposure", "data_retention", "obsutil_credential_boundary"],
+      "required_inputs": ["region", "bucket"],
+      "optional_inputs": ["project_id", "obs_endpoint", "probe_url", "domain_name", "static_website", "retention_policy", "owner", "public_access_intent"],
+      "hcloud_readback_operations": [
+        {"service": "OBS", "operation": "ListBuckets", "purpose": "Discover OBS bucket inventory through the OBS adapter."},
+        {"service": "OBS", "operation": "StatBucket", "required_inputs": ["bucket"], "purpose": "Read back target bucket metadata and existence."},
+        {"service": "OBS", "operation": "GetBucketLifecycle", "required_inputs": ["bucket"], "purpose": "Read back lifecycle policy before retention claims."},
+        {"service": "OBS", "operation": "GetBucketPolicy", "required_inputs": ["bucket"], "purpose": "Read back bucket policy and public exposure posture."}
+      ],
+      "acceptance_evidence": [
+        {"id": "bucket_stat_policy_lifecycle", "layer": "cloud_control_plane", "required_inputs": ["bucket"], "description": "Read back bucket stat, policy, lifecycle configuration, and public-access posture through the OBS adapter."},
+        {"id": "static_site_or_object_probe", "layer": "protocol_or_network", "required_inputs": ["bucket"], "any_of_inputs": ["static_website", "probe_url", "domain_name"], "description": "Verify index/error documents, object availability, CDN/DNS linkage, or HTTP/HTTPS response for published content."},
+        {"id": "retention_review", "layer": "governance", "any_of_inputs": ["retention_policy", "owner", "public_access_intent"], "description": "Record owner, data classification, lifecycle retention, and public access justification."}
+      ],
+      "probe_candidates": [
+        {"type": "http", "evidence_id": "static_site_or_object_probe", "requires_any_of_inputs": ["probe_url", "domain_name"], "description": "HTTP/HTTPS probe for the website endpoint, object URL, custom domain, or CDN URL."}
+      ],
+      "promotion_gates": [
+        {"id": "bucket_readback_complete", "required_evidence": ["bucket_stat_policy_lifecycle"], "description": "Bucket stat/policy/lifecycle evidence is captured."},
+        {"id": "user_path_verified", "required_evidence": ["static_site_or_object_probe"], "description": "Published website/object claims are backed by HTTP evidence."},
+        {"id": "retention_and_public_access_reviewed", "required_evidence": ["retention_review"], "description": "Lifecycle and public access posture is explicitly reviewed."}
+      ],
+      "blockers": ["OBS adapter may need obsutil-specific endpoint/config; do not assume normal hcloud profile covers it.", "Do not dump object listings or policy secrets into chat."]
+    },
+    "ELB": {
+      "current_status": "curated",
+      "target_tier": "live_validated_curated",
+      "tenant_goals": ["build_cloud", "use_cloud", "manage_cloud"],
+      "risk": ["public_or_private_entry", "backend_health_dependency", "certificate_and_security_group_dependency"],
+      "required_inputs": ["region", "loadbalancer_id"],
+      "optional_inputs": ["project_id", "listener_id", "pool_id", "member_id", "backend_server_id", "backend_address", "listener_port", "backend_port", "probe_url", "security_group_id"],
+      "hcloud_readback_operations": [
+        {"service": "ELB", "operation": "ListLoadbalancers", "purpose": "Discover load balancer inventory and status."},
+        {"service": "ELB", "operation": "ListListeners", "purpose": "Discover listener topology."},
+        {"service": "ELB", "operation": "ListPools", "purpose": "Discover backend pool topology."},
+        {"service": "ELB", "operation": "ShowLoadBalancer", "required_inputs": ["loadbalancer_id"], "purpose": "Read back target load balancer status and networking."},
+        {"service": "ELB", "operation": "ShowListener", "required_inputs": ["listener_id"], "purpose": "Read back listener protocol, port, certificate linkage, and defaults."},
+        {"service": "ELB", "operation": "ShowPool", "required_inputs": ["pool_id"], "purpose": "Read back pool protocol and health policy."},
+        {"service": "ELB", "operation": "ListMembers", "required_inputs": ["pool_id"], "purpose": "Read back backend members."},
+        {"service": "ELB", "operation": "ShowMember", "required_inputs": ["pool_id", "member_id"], "purpose": "Read back a target backend member."}
+      ],
+      "acceptance_evidence": [
+        {"id": "elb_topology_readback", "layer": "cloud_control_plane", "required_inputs": ["loadbalancer_id"], "any_of_inputs": ["listener_id", "pool_id", "member_id"], "description": "Read back load balancer, listener, pool, member, and health monitor topology."},
+        {"id": "backend_health", "layer": "service_readiness", "any_of_inputs": ["member_id", "backend_server_id", "backend_address"], "description": "Verify backend member health, backend ECS status, and security group allowance from the ELB subnet."},
+        {"id": "elb_protocol_probe", "layer": "protocol_or_network", "any_of_inputs": ["probe_url", "listener_port", "backend_port"], "description": "Probe HTTP/TCP through the ELB entry point with expected host, path, port, and status behavior."}
+      ],
+      "probe_candidates": [
+        {"type": "http", "evidence_id": "elb_protocol_probe", "requires_any_of_inputs": ["probe_url"], "description": "HTTP/HTTPS probe through the ELB listener."},
+        {"type": "tcp", "evidence_id": "elb_protocol_probe", "requires_any_of_inputs": ["listener_port"], "description": "TCP probe to the listener when HTTP is not applicable."}
+      ],
+      "promotion_gates": [
+        {"id": "topology_readback_complete", "required_evidence": ["elb_topology_readback"], "description": "ELB listener/pool/member topology is read back."},
+        {"id": "backend_health_verified", "required_evidence": ["backend_health"], "description": "Backend health evidence is present before traffic readiness claims."},
+        {"id": "entry_protocol_verified", "required_evidence": ["elb_protocol_probe"], "description": "User-path traffic has been probed through the ELB entry point."}
+      ],
+      "blockers": ["Do not declare ELB ready from listener or pool creation alone.", "Backend ECS security groups must allow ELB health-check and service traffic."]
+    },
+    "RDS": {
+      "current_status": "curated",
+      "target_tier": "live_validated_curated",
+      "tenant_goals": ["build_cloud", "use_cloud", "manage_cloud"],
+      "risk": ["data_service", "backup_and_restore_dependency", "restart_or_parameter_impact", "credential_boundary"],
+      "required_inputs": ["region", "instance_id"],
+      "optional_inputs": ["project_id", "config_id", "database_port", "vpc_id", "subnet_id", "security_group_id", "probe_source", "rollback_plan", "backup_retention_days", "maintenance_window"],
+      "hcloud_readback_operations": [
+        {"service": "RDS", "operation": "ListInstances", "purpose": "Discover database instances and lifecycle status."},
+        {"service": "RDS", "operation": "ListBackups", "purpose": "Discover backup posture."},
+        {"service": "RDS", "operation": "ListConfigurations", "purpose": "Discover available parameter groups."},
+        {"service": "RDS", "operation": "ShowBackupPolicy", "required_inputs": ["instance_id"], "purpose": "Read back backup policy for the target instance."},
+        {"service": "RDS", "operation": "ShowConfiguration", "required_inputs": ["config_id"], "purpose": "Read back parameter group detail when config scope is known."},
+        {"service": "RDS", "operation": "ShowInstanceConfiguration", "required_inputs": ["instance_id"], "purpose": "Read back target instance configuration and pending restart context."}
+      ],
+      "acceptance_evidence": [
+        {"id": "instance_backup_parameter_readback", "layer": "cloud_control_plane", "required_inputs": ["instance_id"], "description": "Read back instance state, backup policy, configuration/parameter state, endpoint, and pending restart state."},
+        {"id": "client_connection_probe", "layer": "application_runtime", "required_inputs": ["database_port"], "any_of_inputs": ["vpc_id", "subnet_id", "security_group_id", "probe_source"], "description": "Run a bounded connection probe from the intended client network with least-privilege credentials."},
+        {"id": "rollback_boundary", "layer": "governance", "any_of_inputs": ["rollback_plan", "backup_retention_days", "maintenance_window"], "description": "Record latest backup posture, maintenance window, restart impact, and rollback owner before risky changes."}
+      ],
+      "probe_candidates": [
+        {"type": "tcp", "evidence_id": "client_connection_probe", "requires_inputs": ["database_port"], "requires_any_of_inputs": ["probe_source", "vpc_id", "subnet_id"], "description": "TCP database-port reachability from an approved client source; never collect database passwords in chat."}
+      ],
+      "promotion_gates": [
+        {"id": "database_readback_complete", "required_evidence": ["instance_backup_parameter_readback"], "description": "RDS instance, backup, and parameter evidence is read back."},
+        {"id": "client_path_verified", "required_evidence": ["client_connection_probe"], "description": "Application/client connection path is verified without exposing credentials."},
+        {"id": "rollback_reviewed", "required_evidence": ["rollback_boundary"], "description": "Backup, restart, and rollback boundaries are reviewed before risky claims."}
+      ],
+      "blockers": ["Do not ask the user to paste database passwords.", "Available instance state does not prove application connectivity."]
+    }
+  }
+}

@@ -1,0 +1,6 @@
+region_name        = "cn-north-4"
+volume_name        = "demo-evs-volume"
+availability_zone  = "cn-north-4a"
+volume_type        = "SSD"
+volume_size        = 40
+volume_description = "Managed by terraform"

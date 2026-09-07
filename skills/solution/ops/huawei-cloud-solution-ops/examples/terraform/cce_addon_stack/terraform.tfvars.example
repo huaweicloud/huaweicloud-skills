@@ -1,0 +1,4 @@
+region_name   = "cn-north-4"
+cluster_id    = ""
+cluster_name  = "replace-with-existing-cce-cluster-name"
+addon_version = "replace-with-addon-version-matching-your-cluster"

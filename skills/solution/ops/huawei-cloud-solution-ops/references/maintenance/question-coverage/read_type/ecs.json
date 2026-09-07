@@ -1,0 +1,8 @@
+[
+  {
+    "question": "查询当前项目中的云服务器列表，并确认实例的基础状态。",
+    "relevant_apis": [
+      "ECS-ListServersDetails"
+    ]
+  }
+]

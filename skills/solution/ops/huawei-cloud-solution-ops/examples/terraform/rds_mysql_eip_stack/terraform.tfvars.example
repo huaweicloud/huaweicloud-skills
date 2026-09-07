@@ -1,0 +1,8 @@
+region_name         = "cn-north-4"
+vpc_name            = "demo-mysql-eip-vpc"
+subnet_name         = "demo-mysql-eip-subnet"
+security_group_name = "demo-mysql-eip-sg"
+rds_name            = "demo-mysql-eip-rds"
+# Required secret input: provide TF_VAR_rds_password at runtime; never store it in this file.
+mysql_ingress_cidr  = "203.0.113.10/32"
+create_eip          = true

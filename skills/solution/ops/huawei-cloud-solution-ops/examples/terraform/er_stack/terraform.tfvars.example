@@ -1,0 +1,8 @@
+region_name            = "cn-north-4"
+vpc_name               = "demo-er-vpc"
+subnet_name            = "demo-er-subnet"
+subnet_cidr            = "192.168.1.0/24"
+subnet_gateway_ip      = "192.168.1.1"
+er_instance_name       = "demo-er-instance"
+er_vpc_attachment_name = "demo-er-vpc-attachment"
+

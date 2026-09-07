@@ -1,0 +1,7 @@
+region_name         = "cn-north-4"
+vpc_name            = "demo-pg-ha-vpc"
+subnet_name         = "demo-pg-ha-subnet"
+security_group_name = "demo-pg-ha-sg"
+rds_name            = "demo-pg-ha-rds"
+# Required secret input: provide TF_VAR_rds_password at runtime; never store it in this file.
+availability_zones  = []

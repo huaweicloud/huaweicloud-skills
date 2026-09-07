@@ -1,0 +1,327 @@
+{
+  "schema_version": 1,
+  "name": "HuaweiCloudBillingSemanticCatalog",
+  "source": "https://github.com/huaweicloud/huaweicloud-skills/tree/master/skills/bss/billing/huawei-cloud-billing-scout/references/semantic",
+  "source_version": "KooCLI 7.2.2",
+  "execution_boundary": "planner_only; no credentials, signing, HTTP sending, order/payment/subscription mutations, or raw spend dumps",
+  "bss_cli_defaults": {
+    "cli_region": "cn-north-1",
+    "x_language": "zh_CN"
+  },
+  "money_basis": {
+    "billed": ["consume_amount", "official_amount", "discount_amount"],
+    "paid": ["cash_amount", "credit_amount", "coupon_amount", "stored_value_card_amount"],
+    "outstanding": ["debt_amount"],
+    "amortized": ["amortized_cost"],
+    "quoted": ["amount", "official_website_amount", "discount_amount"]
+  },
+  "protected_identifiers": [
+    "account_id",
+    "customer_id",
+    "sub_customer_id",
+    "indirect_partner_id",
+    "resource_id",
+    "order_id",
+    "trade_id",
+    "coupon_id",
+    "quota_id",
+    "card_id"
+  ],
+  "entry_points": {
+    "balance_and_debt": {
+      "required_context": {
+        "scope": ["current_profile"],
+        "time": ["point_in_time"],
+        "money_basis": ["outstanding", "billed"]
+      },
+      "triggers": ["华为云余额", "华为云欠费"],
+      "ontology_entities": ["AccountBalance", "AccountChangeRecord", "StoredValueCard"],
+      "supported_planner_operations": ["account-balances", "account-change-records", "stored-value-cards"]
+    },
+    "monthly_spend": {
+      "required_context": {
+        "scope": ["current_profile"],
+        "time": ["bill_cycle"],
+        "money_basis": ["billed", "amortized"]
+      },
+      "triggers": ["华为云本月花费", "华为云月度汇总"],
+      "ontology_entities": ["MonthlyBillSummary", "CostAnalysis", "AmortizedCost"],
+      "supported_planner_operations": ["monthly-sum", "cost-data", "monthly-breakdown"]
+    },
+    "charge_attribution": {
+      "required_context": {
+        "scope": ["current_profile"],
+        "time": ["bill_cycle", "date_range"],
+        "money_basis": ["billed"]
+      },
+      "triggers": ["华为云扣费原因", "华为云哪个资源在扣费", "华为云95计费用量"],
+      "ontology_entities": ["ResourceBillRecord", "ResourceBillDetail", "ResourceUsage", "OrderEvidence"],
+      "supported_planner_operations": [
+        "resource-fee-records",
+        "resource-records",
+        "usage-summary",
+        "usage-detail",
+        "order-list",
+        "order-details"
+      ]
+    },
+    "pricing_inquiry": {
+      "required_context": {
+        "scope": ["project_id", "sku_region", "resource_spec"],
+        "time": ["point_in_time"],
+        "money_basis": ["quoted"]
+      },
+      "triggers": ["华为云询价", "华为云按需价格", "华为云包年包月价格", "华为云资源价格"],
+      "ontology_entities": ["PricingInquiry", "ReferenceDimensions"],
+      "supported_planner_operations": ["on-demand-pricing", "period-pricing", "reference-service-types", "reference-resource-types", "reference-usage-types", "reference-measure-units"]
+    },
+    "reconciliation": {
+      "required_context": {
+        "scope": ["current_profile"],
+        "time": ["bill_cycle"],
+        "money_basis": ["billed", "paid"]
+      },
+      "triggers": ["华为云账单对账", "华为云汇总和明细不一致"],
+      "ontology_entities": ["BillingStatement", "MonthlyBillSummary", "ResourceBillDetail", "OrderEvidence"],
+      "supported_planner_operations": [
+        "billing-statements",
+        "resource-records",
+        "order-list",
+        "order-details",
+        "monthly-sum"
+      ]
+    },
+    "entitlement_and_deduction": {
+      "required_context": {
+        "scope": ["current_profile"],
+        "time": ["bill_cycle", "point_in_time"],
+        "money_basis": ["billed", "paid"]
+      },
+      "triggers": ["华为云资源包", "华为云优惠券"],
+      "ontology_entities": ["FreeResourcePackage", "CouponChangeRecord", "CouponQuota", "StoredValueCard"],
+      "supported_planner_operations": [
+        "free-resource-infos",
+        "free-resource-usages",
+        "free-resource-usage-records",
+        "coupon-change-records",
+        "quota-coupons",
+        "stored-value-cards",
+        "order-coupons",
+        "order-discounts"
+      ]
+    },
+    "account_scope": {
+      "required_context": {
+        "scope": ["enterprise", "partner", "sub_customer"],
+        "time": ["bill_cycle", "point_in_time"],
+        "money_basis": ["billed", "outstanding"]
+      },
+      "triggers": ["华为云企业主账号", "华为云伙伴账务"],
+      "ontology_entities": [
+        "EnterpriseAndPartnerContext",
+        "EnterpriseAccountContext",
+        "EnterpriseBilling",
+        "PartnerAccountContext",
+        "PartnerBilling"
+      ],
+      "supported_planner_operations": [
+        "enterprise-organizations",
+        "enterprise-sub-customers",
+        "subcustomer-monthly-bills",
+        "subcustomer-bill-detail",
+        "partner-balances",
+        "partner-account-change-records"
+      ]
+    },
+    "reference_dimensions": {
+      "required_context": {
+        "scope": ["current_profile"],
+        "time": ["not_applicable"],
+        "money_basis": ["not_applicable"]
+      },
+      "triggers": ["华为云服务编码", "华为云计量单位"],
+      "ontology_entities": ["ReferenceDimensions"],
+      "supported_planner_operations": [
+        "reference-service-types",
+        "reference-resource-types",
+        "reference-usage-types",
+        "reference-measure-units",
+        "reference-service-resources"
+      ]
+    }
+  },
+  "entities": {
+    "AccountBalance": {
+      "domain": "customer_billing",
+      "source_operations": ["BSS/ShowCustomerAccountBalances"],
+      "grain": "账户×时点",
+      "summary": "余额、欠费、账户构成"
+    },
+    "MonthlyBillSummary": {
+      "domain": "customer_billing",
+      "source_operations": ["BSS/ShowCustomerMonthlySum"],
+      "grain": "账期×服务×资源类型×计费模式",
+      "summary": "月/上月花费、服务或项目汇总"
+    },
+    "BillingStatement": {
+      "domain": "customer_billing",
+      "source_operations": ["BSS/ListCustomerBillsFeeRecords"],
+      "grain": "账期流水行",
+      "summary": "账单、交易、支付、对账差异"
+    },
+    "ResourceBillRecord": {
+      "domain": "customer_billing",
+      "source_operations": ["BSS/ListCustomerselfResourceRecords"],
+      "grain": "资源消费记录",
+      "summary": "持续扣费资源定位"
+    },
+    "ResourceBillDetail": {
+      "domain": "customer_billing",
+      "source_operations": ["BSS/ListCustomerselfResourceRecordDetails"],
+      "grain": "资源详单行",
+      "summary": "日级/用量级下钻"
+    },
+    "AccountChangeRecord": {
+      "domain": "customer_billing",
+      "source_operations": ["BSS/ListCustomerAccountChangeRecords"],
+      "grain": "现金/授信/储值交易",
+      "summary": "账户收支流水"
+    },
+    "StoredValueCard": {
+      "domain": "customer_billing",
+      "source_operations": ["BSS/ListStoredValueCards"],
+      "grain": "储值卡",
+      "summary": "卡状态、有效期、面额"
+    },
+    "CostAnalysis": {
+      "domain": "cost_and_usage",
+      "source_operations": ["BSS/ListCosts"],
+      "grain": "时间桶×分组维度",
+      "summary": "成本 TopN、趋势、聚合归因"
+    },
+    "AmortizedCost": {
+      "domain": "cost_and_usage",
+      "source_operations": ["BSS/ListCustomerBillsMonthlyBreakDown"],
+      "grain": "摊销月×服务/资源/账号",
+      "summary": "摊销 vs 现金扣费"
+    },
+    "ResourceUsage": {
+      "domain": "cost_and_usage",
+      "source_operations": ["BSS/ListResourceUsageSummary", "BSS/ListResourceUsage"],
+      "grain": "用量汇总或明细行",
+      "summary": "CDN/OBS/IEC/VPC 流量带宽与 95 计费"
+    },
+    "PricingInquiry": {
+      "domain": "cost_and_usage",
+      "source_operations": ["BSS/ListOnDemandResourceRatings", "BSS/ListRateOnPeriodDetail"],
+      "grain": "项目×区域×资源规格×计费模式报价",
+      "summary": "按需或包周期资源询价；不是历史账单或实际成交订单"
+    },
+    "FreeResourcePackage": {
+      "domain": "discount_entitlement",
+      "source_operations": [
+        "BSS/ListFreeResourceInfos",
+        "BSS/ListFreeResourceUsages",
+        "BSS/ListFreeResourcesUsageRecords"
+      ],
+      "grain": "资源包/余量/抵扣记录",
+      "summary": "资源包库存、余量、抵扣"
+    },
+    "CouponChangeRecord": {
+      "domain": "discount_entitlement",
+      "source_operations": ["BSS/ListCustomerCouponChangeRecords"],
+      "grain": "代金券交易",
+      "summary": "券消费/回收/过期"
+    },
+    "CouponQuota": {
+      "domain": "discount_entitlement",
+      "source_operations": [
+        "BSS/ListQuotaCoupons",
+        "BSS/ListIssuedCouponQuotas",
+        "BSS/ListCouponQuotasRecords",
+        "BSS/ListIssuedPartnerCoupons",
+        "BSS/ListPartnerCouponsRecord",
+        "BSS/ListSubCustomerCoupons"
+      ],
+      "grain": "券额度/发放/操作记录",
+      "summary": "伙伴券额度、发放、客户券"
+    },
+    "OrderEvidence": {
+      "domain": "order_evidence",
+      "source_operations": [
+        "BSS/ListCustomerOrders",
+        "BSS/ShowCustomerOrderDetails",
+        "BSS/ShowRefundOrderDetails",
+        "BSS/ListOrderCouponsByOrderId",
+        "BSS/ListOrderDiscounts"
+      ],
+      "grain": "订单/退款/券/折扣证据",
+      "summary": "订单、退款、降配、订单侧折扣"
+    },
+    "EnterpriseAndPartnerContext": {
+      "domain": "account_scope",
+      "source_operations": [],
+      "grain": "企业/伙伴/代售范围",
+      "summary": "企业、伙伴、子客户授权边界"
+    },
+    "EnterpriseAccountContext": {
+      "domain": "account_scope",
+      "source_operations": [
+        "BSS/ListEnterpriseOrganizations",
+        "BSS/ListEnterpriseSubCustomers",
+        "BSS/ListEnterpriseMultiAccount",
+        "BSS/ShowMultiAccountTransferAmount",
+        "BSS/ListMultiAccountTransferCoupons",
+        "BSS/ListMultiAccountRetrieveCoupons"
+      ],
+      "grain": "组织/子客户/拨款/可回收券",
+      "summary": "企业主可查组织与子账号范围"
+    },
+    "EnterpriseBilling": {
+      "domain": "account_scope",
+      "source_operations": [
+        "BSS/ListConsumeSubCustomers",
+        "BSS/ListSubcustomerMonthlyBills",
+        "BSS/ListSubCustomerBillDetail"
+      ],
+      "grain": "子客户账单汇总或明细",
+      "summary": "企业子账号账单与分摊"
+    },
+    "PartnerAccountContext": {
+      "domain": "account_scope",
+      "source_operations": [
+        "BSS/ListSubCustomers",
+        "BSS/ListSubCustomerNewTag",
+        "BSS/ListIndirectPartners",
+        "BSS/ListCustomerOnDemandResources",
+        "BSS/ListPayPerUseCustomerResources",
+        "BSS/ListCustomersBalancesDetail",
+        "BSS/ListPartnerBalances"
+      ],
+      "grain": "伙伴客户/经销商/标签/资源/余额",
+      "summary": "伙伴/代售可查询对象"
+    },
+    "PartnerBilling": {
+      "domain": "account_scope",
+      "source_operations": ["BSS/ListPartnerAccountChangeRecords", "BSS/ListPartnerAdjustRecords"],
+      "grain": "伙伴流水或调账",
+      "summary": "伙伴流水、调账、客户侧收支"
+    },
+    "ReferenceDimensions": {
+      "domain": "reference_dimensions",
+      "source_operations": [
+        "BSS/ListServiceTypes",
+        "BSS/ListResourceTypes",
+        "BSS/ListUsageTypes",
+        "BSS/ListMeasureUnits",
+        "BSS/ListConversions",
+        "BSS/ListServiceResources",
+        "BSS/ListProvinces",
+        "BSS/ListCities",
+        "BSS/ListCounties"
+      ],
+      "grain": "维度编码目录",
+      "summary": "服务、资源、用量和计量单位编码"
+    }
+  }
+}

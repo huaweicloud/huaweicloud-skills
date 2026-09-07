@@ -1,0 +1,8 @@
+region_name         = "cn-north-4"
+subnet_id           = "your-existing-subnet-id"
+security_group_id   = "your-existing-secgroup-id"
+instance_name       = "demo-ecs-reuse"
+image_name          = "Ubuntu 20.04 server 64bit"
+key_pair_name       = "your-keypair"
+system_disk_type    = "SAS"
+system_disk_size    = 40

@@ -1,0 +1,38 @@
+region_name                    = "cn-north-4"
+vpc_name                       = "demo-elb-as-vpc"
+subnet_name                    = "demo-elb-as-subnet"
+security_group_name            = "demo-elb-as-security-group"
+instance_name                  = "demo-elb-as-seed-instance"
+loadbalancer_name              = "demo-dedicated-loadbalancer"
+loadbalancer_cross_vpc_backend = true
+listener_name                  = "demo-http-listener"
+pool_name                      = "demo-http-pool"
+configuration_name             = "demo-as-configuration"
+configuration_user_data        = <<EOT
+#! /bin/bash
+echo "Configure application bootstrap here. Do not write secrets into user_data."
+EOT
+
+configuration_disks = [
+  {
+    size        = 40
+    volume_type = "SSD"
+    disk_type   = "SYS"
+  }
+]
+
+group_name      = "demo-as-group"
+policy_name     = "demo-as-policy"
+alarm_rule_name = "demo-as-cpu-alarm"
+alarm_rule_conditions = [
+  {
+    alarm_level         = 2
+    period              = 300
+    filter              = "max"
+    comparison_operator = ">"
+    value               = 80
+    unit                = "%"
+    count               = 1
+    metric_name         = "cpu_util"
+  }
+]

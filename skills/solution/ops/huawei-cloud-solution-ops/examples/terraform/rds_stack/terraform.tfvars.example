@@ -1,0 +1,12 @@
+region_name         = "cn-north-4"
+vpc_name            = "demo-rds-vpc"
+vpc_cidr            = "192.168.0.0/16"
+subnet_name         = "demo-rds-subnet"
+subnet_cidr         = "192.168.1.0/24"
+subnet_gateway_ip   = "192.168.1.1"
+security_group_name = "demo-rds-secgroup"
+rds_name            = "demordsinstance"
+# Required secret input: provide TF_VAR_rds_password at runtime; never store it in this file.
+availability_zone   = "cn-north-4a"
+rds_flavor_vcpus    = 2
+rds_flavor_memory   = 4

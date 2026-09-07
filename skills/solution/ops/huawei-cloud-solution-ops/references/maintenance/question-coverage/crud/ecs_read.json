@@ -1,0 +1,9 @@
+[
+  {
+    "question": "读取指定云服务器的详情，用于后续状态核验。",
+    "relevant_apis": [
+      "ECS-ShowServer"
+    ],
+    "type": "read"
+  }
+]

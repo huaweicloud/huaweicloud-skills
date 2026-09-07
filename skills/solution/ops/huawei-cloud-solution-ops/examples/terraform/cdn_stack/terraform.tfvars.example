@@ -1,0 +1,4 @@
+region_name   = "cn-north-4"
+domain_name   = "cdn.example.com"
+origin_server = "198.51.100.10"
+

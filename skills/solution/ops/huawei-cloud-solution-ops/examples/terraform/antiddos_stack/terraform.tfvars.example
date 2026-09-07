@@ -1,0 +1,7 @@
+region_name           = "cn-north-4"
+bandwidth_name        = "demo-antiddos-bandwidth"
+bandwidth_size        = 5
+topic_name            = "demo-antiddos-topic"
+subscription_endpoint = "alert@example.com"
+subscription_protocol = "email"
+traffic_threshold     = 200

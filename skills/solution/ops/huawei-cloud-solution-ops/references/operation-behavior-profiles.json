@@ -1,0 +1,806 @@
+{
+  "schema_version": 1,
+  "description": "高频华为云 operation 的批量目标、提交回执和异步收敛证据。该文件只提供证据，不执行轮询或任务编排。",
+  "operations": {
+    "ECS.CreateServers": {
+      "service": "ECS",
+      "operation": "CreateServers",
+      "versions": ["v2"],
+      "support_level": "curated",
+      "cardinality": "multi_resource",
+      "request_targets": {
+        "path": "body.server.count",
+        "kind": "requested_count",
+        "identity_available_before_submit": false
+      },
+      "submit_receipt": {
+        "fields": ["job_id", "serverIds[]"],
+        "meaning": "request_accepted_only",
+        "per_item_completion": false,
+        "job_receipts_queryable": true
+      },
+      "batch_result_contract": {
+        "applies_after": "submit_receipt",
+        "initial_item_outcome": "outcome_unknown",
+        "succeeded_when": "Every returned server ID is read back in ACTIVE state and the requested count is accounted for.",
+        "partially_succeeded_when": "Only a proven subset of returned or requested servers reaches ACTIVE while another subset fails or remains unverified.",
+        "failed_when": "The provider explicitly rejects the request before acceptance, or final evidence proves that no requested server was created.",
+        "unknown_when": "The request was accepted but job or resource readback cannot account for every requested server."
+      },
+      "async_convergence": {
+        "mode": "job_then_resource",
+        "agent_direct_poll_supported": true,
+        "public_polling_framework_required": false,
+        "poll": {
+          "service": "ECS",
+          "operation": "ShowJob",
+          "id_source": "response.job_id",
+          "running_states": ["INIT", "PENDING", "RUNNING", "PROCESSING", "WAITING"],
+          "success_states": ["SUCCESS", "SUCCEEDED", "COMPLETE", "COMPLETED"],
+          "failure_states": ["FAIL", "FAILED", "ERROR", "CANCELLED", "CANCELED", "ROLLBACK", "ROLLED_BACK"],
+          "optional_helper": "scripts/hcloud_ecs_wait_job.py"
+        },
+        "resource_readback": {
+          "operations": ["ListServersDetails", "ShowServer"],
+          "target_ids_source": "response.serverIds[]",
+          "success_states": ["ACTIVE"],
+          "required_after_job_success": true
+        }
+      },
+      "evidence_sources": [
+        "generated_hcloud_catalog",
+        "official_sdk_request_response_schema",
+        "curated_ecs_planner_and_verifiers"
+      ]
+    },
+    "ECS.CreatePostPaidServers": {
+      "service": "ECS",
+      "operation": "CreatePostPaidServers",
+      "versions": ["v2"],
+      "support_level": "curated",
+      "cardinality": "multi_resource",
+      "request_targets": {
+        "path": "body.server.count",
+        "kind": "requested_count",
+        "identity_available_before_submit": false
+      },
+      "submit_receipt": {
+        "fields": ["job_id", "serverIds[]"],
+        "meaning": "request_accepted_only",
+        "per_item_completion": false,
+        "job_receipts_queryable": true
+      },
+      "batch_result_contract": {
+        "applies_after": "submit_receipt",
+        "initial_item_outcome": "outcome_unknown",
+        "succeeded_when": "Every returned server ID is read back in ACTIVE state and the requested count is accounted for.",
+        "partially_succeeded_when": "Only a proven subset of returned or requested servers reaches ACTIVE while another subset fails or remains unverified.",
+        "failed_when": "The provider explicitly rejects the request before acceptance, or final evidence proves that no requested server was created.",
+        "unknown_when": "The request was accepted but job/resource readback cannot account for every requested server."
+      },
+      "async_convergence": {
+        "mode": "job_then_resource",
+        "agent_direct_poll_supported": true,
+        "public_polling_framework_required": false,
+        "poll": {
+          "service": "ECS",
+          "operation": "ShowJob",
+          "id_source": "response.job_id",
+          "running_states": ["INIT", "PENDING", "RUNNING", "PROCESSING", "WAITING"],
+          "success_states": ["SUCCESS", "SUCCEEDED", "COMPLETE", "COMPLETED"],
+          "failure_states": ["FAIL", "FAILED", "ERROR", "CANCELLED", "CANCELED", "ROLLBACK", "ROLLED_BACK"],
+          "optional_helper": "scripts/hcloud_ecs_wait_job.py"
+        },
+        "resource_readback": {
+          "operations": ["ListServersDetails", "ShowServer"],
+          "target_ids_source": "response.serverIds[]",
+          "success_states": ["ACTIVE"],
+          "required_after_job_success": true
+        }
+      },
+      "evidence_sources": [
+        "generated_hcloud_catalog",
+        "official_sdk_request_response_schema",
+        "curated_ecs_planner_and_verifiers"
+      ]
+    },
+    "ECS.DeleteServers": {
+      "service": "ECS",
+      "operation": "DeleteServers",
+      "versions": ["v2"],
+      "support_level": "metadata_backed",
+      "cardinality": "multi_resource",
+      "request_targets": {
+        "path": "body.servers[].id",
+        "kind": "resource_ids",
+        "identity_available_before_submit": true,
+        "max_items": 1000
+      },
+      "submit_receipt": {
+        "fields": ["job_id"],
+        "meaning": "batch_request_accepted_only",
+        "per_item_completion": false,
+        "job_receipts_queryable": true
+      },
+      "batch_result_contract": {
+        "applies_after": "submit_receipt",
+        "initial_item_outcome": "outcome_unknown",
+        "succeeded_when": "Every requested server ID is read back as not found after the delete job reaches a success terminal state.",
+        "partially_succeeded_when": "A proven subset of requested server IDs is absent while another subset still exists, fails, or remains unverified.",
+        "failed_when": "The provider explicitly rejects the request before acceptance, or final readback proves that every requested server still exists after a terminal failure.",
+        "unknown_when": "The request was accepted but job or per-server readback cannot account for every requested ID."
+      },
+      "async_convergence": {
+        "mode": "job_then_resource",
+        "agent_direct_poll_supported": true,
+        "public_polling_framework_required": false,
+        "poll": {
+          "service": "ECS",
+          "operation": "ShowJob",
+          "id_source": "response.job_id",
+          "running_states": ["INIT", "PENDING", "RUNNING", "PROCESSING", "WAITING"],
+          "success_states": ["SUCCESS", "SUCCEEDED", "COMPLETE", "COMPLETED"],
+          "failure_states": ["FAIL", "FAILED", "ERROR", "CANCELLED", "CANCELED", "ROLLBACK", "ROLLED_BACK"],
+          "optional_helper": "scripts/hcloud_ecs_wait_job.py"
+        },
+        "resource_readback": {
+          "operations": ["ShowServer", "ListServersDetails"],
+          "target_ids_source": "request.body.servers[].id",
+          "expected": "not_found",
+          "required_after_job_success": true
+        }
+      },
+      "evidence_sources": ["generated_hcloud_catalog", "official_sdk_request_response_schema"]
+    },
+    "EIP.BatchDeletePublicIp": {
+      "service": "EIP",
+      "operation": "BatchDeletePublicIp",
+      "versions": ["v2"],
+      "support_level": "curated",
+      "cardinality": "multi_resource",
+      "request_targets": {
+        "path": "body.publicip_ids[]",
+        "kind": "resource_ids",
+        "identity_available_before_submit": true
+      },
+      "submit_receipt": {
+        "fields": ["job_ids[]"],
+        "meaning": "batch_request_receipts_only",
+        "per_item_completion": false,
+        "job_receipts_queryable": false
+      },
+      "batch_result_contract": {
+        "applies_after": "submit_receipt",
+        "initial_item_outcome": "outcome_unknown",
+        "succeeded_when": "Every requested EIP ID is read back as not found.",
+        "partially_succeeded_when": "A proven subset of requested EIP IDs is absent while another subset still exists, fails, or remains unverified.",
+        "failed_when": "The provider explicitly rejects the request before acceptance, or final readback proves that every requested EIP still exists after an explicit failure.",
+        "unknown_when": "The API returned non-queryable job receipts but per-EIP readback cannot account for every requested ID."
+      },
+      "async_convergence": {
+        "mode": "resource_readback_only",
+        "agent_direct_poll_supported": true,
+        "public_polling_framework_required": false,
+        "poll": null,
+        "resource_readback": {
+          "operations": ["ShowPublicip", "ListPublicips"],
+          "target_ids_source": "request.body.publicip_ids[]",
+          "expected": "not_found",
+          "pagination_must_be_complete_for_list_absence": true,
+          "required_after_submit_receipt": true
+        }
+      },
+      "evidence_sources": [
+        "generated_hcloud_catalog",
+        "official_sdk_request_response_schema",
+        "curated_eip_change_flow"
+      ]
+    },
+    "ELB.BatchDeleteLoadbalancers": {
+      "service": "ELB",
+      "operation": "BatchDeleteLoadbalancers",
+      "versions": ["v3"],
+      "support_level": "metadata_backed",
+      "cardinality": "multi_resource",
+      "request_targets": {
+        "path": "body.loadbalancer_ids[]",
+        "kind": "resource_ids",
+        "identity_available_before_submit": true
+      },
+      "submit_receipt": {
+        "fields": ["job_id", "loadbalancer_ids[]"],
+        "meaning": "batch_request_accepted_only",
+        "per_item_completion": false,
+        "job_receipts_queryable": true
+      },
+      "batch_result_contract": {
+        "applies_after": "submit_receipt",
+        "initial_item_outcome": "outcome_unknown",
+        "succeeded_when": "The ELB job reaches a success terminal state and every requested load balancer is read back as not found.",
+        "partially_succeeded_when": "Only a proven subset of requested load balancers is absent while another subset exists, fails, or remains unverified.",
+        "failed_when": "The provider rejects the request before acceptance, or terminal evidence proves that no requested load balancer was deleted.",
+        "unknown_when": "The job or per-load-balancer readback cannot account for every requested ID."
+      },
+      "async_convergence": {
+        "mode": "job_then_resource",
+        "agent_direct_poll_supported": true,
+        "public_polling_framework_required": false,
+        "poll": {
+          "service": "ELB",
+          "operation": "ShowJob",
+          "id_source": "response.job_id",
+          "running_states": ["INIT", "RUNNING", "ROLLBACKING"],
+          "success_states": ["SUCCESS", "COMPLETE"],
+          "failure_states": ["FAIL", "ROLLBACK_FAIL", "CANCEL"]
+        },
+        "resource_readback": {
+          "operations": ["ShowLoadBalancer", "ListLoadBalancers"],
+          "target_ids_source": "request.body.loadbalancer_ids[]",
+          "expected": "not_found",
+          "pagination_must_be_complete_for_list_absence": true,
+          "required_after_job_success": true
+        }
+      },
+      "evidence_sources": ["generated_hcloud_catalog", "official_sdk_request_response_schema"]
+    },
+    "ELB.BatchDeletePools": {
+      "service": "ELB",
+      "operation": "BatchDeletePools",
+      "versions": ["v3"],
+      "support_level": "metadata_backed",
+      "cardinality": "multi_resource",
+      "request_targets": {
+        "path": "body.pools[]",
+        "kind": "resource_ids",
+        "identity_available_before_submit": true
+      },
+      "submit_receipt": {
+        "fields": ["pools[].id", "pools[].ret_status", "pools[].ret_code"],
+        "item_fields": ["id", "ret_status", "ret_code"],
+        "meaning": "per_item_delete_receipts",
+        "per_item_completion": true,
+        "job_receipts_queryable": false
+      },
+      "batch_result_contract": {
+        "applies_after": "submit_receipt",
+        "initial_item_outcome": "classify_from_ret_status_then_verify",
+        "succeeded_when": "Every requested pool returns successful or not found and is read back as not found.",
+        "partially_succeeded_when": "The per-item receipt or readback proves a mix of deleted/not-found and failed/still-present pools.",
+        "failed_when": "Every requested pool has an explicit failure receipt and remains present.",
+        "unknown_when": "A requested pool is missing from the receipt or cannot be accounted for by readback."
+      },
+      "async_convergence": {
+        "mode": "receipt_then_resource",
+        "agent_direct_poll_supported": true,
+        "public_polling_framework_required": false,
+        "poll": null,
+        "resource_readback": {
+          "operations": ["ShowPool", "ListPools"],
+          "target_ids_source": "request.body.pools[]",
+          "expected": "not_found",
+          "pagination_must_be_complete_for_list_absence": true,
+          "required_after_submit_receipt": true
+        }
+      },
+      "evidence_sources": ["generated_hcloud_catalog", "official_sdk_request_response_schema"]
+    },
+    "EVS.CreateVolume": {
+      "service": "EVS",
+      "operation": "CreateVolume",
+      "versions": ["v2"],
+      "support_level": "curated",
+      "cardinality": "multi_resource",
+      "request_targets": {
+        "path": "body.volume.count",
+        "kind": "requested_count",
+        "identity_available_before_submit": false,
+        "default_items": 1,
+        "max_items": 100
+      },
+      "request_safeguards": ["x-client-token"],
+      "submit_receipt": {
+        "fields": ["job_id", "order_id", "volume_ids[]"],
+        "meaning": "job_or_order_accepted_only",
+        "per_item_completion": false,
+        "job_receipts_queryable": true
+      },
+      "batch_result_contract": {
+        "applies_after": "submit_receipt",
+        "initial_item_outcome": "outcome_unknown",
+        "succeeded_when": "Every returned/requested volume is read back in available or in-use state and the requested count is accounted for.",
+        "partially_succeeded_when": "Only a proven subset of requested volumes reaches a usable state.",
+        "failed_when": "The provider rejects the request, the job fails, or final evidence proves that no requested volume was created.",
+        "unknown_when": "Job/order or per-volume readback cannot account for every requested volume."
+      },
+      "async_convergence": {
+        "mode": "job_or_order_then_resource",
+        "agent_direct_poll_supported": true,
+        "public_polling_framework_required": false,
+        "poll": {
+          "service": "EVS",
+          "operation": "ShowJob",
+          "id_source": "response.job_id_if_present",
+          "running_states": ["INIT", "RUNNING"],
+          "success_states": ["SUCCESS"],
+          "failure_states": ["FAIL"]
+        },
+        "resource_readback": {
+          "operations": ["ShowVolume", "ListVolumes"],
+          "target_ids_source": "response.volume_ids[]",
+          "success_states": ["available", "in-use"],
+          "required_after_job_success": true
+        }
+      },
+      "evidence_sources": ["generated_hcloud_catalog", "official_sdk_request_response_schema", "evs_volume_readiness_playbook"]
+    },
+    "EVS.DeleteVolume": {
+      "service": "EVS",
+      "operation": "DeleteVolume",
+      "versions": ["v2"],
+      "support_level": "curated",
+      "cardinality": "single_resource",
+      "request_targets": {
+        "path": "path.volume_id",
+        "kind": "resource_id",
+        "identity_available_before_submit": true
+      },
+      "submit_receipt": {
+        "fields": ["job_id"],
+        "meaning": "request_accepted_only",
+        "per_item_completion": false,
+        "job_receipts_queryable": true
+      },
+      "resource_result_contract": {
+        "applies_after": "submit_receipt",
+        "initial_outcome": "outcome_unknown",
+        "succeeded_when": "The delete job succeeds and the target volume is read back as not found.",
+        "failed_when": "The provider explicitly rejects the request or the terminal job fails and the volume remains present.",
+        "unknown_when": "The job or target readback cannot prove the final state."
+      },
+      "async_convergence": {
+        "mode": "job_then_resource",
+        "agent_direct_poll_supported": true,
+        "public_polling_framework_required": false,
+        "poll": {
+          "service": "EVS",
+          "operation": "ShowJob",
+          "id_source": "response.job_id",
+          "running_states": ["INIT", "RUNNING"],
+          "success_states": ["SUCCESS"],
+          "failure_states": ["FAIL"]
+        },
+        "resource_readback": {
+          "operations": ["ShowVolume", "ListVolumes"],
+          "target_ids_source": "request.path.volume_id",
+          "expected": "not_found",
+          "pagination_must_be_complete_for_list_absence": true,
+          "required_after_job_success": true
+        }
+      },
+      "evidence_sources": ["generated_hcloud_catalog", "official_sdk_request_response_schema"]
+    },
+    "EVS.BatchResizeVolumes": {
+      "service": "EVS",
+      "operation": "BatchResizeVolumes",
+      "versions": ["v2"],
+      "support_level": "metadata_backed",
+      "cardinality": "multi_resource",
+      "request_targets": {
+        "path": "body.volumes[].id",
+        "kind": "resource_ids",
+        "identity_available_before_submit": true
+      },
+      "submit_receipt": {
+        "fields": ["job_id", "order_id"],
+        "meaning": "batch_request_accepted_only",
+        "per_item_completion": false,
+        "job_receipts_queryable": true
+      },
+      "batch_result_contract": {
+        "applies_after": "submit_receipt",
+        "initial_item_outcome": "outcome_unknown",
+        "succeeded_when": "The job succeeds and every requested volume is read back with its requested new size.",
+        "partially_succeeded_when": "Only a proven subset of requested volumes reaches the requested size.",
+        "failed_when": "The provider rejects the request or terminal evidence proves no requested resize completed.",
+        "unknown_when": "The job or size readback cannot account for every requested volume."
+      },
+      "async_convergence": {
+        "mode": "job_or_order_then_resource",
+        "agent_direct_poll_supported": true,
+        "public_polling_framework_required": false,
+        "poll": {
+          "service": "EVS",
+          "operation": "ShowJob",
+          "id_source": "response.job_id_if_present",
+          "running_states": ["INIT", "RUNNING"],
+          "success_states": ["SUCCESS"],
+          "failure_states": ["FAIL"]
+        },
+        "resource_readback": {
+          "operations": ["ShowVolume", "ListVolumes"],
+          "target_ids_source": "request.body.volumes[].id",
+          "expected": "size_matches_request.body.volumes[].new_size",
+          "required_after_job_success": true
+        }
+      },
+      "evidence_sources": ["generated_hcloud_catalog", "official_sdk_request_response_schema"]
+    },
+    "RDS.CreateInstance": {
+      "service": "RDS",
+      "operation": "CreateInstance",
+      "versions": ["v3"],
+      "support_level": "curated",
+      "cardinality": "single_resource",
+      "request_targets": {
+        "path": "body.name",
+        "kind": "requested_resource",
+        "identity_available_before_submit": false
+      },
+      "request_safeguards": ["x-client-token"],
+      "submit_receipt": {
+        "fields": ["instance.id", "job_id", "order_id"],
+        "meaning": "job_or_order_accepted_only",
+        "per_item_completion": false,
+        "job_receipts_queryable": true
+      },
+      "resource_result_contract": {
+        "applies_after": "submit_receipt",
+        "initial_outcome": "outcome_unknown",
+        "succeeded_when": "The RDS job completes and the instance is read back ACTIVE; network and database connection acceptance remain separate.",
+        "failed_when": "The provider rejects the request or the terminal job/resource state proves creation failed.",
+        "unknown_when": "The job or instance readback cannot prove the final state."
+      },
+      "async_convergence": {
+        "mode": "job_or_order_then_resource",
+        "agent_direct_poll_supported": true,
+        "public_polling_framework_required": false,
+        "poll": {
+          "service": "RDS",
+          "operation": "ListJobInfo",
+          "id_source": "response.job_id_if_present",
+          "running_states": ["Running"],
+          "success_states": ["Completed"],
+          "failure_states": ["Failed"]
+        },
+        "resource_readback": {
+          "operations": ["ListInstances"],
+          "target_ids_source": "response.instance.id",
+          "success_states": ["ACTIVE"],
+          "required_after_job_success": true
+        }
+      },
+      "evidence_sources": ["generated_hcloud_catalog", "official_sdk_request_response_schema", "rds_instance_readiness_playbook"]
+    },
+    "RDS.DeleteInstance": {
+      "service": "RDS",
+      "operation": "DeleteInstance",
+      "versions": ["v3"],
+      "support_level": "curated",
+      "cardinality": "single_resource",
+      "request_targets": {
+        "path": "path.instance_id",
+        "kind": "resource_id",
+        "identity_available_before_submit": true
+      },
+      "submit_receipt": {
+        "fields": ["job_id"],
+        "meaning": "request_accepted_only",
+        "per_item_completion": false,
+        "job_receipts_queryable": true
+      },
+      "resource_result_contract": {
+        "applies_after": "submit_receipt",
+        "initial_outcome": "outcome_unknown",
+        "succeeded_when": "The RDS job completes and the instance is absent from complete readback.",
+        "failed_when": "The provider rejects the request or terminal evidence proves deletion failed and the instance remains present.",
+        "unknown_when": "The job or instance readback cannot prove the final state."
+      },
+      "async_convergence": {
+        "mode": "job_then_resource",
+        "agent_direct_poll_supported": true,
+        "public_polling_framework_required": false,
+        "poll": {
+          "service": "RDS",
+          "operation": "ListJobInfo",
+          "id_source": "response.job_id",
+          "running_states": ["Running"],
+          "success_states": ["Completed"],
+          "failure_states": ["Failed"]
+        },
+        "resource_readback": {
+          "operations": ["ListInstances"],
+          "target_ids_source": "request.path.instance_id",
+          "expected": "not_found",
+          "pagination_must_be_complete_for_list_absence": true,
+          "required_after_job_success": true
+        }
+      },
+      "evidence_sources": ["generated_hcloud_catalog", "official_sdk_request_response_schema"]
+    },
+    "RDS.BatchDeleteInstance": {
+      "service": "RDS",
+      "operation": "BatchDeleteInstance",
+      "versions": ["v3"],
+      "support_level": "metadata_backed",
+      "cardinality": "multi_resource",
+      "request_targets": {
+        "path": "body.instance_ids[]",
+        "kind": "resource_ids",
+        "identity_available_before_submit": true
+      },
+      "submit_receipt": {
+        "fields": ["records[].instance_id", "records[].job_id"],
+        "meaning": "per_item_job_receipts_only",
+        "per_item_completion": false,
+        "job_receipts_queryable": true
+      },
+      "batch_result_contract": {
+        "applies_after": "submit_receipt",
+        "initial_item_outcome": "outcome_unknown",
+        "succeeded_when": "Every per-instance job completes and every requested instance is absent from complete readback.",
+        "partially_succeeded_when": "Only a proven subset of per-instance jobs/readbacks confirms deletion.",
+        "failed_when": "The provider rejects the request or every per-instance job explicitly fails and every instance remains present.",
+        "unknown_when": "Any requested instance lacks a matching receipt, terminal job, or conclusive readback."
+      },
+      "async_convergence": {
+        "mode": "per_item_job_then_resource",
+        "agent_direct_poll_supported": true,
+        "public_polling_framework_required": false,
+        "poll": {
+          "service": "RDS",
+          "operation": "ListJobInfo",
+          "id_source": "response.records[].job_id",
+          "target_correlation": "response.records[].instance_id",
+          "running_states": ["Running"],
+          "success_states": ["Completed"],
+          "failure_states": ["Failed"]
+        },
+        "resource_readback": {
+          "operations": ["ListInstances"],
+          "target_ids_source": "request.body.instance_ids[]",
+          "expected": "not_found",
+          "pagination_must_be_complete_for_list_absence": true,
+          "required_after_job_success": true
+        }
+      },
+      "evidence_sources": ["generated_hcloud_catalog", "official_sdk_request_response_schema"]
+    },
+    "DNS.CreateRecordSet": {
+      "service": "DNS",
+      "operation": "CreateRecordSet",
+      "versions": ["v2"],
+      "support_level": "curated",
+      "cardinality": "single_resource",
+      "request_targets": {
+        "path": "path.zone_id+body.name+body.type",
+        "kind": "resource_identity",
+        "identity_available_before_submit": false
+      },
+      "submit_receipt": {
+        "fields": ["id", "zone_id", "status"],
+        "meaning": "resource_created_or_pending_only",
+        "per_item_completion": false,
+        "job_receipts_queryable": false
+      },
+      "resource_result_contract": {
+        "applies_after": "submit_receipt",
+        "initial_outcome": "outcome_unknown_when_pending",
+        "succeeded_when": "The record set is read back ACTIVE; authoritative DNS and application protocol acceptance remain separate.",
+        "failed_when": "The provider rejects the request or the record set reaches ERROR.",
+        "unknown_when": "The record set remains pending or cannot be read back."
+      },
+      "async_convergence": {
+        "mode": "resource_state_readback",
+        "agent_direct_poll_supported": true,
+        "public_polling_framework_required": false,
+        "poll": null,
+        "resource_readback": {
+          "operations": ["ShowRecordSet", "ListRecordSets"],
+          "target_ids_source": "response.id",
+          "running_states": ["PENDING_CREATE", "PENDING_UPDATE"],
+          "success_states": ["ACTIVE"],
+          "failure_states": ["ERROR", "ILLEGAL", "POLICE"],
+          "required_after_submit_receipt": true
+        }
+      },
+      "evidence_sources": ["generated_hcloud_catalog", "official_sdk_request_response_schema", "dns_zone_record_readiness_playbook"]
+    },
+    "DNS.DeleteRecordSet": {
+      "service": "DNS",
+      "operation": "DeleteRecordSet",
+      "versions": ["v2"],
+      "support_level": "curated",
+      "cardinality": "single_resource",
+      "request_targets": {
+        "path": "path.zone_id+path.recordset_id",
+        "kind": "resource_id",
+        "identity_available_before_submit": true
+      },
+      "submit_receipt": {
+        "fields": ["id", "zone_id", "status"],
+        "meaning": "delete_started_or_completed_only",
+        "per_item_completion": false,
+        "job_receipts_queryable": false
+      },
+      "resource_result_contract": {
+        "applies_after": "submit_receipt",
+        "initial_outcome": "outcome_unknown_when_pending",
+        "succeeded_when": "The target record set is read back as not found.",
+        "failed_when": "The provider rejects the request or the record set reaches ERROR and remains present.",
+        "unknown_when": "The record set remains PENDING_DELETE or cannot be read back conclusively."
+      },
+      "async_convergence": {
+        "mode": "resource_state_readback",
+        "agent_direct_poll_supported": true,
+        "public_polling_framework_required": false,
+        "poll": null,
+        "resource_readback": {
+          "operations": ["ShowRecordSet", "ListRecordSets"],
+          "target_ids_source": "request.path.recordset_id",
+          "running_states": ["PENDING_DELETE"],
+          "failure_states": ["ERROR"],
+          "expected": "not_found",
+          "pagination_must_be_complete_for_list_absence": true,
+          "required_after_submit_receipt": true
+        }
+      },
+      "evidence_sources": ["generated_hcloud_catalog", "official_sdk_request_response_schema", "dns_zone_record_readiness_playbook"]
+    },
+    "VPC.CreateVpc": {
+      "service": "VPC",
+      "operation": "CreateVpc",
+      "versions": ["v2"],
+      "support_level": "curated",
+      "cardinality": "single_resource",
+      "request_targets": {"path": "body.vpc.name+body.vpc.cidr", "kind": "resource_identity", "identity_available_before_submit": false},
+      "submit_receipt": {"fields": ["vpc.id"], "meaning": "resource_returned_not_readback_verified", "per_item_completion": false, "job_receipts_queryable": false},
+      "resource_result_contract": {"applies_after": "submit_receipt", "initial_outcome": "outcome_unknown", "succeeded_when": "The returned VPC is read back with the requested name and CIDR.", "failed_when": "The provider rejects the request or readback proves conflicting final attributes.", "unknown_when": "The VPC cannot be read back conclusively."},
+      "async_convergence": {"mode": "resource_state_readback", "agent_direct_poll_supported": true, "public_polling_framework_required": false, "poll": null, "resource_readback": {"operations": ["ShowVpc", "ListVpcs"], "target_ids_source": "response.vpc.id", "expected": "present", "success_states": ["ACTIVE"], "required_after_submit_receipt": true}},
+      "evidence_sources": ["generated_hcloud_catalog", "official_sdk_request_response_schema", "vpc_network_readiness_playbook"]
+    },
+    "VPC.CreateSubnet": {
+      "service": "VPC",
+      "operation": "CreateSubnet",
+      "versions": ["v2"],
+      "support_level": "curated",
+      "cardinality": "single_resource",
+      "request_targets": {"path": "body.subnet.name+body.subnet.cidr", "kind": "resource_identity", "identity_available_before_submit": false},
+      "submit_receipt": {"fields": ["subnet.id"], "meaning": "resource_returned_not_readback_verified", "per_item_completion": false, "job_receipts_queryable": false},
+      "resource_result_contract": {"applies_after": "submit_receipt", "initial_outcome": "outcome_unknown", "succeeded_when": "The subnet is read back ACTIVE with the requested VPC, CIDR, gateway, and AZ.", "failed_when": "The provider rejects the request or the subnet reaches ERROR.", "unknown_when": "The subnet remains UNKNOWN or cannot be read back."},
+      "async_convergence": {"mode": "resource_state_readback", "agent_direct_poll_supported": true, "public_polling_framework_required": false, "poll": null, "resource_readback": {"operations": ["ShowSubnet", "ListSubnets"], "target_ids_source": "response.subnet.id", "expected": "present", "running_states": ["UNKNOWN"], "success_states": ["ACTIVE"], "failure_states": ["ERROR"], "required_after_submit_receipt": true}},
+      "evidence_sources": ["generated_hcloud_catalog", "official_sdk_request_response_schema", "vpc_network_readiness_playbook"]
+    },
+    "VPC.DeleteSubnet": {
+      "service": "VPC",
+      "operation": "DeleteSubnet",
+      "versions": ["v2"],
+      "support_level": "curated",
+      "cardinality": "single_resource",
+      "request_targets": {"path": "path.subnet_id", "kind": "resource_id", "identity_available_before_submit": true},
+      "submit_receipt": {"fields": [], "meaning": "empty_response_request_accepted_only", "per_item_completion": false, "job_receipts_queryable": false},
+      "resource_result_contract": {"applies_after": "submit_receipt", "initial_outcome": "outcome_unknown", "succeeded_when": "The target subnet is absent from conclusive readback.", "failed_when": "The provider rejects the request or the subnet remains after explicit terminal failure.", "unknown_when": "Absence cannot be proven."},
+      "async_convergence": {"mode": "resource_readback_only", "agent_direct_poll_supported": true, "public_polling_framework_required": false, "poll": null, "resource_readback": {"operations": ["ShowSubnet", "ListSubnets"], "target_ids_source": "request.path.subnet_id", "expected": "not_found", "pagination_must_be_complete_for_list_absence": true, "required_after_submit_receipt": true}},
+      "evidence_sources": ["generated_hcloud_catalog", "official_sdk_request_response_schema"]
+    },
+    "VPC.DeleteVpc": {
+      "service": "VPC",
+      "operation": "DeleteVpc",
+      "versions": ["v2"],
+      "support_level": "curated",
+      "cardinality": "single_resource",
+      "request_targets": {"path": "path.vpc_id", "kind": "resource_id", "identity_available_before_submit": true},
+      "submit_receipt": {"fields": [], "meaning": "empty_response_request_accepted_only", "per_item_completion": false, "job_receipts_queryable": false},
+      "resource_result_contract": {"applies_after": "submit_receipt", "initial_outcome": "outcome_unknown", "succeeded_when": "The target VPC is absent from conclusive readback.", "failed_when": "The provider rejects the request or the VPC remains after explicit terminal failure.", "unknown_when": "Absence cannot be proven."},
+      "async_convergence": {"mode": "resource_readback_only", "agent_direct_poll_supported": true, "public_polling_framework_required": false, "poll": null, "resource_readback": {"operations": ["ShowVpc", "ListVpcs"], "target_ids_source": "request.path.vpc_id", "expected": "not_found", "pagination_must_be_complete_for_list_absence": true, "required_after_submit_receipt": true}},
+      "evidence_sources": ["generated_hcloud_catalog", "official_sdk_request_response_schema"]
+    },
+    "EIP.CreatePublicip": {
+      "service": "EIP",
+      "operation": "CreatePublicip",
+      "versions": ["v2"],
+      "support_level": "curated",
+      "cardinality": "single_resource",
+      "request_targets": {"path": "body.publicip+body.bandwidth", "kind": "resource_spec", "identity_available_before_submit": false},
+      "submit_receipt": {"fields": ["publicip.id"], "meaning": "resource_returned_not_readback_verified", "per_item_completion": false, "job_receipts_queryable": false},
+      "resource_result_contract": {"applies_after": "submit_receipt", "initial_outcome": "outcome_unknown", "succeeded_when": "The EIP is read back with the requested type, bandwidth, and binding state.", "failed_when": "The provider rejects the request or explicit readback proves incompatible attributes.", "unknown_when": "The EIP cannot be read back conclusively."},
+      "async_convergence": {"mode": "resource_state_readback", "agent_direct_poll_supported": true, "public_polling_framework_required": false, "poll": null, "resource_readback": {"operations": ["ShowPublicip", "ListPublicips"], "target_ids_source": "response.publicip.id", "expected": "present", "running_states": ["PENDING_CREATE", "NOTIFYING", "BINDING", "PENDING_UPDATE"], "success_states": ["DOWN", "ACTIVE", "ELB", "VPN"], "failure_states": ["ERROR", "BIND_ERROR", "FREEZED"], "required_after_submit_receipt": true}},
+      "evidence_sources": ["generated_hcloud_catalog", "official_sdk_request_response_schema", "eip_public_ip_readiness_playbook"]
+    },
+    "EIP.DeletePublicip": {
+      "service": "EIP",
+      "operation": "DeletePublicip",
+      "versions": ["v2"],
+      "support_level": "curated",
+      "cardinality": "single_resource",
+      "request_targets": {"path": "path.publicip_id", "kind": "resource_id", "identity_available_before_submit": true},
+      "submit_receipt": {"fields": [], "meaning": "empty_response_request_accepted_only", "per_item_completion": false, "job_receipts_queryable": false},
+      "resource_result_contract": {"applies_after": "submit_receipt", "initial_outcome": "outcome_unknown", "succeeded_when": "The target EIP is absent and related bandwidth billing state is reconciled.", "failed_when": "The provider rejects the request or the EIP remains after explicit terminal failure.", "unknown_when": "EIP absence cannot be proven."},
+      "async_convergence": {"mode": "resource_readback_only", "agent_direct_poll_supported": true, "public_polling_framework_required": false, "poll": null, "resource_readback": {"operations": ["ShowPublicip", "ListPublicips"], "target_ids_source": "request.path.publicip_id", "expected": "not_found", "pagination_must_be_complete_for_list_absence": true, "required_after_submit_receipt": true}},
+      "evidence_sources": ["generated_hcloud_catalog", "official_sdk_request_response_schema", "eip_cost_optimization_playbook"]
+    },
+    "EVS.ResizeVolume": {
+      "service": "EVS",
+      "operation": "ResizeVolume",
+      "versions": ["v2"],
+      "support_level": "curated",
+      "cardinality": "single_resource",
+      "request_targets": {"path": "path.volume_id", "kind": "resource_id", "identity_available_before_submit": true},
+      "submit_receipt": {"fields": ["job_id", "order_id"], "meaning": "job_or_order_accepted_only", "per_item_completion": false, "job_receipts_queryable": true},
+      "resource_result_contract": {"applies_after": "submit_receipt", "initial_outcome": "outcome_unknown", "succeeded_when": "The job succeeds and the volume size matches the requested new size.", "failed_when": "The provider rejects the request or the job fails.", "unknown_when": "The job or volume size cannot be verified."},
+      "async_convergence": {"mode": "job_or_order_then_resource", "agent_direct_poll_supported": true, "public_polling_framework_required": false, "poll": {"service": "EVS", "operation": "ShowJob", "id_source": "response.job_id_if_present", "running_states": ["INIT", "RUNNING"], "success_states": ["SUCCESS"], "failure_states": ["FAIL"]}, "resource_readback": {"operations": ["ShowVolume", "ListVolumes"], "target_ids_source": "request.path.volume_id", "expected": "size_matches_requested", "required_after_job_success": true}},
+      "evidence_sources": ["generated_hcloud_catalog", "official_sdk_request_response_schema", "evs_volume_readiness_playbook"]
+    },
+    "ELB.CreateLoadBalancer": {
+      "service": "ELB",
+      "operation": "CreateLoadBalancer",
+      "versions": ["v3"],
+      "support_level": "curated",
+      "cardinality": "single_resource",
+      "request_targets": {"path": "body.loadbalancer.name+body.loadbalancer.vip_subnet_cidr_id", "kind": "resource_identity", "identity_available_before_submit": false},
+      "submit_receipt": {"fields": ["loadbalancer.id", "loadbalancer_id", "order_id", "request_id"], "meaning": "resource_or_order_accepted_only", "per_item_completion": false, "job_receipts_queryable": false},
+      "resource_result_contract": {"applies_after": "submit_receipt", "initial_outcome": "outcome_unknown", "succeeded_when": "The load balancer is read back ACTIVE with the requested network and flavor attributes.", "failed_when": "The provider rejects the request or the resource reaches ERROR.", "unknown_when": "Provisioning remains non-terminal or readback is unavailable."},
+      "async_convergence": {"mode": "resource_state_readback", "agent_direct_poll_supported": true, "public_polling_framework_required": false, "poll": null, "resource_readback": {"operations": ["ShowLoadBalancer", "ShowLoadBalancerStatus", "ListLoadBalancers"], "target_ids_source": "response.loadbalancer.id", "expected": "present", "running_states": ["PENDING_CREATE", "PENDING_UPDATE"], "success_states": ["ACTIVE"], "failure_states": ["ERROR"], "required_after_submit_receipt": true}},
+      "evidence_sources": ["generated_hcloud_catalog", "official_sdk_request_response_schema", "elb_http_backend_readiness_playbook"]
+    },
+    "ELB.DeleteLoadBalancer": {
+      "service": "ELB",
+      "operation": "DeleteLoadBalancer",
+      "versions": ["v3"],
+      "support_level": "curated",
+      "cardinality": "single_resource",
+      "request_targets": {"path": "path.loadbalancer_id", "kind": "resource_id", "identity_available_before_submit": true},
+      "submit_receipt": {"fields": [], "meaning": "empty_response_request_accepted_only", "per_item_completion": false, "job_receipts_queryable": false},
+      "resource_result_contract": {"applies_after": "submit_receipt", "initial_outcome": "outcome_unknown", "succeeded_when": "The load balancer is absent from conclusive readback.", "failed_when": "The provider rejects the request or the resource remains after explicit terminal failure.", "unknown_when": "Deletion or absence cannot be proven."},
+      "async_convergence": {"mode": "resource_readback_only", "agent_direct_poll_supported": true, "public_polling_framework_required": false, "poll": null, "resource_readback": {"operations": ["ShowLoadBalancer", "ListLoadBalancers"], "target_ids_source": "request.path.loadbalancer_id", "expected": "not_found", "pagination_must_be_complete_for_list_absence": true, "required_after_submit_receipt": true}},
+      "evidence_sources": ["generated_hcloud_catalog", "official_sdk_request_response_schema", "elb_guide"]
+    },
+    "ELB.CreateMember": {
+      "service": "ELB",
+      "operation": "CreateMember",
+      "versions": ["v3"],
+      "support_level": "curated",
+      "cardinality": "single_resource",
+      "request_targets": {"path": "path.pool_id+body.member.address+body.member.protocol_port", "kind": "resource_identity", "identity_available_before_submit": false},
+      "submit_receipt": {"fields": ["member.id", "request_id"], "meaning": "resource_returned_not_readback_verified", "per_item_completion": false, "job_receipts_queryable": false},
+      "resource_result_contract": {"applies_after": "submit_receipt", "initial_outcome": "outcome_unknown", "succeeded_when": "The member is read back and backend health/business acceptance is separately verified.", "failed_when": "The provider rejects the request or resource readback reaches ERROR.", "unknown_when": "The member cannot be read back conclusively."},
+      "async_convergence": {"mode": "resource_state_readback", "agent_direct_poll_supported": true, "public_polling_framework_required": false, "poll": null, "resource_readback": {"operations": ["ShowMember", "ListMembers"], "target_ids_source": "response.member.id", "expected": "present", "success_states": ["ONLINE"], "required_after_submit_receipt": true}},
+      "evidence_sources": ["generated_hcloud_catalog", "official_sdk_request_response_schema", "elb_http_backend_readiness_playbook"]
+    },
+    "ELB.DeleteMember": {
+      "service": "ELB",
+      "operation": "DeleteMember",
+      "versions": ["v3"],
+      "support_level": "curated",
+      "cardinality": "single_resource",
+      "request_targets": {"path": "path.pool_id+path.member_id", "kind": "resource_id", "identity_available_before_submit": true},
+      "submit_receipt": {"fields": [], "meaning": "empty_response_request_accepted_only", "per_item_completion": false, "job_receipts_queryable": false},
+      "resource_result_contract": {"applies_after": "submit_receipt", "initial_outcome": "outcome_unknown", "succeeded_when": "The member is absent from the target pool.", "failed_when": "The provider rejects the request or the member remains after explicit failure.", "unknown_when": "Absence cannot be proven."},
+      "async_convergence": {"mode": "resource_readback_only", "agent_direct_poll_supported": true, "public_polling_framework_required": false, "poll": null, "resource_readback": {"operations": ["ShowMember", "ListMembers"], "target_ids_source": "request.path.member_id", "expected": "not_found", "pagination_must_be_complete_for_list_absence": true, "required_after_submit_receipt": true}},
+      "evidence_sources": ["generated_hcloud_catalog", "official_sdk_request_response_schema", "elb_guide"]
+    },
+    "ELB.CreateHealthMonitor": {
+      "service": "ELB",
+      "operation": "CreateHealthMonitor",
+      "versions": ["v3"],
+      "support_level": "curated",
+      "cardinality": "single_resource",
+      "request_targets": {"path": "body.healthmonitor.pool_id", "kind": "parent_resource_id", "identity_available_before_submit": false},
+      "submit_receipt": {"fields": ["healthmonitor.id", "request_id"], "meaning": "resource_returned_not_readback_verified", "per_item_completion": false, "job_receipts_queryable": false},
+      "resource_result_contract": {"applies_after": "submit_receipt", "initial_outcome": "outcome_unknown", "succeeded_when": "The monitor is read back with the requested pool and probe settings.", "failed_when": "The provider rejects the request or readback reaches ERROR.", "unknown_when": "The monitor cannot be read back conclusively."},
+      "async_convergence": {"mode": "resource_state_readback", "agent_direct_poll_supported": true, "public_polling_framework_required": false, "poll": null, "resource_readback": {"operations": ["ShowHealthMonitor", "ListHealthMonitors"], "target_ids_source": "response.healthmonitor.id", "expected": "present", "required_after_submit_receipt": true}},
+      "evidence_sources": ["generated_hcloud_catalog", "official_sdk_request_response_schema", "elb_guide"]
+    },
+    "ELB.DeleteHealthMonitor": {
+      "service": "ELB",
+      "operation": "DeleteHealthMonitor",
+      "versions": ["v3"],
+      "support_level": "curated",
+      "cardinality": "single_resource",
+      "request_targets": {"path": "path.healthmonitor_id", "kind": "resource_id", "identity_available_before_submit": true},
+      "submit_receipt": {"fields": [], "meaning": "empty_response_request_accepted_only", "per_item_completion": false, "job_receipts_queryable": false},
+      "resource_result_contract": {"applies_after": "submit_receipt", "initial_outcome": "outcome_unknown", "succeeded_when": "The monitor is absent from conclusive readback.", "failed_when": "The provider rejects the request or the monitor remains after explicit failure.", "unknown_when": "Absence cannot be proven."},
+      "async_convergence": {"mode": "resource_readback_only", "agent_direct_poll_supported": true, "public_polling_framework_required": false, "poll": null, "resource_readback": {"operations": ["ShowHealthMonitor", "ListHealthMonitors"], "target_ids_source": "request.path.healthmonitor_id", "expected": "not_found", "pagination_must_be_complete_for_list_absence": true, "required_after_submit_receipt": true}},
+      "evidence_sources": ["generated_hcloud_catalog", "official_sdk_request_response_schema", "elb_guide"]
+    }
+  }
+}

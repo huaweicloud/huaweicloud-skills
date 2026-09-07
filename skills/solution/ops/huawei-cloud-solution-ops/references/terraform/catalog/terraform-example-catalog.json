@@ -1,0 +1,2907 @@
+{
+  "schema_version": 1,
+  "description": "Terraform example catalog. Use this for routing; do not browse every example by default.",
+  "example_count": 73,
+  "default_route_count": 12,
+  "examples": [
+    {
+      "id": "antiddos_stack",
+      "path": "examples/terraform/antiddos_stack",
+      "category": "security",
+      "services": [
+        "AntiDDoS",
+        "SMN",
+        "VPC"
+      ],
+      "intent": [
+        "antiddos",
+        "create",
+        "iac",
+        "security",
+        "smn",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "这是一个最小可运行的华为云 Terraform 示例，用于创建：",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf",
+        "outputs.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "outputs.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "aom_stack",
+      "path": "examples/terraform/aom_stack",
+      "category": "observability",
+      "services": [
+        "AOM",
+        "SMN"
+      ],
+      "intent": [
+        "aom",
+        "create",
+        "iac",
+        "observability",
+        "smn",
+        "terraform"
+      ],
+      "recommended_for": "This example provides best practice code for using Terraform to configure AOM alarm action callback through SMN (Simple",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "apig_stack",
+      "path": "examples/terraform/apig_stack",
+      "category": "platform",
+      "services": [
+        "APIG",
+        "VPC"
+      ],
+      "intent": [
+        "apig",
+        "create",
+        "iac",
+        "platform",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "这是一个最小可运行的华为云 Terraform 示例，用于创建：",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf",
+        "outputs.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "outputs.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "as_stack",
+      "path": "examples/terraform/as_stack",
+      "category": "compute",
+      "services": [
+        "AS",
+        "VPC"
+      ],
+      "intent": [
+        "as",
+        "compute",
+        "create",
+        "iac",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "This example provides best practice code for using Terraform to create an Auto Scaling group with configuration in",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "bms_stack",
+      "path": "examples/terraform/bms_stack",
+      "category": "compute",
+      "services": [
+        "BMS",
+        "VPC"
+      ],
+      "intent": [
+        "bms",
+        "compute",
+        "create",
+        "iac",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "This example provides best practice code for using Terraform to create a BMS instance in HuaweiCloud.",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "cbh_stack",
+      "path": "examples/terraform/cbh_stack",
+      "category": "security",
+      "services": [
+        "CBH",
+        "VPC"
+      ],
+      "intent": [
+        "cbh",
+        "create",
+        "iac",
+        "security",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "This example provides best practice code for using Terraform to create a CBH basic instance in HuaweiCloud.",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "cbr_stack",
+      "path": "examples/terraform/cbr_stack",
+      "category": "governance",
+      "services": [
+        "CBR",
+        "VPC"
+      ],
+      "intent": [
+        "cbr",
+        "create",
+        "governance",
+        "iac",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "这是一个最小可运行的华为云 Terraform 示例，用于创建：",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf",
+        "outputs.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "outputs.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "cc_stack",
+      "path": "examples/terraform/cc_stack",
+      "category": "network",
+      "services": [
+        "CC"
+      ],
+      "intent": [
+        "cc",
+        "create",
+        "iac",
+        "network",
+        "terraform"
+      ],
+      "recommended_for": "This example provides best practice code for using Terraform to create a Cloud Connect (CC) bandwidth package in HuaweiCloud.",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "cce_addon_stack",
+      "path": "examples/terraform/cce_addon_stack",
+      "category": "container",
+      "services": [
+        "CCE"
+      ],
+      "intent": [
+        "addon",
+        "cce",
+        "container",
+        "create",
+        "iac",
+        "terraform"
+      ],
+      "recommended_for": "这个示例从上游 Terraform 资产库中吸收并改写，用于给现有 CCE 集群安装或管理 autoscaler addon。",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "cce_coredns_addon_stack",
+      "path": "examples/terraform/cce_coredns_addon_stack",
+      "category": "container",
+      "services": [
+        "CCE"
+      ],
+      "intent": [
+        "addon",
+        "cce",
+        "container",
+        "coredns",
+        "create",
+        "iac",
+        "terraform"
+      ],
+      "recommended_for": "这个示例复用现网 CCE 集群，管理 CoreDNS addon。",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "cce_node_partition_stack",
+      "path": "examples/terraform/cce_node_partition_stack",
+      "category": "container",
+      "services": [
+        "CCE"
+      ],
+      "intent": [
+        "cce",
+        "container",
+        "create",
+        "iac",
+        "partition",
+        "terraform"
+      ],
+      "recommended_for": "这个示例吸收上游 `cce/node-partition` 变体，用于在现网 CCE 集群上创建 partition，并把 node pool 放入该 partition。",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "cce_node_pool_reuse_stack",
+      "path": "examples/terraform/cce_node_pool_reuse_stack",
+      "category": "reuse",
+      "services": [
+        "CCE"
+      ],
+      "intent": [
+        "cce",
+        "create",
+        "iac",
+        "node_pool",
+        "reuse",
+        "reuse_existing",
+        "terraform"
+      ],
+      "recommended_for": "这个示例复用现网 CCE 集群，只新增 node pool。",
+      "complexity": "high",
+      "default_route": false,
+      "requires_existing_resources": true,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "cce_node_pool_stack",
+      "path": "examples/terraform/cce_node_pool_stack",
+      "category": "container",
+      "services": [
+        "CCE",
+        "VPC"
+      ],
+      "intent": [
+        "cce",
+        "container",
+        "create",
+        "iac",
+        "node_pool",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "这是一个最小可运行的华为云 Terraform 示例，用于创建：",
+      "complexity": "low",
+      "default_route": true,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf",
+        "outputs.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "outputs.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "cce_stack",
+      "path": "examples/terraform/cce_stack",
+      "category": "container",
+      "services": [
+        "CCE",
+        "VPC"
+      ],
+      "intent": [
+        "cce",
+        "container",
+        "create",
+        "iac",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "这是一个最小可运行的华为云 Terraform 示例，用于创建：",
+      "complexity": "low",
+      "default_route": true,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf",
+        "outputs.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "outputs.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "cce_turbo_cluster_stack",
+      "path": "examples/terraform/cce_turbo_cluster_stack",
+      "category": "container",
+      "services": [
+        "CCE",
+        "VPC"
+      ],
+      "intent": [
+        "cce",
+        "container",
+        "create",
+        "iac",
+        "terraform",
+        "turbo",
+        "vpc"
+      ],
+      "recommended_for": "这个示例吸收上游 `cce/turbo-cluster` 变体，用于创建 CCE Turbo/ENI 网络形态的集群。",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "cci_stack",
+      "path": "examples/terraform/cci_stack",
+      "category": "container",
+      "services": [
+        "CCI",
+        "VPC"
+      ],
+      "intent": [
+        "cci",
+        "container",
+        "create",
+        "iac",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "This example provides best practice code for using Terraform to create a Cloud Container Instance (CCI) network",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "cdn_stack",
+      "path": "examples/terraform/cdn_stack",
+      "category": "network",
+      "services": [
+        "CDN"
+      ],
+      "intent": [
+        "cdn",
+        "create",
+        "iac",
+        "network",
+        "terraform"
+      ],
+      "recommended_for": "这是一个最小可运行的华为云 Terraform 示例，用于创建：",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf",
+        "outputs.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "outputs.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "ces_stack",
+      "path": "examples/terraform/ces_stack",
+      "category": "observability",
+      "services": [
+        "CES"
+      ],
+      "intent": [
+        "ces",
+        "create",
+        "iac",
+        "observability",
+        "terraform"
+      ],
+      "recommended_for": "This example provides best practice code for using Terraform to create an alarm template in HuaweiCloud CES service.",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "coc_stack",
+      "path": "examples/terraform/coc_stack",
+      "category": "operations",
+      "services": [
+        "COC"
+      ],
+      "intent": [
+        "coc",
+        "create",
+        "iac",
+        "operations",
+        "terraform"
+      ],
+      "recommended_for": "This example provides best practice code for using Terraform to create a COC script in HuaweiCloud.",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "cts_stack",
+      "path": "examples/terraform/cts_stack",
+      "category": "governance",
+      "services": [
+        "CTS",
+        "OBS"
+      ],
+      "intent": [
+        "create",
+        "cts",
+        "governance",
+        "iac",
+        "obs",
+        "terraform"
+      ],
+      "recommended_for": "This example provides best practice code for using Terraform to create a CTS (Cloud Trace Service) system tracker in",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "dc_stack",
+      "path": "examples/terraform/dc_stack",
+      "category": "network",
+      "services": [
+        "DC"
+      ],
+      "intent": [
+        "create",
+        "dc",
+        "iac",
+        "network",
+        "terraform"
+      ],
+      "recommended_for": "This example provides best practice code for using Terraform to create a DC (Direct Connect) connect gateway in HuaweiCloud.",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "dcs_stack",
+      "path": "examples/terraform/dcs_stack",
+      "category": "database",
+      "services": [
+        "DCS",
+        "VPC"
+      ],
+      "intent": [
+        "create",
+        "database",
+        "dcs",
+        "iac",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "这是一个最小可运行的华为云 Terraform 示例，用于创建：",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf",
+        "outputs.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "outputs.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "deh_stack",
+      "path": "examples/terraform/deh_stack",
+      "category": "compute",
+      "services": [
+        "DEH"
+      ],
+      "intent": [
+        "compute",
+        "create",
+        "deh",
+        "iac",
+        "terraform"
+      ],
+      "recommended_for": "This example provides best practice code for using Terraform to create a instance",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "dew_stack",
+      "path": "examples/terraform/dew_stack",
+      "category": "security",
+      "services": [
+        "DEW"
+      ],
+      "intent": [
+        "create",
+        "dew",
+        "iac",
+        "security",
+        "terraform"
+      ],
+      "recommended_for": "This example provides best practice code for using Terraform to create a KMS key in HuaweiCloud.",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "dms_stack",
+      "path": "examples/terraform/dms_stack",
+      "category": "platform",
+      "services": [
+        "DMS",
+        "VPC"
+      ],
+      "intent": [
+        "create",
+        "dms",
+        "iac",
+        "platform",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "This example provides best practice code for using Terraform to create a DMS RabbitMQ basic instance in HuaweiCloud.",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "dns_stack",
+      "path": "examples/terraform/dns_stack",
+      "category": "network",
+      "services": [
+        "DNS"
+      ],
+      "intent": [
+        "create",
+        "dns",
+        "iac",
+        "network",
+        "terraform"
+      ],
+      "recommended_for": "这是一个最小可运行的华为云 Terraform 示例，用于创建：",
+      "complexity": "low",
+      "default_route": true,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf",
+        "outputs.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "outputs.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "ecs_elb_rds_stack",
+      "path": "examples/terraform/ecs_elb_rds_stack",
+      "category": "compute",
+      "services": [
+        "ECS",
+        "ELB",
+        "RDS",
+        "VPC"
+      ],
+      "intent": [
+        "compute",
+        "create",
+        "ecs",
+        "elb",
+        "iac",
+        "rds",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "这个示例提供一个最小 Web 服务拓扑：VPC/Subnet、安全组、ECS、RDS、ELB、listener、pool、member 和 health monitor。",
+      "complexity": "high",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "ecs_reuse_stack",
+      "path": "examples/terraform/ecs_reuse_stack",
+      "category": "reuse",
+      "services": [
+        "ECS",
+        "VPC"
+      ],
+      "intent": [
+        "create",
+        "ecs",
+        "iac",
+        "reuse",
+        "reuse_existing",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "这是一个“复用现网网络资源”的华为云 Terraform 示例，用于：",
+      "complexity": "low",
+      "default_route": true,
+      "requires_existing_resources": true,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf",
+        "outputs.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "outputs.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "ecs_stack",
+      "path": "examples/terraform/ecs_stack",
+      "category": "compute",
+      "services": [
+        "ECS",
+        "VPC"
+      ],
+      "intent": [
+        "compute",
+        "create",
+        "ecs",
+        "iac",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "这是一个最小可运行的华为云 Terraform 示例，用于创建：",
+      "complexity": "low",
+      "default_route": true,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf",
+        "outputs.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "outputs.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "eg_stack",
+      "path": "examples/terraform/eg_stack",
+      "category": "platform",
+      "services": [
+        "EG"
+      ],
+      "intent": [
+        "create",
+        "eg",
+        "iac",
+        "platform",
+        "terraform"
+      ],
+      "recommended_for": "This example provides best practice code for using Terraform to create custom Event Grid (EG) resources in",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "eip_stack",
+      "path": "examples/terraform/eip_stack",
+      "category": "network",
+      "services": [
+        "EIP",
+        "VPC"
+      ],
+      "intent": [
+        "create",
+        "eip",
+        "iac",
+        "network",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "这是一个最小可运行的华为云 Terraform 示例，用于创建一个独立 EIP。",
+      "complexity": "low",
+      "default_route": true,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf",
+        "outputs.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "outputs.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "elb_as_stack",
+      "path": "examples/terraform/elb_as_stack",
+      "category": "compute",
+      "services": [
+        "AS",
+        "CES",
+        "ELB",
+        "VPC"
+      ],
+      "intent": [
+        "as",
+        "ces",
+        "compute",
+        "create",
+        "elb",
+        "iac",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "这个示例从上游 Terraform 资产库中吸收并改写，用于创建独享型 ELB、监听器、后端池、AS 配置、AS 组和 CES 触发的伸缩策略。",
+      "complexity": "high",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "elb_member_stack",
+      "path": "examples/terraform/elb_member_stack",
+      "category": "network",
+      "services": [
+        "ELB",
+        "VPC"
+      ],
+      "intent": [
+        "backend_member",
+        "create",
+        "elb",
+        "iac",
+        "network",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "这是一个最小可运行的华为云 Terraform 示例，用于创建：",
+      "complexity": "low",
+      "default_route": true,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf",
+        "outputs.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "outputs.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "elb_reuse_stack",
+      "path": "examples/terraform/elb_reuse_stack",
+      "category": "reuse",
+      "services": [
+        "ELB"
+      ],
+      "intent": [
+        "create",
+        "elb",
+        "iac",
+        "reuse",
+        "reuse_existing",
+        "terraform"
+      ],
+      "recommended_for": "这个示例用于复用现网 ELB，只新增 listener、pool、member 和 health monitor。",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": true,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "elb_stack",
+      "path": "examples/terraform/elb_stack",
+      "category": "network",
+      "services": [
+        "ELB",
+        "VPC"
+      ],
+      "intent": [
+        "create",
+        "elb",
+        "iac",
+        "network",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "这是一个最小可运行的华为云 Terraform 示例，用于创建：",
+      "complexity": "low",
+      "default_route": true,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf",
+        "outputs.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "outputs.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "er_stack",
+      "path": "examples/terraform/er_stack",
+      "category": "network",
+      "services": [
+        "ER",
+        "VPC"
+      ],
+      "intent": [
+        "create",
+        "er",
+        "iac",
+        "network",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "这是一个最小可运行的华为云 Terraform 示例，用于创建：",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf",
+        "outputs.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "outputs.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "esw_stack",
+      "path": "examples/terraform/esw_stack",
+      "category": "network",
+      "services": [
+        "ESW",
+        "VPC"
+      ],
+      "intent": [
+        "create",
+        "esw",
+        "iac",
+        "network",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "This example provides best practice code for using Terraform to create an instance in HuaweiCloud ESW service.",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "evs_stack",
+      "path": "examples/terraform/evs_stack",
+      "category": "storage",
+      "services": [
+        "EVS"
+      ],
+      "intent": [
+        "create",
+        "evs",
+        "iac",
+        "storage",
+        "terraform"
+      ],
+      "recommended_for": "这是一个最小可运行的华为云 Terraform 示例，用于创建：",
+      "complexity": "low",
+      "default_route": true,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf",
+        "outputs.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "outputs.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "fgs_stack",
+      "path": "examples/terraform/fgs_stack",
+      "category": "platform",
+      "services": [
+        "EG",
+        "FGS",
+        "OBS"
+      ],
+      "intent": [
+        "create",
+        "eg",
+        "fgs",
+        "iac",
+        "obs",
+        "platform",
+        "terraform"
+      ],
+      "recommended_for": "This example provides best practice code for using Terraform to create a FunctionGraph OBS trigger for automatic image",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "hss_stack",
+      "path": "examples/terraform/hss_stack",
+      "category": "security",
+      "services": [
+        "HSS",
+        "VPC"
+      ],
+      "intent": [
+        "create",
+        "hss",
+        "iac",
+        "security",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "This example provides best practice code for using Terraform to create an HSS host group in HuaweiCloud.",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "iam_stack",
+      "path": "examples/terraform/iam_stack",
+      "category": "governance",
+      "services": [
+        "IAM"
+      ],
+      "intent": [
+        "create",
+        "governance",
+        "iac",
+        "iam",
+        "terraform"
+      ],
+      "recommended_for": "This example provides best practice code for using Terraform to authorize users through IAM user group in HuaweiCloud",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "identity_center_stack",
+      "path": "examples/terraform/identity_center_stack",
+      "category": "governance",
+      "services": [
+        "IdentityCenter"
+      ],
+      "intent": [
+        "create",
+        "governance",
+        "iac",
+        "identitycenter",
+        "terraform"
+      ],
+      "recommended_for": "This example provides best practice code for using Terraform to create an Identity Center group in HuaweiCloud.",
+      "complexity": "high",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "ims_stack",
+      "path": "examples/terraform/ims_stack",
+      "category": "image",
+      "services": [
+        "IMS",
+        "OBS"
+      ],
+      "intent": [
+        "create",
+        "iac",
+        "image",
+        "ims",
+        "obs",
+        "terraform"
+      ],
+      "recommended_for": "This example demonstrates how to query all images owned by the current user and export them to an OBS bucket",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "lts_stack",
+      "path": "examples/terraform/lts_stack",
+      "category": "observability",
+      "services": [
+        "LTS"
+      ],
+      "intent": [
+        "create",
+        "iac",
+        "lts",
+        "observability",
+        "terraform"
+      ],
+      "recommended_for": "这是一个最小可运行的华为云 Terraform 示例，用于创建：",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf",
+        "outputs.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "outputs.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "nat_dnat_stack",
+      "path": "examples/terraform/nat_dnat_stack",
+      "category": "network",
+      "services": [
+        "NAT",
+        "VPC"
+      ],
+      "intent": [
+        "create",
+        "iac",
+        "inbound",
+        "nat",
+        "network",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "这是一个最小可运行的华为云 Terraform 示例，用于创建：",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf",
+        "outputs.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "outputs.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "nat_reuse_stack",
+      "path": "examples/terraform/nat_reuse_stack",
+      "category": "reuse",
+      "services": [
+        "NAT"
+      ],
+      "intent": [
+        "create",
+        "iac",
+        "nat",
+        "reuse",
+        "reuse_existing",
+        "terraform"
+      ],
+      "recommended_for": "这个示例用于复用现网 NAT Gateway 和 EIP，只新增 SNAT/DNAT 规则。",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": true,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "nat_snat_stack",
+      "path": "examples/terraform/nat_snat_stack",
+      "category": "network",
+      "services": [
+        "NAT",
+        "VPC"
+      ],
+      "intent": [
+        "create",
+        "iac",
+        "nat",
+        "network",
+        "outbound",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "这是一个最小可运行的华为云 Terraform 示例，用于创建：",
+      "complexity": "low",
+      "default_route": true,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf",
+        "outputs.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "outputs.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "nat_vpc_peering_stack",
+      "path": "examples/terraform/nat_vpc_peering_stack",
+      "category": "network",
+      "services": [
+        "NAT",
+        "VPC"
+      ],
+      "intent": [
+        "create",
+        "iac",
+        "nat",
+        "network",
+        "peering",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "这个示例从上游 Terraform 资产库中吸收并改写，用于演示两个 VPC 通过 peering 互联，并由一个 NAT Gateway 提供 SNAT/DNAT 能力。",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "obs_cdn_dns_stack",
+      "path": "examples/terraform/obs_cdn_dns_stack",
+      "category": "network",
+      "services": [
+        "CDN",
+        "DNS",
+        "OBS"
+      ],
+      "intent": [
+        "cdn",
+        "create",
+        "dns",
+        "iac",
+        "network",
+        "obs",
+        "static_site",
+        "terraform"
+      ],
+      "recommended_for": "这个示例把 OBS 静态网站、CDN 加速域名和 DNS CNAME 记录放在一个受控链路里。",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "obs_stack",
+      "path": "examples/terraform/obs_stack",
+      "category": "storage",
+      "services": [
+        "OBS"
+      ],
+      "intent": [
+        "create",
+        "iac",
+        "obs",
+        "storage",
+        "terraform"
+      ],
+      "recommended_for": "这是一个最小可运行的华为云 Terraform 示例，用于创建一个 OBS Bucket，并启用一组常见的基础能力：",
+      "complexity": "low",
+      "default_route": true,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf",
+        "outputs.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "outputs.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "oms_stack",
+      "path": "examples/terraform/oms_stack",
+      "category": "storage",
+      "services": [
+        "OBS",
+        "OMS"
+      ],
+      "intent": [
+        "create",
+        "iac",
+        "obs",
+        "oms",
+        "storage",
+        "terraform"
+      ],
+      "recommended_for": "This example provides best practice code for using Terraform to create an Object Migration Service (OMS) migration task",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "organizations_stack",
+      "path": "examples/terraform/organizations_stack",
+      "category": "governance",
+      "services": [
+        "Organizations"
+      ],
+      "intent": [
+        "create",
+        "governance",
+        "iac",
+        "organizations",
+        "terraform"
+      ],
+      "recommended_for": "这是一个最小可运行的华为云 Terraform 示例，用于创建：",
+      "complexity": "high",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf",
+        "outputs.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "outputs.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "ram_stack",
+      "path": "examples/terraform/ram_stack",
+      "category": "governance",
+      "services": [
+        "RAM"
+      ],
+      "intent": [
+        "create",
+        "governance",
+        "iac",
+        "ram",
+        "terraform"
+      ],
+      "recommended_for": "这是一个最小可运行的华为云 Terraform 示例，用于创建：",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf",
+        "outputs.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "outputs.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "rds_mysql_eip_stack",
+      "path": "examples/terraform/rds_mysql_eip_stack",
+      "category": "network",
+      "services": [
+        "EIP",
+        "RDS",
+        "VPC"
+      ],
+      "intent": [
+        "create",
+        "eip",
+        "iac",
+        "mysql",
+        "network",
+        "rds",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "这个示例创建 MySQL RDS 并绑定 EIP，吸收上游 MySQL with EIP 形态。",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "rds_mysql_stack",
+      "path": "examples/terraform/rds_mysql_stack",
+      "category": "database",
+      "services": [
+        "RDS",
+        "VPC"
+      ],
+      "intent": [
+        "create",
+        "database",
+        "iac",
+        "mysql",
+        "rds",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "这个示例创建单机 MySQL RDS 实例，补齐上游 MySQL single 形态。",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "rds_postgresql_ha_stack",
+      "path": "examples/terraform/rds_postgresql_ha_stack",
+      "category": "database",
+      "services": [
+        "RDS",
+        "VPC"
+      ],
+      "intent": [
+        "create",
+        "database",
+        "high_availability",
+        "iac",
+        "postgresql",
+        "rds",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "这个示例创建 PostgreSQL HA RDS 实例，补齐上游 PostgreSQL HA 形态。",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "rds_read_replica_stack",
+      "path": "examples/terraform/rds_read_replica_stack",
+      "category": "database",
+      "services": [
+        "RDS",
+        "VPC"
+      ],
+      "intent": [
+        "create",
+        "database",
+        "iac",
+        "rds",
+        "read_replica",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "这个示例创建 MySQL 主实例和只读副本，补齐上游 read replica 形态。",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "rds_sqlserver_stack",
+      "path": "examples/terraform/rds_sqlserver_stack",
+      "category": "database",
+      "services": [
+        "RDS",
+        "VPC"
+      ],
+      "intent": [
+        "create",
+        "database",
+        "iac",
+        "rds",
+        "sqlserver",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "这个示例创建单机 SQL Server RDS 实例，补齐上游 SQL Server single 形态。",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "rds_stack",
+      "path": "examples/terraform/rds_stack",
+      "category": "database",
+      "services": [
+        "RDS",
+        "VPC"
+      ],
+      "intent": [
+        "create",
+        "database",
+        "iac",
+        "rds",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "这是一个最小可运行的华为云 Terraform 示例，用于创建：",
+      "complexity": "low",
+      "default_route": true,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf",
+        "outputs.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "outputs.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "rgc_stack",
+      "path": "examples/terraform/rgc_stack",
+      "category": "governance",
+      "services": [
+        "RGC"
+      ],
+      "intent": [
+        "create",
+        "governance",
+        "iac",
+        "rgc",
+        "terraform"
+      ],
+      "recommended_for": "This example provides best practice code for using Terraform to create a Resource Governance Center (RGC) account",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "rms_stack",
+      "path": "examples/terraform/rms_stack",
+      "category": "governance",
+      "services": [
+        "RMS"
+      ],
+      "intent": [
+        "create",
+        "governance",
+        "iac",
+        "rms",
+        "terraform"
+      ],
+      "recommended_for": "This example provides best practice code for using Terraform to create an RMS (Resource Management Service)",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "sdrs_stack",
+      "path": "examples/terraform/sdrs_stack",
+      "category": "migration",
+      "services": [
+        "SDRS",
+        "VPC"
+      ],
+      "intent": [
+        "create",
+        "iac",
+        "migration",
+        "sdrs",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "This example provides best practice code for using Terraform to create a SDRS protection group in HuaweiCloud.",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "secmaster_stack",
+      "path": "examples/terraform/secmaster_stack",
+      "category": "security",
+      "services": [
+        "SecMaster"
+      ],
+      "intent": [
+        "create",
+        "iac",
+        "secmaster",
+        "security",
+        "terraform"
+      ],
+      "recommended_for": "This example provides best practice code for using Terraform to create a SecMaster workspace in HuaweiCloud.",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "sfs_turbo_stack",
+      "path": "examples/terraform/sfs_turbo_stack",
+      "category": "storage",
+      "services": [
+        "SFS",
+        "VPC"
+      ],
+      "intent": [
+        "create",
+        "iac",
+        "sfs",
+        "storage",
+        "terraform",
+        "turbo",
+        "vpc"
+      ],
+      "recommended_for": "这是一个最小可运行的华为云 Terraform 示例，用于创建：",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf",
+        "outputs.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "outputs.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "smn_stack",
+      "path": "examples/terraform/smn_stack",
+      "category": "operations",
+      "services": [
+        "SMN"
+      ],
+      "intent": [
+        "create",
+        "iac",
+        "operations",
+        "smn",
+        "terraform"
+      ],
+      "recommended_for": "This example provides best practice code for using Terraform to publish SMN (Simple Message Notification) messages",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "sms_stack",
+      "path": "examples/terraform/sms_stack",
+      "category": "migration",
+      "services": [
+        "SMS"
+      ],
+      "intent": [
+        "create",
+        "iac",
+        "migration",
+        "sms",
+        "terraform"
+      ],
+      "recommended_for": "这是一个最小可运行的华为云 Terraform 示例，用于创建：",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf",
+        "outputs.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "outputs.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "swr_stack",
+      "path": "examples/terraform/swr_stack",
+      "category": "container",
+      "services": [
+        "SWR"
+      ],
+      "intent": [
+        "container",
+        "create",
+        "iac",
+        "swr",
+        "terraform"
+      ],
+      "recommended_for": "这是一个最小可运行的华为云 Terraform 示例，用于创建：",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf",
+        "outputs.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "outputs.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "tms_stack",
+      "path": "examples/terraform/tms_stack",
+      "category": "governance",
+      "services": [
+        "TMS"
+      ],
+      "intent": [
+        "create",
+        "governance",
+        "iac",
+        "terraform",
+        "tms"
+      ],
+      "recommended_for": "This example provides best practice code for using Terraform to create preset tags (predefine tags) in HuaweiCloud Tag",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "vpc_peering_stack",
+      "path": "examples/terraform/vpc_peering_stack",
+      "category": "network",
+      "services": [
+        "VPC"
+      ],
+      "intent": [
+        "create",
+        "iac",
+        "network",
+        "peering",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "这个示例从上游 Terraform 资产库中吸收并改写，用于创建两个 VPC、对应 subnet、VPC peering connection 和双向路由。",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "vpc_security_group_stack",
+      "path": "examples/terraform/vpc_security_group_stack",
+      "category": "network",
+      "services": [
+        "VPC"
+      ],
+      "intent": [
+        "create",
+        "iac",
+        "network",
+        "security_group",
+        "terraform",
+        "vpc"
+      ],
+      "recommended_for": "这个示例从上游 Terraform 资产库中吸收并改写，用于创建一个独立安全组和一组可审查的安全组规则。",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "vpcep_stack",
+      "path": "examples/terraform/vpcep_stack",
+      "category": "network",
+      "services": [
+        "VPC",
+        "VPCEP"
+      ],
+      "intent": [
+        "create",
+        "iac",
+        "network",
+        "terraform",
+        "vpc",
+        "vpcep"
+      ],
+      "recommended_for": "这是一个最小可运行的华为云 Terraform 示例，用于创建：",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf",
+        "outputs.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "outputs.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "vpn_stack",
+      "path": "examples/terraform/vpn_stack",
+      "category": "network",
+      "services": [
+        "VPC",
+        "VPN"
+      ],
+      "intent": [
+        "create",
+        "iac",
+        "network",
+        "terraform",
+        "vpc",
+        "vpn"
+      ],
+      "recommended_for": "这是一个最小可运行的华为云 Terraform 示例，用于创建：",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf",
+        "outputs.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "outputs.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    },
+    {
+      "id": "waf_stack",
+      "path": "examples/terraform/waf_stack",
+      "category": "security",
+      "services": [
+        "WAF"
+      ],
+      "intent": [
+        "create",
+        "iac",
+        "security",
+        "terraform",
+        "waf"
+      ],
+      "recommended_for": "这是一个最小可运行的华为云 Terraform 示例，用于创建：",
+      "complexity": "medium",
+      "default_route": false,
+      "requires_existing_resources": false,
+      "entry_files": [
+        "versions.tf",
+        "provider.tf",
+        "variables.tf",
+        "main.tf",
+        "outputs.tf"
+      ],
+      "files": [
+        "README.md",
+        "main.tf",
+        "outputs.tf",
+        "provider.tf",
+        "terraform.tfvars.example",
+        "variables.tf",
+        "versions.tf"
+      ],
+      "validation": [
+        "fmt",
+        "init-backend-false",
+        "validate"
+      ]
+    }
+  ]
+}

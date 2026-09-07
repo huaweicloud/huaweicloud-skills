@@ -1,0 +1,4 @@
+region_name = "cn-north-4"
+group_name  = "demo-lts-group"
+stream_name = "demo-lts-stream"
+

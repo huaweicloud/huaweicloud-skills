@@ -1,0 +1,5 @@
+region_name        = "cn-north-4"
+cluster_id         = "replace-with-existing-cce-cluster-id"
+cluster_name       = ""
+node_pool_name     = "demo-reuse-node-pool"
+node_key_pair_name = "replace-with-existing-keypair-name"

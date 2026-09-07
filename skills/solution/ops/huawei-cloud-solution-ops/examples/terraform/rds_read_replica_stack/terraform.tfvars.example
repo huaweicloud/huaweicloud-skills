@@ -1,0 +1,7 @@
+region_name         = "cn-north-4"
+vpc_name            = "demo-rds-replica-vpc"
+subnet_name         = "demo-rds-replica-subnet"
+security_group_name = "demo-rds-replica-sg"
+primary_name        = "demo-rds-primary"
+replica_name        = "demo-rds-read-replica"
+# Required secret input: provide TF_VAR_rds_password at runtime; never store it in this file.

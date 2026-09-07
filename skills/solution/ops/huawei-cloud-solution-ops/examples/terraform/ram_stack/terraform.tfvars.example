@@ -1,0 +1,11 @@
+region_name         = "cn-north-4"
+resource_share_name = "demo-cross-account-share"
+description         = "Share selected resources with another account"
+principals = [
+  "01234567890123456789012345678901",
+]
+resource_urns = [
+  "vpc:cn-north-4:01234567890123456789012345678901:subnet:11111111-2222-3333-4444-555555555555",
+]
+permission_ids = []
+

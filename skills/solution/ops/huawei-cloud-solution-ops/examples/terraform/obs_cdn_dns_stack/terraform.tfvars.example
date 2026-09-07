@@ -1,0 +1,8 @@
+region_name     = "cn-north-4"
+bucket_name     = "replace-with-globally-unique-bucket-name"
+cdn_domain_name = "static.example.com"
+
+create_dns_zone   = false
+zone_id           = "replace-with-existing-public-zone-id"
+create_dns_record = false
+cdn_cname_target  = ""

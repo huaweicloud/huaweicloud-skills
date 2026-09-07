@@ -1,0 +1,6 @@
+region_name         = "cn-north-4"
+vpc_name            = "demo-sqlserver-vpc"
+subnet_name         = "demo-sqlserver-subnet"
+security_group_name = "demo-sqlserver-sg"
+rds_name            = "demo-sqlserver-rds"
+# Required secret input: provide TF_VAR_rds_password at runtime; never store it in this file.

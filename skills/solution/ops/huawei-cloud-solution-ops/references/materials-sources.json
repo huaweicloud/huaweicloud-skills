@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "mappings": [
+    {
+      "reference": "references/auth-and-context.md",
+      "materials": [
+        "materials/hcloud-docs-md/华为云命令行工具服务 KooCLI 用户指南_md_dollar/output.md",
+        "materials/hcloud-docs-md/华为云命令行工具服务 KooCLI 常见问题_md_dollar/output.md"
+      ]
+    },
+    {
+      "reference": "references/command-construction.md",
+      "materials": [
+        "materials/hcloud-docs-md/华为云命令行工具服务 KooCLI 用户指南_md_dollar/output.md"
+      ]
+    },
+    {
+      "reference": "references/error-playbook.md",
+      "materials": [
+        "materials/hcloud-docs-md/华为云命令行工具服务 KooCLI 常见问题_md_dollar/output.md"
+      ]
+    },
+    {
+      "reference": "references/output-and-query.md",
+      "materials": [
+        "materials/hcloud-docs-md/华为云命令行工具服务 KooCLI 用户指南_md_dollar/output.md"
+      ]
+    },
+    {
+      "reference": "references/cache-prewarm.md",
+      "materials": [
+        "materials/hcloud-docs-md/华为云命令行工具服务 KooCLI 用户指南_md_dollar/output.md"
+      ]
+    },
+    {
+      "reference": "references/local-meta-discovery.md",
+      "materials": [
+        "materials/hcloud-docs-md/华为云命令行工具服务 KooCLI 用户指南_md_dollar/output.md"
+      ]
+    },
+    {
+      "reference": "references/service-coverage.md",
+      "materials": [
+        "materials/hcloud-docs-md/华为云命令行工具服务 KooCLI 用户指南_md_dollar/output.md"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+region_name                    = "cn-north-4"
+migration_project_name         = "demo-sms-migration-project"
+migration_project_region       = "cn-north-4"
+migration_project_use_public_ip = true
+migration_project_exist_server = true
+migration_project_type         = "MIGRATE_SYSTEM_DATA"
+migration_project_syncing      = false

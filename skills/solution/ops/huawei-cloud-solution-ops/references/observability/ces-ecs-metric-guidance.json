@@ -1,0 +1,140 @@
+{
+  "schema_version": 1,
+  "description": "Compact ECS CES metric guidance for planner-only alarm drafts.",
+  "source_assets": [
+    "https://github.com/huaweicloud/huaweicloud-skills/blob/master/skills/monitoring/ecs/huawei-cloud-ecs-alert/references/memory-monitoring-guide.md",
+    "https://github.com/huaweicloud/huaweicloud-skills/blob/master/skills/monitoring/ces/huawei-cloud-ces-ecs-monitoring/references/ces-metrics-reference.md"
+  ],
+  "namespaces": {
+    "SYS.ECS": {
+      "collection": "base_monitoring",
+      "agent_required": false,
+      "min_period": 300,
+      "default_dimensions": [
+        "instance_id"
+      ],
+      "notes": [
+        "Base monitoring is collected from the virtualization layer and normally uses period=300 or greater.",
+        "Some SYS.ECS metrics such as mem_util, disk_util_inband, and network_*_inband depend on image tools and may return no data.",
+        "Creating alarms with an OS metric under SYS.ECS can surface as http 400 / ces.0014 instead of a clear Agent or namespace error."
+      ],
+      "metrics": {
+        "cpu_util": {
+          "unit": "%",
+          "default_dimensions": [
+            "instance_id"
+          ],
+          "fallback": "AGT.ECS:cpu_usage",
+          "suggested_thresholds": {
+            "warning_gt": 80,
+            "critical_gt": 95
+          }
+        },
+        "mem_util": {
+          "unit": "%",
+          "default_dimensions": [
+            "instance_id"
+          ],
+          "fallback": "AGT.ECS:mem_usedPercent",
+          "caveats": [
+            "Requires UVP VMTools on the image.",
+            "QingTian instances do not support this SYS.ECS memory metric."
+          ],
+          "suggested_thresholds": {
+            "warning_gt": 85,
+            "critical_gt": 95
+          }
+        },
+        "disk_util_inband": {
+          "unit": "%",
+          "default_dimensions": [
+            "instance_id"
+          ],
+          "fallback": "AGT.ECS:disk_usedPercent",
+          "caveats": [
+            "Requires UVP VMTools on the image."
+          ]
+        },
+        "disk_read_bytes_rate": {
+          "unit": "B/s",
+          "default_dimensions": [
+            "instance_id"
+          ],
+          "fallback": "AGT.ECS:disk_agt_read_bytes_rate"
+        },
+        "disk_write_bytes_rate": {
+          "unit": "B/s",
+          "default_dimensions": [
+            "instance_id"
+          ],
+          "fallback": "AGT.ECS:disk_agt_write_bytes_rate"
+        },
+        "network_incoming_bytes_aggregate_rate": {
+          "unit": "B/s",
+          "default_dimensions": [
+            "instance_id"
+          ]
+        },
+        "network_outgoing_bytes_aggregate_rate": {
+          "unit": "B/s",
+          "default_dimensions": [
+            "instance_id"
+          ]
+        }
+      }
+    },
+    "AGT.ECS": {
+      "collection": "os_monitoring",
+      "agent_required": true,
+      "min_period": 60,
+      "default_dimensions": [
+        "instance_id"
+      ],
+      "notes": [
+        "OS monitoring requires the Telescope/host monitoring Agent to be installed and reporting.",
+        "Use AGT.ECS for OS memory, mount-point disk usage, process, load, and 1-minute granularity metrics."
+      ],
+      "metrics": {
+        "cpu_usage": {
+          "unit": "%",
+          "default_dimensions": [
+            "instance_id"
+          ],
+          "aliases": [
+            "cpu_util_agent"
+          ]
+        },
+        "mem_usedPercent": {
+          "unit": "%",
+          "default_dimensions": [
+            "instance_id"
+          ],
+          "aliases": [
+            "mem_used_percent"
+          ],
+          "caveats": [
+            "Do not create this metric under SYS.ECS; create/query it under AGT.ECS after Agent installation."
+          ],
+          "known_error": {
+            "code": "ces.0014",
+            "message": "Some content in message body is not correct",
+            "meaning": "Often indicates the metric/namespace/body does not match actual reported metrics; verify ListMetrics and Agent reporting before retrying."
+          }
+        },
+        "disk_usedPercent": {
+          "unit": "%",
+          "default_dimensions": [
+            "instance_id",
+            "mount_point"
+          ]
+        },
+        "load_average1": {
+          "unit": "count",
+          "default_dimensions": [
+            "instance_id"
+          ]
+        }
+      }
+    }
+  }
+}

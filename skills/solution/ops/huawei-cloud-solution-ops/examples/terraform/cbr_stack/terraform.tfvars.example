@@ -1,0 +1,10 @@
+region_name         = "cn-north-4"
+vpc_name            = "demo-cbr-vpc"
+subnet_name         = "demo-cbr-subnet"
+subnet_cidr         = "192.168.1.0/24"
+subnet_gateway_ip   = "192.168.1.1"
+security_group_name = "demo-cbr-secgroup"
+instance_name       = "demo-cbr-ecs"
+key_pair_name       = "your-keypair"
+vault_name          = "demo-cbr-vault"
+
