@@ -1,0 +1,300 @@
+{
+  "skill_name": "huawei-cloud-cloudrobo-workspace",
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "list-workspaces",
+      "executor": "cli",
+      "command": "cloudrobo workspace list",
+      "expected": "JSON with workspaces array, page_info, and last_count",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-02",
+      "name": "list-workspaces-pagination",
+      "executor": "cli",
+      "command": "cloudrobo workspace list --limit 10 --offset 0",
+      "expected": "JSON with paginated workspaces and page_info",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-03",
+      "name": "show-workspace",
+      "executor": "cli",
+      "command": "cloudrobo workspace show --workspace-id ${WORKSPACE_ID}",
+      "expected": "JSON workspace detail with workspace_id, name, asset_catalog_id, default_obs_path",
+      "type": "read",
+      "requires": "WORKSPACE_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-04",
+      "name": "create-workspace-dry-run",
+      "executor": "cli",
+      "command": "cloudrobo workspace create --name test-dry-run --default-obs-path obs://bucket/test --dry-run",
+      "expected": "[DRY-RUN] create_workspace(name=test-dry-run, default_obs_path=obs://bucket/test)",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-05",
+      "name": "overview",
+      "executor": "cli",
+      "command": "cloudrobo workspace overview",
+      "expected": "JSON with workspace_capacity, workspace_used, workspace_available, member_capacity, member_count",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-06",
+      "name": "current",
+      "executor": "cli",
+      "command": "cloudrobo workspace current",
+      "expected": "JSON workspace config or '未配置工作空间'",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-07",
+      "name": "list-members",
+      "executor": "cli",
+      "command": "cloudrobo workspace list-members --workspace-id ${WORKSPACE_ID}",
+      "expected": "JSON with members array and remain_count",
+      "type": "read",
+      "requires": "WORKSPACE_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-08",
+      "name": "use-workspace",
+      "executor": "cli",
+      "command": "cloudrobo workspace use --workspace-id ${WORKSPACE_ID}",
+      "expected": "已切换到工作空间: <name> (<id>) with asset_catalog_id and default_obs_path",
+      "type": "read",
+      "requires": "WORKSPACE_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-09",
+      "name": "update-workspace-dry-run",
+      "executor": "cli",
+      "command": "cloudrobo workspace update --workspace-id ${WORKSPACE_ID} --name test-update --dry-run",
+      "expected": "[DRY-RUN] update_workspace(id=<id>)",
+      "type": "read",
+      "requires": "WORKSPACE_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-10",
+      "name": "delete-workspace-dry-run",
+      "executor": "cli",
+      "command": "cloudrobo workspace delete --workspace-id ${WORKSPACE_ID} --dry-run",
+      "expected": "[DRY-RUN] delete_workspace(id=<id>)",
+      "type": "read",
+      "requires": "WORKSPACE_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-11",
+      "name": "create-workspace",
+      "executor": "cli",
+      "command": "cloudrobo workspace create --name test-ws --default-obs-path obs://bucket/test --description 'test workspace' --tags 'tag1,tag2'",
+      "expected": "Workspace created with workspace_id, name, asset_catalog_id, default_obs_path",
+      "type": "mutation",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-12",
+      "name": "create-workspace-with-members",
+      "executor": "cli",
+      "command": "cloudrobo workspace create --name team-ws --default-obs-path obs://bucket/team --member-list '[{\"user_id\":\"${USER_ID}\",\"role_ids\":[\"${ROLE_ID}\"]}]'",
+      "expected": "Workspace created with members added",
+      "type": "mutation",
+      "requires": "USER_ID, ROLE_ID",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-13",
+      "name": "update-workspace-name",
+      "executor": "cli",
+      "command": "cloudrobo workspace update --workspace-id ${WORKSPACE_ID} --name updated-name",
+      "expected": "Workspace updated with new name",
+      "type": "mutation",
+      "requires": "WORKSPACE_ID",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-14",
+      "name": "update-workspace-tags",
+      "executor": "cli",
+      "command": "cloudrobo workspace update --workspace-id ${WORKSPACE_ID} --tags 'new-tag1,new-tag2'",
+      "expected": "Workspace updated with new tags (full replacement)",
+      "type": "mutation",
+      "requires": "WORKSPACE_ID",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-15",
+      "name": "add-members",
+      "executor": "cli",
+      "command": "cloudrobo workspace add-members --workspace-id ${WORKSPACE_ID} --member-list '[{\"user_id\":\"${USER_ID}\",\"role_ids\":[\"${ROLE_ID}\"]}]'",
+      "expected": "Members added to workspace",
+      "type": "mutation",
+      "requires": "WORKSPACE_ID, USER_ID, ROLE_ID",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-16",
+      "name": "update-member",
+      "executor": "cli",
+      "command": "cloudrobo workspace update-member --workspace-id ${WORKSPACE_ID} --user-id ${USER_ID} --role-ids ${ROLE_ID}",
+      "expected": "Member roles updated",
+      "type": "mutation",
+      "requires": "WORKSPACE_ID, USER_ID, ROLE_ID",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-17",
+      "name": "delete-members",
+      "executor": "cli",
+      "command": "cloudrobo workspace delete-members --workspace-id ${WORKSPACE_ID} --user-ids ${USER_ID}",
+      "expected": "Members deleted from workspace",
+      "type": "mutation",
+      "requires": "WORKSPACE_ID, USER_ID",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-18",
+      "name": "delete-workspace",
+      "executor": "cli",
+      "command": "cloudrobo workspace delete --workspace-id ${WORKSPACE_ID}",
+      "expected": "Workspace deleted (204 No Content)",
+      "type": "mutation",
+      "requires": "WORKSPACE_ID",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-19",
+      "name": "list-workspaces-sdk",
+      "executor": "sdk",
+      "command": "client.list_workspaces()",
+      "expected": "Dict with workspaces, page_info, last_count",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-20",
+      "name": "show-workspace-sdk",
+      "executor": "sdk",
+      "command": "client.show_workspace('${WORKSPACE_ID}')",
+      "expected": "Dict with workspace detail",
+      "type": "read",
+      "requires": "WORKSPACE_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-21",
+      "name": "get-overview-sdk",
+      "executor": "sdk",
+      "command": "client.get_workspace_overview()",
+      "expected": "Dict with workspace_capacity, workspace_used, etc.",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-22",
+      "name": "list-members-sdk",
+      "executor": "sdk",
+      "command": "client.list_workspace_members('${WORKSPACE_ID}')",
+      "expected": "Dict with members list",
+      "type": "read",
+      "requires": "WORKSPACE_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-23",
+      "name": "create-workspace-sdk",
+      "executor": "sdk",
+      "command": "client.create_workspace({'name': 'sdk-test', 'default_obs_path': 'obs://bucket/test'})",
+      "expected": "Dict with workspace_id and asset_catalog_id",
+      "type": "mutation",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-24",
+      "name": "update-workspace-sdk",
+      "executor": "sdk",
+      "command": "client.update_workspace('${WORKSPACE_ID}', {'name': 'sdk-updated'})",
+      "expected": "Dict with updated workspace",
+      "type": "mutation",
+      "requires": "WORKSPACE_ID",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-25",
+      "name": "delete-workspace-sdk",
+      "executor": "sdk",
+      "command": "client.delete_workspace('${WORKSPACE_ID}')",
+      "expected": "Empty response (workspace deleted)",
+      "type": "mutation",
+      "requires": "WORKSPACE_ID",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-26",
+      "name": "add-members-sdk",
+      "executor": "sdk",
+      "command": "client.add_workspace_members('${WORKSPACE_ID}', {'member_list': [{'user_id': '${USER_ID}', 'role_ids': ['${ROLE_ID}']}]})",
+      "expected": "Dict with added members",
+      "type": "mutation",
+      "requires": "WORKSPACE_ID, USER_ID, ROLE_ID",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-27",
+      "name": "delete-members-sdk",
+      "executor": "sdk",
+      "command": "client.delete_workspace_members('${WORKSPACE_ID}', ['${USER_ID}'])",
+      "expected": "Empty response (members deleted)",
+      "type": "mutation",
+      "requires": "WORKSPACE_ID, USER_ID",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-28",
+      "name": "onboarding-flow",
+      "executor": "cli",
+      "command": "workspace list → workspace create → workspace use → workspace current",
+      "expected": "Full onboarding: list existing → create new → switch context → verify",
+      "type": "mutation",
+      "requires_confirmation": true,
+      "status": "pending"
+    }
+  ],
+  "environment_variables": {
+    "required": ["HUAWEI_CLOUD_AK", "HUAWEI_CLOUD_SK"],
+    "optional": ["WORKSPACE_ID", "USER_ID", "ROLE_ID", "CLOUDROBO_DEBUG"]
+  },
+  "notes": [
+    "Read-only tests (TC-01 to TC-10, TC-19 to TC-22) run automatically.",
+    "Mutation tests (TC-11 to TC-18, TC-23 to TC-28) require explicit user confirmation.",
+    "Set WORKSPACE_ID to run workspace-specific tests (TC-03, TC-07 to TC-10, TC-13 to TC-18, TC-20, TC-22, TC-24 to TC-27).",
+    "Set USER_ID and ROLE_ID to run member management tests (TC-12, TC-15 to TC-17, TC-26, TC-27).",
+    "TC-28 (onboarding-flow) is an end-to-end test combining list, create, use, and current."
+  ]
+}
