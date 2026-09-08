@@ -24,9 +24,25 @@
 > - Script path: `$HOME/obs-scheduled-upload-<BucketName>.sh`
 > - Log path: `$HOME/obs-scheduled-upload-<BucketName>.log`
 
-**Step 1: Generate obsutil upload script**
+**Step 1: Ask the customer whether to preserve the source directory structure**
 
-Create the upload script `$HOME/obs-scheduled-upload-<BucketName>.sh`:
+> **⚠️ MUST ask the customer first before generating the upload script**
+>
+> Before generating the scheduled upload script, you **must** ask the customer:
+> "Do you need the source directory itself to be uploaded as a directory layer to OBS (i.e., preserve the directory structure)?"
+>
+> Decide whether to use `-flat` based on the customer's explicit answer:
+> - **Customer answers "Yes" (preserve directory structure)** → do NOT use `-flat`
+> - **Customer answers "No" (do not preserve directory structure, flatten files)** → use `-flat`
+>
+> **Do NOT assume or default. You must ask the customer and decide based on their explicit answer.**
+> If the answer is ambiguous, clarify with the customer before generating the script.
+
+**Step 2: Generate obsutil upload script**
+
+Create the upload script `$HOME/obs-scheduled-upload-<BucketName>.sh`. Pick the command variant based on the customer's answer in Step 1.
+
+**Option A — preserve directory structure (no `-flat`, customer answered "Yes"):**
 
 ```bash
 #!/bin/bash
@@ -48,13 +64,35 @@ else
 fi
 ```
 
-> **⚠️ Key: Do NOT use `-flat` for directory uploads**
->
-> The user specified a directory to upload, so the entire directory structure should be preserved.
-> - Default command: `obsutil cp <LocalDirPath> obs://<BucketName>/<Prefix> -r -f -u` (preserves directory structure, `-u` enables incremental upload)
-> - Only add `-flat` if the user **explicitly requests** flattening (e.g., "upload all files without directory structure")
+**Option B — flatten files (with `-flat`, customer answered "No"):**
 
-**Step 2: Set crontab scheduled task**
+```bash
+#!/bin/bash
+# OBS scheduled upload script
+# Bucket: <BucketName>
+# Local directory: <LocalDirPath>
+# Generated at: <Timestamp>
+
+LOG_FILE="$HOME/obs-scheduled-upload-<BucketName>.log"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting scheduled upload" >> "$LOG_FILE"
+
+obsutil cp <LocalDirPath> obs://<BucketName>/<Prefix> -r -flat -f -u >> "$LOG_FILE" 2>&1
+
+RESULT=$?
+if [ $RESULT -eq 0 ]; then
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Upload succeeded" >> "$LOG_FILE"
+else
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Upload failed, exit code: $RESULT" >> "$LOG_FILE"
+fi
+```
+
+> **⚠️ Key: `-flat` is decided by the customer's answer in Step 1**
+>
+> - Without `-flat`: `obsutil cp <LocalDirPath> obs://<BucketName>/<Prefix> -r -f -u` (preserves directory structure, `-u` enables incremental upload)
+> - With `-flat`: `obsutil cp <LocalDirPath> obs://<BucketName>/<Prefix> -r -flat -f -u` (flattens files, directory structure lost)
+> - **Never default to either option**; always follow the customer's explicit answer from Step 1.
+
+**Step 3: Set crontab scheduled task**
 
 ```bash
 # Run every hour
@@ -67,7 +105,7 @@ fi
 (crontab -l 2>/dev/null; echo "*/30 * * * * /bin/bash $HOME/obs-scheduled-upload-<BucketName>.sh") | crontab -
 ```
 
-**Step 3: Verify scheduled task is set**
+**Step 4: Verify scheduled task is set**
 
 ```bash
 crontab -l
@@ -75,9 +113,20 @@ crontab -l
 
 ## Implementation (Windows - Task Scheduler)
 
+> **⚠️ Same as Linux/macOS: ask the customer first (Step 1) whether to preserve the source directory structure, then pick the corresponding command.**
+
+**Option A — preserve directory structure (no `-flat`, customer answered "Yes"):**
+
 ```powershell
 # Create a scheduled task (run daily at 8:00)
 schtasks /create /tn "OBS-ScheduledUpload-<BucketName>" /tr "obsutil cp <LocalDirPath> obs://<BucketName>/<Prefix> -r -u" /sc daily /st 08:00 /f
+```
+
+**Option B — flatten files (with `-flat`, customer answered "No"):**
+
+```powershell
+# Create a scheduled task (run daily at 8:00)
+schtasks /create /tn "OBS-ScheduledUpload-<BucketName>" /tr "obsutil cp <LocalDirPath> obs://<BucketName>/<Prefix> -r -flat -u" /sc daily /st 08:00 /f
 ```
 
 > **⚠️ Important: Notes on scheduled uploads**
@@ -87,7 +136,7 @@ schtasks /create /tn "OBS-ScheduledUpload-<BucketName>" /tr "obsutil cp <LocalDi
 > 3. **Logs**: Upload logs are recorded in `$HOME/obs-scheduled-upload-<BucketName>.log`
 > 4. **Deletes are not synced**: Scheduled upload only syncs new/modified files; **objects deleted locally will not be deleted from the bucket** (user must clean up manually)
 > 5. **Crontab environment**: The crontab execution environment differs from an interactive shell; ensure obsutil is in PATH, and recommend using the full path to obsutil in the script
-> 6. **Directory structure preserved**: By default, the full local directory structure is preserved in OBS. Only use `-flat` if the user explicitly requests it.
+> 6. **Directory structure**: Whether the local directory structure is preserved in OBS is decided by the customer's answer in Step 1 (without `-flat` → preserved; with `-flat` → flattened). Never default; always ask first.
 
 ## Managing Scheduled Tasks
 

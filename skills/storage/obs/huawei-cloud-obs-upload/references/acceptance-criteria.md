@@ -91,19 +91,21 @@ hcloud CES ShowMetricData \
 
 ### 4. obsutil Upload Commands
 
+> **⚠️ For directory uploads, ask the customer first whether to preserve the source directory structure, then pick the command. Never default.**
+
 #### ✅ Correct
 ```bash
-obsutil cp /home/user/file.txt obs://my-bucket/path/file.txt -flat    # Single file: -flat is fine
-obsutil cp /home/user/data/ obs://my-bucket/data/ -r                   # Directory: preserves structure (default)
-obsutil cp /home/user/data/ obs://my-bucket/data/ -r -p=10             # Directory with concurrency
-obsutil cp /home/user/data/ obs://my-bucket/data/ -r -flat             # Directory: -flat only if user explicitly requests
+obsutil cp /home/user/file.txt obs://my-bucket/path/file.txt -flat    # Single file: -flat is fine (no need to ask)
+obsutil cp /home/user/data/ obs://my-bucket/data/ -r                   # Directory: customer chose to preserve structure
+obsutil cp /home/user/data/ obs://my-bucket/data/ -r -p=10             # Directory with concurrency (customer chose preserve)
+obsutil cp /home/user/data/ obs://my-bucket/data/ -r -flat             # Directory: customer chose to flatten files
 ```
 
 #### ❌ Incorrect
 ```bash
 obsutil upload /home/user/file.txt obs://my-bucket/  # Incorrect: obsutil upload command is cp, not upload
 obsutil cp /home/user/file.txt my-bucket/path/file.txt  # Incorrect: Target must start with obs://
-obsutil cp /home/user/data/ obs://my-bucket/ -r -flat  # Incorrect: -flat discards directory structure by default; do not use unless user explicitly requests
+obsutil cp /home/user/data/ obs://my-bucket/ -r -flat  # Incorrect: using -flat without asking the customer first; -flat must follow the customer's explicit answer
 ```
 
 ### 5. CES Namespace and Metric Names
@@ -165,8 +167,8 @@ from huaweicloudsdkobs import Client  # Incorrect: Missing correct module path
 from huaweicloudsdkcore.auth.credentials import BasicCredentials
 
 credentials = BasicCredentials() \
-    .with_ak(os.getenv("HUAWEICLOUD_SDK_AK")) \
-    .with_sk(os.getenv("HUAWEICLOUD_SDK_SK")) \
+    .with_ak(os.getenv("HW_ACCESS_KEY")) \
+    .with_sk(os.getenv("HW_SECRET_KEY")) \
     .with_project_id(os.getenv("HUAWEICLOUD_SDK_PROJECT_ID"))
 ```
 
@@ -184,8 +186,8 @@ credentials = BasicCredentials() \
 from obs import ObsClient
 
 obs_client = ObsClient(
-    access_key_id=os.getenv("HUAWEICLOUD_SDK_AK"),
-    secret_access_key=os.getenv("HUAWEICLOUD_SDK_SK"),
+    access_key_id=os.getenv("HW_ACCESS_KEY"),
+    secret_access_key=os.getenv("HW_SECRET_KEY"),
     server='obs.cn-south-1.myhuaweicloud.com'
 )
 ```

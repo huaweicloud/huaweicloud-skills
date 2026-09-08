@@ -124,8 +124,8 @@ hcloud configure
 #### Method 2: Environment variables
 
 ```bash
-export HUAWEICLOUD_SDK_AK=<your-access-key-id>
-export HUAWEICLOUD_SDK_SK=<your-access-key-secret>
+export HW_ACCESS_KEY=<your-access-key-id>
+export HW_SECRET_KEY=<your-access-key-secret>
 ```
 
 #### Method 3: Non-interactive configuration
