@@ -1,0 +1,135 @@
+{
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "list-services",
+      "command": "cloudrobo infer list --workspace-id {workspace_id}",
+      "description": "List all inference services in a workspace",
+      "expected": "JSON array of services",
+      "type": "read"
+    },
+    {
+      "id": "TC-02",
+      "name": "create-service-dry-run",
+      "command": "cloudrobo infer create --name verify-infer --flavor {flavor} --model-json '{\"model_id\": \"{model_id}\", \"model_version_id\": \"{model_version_id}\"}' --workspace-id {workspace_id} --pool-id {pool_id} --pool-type SHARED --stop-schedule-json '{\"duration\": 60, \"time_unit\": \"MINUTES\"}' --dry-run",
+      "description": "Dry-run service create (no actual deployment)",
+      "expected": "[DRY-RUN] message, no service created",
+      "type": "read"
+    },
+    {
+      "id": "TC-03",
+      "name": "create-service",
+      "command": "cloudrobo infer create --name verify-infer --flavor {flavor} --model-json '{\"model_id\": \"{model_id}\", \"model_version_id\": \"{model_version_id}\"}' --workspace-id {workspace_id} --pool-id {pool_id} --pool-type SHARED --stop-schedule-json '{\"duration\": 60, \"time_unit\": \"MINUTES\"}'",
+      "description": "Create an inference service",
+      "expected": "JSON with service_id returned",
+      "type": "write"
+    },
+    {
+      "id": "TC-04",
+      "name": "show-service",
+      "command": "cloudrobo infer show --service-id {service_id}",
+      "description": "Show service detail",
+      "expected": "JSON with service fields",
+      "type": "read"
+    },
+    {
+      "id": "TC-05",
+      "name": "start-service",
+      "command": "cloudrobo infer start --service-id {service_id}",
+      "description": "Start a service",
+      "expected": "Status transitions toward RUNNING",
+      "type": "write"
+    },
+    {
+      "id": "TC-06",
+      "name": "stop-service",
+      "command": "cloudrobo infer stop --service-id {service_id}",
+      "description": "Stop a service",
+      "expected": "Status transitions to STOPPED",
+      "type": "write"
+    },
+    {
+      "id": "TC-07",
+      "name": "update-service",
+      "command": "cloudrobo infer update --service-id {service_id} --description 'Updated description'",
+      "description": "Update service config",
+      "expected": "JSON confirming update",
+      "type": "write"
+    },
+    {
+      "id": "TC-08",
+      "name": "delete-service",
+      "command": "cloudrobo infer delete --service-id {service_id}",
+      "description": "Delete a service",
+      "expected": "JSON confirming deletion",
+      "type": "write"
+    },
+    {
+      "id": "TC-09",
+      "name": "wait-deploy",
+      "command": "cloudrobo infer wait-deploy --service-id {service_id} --timeout 600",
+      "description": "Wait for service deployment to complete (CLI convenience)",
+      "expected": "Service status is no longer DEPLOYING (status != DEPLOYING; RUNNING/FAILED/STOPPED) or reports timeout",
+      "type": "read"
+    },
+    {
+      "id": "TC-10",
+      "name": "list-logs",
+      "command": "cloudrobo infer list-logs --service-id {service_id} --start-time {start_ms} --end-time {end_ms} --limit 50",
+      "description": "List service logs (ms timestamps)",
+      "expected": "Log lines returned",
+      "type": "read"
+    },
+    {
+      "id": "TC-11",
+      "name": "list-logs-keyword",
+      "command": "cloudrobo infer list-logs --service-id {service_id} --start-time {start_ms} --end-time {end_ms} --keywords error",
+      "description": "List logs with keyword filter",
+      "expected": "Filtered log lines",
+      "type": "read"
+    },
+    {
+      "id": "TC-12",
+      "name": "invalid-json-rejected",
+      "command": "cloudrobo infer create --name x --flavor f --model-json '{\"model_id\": \"m\", \"model_version_id\": \"mv\"}' --workspace-id {workspace_id} --pool-id p --pool-type SHARED --envs-json not-json",
+      "description": "Verify malformed JSON is rejected",
+      "expected": "Error: Invalid JSON (click.BadParameter)",
+      "type": "read"
+    },
+    {
+      "id": "TC-13",
+      "name": "path-traversal-rejected",
+      "command": "cloudrobo infer show --service-id '../etc/passwd'",
+      "description": "Verify path traversal is rejected via validate_safe_id",
+      "expected": "Error: validation error",
+      "type": "read"
+    },
+    {
+      "id": "TC-14",
+      "name": "auto-discover-params",
+      "command": "cloudrobo asset show-asset --asset-id {model_id} → show-version → download-url → show-asset algorithm",
+      "description": "Auto-discover deployment parameters from algorithm asset and config files",
+      "expected": "All discoverable parameters resolved",
+      "type": "read"
+    }
+  ],
+  "variables": {
+    "workspace_id": "Workspace ID (required for service create/list)",
+    "model_id": "Model asset ID to deploy",
+    "model_version_id": "Model version ID to deploy",
+    "flavor": "Compute flavor",
+    "pool_id": "Compute pool ID (prefix with 'pool-', e.g. pool-d1cc6d45-...)",
+    "pool_type": "Pool type (SHARED / DEDICATED)",
+    "service_id": "Inference service ID (for show/start/stop/update/delete/logs)",
+    "start_ms": "Start timestamp in milliseconds (for list-logs)",
+    "end_ms": "End timestamp in milliseconds (for list-logs)"
+  },
+  "notes": [
+    "Mutating tests (type=write) require user confirmation before execution",
+    "Deploy/start consume pool compute resources; wait-deploy (TC-09) polls every 5s, default 600s timeout",
+    "list-logs (TC-10, TC-11) require milliseconds timestamps",
+    "TC-12/TC-13 verify JSON validation and path traversal protection",
+    "Cross-package tests query the asset service (list-publication-assets --type model or list-assets --catalog-id <id> --type model)",
+    "For comprehensive end-to-end testing beyond these read-only checks, run the commands from SKILL.md manually"
+  ]
+}
