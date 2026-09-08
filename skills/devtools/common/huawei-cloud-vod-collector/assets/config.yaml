@@ -63,9 +63,10 @@ delivery:
     gitcode:
       enabled: true
       repo_url: "https://gitcode.com/developer-skill/vod-skill.git"
-      token: ""
       labels:
         - "VoD"
+    # NOTE: notification channels (webhook/email) are not yet implemented.
+    # Do not enable until implementation is available.
     notification:
       enabled: false
       type: "webhook"

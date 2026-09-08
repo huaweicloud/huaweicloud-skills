@@ -3,7 +3,8 @@ from __future__ import annotations
 import argparse
 import os
 import re
-from datetime import datetime
+import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 if os.name == "nt":
@@ -25,9 +26,15 @@ else:
 
 
 def _parse_iso_timestamp(ts: str) -> datetime:
-    if ts.endswith("Z"):
-        ts = ts[:-1] + "+00:00"
-    return datetime.fromisoformat(ts)
+    try:
+        if ts.endswith("Z"):
+            ts = ts[:-1] + "+00:00"
+        return datetime.fromisoformat(ts)
+    except (ValueError, TypeError) as e:
+        raise ValueError(
+            f"Invalid timestamp '{ts}': {e}. "
+            f"Expected ISO 8601 format (e.g. 2026-01-01T00:00:00)"
+        )
 
 
 try:
@@ -272,7 +279,10 @@ def _extract_code_block_value(text: str, section: str, field: str) -> str | None
         if in_field and in_code:
             if stripped.startswith("```"):
                 break
-            code_lines.append(line)
+            if line.startswith("  "):
+                code_lines.append(line[2:])
+            else:
+                code_lines.append(line)
     if code_lines:
         return "\n".join(code_lines)
     return None
@@ -470,6 +480,88 @@ def _resolve_value(value: str) -> str:
     return value
 
 
+_SKILL_DIR_MD = Path(__file__).resolve().parent.parent
+_CONFIG_FILE_MD = _SKILL_DIR_MD / "assets" / "config.yaml"
+
+
+def _load_config() -> dict:
+    if not _CONFIG_FILE_MD.exists():
+        return {}
+    try:
+        import yaml
+        text = _CONFIG_FILE_MD.read_text(encoding="utf-8")
+        config = yaml.safe_load(text)
+        return config or {}
+    except Exception:
+        return {}
+
+
+def _count_session_feedbacks(feedbacks_dir: Path, session_id: str) -> int:
+    if not feedbacks_dir.exists():
+        return 0
+    count = 0
+    for f in feedbacks_dir.glob("VOD-*.md"):
+        try:
+            existing = read_feedback_md(f)
+            if existing.session_id == session_id:
+                count += 1
+        except Exception:
+            continue
+    return count
+
+
+def _find_dedup_candidate(
+    feedbacks_dir: Path,
+    session_id: str,
+    error_type: str | None,
+    dedup_key: str | None,
+    dedup_window_sec: int,
+) -> Path | None:
+    if not feedbacks_dir.exists():
+        return None
+    now = datetime.now(timezone.utc)
+    new_key = dedup_key or f"{session_id}:{error_type or ''}"
+    for f in sorted(feedbacks_dir.glob("VOD-*.md"), reverse=True):
+        try:
+            existing = read_feedback_md(f)
+        except Exception:
+            continue
+        existing_key = existing.dedup_key or f"{existing.session_id}:{existing.error_type or ''}"
+        if existing_key != new_key:
+            continue
+        if existing.timestamp:
+            existing_ts = existing.timestamp
+            if existing_ts.tzinfo is None:
+                existing_ts = existing_ts.replace(tzinfo=timezone.utc)
+            age = (now - existing_ts).total_seconds()
+            if 0 <= age <= dedup_window_sec:
+                return f
+    return None
+
+
+_MINIMAL_CONTENT = {"test", "hello", "hi", "测试", "你好", "无", "none", "n/a", "na", "."}
+
+
+def _validate_content(feedback: FeedbackRecord) -> str | None:
+    all_content = " ".join(filter(None, [
+        feedback.problem_description,
+        feedback.error_message,
+        feedback.error_stack,
+        feedback.user_intent,
+        feedback.agent_action,
+        feedback.occurrence_scenario,
+        feedback.expected_behavior,
+    ])).strip()
+    if not all_content:
+        return "Empty feedback content - no meaningful fields provided"
+    lower = all_content.lower().strip()
+    if lower in _MINIMAL_CONTENT:
+        return f"Minimal content '{lower}' rejected - provide meaningful feedback"
+    if len(lower) < 3:
+        return f"Content too short ({len(lower)} chars) - provide meaningful feedback"
+    return None
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="VoD Markdown IO")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -508,6 +600,20 @@ def main() -> None:
         feedback_id = generate_id(args.prefix, args.feedbacks_dir)
         print(feedback_id)
     elif args.command == "write-feedback":
+        if not args.session_id or not args.session_id.strip():
+            print("错误: --session-id must not be empty", file=sys.stderr)
+            sys.exit(1)
+
+        if args.confidence < 0.0 or args.confidence > 1.0:
+            print(f"错误: --confidence must be between 0.0 and 1.0, got {args.confidence}", file=sys.stderr)
+            sys.exit(1)
+
+        try:
+            timestamp = _parse_iso_timestamp(args.timestamp) if args.timestamp else datetime.now()
+        except ValueError as e:
+            print(f"错误: {e}", file=sys.stderr)
+            sys.exit(1)
+
         if args.feedback_id:
             feedback_id = args.feedback_id
         else:
@@ -521,13 +627,13 @@ def main() -> None:
         feedback = FeedbackRecord(
             feedback_id=feedback_id,
             feedback_type=FeedbackType(args.feedback_type),
-            timestamp=_parse_iso_timestamp(args.timestamp) if args.timestamp else datetime.now(),
+            timestamp=timestamp,
             session_id=args.session_id,
             platform=args.platform,
             confidence=args.confidence,
             status=FeedbackStatus(args.status),
             product_name=args.product_name or None,
-            voice_source=args.product_name or None,
+            voice_source=args.voice_source or None,
             error_type=_resolve_value(args.error_type) or None,
             error_message=_resolve_value(args.error_message) or None,
             error_stack=_resolve_value(args.error_stack) or None,
@@ -541,8 +647,57 @@ def main() -> None:
             dedup_key=args.dedup_key or None,
             annotations=args.annotations,
         )
+
+        # Content validation
+        validation_error = _validate_content(feedback)
+        if validation_error:
+            print(f"错误: {validation_error}", file=sys.stderr)
+            sys.exit(1)
+
+        # Load config for session limit and dedup
+        config = _load_config()
+        storage_cfg = config.get("storage", {})
+        capture_cfg = config.get("capture", {})
+        max_per_session = storage_cfg.get("max_feedbacks_per_session", 5)
+        dedup_window = capture_cfg.get("dedup_window_sec", 60)
+
+        feedbacks_dir = output_path.parent
+
+        # In-session dedup check
+        dedup_candidate = _find_dedup_candidate(
+            feedbacks_dir, args.session_id, feedback.error_type, feedback.dedup_key, dedup_window
+        )
+        if dedup_candidate:
+            try:
+                existing = read_feedback_md(dedup_candidate)
+                existing.recurrence_count = existing.recurrence_count + 1
+                write_feedback_md(existing, dedup_candidate)
+                custom_patterns = config.get("sanitizer", {}).get("custom_patterns", [])
+                sanitize_file(dedup_candidate, custom_patterns=custom_patterns)
+                import json as _json
+                print(_json.dumps({
+                    "feedback_id": existing.feedback_id,
+                    "file": str(dedup_candidate),
+                    "deduplicated": True,
+                    "recurrence_count": existing.recurrence_count,
+                }, ensure_ascii=False))
+                return
+            except Exception as e:
+                print(f"警告: 去重更新失败，将创建新文件: {e}", file=sys.stderr)
+
+        # Session limit check
+        session_count = _count_session_feedbacks(feedbacks_dir, args.session_id)
+        if session_count >= max_per_session:
+            print(
+                f"错误: Session limit reached ({session_count}/{max_per_session}). "
+                f"Cannot create more feedbacks for this session.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
         write_feedback_md(feedback, output_path)
-        sanitize_file(output_path)
+        custom_patterns = config.get("sanitizer", {}).get("custom_patterns", [])
+        sanitize_file(output_path, custom_patterns=custom_patterns)
         import json as _json
         print(_json.dumps({"feedback_id": feedback.feedback_id, "file": str(output_path)}, ensure_ascii=False))
 

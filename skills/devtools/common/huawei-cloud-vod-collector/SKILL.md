@@ -50,12 +50,12 @@ The following parameters can be configured by users or integrators:
 
 - `--feedbacks-dir`: Path for storing feedbacks, default is `.vod/feedbacks/`.
 - `--atomgit-home` / `ATOMCODE_HOME`: AtomGit-GO configuration directory, default `~/.atomcode`.
-- `delivery.channels.gitcode.repo_url`: Target repository URL — read only from `assets/config.yaml.template`.
+- `delivery.channels.gitcode.repo_url`: Target repository URL — read only from `assets/config.yaml`.
 - `capture.dedup_window_sec`: In-session deduplication window in seconds.
 - `storage.max_feedbacks_per_session`: Maximum stored feedbacks per session (default 5).
 - Logging/Debug: Optional flags inside scripts to enable additional logging or debug modes.
 
-Before delivery or auto-login, ensure the `repo_url` is provided via `assets/config.yaml.template` and is not inferred from `git remote`.
+Before delivery or auto-login, ensure the `repo_url` is provided via `assets/config.yaml` and is not inferred from `git remote`.
 
 ## References
 
@@ -102,6 +102,8 @@ Triggered by hooks (tool errors, user rejection, proactive reports). Generates r
 
 ### Phase 2: Extract
 
+> **Note:** This phase is executed by the Agent (LLM) directly — there is no independent extraction script. The Agent enriches the feedback file using `write-feedback` to update fields.
+
 Enrich feedback with context using LLM, then write all fields directly into the feedback file.
 
 Each field maps to a specific section in the markdown file:
@@ -122,7 +124,7 @@ Use `write-feedback` again to update fields, or edit the markdown file directly.
 
 #### 3.1 Sync to GitCode Issue
 
-> ⚠️ `repo_url` comes **only** from `assets/config.yaml.template` → `delivery.channels.gitcode.repo_url`. Never use `git remote`, never ask the user.
+> ⚠️ `repo_url` comes **only** from `assets/config.yaml` → `delivery.channels.gitcode.repo_url`. Never use `git remote`, never ask the user.
 
 **Single delivery** — submit one feedback as a GitCode Issue:
 
@@ -203,3 +205,4 @@ python <SKILL_DIR>/scripts/vod_deliver.py update-status \
 - Override: `--atomgit-home <path>`
 - Missing/expired → script returns `"need_login": true` → follow Phase 3.1 auto-login
 - **Never** write token to any file outside `~/.atomcode/auth.toml`
+- **Security Note:** GitCode API v5 requires `access_token` as a URL query parameter. The token may appear in proxy/load-balancer/server logs. Error responses are redacted, but normal request URLs are not. This is a GitCode API limitation.

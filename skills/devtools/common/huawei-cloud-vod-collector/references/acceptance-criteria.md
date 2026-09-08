@@ -8,7 +8,7 @@
 - 敏感信息清理：在捕获时自动或通过 `vod_sanitize.py` 清理敏感字段（令牌、密码、密钥）。
 - 去重：会话内去重时增加 `recurrence_count`；跨会话去重会扫描最近反馈后再交付。
 - 提取：LLM 丰富会填充关键字段（`error_stack`、`user_intent`、`scenario`、`expected_behavior`、`environment`、`dialog_context`）。
-- 交付：`vod_deliver.py deliver` 和 `notify` 会将问题提交到配置的 `delivery.channels.gitcode.repo_url`，并更新反馈状态。
+- 交付：`vod_deliver.py deliver` 会将问题提交到配置的 `delivery.channels.gitcode.repo_url`，并更新反馈状态。
 - 自动登录流程：当返回 `need_login` 时，使用 AtomGit-GO 完成安装/登录序列，并将令牌存储在 `~/.atomcode/auth.toml`（权限 0600）下。
 
 ## 非功能
