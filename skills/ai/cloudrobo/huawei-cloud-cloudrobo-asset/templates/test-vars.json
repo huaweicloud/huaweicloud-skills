@@ -1,0 +1,439 @@
+{
+  "skill_name": "huawei-cloud-cloudrobo-asset",
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "list-repositories",
+      "executor": "cli",
+      "command": "cloudrobo asset list-repositories --limit 5",
+      "expected": "JSON array of repositories with id, name fields",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-02",
+      "name": "list-repositories-filter-name",
+      "executor": "cli",
+      "command": "cloudrobo asset list-repositories --name my-repo",
+      "expected": "JSON array of repositories matching name filter",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-03",
+      "name": "list-catalogs",
+      "executor": "cli",
+      "command": "cloudrobo asset list-catalogs --repository-id ${REPOSITORY_ID} --limit 5",
+      "expected": "JSON array of catalogs with id, name, repository_id fields",
+      "type": "read",
+      "requires": "REPOSITORY_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-04",
+      "name": "show-catalog",
+      "executor": "cli",
+      "command": "cloudrobo asset show-catalog --catalog-id ${CATALOG_ID}",
+      "expected": "JSON catalog detail with id, name fields",
+      "type": "read",
+      "requires": "CATALOG_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-05",
+      "name": "list-assets",
+      "executor": "cli",
+      "command": "cloudrobo asset list-assets --catalog-id ${CATALOG_ID} --limit 5",
+      "expected": "JSON array of assets with asset_id, name, type, status fields",
+      "type": "read",
+      "requires": "CATALOG_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-06",
+      "name": "list-assets-filter-type-status",
+      "executor": "cli",
+      "command": "cloudrobo asset list-assets --catalog-id ${CATALOG_ID} --type model --status RELEASE",
+      "expected": "JSON array of assets with type=model and status=RELEASE",
+      "type": "read",
+      "requires": "CATALOG_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-07",
+      "name": "show-asset",
+      "executor": "cli",
+      "command": "cloudrobo asset show-asset --asset-id ${ASSET_ID}",
+      "expected": "JSON asset detail with id, name, type, status fields",
+      "type": "read",
+      "requires": "ASSET_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-08",
+      "name": "create-asset-dry-run",
+      "executor": "cli",
+      "command": "cloudrobo asset create-asset --catalog-id ${CATALOG_ID} --name test-dry-run --type model --dry-run",
+      "expected": "[DRY-RUN] create_asset(catalog_id=..., name=test-dry-run, type=model)",
+      "type": "read",
+      "requires": "CATALOG_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-09",
+      "name": "create-asset",
+      "executor": "cli",
+      "command": "cloudrobo asset create-asset --catalog-id ${CATALOG_ID} --name test-asset --type model --ext-metadata '{\"model_type\":\"planning\"}'",
+      "expected": "Asset created with asset_id",
+      "type": "mutation",
+      "requires": "CATALOG_ID",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-10",
+      "name": "update-asset",
+      "executor": "cli",
+      "command": "cloudrobo asset update-asset --asset-id ${ASSET_ID} --description updated-description",
+      "expected": "Asset updated with new description",
+      "type": "mutation",
+      "requires": "ASSET_ID",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-11",
+      "name": "delete-asset",
+      "executor": "cli",
+      "command": "cloudrobo asset delete-asset --asset-id ${ASSET_ID}",
+      "expected": "Asset deleted",
+      "type": "mutation",
+      "requires": "ASSET_ID",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-12",
+      "name": "batch-delete-assets",
+      "executor": "cli",
+      "command": "cloudrobo asset batch-delete-assets --asset-ids ${ASSET_IDS}",
+      "expected": "Assets batch deleted with count",
+      "type": "mutation",
+      "requires": "ASSET_IDS",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-13",
+      "name": "list-versions",
+      "executor": "cli",
+      "command": "cloudrobo asset list-versions --asset-id ${ASSET_ID} --limit 5",
+      "expected": "JSON array of versions with id, version fields",
+      "type": "read",
+      "requires": "ASSET_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-14",
+      "name": "show-version",
+      "executor": "cli",
+      "command": "cloudrobo asset show-version --asset-id ${ASSET_ID} --version-id ${VERSION_ID}",
+      "expected": "JSON version detail with id, version fields",
+      "type": "read",
+      "requires": "ASSET_ID, VERSION_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-15",
+      "name": "create-version",
+      "executor": "cli",
+      "command": "cloudrobo asset create-version --asset-id ${ASSET_ID} --version 1.0.0",
+      "expected": "Version created with version_id",
+      "type": "mutation",
+      "requires": "ASSET_ID",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-16",
+      "name": "delete-version",
+      "executor": "cli",
+      "command": "cloudrobo asset delete-version --asset-id ${ASSET_ID} --version-id ${VERSION_ID}",
+      "expected": "Version deleted",
+      "type": "mutation",
+      "requires": "ASSET_ID, VERSION_ID",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-17",
+      "name": "add-tags",
+      "executor": "cli",
+      "command": "cloudrobo asset add-tags --asset-id ${ASSET_ID} --tags \"tag1,tag2\"",
+      "expected": "Tags added to asset",
+      "type": "mutation",
+      "requires": "ASSET_ID",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-18",
+      "name": "delete-tag",
+      "executor": "cli",
+      "command": "cloudrobo asset delete-tag --asset-id ${ASSET_ID} --tag tag1",
+      "expected": "Tag deleted from asset",
+      "type": "mutation",
+      "requires": "ASSET_ID",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-19",
+      "name": "list-tags",
+      "executor": "cli",
+      "command": "cloudrobo asset list-tags --language zh",
+      "expected": "JSON array of predefined tags",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-20",
+      "name": "list-tags-filter-type",
+      "executor": "cli",
+      "command": "cloudrobo asset list-tags --language zh --type model",
+      "expected": "JSON array of predefined tags for model type",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-21",
+      "name": "list-actions",
+      "executor": "cli",
+      "command": "cloudrobo asset list-actions --asset-id ${ASSET_ID} --version-id ${VERSION_ID}",
+      "expected": "JSON array of actions",
+      "type": "read",
+      "requires": "ASSET_ID, VERSION_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-22",
+      "name": "check-permission",
+      "executor": "cli",
+      "command": "cloudrobo asset check-permission --asset-id ${ASSET_ID} --version-id ${VERSION_ID} --permissions \"meta_read,data_read\"",
+      "expected": "JSON with permission verdict (allow/deny per permission)",
+      "type": "read",
+      "requires": "ASSET_ID, VERSION_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-23",
+      "name": "show-lineage-children",
+      "executor": "cli",
+      "command": "cloudrobo asset show-lineage --asset-id ${ASSET_ID} --version-id ${VERSION_ID} --type children",
+      "expected": "JSON tree of child assets or friendly message if no lineage",
+      "type": "read",
+      "requires": "ASSET_ID, VERSION_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-24",
+      "name": "show-lineage-parent",
+      "executor": "cli",
+      "command": "cloudrobo asset show-lineage --asset-id ${ASSET_ID} --version-id ${VERSION_ID} --type parent",
+      "expected": "JSON tree of parent assets or friendly message if no lineage",
+      "type": "read",
+      "requires": "ASSET_ID, VERSION_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-25",
+      "name": "search-assets",
+      "executor": "cli",
+      "command": "cloudrobo asset search-assets --keyword robot --limit 5",
+      "expected": "JSON search results with asset list",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-26",
+      "name": "search-assets-filter-type",
+      "executor": "cli",
+      "command": "cloudrobo asset search-assets --keyword robot --type model",
+      "expected": "JSON search results filtered by type=model",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-27",
+      "name": "list-publication-assets",
+      "executor": "cli",
+      "command": "cloudrobo asset list-publication-assets --type model --limit 5",
+      "expected": "JSON array of official/community assets",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-28",
+      "name": "list-publication-assets-capabilities",
+      "executor": "cli",
+      "command": "cloudrobo asset list-publication-assets --type model --capabilities training --limit 5",
+      "expected": "JSON array of model assets with training capability",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-29",
+      "name": "import-asset-dry-run",
+      "executor": "cli",
+      "command": "cloudrobo asset import-asset --catalog-id ${CATALOG_ID} --name test-import --type model --ext-metadata '{\"model_type\":\"planning\"}' --local-path ./test-model --dry-run",
+      "expected": "[DRY-RUN] import_asset(catalog_id=..., name=test-import, type=model, ..., ext_metadata={'model_type': 'planning'})",
+      "type": "read",
+      "requires": "CATALOG_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-30",
+      "name": "import-asset",
+      "executor": "cli",
+      "command": "cloudrobo asset import-asset --catalog-id ${CATALOG_ID} --name test-import --type model --ext-metadata '{\"model_type\":\"planning\"}' --local-path ${LOCAL_PATH}",
+      "expected": "Asset imported with asset_id, version_id, OBS upload success",
+      "type": "mutation",
+      "requires": "CATALOG_ID, LOCAL_PATH",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-31",
+      "name": "import-asset-new-version",
+      "executor": "cli",
+      "command": "cloudrobo asset import-asset --asset-id ${ASSET_ID} --local-path ${LOCAL_PATH}",
+      "expected": "New version created for existing asset, OBS upload success",
+      "type": "mutation",
+      "requires": "LOCAL_PATH, ASSET_ID",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-32",
+      "name": "export-asset-dry-run",
+      "executor": "cli",
+      "command": "cloudrobo asset export-asset --asset-id ${ASSET_ID} --local-path ./export-out --dry-run",
+      "expected": "[DRY-RUN] export_asset(asset_id=..., version_id=latest, local_path=./export-out)",
+      "type": "read",
+      "requires": "ASSET_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-33",
+      "name": "export-asset",
+      "executor": "cli",
+      "command": "cloudrobo asset export-asset --asset-id ${ASSET_ID} --local-path ${LOCAL_PATH}",
+      "expected": "Asset exported to local path with status=exported",
+      "type": "mutation",
+      "requires": "ASSET_ID, LOCAL_PATH",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-34",
+      "name": "export-asset-specific-version",
+      "executor": "cli",
+      "command": "cloudrobo asset export-asset --asset-id ${ASSET_ID} --version-id ${VERSION_ID} --local-path ${LOCAL_PATH}",
+      "expected": "Specific version exported to local path",
+      "type": "mutation",
+      "requires": "ASSET_ID, VERSION_ID, LOCAL_PATH",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-35",
+      "name": "create-action",
+      "executor": "cli",
+      "command": "cloudrobo asset create-action --asset-id ${ASSET_ID} --version-id ${VERSION_ID} --action-info '{\"action\":\"FFT\",\"algorithm\":{\"asset_id\":\"${ALGO_ASSET_ID}\",\"version_id\":\"${ALGO_VERSION_ID}\"},\"status\":\"ENABLE\"}'",
+      "expected": "Action created on asset version",
+      "type": "mutation",
+      "requires": "ASSET_ID, VERSION_ID, ALGO_ASSET_ID, ALGO_VERSION_ID",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-36",
+      "name": "update-action",
+      "executor": "cli",
+      "command": "cloudrobo asset update-action --asset-id ${ASSET_ID} --version-id ${VERSION_ID} --action FFT --action-info '{\"status\":\"DISABLE\"}'",
+      "expected": "Action updated with new status",
+      "type": "mutation",
+      "requires": "ASSET_ID, VERSION_ID",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-37",
+      "name": "delete-action",
+      "executor": "cli",
+      "command": "cloudrobo asset delete-action --asset-id ${ASSET_ID} --version-id ${VERSION_ID} --action FFT",
+      "expected": "Action deleted from asset version",
+      "type": "mutation",
+      "requires": "ASSET_ID, VERSION_ID",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-38",
+      "name": "import-asset-from-frontmatter",
+      "executor": "cli",
+      "command": "cloudrobo asset import-asset --catalog-id ${CATALOG_ID} --local-path ${EXPORTED_PATH} --dry-run",
+      "expected": "[DRY-RUN] with metadata from README.md frontmatter",
+      "type": "read",
+      "requires": "CATALOG_ID, EXPORTED_PATH",
+      "status": "pending"
+    },
+    {
+      "id": "TC-39",
+      "name": "import-asset-ext-metadata-missing",
+      "executor": "cli",
+      "command": "cloudrobo asset import-asset --catalog-id ${CATALOG_ID} --name test --type model --local-path ${LOCAL_PATH} --dry-run",
+      "expected": "UsageError: ext_metadata is required for type 'model'",
+      "type": "read",
+      "requires": "CATALOG_ID, LOCAL_PATH",
+      "status": "pending"
+    },
+    {
+      "id": "TC-40",
+      "name": "export-asset-readme-generation",
+      "executor": "cli",
+      "command": "cloudrobo asset export-asset --asset-id ${ASSET_ID} --local-path ${LOCAL_PATH}",
+      "expected": "Exported with README.md containing frontmatter (name, type, ext_metadata, etc.)",
+      "type": "mutation",
+      "requires": "ASSET_ID, LOCAL_PATH",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-41",
+      "name": "export-import-roundtrip",
+      "executor": "cli",
+      "command": "cloudrobo asset export-asset --asset-id ${ASSET_ID} --local-path ${LOCAL_PATH} && cloudrobo asset import-asset --catalog-id ${CATALOG_ID} --local-path ${LOCAL_PATH}/${ASSET_ID} --dry-run",
+      "expected": "Round-trip: export writes frontmatter, import reads it successfully",
+      "type": "read",
+      "requires": "ASSET_ID, LOCAL_PATH, CATALOG_ID",
+      "requires_confirmation": true,
+      "status": "pending"
+    }
+  ],
+  "environment_variables": {
+    "required": ["HUAWEI_CLOUD_AK", "HUAWEI_CLOUD_SK"],
+    "optional": ["REPOSITORY_ID", "CATALOG_ID", "ASSET_ID", "VERSION_ID", "ASSET_IDS", "LOCAL_PATH", "EXPORTED_PATH", "ALGO_ASSET_ID", "ALGO_VERSION_ID", "CLOUDROBO_DEBUG"]
+  },
+  "notes": [
+    "Read-only tests (TC-01 to TC-08, TC-13, TC-14, TC-19 to TC-29, TC-32, TC-38, TC-39) run automatically.",
+    "Mutation tests (TC-09 to TC-12, TC-15 to TC-18, TC-30 to TC-31, TC-33 to TC-37, TC-40, TC-41) require explicit user confirmation.",
+    "Set REPOSITORY_ID to run catalog listing tests (TC-03).",
+    "Set CATALOG_ID to run catalog-specific tests (TC-04 to TC-06, TC-08, TC-29 to TC-30, TC-38 to TC-39).",
+    "Set ASSET_ID to run asset-specific tests (TC-07, TC-10 to TC-11, TC-13 to TC-14, TC-17 to TC-18, TC-21 to TC-24, TC-32 to TC-34, TC-40 to TC-41).",
+    "Set VERSION_ID to run version-specific tests (TC-14, TC-21 to TC-24, TC-34 to TC-37).",
+    "Set LOCAL_PATH to run import/export tests (TC-30, TC-31, TC-33, TC-34, TC-39 to TC-41).",
+    "Set EXPORTED_PATH to run frontmatter-driven import test (TC-38).",
+    "Set ALGO_ASSET_ID and ALGO_VERSION_ID to run create-action test (TC-35)."
+  ]
+}
