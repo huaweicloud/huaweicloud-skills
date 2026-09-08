@@ -139,25 +139,26 @@ hcloud OBS GetBucketStorageInfo \
 # Upload a single file
 obsutil cp <LocalFilePath> obs://<BucketName>/<ObjectKey> -flat
 
-# Upload an entire directory (preserves directory structure by default)
-obsutil cp <LocalDirPath> obs://<BucketName>/<Prefix> -r
+# Upload an entire directory (ask the customer first whether to preserve structure)
+obsutil cp <LocalDirPath> obs://<BucketName>/<Prefix> -r          # customer: preserve structure
+obsutil cp <LocalDirPath> obs://<BucketName>/<Prefix> -r -flat    # customer: flatten files
 
 # Upload with specified concurrency (large files/many files)
 obsutil cp <LocalPath> obs://<BucketName>/<Prefix> -r -p=10
 ```
 
-> **⚠️ Key: Do NOT use `-flat` for directory uploads by default**
+> **⚠️ Key: Ask the customer first for directory uploads**
 >
-> When the user specifies a directory, the entire directory should be uploaded as-is (preserving structure).
-> Only add `-flat` if the user **explicitly requests** flattening.
-> - Without `-flat`: `/home/user/data/sub/file.txt` → `obs://bucket/prefix/sub/file.txt` (structure preserved)
-> - With `-flat`: `/home/user/data/sub/file.txt` → `obs://bucket/prefix/file.txt` (structure lost)
+> When the user specifies a directory, you **must** ask whether the source directory itself should be uploaded as a directory layer to OBS (i.e., preserve directory structure) before running the command. Decide `-flat` based on the customer's explicit answer.
+> - Customer "Yes" (preserve) → no `-flat`: `/home/user/data/sub/file.txt` → `obs://bucket/prefix/sub/file.txt`
+> - Customer "No" (flatten) → with `-flat`: `/home/user/data/sub/file.txt` → `obs://bucket/prefix/file.txt`
+> - Never default; always ask first.
 
 **Optional parameters:**
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `-flat` | off | Discard local directory structure (only use for single files or if user explicitly requests) |
+| `-flat` | off | Discard local directory structure (for directory uploads, decide by asking the customer first; for single files, can be used directly) |
 | `-r` | - | Recursively upload directory |
 | `-p` | 5 | Concurrency |
 | `-threshold` | 50MB | Multipart upload threshold |
