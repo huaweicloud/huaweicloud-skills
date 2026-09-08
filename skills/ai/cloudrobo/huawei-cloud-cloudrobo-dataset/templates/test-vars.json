@@ -1,0 +1,309 @@
+{
+  "skill_name": "cloudrobo-dataset",
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "list-tasks",
+      "executor": "cli",
+      "command": "cloudrobo dataset proc list-tasks",
+      "expected": "JSON array of tasks with task_id, name, status fields",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-02",
+      "name": "list-tasks-filter-status",
+      "executor": "cli",
+      "command": "cloudrobo dataset proc list-tasks --status RUNNING",
+      "expected": "JSON array of tasks with status=RUNNING",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-03",
+      "name": "list-tasks-filter-algo-type",
+      "executor": "cli",
+      "command": "cloudrobo dataset proc list-tasks --algo-type PRESET_ASSETS",
+      "expected": "JSON array of tasks with algo_type=PRESET_ASSETS",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-04",
+      "name": "show-task",
+      "executor": "cli",
+      "command": "cloudrobo dataset proc show-task --task-id ${TASK_ID}",
+      "expected": "JSON task detail with id, name, status, algo_type fields",
+      "type": "read",
+      "requires": "TASK_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-05",
+      "name": "create-task-dry-run",
+      "executor": "cli",
+      "command": "cloudrobo dataset proc create-task --name test-dry-run --algo-type PRESET_ASSETS --task-config '{\"algo_name\":\"test\"}' --dry-run",
+      "expected": "[DRY-RUN] create_task(name=test-dry-run)",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-06",
+      "name": "create-task",
+      "executor": "cli",
+      "command": "cloudrobo dataset proc create-task --name test-task --algo-type PRESET_ASSETS --task-config '${TASK_CONFIG}' --wait --timeout 300",
+      "expected": "Task created with task_id, status transitions to SUCCEEDED",
+      "type": "mutation",
+      "requires": "TASK_CONFIG",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-07",
+      "name": "wait-task",
+      "executor": "cli",
+      "command": "cloudrobo dataset proc wait-task --task-id ${TASK_ID} --timeout 60 --interval 5",
+      "expected": "Status transitions printed, final status SUCCEEDED/FAILED/DELETED",
+      "type": "read",
+      "requires": "TASK_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-08",
+      "name": "restart-task",
+      "executor": "cli",
+      "command": "cloudrobo dataset proc restart-task --task-id ${TASK_ID}",
+      "expected": "Task restarted, new status returned",
+      "type": "mutation",
+      "requires": "TASK_ID",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-09",
+      "name": "get-log-list-system",
+      "executor": "cli",
+      "command": "cloudrobo dataset proc get-log --task-id ${TASK_ID} --is-system true",
+      "expected": "JSON list of system log files with file_name and file_path",
+      "type": "read",
+      "requires": "TASK_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-10",
+      "name": "get-log-list-job",
+      "executor": "cli",
+      "command": "cloudrobo dataset proc get-log --task-id ${TASK_ID} --is-system false",
+      "expected": "JSON list of job log files with file_name and file_path",
+      "type": "read",
+      "requires": "TASK_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-11",
+      "name": "get-log-content",
+      "executor": "cli",
+      "command": "cloudrobo dataset proc get-log --task-id ${TASK_ID} --file-name system-std-output.log --file-path ${FILE_PATH}",
+      "expected": "Log content (latest 64KB tail by default)",
+      "type": "read",
+      "requires": "TASK_ID, FILE_PATH",
+      "status": "pending"
+    },
+    {
+      "id": "TC-12",
+      "name": "get-log-content-full",
+      "executor": "cli",
+      "command": "cloudrobo dataset proc get-log --task-id ${TASK_ID} --file-name system-std-output.log --file-path ${FILE_PATH} --all",
+      "expected": "Full log content (up to 1MB)",
+      "type": "read",
+      "requires": "TASK_ID, FILE_PATH",
+      "status": "pending"
+    },
+    {
+      "id": "TC-13",
+      "name": "get-preview",
+      "executor": "cli",
+      "command": "cloudrobo dataset proc get-preview --task-id ${TASK_ID} --file-name ${PREVIEW_FILE_NAME}",
+      "expected": "OBS temporary download link for the specified file",
+      "type": "read",
+      "requires": "TASK_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-14",
+      "name": "list-algorithms-data-processing",
+      "executor": "cli",
+      "command": "cloudrobo asset list-publication-assets --type algorithm --sub-type data_processing --limit 5",
+      "expected": "JSON array of algorithms with asset_id, name, ext_metadata",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-15",
+      "name": "list-algorithms-data-evaluating",
+      "executor": "cli",
+      "command": "cloudrobo asset list-publication-assets --type algorithm --sub-type data_evaluating --limit 5",
+      "expected": "JSON array of evaluation algorithms",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-16",
+      "name": "update-task-sdk",
+      "executor": "sdk",
+      "command": "client.update_task('${TASK_ID}', {\"name\": \"updated-name\"})",
+      "expected": "Task updated with new name",
+      "type": "mutation",
+      "requires": "TASK_ID",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-17",
+      "name": "delete-task-sdk",
+      "executor": "sdk",
+      "command": "client.delete_tasks(['${TASK_ID}'])",
+      "expected": "Tasks deleted successfully",
+      "type": "mutation",
+      "requires": "TASK_ID",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-19",
+      "name": "get-task-frames-sdk",
+      "executor": "sdk",
+      "command": "cloudrobo dataset proc get-frames --task-id ${TASK_ID} --prefix ${PREFIX}",
+      "expected": "JSON frame information for the task",
+      "type": "read",
+      "requires": "TASK_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-21",
+      "name": "download-log",
+      "executor": "cli",
+      "command": "cloudrobo dataset proc download-log --task-id ${TASK_ID} --file-name system-std-output.log --file-path ${FILE_PATH}",
+      "expected": "Log file downloaded",
+      "type": "read",
+      "requires": "TASK_ID, FILE_PATH",
+      "status": "pending"
+    },
+    {
+      "id": "TC-22",
+      "name": "eval-list-tasks",
+      "executor": "cli",
+      "command": "cloudrobo dataset eval list-tasks",
+      "expected": "JSON array of eval tasks",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-23",
+      "name": "eval-show-task",
+      "executor": "cli",
+      "command": "cloudrobo dataset eval show-task --task-id ${EVAL_TASK_ID}",
+      "expected": "JSON eval task detail",
+      "type": "read",
+      "requires": "EVAL_TASK_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-24",
+      "name": "eval-create-task",
+      "executor": "cli",
+      "command": "cloudrobo dataset eval create-task --name test-eval --task-config '{\"algo_id\":\"404969d0-14dc-4185-ae81-6dbeb173ddd1\",\"algo_name\":\"数据集多样性评测-LeRobot\",\"algo_entrance\":\"bash entrypoint.sh diversity_evaluation --operator diversity\",\"dataset_type\":\"BUILD_IN_ASSET\",\"dataset_id\":\"28df9fd8-8967-4460-897d-5b677b457525\",\"dataset_name\":\"jaka_place_block_into_tray_sim_50\",\"dataset_path\":\"obs://cloudrobo-test-203/workspace-test/dataset/jaka_place_block_into_tray_sim_50/\",\"image\":\"swr.cn-north-7.myhuaweicloud.com/cloudrobo/data-engineering-core-dataset-evaluation-image:26.7.0-26.7.0001\",\"robot_config\":\"obs://cloudrobo-test-203/workspace-test/dataset/jaka/\",\"worker_spec\":{\"cpu\":2,\"memory\":4},\"resource_pool_type\":\"PUBLIC_POOL\",\"description\":\"eval test\"}' --wait --timeout 600",
+      "expected": "Eval task created, status transitions to SUCCEEDED",
+      "type": "mutation",
+      "requires": "",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-25",
+      "name": "eval-get-log-list-system",
+      "executor": "cli",
+      "command": "cloudrobo dataset eval get-log --task-id ${EVAL_TASK_ID} --is-system true",
+      "expected": "JSON list of eval system log files",
+      "type": "read",
+      "requires": "EVAL_TASK_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-26",
+      "name": "eval-get-log-content",
+      "executor": "cli",
+      "command": "cloudrobo dataset eval get-log --task-id ${EVAL_TASK_ID} --file-name system-std-output.log --file-path ${EVAL_FILE_PATH}",
+      "expected": "Eval log content",
+      "type": "read",
+      "requires": "EVAL_TASK_ID, EVAL_FILE_PATH",
+      "status": "pending"
+    },
+    {
+      "id": "TC-28",
+      "name": "eval-get-preview",
+      "executor": "cli",
+      "command": "cloudrobo dataset eval get-preview --task-id ${EVAL_TASK_ID} --file-name report.json",
+      "expected": "OBS temp URL for evaluation report",
+      "type": "read",
+      "requires": "EVAL_TASK_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-28a",
+      "name": "eval-get-preview-download",
+      "executor": "cli",
+      "command": "cloudrobo dataset eval get-preview --task-id ${EVAL_TASK_ID} --file-name report.json --is-download",
+      "expected": "OBS temp download URL for evaluation report",
+      "type": "read",
+      "requires": "EVAL_TASK_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-28b",
+      "name": "proc-get-resource-usage",
+      "executor": "cli",
+      "command": "cloudrobo dataset proc get-resource-usage --task-id ${TASK_ID} --metric CPU_UTIL --start ${START_TS} --end ${END_TS} --step 60",
+      "expected": "CPU utilization time series data",
+      "type": "read",
+      "requires": "TASK_ID, START_TS, END_TS",
+      "status": "pending"
+    },
+    {
+      "id": "TC-29",
+      "name": "eval-delete-task-sdk",
+      "executor": "sdk",
+      "command": "client.delete_eval_task('${EVAL_TASK_ID}')",
+      "expected": "Eval task deleted (single granularity)",
+      "type": "mutation",
+      "requires": "EVAL_TASK_ID",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-31",
+      "name": "pipeline-proc-to-eval",
+      "executor": "cli",
+      "command": "cloudrobo dataset proc show-task --task-id ${TASK_ID} (extract target_path) → cloudrobo dataset eval create-task --task-config with dataset_configs containing obs_path=target_path",
+      "expected": "Pipeline: proc SUCCEEDED → eval created with target_path wrapped in dataset_configs",
+      "type": "mutation",
+      "requires": "TASK_ID, EVAL_TASK_CONFIG",
+      "requires_confirmation": true,
+      "status": "pending"
+    }
+  ],
+  "environment_variables": {
+    "required": ["HUAWEI_CLOUD_AK", "HUAWEI_CLOUD_SK"],
+    "optional": ["TASK_ID", "TASK_CONFIG", "FILE_PATH", "EVAL_TASK_ID", "EVAL_TASK_CONFIG", "EVAL_FILE_PATH", "WORKSPACE_ID", "CLOUDROBO_DEBUG", "START_TS", "END_TS"]
+  },
+  "notes": [
+    "Read-only tests (TC-01 to TC-05, TC-07, TC-09 to TC-15, TC-19 to TC-23, TC-25 to TC-28a, TC-28b, TC-30) run automatically.",
+    "Mutation tests (TC-06, TC-08, TC-16, TC-17, TC-18, TC-24, TC-29, TC-31) require explicit user confirmation.",
+    "Set TASK_ID to run proc-task-specific tests (TC-04, TC-07 to TC-13, TC-16 to TC-21, TC-28b).",
+    "Set TASK_CONFIG to run TC-06 (create-task).",
+    "Set EVAL_TASK_ID to run eval-task-specific tests (TC-23 to TC-29).",
+    "Set EVAL_TASK_CONFIG to run TC-24 (eval create-task).",
+    "Set START_TS/END_TS to run TC-28b (resource-usage).",
+    "Pipeline test TC-31 requires a SUCCEEDED proc-task and its target_path."
+  ]
+}
