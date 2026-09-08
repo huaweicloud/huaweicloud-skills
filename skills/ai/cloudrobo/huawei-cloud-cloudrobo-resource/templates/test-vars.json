@@ -1,0 +1,135 @@
+{
+  "skill_name": "cloudrobo-resource",
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "list-quotas",
+      "executor": "cli",
+      "command": "cloudrobo resource list-quotas",
+      "expected": "JSON with domain_quotas, quotas, and page_info",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-02",
+      "name": "list-quotas-cce",
+      "executor": "cli",
+      "command": "cloudrobo resource list-quotas --resource-type CCE",
+      "expected": "JSON with domain_quotas where npu=0 for CCE type",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-03",
+      "name": "list-quotas-modelarts",
+      "executor": "cli",
+      "command": "cloudrobo resource list-quotas --resource-type MODELARTS",
+      "expected": "JSON with domain_quotas where cpu/memory/gpu=0 for MODELARTS type",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-04",
+      "name": "list-quotas-pagination",
+      "executor": "cli",
+      "command": "cloudrobo resource list-quotas --limit 20 --offset 0",
+      "expected": "JSON with paginated quotas and page_info",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-05",
+      "name": "list-quotas-pool-type",
+      "executor": "cli",
+      "command": "cloudrobo resource list-quotas --pool-type DEDICATED",
+      "expected": "JSON with quotas filtered by pool_type",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-06",
+      "name": "list-pools",
+      "executor": "cli",
+      "command": "cloudrobo resource list-pools",
+      "expected": "JSON with resources array and page_info",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-07",
+      "name": "list-pools-modelarts-standard",
+      "executor": "cli",
+      "command": "cloudrobo resource list-pools --resource-type MODELARTS --resource-sub-type STANDARD",
+      "expected": "JSON with filtered resources",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-08",
+      "name": "list-pools-usages",
+      "executor": "cli",
+      "command": "cloudrobo resource list-pools --usages TRAINING,INFERENCE",
+      "expected": "JSON with resources filtered by usages",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-09",
+      "name": "list-pools-pagination",
+      "executor": "cli",
+      "command": "cloudrobo resource list-pools --limit 10 --offset 0",
+      "expected": "JSON with paginated resources and page_info",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-10",
+      "name": "show-pool",
+      "executor": "cli",
+      "command": "cloudrobo resource show-pool --pool-id ${POOL_ID}",
+      "expected": "JSON with ResourceVo including nodes, status, config",
+      "type": "read",
+      "requires": "POOL_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-11",
+      "name": "list-quotas-sdk",
+      "executor": "sdk",
+      "command": "client.list_quotas()",
+      "expected": "Dict with domain_quotas, quotas, page_info",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-12",
+      "name": "list-pools-sdk",
+      "executor": "sdk",
+      "command": "client.list_pools()",
+      "expected": "Dict with resources and page_info",
+      "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-13",
+      "name": "show-pool-sdk",
+      "executor": "sdk",
+      "command": "client.show_pool('${POOL_ID}')",
+      "expected": "Dict with ResourceVo detail",
+      "type": "read",
+      "requires": "POOL_ID",
+      "status": "pending"
+    }
+  ],
+  "environment_variables": {
+    "required": ["HUAWEI_CLOUD_AK", "HUAWEI_CLOUD_SK"],
+    "optional": ["POOL_ID", "WORKSPACE_ID", "CLOUDROBO_DEBUG"]
+  },
+  "notes": [
+    "All tests are read-only — no mutation tests in this skill.",
+    "Set POOL_ID to run pool show tests (TC-10, TC-13).",
+    "Set WORKSPACE_ID to filter quota list by workspace.",
+    "TC-02 verifies CCE quota isolation (npu=0).",
+    "TC-03 verifies ModelArts quota isolation (cpu/memory/gpu=0)."
+  ]
+}
