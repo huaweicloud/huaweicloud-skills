@@ -1,0 +1,153 @@
+{
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "list-tasks",
+      "command": "cloudrobo dispatch list-tasks --session-id {session_id}",
+      "description": "List all tasks in a session",
+      "expected": "JSON array of tasks",
+      "type": "read"
+    },
+    {
+      "id": "TC-02",
+      "name": "list-tasks-filter-status",
+      "command": "cloudrobo dispatch list-tasks --session-id {session_id} --status RUNNING",
+      "description": "List tasks filtered by status",
+      "expected": "JSON array of RUNNING tasks",
+      "type": "read"
+    },
+    {
+      "id": "TC-03",
+      "name": "list-tasks-filter-robot",
+      "command": "cloudrobo dispatch list-tasks --session-id {session_id} --robot-id {robot_id}",
+      "description": "List tasks filtered by robot",
+      "expected": "JSON array of tasks for the robot",
+      "type": "read"
+    },
+    {
+      "id": "TC-04",
+      "name": "list-tasks-filter-infer-service",
+      "command": "cloudrobo dispatch list-tasks --session-id {session_id} --infer-service-id {infer_service_id}",
+      "description": "List tasks filtered by inference service",
+      "expected": "JSON array of tasks for the infer service",
+      "type": "read"
+    },
+    {
+      "id": "TC-05",
+      "name": "create-task",
+      "command": "cloudrobo dispatch create-task --session-id {session_id} --name {task_name} --task {task_description} --constraints-json '{constraints_json}'",
+      "description": "Create a dispatcher task in a session",
+      "expected": "JSON with task_id and status=PENDING",
+      "type": "write"
+    },
+    {
+      "id": "TC-06",
+      "name": "create-task-dry-run",
+      "command": "cloudrobo dispatch create-task --session-id {session_id} --name {task_name} --task {task_description} --constraints-json '{constraints_json}' --dry-run",
+      "description": "Dry-run create (no task submitted)",
+      "expected": "[DRY-RUN] message, no task created",
+      "type": "read"
+    },
+    {
+      "id": "TC-07",
+      "name": "show-task",
+      "command": "cloudrobo dispatch show-task --session-id {session_id} --task-id {task_id}",
+      "description": "Show a task detail",
+      "expected": "JSON with task fields and status",
+      "type": "read"
+    },
+    {
+      "id": "TC-08",
+      "name": "show-task-result",
+      "command": "cloudrobo dispatch show-task-result --session-id {session_id} --task-id {task_id}",
+      "description": "Fetch task result and log items",
+      "expected": "JSON {task, log_items}",
+      "type": "read"
+    },
+    {
+      "id": "TC-09",
+      "name": "show-task-result-paginated",
+      "command": "cloudrobo dispatch show-task-result --session-id {session_id} --task-id {task_id} --limit 100 --offset 0",
+      "description": "Fetch task result with pagination",
+      "expected": "JSON page of log items",
+      "type": "read"
+    },
+    {
+      "id": "TC-10",
+      "name": "show-task-result-inverse",
+      "command": "cloudrobo dispatch show-task-result --session-id {session_id} --task-id {task_id} --inverse",
+      "description": "Fetch task result in inverse order",
+      "expected": "Reverse-ordered JSON",
+      "type": "read"
+    },
+    {
+      "id": "TC-11",
+      "name": "cancel-task",
+      "command": "cloudrobo dispatch cancel-task --session-id {session_id} --task-id {task_id}",
+      "description": "Cancel a task",
+      "expected": "JSON reflecting terminal (cancelled) state",
+      "type": "write"
+    },
+    {
+      "id": "TC-12",
+      "name": "cancel-task-dry-run",
+      "command": "cloudrobo dispatch cancel-task --session-id {session_id} --task-id {task_id} --dry-run",
+      "description": "Dry-run cancel (no action taken)",
+      "expected": "[DRY-RUN] message",
+      "type": "read"
+    },
+    {
+      "id": "TC-13",
+      "name": "path-traversal-blocked",
+      "command": "cloudrobo dispatch show-task --session-id {session_id} --task-id '../etc/passwd'",
+      "description": "Verify validate_safe_id blocks path traversal",
+      "expected": "Error raised (invalid task id)",
+      "type": "read"
+    },
+    {
+      "id": "TC-14",
+      "name": "missing-session-id",
+      "command": "cloudrobo dispatch create-task --name t --task x --constraints-json '{constraints_json}'",
+      "description": "Verify create-task requires --session-id",
+      "expected": "CLI usage error (session_id required)",
+      "type": "read"
+    },
+    {
+      "id": "TC-15",
+      "name": "wait-task",
+      "command": "cloudrobo dispatch wait-task --session-id {session_id} --task-id {task_id} --timeout 600",
+      "description": "Wait (block) for a task to finish; polls every 5s, returns once status != RUNNING",
+      "expected": "JSON task dict once status leaves RUNNING (COMPLETED/FAILED/CANCELLED)",
+      "type": "read",
+      "prerequisite": "A task created via create-task (TC-05); wait-task does not create tasks"
+    },
+    {
+      "id": "TC-16",
+      "name": "wait-task-timeout",
+      "command": "cloudrobo dispatch wait-task --session-id {session_id} --task-id {task_id} --timeout 2",
+      "description": "Verify wait-task honors --timeout (min 1s); raises TimeoutError / CLI exits 1 if task still RUNNING",
+      "expected": "Timeout shown as [ERROR] and non-zero exit if task not terminal within timeout",
+      "type": "read"
+    }
+  ],
+  "variables": {
+    "session_id": "Dispatcher session id (required for all dispatch ops)",
+    "task_id": "Dispatcher task id (for task-specific operations)",
+    "robot_id": "Target robot id (for create-task / list filter)",
+    "exec_model_id": "Execution model id (required for create-task)",
+    "infer_service_id": "Inference service id (optional list filter)",
+    "task_name": "Task name for create-task",
+    "task_description": "Natural-language task description",
+    "constraints_json": "Required --constraints-json object for create-task: {\"model\":{\"exec_model_id\":\"<exec_model_id>\"},\"robot_id\":\"<robot_id>\",\"exec_constraints\":{\"max_run_time\":10,\"max_iter_num\":100}}",
+    "wait_timeout": "Seconds for wait-task (default 600, IntRange 1-3600)"
+  },
+  "notes": [
+    "All dispatch operations are session-scoped and require a valid session_id",
+    "Mutating tests (TC-05, TC-11) require user confirmation before execution",
+    "TC-06/TC-12 validate --dry-run — no side effects",
+    "TC-15/TC-16 use wait-task to block until a task finishes (polls every 5s); wait-task does NOT create a task — run TC-05 first to obtain a task_id",
+    "These tests use the CURRENT FE2026052100144 interface (create-task etc.); do NOT use deprecated create-session/exec-task",
+    "Subagents may reuse old IDs giving stale cache; if results look stale, wait (60+ minutes) and re-query",
+    "For comprehensive end-to-end testing beyond these read-only checks, run the commands from SKILL.md manually"
+  ]
+}
