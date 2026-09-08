@@ -48,11 +48,11 @@ _ATOMGIT_AUTH_FILE = "auth.toml"
 # ====== Auto-init .vod/ directory ======
 
 _SKILL_DIR = Path(__file__).resolve().parent.parent
-_CONFIG_TEMPLATE = _SKILL_DIR / "assets" / "config.yaml.template"
+_CONFIG_TEMPLATE = _SKILL_DIR / "assets" / "config.yaml"
 
 
 def _load_config() -> dict:
-    """Read config directly from assets/config.yaml.template."""
+    """Read config directly from assets/config.yaml."""
     if not _CONFIG_TEMPLATE.exists():
         print(f"[vod_deliver] Config template not found: {_CONFIG_TEMPLATE}", file=sys.stderr)
         return {}
@@ -107,6 +107,13 @@ def _read_atomgit_token(atomgit_home: str | None = None) -> dict | None:
 
         if not data.get("access_token"):
             return None
+
+        try:
+            current_mode = auth_path.stat().st_mode & 0o777
+            if current_mode != 0o600:
+                os.chmod(auth_path, 0o600)
+        except (OSError, PermissionError):
+            pass
 
         return {
             "access_token": data["access_token"],
@@ -491,14 +498,6 @@ def deliver_feedback(
     if not repo_url:
         return {"success": False, "error": "GitCode repo URL not configured"}
 
-    # Get token from AtomGit-GO
-    resolution = _resolve_atomgit_token(atomgit_home)
-    if not resolution["success"]:
-        return resolution  # carries need_login signal or error
-
-    token = resolution["access_token"]
-    atomgit_hint = resolution.get("atomgit")
-
     feedback_file = feedbacks_dir / f"{feedback_id}.md"
     if not feedback_file.exists():
         return {"success": False, "error": f"Feedback file not found: {feedback_file}"}
@@ -507,6 +506,14 @@ def deliver_feedback(
         feedback = read_feedback_md(feedback_file)
     except Exception as e:
         return {"success": False, "error": f"Failed to read feedback record: {e}"}
+
+    # Get token from AtomGit-GO
+    resolution = _resolve_atomgit_token(atomgit_home)
+    if not resolution["success"]:
+        return resolution  # carries need_login signal or error
+
+    token = resolution["access_token"]
+    atomgit_hint = resolution.get("atomgit")
 
     if feedback.status == FeedbackStatus.DISCARDED:
         return {"success": False, "error": "Discarded feedbacks are not delivered"}
@@ -620,7 +627,7 @@ def main() -> None:
 
     update_p = subparsers.add_parser("update-status", help="Update feedback delivery status")
     update_p.add_argument("--feedback-id", required=True, help="Feedback ID")
-    update_p.add_argument("--status", required=True, help="Delivery status")
+    update_p.add_argument("--status", required=True, choices=["open", "promoted", "resolved", "discarded", "delivered"], help="Delivery status")
     update_p.add_argument("--feedbacks-dir", "--feedback-dir", required=True, type=Path, dest="feedbacks_dir", help="Path to .vod/feedbacks/")
 
     login_p = subparsers.add_parser("login-wait", help="Poll for QR-code authorization and get token")
