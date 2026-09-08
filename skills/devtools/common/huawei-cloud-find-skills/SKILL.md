@@ -1,7 +1,7 @@
 ---
 name: huawei-cloud-find-skills
 description: |
-  Invoke this skill to search, discover, browse, find and install any Huawei Cloud (华为云) agent skill.Triggers include: "华为云","华为云有什么skill","华为云相关skill","华为云agent skill 市场","华为云skill类目","explore Huawei Cloud skills","show Huawei Cloud skill categories","does a Huawei Cloud skill exist for...","which Huawei Cloud skills exist","搜索华为云技能","有没有管理ECS/OBS/RDS的skill","帮我找 XX 华为云skill","介绍 XX Skill 内容","华为云 XX Skill 具体做什么","安装华为云Skill".
+  Invoke this skill to search, list, query, discover, browse, find and install any Huawei Cloud (华为云) agent skill. Triggers include: "华为云", "华为云有什么skill", "华为云相关skill", "华为云agent skill 市场", "华为云skill类目", "explore Huawei Cloud skills", "show Huawei Cloud skill categories", "does a Huawei Cloud skill exist for...", "which Huawei Cloud skills exist", "搜索华为云技能", "查询华为云skill列表", "有没有管理ECS/OBS/RDS的skill", "帮我找 XX 华为云skill", "介绍 XX Skill 内容", "华为云 XX Skill 具体做什么", "安装华为云Skill".
 ---
 
 > [!IMPORTANT]
@@ -165,7 +165,47 @@ If all installation attempts fail, report the error message to the user. Do NOT 
 | `Keyword` | Optional | Search keyword (matched against name, description, triggers, service) | None |
 | `Category` | Optional | Category code for filtering (e.g., "computing", "storage", "network") | None |
 | `skill-name` | Required (Step 3) | Exact skill name for installing | None |
+| `SKILL_QUALITY_ENDPOINT` | Optional | Quality-report server URL (see Quality Reporting below) | `https://skillsapi.developer.myhuaweicloud.com/api/quality/report` |
+| `SKILL_QUALITY_DISABLE` | Optional | Set to `1` to disable quality reporting entirely (local debugging) | `0` |
+| `SKILL_QUALITY_TIMEOUT` | Optional | Report HTTP timeout in seconds (non-blocking) | `3` |
+| `SKILL_QUALITY_TRIGGER` | Optional | Trigger type reported (`agent` / `workflow` / `auto` / `manual`) | `agent` |
 
+
+## Quality Reporting
+
+This Skill integrates [scripts/skill_quality_sdk.py](scripts/skill_quality_sdk.py)
+(vendored, zero third-party dependency) for execution quality reporting. Every
+`search-skills.py` run automatically reports one record — **skill name
+(`huawei-cloud-find-skills`), status (`success` / `biz_fail` / `sys_fail`),
+error code, cost, keyword/category input and result count** — to the skillsopr
+operations console, enabling usage/statistics counting of the skill itself.
+
+### Integration
+
+- **Entry script (`scripts/search-skills.py`):** the main search flow runs inside
+  a `quality_context` block (imported from the vendored SDK), which reports on
+  every exit path:
+  - search with results → `status=success`
+  - missing both keyword and category → `status=biz_fail`, `error_code=U02`
+  - no matching skills → `status=biz_fail`, `error_code=U03`
+  - index / cn-en-map fetch failure → `status=sys_fail`, `error_code=N02`
+- The report is **fire-and-forget** (3s HTTP timeout): reporting failure or
+  latency never blocks, changes, or fails the search.
+- The SDK is Python 3.6+ stdlib only; `python` / `python3` is already a hard
+  prerequisite.
+
+### Error Code Convention
+
+| Prefix | Category | Examples |
+|--------|----------|---------|
+| U | User input | U01 missing param, U02 bad param, U03 no data found |
+| C | Configuration | C01 missing AK/SK/env |
+| N | Network | N01 timeout, N02 connection refused |
+| B | Code bug | B01 null pointer, B04 version mismatch |
+| P | Platform | P01 scheduler error, P02 resource insufficient |
+
+Reporting is non-blocking and fails silently — it never interrupts the Skill
+main flow. Disable via `SKILL_QUALITY_DISABLE=1` for local testing.
 
 ## Reference Documentation
 
@@ -174,6 +214,10 @@ If all installation attempts fail, report the error message to the user. Do NOT 
 | GitCode API v5 `index.json` | Skill index fetched via HTTP GET (base64 decoded) |
 | GitCode API v5 `cn-en-map.json` | Chinese-English keyword mapping fetched via HTTP GET (base64 decoded) |
 | [scripts/search-skills.py](scripts/search-skills.py) | Search script (Python) — fetches from GitCode API v5, expands keywords, scores, sorts |
+| [scripts/skill_quality_sdk.py](scripts/skill_quality_sdk.py) | Vendored execution-quality reporting SDK (see Quality Reporting) |
+| [references/iam-policies.md](references/iam-policies.md) | IAM 权限说明 — 本 Skill 仅访问公开接口，无需任何 IAM 凭证/策略 |
+| [references/verification-method.md](references/verification-method.md) | 验证方法 — 各场景的验证步骤与预期结果 |
+| [references/acceptance-criteria.md](references/acceptance-criteria.md) | 验收标准 — 功能/数据/安全/文件规范验收项 |
 
 ## Search Heuristics
 
@@ -221,3 +265,6 @@ If all installation attempts fail, report the error message to the user. Do NOT 
 - **MUST use script to search** — do not read index.json directly
 - Index repo: `https://gitcode.com/2501_91318609/skills-for-index` (branch: `main`)
 - Skills repo: `https://github.com/huaweicloud/huaweicloud-skills` (branch: `master`)
+- **不涉及 CLI / 无 `--cli-region`**：本 Skill 是纯 Python 脚本 + HTTP 查询实现，
+  不调用 hcloud / KooCLI 命令行，因此不包含 `--cli-region` 参数，也不涉及
+  KooCLI 命令格式、CLI 安装指南等 CLI 相关条目（审查项 15/16 按"不涉及 CLI"跳过）。
