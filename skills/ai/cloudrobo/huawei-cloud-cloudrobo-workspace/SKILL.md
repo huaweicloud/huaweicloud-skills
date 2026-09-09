@@ -7,8 +7,8 @@ description: >
   other cloudrobo skills (dataset, train, eval, infer, etc.). Workspace is the foundational
   resource container — all other CloudRobo operations require a valid workspace_id.
   Triggers include: workspace management, workspace member management, workspace switching,
-  workspace overview, workspace configuration, default workspace, asset catalog creation,
-  workspace quota, 工作空间管理, 工作空间成员, 工作空间切换, 工作空间概览, 工作空间配置, 默认工作空间.
+  workspace overview, workspace configuration, default workspace,
+  工作空间管理, 工作空间成员, 工作空间切换, 工作空间概览, 工作空间配置, 默认工作空间.
 tags:
   - huawei-cloud-cloudrobo
   - workspace
@@ -299,6 +299,7 @@ configured, outputs "未配置工作空间".
 | Scenario | Handling |
 |----------|----------|
 | Missing `workspace_id` | Operations fail with validation error; use `cloudrobo workspace list` to find valid IDs |
+| Workspace not found | Server rejects with `WORKSPACE_NOT_EXIST_ERROR`; verify ID via `workspace list` |
 | Default workspace | Auto-created on first `list`; cannot be deleted; only supports first-time `default_obs_path` update; does not support member add/update/delete operations |
 | Workspace name conflict | Server rejects with `WORKSPACE_NAME_EXIST` error; names are case-insensitive unique per domain |
 | Workspace quota exceeded | Server rejects with `WORKSPACE_EXCEED_NUM_LIMIT`; check `overview` for capacity; `last_count` in list response shows remaining |
@@ -338,8 +339,11 @@ bash scripts/test-cli-commands.sh -s . -e cli
 ### Functional Testing 功能测试
 
 ```bash
-# CLI / SDK
+# CLI / SDK (read-only cases TC-01..TC-10 / TC-19..TC-22 run automatically)
 bash scripts/test-cli-commands.sh -s . -e {cli|sdk}
+
+# Include mutation cases (TC-11..TC-18, TC-23..TC-28) — each prompts for confirmation
+bash scripts/test-cli-commands.sh -s . -e {cli|sdk} -m
 ```
 
 API-level verification is manual — replay the paths in `references/api-paths.md` in
