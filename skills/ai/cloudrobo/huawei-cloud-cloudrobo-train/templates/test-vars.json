@@ -1,0 +1,286 @@
+{
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "list-tasks",
+      "command": "cloudrobo train list-tasks",
+      "description": "List all training tasks",
+      "expected": "JSON array of tasks",
+      "type": "read"
+    },
+    {
+      "id": "TC-02",
+      "name": "list-tasks-filter-status",
+      "command": "cloudrobo train list-tasks --status RUNNING",
+      "description": "List tasks filtered by status",
+      "expected": "JSON array of RUNNING tasks",
+      "type": "read"
+    },
+    {
+      "id": "TC-03",
+      "name": "list-tasks-filter-train-mode",
+      "command": "cloudrobo train list-tasks --train-mode MODEL_TUNING",
+      "description": "List tasks filtered by train_mode",
+      "expected": "JSON array of MODEL_TUNING tasks",
+      "type": "read"
+    },
+    {
+      "id": "TC-04",
+      "name": "stats",
+      "command": "cloudrobo train stats --workspace-id {workspace_id}",
+      "description": "Count training tasks by status",
+      "expected": "JSON with status counts",
+      "type": "read"
+    },
+    {
+      "id": "TC-05",
+      "name": "save-draft",
+      "command": "cloudrobo train save-draft --config '{\"name\": \"test-draft\", \"workspace_id\": \"{workspace_id}\", \"train_mode\": \"MODEL_TUNING\"}'",
+      "description": "Save a draft task",
+      "expected": "JSON with task_id and status=DRAFT",
+      "type": "write"
+    },
+    {
+      "id": "TC-06",
+      "name": "show-task",
+      "command": "cloudrobo train show-task --task-id {task_id}",
+      "description": "Show task detail",
+      "expected": "JSON with task fields",
+      "type": "read"
+    },
+    {
+      "id": "TC-07",
+      "name": "get-stages",
+      "command": "cloudrobo train get-stages --task-id {task_id}",
+      "description": "Get execution stages for a task",
+      "expected": "JSON with stage information",
+      "type": "read"
+    },
+    {
+      "id": "TC-08",
+      "name": "get-resource-usage",
+      "command": "cloudrobo train get-resource-usage --task-id {task_id} --metric cpu_util --start {start_timestamp} --end {end_timestamp}",
+      "description": "Get resource usage for a task (requires metric/start/end)",
+      "expected": "JSON with CPU/GPU/NPU utilization",
+      "type": "read"
+    },
+    {
+      "id": "TC-09",
+      "name": "get-events",
+      "command": "cloudrobo train get-events --task-id {task_id} --start-time {start_timestamp} --end-time {end_timestamp}",
+      "description": "Get events for a task (requires start-time/end-time)",
+      "expected": "JSON array of events",
+      "type": "read"
+    },
+    {
+      "id": "TC-10",
+      "name": "get-events-filter-error",
+      "command": "cloudrobo train get-events --task-id {task_id} --start-time {start_timestamp} --end-time {end_timestamp} --level Error",
+      "description": "Get Error-level events for a task",
+      "expected": "JSON array of Error events",
+      "type": "read"
+    },
+    {
+      "id": "TC-11",
+      "name": "get-logs",
+      "command": "cloudrobo train get-logs --task-id {task_id} --file-name {file_name}",
+      "description": "Get log content by file name",
+      "expected": "Log text content",
+      "type": "read"
+    },
+    {
+      "id": "TC-12",
+      "name": "get-signed-url",
+      "command": "cloudrobo train get-signed-url --task-id {task_id} --file-source TRAIN --file-name {file_name}",
+      "description": "Get log file download signed URL (requires file-source/file-name)",
+      "expected": "JSON with OBS temp URL",
+      "type": "read"
+    },
+    {
+      "id": "TC-13",
+      "name": "restart-task",
+      "command": "cloudrobo train restart-task --task-id {task_id}",
+      "description": "Restart/resubmit a task",
+      "expected": "JSON with updated task status",
+      "type": "write"
+    },
+    {
+      "id": "TC-14",
+      "name": "resume-task",
+      "command": "cloudrobo train resume-task --task-id {task_id}",
+      "description": "Resume a train task (train-only)",
+      "expected": "JSON with resumed task status",
+      "type": "write"
+    },
+    {
+      "id": "TC-15",
+      "name": "delete-tasks",
+      "command": "cloudrobo train delete-tasks --task-id {task_id}",
+      "description": "Delete tasks (batch POST for train)",
+      "expected": "JSON confirming deletion",
+      "type": "write"
+    },
+    {
+      "id": "TC-16",
+      "name": "query-base-models",
+      "command": "cloudrobo asset list-assets --type model --limit 5",
+      "description": "Query base models (cross-package)",
+      "expected": "JSON array of models",
+      "type": "read"
+    },
+    {
+      "id": "TC-17",
+      "name": "query-datasets",
+      "command": "cloudrobo asset list-assets --type dataset --limit 5",
+      "description": "Query datasets (cross-package)",
+      "expected": "JSON array of datasets",
+      "type": "read"
+    },
+    {
+      "id": "TC-18",
+      "name": "query-algorithms",
+      "command": "cloudrobo asset list-publication-assets --type algorithm --limit 5",
+      "description": "Query algorithms (cross-package)",
+      "expected": "JSON array of algorithms",
+      "type": "read"
+    },
+    {
+      "id": "TC-19",
+      "name": "finetune-create-example",
+      "command": "cloudrobo train create-task --config '{\"name\":\"test-finetune\",\"train_mode\":\"MODEL_TUNING\",\"base_model_asset_id\":\"{model_id}\",\"dataset_asset_ids\":[\"{dataset_id}\"],\"method\":\"LORA\",\"spec\":\"Ascend: 1 * Ascend-910B | 24 vCPUs | 96 GiB\"}'",
+      "description": "Create finetune task (MODEL_TUNING) — requires user confirmation; no dry-run support",
+      "expected": "task_id returned, status CREATING/WAITING",
+      "type": "write",
+      "requires_confirmation": true
+    },
+    {
+      "id": "TC-20",
+      "name": "pretrain-create-example",
+      "command": "cloudrobo train create-task --config '{\"name\":\"test-pretrain\",\"train_mode\":\"TRAIN_FROM_SCRATCH\",\"algorithm\":{\"algorithm_asset_id\":\"{algo_id}\",\"image_url\":\"{image_url}\",\"command\":\"{command}\",\"boot_file\":\"{boot_file}\"},\"spec\":\"Ascend: 2 * Ascend-910B | 48 vCPUs | 192 GiB\",\"dataset\":{\"source_type\":\"DATASET\",\"dataset_asset_id\":\"{dataset_id}\"}}'",
+      "description": "Create pretrain task (TRAIN_FROM_SCRATCH) — requires user confirmation; no dry-run support",
+      "expected": "task_id returned, status CREATING/WAITING",
+      "type": "write",
+      "requires_confirmation": true
+    },
+    {
+      "id": "TC-21",
+      "name": "sim-rl-stats",
+      "command": "cloudrobo train stats --workspace-id {workspace_id} --sim-rl",
+      "description": "Count SimRL tasks by status",
+      "expected": "JSON with SimRL status counts",
+      "type": "read"
+    },
+    {
+      "id": "TC-22",
+      "name": "sim-rl-list-tasks",
+      "command": "cloudrobo train list-tasks --sim-rl",
+      "description": "List SimRL tasks",
+      "expected": "JSON array of SimRL tasks",
+      "type": "read"
+    },
+    {
+      "id": "TC-23",
+      "name": "sim-rl-create-task",
+      "command": "cloudrobo train create-task --config '{\"name\":\"test-simrl\"}' --sim-rl",
+      "description": "Create a SimRL task",
+      "expected": "JSON with SimRL task_id",
+      "type": "write"
+    },
+    {
+      "id": "TC-24",
+      "name": "sim-rl-show-task",
+      "command": "cloudrobo train show-task --task-id {sim_rl_task_id} --sim-rl",
+      "description": "Show SimRL task detail",
+      "expected": "JSON with SimRL task fields",
+      "type": "read"
+    },
+    {
+      "id": "TC-25",
+      "name": "sim-rl-get-stages-unavailable",
+      "command": "cloudrobo train get-stages --task-id {sim_rl_task_id} --sim-rl",
+      "description": "Confirm get-stages is train-only (SimRL has no stages endpoint)",
+      "expected": "Error: get-stages does not accept --sim-rl",
+      "type": "negative"
+    },
+    {
+      "id": "TC-26",
+      "name": "sim-rl-get-resource-usage",
+      "command": "cloudrobo train get-resource-usage --task-id {sim_rl_task_id} --metric cpu_util --start {start_timestamp} --end {end_timestamp} --sim-rl",
+      "description": "Get SimRL task resource usage",
+      "expected": "JSON with CPU/GPU/NPU utilization",
+      "type": "read"
+    },
+    {
+      "id": "TC-27",
+      "name": "sim-rl-get-events",
+      "command": "cloudrobo train get-events --task-id {sim_rl_task_id} --start-time {start_timestamp} --end-time {end_timestamp} --sim-rl",
+      "description": "Get SimRL task events",
+      "expected": "JSON array of events",
+      "type": "read"
+    },
+    {
+      "id": "TC-28",
+      "name": "sim-rl-get-logs",
+      "command": "cloudrobo train get-logs --task-id {sim_rl_task_id} --file-name {file_name} --sim-rl",
+      "description": "Get SimRL task log content",
+      "expected": "Log text content",
+      "type": "read"
+    },
+    {
+      "id": "TC-29",
+      "name": "sim-rl-get-signed-url",
+      "command": "cloudrobo train get-signed-url --task-id {sim_rl_task_id} --file-source TRAIN --file-name {file_name} --sim-rl",
+      "description": "Get SimRL task log signed URL",
+      "expected": "JSON with OBS temp URL",
+      "type": "read"
+    },
+    {
+      "id": "TC-30",
+      "name": "sim-rl-restart-task",
+      "command": "cloudrobo train restart-task --task-id {sim_rl_task_id} --sim-rl",
+      "description": "Restart a SimRL task",
+      "expected": "JSON with updated SimRL task status",
+      "type": "write"
+    },
+    {
+      "id": "TC-31",
+      "name": "sim-rl-delete-tasks",
+      "command": "cloudrobo train delete-tasks --task-id {sim_rl_task_id} --sim-rl",
+      "description": "Delete a SimRL task (DELETE per-id)",
+      "expected": "JSON confirming deletion",
+      "type": "write"
+    },
+    {
+      "id": "TC-32",
+      "name": "resume-task-rejects-sim-rl",
+      "command": "cloudrobo train resume-task --task-id {task_id} --sim-rl",
+      "description": "Verify resume-task rejects --sim-rl (train-only)",
+      "expected": "Error: no such option --sim-rl (resume is train-only)",
+      "type": "read"
+    }
+  ],
+  "variables": {
+    "workspace_id": "Workspace ID (required for stats)",
+    "task_id": "Train task ID (for task-specific operations)",
+    "sim_rl_task_id": "SimRL task ID (for SimRL-specific operations)",
+    "model_id": "Base model asset ID (for finetune)",
+    "dataset_id": "Dataset asset ID (for finetune/pretrain)",
+    "algo_id": "Algorithm asset ID (for pretrain)",
+    "image_url": "Algorithm image URL (for pretrain)",
+    "command": "Algorithm command (for pretrain)",
+    "boot_file": "Algorithm boot file (for pretrain)",
+    "file_name": "Log file name (for get-logs/get-signed-url)",
+    "start_timestamp": "Start Unix timestamp in seconds (for get-resource-usage/get-events)",
+    "end_timestamp": "End Unix timestamp in seconds (for get-resource-usage/get-events)"
+  },
+  "notes": [
+    "Some tests require actual asset IDs (models, datasets, algorithms) from the workspace",
+    "Creation has no --dry-run; validate params via save-draft + show-task before create-task (TC-19, TC-20 are mutating and require confirmation)",
+    "Cross-package tests (TC-16, TC-17, TC-18) query the asset service",
+    "SimRL tests (TC-21 ~ TC-31) use the --sim-rl flag to route to the SimRL API surface",
+    "TC-25 confirms get-stages is train-only (SimRL has no stages endpoint)",
+    "TC-32 verifies that resume-task correctly rejects --sim-rl (resume is train-only)",
+    "Mutating tests (type=write) require user confirmation before execution",
+    "For comprehensive end-to-end testing beyond these checks, run the commands from SKILL.md manually"
+  ]
+}
