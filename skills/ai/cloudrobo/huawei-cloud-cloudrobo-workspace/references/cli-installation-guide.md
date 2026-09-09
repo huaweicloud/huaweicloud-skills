@@ -8,29 +8,15 @@
 - pip package manager
 - CloudRobo Cloud account with AK/SK credentials
 
-### Install cloudrobo-core (CLI framework) 安装核心包
+### Install cloudrobo CLI 安装 CloudRobo CLI
 
 ```bash
 pip install hw-cloudrobo-client
 ```
 
-This provides the `cloudrobo` main CLI entry point.
-
-### Install cloudrobo-workspace (workspace commands) 安装工作空间包
-
-```bash
-pip install hw-cloudrobo-client
-```
-
-This registers the `workspace` command group via entry points.
-
-### Install all packages (recommended) 安装全部包
-
-```bash
-pip install hw-cloudrobo-client
-```
-
-The root `pyproject.toml` (`cloudrobo-client`) installs all sub-packages.
+`hw-cloudrobo-client` is a meta-package: it installs the core CLI framework, the workspace
+command group, and all sub-packages via Python entry points. No separate installation of
+individual packages is needed — a single `pip install` is sufficient.
 
 ## Configuration 配置
 
@@ -102,7 +88,7 @@ cloudrobo workspace current
 | `未配置工作空间` | Run `cloudrobo workspace use --workspace-id <id>` |
 | `HTTP 401/403` | Check AK/SK credentials in environment or config |
 | `HTTP 404` | Check service endpoint in `~/.cloudrobo/config.yaml` |
-| SSL verification errors | Set `CLOUDROBO_VERIFY_SSL=false` (debug only) |
+| SSL verification errors | Check CA certificates; set `CLOUDROBO_VERIFY_SSL=false` only for local debugging against trusted endpoints |
 | `切换失败: ...` | Workspace ID is invalid or not accessible; verify with `workspace list` |
 
 ## Environment Variables 环境变量
@@ -115,6 +101,12 @@ cloudrobo workspace current
 | `CLOUDROBO_ENDPOINT_cloudrobo-service` | Override service endpoint | — |
 | `CLOUDROBO_HTTP_PROXY` | HTTP proxy | — |
 | `CLOUDROBO_HTTPS_PROXY` | HTTPS proxy | — |
-| `CLOUDROBO_VERIFY_SSL` | SSL verification (true/false) | false |
+| `CLOUDROBO_VERIFY_SSL` | SSL verification (true/false) | true |
 | `CLOUDROBO_LOG_TRAFFIC` | Traffic logging (true/false) | false |
 | `CLOUDROBO_DEBUG` | Verbose error output (1/0) | 0 |
+
+> **⚠️ Security warning:** SSL/TLS certificate verification is **enabled by default**
+> (`CLOUDROBO_VERIFY_SSL=true`). Do **not** disable it in production — setting it to
+> `false` skips server certificate checks on all HTTPS requests and exposes your
+> HMAC-SHA256-signed API requests to man-in-the-middle attacks. Only set
+> `CLOUDROBO_VERIFY_SSL=false` when debugging against a trusted local endpoint.
