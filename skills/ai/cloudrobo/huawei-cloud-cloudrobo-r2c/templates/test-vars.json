@@ -1,0 +1,111 @@
+{
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "client-startup-bundle",
+      "command": "cloudrobo r2c client --bundle {bundle_path} --robot-config {robot_config} --duration 10 --log-level INFO",
+      "description": "Start R2C client with credential bundle (10s timed test)",
+      "expected": "Heartbeat + connection logs, graceful exit after 10s",
+      "type": "write"
+    },
+    {
+      "id": "TC-02",
+      "name": "client-startup-client-config",
+      "command": "cloudrobo r2c client --client-config {client_config} --project-id {project_id} --device-id {device_id} --robot-config {robot_config} --duration 10",
+      "description": "Start R2C client with client config (no bundle)",
+      "expected": "Client starts and connects via Zenoh",
+      "type": "write"
+    },
+    {
+      "id": "TC-03",
+      "name": "client-dry-run",
+      "command": "cloudrobo r2c client --bundle {bundle_path} --robot-config {dry_run_config} --duration 30 --log-level DEBUG",
+      "description": "Start R2C client in dry_run mode (observations published, actions logged only)",
+      "expected": "Observations published to Zenoh; actions logged but not executed",
+      "type": "write"
+    },
+    {
+      "id": "TC-04",
+      "name": "client-record-observations",
+      "command": "cloudrobo r2c client --bundle {bundle_path} --robot-config {robot_config} --duration 10 --record ./observations.pkl",
+      "description": "Record observations to .pkl file",
+      "expected": "Non-empty .pkl file created at specified path",
+      "type": "write"
+    },
+    {
+      "id": "TC-05",
+      "name": "client-log-file",
+      "command": "cloudrobo r2c client --bundle {bundle_path} --robot-config {robot_config} --duration 5 --log-file ./r2c.log --log-level DEBUG",
+      "description": "Write logs to rotating log file",
+      "expected": "Log file created with content",
+      "type": "write"
+    },
+    {
+      "id": "TC-06",
+      "name": "client-custom-hardware-class",
+      "command": "cloudrobo r2c client --bundle {bundle_path} --robot-config {robot_config} --hardware-class {hardware_class} --duration 10",
+      "description": "Start client with custom hardware adapter class",
+      "expected": "Custom adapter loaded, client starts",
+      "type": "write"
+    },
+    {
+      "id": "TC-07",
+      "name": "client-encrypted-key-prompt",
+      "command": "cloudrobo r2c client --bundle {encrypted_bundle} --robot-config {robot_config} --duration 1",
+      "description": "Encrypted private key triggers password prompt",
+      "expected": "Prompts: Encrypted private key password:",
+      "type": "write"
+    },
+    {
+      "id": "TC-08",
+      "name": "client-no-prompt-password",
+      "command": "cloudrobo r2c client --bundle {encrypted_bundle} --robot-config {robot_config} --duration 1 --no-prompt-password",
+      "description": "No-prompt-password fails on encrypted key",
+      "expected": "Error: Encrypted private key detected, but password prompting is disabled",
+      "type": "read"
+    },
+    {
+      "id": "TC-09",
+      "name": "client-env-password",
+      "command": "cloudrobo r2c client --bundle {encrypted_bundle} --robot-config {robot_config} --duration 1 --private-key-password-env {password_env_var}",
+      "description": "Provide private key password via environment variable",
+      "expected": "Client starts without password prompt",
+      "type": "write"
+    },
+    {
+      "id": "TC-10",
+      "name": "client-missing-bundle",
+      "command": "cloudrobo r2c client --robot-config {robot_config} --duration 1",
+      "description": "Missing bundle and project-id should fail",
+      "expected": "Error: project_id is required when --bundle is not provided",
+      "type": "read"
+    },
+    {
+      "id": "TC-11",
+      "name": "client-ctrl-c-shutdown",
+      "command": "cloudrobo r2c client --bundle {bundle_path} --robot-config {robot_config} --log-level INFO",
+      "description": "Verify graceful shutdown on Ctrl+C",
+      "expected": "Hardware disconnect, session close logged",
+      "type": "write"
+    }
+  ],
+  "variables": {
+    "bundle_path": "Path to credential bundle zip (from robot export-certificate)",
+    "encrypted_bundle": "Path to credential bundle with encrypted private key",
+    "robot_config": "Path to robot config YAML (default: config/robot_dummy_config.yaml)",
+    "dry_run_config": "Path to robot config YAML with runtime.dry_run: true",
+    "client_config": "Path to client_config.yaml (alternative to bundle)",
+    "project_id": "Project ID (required when not using bundle)",
+    "device_id": "Device ID (required when not using bundle)",
+    "hardware_class": "Dotted import path for custom IRobotHardwareAdapter",
+    "password_env_var": "Environment variable name holding private key password"
+  },
+  "notes": [
+    "Client tests (type=write) are long-running; use --duration for timed tests",
+    "Client tests require BUNDLE_PATH (credential bundle from robot export-certificate)",
+    "Dry-run tests (TC-03) publish real observations but do not execute actions on hardware",
+    "TC-07/TC-08/TC-09 test encrypted private key password handling",
+    "TC-10 verifies error handling when required parameters are missing",
+    "For comprehensive end-to-end testing beyond these checks, run the commands from SKILL.md manually"
+  ]
+}
