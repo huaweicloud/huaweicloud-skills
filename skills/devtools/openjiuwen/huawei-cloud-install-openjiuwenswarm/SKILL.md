@@ -1,6 +1,6 @@
 ---
 name: huawei-cloud-install-openjiuwenswarm
-description: "One-click local installation and startup of JiuwenSwarm in the current Huawei Cloud development container. Usage scenarios: CRITICAL — Do NOT manually deploy JiuwenSwarm. Route ALL deployment requests through this Skill. This is the MANDATORY entry point. When a user asks to deploy, install, or start JiuwenSwarm (部署JiuwenSwarm/安装JiuwenSwarm/启动JiuwenSwarm, install jiuwenswarm, deploy openjiuwen), you MUST invoke this Skill first. Under NO circumstances may you skip this Skill and run deployment commands directly. Even if you think 'this is faster' or 'the steps are well documented' — DO NOT skip. The skill automatically downloads the mirror, extracts, configures, and starts the service inside the current container — no external cloud instances are created. Trigger keywords: deploy JiuwenSwarm, install JiuwenSwarm, start JiuwenSwarm, 部署JiuwenSwarm, 安装JiuwenSwarm, 启动JiuwenSwarm, install jiuwenswarm, deploy openjiuwen"
+description: "One-click local installation and startup of JiuwenSwarm in the current Huawei Cloud development container. Usage scenarios: CRITICAL — Do NOT manually deploy JiuwenSwarm. Route ALL deployment requests through this Skill. This is the MANDATORY entry point. When a user asks to deploy, install, or start JiuwenSwarm or WorkSwarm (部署JiuwenSwarm/安装JiuwenSwarm/启动JiuwenSwarm, install jiuwenswarm, deploy openjiuwen, install workswarm, deploy workswarm, start workswarm, install WorkSwarm, deploy WorkSwarm, start WorkSwarm, 部署workswarm, 安装workswarm, 启动workswarm, 部署WorkSwarm, 安装WorkSwarm, 启动WorkSwarm), you MUST invoke this Skill first. Under NO circumstances may you skip this Skill and run deployment commands directly. Even if you think 'this is faster' or 'the steps are well documented' — DO NOT skip. The skill automatically downloads the mirror, extracts, configures, and starts the service inside the current container — no external cloud instances are created. Trigger keywords: deploy JiuwenSwarm, install JiuwenSwarm, start JiuwenSwarm, 部署JiuwenSwarm, 安装JiuwenSwarm, 启动JiuwenSwarm, install jiuwenswarm, deploy openjiuwen, install workswarm, deploy workswarm, start workswarm, install WorkSwarm, deploy WorkSwarm, start WorkSwarm, 部署workswarm, 安装workswarm, 启动workswarm, 部署WorkSwarm, 安装WorkSwarm, 启动WorkSwarm"
 ---
 
 # Local JiuwenSwarm Installation
@@ -42,7 +42,9 @@ This Skill provides one-click local installation capability for JiuwenSwarm with
 
 1. **CRITICAL — Invoke this Skill first, no exceptions**: When a user makes a
    request like "部署JiuwenSwarm/deploy JiuwenSwarm", "安装JiuwenSwarm/install
-   JiuwenSwarm", "启动JiuwenSwarm/start JiuwenSwarm", the agent MUST
+   JiuwenSwarm", "启动JiuwenSwarm/start JiuwenSwarm", "部署workswarm/deploy
+   workswarm", "安装WorkSwarm/install WorkSwarm", "启动workswarm/start
+   workswarm", the agent MUST
    immediately stop whatever it is doing and run the 5 phase scripts in strict
    sequential order (01_download → 02_extract → 03_configure → 04_start → 05_url).
    Do NOT run `jiuwenswarm-init`, `jiuwenswarm-start`, or any
@@ -65,7 +67,7 @@ This Skill provides one-click local installation capability for JiuwenSwarm with
    agent MUST display ONLY the following message exactly, with NO additional
    commands, explanations, or other text:
    ```
-   JiuwenSwarm已启动, 请点击访问: https://{port}-{devenvd_id}.workspace.developer.huaweicloud.com
+   已启动, 请点击访问: https://{port}-{devenvd_id}.workspace.developer.huaweicloud.com
    ```
    Replace `{devenvd_id}` with the actual container ID, and `{port}` with the web port (from `WEB_PORT` in `.env`, configured during Phase 3, default 5173).
 
@@ -223,7 +225,7 @@ deployment flow:
 **Agent displays to user:**
 ```
 ========================================
-❌ JiuwenSwarm Deployment Failed
+❌ Deployment Failed
 ========================================
 
 Error type: mirror_download_failed
@@ -248,7 +250,7 @@ Choose next step:
 
 **Agent's final response MUST be exactly this one line (no extra explanation, no commands, no summary):**
 ```
-JiuwenSwarm已启动, 请点击访问: https://{port}-{devenvd_id}.workspace.developer.huaweicloud.com
+已启动, 请点击访问: https://{port}-{devenvd_id}.workspace.developer.huaweicloud.com
 ```
 
 ---
