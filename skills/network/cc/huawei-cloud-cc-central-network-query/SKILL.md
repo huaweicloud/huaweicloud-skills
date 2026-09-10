@@ -1,7 +1,19 @@
 ---
 name: huawei-cloud-cc-central-network-query
-description: Queries Huawei Cloud Cloud Connect (CC) Central Network resources via hcloud CLI. Covers central network instances (single + list), central network attachments (single + list, including ER route table and GDGW attachment types), and central network connections (single + list). No write operations. Use this skill when the user needs to inspect central network topology, check central network connection status, review attachment configurations, or audit central network deployment. Triggers: 中心网络, Central Network, CC Central Network, 中心网络实例, 中心网络附件, 中心网络连接, central network instance, central network attachment, central network connection, 查询中心网络, central network query.
+description: "Queries Huawei Cloud Cloud Connect (CC) Central Network resources via hcloud CLI. Covers central network instances (single + list), central network attachments (single + list, including ER route table and GDGW attachment types), and central network connections (single + list). No write operations. Use this skill when the user needs to inspect central network topology, check central network connection status, review attachment configurations, or audit central network deployment. Triggers: 中心网络, Central Network, CC Central Network, 中心网络实例, 中心网络附件, 中心网络连接, central network instance, central network attachment, central network connection, 查询中心网络, central network query."
 tags: [huawei-cloud cc cloud-connect central-network query]
+triggers:
+  - "中心网络"
+  - "Central Network"
+  - "CC Central Network"
+  - "中心网络实例"
+  - "中心网络附件"
+  - "中心网络连接"
+  - "central network instance"
+  - "central network attachment"
+  - "central network connection"
+  - "查询中心网络"
+  - "central network query"
 ---
 
 # Huawei Cloud CC Central Network Query
@@ -61,9 +73,11 @@ The following Central Network capabilities are **not** covered by this skill. If
 
 ### 1. List Central Network Instances
 
-```bash
+```text
 hcloud CC ListCentralNetworks --cli-region={region} --domain_id={domain_id} [optional filters]
 ```
+
+**格式说明模板，不可直接执行** — 将 `{region}`、`{domain_id}` 等占位符替换为实际值后执行。
 
 **Key parameters:**
 
@@ -87,9 +101,11 @@ hcloud CC ListCentralNetworks --cli-region=cn-north-4 --domain_id=xxx --limit=10
 
 ### 2. Show Central Network Instance
 
-```bash
+```text
 hcloud CC ShowCentralNetwork --cli-region={region} --domain_id={domain_id} --central_network_id={central_network_id}
 ```
+
+**格式说明模板，不可直接执行** — 将 `{region}`、`{domain_id}`、`{central_network_id}` 等占位符替换为实际值后执行。
 
 **Key parameters:**
 
@@ -109,9 +125,11 @@ hcloud CC ShowCentralNetwork --cli-region=cn-north-4 --domain_id=xxx --central_n
 
 ### 3. List Central Network Attachments
 
-```bash
+```text
 hcloud CC ListCentralNetworkAttachments --cli-region={region} --domain_id={domain_id} --central_network_id={central_network_id} [optional filters]
 ```
+
+**格式说明模板，不可直接执行** — 将 `{region}`、`{domain_id}`、`{central_network_id}` 等占位符替换为实际值后执行。
 
 **Key parameters:**
 
@@ -139,23 +157,27 @@ There is no generic show-attachment command. Use the type-specific command based
 
 #### 4a. Show ER Route Table Attachment
 
-```bash
+```text
 hcloud CC ShowCentralNetworkErRouteTableAttachment --cli-region={region} --domain_id={domain_id} --central_network_id={central_network_id} --er_route_table_attachment_id={attachment_id}
 ```
 
 #### 4b. Show GDGW Attachment
 
-```bash
+```text
 hcloud CC ShowCentralNetworkGdgwAttachment --cli-region={region} --domain_id={domain_id} --central_network_id={central_network_id} --gdgw_attachment_id={attachment_id}
 ```
+
+> **格式说明模板，不可直接执行** — 将 `{region}`、`{domain_id}`、`{central_network_id}`、`{attachment_id}` 等占位符替换为实际值后执行。
 
 **How to determine attachment type:** Run `ListCentralNetworkAttachments` first — the response includes `attachment_instance_type` (`GDGW` or `ER_ROUTE_TABLE`) and the corresponding attachment ID for each entry.
 
 ### 5. List Central Network Connections
 
-```bash
+```text
 hcloud CC ListCentralNetworkConnections --cli-region={region} --domain_id={domain_id} --central_network_id={central_network_id} [optional filters]
 ```
+
+**格式说明模板，不可直接执行** — 将 `{region}`、`{domain_id}`、`{central_network_id}` 等占位符替换为实际值后执行。
 
 **Key parameters:**
 
@@ -183,9 +205,11 @@ hcloud CC ListCentralNetworkConnections --cli-region=cn-north-4 --domain_id=xxx 
 
 No dedicated `ShowCentralNetworkConnection` API exists. Use the list command with an ID filter:
 
-```bash
+```text
 hcloud CC ListCentralNetworkConnections --cli-region={region} --domain_id={domain_id} --central_network_id={central_network_id} --id.1={connection_id}
 ```
+
+**格式说明模板，不可直接执行** — 将 `{region}`、`{domain_id}`、`{central_network_id}`、`{connection_id}` 等占位符替换为实际值后执行。
 
 **Alternative:** The `ShowCentralNetwork` response embeds a `connections` array containing `CentralNetworkConnectionInfo` objects — you can find the target connection there without a separate call.
 
@@ -210,7 +234,9 @@ hcloud CC ListCentralNetworkConnections --cli-region={region} --domain_id={domai
 
 ## KooCLI Command Format Standard
 
-```bash
+> **格式说明模板，不可直接执行**：以下为命令格式说明，`<...>`、`[...]` 为占位符，需替换为实际值后才能在终端执行。
+
+```text
 hcloud <Service> <Operation> --cli-region=<region> [--key=value ...]
 ```
 
