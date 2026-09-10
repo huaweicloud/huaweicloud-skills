@@ -31,6 +31,12 @@ PATTERNS: dict[str, tuple[str, str]] = {
         r"\b(SK|HW_SECRET_KEY|SecretAccessKey)\s*[:=]\s*[\"']?(\S{8,})[\"']?",
         r"\1=***REDACTED***",
     ),
+    # 裸密钥字符串（无 key= 前缀）: 复用 skill_quality_sdk.py 的同款掩码逻辑,
+    # 覆盖常见 AK/SK 前缀: sk- (OpenAI 类), AKIA (AWS), LTAI (阿里云), mul_ (Multica)
+    "bare_secret": (
+        r"\b(sk-[A-Za-z0-9-]{8,}|AKIA[A-Z0-9]{16}|LTAI[A-Za-z0-9]{12,}|mul_[A-Za-z0-9]{20,})\b",
+        r"***REDACTED***",
+    ),
 }
 
 
