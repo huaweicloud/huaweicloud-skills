@@ -114,25 +114,37 @@ Tier 3: Final Report
 
 ## KooCLI Command Format Standard
 
-This testing framework uses `bash` scripts as the primary execution mode, not direct `hcloud` CLI commands. However, when executing test cases, the framework constructs `hcloud` CLI commands in the following format:
+This testing framework uses `bash` scripts as the primary execution mode; it does **NOT** execute raw
+`hcloud` CLI commands directly. The `hcloud` command strings shown below are **format templates —
+占位符示例, NOT executable commands**: they contain placeholder tokens (`<Service>`、`{region}`、
+`[--param1=value1 ...]` 等) with no real values, so they MUST NOT be extracted or executed by any
+command-collection / test-case-generation / test-execution logic (Phase 1/3/4). Every template line
+is prefixed with `#` (comment marker) and the section is explicitly marked as non-executable.
 
-> Format template — illustrative, NOT an executable command:
-> `hcloud <Service> <Operation> --cli-region={region} [--param1=value1 ...]`
+> **可执行命令清单 (Executable Command List):** 本 skill 的真实可执行命令仅为 `scripts/` 目录下的
+> 流水线脚本，通过 `bash scripts/...` 调用（如 `bash scripts/run-test-pipeline.sh --skills <name>`、
+> `bash scripts/tier1/phase-0-install-check.sh --skill <name>` 等，见下文 Core Commands）。
+> 本节所有 `hcloud ...` 格式模板均为说明性占位符，**不是可执行命令**，命令提取/执行逻辑必须跳过。
+
+```bash
+# 格式模板占位符示例 — 仅供阅读格式说明，禁止提取/执行为命令（# 注释行，含 <Service>/{region} 占位符）
+# hcloud <Service> <Operation> --cli-region={region} [--param1=value1 ...]
+```
 
 **Format Rules:**
 
-| Rule | Description |
-|------|-------------|
-| Service name | Follows KooCLI Services (uppercase: ECS, VPC, OBS; title case: CloudPond, IAMAccessAnalyzer) |
-| Operation name | PascalCase (e.g., ListServersDetails, ListBuckets) |
-| Region | Always include `--cli-region={region}` parameter |
-| Parameters | Use `--param=value` syntax |
-| Read-only limit | Always append `--limit=1` for exploratory queries |
+- **Service name** — Follows KooCLI Services (uppercase: ECS, VPC, OBS; title case: CloudPond, IAMAccessAnalyzer)
+- **Operation name** — PascalCase (e.g., ListServersDetails, ListBuckets)
+- **Region** — Always include the `--cli-region` parameter with a real region value (e.g. `cn-north-4`). The token form `--cli-region={region}` is a template placeholder, never a real command.
+- **Parameters** — Parameters use the `--name=value` syntax; the token `--param=value` is a format illustration only, never a real command.
+- **Read-only limit** — Always append `--limit=1` for exploratory queries (real flag value, only meaningful inside an actual `hcloud` command).
 
 For OBS service, the framework uses `hcloud obs` (obsutil) subsystem:
 
-> Format template — illustrative, NOT an executable command:
-> `hcloud obs <command> [args...] [options...]`
+```bash
+# OBS 格式模板占位符示例 — 仅供阅读格式说明，禁止提取/执行为命令（# 注释行，含 <command>/[args...] 占位符）
+# hcloud obs <command> [args...] [options...]
+```
 
 ---
 
@@ -206,7 +218,6 @@ bash scripts/tier2/phase-6-full-flow.sh --skill "huawei-cloud-rds-intelligent-se
 | `SKILL_QUALITY_DISABLE` | `0` | Set to `1` to disable quality reporting entirely (local debugging) |
 | `SKILL_QUALITY_TIMEOUT` | `3` | Report HTTP timeout in seconds (non-blocking) |
 | `SKILL_QUALITY_TRIGGER` | `workflow` | Trigger type reported (`agent` / `workflow` / `auto` / `manual`) |
-| `SKILL_QUALITY_ALLOW_ANONYMOUS` | `1` | Allow degraded anonymous reporting when no AK/SK is available (exit 77 / `C01` events remain countable); `0` keeps the legacy skip-without-credentials behavior |
 
 ---
 
@@ -237,12 +248,12 @@ counting of the tester itself.
   `SKILL_QUALITY_AK/SK` and other `HUAWEI*` / `HW*` / `HWC*` variants —
   so a tester run that has valid credentials always reports authenticated.
 - When **no AK/SK is available** (e.g. the exit-77 credential-missing path), the SDK
-  degrades to a direct anonymous POST to the APIG public endpoint and marks the
-  payload `unauthenticated=1` (default `SKILL_QUALITY_ALLOW_ANONYMOUS=1`). This keeps
-  `C01` / `sys_fail` events structurally reachable — they would otherwise be silently
+  (v2.13) automatically degrades to the **guest channel** — an anonymous POST to
+  `SKILL_QUALITY_GUEST_ENDPOINT` (default `https://skillsop.topxtopx.com/api/quality/guest-report`).
+  This keeps `C01` / `sys_fail` events structurally reachable — they would otherwise be silently
   dropped because the IAM token (which itself needs credentials) can never be obtained.
-  Set `SKILL_QUALITY_ALLOW_ANONYMOUS=0` to restore the legacy skip-without-credentials
-  behavior.
+  Session context (`session_id`/`intent`/etc.) is read from `.quality_report.json` when present;
+  otherwise an `auto_*` anonymous session id is generated. No legacy flag needed.
 
 ### Error Code Convention
 

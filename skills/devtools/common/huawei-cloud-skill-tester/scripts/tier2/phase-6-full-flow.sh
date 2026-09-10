@@ -10,6 +10,9 @@ source "$SCRIPT_DIR/lib/chain-verify.sh"
 PHASE_NUM=6
 PHASE_NAME="full-flow"
 
+# Export placeholder-utils path for the embedded Python executor (same as phase-3/4)
+export PLACEHOLDER_UTILS="${PLACEHOLDER_UTILS:-$SCRIPT_DIR/lib/placeholder-utils.py}"
+
 # Parse args: getopts for -s, pre-filter --skills (getopts can't handle --long)
 SKILLS_LIST=""
 SKILL_PATHS=()
@@ -99,6 +102,10 @@ if [ "$SKILL_COUNT" -le 1 ]; then
   p6_py_tmp=$(mktemp)
   cat > "$p6_py_tmp" << 'PYEOF'
 import json, subprocess, os, sys
+
+_PU = os.environ.get('PLACEHOLDER_UTILS', '')
+if _PU and os.path.isfile(_PU):
+    exec(open(_PU, encoding='utf-8').read())
 
 p1_file = sys.argv[1]
 local_skill_name = sys.argv[2]
@@ -202,13 +209,14 @@ for step in steps:
             step['output'] = (r.stdout[:500] + r.stderr[:200]).strip()
             step['status'] = 'pass' if r.returncode == 0 else 'fail'
         elif executor == 'script' and cmd_text:
+            cmd_text = replace_placeholders(cmd_text, local_skill_dir)
             skill_root = local_skill_dir
             if cmd_text.startswith('python3 ') and 'scripts/' in cmd_text:
                 script_part = cmd_text.replace('python3 ', '', 1).strip()
                 script_path = os.path.join(skill_root, script_part.split()[0])
                 script_args = ' '.join(script_part.split()[1:]) if len(script_part.split()) > 1 else ''
                 if os.path.isfile(script_path):
-                    full_cmd = f'python3 {script_path} {script_args}'.strip()
+                    full_cmd = f'python3 {_posix(script_path)} {script_args}'.strip()
                     r = subprocess.run(['bash', '-c', full_cmd], capture_output=True, text=True, timeout=60, env=os.environ)
                     step['output'] = (r.stdout[:500] + r.stderr[:200]).strip()
                     step['status'] = 'pass' if r.returncode == 0 else 'fail'

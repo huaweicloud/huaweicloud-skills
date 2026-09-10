@@ -75,7 +75,7 @@ hcloud configure    # interactive only — will prompt for AK/SK in your termina
 ## Verify Configuration
 
 ```bash
-hcloud ECS ListServers --cli-region=cn-north-4 --limit=1
+hcloud ECS ListServersDetails --cli-region=cn-north-4 --limit=1
 ```
 
 期望：返回 ECS 实例列表（即使为空 `{"servers": [], "total_count": 0}` 也算成功）。
