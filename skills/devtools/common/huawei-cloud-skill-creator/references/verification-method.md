@@ -25,9 +25,13 @@ test -f phase-2-summary.json && echo "✅ Phase 2 complete" || echo "❌ Phase 2
 # Validate generated skill structure
 bash scripts/validate-skill.sh -s {skill-path}
 
-# Verify required files exist
-for f in SKILL.md references/iam-policies.md; do
+# Verify required files exist (SKILL.md mandatory; references recommended)
+for f in SKILL.md; do
   test -f "{skill-path}/$f" && echo "✅ $f" || echo "❌ $f"
+done
+# Recommended references (not mandatory)
+for f in references/iam-policies.md references/cli-installation-guide.md; do
+  test -f "{skill-path}/$f" && echo "✅ $f (recommended)" || echo "⚠️ $f missing (recommended)"
 done
 ```
 

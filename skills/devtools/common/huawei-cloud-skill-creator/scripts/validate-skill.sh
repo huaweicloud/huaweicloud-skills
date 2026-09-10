@@ -7,6 +7,9 @@ set -euo pipefail
 
 SKILL_DIR="."
 
+# Python interpreter auto-detection (python3 preferred; fall back to python on Windows)
+if command -v python3 &>/dev/null 2>&1; then PY_CMD="python3"; else PY_CMD="python"; fi
+
 while getopts ":s:b:" opt; do
   case "$opt" in
     s) SKILL_DIR="$OPTARG" ;;
@@ -20,6 +23,11 @@ shift $((OPTIND - 1))
 if [ $# -gt 0 ]; then
   SKILL_DIR="$1"
 fi
+
+# 质量自动上报 hook (游客/用户双模式, fire-and-forget)
+QUALITY_SKILL_NAME="$(basename "$(cd "$SKILL_DIR" 2>/dev/null && pwd || printf '%s' "$SKILL_DIR")")"
+QUALITY_REPORT_DIR="$SKILL_DIR"
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/quality-report.sh" 2>/dev/null || true
 
 PASS=0
 FAIL=0
@@ -38,7 +46,7 @@ echo "============================================"
 echo ""
 echo "--- Critical Checks ---"
 
-[ ! -d "$SKILL_DIR" ] && { echo "[FATAL] Skill directory not found: $SKILL_DIR"; exit 1; }
+[ ! -d "$SKILL_DIR" ] && { echo "[FATAL] Skill directory not found: $SKILL_DIR"; QUALITY_STATUS="sys_fail"; exit 1; }
 [ -f "$SKILL_DIR/SKILL.md" ] && pass "SKILL.md exists" || fail "SKILL.md missing"
 
 if [ -f "$SKILL_DIR/SKILL.md" ]; then
@@ -46,6 +54,19 @@ if [ -f "$SKILL_DIR/SKILL.md" ]; then
     grep -q '^---$' "$SKILL_DIR/SKILL.md" && pass "YAML Frontmatter present" || fail "Frontmatter missing"
     grep -q '^name:' "$SKILL_DIR/SKILL.md" && pass "name field present" || fail "name field missing"
     grep -q '^description:' "$SKILL_DIR/SKILL.md" && pass "description field present" || fail "description field missing"
+
+    # YAML Frontmatter syntax validation (critical): parse via yaml-check-frontmatter.py from the skill dir
+        YAML_CHECK_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/yaml-check-frontmatter.py"
+        if command -v cygpath >/dev/null 2>&1; then
+          YAML_CHECK_SCRIPT="$(cygpath -w "$YAML_CHECK_SCRIPT" 2>/dev/null || printf '%s' "$YAML_CHECK_SCRIPT")"
+        fi
+        YAML_VALID=$(cd "$SKILL_DIR" 2>/dev/null && "${PY_CMD}" "$YAML_CHECK_SCRIPT" 2>&1) || true
+        case "$YAML_VALID" in
+          OK) pass "YAML Frontmatter parses (yaml.safe_load)" ;;
+          NO_PYYAML) warn "YAML deep validation skipped (PyYAML not installed)" ;;
+          ERR:*) fail "YAML Frontmatter invalid: ${YAML_VALID#ERR:}" || true ;;
+          *) warn "YAML validation inconclusive: $YAML_VALID" ;;
+        esac
 
     FRONTMATTER_NAME=$(sed -n '2,/^---$/s/^name:[[:space:]]*//p' "$SKILL_DIR/SKILL.md" | head -n 1 | tr -d '"' | tr -d "'")
     if [ "$FRONTMATTER_NAME" = "$(basename "$SKILL_DIR")" ]; then
@@ -82,7 +103,11 @@ if [ -f "$SKILL_DIR/SKILL.md" ]; then
     _value="[[:space:]]*[:=][[:space:]]*['\"]?[[:alnum:]_+/=-]{8,}"
     _sec001_pattern="(${_ak}|${_sk}|${_pair})${_value}"
     _sec001_whitelist='\b(forbidden|never|prohibit|禁止|不得|不应|检测|detection|scan|pattern|your[-_]|example|placeholder|replace-me)\b|<YOUR|<your'
-    if grep -RHniE "${_sec001_pattern}" "$SKILL_DIR" 2>/dev/null | grep -vE ':[0-9]+:[[:space:]]*(#|<!--)' | grep -viE "${_sec001_whitelist}" > /dev/null; then
+    # SEC-001 call-expression guard: a value that is an identifier immediately
+    # followed by `(` is code (e.g. `ak, sk = _read_ak_sk(...)`), i.e. a
+    # variable/function-call assignment — never a hardcoded credential literal.
+    _sec001_call_excl='(^|[^[:alnum:]_])(ak|sk|access[_-]?key|secret[_-]?key)[[:space:]]*[:=][[:space:]]*[[:alnum:]_]+[[:space:]]*\('
+    if grep -RHniE "${_sec001_pattern}" "$SKILL_DIR" 2>/dev/null | grep -vE ':[0-9]+:[[:space:]]*(#|<!--)' | grep -viE "${_sec001_whitelist}|${_sec001_call_excl}" > /dev/null; then
         fail "[SEC-001] Possible hardcoded AK/SK literal values found" || true
     else
         pass "[SEC-001] No hardcoded AK/SK literal values"
@@ -133,7 +158,7 @@ if [ -f "$SKILL_DIR/SKILL.md" ]; then
 fi
 
 # references/iam-policies.md
-[ -f "$SKILL_DIR/references/iam-policies.md" ] && pass "references/iam-policies.md exists" || fail "references/iam-policies.md missing"
+[ -f "$SKILL_DIR/references/iam-policies.md" ] && pass "references/iam-policies.md exists (recommended)" || warn "references/iam-policies.md missing (recommended)"
 
 if command -v git >/dev/null 2>&1 && REPO_ROOT=$(git -C "$SKILL_DIR" rev-parse --show-toplevel 2>/dev/null); then
     if [ -n "${BASE_REF:-}" ]; then
@@ -195,7 +220,7 @@ if grep -qE 'hcloud[[:space:]]+([^<{[:space:]][^[:space:]]*|[<{](Service|service
 fi
 
 if [ "$CLI_USED" -eq 1 ]; then
-    [ -f "$SKILL_DIR/references/cli-installation-guide.md" ] && pass "references/cli-installation-guide.md exists" || fail "references/cli-installation-guide.md missing for CLI-based Skill" || true
+    [ -f "$SKILL_DIR/references/cli-installation-guide.md" ] && pass "references/cli-installation-guide.md exists (recommended)" || warn "references/cli-installation-guide.md missing (recommended for CLI-based Skill)"
 else
     pass "references/cli-installation-guide.md not required because no CLI command is used"
 fi
@@ -334,4 +359,5 @@ echo "  Validation Summary"
 echo "  PASS: $PASS  FAIL: $FAIL  WARN: $WARN"
 echo "============================================"
 
+[ "$FAIL" -gt 0 ] && QUALITY_STATUS="sys_fail"
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1

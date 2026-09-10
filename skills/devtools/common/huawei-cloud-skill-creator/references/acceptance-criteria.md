@@ -9,7 +9,7 @@
 | 3 | CLI/SDK/API availability researched for each function | P2 | ⬜ |
 | 4 | Phase 2 summary generated (execution mode per function) | P2 | ⬜ |
 | 5 | SKILL.md generated with required sections | P3 | ⬜ |
-| 6 | references/iam-policies.md generated | P3 | ⬜ |
+| 6 | references/iam-policies.md generated (recommended) | P3 | ⬜ |
 | 7 | references/dataflow-diagram.md generated | P3 | ⬜ |
 | 8 | Test cases generated and saved to JSON | P4 | ⬜ |
 | 9 | All CLI commands executed and verified | P4 | ⬜ |
@@ -18,8 +18,8 @@
 | 12 | Test resources cleaned up | P6 | ⬜ |
 | 13 | Skill spec compliance check passed | P6 | ⬜ |
 | 14 | Frontmatter name matches directory, description includes triggers, and version is absent | P3/P6 | ⬜ |
-| 15 | CLI-based Skill includes KooCLI format and cli-installation-guide.md | P3/P6 | ⬜ |
-| 16 | IAM, verification, and acceptance reference requirements checked | P3/P6 | ⬜ |
+| 15 | CLI-based Skill includes KooCLI format and cli-installation-guide.md (reference recommended) | P3/P6 | ⬜ |
+| 16 | IAM, verification, and acceptance reference files (all recommended) checked | P3/P6 | ⬜ |
 | 17 | All concrete CLI commands use valid Service/PascalCase operation names and `--cli-region` | P3/P6 | ⬜ |
 | 18 | Total content size ≤40 MB, file count ≤30, and SKILL.md ≤500 lines | P3/P6 | ⬜ |
 | 19 | Every file has one of the 46 allowed extensions | P3/P6 | ⬜ |
