@@ -1,0 +1,120 @@
+{
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "list-robots",
+      "command": "cloudrobo robot list",
+      "description": "List all robots",
+      "expected": "JSON array of robots",
+      "type": "read"
+    },
+    {
+      "id": "TC-02",
+      "name": "list-robots-by-workspace",
+      "command": "cloudrobo robot list --workspace-id {workspace_id}",
+      "description": "List robots in a workspace",
+      "expected": "JSON array of robots in workspace",
+      "type": "read"
+    },
+    {
+      "id": "TC-03",
+      "name": "list-robots-by-type",
+      "command": "cloudrobo robot list --type HUMANOID",
+      "description": "List robots filtered by type",
+      "expected": "JSON array of HUMANOID robots",
+      "type": "read"
+    },
+    {
+      "id": "TC-04",
+      "name": "list-robots-paginate",
+      "command": "cloudrobo robot list --limit 10 --offset 0",
+      "description": "Paginate robot list",
+      "expected": "JSON array respecting limit/offset",
+      "type": "read"
+    },
+    {
+      "id": "TC-05",
+      "name": "show-sdk",
+      "command": "cloudrobo robot show-sdk",
+      "description": "Get robot SDK download info",
+      "expected": "JSON with file_name/version/signed_url",
+      "type": "read"
+    },
+    {
+      "id": "TC-06",
+      "name": "create-robot-dry-run",
+      "command": "cloudrobo robot create --name test-robot --type HUMANOID --manufacturer DemoMaker --robot-model B2-W --workspace-id {workspace_id} --dry-run",
+      "description": "Dry-run robot create (no actual submission)",
+      "expected": "[DRY-RUN] message, no robot created",
+      "type": "read"
+    },
+    {
+      "id": "TC-07",
+      "name": "create-robot",
+      "command": "cloudrobo robot create --name test-robot --type HUMANOID --manufacturer DemoMaker --robot-model B2-W --workspace-id {workspace_id}",
+      "description": "Create a robot",
+      "expected": "JSON with robot_id returned",
+      "type": "write"
+    },
+    {
+      "id": "TC-08",
+      "name": "show-robot",
+      "command": "cloudrobo robot show --robot-id {robot_id}",
+      "description": "Show robot detail",
+      "expected": "JSON with robot fields",
+      "type": "read"
+    },
+    {
+      "id": "TC-09",
+      "name": "update-robot",
+      "command": "cloudrobo robot update --robot-id {robot_id} --description 'Updated description'",
+      "description": "Update robot description",
+      "expected": "JSON confirming update",
+      "type": "write"
+    },
+    {
+      "id": "TC-10",
+      "name": "export-certificate",
+      "command": "cloudrobo robot export-certificate --robot-id {robot_id} --password {password} --output ./certs",
+      "description": "Export robot certificate (auto-generated filename, binary write to directory)",
+      "expected": "Binary certificate written to ./certs/cert_config_{robot_name}_{timestamp}.zip",
+      "type": "write"
+    },
+    {
+      "id": "TC-11",
+      "name": "delete-robot",
+      "command": "cloudrobo robot delete --robot-id {robot_id}",
+      "description": "Delete a robot",
+      "expected": "JSON confirming deletion",
+      "type": "write"
+    },
+    {
+      "id": "TC-12",
+      "name": "invalid-type-rejected",
+      "command": "cloudrobo robot create --name x --type invalid-type --manufacturer M --robot-model M --workspace-id {workspace_id}",
+      "description": "Verify out-of-enum type is rejected (CLI is case-insensitive)",
+      "expected": "click usage error: not one of arm/humanoid/operation/other/quadruped/wheeled",
+      "type": "read"
+    },
+    {
+      "id": "TC-13",
+      "name": "path-traversal-rejected",
+      "command": "cloudrobo robot show --robot-id '../etc/passwd'",
+      "description": "Verify path traversal is rejected via validate_safe_id",
+      "expected": "Error: validation error",
+      "type": "read"
+    }
+  ],
+  "variables": {
+    "workspace_id": "Workspace ID (required for robot create/list)",
+    "robot_id": "Robot ID (for show/update/delete/export-certificate)",
+    "password": "Certificate export encryption password (sensitive)"
+  },
+  "notes": [
+    "Mutating tests (type=write) require user confirmation before execution",
+    "Second-party certificate export (TC-10) writes a binary file using wb mode",
+    "TC-12/TC-13 verify enum validation and path traversal protection",
+    "Cross-package tests query the workspace service (workspace list)",
+    "For comprehensive end-to-end testing beyond these checks, run the commands from SKILL.md manually"
+  ]
+}
