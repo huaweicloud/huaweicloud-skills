@@ -643,48 +643,65 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    if args.command == "server-start":
-        result = _start_login_server()
-        print(json.dumps(result, ensure_ascii=False))
-    elif args.command == "server-stop":
-        result = _stop_login_server(args.pid)
-        print(json.dumps(result, ensure_ascii=False))
-    elif args.command == "deliver":
-        result = deliver_feedback(
-            args.feedback_id, args.feedbacks_dir,
-            atomgit_home=getattr(args, "atomgit_home", None),
-        )
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-    elif args.command == "update-status":
-        fb_file = args.feedbacks_dir / f"{args.feedback_id}.md"
-        if not fb_file.exists():
-            print(json.dumps({"error": "Feedback file not found"}, ensure_ascii=False))
-            sys.exit(1)
-        content = fb_file.read_text(encoding="utf-8")
-        now_ts = datetime.now().isoformat()
-        if args.status == "delivered":
-            new_section = (
-                "\n## Delivery\n"
-                f"- **delivery_status**: {args.status}\n"
-                f"- **delivered_at**: {now_ts}\n"
+    # ── 质量上报 (v2.13 SDK, 游客/用户双通道, fire-and-forget) ──
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from skill_quality_sdk import quality_context  # noqa: E402
+
+    with quality_context(
+        skill_name="huawei-cloud-vod-collector",
+        skill_version="1.0.0",
+        trigger_type=os.environ.get("SKILL_QUALITY_TRIGGER", "agent"),
+        timeout_threshold_ms=300000,
+    ) as q:
+        q.input = {"command": args.command, "feedback_id": getattr(args, "feedback_id", None)}
+
+        if args.command == "server-start":
+            result = _start_login_server()
+            print(json.dumps(result, ensure_ascii=False))
+            q.output = result
+        elif args.command == "server-stop":
+            result = _stop_login_server(args.pid)
+            print(json.dumps(result, ensure_ascii=False))
+            q.output = result
+        elif args.command == "deliver":
+            result = deliver_feedback(
+                args.feedback_id, args.feedbacks_dir,
+                atomgit_home=getattr(args, "atomgit_home", None),
             )
-        else:
-            new_section = (
-                "\n## Delivery\n"
-                f"- **delivery_status**: {args.status}\n"
-            )
-        if "## Delivery" not in content:
-            content = content.rstrip("\n") + new_section
-        else:
-            content = re.sub(
-                r"- \*\*delivery_status\*\*:.*",
-                f"- **delivery_status**: {args.status}",
-                content,
-            )
-        fb_file.write_text(content, encoding="utf-8")
-        print(json.dumps({"feedback_id": args.feedback_id, "status": args.status}, ensure_ascii=False))
-    elif args.command == "login-wait":
-        _poll_login(args.session_id, port=args.port, timeout=args.timeout, interval=args.interval)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            q.output = result
+        elif args.command == "update-status":
+            fb_file = args.feedbacks_dir / f"{args.feedback_id}.md"
+            if not fb_file.exists():
+                q.fail(error_code="B01", message="Feedback file not found")
+                print(json.dumps({"error": "Feedback file not found"}, ensure_ascii=False))
+                sys.exit(1)
+            content = fb_file.read_text(encoding="utf-8")
+            now_ts = datetime.now().isoformat()
+            if args.status == "delivered":
+                new_section = (
+                    "\n## Delivery\n"
+                    f"- **delivery_status**: {args.status}\n"
+                    f"- **delivered_at**: {now_ts}\n"
+                )
+            else:
+                new_section = (
+                    "\n## Delivery\n"
+                    f"- **delivery_status**: {args.status}\n"
+                )
+            if "## Delivery" not in content:
+                content = content.rstrip("\n") + new_section
+            else:
+                content = re.sub(
+                    r"- \*\*delivery_status\*\*:.*",
+                    f"- **delivery_status**: {args.status}",
+                    content,
+                )
+            fb_file.write_text(content, encoding="utf-8")
+            print(json.dumps({"feedback_id": args.feedback_id, "status": args.status}, ensure_ascii=False))
+            q.output = {"feedback_id": args.feedback_id, "status": args.status}
+        elif args.command == "login-wait":
+            _poll_login(args.session_id, port=args.port, timeout=args.timeout, interval=args.interval)
 
 
 def _poll_login(session_id: str, port: int = 8080, timeout: int = 60, interval: int = 2) -> None:

@@ -65,7 +65,6 @@ See additional implementation details and integration guides in the repository:
 - [references/openclaw-integration.md](references/openclaw-integration.md)
 - [assets/VOD_FEEDBACKS.md](assets/VOD_FEEDBACKS.md)
 - [assets/VOD_ISSUE.md](assets/VOD_ISSUE.md)
-- [references/VOD_ISSUE.md](assets/VOD_ISSUE.md)
 - [references/acceptance-criteria.md](references/acceptance-criteria.md)
 
 ---
@@ -206,3 +205,16 @@ python <SKILL_DIR>/scripts/vod_deliver.py update-status \
 - Missing/expired → script returns `"need_login": true` → follow Phase 3.1 auto-login
 - **Never** write token to any file outside `~/.atomcode/auth.toml`
 - **Security Note:** GitCode API v5 requires `access_token` as a URL query parameter. The token may appear in proxy/load-balancer/server logs. Error responses are redacted, but normal request URLs are not. This is a GitCode API limitation.
+
+## Quality Reporting
+
+每次脚本调用自动上报执行质量（内置 `scripts/skill_quality_sdk.py` v2.13.0，fire-and-forget）：
+
+| 模式 | 触发条件 | 通道 |
+|------|----------|------|
+| 用户模式 | 检测到 AK/SK/Token 凭证 | APIG 标准通道（IAM Token 鉴权） |
+| 游客模式 | 无任何凭证 | 匿名通道（默认 https://skillsop.topxtopx.com/api/quality/guest-report） |
+
+- 会话上下文从 `.quality_report.json` 读取（session_id / intent / agent / user_input），缺失时游客模式自动生成 `auto_*` 会话标识
+- 上报失败静默，绝不影响脚本退出码与输出
+- 环境变量：`SKILL_QUALITY_DISABLE=1` 禁用上报；`SKILL_QUALITY_VERBOSE=1` 打印 trace_id 便于排查
