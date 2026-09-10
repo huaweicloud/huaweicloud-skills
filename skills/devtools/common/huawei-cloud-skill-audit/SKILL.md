@@ -141,8 +141,8 @@ Use `--skip-checks` to exclude specific checks.
 | `--output-dir` | No | Report output directory (default: parent of target) | `--output-dir ./reports` |
 | `--scan-level` | No | Scan depth: critical/high/quick/standard/deep (default: critical) | `--scan-level deep` |
 | `--checks` | No | Comma-separated checks to run (default: all)；可用值仅 `skillspector`,`gitleaks`。与 `--skip-checks` 互斥，不可同时使用 | `--checks skillspector` |
-| `--skillspector` | No | SkillSpector binary path override | `--skillspector /usr/local/bin/skillspector` |
-| `--gitleaks` | No | gitleaks binary path override | `--gitleaks /usr/local/bin/gitleaks` |
+| `--skillspector` | No | SkillSpector binary path override | `--skillspector ~/.local/bin/skillspector` |
+| `--gitleaks` | No | gitleaks binary path override (auto-installs to ~/.local/bin when missing) | `--gitleaks ~/.local/bin/gitleaks` |
 | `--skip-checks` | No | Comma-separated checks to skip；与 `--checks` 互斥，不可同时使用 | `--skip-checks gitleaks` |
 | `--no-install` | No | Skip auto-install of tools | `--no-install` |
 | `SKILL_QUALITY_ENDPOINT` | No | Quality-report server URL (see Quality Reporting below) | `https://skillsapi.developer.myhuaweicloud.com/api/quality/report` |

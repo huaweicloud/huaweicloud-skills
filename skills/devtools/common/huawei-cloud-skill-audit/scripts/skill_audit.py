@@ -12,7 +12,6 @@ import argparse
 import json
 import os
 import re
-import shlex
 import shutil
 import subprocess
 import sys
@@ -60,12 +59,9 @@ def ensure_tools(no_install=False):
     """Auto-install missing tools. Skip if --no-install."""
     if no_install:
         return
-    # markdownlint-cli2 (npm)
-    _builtin_sp_rules = Path(__file__).parent / "checks" / "skillspector_rules.json"
-    if not shutil.which("skillspector") and not _builtin_sp_rules.exists():
-        print("  Auto-installing skillspector ...", flush=True)
-        subprocess.run([sys.executable, "-m", "pip", "install", "-q", "skillspector"], check=False)
-    # gitleaks (download binary only if builtin rules not available)
+    # skillspector: pure-Python builtin rules (checks/skillspector_rules.json) cover
+    # all scan levels, so no PyPI auto-install is performed.
+    # gitleaks binary auto-install happens only when no binary and no builtin rules.
     _builtin_rules = Path(__file__).parent / "checks" / "gitleaks_rules.json"
     if not shutil.which("gitleaks") and not _builtin_rules.exists():
         print("  Auto-installing gitleaks ...", flush=True)
@@ -83,39 +79,93 @@ def discover_skills(target: Path):
 # ── Run checks ──
 
 def run_cmd(cmd, timeout=120):
-    """Run command with shell timeout wrapper to handle stubborn child processes (skill-scanner)."""
+    """Run command with timeout wrapper to handle stubborn child processes (skill-scanner)."""
     try:
-        shell_cmd = f"timeout --signal=KILL {timeout} " + " ".join(shlex.quote(c) for c in cmd)
-        r = subprocess.run(shell_cmd, shell=True, capture_output=True, text=True)
+        full_cmd = ["timeout", "--signal=KILL", str(timeout)] + list(cmd)
+        r = subprocess.run(full_cmd, capture_output=True, text=True)
         return r.stdout + r.stderr, r.returncode
     except FileNotFoundError:
         return f"ERROR: command not found: {cmd[0]}", 127
 
+GITLEAKS_VERSION = "8.25.1"
+# SHA256 pinned from the official gitleaks checksums.txt (v8.25.1), so downloaded
+# binaries can be verified without trusting any download source (incl. mirrors).
+# Asset names use linux_x64 (NOT linux_amd64) — the old amd64 name never existed.
+GITLEAKS_SHA256 = {
+    "gitleaks_8.25.1_linux_arm64.tar.gz": "262811de1ef1e328eba99a976d9df8a9def2fb04f6f977ab1120d8710cadb354",
+    "gitleaks_8.25.1_linux_x64.tar.gz": "3000d057342489827ee127310771873000b658f2987be7bbd21968ab7443913a",
+}
+
+def _sanitize_snippet(text: str, limit: int = 120) -> str:
+    """Strip control/ANSI chars from external snippet text before printing.
+
+    Snippets come from scanned skill content (untrusted input); printable text is
+    kept, everything else is shown as \\xNN escapes so a malicious skill cannot
+    inject terminal control sequences into the report.
+    """
+    out = []
+    for ch in text[:limit]:
+        if ch.isprintable() or ch in "\t\n":
+            out.append(ch)
+        else:
+            out.append(f"\\x{ord(ch):02x}")
+    return "".join(out)
+
 def _install_gitleaks():
-    """Download and install gitleaks binary."""
-    import platform, tempfile, tarfile
-    arch = "arm64" if platform.machine() in ("aarch64", "arm64") else "amd64"
-    version = "8.25.1"
+    """Download and install gitleaks binary. Official GitHub source first, then proxies.
+
+    The tarball is verified against the pinned SHA256 from the official
+    checksums.txt before extraction; archive members are checked for path
+    traversal. Installs into ~/.local/bin (user-writable), not system dirs.
+    """
+    import hashlib
+    import platform
+    import tarfile
+    import tempfile
+
+    arch = "arm64" if platform.machine() in ("aarch64", "arm64") else "x64"
+    version = GITLEAKS_VERSION
     filename = f"gitleaks_{version}_linux_{arch}.tar.gz"
-    mirrors = [
+    expected_sha256 = GITLEAKS_SHA256.get(filename)
+    if not expected_sha256:
+        print(f"  WARNING: no pinned checksum for {filename}; skipping gitleaks auto-install", flush=True)
+        return
+    sources = [
+        f"https://github.com/gitleaks/gitleaks/releases/download/v{version}/{filename}",
         f"https://gh-proxy.com/https://github.com/gitleaks/gitleaks/releases/download/v{version}/{filename}",
         f"https://gh.ddlc.top/https://github.com/gitleaks/gitleaks/releases/download/v{version}/{filename}",
     ]
-    for url in mirrors:
+    dest_dir = Path.home() / ".local" / "bin"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    for url in sources:
+        tmp = None
         try:
             tmp = tempfile.mktemp(suffix=".tar.gz")
             r = subprocess.run(["curl", "-fsSL", "-o", tmp, url, "--connect-timeout", "10", "-m", "120"],
                                capture_output=True, text=True)
             if r.returncode != 0:
                 continue
+            actual_sha256 = hashlib.sha256(open(tmp, "rb").read()).hexdigest()
+            if actual_sha256 != expected_sha256:
+                print(f"  WARNING: checksum mismatch from {url} (expected {expected_sha256}, got {actual_sha256}); skipping", flush=True)
+                continue
             with tarfile.open(tmp, "r:gz") as tf:
-                tf.extractall(path="/usr/local/bin")
+                for member in tf.getmembers():
+                    p = Path(member.name)
+                    if p.is_absolute() or ".." in p.parts:
+                        raise ValueError(f"unsafe path in archive: {member.name!r}")
+                tf.extractall(path=str(dest_dir))
+            (dest_dir / "gitleaks").chmod(0o755)
             os.unlink(tmp)
-            if shutil.which("gitleaks"):
+            tmp = None
+            if (dest_dir / "gitleaks").exists() or shutil.which("gitleaks"):
                 print("  gitleaks installed successfully", flush=True)
                 return
-        except Exception:
-            continue
+        except Exception as e:
+            print(f"  WARNING: install from {url} failed: {e}", flush=True)
+        finally:
+            if tmp and os.path.exists(tmp):
+                os.unlink(tmp)
     print("  WARNING: gitleaks auto-install failed; install manually from https://github.com/gitleaks/gitleaks/releases", flush=True)
 
 # ── Fix strategies ──
@@ -137,7 +187,7 @@ FIX_STRATEGIES = {
     "command_injection": "Move dangerous commands (nc, curl|sh, etc.) to standalone scripts under scripts/; reference script path in SKILL.md instead of inline code",
     "reverse_shell": "Remove or relocate reverse shell examples; if needed for documentation, add <!-- skill-scanner:ignore --> annotation",
     "credential_leak": "Replace hardcoded secrets with environment variable references (${VAR}); add to .secrets.baseline if false positive",
-    "dangerous_function": "Wrap eval()/exec() calls with input validation; consider safer alternatives like ast.literal_eval()",
+    "dangerous_function": "Wrap dynamic code execution with input validation; prefer safe literal parsing from the ast module over direct evaluation",
     "prompt_injection": "Review and sanitize user-controllable input before embedding in prompts; use structured input templates",
     # skillspector (replaces skill-scanner)
     "P1": "Do not embed user-controllable input in system prompts; use template variables with explicit escaping",
@@ -152,7 +202,7 @@ FIX_STRATEGIES = {
     "PE1": "Do not instruct agents to modify system security settings; use least-privilege tool configurations",
     "PE2": "Avoid sudo/root commands in skill scripts; use capability-based permissions",
     "PE3": "Remove instructions that disable security controls (firewalls, audit logs, etc.)",
-    "AST1": "Replace exec()/eval() with safer alternatives (ast.literal_eval, subprocess with explicit args)",
+    "AST1": "Replace dynamic code execution with safer alternatives (ast literal parsing, subprocess with explicit args)",
     "AST2": "Avoid dynamic module imports with user-controlled names; use importlib with allowlists",
     "AST3": "Do not use __import__ with dynamic strings; map allowed modules explicitly",
     "YR1": "Remove reverse shell patterns; if needed for testing, use isolated sandbox with no network access",
@@ -275,7 +325,7 @@ def build_report(target: Path, skills: list, results: dict, config):
             else:
                 a(f"    {i['rule']}")
             if i.get("snippet"):
-                a(f"    Snippet: {i['snippet'][:120]}")
+                a(f"    Snippet: {_sanitize_snippet(i['snippet'])}")
             if i.get("message"):
                 a(f"    {i['message'][:150]}")
             a()
