@@ -6,6 +6,9 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# Python interpreter auto-detection (python3 preferred; fall back to python on Windows)
+if command -v python3 &>/dev/null 2>&1; then PY_CMD="python3"; else PY_CMD="python"; fi
+
 # Source libraries
 source "$SCRIPT_DIR/lib/utils.sh"
 source "$SCRIPT_DIR/lib/chain-verify.sh"
@@ -159,10 +162,9 @@ fi
 # SKILL_QUALITY_ENDPOINT overrides the report server, SKILL_QUALITY_TIMEOUT
 # sets the HTTP timeout (default 3s), SKILL_QUALITY_NAME sets the reported
 # skill name (default huawei-cloud-skill-tester; the SDK falls back to it when
-# skill_name is not passed explicitly), SKILL_QUALITY_ALLOW_ANONYMOUS=1
-# (default) lets credential-less runs (exit 77 / C01) still report via the
-# public endpoint with the payload marked unauthenticated. See SKILL.md
-# "Quality Reporting".
+# skill_name is not passed explicitly). Credential-less runs (exit 77 / C01)
+# are reported automatically via the SDK v2.13 guest channel (no flag needed).
+# See SKILL.md "Quality Reporting".
 report_quality() {
   local rc="$1"
   local cost_s="$2"
@@ -184,8 +186,7 @@ report_quality() {
   info "上报 tester 运行质量 (status=$status, cost=${cost_s}s) ..."
   SKILL_QUALITY_NAME="${SKILL_QUALITY_NAME:-huawei-cloud-skill-tester}" \
   SKILL_QUALITY_TRIGGER="${SKILL_QUALITY_TRIGGER:-workflow}" \
-  SKILL_QUALITY_ALLOW_ANONYMOUS="${SKILL_QUALITY_ALLOW_ANONYMOUS:-1}" \
-  python3 - "$SCRIPT_DIR" "$rc" "$status" "$error_code" "$error_msg" "$cost_s" "$SKILLS_LIST" "$OUTPUT_DIR" "$MODE" "${START_PHASE:-}" <<'PYEOF' &
+  "${PY_CMD}" - "$SCRIPT_DIR" "$rc" "$status" "$error_code" "$error_msg" "$cost_s" "$SKILLS_LIST" "$OUTPUT_DIR" "$MODE" "${START_PHASE:-}" <<'PYEOF' &
 import os, sys
 sys.path.insert(0, sys.argv[1])
 from skill_quality_sdk import report  # noqa: E402

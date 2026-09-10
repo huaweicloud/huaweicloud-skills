@@ -11,6 +11,25 @@ import os
 _REGION = os.environ.get('HUAWEI_REGION', 'cn-north-4')
 
 
+def _repl_escape(s):
+    """Escape backslashes in replacement strings for re.sub (Windows paths)."""
+    return s.replace('\\', '\\\\')
+
+
+def _posix(s):
+    """Convert a Windows native path (C:\\Users\\x) to MSYS/POSIX style (/c/Users/x).
+
+    POSIX paths contain no backslashes, so commands embedding them are safe when
+    executed via `bash -c` (unquoted backslashes get consumed by bash, corrupting
+    `C:\\Users\\x` into `C:Usersx`). The python shim converts /c/... back to a
+    native path before the real interpreter receives it. POSIX input is unchanged.
+    """
+    s = s.replace('\\', '/')
+    if len(s) >= 2 and s[1] == ':':
+        s = '/' + s[0].lower() + s[2:]
+    return s
+
+
 def replace_placeholders(text, skill_dir):
     """替换命令中的占位符为真实值, 返回清理后的命令字符串。
 
@@ -29,10 +48,10 @@ def replace_placeholders(text, skill_dir):
     text = re.sub(r'\{region\}|\{cli_region\}|\{location\}', _REGION, text)
     text = re.sub(r'<region>|<cli-region>|<location>', _REGION, text)
     # 明文路径占位符 → 被测 skill 真实目录
-    text = re.sub(r'/path/to/[^\s"\']*', skill_dir, text)
-    text = re.sub(r'<skill[-_]?path>|<your-skill>|/your-skill[^\s"\']*|/target/skill[^\s"\']*|/skills-folder[^\s"\']*', skill_dir, text)
+    text = re.sub(r"/path/to/[^\s\"']*", _posix(skill_dir), text)
+    text = re.sub(r"<skill[-_]?path>|<your-skill>|/your-skill[^\s\"']*|/target/skill[^\s\"']*|/skills-folder[^\s\"']*", _posix(skill_dir), text)
     # 相对路径占位符: ./my-skill / ./xxx-skill / ./skills/xxx 等
-    text = re.sub(r'\./[^\s"\']*skill[^\s"\']*', skill_dir, text)
+    text = re.sub(r"\./[^\s\"']*skill[^\s\"']*", _posix(skill_dir), text)
     text = re.sub(r'\{id\}|\{instance_id\}|\{server_id\}|\{vpc_id\}|\{subnet_id\}|\{flavor_id\}|\{image_id\}|\{config_id\}', 'test-placeholder', text)
     text = re.sub(r'<id>|<instance_id>|<server_id>|<vpc_id>|<subnet_id>|<flavor_id>|<image_id>|<config_id>', 'test-placeholder', text)
     # 清理 [--key=value ...] 等模板残渣

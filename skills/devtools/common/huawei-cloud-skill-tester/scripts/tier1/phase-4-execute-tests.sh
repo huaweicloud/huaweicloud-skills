@@ -161,13 +161,26 @@ for tc in cases:
                 _trunc_err = int(os.environ.get('OUTPUT_TRUNC_ERR', '300'))
                 output = (r.stdout[:_trunc] + r.stderr[:_trunc_err]).strip()
                 if tc.get('type') in ('negative', '负向'):
-                    # 负向用例: 非零退出码 = CLI 正确拒绝未知参数 = pass; 静默接受 = fail
+                    # 负向用例: CLI 正确拒绝未知参数 = pass; 静默接受 = fail。
+                    # hcloud KooCLI 对 USE_ERROR 等错误返回码为 0 (rc==0 但输出含错误提示),
+                    # 因此增加文本兜底: rc==0 但输出含 [USE_ERROR]/is not supported/format
+                    # 等错误特征时, 同样视为 CLI 已拒绝未知参数 → pass。
                     if r.returncode != 0:
                         status = 'pass'
                         error_detail = None
                     else:
-                        status = 'fail'
-                        error_detail = '负向用例: 命令未拒绝未知参数(--invalid-flag-xyz), 报错质量差'
+                        _neg_out = (output or '').lower()
+                        _neg_reject_pats = ('[use_error]', 'use_error', 'is not supported',
+                                            'not supported', 'unrecognized', 'parameter format',
+                                            'format error', 'format incorrect', 'invalid parameter',
+                                            'invalid option', 'unknown option', 'unknown parameter',
+                                            'invalid value', 'not found', '参数格式', '不支持')
+                        if any(p in _neg_out for p in _neg_reject_pats):
+                            status = 'pass'
+                            error_detail = f'负向用例: hcloud rc=0 但输出含错误提示(已拒绝未知参数): {output[:200]}'
+                        else:
+                            status = 'fail'
+                            error_detail = '负向用例: 命令未拒绝未知参数(--invalid-flag-xyz), 报错质量差'
                     # 负向用例不做 CLI error pattern 复查
                 else:
                     status = 'pass' if r.returncode == 0 else 'fail'
@@ -315,7 +328,10 @@ for tc in cases:
                 script_path = os.path.join(skill_root, script_part.split()[0])
                 script_args = ' '.join(script_part.split()[1:]) if len(script_part.split()) > 1 else ''
                 if os.path.isfile(script_path):
-                    full_cmd = f'python3 {script_path} {script_args}'.strip()
+                    # _posix: bash -c consumes backslashes in unquoted Windows paths
+                    # (C:\Users\x -> C:Usersx); use POSIX form, the python shim
+                    # converts it back to native before the interpreter runs.
+                    full_cmd = f'python3 {_posix(script_path)} {script_args}'.strip()
                     r = subprocess.run(['bash', '-c', full_cmd], capture_output=True, text=True, timeout=int(os.environ.get('TIMEOUT_SDK', '60')), env=os.environ)
                     output = (r.stdout[:1000] + '\n' + r.stderr[:500]).strip()
                     status = 'pass' if r.returncode == 0 else 'fail'
