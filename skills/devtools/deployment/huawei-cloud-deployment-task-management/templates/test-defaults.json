@@ -1,0 +1,126 @@
+{
+  "region": "cn-north-4",
+  "request_defaults": {
+    "project_id": "383eff43089245eb90ee42bf24fb697b",
+    "domain_id": "074c26ae7f0025b10fd7c0159cb576a0"
+  },
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "ListAllApp --help syntax check",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsDeploy ListAllApp --cli-region={region} --help",
+      "note": "Verifies operation exists and parameter names/required flags match the documented ones."
+    },
+    {
+      "id": "TC-02",
+      "name": "ListAllApp live (read-only) - project error semantics",
+      "type": "query",
+      "executor": "cli",
+      "command": "hcloud CodeArtsDeploy ListAllApp --cli-region={region} --project_id={project_id} --page=1 --size=10",
+      "note": "Test account IAM project is not a CodeArts (DevCloud) project; Deploy.00016902 项目不存在 is the EXPECTED outcome proving CLI+auth wiring, not a skill defect."
+    },
+    {
+      "id": "TC-03",
+      "name": "ListDeployTasks --help syntax check",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsDeploy ListDeployTasks --cli-region={region} --help"
+    },
+    {
+      "id": "TC-04",
+      "name": "ListDeployTasks live (read-only) - project error semantics",
+      "type": "query",
+      "executor": "cli",
+      "command": "hcloud CodeArtsDeploy ListDeployTasks --cli-region={region} --project_id={project_id} --page=1 --size=10"
+    },
+    {
+      "id": "TC-05",
+      "name": "ShowDeployTaskDetail --help syntax check",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsDeploy ShowDeployTaskDetail --cli-region={region} --help"
+    },
+    {
+      "id": "TC-06",
+      "name": "ShowDeployTaskDetail live with unknown task id - error semantics",
+      "type": "query",
+      "executor": "cli",
+      "command": "hcloud CodeArtsDeploy ShowDeployTaskDetail --cli-region={region} --task_id=00000000-0000-0000-0000-000000000000",
+      "note": "unknown task id -> not-found/param error JSON expected (negative-style read-only probe)."
+    },
+    {
+      "id": "TC-07",
+      "name": "ListDeployTaskHistoryByDate --help syntax check",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsDeploy ListDeployTaskHistoryByDate --cli-region={region} --help"
+    },
+    {
+      "id": "TC-08",
+      "name": "CheckIsDuplicateAppName --help syntax check",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsDeploy CheckIsDuplicateAppName --cli-region={region} --help"
+    },
+    {
+      "id": "TC-09",
+      "name": "CreateApp --help syntax check (no live mutation)",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsDeploy CreateApp --cli-region={region} --help",
+      "note": "R2 write op: syntax-only check, no live execution without user confirmation."
+    },
+    {
+      "id": "TC-10",
+      "name": "CreateDeployTaskByTemplate --help syntax check (no live mutation)",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsDeploy CreateDeployTaskByTemplate --cli-region={region} --help",
+      "note": "R2 write op: syntax-only."
+    },
+    {
+      "id": "TC-11",
+      "name": "StartDeployTask --help syntax check (no live mutation)",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsDeploy StartDeployTask --cli-region={region} --help",
+      "note": "R2 write op: syntax-only."
+    },
+    {
+      "id": "TC-12",
+      "name": "DeleteDeployTask --help syntax check (no live mutation)",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsDeploy DeleteDeployTask --cli-region={region} --help",
+      "note": "R1 delete op: syntax-only, never executed without explicit confirmation."
+    },
+    {
+      "id": "TC-13",
+      "name": "Negative: hcloud CloudDeploy must fail (service name probe)",
+      "type": "negative",
+      "executor": "cli",
+      "command": "hcloud CloudDeploy ListAllApp --cli-region={region}",
+      "expected_failure": true,
+      "note": "Proves the service name trap: CloudDeploy is NOT a valid KooCLI service; CodeArtsDeploy is."
+    },
+    {
+      "id": "TC-14",
+      "name": "Negative: ListAllApp --page=0 must fail validation",
+      "type": "negative",
+      "executor": "cli",
+      "command": "hcloud CodeArtsDeploy ListAllApp --cli-region={region} --project_id={project_id} --page=0 --size=10",
+      "expected_failure": true,
+      "note": "page must be >= 1; CLI-side validation error is the EXPECTED outcome."
+    },
+    {
+      "id": "TC-15",
+      "name": "OBS artifact check invocation (obsutil passthrough)",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud obs ls obs://{artifact_bucket}/{artifact_object_path}",
+      "note": "Verifies hcloud obs passthrough wiring for huawei_analyze_clouddeploy_artifact; bucket/object must exist in a real deployment scenario."
+    }
+  ]
+}

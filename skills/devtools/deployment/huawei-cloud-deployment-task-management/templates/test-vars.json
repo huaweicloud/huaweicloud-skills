@@ -1,0 +1,112 @@
+{
+  "region": "cn-north-4",
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "ListAllApp --help syntax check",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsDeploy ListAllApp --cli-region={region} --help"
+    },
+    {
+      "id": "TC-02",
+      "name": "ListAllApp live (read-only) - project error semantics",
+      "type": "query",
+      "executor": "cli",
+      "command": "hcloud CodeArtsDeploy ListAllApp --cli-region={region} --project_id=383eff43089245eb90ee42bf24fb697b --page=1 --size=10"
+    },
+    {
+      "id": "TC-03",
+      "name": "ListDeployTasks --help syntax check",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsDeploy ListDeployTasks --cli-region={region} --help"
+    },
+    {
+      "id": "TC-04",
+      "name": "ListDeployTasks live (read-only) - project error semantics",
+      "type": "query",
+      "executor": "cli",
+      "command": "hcloud CodeArtsDeploy ListDeployTasks --cli-region={region} --project_id=383eff43089245eb90ee42bf24fb697b --page=1 --size=10"
+    },
+    {
+      "id": "TC-05",
+      "name": "ShowDeployTaskDetail --help syntax check",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsDeploy ShowDeployTaskDetail --cli-region={region} --help"
+    },
+    {
+      "id": "TC-06",
+      "name": "ShowDeployTaskDetail live with unknown task id - error semantics",
+      "type": "query",
+      "executor": "cli",
+      "command": "hcloud CodeArtsDeploy ShowDeployTaskDetail --cli-region={region} --task_id=00000000-0000-0000-0000-000000000000"
+    },
+    {
+      "id": "TC-07",
+      "name": "ListDeployTaskHistoryByDate --help syntax check",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsDeploy ListDeployTaskHistoryByDate --cli-region={region} --help"
+    },
+    {
+      "id": "TC-08",
+      "name": "CheckIsDuplicateAppName --help syntax check",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsDeploy CheckIsDuplicateAppName --cli-region={region} --help"
+    },
+    {
+      "id": "TC-09",
+      "name": "CreateApp --help syntax check (no live mutation)",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsDeploy CreateApp --cli-region={region} --help"
+    },
+    {
+      "id": "TC-10",
+      "name": "CreateDeployTaskByTemplate --help syntax check (no live mutation)",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsDeploy CreateDeployTaskByTemplate --cli-region={region} --help"
+    },
+    {
+      "id": "TC-11",
+      "name": "StartDeployTask --help syntax check (no live mutation)",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsDeploy StartDeployTask --cli-region={region} --help"
+    },
+    {
+      "id": "TC-12",
+      "name": "DeleteDeployTask --help syntax check (no live mutation)",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsDeploy DeleteDeployTask --cli-region={region} --help"
+    },
+    {
+      "id": "TC-13",
+      "name": "Negative: hcloud CloudDeploy must fail (service name probe)",
+      "type": "negative",
+      "executor": "cli",
+      "command": "hcloud CloudDeploy ListAllApp --cli-region={region}",
+      "expected_failure": true
+    },
+    {
+      "id": "TC-14",
+      "name": "Negative: ListAllApp --page=0 must fail validation",
+      "type": "negative",
+      "executor": "cli",
+      "command": "hcloud CodeArtsDeploy ListAllApp --cli-region={region} --project_id=383eff43089245eb90ee42bf24fb697b --page=0 --size=10",
+      "expected_failure": true
+    },
+    {
+      "id": "TC-15",
+      "name": "OBS artifact check invocation (obsutil passthrough)",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud obs ls obs://nonexistent-bucket-xyz/obj"
+    }
+  ]
+}
