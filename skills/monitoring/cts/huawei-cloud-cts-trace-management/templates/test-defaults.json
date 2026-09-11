@@ -1,0 +1,87 @@
+{
+  "region": "cn-north-4",
+  "request_defaults": {
+    "project_id": "383eff43089245eb90ee42bf24fb697b",
+    "domain_id": "074c26ae7f0025b10fd7c0159cb576a0"
+  },
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "ListOperations - list cloud service operations",
+      "type": "query",
+      "executor": "cli",
+      "command": "hcloud CTS ListOperations --cli-region={region}",
+      "note": "project_id is filled from request_defaults when the executor substitutes placeholders; hcloud also fills it from the authenticated profile."
+    },
+    {
+      "id": "TC-02",
+      "name": "ListTrackers - list trackers",
+      "type": "query",
+      "executor": "cli",
+      "command": "hcloud CTS ListTrackers --cli-region={region}",
+      "note": "project_id is filled from request_defaults when the executor substitutes placeholders; hcloud also fills it from the authenticated profile."
+    },
+    {
+      "id": "TC-03",
+      "name": "ListTraces - query recent traces (limit 5)",
+      "type": "query",
+      "executor": "cli",
+      "command": "hcloud CTS ListTraces --cli-region={region} --trace_type=system --limit=5",
+      "note": "project_id is filled from request_defaults when the executor substitutes placeholders; hcloud also fills it from the authenticated profile."
+    },
+    {
+      "id": "TC-04",
+      "name": "ListNotifications - list SMN notifications",
+      "type": "query",
+      "executor": "cli",
+      "command": "hcloud CTS ListNotifications --cli-region={region} --notification_type=smn",
+      "note": "project_id is filled from request_defaults when the executor substitutes placeholders; hcloud also fills it from the authenticated profile."
+    },
+    {
+      "id": "TC-05",
+      "name": "ListTraceResources - list trace resources requires --domain_id",
+      "type": "query",
+      "executor": "cli",
+      "command": "hcloud CTS ListTraceResources --cli-region={region} --domain_id=074c26ae7f0025b10fd7c0159cb576a0"
+    },
+    {
+      "id": "TC-06",
+      "name": "CreateTracker syntax check (--help only, no live mutation)",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CTS CreateTracker --cli-region={region} --help"
+    },
+    {
+      "id": "TC-07",
+      "name": "CreateNotification syntax check (--help only, no live mutation)",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CTS CreateNotification --cli-region={region} --help"
+    },
+    {
+      "id": "TC-08",
+      "name": "DeleteTracker syntax check (--help only, no live mutation)",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CTS DeleteTracker --cli-region={region} --help"
+    },
+    {
+      "id": "TC-09",
+      "name": "Negative: ListTraceResources with --project_id must fail (domain_id required)",
+      "type": "negative",
+      "executor": "cli",
+      "command": "hcloud CTS ListTraceResources --cli-region={region} --project_id=383eff43089245eb90ee42bf24fb697b",
+      "expected_failure": true,
+      "note": "Negative case: ListTraceResources requires --domain_id (NOT --project_id); a CLI error is the EXPECTED outcome, not a skill defect."
+    },
+    {
+      "id": "TC-10",
+      "name": "Negative: ListTraces with invalid --trace_type must fail",
+      "type": "negative",
+      "executor": "cli",
+      "command": "hcloud CTS ListTraces --cli-region={region} --limit=1 --trace_type=invalid_value",
+      "expected_failure": true,
+      "note": "Negative case: --trace_type only accepts system|data; an enum-validation CLI error is the EXPECTED outcome, not a skill defect."
+    }
+  ]
+}
