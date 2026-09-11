@@ -103,7 +103,6 @@ Scenario: run same algorithm across multiple datasets
 3. Collect task_ids, poll status
 4. Summarize success/failure/in-progress counts
 5. For failed tasks: view logs or restart
-6. Batch delete: `proc delete-task --task-id id1,id2,id3`
 
 ### Diagnosis Workflow (Failure Diagnosis)
 
