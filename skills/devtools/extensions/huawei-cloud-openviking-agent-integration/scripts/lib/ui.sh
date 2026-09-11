@@ -1,20 +1,30 @@
 #!/bin/bash
-# =============================================================================
-# lib/ui.sh — UI services: logging, authorization, dry-run, i18n
-# Part of the OO refactoring. Sourced by lib/base.sh and entry points.
-# =============================================================================
-# NOTE: set -euo pipefail is set by the entry point, not here.
-
-# ── Colors ────────────────────────────────────────────────────────────────────
+# lib/ui.sh — Logging, authorization, dry-run, i18n
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
-
-# ── Logging ───────────────────────────────────────────────────────────────────
 log_info()  { echo -e "${BLUE}[INFO]${NC} $*"; }
 log_ok()    { echo -e "${GREEN}[OK]${NC} $*"; }
 log_warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
-
-# ── Authorization ─────────────────────────────────────────────────────────────
+log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
+# Returns "zh" for Chinese, "en" for English.
+# Detection order: OV_LANG env var > LANG/LC_ALL/LANGUAGE env vars > default "zh"
+ov_detect_lang() {
+  if [[ -n "${OV_LANG:-}" ]]; then
+    echo "${OV_LANG}"
+    return
+  fi
+  for var in LANG LC_ALL LANGUAGE; do
+    local val="${!var:-}"
+    if [[ "$val" == zh* ]]; then
+      echo "zh"
+      return
+    fi
+  done
+  echo "zh"
+}
+# i18n-aware logging: ov_log_info "中文" "English" (picks by detected language)
+ov_log_info() { local zh="$1" en="${2:-$1}"; if [[ "$(ov_detect_lang)" == "zh" ]]; then log_info "$zh"; else log_info "$en"; fi; }
+ov_log_ok()   { local zh="$1" en="${2:-$1}"; if [[ "$(ov_detect_lang)" == "zh" ]]; then log_ok "$zh"; else log_ok "$en"; fi; }
+ov_log_warn() { local zh="$1" en="${2:-$1}"; if [[ "$(ov_detect_lang)" == "zh" ]]; then log_warn "$zh"; else log_warn "$en"; fi; }
 # Globals used: AUTO_YES, DRY_RUN
 require_confirmation() {
   local action="$1" agent="$2" details="$3"
@@ -35,8 +45,6 @@ require_confirmation() {
   fi
   return 0
 }
-
-# ── Dry run ───────────────────────────────────────────────────────────────────
 # Globals used: DRY_RUN
 dry_run_msg() {
   if [[ "${DRY_RUN:-false}" == "true" ]]; then
@@ -44,22 +52,4 @@ dry_run_msg() {
     return 0
   fi
   return 1
-}
-
-# ── i18n: detect language ─────────────────────────────────────────────────────
-# Returns "zh" for Chinese, "en" for English.
-# Detection order: OV_LANG env var > LANG/LC_ALL/LANGUAGE env vars > default "zh"
-ov_detect_lang() {
-  if [[ -n "${OV_LANG:-}" ]]; then
-    echo "${OV_LANG}"
-    return
-  fi
-  for var in LANG LC_ALL LANGUAGE; do
-    val="${!var:-}"
-    if [[ "$val" == zh* ]]; then
-      echo "zh"
-      return
-    fi
-  done
-  echo "zh"
 }
