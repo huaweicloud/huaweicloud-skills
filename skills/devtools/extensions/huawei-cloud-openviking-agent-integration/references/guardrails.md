@@ -1,43 +1,40 @@
-# Guardrails
+# Guardrails (Supplement)
 
-Safety and authorization rules for the OpenViking agent integration skill. These rules are mandatory — violations may corrupt agent configurations or expose credentials.
+Details beyond what SKILL.md's Authorization & Safety section covers.
 
-## 1. Authorization
+## State Reporting
 
-- **Both integration and unbinding require explicit user authorization.** The scripts prompt for `confirm` before modifying any agent configuration.
-- The user must type exactly `confirm` to proceed. Any other input aborts the operation.
-- `--yes` / `-y` skips the prompt — allowed for automation only, never recommended for production.
-- `--dry-run` shows what would happen without requiring authorization — use it first for unfamiliar targets.
-- Never modify an agent configuration that the user did not ask to modify.
+- **Never claim an agent is integrated without running `status.sh` first.**
+- Three states: `template + live` (active), `template only` (activates on restart), `live only` (**lost on restart** — explicitly warn user).
+- Template-level persistence (dual-write) required for agents whose `start.sh` recreates config: OpenCode, Hermes, KimiCode, OpenClaw.
+- A live-only change is a **partial integration, not success** — verify template-level write succeeded.
 
-## 2. State Reporting
+## Credential Handling
 
-- **Never claim an agent is integrated without running `status.sh` first.** The status script is the single source of truth.
-- Report the three states accurately:
-  - `template + live` — fully integrated and active
-  - `template only` — will activate on next restart
-  - `live only` — will be **lost on restart**
-- If status shows `live only`, explicitly warn the user that the integration is not persistent.
-
-## 3. Configuration Changes
-
-- All configuration changes must go through the skill scripts (`integrate.sh`, `unbind.sh`). Do not hand-edit `/root/template/<agent>/start.sh` or sandbox config files.
-- Template-level persistence (dual-write) is required for agents whose `start.sh` recreates config from scratch: OpenCode, Hermes, KimiCode, OpenClaw.
-- Verify template-level write succeeded; a live-only change is a partial integration, not success.
-
-## 4. Credential Handling
-
-- **NEVER** echo `--api-key` values to output, logs, or status messages.
+- **NEVER** echo `--api-key` in output, logs, or status. Use command-line flags or env vars only.
 - **NEVER** persist API keys in agent config beyond what the agent itself requires.
-- When server auth is enabled, use the key the user provides; in dev mode, no key is needed — do not fabricate one.
+- Dev mode (default): no key needed. Auth enabled: pass server's `root_api_key` via `--api-key`.
 
-## 5. Environment Safety
+## Environment Safety
 
-- The OpenViking server runs inside a bwrap sandbox. Never start or stop `openviking-server` on the host directly.
-- Operations against the host filesystem are limited to template `start.sh` files under `/root/template/<agent>/` and sandbox workspace copies.
-- If the OpenViking server is unreachable (`curl http://127.0.0.1:1933/health` fails), do not attempt integration — report the prerequisite failure.
+- OpenViking server runs inside a bwrap sandbox — never start/stop it on the host directly.
+- Host filesystem operations limited to template `start.sh` under `/root/template/<agent>/` and sandbox workspace copies.
+- If server unreachable, do not attempt integration — report the prerequisite failure.
 
-## 6. Rollback
+## Rollback
 
-- Every config modification creates a `.bak.<timestamp>` backup. If a verification step fails, restore the backup and report the problem.
-- If `verify_mcp.sh` fails during integration, remove the partial MCP configuration (or restore the backup) and report.
+- Every config modification creates a `.bak.<timestamp>` backup.
+- If verification fails, restore the backup and report.
+- If `verify_mcp.sh` fails during integration, remove partial MCP config (or restore backup) and report.
+
+## Access Permissions
+
+No Huawei Cloud IAM policies required — this skill operates on local bwrap sandboxes only.
+
+| Resource | Permission | Reason |
+|----------|-----------|--------|
+| OpenViking server | Access to `http://127.0.0.1:1933` | MCP endpoint / health check |
+| OpenViking server | `root_api_key` (if auth enabled) | `--api-key` for MCP handshake |
+| Host filesystem | R/W `/root/template/<agent>/start.sh` | Template re-injection |
+| Host filesystem | R/W `/root/job-envs/sandboxes/` | Live sandbox config |
+| Host filesystem | Execute `curl`, `python3`, `bash` | Script prerequisites |
