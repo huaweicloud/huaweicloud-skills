@@ -43,12 +43,11 @@ After user selection, proceed to Step 4 (subsequent steps differ by algorithm ty
 
 **4b. Workspace Asset Algorithm (WORKSPACE_ASSETS)**
 - Get workspace `catalog_id` (obtain `asset_catalog_id` from `cloudrobo workspace current`)
-- Query and display algorithm list: `cloudrobo asset list-assets --catalog-id <workspace-catalog-id> --type algorithm`
-- **Note:** Do not add `--tags "Data Processing"` filter; workspace algorithms may not have the tags field set
+- Query and display algorithm list: `cloudrobo asset list-assets --catalog-id <workspace-catalog-id> --type algorithm --tags "Data Processing"`
 - Display algorithm list (name, description, update time). Since there may be many algorithms, display only the first few
 - **Provide search functionality**: Offer "Search algorithm name" option in AskUserQuestion
   - If user chooses search, ask for search keyword
-  - Use `--name` parameter to filter: `cloudrobo asset list-assets --catalog-id <workspace-catalog-id> --type algorithm --name <keyword>`
+  - Use `--name` parameter to filter: `cloudrobo asset list-assets --catalog-id <workspace-catalog-id> --type algorithm --tags "Data Processing" --name <keyword>`
 - After user selection, extract field mappings from `ext_metadata`:
   - `asset_id` → `algo_id`
   - `name` → `algo_name`
