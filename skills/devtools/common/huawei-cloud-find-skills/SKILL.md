@@ -61,11 +61,33 @@ If the command fails or returns Python 2.x:
 2. **Verify after install**: Run `python --version` again to confirm Python 3.6+ is available
 3. **If `python` points to Python 2**: Use `python3` instead of `python` in all commands below
 
+### Step 0.5: Check KooCLI Version (NON-BLOCKING)
+
+> **OPTIONAL**: A KooCLI (`hcloud`) availability/version check that **never blocks the flow**.
+> Skills installed later may depend on KooCLI; this step warns early, then **always
+> continues to Step 1** regardless of the outcome.
+
+```bash
+# Check KooCLI availability & version (non-blocking)
+python scripts/check-koocli.py
+```
+
+→ [scripts/check-koocli.py](scripts/check-koocli.py) (Python — cross-platform)
+
+| Outcome | Behavior |
+|---------|----------|
+| `hcloud` installed and version OK (≥ 3.0.0) | **Silent pass** — no output |
+| `hcloud` installed but too old | Prints an upgrade reminder (`hcloud update -y`) |
+| `hcloud` not installed | Prints an install reminder (official KooCLI guide link) |
+
+> The script always exits `0` — it is informational only and never interrupts
+> search or installation.
+
 ## Repository Info
 
 ```
-INDEX_REPO=2501_91318609/skills-for-index
-INDEX_BRANCH=main
+INDEX_REPO=developer-skill/skills-group-contribution
+INDEX_BRANCH=test-for-index
 SKILLS_REPO=huaweicloud/huaweicloud-skills
 SKILLS_BRANCH=master
 RAW_BASE=https://raw.githubusercontent.com/$SKILLS_REPO/$SKILLS_BRANCH
@@ -76,8 +98,8 @@ RAW_BASE=https://raw.githubusercontent.com/$SKILLS_REPO/$SKILLS_BRANCH
 The search script fetches the skill index from GitCode API v5 via HTTP GET (base64 auto-decoded):
 
 ```
-SKILLS_INDEX_URL=https://gitcode.com/api/v5/repos/2501_91318609/skills-for-index/contents/skills-index/index.json?ref=main
-SKILLS_CN_EN_MAP_URL=https://gitcode.com/api/v5/repos/2501_91318609/skills-for-index/contents/skills-index/cn-en-map.json?ref=main
+SKILLS_INDEX_URL=https://gitcode.com/api/v5/repos/developer-skill/skills-group-contribution/contents/skills-index/index.json?ref=test-for-index
+SKILLS_CN_EN_MAP_URL=https://gitcode.com/api/v5/repos/developer-skill/skills-group-contribution/contents/skills-index/cn-en-map.json?ref=test-for-index
 ```
 
 
@@ -110,6 +132,7 @@ python scripts/search-skills.py -c "<category>"
 2. Expands keywords via `cn-en-map.json` (bidirectional CN↔EN, e.g., "ECS" → "ECS, 弹性云服务器, 云服务器")
 3. Scores each skill: name match **+10**, trigger match **+8**, description match **+5**, service match **+3**
 4. Sorts by score descending, outputs formatted results with matched keywords
+5. Reports every result's skill name to the install-count API (`skills/<category>/<service>/<name>`) as an exposure impression — fire-and-forget, never blocks or fails the search
 
 **Fallback iteration** (if no results): 1) Switch CN↔EN keywords 2) Expand keywords 3) Remove category filter 4) Try synonyms 5) List all skills
 
@@ -177,7 +200,8 @@ This Skill integrates [scripts/skill_quality_sdk.py](scripts/skill_quality_sdk.p
 (vendored, zero third-party dependency) for execution quality reporting. Every
 `search-skills.py` run automatically reports one record — **skill name
 (`huawei-cloud-find-skills`), status (`success` / `biz_fail` / `sys_fail`),
-error code, cost, keyword/category input and result count** — to the skillsopr
+error code, cost, keyword/category input, result count and search-result
+exposure count** — to the skillsopr
 operations console, enabling usage/statistics counting of the skill itself.
 
 ### Integration
@@ -213,7 +237,8 @@ main flow. Disable via `SKILL_QUALITY_DISABLE=1` for local testing.
 |----------|-------------|
 | GitCode API v5 `index.json` | Skill index fetched via HTTP GET (base64 decoded) |
 | GitCode API v5 `cn-en-map.json` | Chinese-English keyword mapping fetched via HTTP GET (base64 decoded) |
-| [scripts/search-skills.py](scripts/search-skills.py) | Search script (Python) — fetches from GitCode API v5, expands keywords, scores, sorts |
+| [scripts/search-skills.py](scripts/search-skills.py) | Search script (Python) — fetches from GitCode API v5, expands keywords, scores, sorts, reports search-result exposures |
+| [scripts/check-koocli.py](scripts/check-koocli.py) | Step 0.5 non-blocking KooCLI (`hcloud`) availability/version check |
 | [scripts/skill_quality_sdk.py](scripts/skill_quality_sdk.py) | Vendored execution-quality reporting SDK (see Quality Reporting) |
 | [references/iam-policies.md](references/iam-policies.md) | IAM 权限说明 — 本 Skill 仅访问公开接口，无需任何 IAM 凭证/策略 |
 | [references/verification-method.md](references/verification-method.md) | 验证方法 — 各场景的验证步骤与预期结果 |
@@ -246,7 +271,7 @@ main flow. Disable via `SKILL_QUALITY_DISABLE=1` for local testing.
 
 ### Issue: GitCode API v5 returns 404
 
-**Cause**: File path incorrect or default branch is not `main`
+**Cause**: File path incorrect or the branch is not `test-for-index`
 **Solution**: Verify the skill's `category`, `service`, and `name` from search results
 
 ### Issue: Search returns no results
@@ -263,8 +288,9 @@ main flow. Disable via `SKILL_QUALITY_DISABLE=1` for local testing.
 - **No cache management needed** — index is fetched fresh from GitCode API v5 each run
 - **Network required** — index data is hosted on GitCode, fetched via HTTP GET (base64 decoded)
 - **MUST use script to search** — do not read index.json directly
-- Index repo: `https://gitcode.com/2501_91318609/skills-for-index` (branch: `main`)
+- Index repo: `https://gitcode.com/developer-skill/skills-group-contribution` (branch: `test-for-index`)
 - Skills repo: `https://github.com/huaweicloud/huaweicloud-skills` (branch: `master`)
-- **不涉及 CLI / 无 `--cli-region`**：本 Skill 是纯 Python 脚本 + HTTP 查询实现，
-  不调用 hcloud / KooCLI 命令行，因此不包含 `--cli-region` 参数，也不涉及
-  KooCLI 命令格式、CLI 安装指南等 CLI 相关条目（审查项 15/16 按"不涉及 CLI"跳过）。
+- **KooCLI**: the search/install flow itself is pure Python + HTTP (no service-level
+  hcloud commands, no `--cli-region`). Step 0.5 performs only a non-blocking KooCLI
+  availability/version check (`hcloud version` via `scripts/check-koocli.py`) to warn
+  about a missing/outdated CLI before installing skills that depend on it.
