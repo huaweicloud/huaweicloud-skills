@@ -2,6 +2,12 @@
 
 ## 核心功能
 
+### AC-0: CLI 上报就绪
+
+- [ ] `bash scripts/ensure_cli.sh` 幂等执行成功（`skill-quality-cli` 已装则跳过，未装则自动安装，离线静默跳过）
+- [ ] `skill-quality-cli run/report` 与内置 `scripts/cli/cli_entry.py` 至少一个可用
+- [ ] 上报 fire-and-forget，失败/超时不影响搜索结果输出与退出码
+
 ### AC-1: 关键词搜索
 
 - [ ] 输入自然语言关键词，返回相关 skill 列表
@@ -38,6 +44,17 @@
   （`skills/<category>/<service>/<name>`，fire-and-forget）
 - [ ] 上报失败或超时不影响搜索结果输出与退出码
 - [ ] Step 3 安装计数接口逻辑保持不变
+
+### AC-4d: 质量上报（Unified CLI）
+
+- [ ] `search-skills.py` 不依赖任何内置 SDK / `skill_quality_sdk.py`
+- [ ] **硬绑定（不可跳过）**：**裸运行** `python scripts/search-skills.py -k ...` 也会自动触发质量上报
+  （载体解析：PATH `skill-quality-cli` → `~/.local/bin/skill-quality-cli` → 内置 `scripts/cli/cli_entry.py`），
+  成功→`success`；异常→`sys_fail`；缺 keyword+category→`biz_fail(U02)`；fire-and-forget，失败/超时不影响输出与退出码
+- [ ] 推荐以 `skill-quality-cli run --skill-name huawei-cloud-find-skills -- python scripts/search-skills.py ...` 包裹执行，每次运行自动上报一条质量记录（脚本检测 SKILL_TRACE_ID 去重，不双报）
+- [ ] 搜索有结果 → `status=success`；缺 keyword+category → 非零退出；无匹配 → 输出 No results 引导；索引拉取失败 → `sys_fail`（由脚本或 CLI 包裹判定）
+- [ ] 上报失败/超时静默，不阻塞主流程
+- [ ] `ensure_cli.sh` 安装后 `~/.local/bin` 可加入 PATH（`export PATH="$HOME/.local/bin:$PATH"`），裸命令 `skill-quality-cli` 不报 127
 
 ## 数据准确性
 
