@@ -4,6 +4,8 @@
 Quality reporting: vendored skill_quality_sdk (scripts/skill_quality_sdk.py) -
 every run reports trace_id, status (success|biz_fail|sys_fail), error code and
 cost to the skillsopr operations console (fire-and-forget, fails silently).
+Every search-result skill name is also reported to the install-count API
+(exposure impression, fire-and-forget, non-blocking).
 """
 
 import argparse
@@ -17,10 +19,16 @@ from urllib.error import URLError, HTTPError
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from skill_quality_sdk import QualityError, quality_context  # noqa: E402
 
-DEFAULT_INDEX_URL = "https://gitcode.com/api/v5/repos/2501_91318609/skills-for-index/contents/skills-index/index.json?ref=main"
-DEFAULT_CN_EN_MAP_URL = "https://gitcode.com/api/v5/repos/2501_91318609/skills-for-index/contents/skills-index/cn-en-map.json?ref=main"
+DEFAULT_INDEX_URL = "https://gitcode.com/api/v5/repos/developer-skill/skills-group-contribution/contents/skills-index/index.json?ref=test-for-index"
+DEFAULT_CN_EN_MAP_URL = "https://gitcode.com/api/v5/repos/developer-skill/skills-group-contribution/contents/skills-index/cn-en-map.json?ref=test-for-index"
 
 HTTP_TIMEOUT = 15
+
+# Install-count API (same endpoint as Step 3 install counting). Used to report
+# every search-result skill name as an exposure impression - fire-and-forget,
+# never blocks or fails the search.
+INSTALL_COUNT_URL = "https://devdata2.huaweicloud.com/rest/developer/fwdo/rest/developer/servlet/hdskillservice/v1/obs/findcounts/increment"
+INSTALL_COUNT_TIMEOUT = HTTP_TIMEOUT
 
 GENERIC_KEYWORDS = {
     "华为云", "huawei", "huawei cloud", "云", "cloud",
@@ -162,6 +170,38 @@ def truncate(desc, limit=150):
     return desc
 
 
+def report_search_results_impressions(results):
+    """Report every search-result skill name via the install-count API (non-blocking).
+
+    Each result's skill_id (`skills/<category>/<service>/<name>`) is POSTed to the
+    same endpoint Step 3 uses for install counting, so search-result exposures are
+    counted too. Fire-and-forget: failures/timeouts are swallowed and never affect
+    the search output or exit code.
+    """
+    reported = 0
+    for r in results:
+        skill_id = "skills/{}/{}/{}".format(r["category"], r["service"], r["name"])
+        body = json.dumps({"skill_id": skill_id}).encode("utf-8")
+        req = Request(
+            INSTALL_COUNT_URL,
+            data=body,
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/plain, */*",
+                "Origin": "https://skills.huaweicloud.com",
+                "Referer": "https://skills.huaweicloud.com/",
+                "User-Agent": "huawei-cloud-find-skills/1.0",
+            },
+        )
+        try:
+            with urlopen(req, timeout=INSTALL_COUNT_TIMEOUT) as resp:
+                resp.read()
+            reported += 1
+        except (URLError, HTTPError, OSError, ValueError):
+            continue
+    return reported
+
+
 def main():
     parser = argparse.ArgumentParser(description="Search Huawei Cloud skills")
     parser.add_argument("-k", "--keyword", default="", help="Search keyword(s), space/comma/semicolon separated")
@@ -214,6 +254,8 @@ def main():
 
         results.sort(key=lambda r: r["score"], reverse=True)
 
+        impressions = report_search_results_impressions(results)
+
         if not results:
             print(f"No results for keyword='{args.keyword}' category='{args.category}'")
             print()
@@ -238,7 +280,12 @@ def main():
                 print(f"    triggers: {', '.join(r['triggers'])}")
             print()
 
-        q.output = {"count": len(results), "keyword": args.keyword, "category": args.category}
+        q.output = {
+            "count": len(results),
+            "keyword": args.keyword,
+            "category": args.category,
+            "impressions_reported": impressions,
+        }
         return 0
 
 

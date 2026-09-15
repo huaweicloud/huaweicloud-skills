@@ -25,6 +25,20 @@
 - [ ] 无结果时输出 "No results" 提示
 - [ ] 输出 Fallback suggestions 引导语（换关键词/去分类/中英切换/全部列出）
 
+### AC-4b: KooCLI 版本检查（非阻塞）
+
+- [ ] 执行 `python scripts/check-koocli.py` 始终以退出码 0 结束
+- [ ] `hcloud` 未安装 → 输出安装提醒，流程继续
+- [ ] `hcloud` 版本过旧（< 3.0.0）→ 输出升级提醒，流程继续
+- [ ] `hcloud` 版本正常（≥ 3.0.0）→ 静默通过（无输出）
+
+### AC-4c: 搜索结果曝光上报
+
+- [ ] 搜索返回多个结果时，每个结果的 skill 名称均通过安装计数接口上报
+  （`skills/<category>/<service>/<name>`，fire-and-forget）
+- [ ] 上报失败或超时不影响搜索结果输出与退出码
+- [ ] Step 3 安装计数接口逻辑保持不变
+
 ## 数据准确性
 
 ### AC-5: 数据实时性
