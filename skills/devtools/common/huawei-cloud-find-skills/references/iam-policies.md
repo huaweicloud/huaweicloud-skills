@@ -34,8 +34,9 @@ All data sources are public endpoints:
 - No cloud resources are created, modified, or deleted
 - No credentials are stored, transmitted, or logged
 - The script does not reference any environment variables prefixed with
-  `HUAWEI_`, `HW_`, or `HWC_` (except `SKILL_QUALITY_*` used to configure
-  non-blocking quality reporting, which is optional)
+  `HUAWEI_`, `HW_`, or `HWC_`. Quality reporting is handled by the external
+  `skill-quality-cli` (non-blocking, optional; see SKILL.md「Quality Reporting
+  (Unified CLI)」)
 
 ## Network Requirements
 

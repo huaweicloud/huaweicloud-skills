@@ -1,5 +1,20 @@
 # 验证方法
 
+## 前置检查
+
+### 0. CLI 上报就绪验证
+
+```bash
+bash scripts/ensure_cli.sh
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+**预期结果**：
+- `skill-quality-cli` 可用（`skill-quality-cli version` 有输出）或已自动安装
+- 内置 `scripts/cli/cli_entry.py` 存在（`python3 scripts/cli/cli_entry.py version` 有输出）
+- 两个载体至少一个可用，上报为 fire-and-forget
+- `export PATH` 使裸命令 `skill-quality-cli` 可直接使用（避免 exit 127）
+
 ## 功能验证
 
 ### 0.5. KooCLI 版本检查验证（非阻塞）
@@ -24,6 +39,7 @@ python scripts/search-skills.py -k "ecs"
 - 每个结果包含名称、分类/服务、描述，并按评分降序排列
 - 命中关键词会在结果中标注 `matched: ...`
 - 搜索结果的每个 skill 名称均通过安装计数接口上报（fire-and-forget，失败静默，不阻塞输出）
+- **每次运行自动触发质量上报**（`skill-quality-cli` 或内置 `scripts/cli/cli_entry.py`，成功→`success`；失败→`sys_fail`/`biz_fail`；fire-and-forget 不阻塞退出码）
 
 ### 2. 中英文关键词扩展验证
 
@@ -87,6 +103,8 @@ python scripts/search-skills.py
 
 ## 质量上报验证（可选）
 
-设置 `SKILL_QUALITY_DISABLE=1` 可关闭上报；默认每次运行会向
-`SKILL_QUALITY_ENDPOINT` 发送一条 fire-and-forget 运行记录（3s 超时，
-失败静默，不阻塞主流程）。
+- 执行前先运行 `bash scripts/ensure_cli.sh`（幂等安装 `skill-quality-cli`，已安装则直接跳过）
+- 质量上报由外部 `skill-quality-cli` 完成（见 SKILL.md「Quality Reporting (Unified CLI)」段）：
+  - 整段包裹执行：`skill-quality-cli run --skill-name huawei-cloud-find-skills -- python scripts/search-skills.py ...`
+  - 逐步骤上报：`skill-quality-cli report --skill-name huawei-cloud-find-skills --status <success|sys_fail|biz_fail|cancel>`
+- 上报失败静默，不阻塞主流程；离线环境下 CLI 自动跳过上报

@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Search Huawei Cloud agent skills by keyword/category.
 
-Quality reporting: vendored skill_quality_sdk (scripts/skill_quality_sdk.py) -
-every run reports trace_id, status (success|biz_fail|sys_fail), error code and
-cost to the skillsopr operations console (fire-and-forget, fails silently).
+Quality reporting: hard-bound to this main flow. Every run of this script
+automatically sends a quality report via `skill-quality-cli` (or its bundled
+in-skill carrier `scripts/cli/cli_entry.py`) - fire-and-forget, non-blocking,
+failures never affect search output or the exit code. When the whole command
+is already wrapped with `skill-quality-cli run` (SKILL_TRACE_ID is set), the
+script skips its own report to avoid double counting.
 Every search-result skill name is also reported to the install-count API
 (exposure impression, fire-and-forget, non-blocking).
 """
@@ -12,12 +15,12 @@ import argparse
 import base64
 import json
 import os
+import shutil
+import subprocess
 import sys
 from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from skill_quality_sdk import QualityError, quality_context  # noqa: E402
 
 DEFAULT_INDEX_URL = "https://gitcode.com/api/v5/repos/developer-skill/skills-group-contribution/contents/skills-index/index.json?ref=test-for-index"
 DEFAULT_CN_EN_MAP_URL = "https://gitcode.com/api/v5/repos/developer-skill/skills-group-contribution/contents/skills-index/cn-en-map.json?ref=test-for-index"
@@ -52,7 +55,7 @@ def load_json_from_url(url, label=""):
             return json.loads(decoded)
         return parsed
     except (URLError, HTTPError, json.JSONDecodeError) as e:
-        raise QualityError("N02", f"Failed to fetch {label}: {e}") from e
+        raise RuntimeError(f"N02: Failed to fetch {label}: {e}") from e
 
 
 def load_index():
@@ -202,99 +205,164 @@ def report_search_results_impressions(results):
     return reported
 
 
+def _resolve_quality_cli():
+    """Resolve the skill-quality-cli invocation, in priority order:
+    0. `SKILL_QUALITY_CLI_HOME` (explicit dir containing `cli_entry.py` or `skill-quality-cli`)
+    1. `skill-quality-cli` on PATH (after ensure_cli.sh + PATH export)
+    2. `~/.local/bin/skill-quality-cli` (ensure_cli.sh install dir, even when not on PATH)
+    3. bundled in-skill carrier `scripts/cli/cli_entry.py` (zero-dependency, always available)
+    Returns an argv list, or None when no carrier exists.
+    """
+    home = os.environ.get("SKILL_QUALITY_CLI_HOME")
+    if home:
+        entry = os.path.join(home, "cli_entry.py")
+        if os.path.isfile(entry):
+            return [sys.executable, entry]
+        exe = os.path.join(home, "skill-quality-cli")
+        if os.path.isfile(exe) and os.access(exe, os.X_OK):
+            return [exe]
+    exe = shutil.which("skill-quality-cli")
+    if exe:
+        return [exe]
+    local = os.path.expanduser("~/.local/bin/skill-quality-cli")
+    if os.path.isfile(local) and os.access(local, os.X_OK):
+        return [local]
+    bundled = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cli", "cli_entry.py")
+    if os.path.isfile(bundled):
+        return [sys.executable, bundled]
+    return None
+
+
+def report_quality(status, error_code=None, error_msg=None):
+    """Fire-and-forget quality report via skill-quality-cli (unified CLI).
+
+    Hard-bound to the search main flow: called on every run (success, usage
+    error, or exception) so a report can never be skipped by running the bare
+    script. Failures are swallowed - reporting never blocks or fails the search
+    output or exit code.
+
+    Skipped when:
+      - SKILL_QUALITY_DISABLE=1 (explicit opt-out),
+      - SKILL_TRACE_ID is already set (the whole command is wrapped with
+        `skill-quality-cli run`, which reports once itself - avoid double counting).
+    """
+    if os.environ.get("SKILL_QUALITY_DISABLE") == "1":
+        return False
+    if os.environ.get("SKILL_TRACE_ID"):  # already wrapped in `skill-quality-cli run`
+        return True
+    argv = _resolve_quality_cli()
+    if not argv:
+        return False
+    cmd = argv + ["--no-auto-upgrade", "report",
+                  "--skill-name", "huawei-cloud-find-skills",
+                  "--status", status]
+    if error_code:
+        cmd += ["--error-code", error_code]
+    if error_msg:
+        cmd += ["--error-msg", error_msg[:500]]
+    try:
+        # Truly fire-and-forget: detach the report subprocess and never wait,
+        # so an unreachable/slow quality endpoint can never block the search
+        # main flow (acceptance: failures/timeouts must not delay or fail it).
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+        return True
+    except Exception:  # noqa: BLE001 - fire-and-forget
+        return False
+
+
+def _extract_error_code(exc):
+    """Extract the leading error code (e.g. N02) from an exception message."""
+    head = str(exc).split(":", 1)[0].strip()
+    if len(head) == 3 and head[0].isalpha() and head[1:].isdigit():
+        return head
+    return "B01"
+
+
 def main():
     parser = argparse.ArgumentParser(description="Search Huawei Cloud skills")
     parser.add_argument("-k", "--keyword", default="", help="Search keyword(s), space/comma/semicolon separated")
     parser.add_argument("-c", "--category", default="", help="Filter by category")
     args = parser.parse_args()
 
-    with quality_context(
-        skill_name="huawei-cloud-find-skills",
-        skill_version="1.0.0",
-        trigger_type=os.environ.get("SKILL_QUALITY_TRIGGER", "agent"),
-        timeout_threshold_ms=120000,
-    ) as q:
-        q.input = {"keyword": args.keyword, "category": args.category}
+    idx = load_index()
+    raw_skills = idx.get("skills", [])
+    skills = [extract_skill_fields(s) for s in raw_skills]
 
-        idx = load_index()
-        raw_skills = idx.get("skills", [])
-        skills = [extract_skill_fields(s) for s in raw_skills]
+    if not args.keyword and not args.category:
+        cats = ", ".join(idx.get("categories", []))
+        print("Usage: python search-skills.py -k <keyword> [-c <category>]")
+        print(f"Categories: {cats}")
+        print("ERROR: missing keyword and category (U02)", file=sys.stderr)
+        return 1
 
-        if not args.keyword and not args.category:
-            cats = ", ".join(idx.get("categories", []))
-            print("Usage: python search-skills.py -k <keyword> [-c <category>]")
-            print(f"Categories: {cats}")
-            q.fail("U02", "missing keyword and category")
-            return 1
+    cn_en_map = load_cn_en_map()
+    specific_kws, generic_kws = expand_keywords(args.keyword, cn_en_map)
+    has_specific = bool(specific_kws)
 
-        cn_en_map = load_cn_en_map()
-        specific_kws, generic_kws = expand_keywords(args.keyword, cn_en_map)
-        has_specific = bool(specific_kws)
+    results = []
 
-        results = []
+    for skill in skills:
+        category = skill["category"]
+        if args.category and category != args.category:
+            continue
+        sc, matched = score_skill(skill, specific_kws, generic_kws)
+        if has_specific and sc == 0:
+            continue
+        desc = truncate(skill["description"])
+        trig_preview = skill["triggers"][:5]
+        results.append({
+            "score": sc,
+            "name": skill["name"],
+            "category": category,
+            "service": skill["service"],
+            "description": desc,
+            "triggers": trig_preview,
+            "matched": matched,
+        })
 
-        for skill in skills:
-            category = skill["category"]
-            if args.category and category != args.category:
-                continue
-            sc, matched = score_skill(skill, specific_kws, generic_kws)
-            if has_specific and sc == 0:
-                continue
-            desc = truncate(skill["description"])
-            trig_preview = skill["triggers"][:5]
-            results.append({
-                "score": sc,
-                "name": skill["name"],
-                "category": category,
-                "service": skill["service"],
-                "description": desc,
-                "triggers": trig_preview,
-                "matched": matched,
-            })
+    results.sort(key=lambda r: r["score"], reverse=True)
 
-        results.sort(key=lambda r: r["score"], reverse=True)
+    impressions = report_search_results_impressions(results)
 
-        impressions = report_search_results_impressions(results)
-
-        if not results:
-            print(f"No results for keyword='{args.keyword}' category='{args.category}'")
-            print()
-            print("Fallback suggestions:")
-            print("  1. Try broader or alternative keywords")
-            print("  2. Remove category filter")
-            print("  3. Switch CN<->EN (e.g., 'obs' <-> 'object storage')")
-            print("  4. List all: python search-skills.py -c 'computing'")
-            q.fail("U03", f"no results for keyword='{args.keyword}' category='{args.category}'")
-            return 0
-
-        all_kws = specific_kws + generic_kws
-        print(f"Found {len(results)} skill(s) for keyword='{args.keyword}' category='{args.category}':")
-        if len(all_kws) > 1 or (len(all_kws) == 1 and all_kws[0] != args.keyword):
-            print(f"  (expanded: {', '.join(all_kws)})")
+    if not results:
+        print(f"No results for keyword='{args.keyword}' category='{args.category}'")
         print()
-        for r in results:
-            match_info = f" matched: {','.join(r['matched'])}" if r["matched"] else ""
-            print(f"  [{r['score']}pts] {r['name']} ({r['category']}/{r['service']}){match_info}")
-            print(f"    {r['description']}")
-            if r["triggers"]:
-                print(f"    triggers: {', '.join(r['triggers'])}")
-            print()
-
-        q.output = {
-            "count": len(results),
-            "keyword": args.keyword,
-            "category": args.category,
-            "impressions_reported": impressions,
-        }
+        print("Fallback suggestions:")
+        print("  1. Try broader or alternative keywords")
+        print("  2. Remove category filter")
+        print("  3. Switch CN<->EN (e.g., 'obs' <-> 'object storage')")
+        print("  4. List all: python search-skills.py -c 'computing'")
         return 0
+
+    all_kws = specific_kws + generic_kws
+    print(f"Found {len(results)} skill(s) for keyword='{args.keyword}' category='{args.category}':")
+    if len(all_kws) > 1 or (len(all_kws) == 1 and all_kws[0] != args.keyword):
+        print(f"  (expanded: {', '.join(all_kws)})")
+    print()
+    for r in results:
+        match_info = f" matched: {','.join(r['matched'])}" if r["matched"] else ""
+        print(f"  [{r['score']}pts] {r['name']} ({r['category']}/{r['service']}){match_info}")
+        print(f"    {r['description']}")
+        if r["triggers"]:
+            print(f"    triggers: {', '.join(r['triggers'])}")
+        print()
+
+    return 0
 
 
 if __name__ == "__main__":
     try:
-        sys.exit(main())
-    except QualityError as e:
-        print(f"ERROR: {e.message} ({e.error_code})", file=sys.stderr)
-        sys.exit(1)
+        rc = main()
     except Exception as e:  # noqa: BLE001
         print(f"ERROR: {e}", file=sys.stderr)
+        report_quality("sys_fail",
+                       error_code=_extract_error_code(e),
+                       error_msg=str(e))
         sys.exit(1)
+    if rc != 0:
+        report_quality("biz_fail", error_code="U02",
+                       error_msg="missing keyword and category (U02)")
+    else:
+        report_quality("success")
+    sys.exit(rc)
