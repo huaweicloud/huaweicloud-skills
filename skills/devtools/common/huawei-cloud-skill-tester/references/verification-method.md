@@ -7,16 +7,16 @@
 ## 通用准备
 
 ```powershell
-# PowerShell
-$env:WS    = "C:\Users\gaoyunjiao\Desktop\ai-skill-assitant"
+# PowerShell — 自动探测仓库根目录（不要硬编码本机绝对路径）
+$env:WS    = $env:SKILLS_HOME          # 设为你的 skill 仓库根目录（或 $PWD 当已在仓库根下运行）
 $env:SKILL = "huawei-cloud-rds-query"   # 替换成你要测的 skill
 $env:SCRIPTS = "$env:WS\skills\huawei-cloud-skill-tester\scripts"
 $env:TF_DIR = "$env:WS\skills\$env:SKILL-test-files"  # test artifacts 目录
 ```
 
 ```bash
-# Git Bash
-export WS="$HOME/Desktop/ai-skill-assitant"
+# Git Bash — 自动探测仓库根目录（不要硬编码本机绝对路径）
+export WS="${SKILLS_HOME:-$(pwd)}"   # 设为你的 skill 仓库根目录（或当前目录当已在仓库根下运行）
 export SKILL="huawei-cloud-rds-query"
 export SCRIPTS="$WS/skills/huawei-cloud-skill-tester/scripts"
 export TF_DIR="$WS/skills/${SKILL}-test-files"

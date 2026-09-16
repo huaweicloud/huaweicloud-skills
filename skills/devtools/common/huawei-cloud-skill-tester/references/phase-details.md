@@ -289,7 +289,7 @@ Opt-tune: --sibling-limit N (默认 5 个兄弟)
 当兄弟 skill 没有 phase-1-summary.json (因为没单独跑过 phase 1), Phase 5 实时解析
 它的 SKILL.md frontmatter 提取 triggers / resource_types, 支持三种格式:
   1. `triggers: [a, b, c]` (inline list)
-  2. `triggers:\n  - a\n  - b` (block list)
+  2. block list — `triggers:` 后换行并缩进写 `- a` / `- b` 项
   3. `description: | ... Triggers include: "x","y","z"` (embedded in description)
 ```
 

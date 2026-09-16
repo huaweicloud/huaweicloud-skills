@@ -49,7 +49,7 @@
 | 15 | Phase 4 出现 `manual_test_items` 时必须在 Markdown 中显式列出 | 报告硬性要求 |
 | 16 | 报告路径 `report_dir` 必须是绝对路径 | 路径规范 |
 | 17 | 报告不含 AK/SK、token 等敏感信息 | 安全 |
-| 18 | 被测 skill 的 `references/cli-installation-guide.md` 不包含 `hcloud configure set --cli-access-key=...` / `--cli-secret-key=...` / `BasicCredentials(ak=..., sk=...)` 等**会话内** AK/SK 录入形式（NEVER / 禁止 / FORBIDDEN 上下文除外） | 安全 — SEC-002 检查项 |
+| 18 | 被测 skill 的 `references/cli-installation-guide.md` 不包含**会话内** AK/SK 录入形式 — 不引导执行交互式或非交互式凭据写入命令、不内联 access/secret key 参数、不使用 SDK 构造器直填密钥（NEVER / 禁止 / FORBIDDEN 上下文除外）；只允许做 `hcloud configure list` 存在性检查，无 profile 时提示用户自行 `hcloud configure init` | 安全 — SEC-002 检查项 |
 
 ## 跨 Phase 资源清理
 

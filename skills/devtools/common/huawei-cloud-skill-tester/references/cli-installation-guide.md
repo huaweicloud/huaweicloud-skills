@@ -22,11 +22,13 @@ hcloud version
 
 ## Configure Credentials
 
-> **NEVER** use `hcloud configure set --cli-access-key=... --cli-secret-key=...` or any
-> other in-session secret-entry form to pass AK/SK to the tester. The tester, the
-> Skill Creator, and the opencode pipeline plugin are all designed to read AK/SK
-> only from environment variables (or an existing `~/.hcloud/config.json`
-> profile that you set up interactively out-of-session).
+> **NEVER** pass AK/SK to the tester through any in-session secret-entry form —
+> the tester, the Skill Creator, and the opencode pipeline plugin are all
+> designed to read AK/SK only from environment variables (or an existing
+> `~/.hcloud/config.json` profile that you set up interactively out-of-session).
+> The tester never writes credentials for you: it only runs the read-only
+> existence check below and, when no profile exists, asks you to initialize one
+> yourself.
 
 ### Recommended — set environment variables out-of-band
 
@@ -50,19 +52,23 @@ export HUAWEI_ACCESS_KEY HUAWEI_SECRET_KEY
 After setting, **re-open your terminal** (or `source ~/.bashrc`) so the new
 variables are inherited by the test process.
 
-### Optional alternative — interactive `hcloud configure` (out-of-session)
+### Optional alternative — user-managed hcloud profile (out-of-session)
 
-If you prefer the on-disk hcloud profile path, run the interactive
-`hcloud configure` command **in your own terminal** — it prompts for AK/SK
-inside the hcloud tool, not the tester, and writes them to
-`~/.hcloud/config.json` (mode `AKSK`). The tester will pick them up
-automatically. Do NOT pass the keys as flags (`--cli-access-key=...`)
-to `hcloud configure`; the goal is to keep AK/SK out of any command line
-that might end up in a transcript or log.
+If you prefer the on-disk hcloud profile path, set it up yourself **in your own
+terminal**: run the interactive command there — it prompts for AK/SK inside the
+hcloud tool, not the tester, and writes them to `~/.hcloud/config.json` (mode
+`AKSK`). The tester will pick them up automatically.
 
 ```bash
-hcloud configure    # interactive only — will prompt for AK/SK in your terminal
+hcloud configure list      # read-only existence check — the tester runs only this
+hcloud configure init      # interactive only — run it YOURSELF if configure list shows no profile
 ```
+
+The tester never runs the interactive init for you and never writes credentials
+on your behalf. It checks `hcloud configure list`; when no profile is listed it
+prompts you to run `hcloud configure init` yourself. Do NOT pass the keys as
+flags on any `hcloud configure` invocation; the goal is to keep AK/SK out of any
+command line that might end up in a transcript or log.
 
 ### Resolution order used by `lib/utils.sh: ensure_ak_sk()`
 
@@ -95,6 +101,6 @@ python3 -c "from huaweicloudsdkrds.v2 import *; print('SDK OK')"
 | `hcloud: command not found` | PATH 没设 | `export PATH="$HOME/.hcloud/bin:$PATH"`（按 install 输出） |
 | `AK/SK 凭证缺失（exit 77）` | 环境无凭证 + hcloud profile 也没有 | 在 shell profile 里 `export HUAWEI_ACCESS_KEY` + `HUAWEI_SECRET_KEY` 后重开终端重跑；框架不会向 agent 或终端索要 AK/SK 明文 |
 | `[USE_ERROR] cli-region的值不支持` | region 不在白名单 | 用 `HUAWEI_REGION=cn-north-4`（默认）或换被测 skill 的真实 region |
-| Python3 找不到（Windows） | WindowsApps alias 冲突 | 用 shim 或 `C:\Program Files\Python311\python.exe` 显式路径 |
+| Python3 找不到（Windows） | WindowsApps alias 冲突 | 用 shim 或 `python3` 实际安装路径（自动探测：`shutil.which('python3')` / `Get-Command python3`） |
 
 完整的环境变量 / 参数说明见 `SKILL.md` § Parameters / § Environment Variables。

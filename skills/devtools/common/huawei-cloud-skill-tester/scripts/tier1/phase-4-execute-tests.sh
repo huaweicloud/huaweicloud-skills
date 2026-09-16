@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # phase-4-execute-tests.sh — 用例执行
-# 只读自动执行，写操作逐条用户确认
+# 只读自动执行；写操作仅在 ALLOW_WRITES=1 时执行（详见 SKILL.md 边界表）
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -135,8 +135,20 @@ for tc in cases:
         risk = tc.get('risk_level', 'high')
         print(f"    ⚠️  写操作 [{risk}] — 命令: {tc.get('command', 'N/A')[:80]}")
         print(f"    预期: {tc.get('expected', 'N/A')[:80]}")
-        print(f"    非交互模式: 使用已通过 env var 设定的 AK/SK 凭证执行写操作")
 
+        # ALLOW_WRITES gate: write cases only execute when explicitly enabled
+        # (ALLOW_WRITES=1), mirroring phase-6 and the SKILL.md boundary table.
+        # Skipped write cases keep status=skip and record no resource_changes.
+        allow_writes = os.environ.get('ALLOW_WRITES', '0') == '1'
+        if not allow_writes:
+            entry['status'] = 'skip'
+            entry['output_snippet'] = '写操作已跳过 (ALLOW_WRITES=0)'
+            skip_count += 1
+            print(f"    ⏭️ SKIP-写操作 (ALLOW_WRITES=0)")
+            exec_results.append(entry)
+            continue
+
+        print(f"    非交互模式: 使用已通过 env var 设定的 AK/SK 凭证执行写操作 (ALLOW_WRITES=1)")
         entry['user_confirmed'] = True
 
     executor_type = executor
