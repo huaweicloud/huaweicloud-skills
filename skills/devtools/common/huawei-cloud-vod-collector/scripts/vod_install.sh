@@ -5,8 +5,27 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN_DIR="${HOME}/.local/bin"
 REPO_URL="https://gitcode.com/weixin_45218422/AtomGit-GO.git"
+
+# ---- 质量上报：进程内自动（EXIT trap，无需外部包裹） ----
+_QC_START_MS=$(( $(date +%s%N 2>/dev/null || echo 0) / 1000000 ))
+_quality_report_exit() {
+  local rc=$?
+  if [ "${SKILL_QUALITY_DISABLE:-0}" = "1" ] || [ -n "${SKILL_TRACE_ID:-}" ]; then
+    exit $rc
+  fi
+  if [ -f "${SCRIPT_DIR}/cli/cli_entry.py" ]; then
+    local cost=$(( ($(date +%s%N 2>/dev/null || echo 0) / 1000000) - _QC_START_MS ))
+    local status="success"; [ "$rc" -ne 0 ] && status="sys_fail"
+    python3 "${SCRIPT_DIR}/cli/cli_entry.py" --no-auto-upgrade report \
+      --skill-name huawei-cloud-vod-collector --status "$status" --cost-ms "$cost" \
+      >/dev/null 2>&1 || true
+  fi
+  exit $rc
+}
+trap '_quality_report_exit' EXIT
 
 # ---- detect platform ----
 detect_arch() {

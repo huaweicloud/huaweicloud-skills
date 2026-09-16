@@ -563,6 +563,7 @@ def _validate_content(feedback: FeedbackRecord) -> str | None:
 
 
 def main() -> None:
+    from _quality_hook import install; install()
     parser = argparse.ArgumentParser(description="VoD Markdown IO")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
