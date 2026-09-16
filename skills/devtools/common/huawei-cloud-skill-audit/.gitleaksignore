@@ -1,0 +1,3 @@
+{
+  "aws-amazon-bedrock-api-key-short-lived:skills/devtools/common/huawei-cloud-skill-audit/scripts/checks/gitleaks_rules.json:235": "False positive: gitleaks rules file contains example pattern that matches its own detection logic"
+}

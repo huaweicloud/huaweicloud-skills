@@ -106,6 +106,8 @@ bash scripts/hcloud-run.sh <Service> <Operation> --cli-region=<region> [--key=va
 ```bash
 # Run from inside the skill directory
 skill-quality-cli run --skill-name huawei-cloud-skill-audit -- python3 scripts/skill_audit.py --target .
+# 等效直接执行（不经 CLI 包装，无质量上报）
+python3 scripts/skill_audit.py --target .
 ```
 
 ### Scan a folder of skills
@@ -113,19 +115,25 @@ skill-quality-cli run --skill-name huawei-cloud-skill-audit -- python3 scripts/s
 ```bash
 # Run from the parent folder that contains the skills
 skill-quality-cli run --skill-name huawei-cloud-skill-audit -- python3 scripts/skill_audit.py --target ..
+# 等效直接执行（不经 CLI 包装，无质量上报）
+python3 scripts/skill_audit.py --target ..
 ```
 
 ### Scan with specific level
 
 ```bash
 skill-quality-cli run --skill-name huawei-cloud-skill-audit -- python3 scripts/skill_audit.py --target .. --scan-level quick
+# 等效直接执行（不经 CLI 包装，无质量上报）
+python3 scripts/skill_audit.py --target .. --scan-level quick
 ```
 
 ### Selective check execution
 
 ```bash
 skill-quality-cli run --skill-name huawei-cloud-skill-audit -- python3 scripts/skill_audit.py --target .. --checks skillspector
+python3 scripts/skill_audit.py --target .. --checks skillspector
 skill-quality-cli run --skill-name huawei-cloud-skill-audit -- python3 scripts/skill_audit.py --target .. --skip-checks gitleaks
+python3 scripts/skill_audit.py --target .. --skip-checks gitleaks
 ```
 
 ### Run with custom tool paths
@@ -134,6 +142,8 @@ Custom binary locations can be overridden with `--skillspector`, `--gitleaks` an
 
 ```bash
 skill-quality-cli run --skill-name huawei-cloud-skill-audit -- python3 scripts/skill_audit.py --target .. --scan-level standard
+# 等效直接执行（不经 CLI 包装，无质量上报）
+python3 scripts/skill_audit.py --target .. --scan-level standard
 ```
 
 Available `--scan-level` values: `critical` (default), `high`, `quick`, `standard`, `deep`.
@@ -329,6 +339,8 @@ Report is a plain text file with four sections (Scanned Skills, Issue Summary, I
 
 ```bash
 skill-quality-cli run --skill-name huawei-cloud-skill-audit -- python3 scripts/skill_audit.py --target .
+# 等效直接执行（不经 CLI 包装，无质量上报）
+python3 scripts/skill_audit.py --target .
 ```
 
 ### Verify fix
@@ -336,6 +348,8 @@ skill-quality-cli run --skill-name huawei-cloud-skill-audit -- python3 scripts/s
 ```bash
 # Fix issues from the report's Fix Strategies section, then re-run audit
 skill-quality-cli run --skill-name huawei-cloud-skill-audit -- python3 scripts/skill_audit.py --target .
+# 等效直接执行（不经 CLI 包装，无质量上报）
+python3 scripts/skill_audit.py --target .
 ```
 
 ### Check gate verdict
