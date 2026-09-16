@@ -1,0 +1,417 @@
+# SkillSpector baseline — findings listed here are suppressed on future scans.
+# Edit 'reason' fields and add glob 'rules' as needed. See docs/SUPPRESSION.md.
+version: 1
+rules: []
+fingerprints:
+- hash: sha256:1564fdc6a501c6bf
+  rule_id: AST4
+  file: scripts/skill_audit.py
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:0576b51d9acca73f
+  rule_id: AST4
+  file: scripts/skill_audit.py
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:21b1b62d17c14106
+  rule_id: AST4
+  file: scripts/skill_audit.py
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:3f3eddd26b477f51
+  rule_id: LP3
+  file: SKILL.md
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:464fb433d692e29a
+  rule_id: AR3
+  file: scripts/skill_audit.py
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:76a4b605bcc80b0a
+  rule_id: E5
+  file: scripts/checks/rules/data-exfiltration.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:4455d48d71d4b04d
+  rule_id: E4
+  file: scripts/skill_audit.py
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:27aa32771c234d70
+  rule_id: EA1
+  file: scripts/checks/rules/excessive-agency.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:18830bb74d507b88
+  rule_id: P5
+  file: scripts/checks/rules/prompt-injection.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:b909494cbb0c5902
+  rule_id: P5
+  file: scripts/checks/rules/prompt-injection.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:c8c1e9d651aa929a
+  rule_id: MP2
+  file: scripts/skill_audit.py
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:e0198fea3e65febe
+  rule_id: OH1
+  file: scripts/skill_audit.py
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:5f11e37c97c761a7
+  rule_id: OH1
+  file: scripts/skill_audit.py
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:264bfcd8821ae927
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:2a0684e7c9a34244
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:6c74afaa40518d04
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:45398a10c4edf654
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:b5ee760ed8991d57
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:2057692bc1b6069c
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:82eb465c24207153
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:1bf3f610a1953175
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:8ee5c6f3bb055868
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:1cc57105aeed115b
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:eeab3be7b5b05569
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:fa28ef8b28389ac1
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:05e53208ab16b632
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:eb638a9d4b671de5
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:0c7baabd66aebb4d
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:4daef9a70d7d6693
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:574a01a7f0eadcad
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:15340440418403cd
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:bf4a5438d07f5c56
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:3c7dec2f5489dfc4
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:21c482fb8bdf0141
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:527a7354d810b2be
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:97e851500ef9b6ae
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:8695f145aa9faa3f
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:2b5846e1f934ab29
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:5e2109d64addb29f
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:99c214e6e652f67b
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:b6197bef249c4f1d
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:d0198f58c87f13ef
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:fc67da4b4cd80c2d
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:b122501a16ea9c8e
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:9bc5552eee1133f1
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:69835fb890823912
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:8feb1bc9f0feffa6
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:ee1690fd357eff70
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:c739bd380f326d8f
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:d4187a14797eb895
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:6dced3389116cbba
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:7fdb3478f664a114
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:509a49ecbf3c6187
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:d02ccbe4e1dee33b
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:d6057c79a1f67899
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:82491a3ff5acd6f8
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:1173e1261c2dda2d
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:a7774e58dbe15fe6
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:0e1c2ff270be22f1
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:63c3d8f8c81e0ff5
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:8bc688226406e533
+  rule_id: PE3
+  file: scripts/checks/gitleaks_rules.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:6c9c02935663762c
+  rule_id: PE3
+  file: scripts/checks/rules/privilege-escalation.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:c0a71dfbbcb9df2a
+  rule_id: PE3
+  file: scripts/checks/rules/privilege-escalation.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:da9baf14d51e98bf
+  rule_id: PE3
+  file: scripts/checks/rules/privilege-escalation.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:722fd55cb68863c9
+  rule_id: PE3
+  file: scripts/checks/rules/privilege-escalation.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:d7e06a980d918b22
+  rule_id: PE3
+  file: scripts/checks/rules/privilege-escalation.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:fd76ef57a9923544
+  rule_id: PE3
+  file: scripts/checks/rules/privilege-escalation.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:98c9c5c00abf12ab
+  rule_id: PE3
+  file: scripts/checks/rules/privilege-escalation.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:99a53bef9bac986c
+  rule_id: PE3
+  file: scripts/checks/rules/privilege-escalation.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:00a6730e4c995cc9
+  rule_id: PE3
+  file: scripts/checks/rules/privilege-escalation.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:a9f880679e10cf45
+  rule_id: PE3
+  file: scripts/checks/rules/privilege-escalation.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:6f6f10e209741cb9
+  rule_id: PE3
+  file: scripts/checks/rules/privilege-escalation.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:941c2fd0fe4ec45d
+  rule_id: PE3
+  file: scripts/checks/rules/privilege-escalation.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:941c2fd0fe4ec45d
+  rule_id: PE3
+  file: scripts/checks/rules/privilege-escalation.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:941c2fd0fe4ec45d
+  rule_id: PE3
+  file: scripts/checks/rules/privilege-escalation.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:40dff725bb72b0de
+  rule_id: PE5
+  file: scripts/checks/rules/privilege-escalation.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:72680d3c0534c1f8
+  rule_id: PE5
+  file: scripts/checks/rules/privilege-escalation.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:b2294b27aab0587a
+  rule_id: PE5
+  file: scripts/checks/rules/tool-misuse.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:11d8b9cf2540083d
+  rule_id: P1
+  file: scripts/skill_audit.py
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:d0650ae6245fd768
+  rule_id: RA2
+  file: scripts/checks/rules/rogue-agent.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:c7939e1b3403b39c
+  rule_id: SSRF1
+  file: scripts/checks/rules/server-side-request-forgery.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:68fc79e6c46fe22d
+  rule_id: SC7
+  file: scripts/checks/rules/supply-chain.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:c010c2b829b85c32
+  rule_id: SC7
+  file: scripts/checks/rules/supply-chain.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:1b277677c2378f87
+  rule_id: P6
+  file: scripts/checks/gitleaks_builtin_check.py
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:093f4b143d6b51ac
+  rule_id: P6
+  file: scripts/checks/skillspector_builtin_check.py
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:8129fa5005d62d93
+  rule_id: TM1
+  file: SKILL.md
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:4bffbeb9e040aed5
+  rule_id: TM1
+  file: SKILL.md
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:3d243f1b0018803a
+  rule_id: TM1
+  file: SKILL.md
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:3d243f1b0018803a
+  rule_id: TM1
+  file: SKILL.md
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:bfa4e313ba214815
+  rule_id: TM1
+  file: scripts/check_registry.py
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:c843e998e6f6885e
+  rule_id: TM1
+  file: scripts/check_registry.py
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:f563ba9f691fc469
+  rule_id: TM1
+  file: scripts/check_registry.py
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:9d8ed7edfbbe21bc
+  rule_id: TM1
+  file: scripts/checks/rules/tool-misuse.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:ece0ec22fd0610c4
+  rule_id: TM1
+  file: scripts/checks/rules/tool-misuse.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:f67966d087297a52
+  rule_id: TM2
+  file: scripts/checks/rules/tool-misuse.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:3aa935eceee9f91b
+  rule_id: TM1
+  file: scripts/skill_audit.py
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:bcd7f9a7358217a0
+  rule_id: TM3
+  file: scripts/skill_audit.py
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:677c4b0f086b936d
+  rule_id: YR4
+  file: SKILL.md
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:8b0bc26d7ef54009
+  rule_id: YR1
+  file: scripts/checks/rules/privilege-escalation.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:926e68802bfc9c12
+  rule_id: YR4
+  file: scripts/checks/rules/prompt-injection.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:a59fbf2570c4221c
+  rule_id: YR4
+  file: scripts/checks/rules/prompt-injection.json
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:05b266adb1777144
+  rule_id: YR4
+  file: scripts/skill_audit.py
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'
+- hash: sha256:22e2df0b96189908
+  rule_id: YR4
+  file: scripts/skill_audit.py
+  reason: 'Self-scan false positive: skill describes the security patterns it detects'

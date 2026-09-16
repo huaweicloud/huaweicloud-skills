@@ -1,0 +1,152 @@
+{
+  "category": "Runtime Security (CWE 高危模式)",
+  "rules": [
+    {
+      "id": "INJ001-dynamic-exec",
+      "category": "CWE-913 动态代码资源控制不当",
+      "description": "间接执行: 通过 getattr 动态获取危险函数(system/popen/exec/eval 等)后调用",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "getattr\\s*\\(\\s*[^,)]+\\s*,\\s*['\"]\\s*(?:system|popen|execl|execle|execlp|execv|execve|execvp|execvpe|spawnl|spawnle|spawnlp|spawnlpe|spawnv|spawnve|spawnvp|spawnvpe|posix_spawn|posix_spawnp|__import__)\\s*['\"]",
+          "confidence": 0.95
+        }
+      ]
+    },
+    {
+      "id": "CMD002-os-system",
+      "category": "CWE-78 操作系统命令注入",
+      "description": "命令注入: 直接调用 os.system() 执行外部命令",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "(?:^|[^\\w.])os\\.system\\s*\\(",
+          "confidence": 0.95
+        }
+      ]
+    },
+    {
+      "id": "CMD002-bash-c",
+      "category": "CWE-78 操作系统命令注入",
+      "description": "Shell 注入: subprocess 以列表形式调用 bash/sh -c 执行 shell 字符串",
+      "severity": "medium",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "subprocess\\.(?:run|call|Popen|check_call|check_output)\\s*\\(\\s*\\[\\s*['\"](?:/bin/)?(?:ba)?sh['\"]\\s*,\\s*['\"]-c",
+          "confidence": 0.95
+        }
+      ]
+    },
+    {
+      "id": "INJ002-yaml-object",
+      "category": "CWE-502 不可信数据反序列化",
+      "description": "YAML 注入: 使用 !!python/object 等 Python 标签, 反序列化不可信数据时可能执行任意代码",
+      "severity": "medium",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "!!python/(?:object(?:\\.\\w+)?|name|module|pickle|new|apply|tuple|list|dict|str|unicode|int|float|complex|bool)",
+          "confidence": 0.95
+        }
+      ]
+    },
+    {
+      "id": "FILE001-ssh-key-read",
+      "category": "CWE-522 凭据保护不足",
+      "description": "凭据窃取: 直接读取 ~/.ssh/ 下的私钥/凭据文件",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "(?:open|Path)\\s*\\(\\s*['\"][^'\"]*\\.ssh/",
+          "confidence": 0.95
+        }
+      ]
+    },
+    {
+      "id": "INJ001-class-bases",
+      "category": "CWE-749 危险方法暴露",
+      "description": "沙箱逃逸: 通过 __class__.__bases__ 遍历对象继承链, 常见沙箱逃逸链起点",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "__class__\\s*\\.\\s*__bases__",
+          "confidence": 0.98
+        }
+      ]
+    },
+    {
+      "id": "DEP001-request-squat",
+      "category": "CWE-1106 符号常量使用不足",
+      "description": "拼写错误/仿冒: import request 而非 requests (typosquatting 依赖, 可能是仿冒包)",
+      "severity": "medium",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "^\\s*import\\s+request\\s*(?:as\\s+\\w+)?\\s*(?:#.*)?$",
+          "confidence": 0.9
+        },
+        {
+          "regex": "^\\s*from\\s+request\\s+import\\s+\\w+",
+          "confidence": 0.9
+        }
+      ]
+    },
+    {
+      "id": "OBF001-rot13",
+      "category": "CWE-327 有风险的密码学算法/混淆",
+      "description": "高级编码混淆: codecs.decode(..., 'rot_13') 常用于隐藏恶意载荷",
+      "severity": "low",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "codecs\\.(?:decode|encode)\\s*\\([^)]*\\brot_?13\\b",
+          "confidence": 0.95
+        }
+      ]
+    },
+    {
+      "id": "INJ003-logic-bomb",
+      "category": "CWE-506 内嵌恶意代码",
+      "description": "逻辑炸弹/时间炸弹: 按当前日期/时间条件触发恶意行为 (datetime.now().day == ...)",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "(?:datetime\\.(?:now|utcnow)\\(\\)|date\\.today\\(\\))\\s*\\.\\s*(?:day|month|year|hour|minute|second)\\s*(?:==|!=|>=|<=|>|<)\\s*\\d+",
+          "confidence": 0.9
+        }
+      ]
+    },
+    {
+      "id": "HIDE001-ld-preload",
+      "category": "CWE-74 注入",
+      "description": "环境变量注入: 设置 LD_PRELOAD 劫持动态链接, 可用于隐藏恶意行为",
+      "severity": "low",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "os\\.environ\\s*\\[\\s*['\"]LD_PRELOAD['\"]\\s*\\]",
+          "confidence": 0.98
+        }
+      ]
+    },
+    {
+      "id": "INJ001-meta-path",
+      "category": "CWE-913 动态代码资源控制不当",
+      "description": "导入钩子劫持: 向 sys.meta_path 插入自定义导入器, 可劫持任意模块导入",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "sys\\.meta_path\\s*\\.\\s*(?:insert|append)\\s*\\(",
+          "confidence": 0.98
+        }
+      ]
+    }
+  ]
+}

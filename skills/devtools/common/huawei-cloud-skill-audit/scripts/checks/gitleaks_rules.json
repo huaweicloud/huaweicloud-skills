@@ -60,7 +60,7 @@
     {
       "id": "adobe-client-secret",
       "description": "Discovered a potential Adobe Client Secret, which, if exposed, could allow unauthorized Adobe service access and data manipulation.",
-      "regex": "\\b(p8e-(?i)[a-z0-9]{32})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "regex": "(?i)\\b(p8e-[a-z0-9]{32})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
       "entropy": 2.0,
       "keywords": [
         "p8e-"
@@ -106,7 +106,7 @@
     {
       "id": "alibaba-access-key-id",
       "description": "Detected an Alibaba Cloud AccessKey ID, posing a risk of unauthorized cloud resource access and potential data compromise.",
-      "regex": "\\b(LTAI(?i)[a-z0-9]{20})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "regex": "(?i)\\b(LTAI[a-z0-9]{20})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
       "entropy": 2.0,
       "keywords": [
         "ltai"
@@ -195,7 +195,7 @@
     {
       "id": "authress-service-client-access-key",
       "description": "Uncovered a possible Authress Service Client Access Key, which may compromise access control services and sensitive data.",
-      "regex": "\\b((?:sc|ext|scauth|authress)_(?i)[a-z0-9]{5,30}\\.[a-z0-9]{4,6}\\.(?-i:acc)[_-][a-z0-9-]{10,32}\\.[a-z0-9+/_=-]{30,120})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "regex": "(?i)\\b((?:sc|ext|scauth|authress)_[a-z0-9]{5,30}\\.[a-z0-9]{4,6}\\.acc[_-][a-z0-9-]{10,32}\\.[a-z0-9+/_=-]{30,120})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
       "entropy": 2.0,
       "keywords": [
         "sc_",
@@ -414,7 +414,7 @@
     {
       "id": "curl-auth-header",
       "description": "Discovered a potential authorization token provided in a curl command header, which could compromise the curl accessed resource.",
-      "regex": "\\bcurl\\b(?:.*?|.*?(?:[\\r\\n]{1,2}.*?){1,5})[ \\t\\n\\r](?:-H|--header)(?:=|[ \\t]{0,5})(?:\"(?i)(?:Authorization:[ \\t]{0,5}(?:Basic[ \\t]([a-z0-9+/]{8,}={0,3})|(?:Bearer|(?:Api-)?Token)[ \\t]([\\w=~@.+/-]{8,})|([\\w=~@.+/-]{8,}))|(?:(?:X-(?:[a-z]+-)?)?(?:Api-?)?(?:Key|Token)):[ \\t]{0,5}([\\w=~@.+/-]{8,}))\"|'(?i)(?:Authorization:[ \\t]{0,5}(?:Basic[ \\t]([a-z0-9+/]{8,}={0,3})|(?:Bearer|(?:Api-)?Token)[ \\t]([\\w=~@.+/-]{8,})|([\\w=~@.+/-]{8,}))|(?:(?:X-(?:[a-z]+-)?)?(?:Api-?)?(?:Key|Token)):[ \\t]{0,5}([\\w=~@.+/-]{8,}))')(?:\\B|\\s|\\z)",
+      "regex": "(?i)\\bcurl\\b(?:.*?|.*?(?:[\\r\\n]{1,2}.*?){1,5})[ \\t\\n\\r](?:-H|--header)(?:=|[ \\t]{0,5})(?:\"(?:Authorization:[ \\t]{0,5}(?:Basic[ \\t]([a-z0-9+/]{8,}={0,3})|(?:Bearer|(?:Api-)?Token)[ \\t]([\\w=~@.+/-]{8,})|([\\w=~@.+/-]{8,}))|(?:(?:X-(?:[a-z]+-)?)?(?:Api-?)?(?:Key|Token)):[ \\t]{0,5}([\\w=~@.+/-]{8,}))\"|'(?:Authorization:[ \\t]{0,5}(?:Basic[ \\t]([a-z0-9+/]{8,}={0,3})|(?:Bearer|(?:Api-)?Token)[ \\t]([\\w=~@.+/-]{8,})|([\\w=~@.+/-]{8,}))|(?:(?:X-(?:[a-z]+-)?)?(?:Api-?)?(?:Key|Token)):[ \\t]{0,5}([\\w=~@.+/-]{8,}))')(?:\\B|\\s|\\Z)",
       "entropy": 2.75,
       "keywords": [
         "curl"
@@ -424,7 +424,7 @@
     {
       "id": "curl-auth-user",
       "description": "Discovered a potential basic authorization token provided in a curl command, which could compromise the curl accessed resource.",
-      "regex": "\\bcurl\\b(?:.*|.*(?:[\\r\\n]{1,2}.*){1,5})[ \\t\\n\\r](?:-u|--user)(?:=|[ \\t]{0,5})(\"(:[^\"]{3,}|[^:\"]{3,}:|[^:\"]{3,}:[^\"]{3,})\"|'([^:']{3,}:[^']{3,})'|((?:\"[^\"]{3,}\"|'[^']{3,}'|[\\w$@.-]+):(?:\"[^\"]{3,}\"|'[^']{3,}'|[\\w${}@.-]+)))(?:\\s|\\z)",
+      "regex": "\\bcurl\\b(?:.*|.*(?:[\\r\\n]{1,2}.*){1,5})[ \\t\\n\\r](?:-u|--user)(?:=|[ \\t]{0,5})(\"(:[^\"]{3,}|[^:\"]{3,}:|[^:\"]{3,}:[^\"]{3,})\"|'([^:']{3,}:[^']{3,})'|((?:\"[^\"]{3,}\"|'[^']{3,}'|[\\w$@.-]+):(?:\"[^\"]{3,}\"|'[^']{3,}'|[\\w${}@.-]+)))(?:\\s|\\Z)",
       "entropy": 2.0,
       "keywords": [
         "curl"
@@ -520,7 +520,7 @@
     {
       "id": "doppler-api-token",
       "description": "Discovered a Doppler API token, posing a risk to environment and secrets management security.",
-      "regex": "dp\\.pt\\.(?i)[a-z0-9]{43}",
+      "regex": "(?i)dp\\.pt\\.[a-z0-9]{43}",
       "entropy": 2.0,
       "keywords": [
         "dp.pt."
@@ -566,7 +566,7 @@
     {
       "id": "duffel-api-token",
       "description": "Uncovered a Duffel API token, which may compromise travel platform integrations and sensitive customer data.",
-      "regex": "duffel_(?:test|live)_(?i)[a-z0-9_\\-=]{43}",
+      "regex": "(?i)duffel_(?:test|live)_[a-z0-9_\\-=]{43}",
       "entropy": 2.0,
       "keywords": [
         "duffel_"
@@ -576,7 +576,7 @@
     {
       "id": "dynatrace-api-token",
       "description": "Detected a Dynatrace API token, potentially risking application performance monitoring and data exposure.",
-      "regex": "dt0c01\\.(?i)[a-z0-9]{24}\\.[a-z0-9]{64}",
+      "regex": "(?i)dt0c01\\.[a-z0-9]{24}\\.[a-z0-9]{64}",
       "entropy": 4.0,
       "keywords": [
         "dt0c01."
@@ -586,7 +586,7 @@
     {
       "id": "easypost-api-token",
       "description": "Identified an EasyPost API token, which could lead to unauthorized postal and shipment service access and data exposure.",
-      "regex": "\\bEZAK(?i)[a-z0-9]{54}\\b",
+      "regex": "(?i)\\bEZAK[a-z0-9]{54}\\b",
       "entropy": 2.0,
       "keywords": [
         "ezak"
@@ -596,7 +596,7 @@
     {
       "id": "easypost-test-api-token",
       "description": "Detected an EasyPost test API token, risking exposure of test environments and potentially sensitive shipment data.",
-      "regex": "\\bEZTK(?i)[a-z0-9]{54}\\b",
+      "regex": "(?i)\\bEZTK[a-z0-9]{54}\\b",
       "entropy": 2.0,
       "keywords": [
         "eztk"
@@ -626,7 +626,7 @@
     {
       "id": "facebook-page-access-token",
       "description": "Discovered a Facebook Page Access Token, posing a risk of unauthorized access to Facebook accounts and personal data exposure.",
-      "regex": "\\b(EAA[MC](?i)[a-z0-9]{100,})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "regex": "(?i)\\b(EAA[MC][a-z0-9]{100,})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
       "entropy": 4.0,
       "keywords": [
         "eaam",
@@ -692,7 +692,7 @@
     {
       "id": "flutterwave-encryption-key",
       "description": "Uncovered a Flutterwave Encryption Key, which may compromise payment processing and sensitive financial information.",
-      "regex": "FLWSECK_TEST-(?i)[a-h0-9]{12}",
+      "regex": "(?i)FLWSECK_TEST-[a-h0-9]{12}",
       "entropy": 2.0,
       "keywords": [
         "flwseck_test"
@@ -702,7 +702,7 @@
     {
       "id": "flutterwave-public-key",
       "description": "Detected a Finicity Public Key, potentially exposing public cryptographic operations and integrations.",
-      "regex": "FLWPUBK_TEST-(?i)[a-h0-9]{32}-X",
+      "regex": "(?i)FLWPUBK_TEST-[a-h0-9]{32}-X",
       "entropy": 2.0,
       "keywords": [
         "flwpubk_test"
@@ -712,7 +712,7 @@
     {
       "id": "flutterwave-secret-key",
       "description": "Identified a Flutterwave Secret Key, risking unauthorized financial transactions and data breaches.",
-      "regex": "FLWSECK_TEST-(?i)[a-h0-9]{32}-X",
+      "regex": "(?i)FLWSECK_TEST-[a-h0-9]{32}-X",
       "entropy": 2.0,
       "keywords": [
         "flwseck_test"
@@ -734,7 +734,7 @@
     {
       "id": "frameio-api-token",
       "description": "Found a Frame.io API token, potentially compromising video collaboration and project management.",
-      "regex": "fio-u-(?i)[a-z0-9\\-_=]{64}",
+      "regex": "(?i)fio-u-[a-z0-9\\-_=]{64}",
       "keywords": [
         "fio-u-"
       ],
@@ -1000,7 +1000,7 @@
     {
       "id": "gocardless-api-token",
       "description": "Detected a GoCardless API token, potentially risking unauthorized direct debit payment operations and financial data exposure.",
-      "regex": "(?i)[\\w.-]{0,50}?(?:gocardless)(?:[ \\t\\w.-]{0,20})[\\s'\"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60'\"\\s=]{0,5}(live_(?i)[a-z0-9\\-_=]{40})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "regex": "(?i)[\\w.-]{0,50}?(?:gocardless)(?:[ \\t\\w.-]{0,20})[\\s'\"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60'\"\\s=]{0,5}(live_[a-z0-9\\-_=]{40})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
       "keywords": [
         "live_",
         "gocardless"
@@ -1138,7 +1138,7 @@
     {
       "id": "intra42-client-secret",
       "description": "Found a Intra42 client secret, which could lead to unauthorized access to the 42School API and sensitive data.",
-      "regex": "\\b(s-s4t2(?:ud|af)-(?i)[abcdef0123456789]{64})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "regex": "(?i)\\b(s-s4t2(?:ud|af)-[abcdef0123456789]{64})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
       "entropy": 3.0,
       "keywords": [
         "intra",
@@ -1537,7 +1537,7 @@
     {
       "id": "openshift-user-token",
       "description": "Found an OpenShift user token, potentially compromising an OpenShift/Kubernetes cluster.",
-      "regex": "\\b(sha256~[\\w-]{43})(?:[^\\w-]|\\z)",
+      "regex": "\\b(sha256~[\\w-]{43})(?:[^\\w-]|\\Z)",
       "entropy": 3.5,
       "keywords": [
         "sha256~"
@@ -1591,7 +1591,7 @@
     {
       "id": "planetscale-api-token",
       "description": "Identified a PlanetScale API token, potentially compromising database management and operations.",
-      "regex": "\\b(pscale_tkn_(?i)[\\w=\\.-]{32,64})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "regex": "(?i)\\b(pscale_tkn_[\\w=\\.-]{32,64})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
       "entropy": 3.0,
       "keywords": [
         "pscale_tkn_"
@@ -1611,7 +1611,7 @@
     {
       "id": "planetscale-password",
       "description": "Discovered a PlanetScale password, which could lead to unauthorized database operations and data breaches.",
-      "regex": "(?i)\\b(pscale_pw_(?i)[\\w=\\.-]{32,64})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "regex": "(?i)\\b(pscale_pw_[\\w=\\.-]{32,64})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
       "entropy": 3.0,
       "keywords": [
         "pscale_pw_"
@@ -1749,7 +1749,7 @@
     {
       "id": "sendinblue-api-token",
       "description": "Identified a Sendinblue API token, which may compromise email marketing services and subscriber data privacy.",
-      "regex": "\\b(xkeysib-[a-f0-9]{64}\\-(?i)[a-z0-9]{16})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "regex": "(?i)\\b(xkeysib-[a-f0-9]{64}\\-[a-z0-9]{16})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
       "entropy": 2.0,
       "keywords": [
         "xkeysib-"

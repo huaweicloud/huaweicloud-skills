@@ -24,7 +24,7 @@ class AuditConfig:
 
 
 DEFAULT_CHECKS = {
-    "skillspector", "gitleaks",
+    "skillspector", "gitleaks", "runtime_security",
 }
 
 
@@ -88,6 +88,12 @@ def _resolve_skillspector_check(scan_level, timeout, bin_path):
     return SkillspectorBuiltinCheck(scan_level=scan_level, timeout=timeout)
 
 
+def _resolve_runtime_security_check(scan_level, timeout):
+    """RuntimeSecurityCheck — CWE 高危模式检查器(纯 Python, 级别无关)。"""
+    from checks.runtime_security_check import RuntimeSecurityCheck
+    return RuntimeSecurityCheck(scan_level=scan_level, timeout=timeout)
+
+
 def create_checks(config: AuditConfig) -> list:
     """Instantiate enabled checks based on config. Returns list of Check instances."""
     from check_protocol import ScanLevel
@@ -108,5 +114,7 @@ def create_checks(config: AuditConfig) -> list:
             checks.append(_resolve_skillspector_check(scan_level, timeout, bin_path))
         elif name == "gitleaks":
             checks.append(_resolve_gitleaks_check(scan_level, timeout, bin_path))
+        elif name == "runtime_security":
+            checks.append(_resolve_runtime_security_check(scan_level, timeout))
 
     return checks
