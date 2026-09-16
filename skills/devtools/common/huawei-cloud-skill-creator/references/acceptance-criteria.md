@@ -3,7 +3,7 @@
 ## Skill Creation Readiness
 
 | # | Criterion | Phase | Status |
-|---|-----------|-------|--------|
+| --- | ----------- | ------- | -------- |
 | 1 | User requirements confirmed via Socratic Q&A | P1 | ⬜ |
 | 2 | Requirements summary table presented and confirmed | P1 | ⬜ |
 | 3 | CLI/SDK/API availability researched for each function | P2 | ⬜ |
@@ -31,7 +31,7 @@
 ## Quality Gates
 
 | Gate | Must Pass Before |
-|------|------------------|
+| ------ | ------------------ |
 | Phase 1 complete | Starting Phase 2 |
 | Phase 2 complete | Starting Phase 3 |
 | Phase 3 complete | Starting Phase 4 |

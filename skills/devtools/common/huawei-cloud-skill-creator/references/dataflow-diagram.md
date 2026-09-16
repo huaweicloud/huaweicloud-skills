@@ -72,7 +72,7 @@ flowchart TD
 ## Diagram Legend
 
 | Symbol | Meaning |
-|--------|---------|
+| -------- | --------- |
 | `([/ /])` | Start / End |
 | `[ ]` | Process step |
 | `( )` | Data store (summary JSON) |
@@ -82,7 +82,7 @@ flowchart TD
 ## Phase Summary Files
 
 | File | Producer | Consumer | Content |
-|------|----------|----------|---------|
+| ------ | ---------- | ---------- | --------- |
 | `phase-1-summary.json` | Phase 1 | Phase 2 | User-confirmed requirements |
 | `phase-2-summary.json` | Phase 2 | Phase 3 | CLI/SDK/API research results |
 | `phase-3-summary.json` | Phase 3 | Phase 4 | Generated file list |

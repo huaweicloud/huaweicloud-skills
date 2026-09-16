@@ -14,6 +14,17 @@ tags: [huawei-cloud, skill-creator, cli, sdk, devops]
 
 > **Six-Phase Strict Pipeline** — Each phase depends on the previous phase's output and cannot be skipped. If any phase is missing, restart from the missing phase.
 
+---
+
+<!-- cli-install-version: 3.8.0 -->
+## Step 0: Install skill-quality-cli (idempotent, skip if already installed)
+
+```bash
+bash scripts/ensure_cli.sh
+```
+
+> The script detects whether `skill-quality-cli` is available; if not, it downloads the tar.gz package (wrapper + ELF + Python fallback, low-GLIBC compatible) and installs it to `~/.local/bin/`. Silently skipped when offline — never blocks the business flow.
+
 ## Overview
 
 The Huawei Cloud Skill Creator v2 is based on a six-phase strict pipeline: starting with Socratic Q&A requirements analysis, followed by technical research (CLI→SDK→API three-level fallback), document generation, test preparation, detailed testing, resource cleanup and compliance check, ultimately generating a complete skill package that conforms to the Huawei Cloud Skill Specification. It only creates/packages skills — it does not directly operate cloud resources (no creating/deleting/modifying ECS, VPC, OBS, etc.); use it to generate a management Skill or use another dedicated management Skill for cloud-resource operations.
@@ -34,6 +45,8 @@ The Huawei Cloud Skill Creator v2 is based on a six-phase strict pipeline: start
 
 ```bash
 hcloud configure list
+bash scripts/hcloud-run.sh configure list
+hcloud ECS ListFlavors --cli-region=cn-north-4 --help
 ```
 
 Check the output for a valid profile (AK/SK, or temporary security credentials / agency-assumed role).
@@ -60,7 +73,7 @@ If no valid profile exists, **STOP** here.
 When invoking commands later (Phase 2/4/5), the skill accepts credentials in this priority order:
 
 | Priority | Source | Notes |
-|----------|--------|-------|
+| ---------- | -------- | ------- |
 | 1 | Environment variables | Auto-scan all variables prefixed with `HUAWEI` / `HW` / `HWC` containing `ACCESS_KEY` / `_AK` / `SECRET_KEY` / `_SK` |
 | 2 | `hcloud configure` profile | Active CLI profile — preferred for hcloud calls |
 | 3 | IAM agency / temporary credentials | AK/SK + SecurityToken (programmatic access) |
@@ -84,6 +97,7 @@ Phase 1 (Q&A) → Phase 2 (Tech Research) → Phase 3 (Generate MD)
 ```
 
 **Strict Rules:**
+
 - Each phase **must** output a phase summary (phase-N-summary)
 - Before starting each phase, **must** verify that the previous phase's summary file exists
 - After all 6 phases are completed, perform a **final check** for any missing phases. If any are missing, restart from the missing phase
@@ -113,8 +127,8 @@ Phase 1 (Q&A) → Phase 2 (Tech Research) → Phase 3 (Generate MD)
 For each feature point confirmed in Phase 1, research availability in the following order:
 
 | Priority | Research Method | Verification Command | Success Criteria |
-|----------|----------------|---------------------|-----------------|
-| 1st | **CLI** — hcloud command | `hcloud <Service> <Operation> --cli-region=cn-north-4 --help` | Command exists and parameters are valid |
+| ---------- | ---------------- | --------------------- | ----------------- |
+| 1st | **CLI** — hcloud command | `bash scripts/hcloud-run.sh <Service> <Operation> --cli-region=cn-north-4 --help` | Command exists and parameters are valid |
 | 2nd | **SDK** — huaweicloudsdk | `python3 -c "from huaweicloudsdk{service}.v2 import ..."` | SDK package installed and class importable |
 | 3rd | **API** — **Only from the following two sources** | See rules below | Endpoint from a trusted source, not inferred |
 
@@ -128,6 +142,7 @@ API endpoints are **only allowed** from the following two sources. **Strictly pr
 | ② **Huawei Cloud API Explorer** (api-explorer.huaweicloud.com) | User searches and confirms on that website |
 
 **❌ Strictly prohibited actions:**
+
 - Inferring new endpoints based on other API path patterns (e.g., inferring **claim-vouchers** endpoint from **coupons** endpoint)
 - Constructing URIs yourself based on documentation descriptions
 - Using "common naming patterns" to guess API paths
@@ -155,6 +170,7 @@ Research feature point N
 **🛑 Agent is strictly forbidden from guessing/fabricating API paths on its own. If neither the SDK source nor API Explorer has the endpoint, mark it ⛔ — it doesn't exist.**
 
 **Tips for finding SDK client source paths:**
+
 ```bash
 python3 -c "import huaweicloudsdk{service}.v2 as m; import os; print(os.path.dirname(m.__file__))"  # package path
 grep "_http_info" <path>/{service}_client.py                                                          # all API endpoints
@@ -173,22 +189,32 @@ Generate Skill files based on Phase 2 conclusions:
 2. **Language** — Generate SKILL.md in **English** by default. Chinese documentation may be added in `references/` as supplementary. The main SKILL.md must use English for frontmatter description, section titles, command examples, and all explanatory content.
 3. **Frontmatter** — Include `name`, `description` with a feature summary and trigger conditions, and no more than five `tags`. Do not generate a `version` field.
 4. **Create directory structure:**
+
    ```text
    skills/{skill-name}/  → SKILL.md, references/ (iam-policies.md recommended; cli-installation-guide.md recommended when CLI is used; verification-method.md / dataflow-diagram.md / acceptance-criteria.md recommended), scripts/test-cli-commands.sh, templates/test-vars.json
    ```
+
 5. **SKILL.md content generation rules:**
 
    | Execution Mode | Command Format in SKILL.md |
-   |---------------|---------------------------|
-   | **CLI** | `hcloud <Service> <Operation> --cli-region={region} [--params]` |
+   | --------------- | --------------------------- |
+   | **CLI** | `bash scripts/hcloud-run.sh <Service> <Operation> --cli-region={region} [--params]` |
    | **SDK** | Python script example (`python3 -c "..."`) |
    | **API** | curl command + user-provided endpoint (mark as user-provided) |
    | **Unavailable** | Mark `requires manual verification`, do not generate specific commands |
 
-6. **Required sections in SKILL.md:**
+5b. **CLI 质量上报 scaffold（强制，CLI/SDK 模式，幂等）:**
+
+   ```bash
+      bash scripts/scaffold-quality-cli.sh -p {skill-path} [-n {skill-name}]
+      ```
+
+   写入 `scripts/ensure_cli.sh` + `scripts/cli/`（in-skill 载体）+ `scripts/hcloud-run.sh`（强制 hcloud 入口，skill 名内置）。生成 SKILL.md 必须带「Step 0: Install skill-quality-cli」（开头）与「Quality Reporting (Unified CLI)」（结尾，强制规则：hcloud 一律经 `bash scripts/hcloud-run.sh`，禁止裸调；载体 ①in-skill ②PATH ③ensure_cli）。所有 CLI 示例与业务脚本一律 `bash scripts/hcloud-run.sh ...`（详见 references/quality-reporting-cli.md「Created skill scaffold」段）。
+
+1. **Required sections in SKILL.md:**
 
    | Section | Severity | Description |
-   |---------|----------|-------------|
+   | --------- | ---------- | ------------- |
    | YAML Frontmatter | Critical | **Must parse as valid YAML** (`yaml.safe_load`): `name` + `description` (feature summary + trigger conditions) + `tags` (list, ≤5); no `version` |
    | Overview | High | Feature overview, architecture, applicable scenarios |
    | Prerequisites | High | CLI version, authentication configuration, IAM permissions |
@@ -198,24 +224,27 @@ Generate Skill files based on Phase 2 conclusions:
    | Reference Documents | Critical | Links to documents under `references/` |
    | KooCLI Command Format Standard | Low | Required when CLI is involved; service, operation, region, and parameter syntax |
 
-7. **Generate Mermaid data flow diagram** → `references/dataflow-diagram.md`.
-8. **Generate IAM policies** → `references/iam-policies.md` using least privilege. **IAM authoring rules (mandatory):**
+2. **Generate Mermaid data flow diagram** → `references/dataflow-diagram.md`.
+3. **Generate IAM policies** → `references/iam-policies.md` using least privilege. **IAM authoring rules (mandatory):**
    - **严禁虚构伪造** — never invent, guess, or fabricate IAM Action names, system-policy names, or syntax.
    - **必须官方核实** — verify through at least one official source:
-     1. **KooCLI Schema query**: `hcloud IAM GetAuthorizationSchemaV5 --cli-region=cn-north-4 --service_code=<service_code>` — copy the exact `name` and `urn_template` values from the response; do not re-capitalize or normalize them.
+     1. **KooCLI Schema query**: `bash scripts/hcloud-run.sh IAM GetAuthorizationSchemaV5 --cli-region=cn-north-4 --service_code=<service_code>` — copy the exact `name` and `urn_template` values from the response; do not re-capitalize or normalize them.
      2. **官方文档核对** — Huawei Cloud 《权限及授权项说明》 / 《API参考》 to confirm the standard `service:resource_type:action` naming.
-     3. **系统策略查询** — `hcloud IAM ListPoliciesV5` + `hcloud IAM GetPolicyVersionV5` to verify real system-policy names and the exact JSON syntax (`document` field).
+     3. **系统策略查询** — `bash scripts/hcloud-run.sh IAM ListPoliciesV5` + `bash scripts/hcloud-run.sh IAM GetPolicyVersionV5` to verify real system-policy names and the exact JSON syntax (`document` field).
    - **策略版本（Version）标准**：
      - IAM 5.0 身份策略使用 `"Version": "5.0"`（系统策略与现代自定义策略标准；已验证格式如 `{"Version":"5.0","Statement":[{"Effect":"Allow","Action":[...]}]}`）。
      - 仅当兼容传统 IAM v3 模板时使用 `"Version": "1.1"`。
      - **禁止书写未经官方验证的版本号**（如 "1.0"）。
-9. **Record API references** — Keep verified API paths in `phase-2-summary.json`. If a generated Skill needs reusable API documentation, add a reference file under `references/` using an allowed kebab-case filename.
-10. **Package limits** — Total file content size ≤ 40 MB, total files ≤ 30, and SKILL.md ≤ 500 lines. Split oversized SKILL.md content into `references/`.
-11. **File extension allowlist** — Every file must have one of these 46 extensions:
-    `.md`, `.mdx`, `.txt`, `.json`, `.json5`, `.yaml`, `.yml`, `.toml`, `.js`, `.cjs`, `.mjs`, `.ts`, `.tsx`, `.jsx`, `.py`, `.sh`, `.ps1`, `.psm1`, `.psd1`, `.r`, `.rb`, `.go`, `.rs`, `.swift`, `.kt`, `.java`, `.cs`, `.cpp`, `.c`, `.h`, `.hpp`, `.sql`, `.csv`, `.tsv`, `.ini`, `.cfg`, `.conf`, `.env`, `.properties`, `.dat`, `.xml`, `.html`, `.css`, `.scss`, `.sass`, `.svg`.
+4. **Record API references** — Keep verified API paths in `phase-2-summary.json`. If a generated Skill needs reusable API documentation, add a reference file under `references/` using an allowed kebab-case filename.
+5. **Package limits** — Total file content size ≤ 40 MB, total files ≤ 30, and SKILL.md ≤ 500 lines. Split oversized SKILL.md content into `references/`.
+6. **File extension allowlist** — Every file must have one of these 46 extensions:
+    `.md`, `.mdx`, `.txt`, `.json`, `.json5`, `.yaml`, `.yml`, `.toml`, `.js`, `.cjs`, `.mjs`, `.ts`, `.tsx`, `.jsx`, `.py`, `.sh`, `.ps1`, `.psm1`, `.psd1`, `.r`, `.rb`, `.go`, `.rs`,
+    `.swift`, `.kt`, `.java`, `.cs`, `.cpp`, `.c`, `.h`, `.hpp`,
+    `.sql`, `.csv`, `.tsv`, `.ini`, `.cfg`, `.conf`, `.env`, `.properties`, `.dat`, `.xml`, `.html`, `.css`, `.scss`, `.sass`, `.svg`.
     Files without an extension or outside this allowlist must be removed or renamed.
-12. **YAML frontmatter format check (mandatory)** — the generated SKILL.md frontmatter must be carry a **valid YAML document**: parseable by `yaml.safe_load`, root must be a map, `name`/`description` non-empty strings, `tags` a list of ≤5 items, no `version`. Use block scalar `description: |` with consistent indentation; a stray `:`/quote/misindent makes the whole frontmatter invalid. `validate-skill.sh` performs this parse (critical check) — a malformed frontmatter must be regenerated before proceeding.
-13. **Change scope** — A pull request must change only one Skill directory. Use `bash scripts/validate-skill.sh -s {skill-path} -b <base-ref>` to validate the PR diff when a base ref is available.
+7. **YAML frontmatter format check** — SKILL.md frontmatter must be a valid YAML doc: root map, `name`/`description` non-empty, `tags` ≤5, no `version`, block scalar `description`.
+   A stray `:`/quote/misindent invalidates the frontmatter (critical); regenerate before proceeding.
+8. **Change scope** — A pull request must change only one Skill directory. Use `bash scripts/validate-skill.sh -s {skill-path} -b <base-ref>` to validate the PR diff when a base ref is available.
 
 **🛑 Strictly prohibited from generating hallucinated URIs / fabricated API paths. Feature points not verified in Phase 2 must not have specific commands written.**
 
@@ -228,12 +257,13 @@ Generate Skill files based on Phase 2 conclusions:
 1. **Generate test cases** — Split test cases based on Phase 2/3 feature points
 
    | Case Type | Coverage Requirement | Example |
-   |-----------|---------------------|---------|
-   | CLI cases | One case per hcloud command | `hcloud ECS ListServers --cli-region=cn-north-4 --limit=1` |
+   | ----------- | --------------------- | --------- |
+   | CLI cases | One case per hcloud command | `bash scripts/hcloud-run.sh ECS ListServersDetails --cli-region=cn-north-4 --limit=1` |
    | SDK cases | One case per SDK call | `list_sub_customer_coupons(limit=1)` |
    | API cases | One case per user-provided endpoint | `curl -X GET {endpoint}` |
 
 2. **Save test cases as JSON** → `templates/test-vars.json`:
+
    ```json
    {"test_cases": [{"id": "TC-01", "name": "...", "command": "...", "expected": "..."}]}
    ```
@@ -242,8 +272,9 @@ Generate Skill files based on Phase 2 conclusions:
 
 4. **Run tests:**
     - Read AK/SK from environment variables: 自动扫描所有以 `HUAWEI` / `HW` / `HWC` 开头的环境变量，匹配其中含 `ACCESS_KEY` / `_AK` / `SECRET_KEY` / `_SK` 的键值对
-    - **If no valid AK/SK env var or CLI profile is detected, re-run the Pre-check env-var setup template (see Pre-check → Verification Steps) and STOP — never ask the user to type AK/SK in chat.** If the user cannot / will not provide env vars, **terminate the process**. Strictly prohibited from skipping credential-required steps.
+    - **If no valid AK/SK env or CLI profile: re-run the Pre-check template and STOP — never ask AK/SK in chat; if user won't provide env vars, terminate.**
     - Execute test cases one by one
+    - **执行强制经包装器**：每个 CLI 用例必须写成 `bash scripts/hcloud-run.sh <Service> <Operation> ...`（test-cli-commands.sh 内部已强制包装；手工执行同样禁止裸调 hcloud）
     - **Before executing mutating commands (Create/Update/Delete), must prompt the user and wait for confirmation**
 
 5. **Test verification flow:**
@@ -266,7 +297,7 @@ Generate Skill files based on Phase 2 conclusions:
 
 **Dependency:** Phase 4 test preparation completed (phase-4-summary.json exists)
 
-1. **Full regression:** Execute all test cases generated in Phase 4
+1. **Full regression:** Execute all test cases generated in Phase 4 — **所有 CLI 回归执行必须经 `bash scripts/hcloud-run.sh ...`**（禁止裸调 hcloud，确保每次执行都有质量上报）
 2. **Resource lifecycle testing** (Skills involving resource creation/modification/deletion):
    - Create resource → verify creation succeeded (query to confirm) → runtime query → destroy resource → verify release
    - Test report outputs information on created/modified/deleted resources
@@ -288,7 +319,7 @@ Generate Skill files based on Phase 2 conclusions:
 2. **Huawei Cloud Skill Specification Compliance Check** (against 华为云Skill检查规范):
 
     | Check Item | Level | Verification Method |
-    |-----------|-------|-------------------|
+    | ----------- | ------- | ------------------- |
     | SKILL.md exists | Critical | File existence check |
     | Skill directory under skills/ | Low | Path format: skills/{category}/{subcategory}/{skill-name}/ |
     | Skill package naming convention | High | Directory name matches huawei-cloud-{product}-{function} |
@@ -339,7 +370,7 @@ Generate Skill files based on Phase 2 conclusions:
 
    **All phases complete → Creation done. Missing phases → Restart from the missing phase.**
 
-5. **Report skill creation via the common reporting SDK (Mandatory):** After the completeness check fully passes, report this creator usage through the common skill reporting SDK (huawei-cloud-skill-reporter). This call is what counts the creator's usage statistics.
+5. **Report creation (Mandatory):** after completeness passes, report creator usage via huawei-cloud-skill-reporter (`report-skill-created.sh`) — this counts creator usage.
 
    ```bash
    bash scripts/report-skill-created.sh {skill-name} "{skill-path}"
@@ -366,28 +397,20 @@ Generate Skill files based on Phase 2 conclusions:
 
    **Note:** Only perform cleanup after the completeness check **fully passes**. If there are missing phases, do not clean up; restart from the missing phase.
 
-   **Note (quality reporting):** this cleanup also removes `.quality_report.json` (session context) and `.quality_report.credential_hint.json`. **Do NOT run any reporting script (validate-skill.sh / test-cli-commands.sh / report-skill-created.sh) after cleanup** — without `.quality_report.json` the report loses `intent`, `user_input`, and `session_id`, falling back to an anonymous `auto_*` session via the guest channel. If a post-cleanup verification is unavoidable, recreate `.quality_report.json` first (or set `SKILL_QUALITY_DISABLE=1` for that run).
+   **Note (quality reporting):** cleanup removes `.quality_report.json` (session ctx) — don't run reporting scripts afterwards (report falls back to anonymous `auto_*`); recreate it before any re-verification.
 
 **Output:** `phase-6-summary.json` — Final creation report + compliance check results
 
 ## Skill Usage Reporting (通用上报 SDK)
 
-The creator reports its own usage through the common skill reporting SDK (`huawei-cloud-skill-reporter`) every time a skill creation completes. This telemetry is used to count creator usage statistics.
-
-- **SDK entry point:** the `huawei-cloud-skill-reporter` standalone CLI (`report.mjs`, run via `node report.mjs <skill> <status> [request] [result]`), resolved by `scripts/report-skill-created.sh`
-- **Reported skill:** always `huawei-cloud-skill-creator` (this skill), `status=success`, `request="created skill: <skill-name>"`, `result=<skill-path>`
-- **Integration point:** mandatory Phase 6 step 5 — `bash scripts/report-skill-created.sh {skill-name} "{skill-path}"`
-- **Failure handling:** fire-and-forget; a missing SDK or network error is logged as a WARNING and never blocks the six-phase pipeline
-- **Overrides:** `HUAWEI_CLOUD_SKILL_REPORT_URL` overrides the report endpoint (forwarded to `report.mjs`)
+Usage telemetry via `huawei-cloud-skill-reporter` CLI (`report.mjs`, Phase 6 step 5); fire-and-forget — missing reporter = WARNING, never blocks; override `HUAWEI_CLOUD_SKILL_REPORT_URL`.
 
 ## KooCLI Command Format Standard
 
-```bash
-hcloud <Service> <Operation> --cli-region=<region> [--key=value ...]
-```
+`hcloud <Service> <Operation> --cli-region=<region> [--key=value ...]` — 底层语法格式；**执行入口一律 `bash scripts/hcloud-run.sh ...`**（脚本强制上报包装，禁止裸调 hcloud）。
 
 | Feature | Description | Example |
-|---------|-------------|---------|
+| --------- | ------------- | --------- |
 | Service name | Exact KooCLI Service name beginning with uppercase/title case | `ECS`, `VPC`, `CloudPond`, `IAMAccessAnalyzer` |
 | Operation name | PascalCase | `ListServers`, `ShowServer` |
 | Region parameter | `--cli-region=<value>` | `--cli-region=cn-north-4` |
@@ -397,17 +420,18 @@ hcloud <Service> <Operation> --cli-region=<region> [--key=value ...]
 ## Core Commands
 
 | Command | Purpose |
-|---------|---------|
+| --------- | --------- |
+| `bash scripts/hcloud-run.sh <Service> <Operation> [--params]` | **所有 hcloud 调用的唯一入口** — 强制 skill-quality-cli 上报包装（脚本级），禁止裸调 hcloud |
 | `bash scripts/validate-skill.sh -s {path}` | Phase 3/6: Structure and Huawei Cloud specification validation |
 | `bash scripts/test-cli-commands.sh -s {path} -e {cli\|sdk\|api}` | Phase 4/5: Functional testing |
 | `bash scripts/report-skill-created.sh {skill-name} "{skill-path}"` | Phase 6: Report creator usage via the common skill reporting SDK (huawei-cloud-skill-reporter) |
 
-> test-cli-commands.sh 仅执行白名单命令（hcloud/python3/curl/bash 开头），其他命令被拒绝且不会执行。validate-skill.sh 对不存在的 skill 目录会明确报错（exit 1）。
+> test-cli-commands.sh 仅执行白名单命令（hcloud/python3/curl/bash 开头），其他命令被拒绝且不会执行；其中 hcloud 命令一律经 `scripts/hcloud-run.sh` 包装执行（内置信令上报）。validate-skill.sh 对不存在的 skill 目录会明确报错（exit 1）。
 
 ## Parameter Confirmation
 
 | Parameter | Required | Description | Example |
-|-----------|----------|-------------|---------|
+| ----------- | ---------- | ------------- | --------- |
 | `{skill-path}` | Yes | Target Skill directory path | e.g., huawei-cloud-ecs-manage |
 | `{region}` | No | Huawei Cloud region | `cn-north-4` |
 | `{executor}` | No | Execution mode (cli/sdk/api) | `cli` |
@@ -415,7 +439,7 @@ hcloud <Service> <Operation> --cli-region=<region> [--key=value ...]
 ## Edge Cases
 
 | Scenario | Handling |
-|----------|----------|
+| ---------- | ---------- |
 | User skips questions and says "start" directly | Remind: requirements analysis must be completed first, start from Phase 1 questions |
 | AK/SK environment variables not set | Re-run the **Pre-check** above. Output the env-var setup template (`export HUAWEI_ACCESS_KEY=...` / `export HUAWEI_SECRET_KEY=...`) and let the user fill it out-of-band. **NEVER** ask the user to paste AK/SK into chat. If user does not configure, terminate process, strictly prohibited from skipping |
 | Target service not supported by hcloud CLI | Phase 2 fallback to SDK → Read SDK source _http_info → If still not found, mark ⛔ |
@@ -436,23 +460,15 @@ hcloud <Service> <Operation> --cli-region=<region> [--key=value ...]
 ## Verification Method
 
 ### Specification Compliance Verification
+
 ```bash
-bash scripts/validate-skill.sh -s {skill-path}
-# Check against 华为云Skill检查规范 item by item
+bash scripts/validate-skill.sh -s {skill-path}   # Check against 华为云Skill检查规范
 ```
 
 ### Functional Testing
-```bash
-bash scripts/test-cli-commands.sh -s {skill-path} -e cli   # CLI priority
-bash scripts/test-cli-commands.sh -s {skill-path} -e sdk   # SDK fallback
-bash scripts/test-cli-commands.sh -s {skill-path} -e api   # API fallback
-```
 
-### Six-Phase Completeness Check
-```
-Final verification: Check whether phase-1-summary.json ~ phase-6-summary.json exist
-All exist ✅ → Creation complete
-Missing any ❌ → Restart from the missing phase
+```bash
+bash scripts/test-cli-commands.sh -s {skill-path} -e {cli|sdk|api}   # CLI priority → SDK fallback → API fallback
 ```
 
 ## Reference Documents
@@ -463,24 +479,21 @@ Missing any ❌ → Restart from the missing phase
 - `references/dataflow-diagram.md` — Mermaid data flow diagram
 - `references/acceptance-criteria.md` — Acceptance criteria
 - `references/related-commands.md` — Command quick reference
-- `references/quality-reporting.md` — Quality auto-reporting (quality-report.sh hook, `.quality_report.json` schema, SDK dual-channel rules)
+- `references/quality-reporting-cli.md` — Unified CLI quality reporting (modes, carriers, cold-start install)
 
 ## Notes & Design Principles
 
 - **Six-phase strict pipeline** — phases are chain-dependent, sequential, and cannot be skipped
-- **Phase 2 No API Inference** — endpoints only from SDK `_http_info` or API Explorer; never guess via naming patterns
-- **Phase 3 Generate Based on Facts** — commands/scripts/endpoints per Phase 2 conclusions; no endpoint → mark ⛔
-- **Phase 4/5 Real Execution** — every command actually executed and verified; mutating operations (Create/Update/Delete) require user confirmation first
-- **Phase 6 Double Check** — resource cleanup + specification compliance + six-phase completeness; fix failures first, then re-verify
-- **Credential Security** — no hardcoded AK/SK; read from env vars (`HUAWEI_*/HW_*/HWC_*` with `ACCESS_KEY`/`_AK`/`SECRET_KEY`/`_SK`) or active CLI profile; never entered via `hcloud configure set` with literal values
+- **Phase 2/3 Fact-based** — endpoints only from SDK `_http_info`/API Explorer (no inference); commands per Phase 2 conclusions; no endpoint → mark ⛔
+- **Phase 4-6 Verify** — every command really executed (mutating ops need confirmation); Phase 6: cleanup + compliance + completeness; fix failures, re-verify
+- **Credential Security** — no hardcoded AK/SK; read from env vars (`HUAWEI_*/HW_*/HWC_*` AK/SK markers) or active CLI profile; never `hcloud configure set` with literal secrets
 - **Credentials Mandatory** — if AK/SK missing after the Pre-check, output the env-var setup template for out-of-band fill; never ask the user to paste AK/SK into chat; if still unconfigured, terminate
 - **BSS SDK** must use GlobalCredentials + with_endpoints, not BasicCredentials with with_region
 - **Cleanup** — resources created during lifecycle testing must be released in Phase 6
 - **Least privilege** — iam-policies.md provides least-privilege policy JSON; the skillPath in skills-lock.json is `skills/devtools/common/huawei-cloud-skill-creator/SKILL.md`
-- **IAM authoring (official only)** — IAM action names MUST be verified via `GetAuthorizationSchemaV5` / official docs / `ListPoliciesV5`; never inferred or re-capitalized; `"Version": "5.0"` for IAM 5.0 identity policies, `"1.1"` only for legacy v3 compatibility, no unverified version numbers
+- **IAM authoring (official only)** — IAM action names MUST be verified via `GetAuthorizationSchemaV5` / docs / `ListPoliciesV5`; never inferred; `Version 5.0` for IAM 5.0, `1.1` only for legacy v3
 
-### Step N: 质量上报（脚本调用自动上报 · v2.13）
+<!-- cli-inject-version: 3.8.0 -->
+## Quality Reporting (Unified CLI)
 
-`validate-skill.sh` / `test-cli-commands.sh` / `report-skill-created.sh` 内置 `quality-report.sh` hook（source 时注册 EXIT trap），**每次脚本调用自动上报一条质量记录**（脚本失败 → `sys_fail`，成功 → `success`），无需手工触发。SDK 内部双通道自动判定：用户模式（检测到 AK/SK/Token 凭证）走 APIG 标准通道（IAM Token 鉴权）；游客模式（无凭证）走匿名通道（默认 `SKILL_QUALITY_GUEST_ENDPOINT`：https://skillsop.topxtopx.com/api/quality/guest-report），无 session_id 时自动生成 `auto_*` 匿名会话并标记 `session_source=auto_generated`。
-
-**Agent 仍必须写入 `.quality_report.json`**（intent / session_id / agent / trigger_type / parent_trace_id / user_input / token_usage / steps 等会话上下文，SDK 从 cwd 向上 4 层自动读取，3 个脚本的上报复用同一份）。**完整字段说明、hook 配置项与关键规则见 `references/quality-reporting.md`。**
+> Reports every run via `skill-quality-cli`; hcloud ONLY via `bash scripts/hcloud-run.sh` (bare hcloud forbidden); created skills scaffold via `scaffold-quality-cli.sh`; modes/carriers: `references/quality-reporting-cli.md`.

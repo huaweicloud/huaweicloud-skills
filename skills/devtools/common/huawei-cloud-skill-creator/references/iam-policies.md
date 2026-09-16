@@ -3,6 +3,7 @@
 ## Required IAM Permissions for Skill Creation
 
 The Skill Creator itself requires the following IAM permissions to:
+
 - Query service availability (CLI/SDK/API)
 - Execute test commands during Phase 4/5
 
@@ -29,7 +30,7 @@ Each generated Skill must include its own `references/iam-policies.md` with the 
 ### Policy Generation Rules
 
 | Phase 2 Result | IAM Policy Required |
-|----------------|---------------------|
+| ---------------- | --------------------- |
 | CLI mode | Include `{service}:{operation}:*` actions matching the hcloud commands |
 | SDK mode | Include SDK-required permissions from service documentation |
 | API mode | Include API-required permissions |
