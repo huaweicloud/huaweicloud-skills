@@ -25,7 +25,7 @@ sys.path.insert(0, '/tmp/DTSE-SKILL/gitcode-security-scanner/scripts')
 from security_scanner import SecurityScanner
 
 scanner = SecurityScanner('config_custom.json')
-issues = scanner.scan_project('project-name', '/path/to/local/repo')
+issues = scanner.scan_project('project-name', '/home/user/work/my-skill-repo')
 # issues = {'high': [...], 'medium': [...], 'low': [...]}
 ```
 
