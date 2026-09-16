@@ -24,11 +24,6 @@ if [ $# -gt 0 ]; then
   SKILL_DIR="$1"
 fi
 
-# 质量自动上报 hook (游客/用户双模式, fire-and-forget)
-QUALITY_SKILL_NAME="$(basename "$(cd "$SKILL_DIR" 2>/dev/null && pwd || printf '%s' "$SKILL_DIR")")"
-QUALITY_REPORT_DIR="$SKILL_DIR"
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/quality-report.sh" 2>/dev/null || true
-
 PASS=0
 FAIL=0
 WARN=0

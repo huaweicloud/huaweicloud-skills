@@ -8,7 +8,7 @@
 从华为云官方下载适配操作系统的二进制包：
 
 | 操作系统 | 下载地址 |
-|----------|----------|
+| ---------- | ---------- |
 | Windows 64位 | [KooCLI-windows-amd64.zip](https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-windows-amd64.zip) |
 | Linux AMD 64位 | [KooCLI-linux-amd64.tar.gz](https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-linux-amd64.tar.gz) |
 | Linux ARM 64位 | [KooCLI-linux-arm64.tar.gz](https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-linux-arm64.tar.gz) |
@@ -71,7 +71,7 @@ hcloud ECS --help
 ## 常见问题
 
 | 问题 | 解决方案 |
-|------|----------|
+| ------ | ---------- |
 | `command not found: hcloud` | 检查 PATH 是否包含 KooCLI 所在目录，或重新下载安装 |
 | `Authentication failed` | 确认 AK/SK 正确 |
 | `Permission denied` | 检查 IAM 权限策略 |

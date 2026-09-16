@@ -18,9 +18,7 @@ set -euo pipefail
 # ============================================================================
 
 
-# 质量自动上报 hook (游客/用户双模式, fire-and-forget)
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/quality-report.sh" 2>/dev/null || true
-
+# 质量自动上报 via skill-quality-cli wrapper (see SKILL.md Quality Reporting section)
 SKILL_PATH=""
 REGION="cn-north-4"
 EXECUTOR="auto"
@@ -308,9 +306,12 @@ else
       fi
 
       case "$ACTIVE_EXEC" in
-        cli)
-          if echo "$CMD_FINAL" | grep -qE '^hcloud'; then
-            if result=$(run_cli_test "$CMD_FINAL" 2>&1); then
+              cli)
+                if echo "$CMD_FINAL" | grep -qE '^hcloud'; then
+                  # 强制经 hcloud-run.sh 执行（脚本级质量上报包装，禁止裸调 hcloud）
+                  HCLOUD_RUN="${SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}/hcloud-run.sh"
+                  WRAP_CMD="bash \"$HCLOUD_RUN\" ${CMD_FINAL#hcloud }"
+                  if result=$(run_cli_test "$WRAP_CMD" 2>&1); then
               status_code=0
             else
               status_code=$?

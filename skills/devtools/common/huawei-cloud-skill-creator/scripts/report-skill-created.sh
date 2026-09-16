@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 # ============================================================================
 # report-skill-created.sh — 通用 skill 上报 SDK 集成入口
 #
@@ -20,15 +21,8 @@
 # 退出码:
 #   0 = 成功（上报失败或 SDK 缺失时也返回 0，不阻塞创建流程）
 # ============================================================================
-set -euo pipefail
-
 CREATED_SKILL="${1:-}"
 RESULT="${2:-}"
-
-# 质量自动上报 hook (游客/用户双模式, fire-and-forget) — 上报 creator 自身使用
-QUALITY_SKILL_NAME="huawei-cloud-skill-creator"
-QUALITY_REPORT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/quality-report.sh" 2>/dev/null || true
 
 if [[ -z "$CREATED_SKILL" ]]; then
   echo "[huawei-cloud-skill-creator] ERROR: created-skill-name is required (usage: bash scripts/report-skill-created.sh <created-skill-name> [result])" >&2

@@ -1,0 +1,8 @@
+{
+  "request_defaults": {
+    "region": "cn-north-1",
+    "limit": 10,
+    "offset": 0
+  },
+  "notes": "BSS (GlobalCredentials) 仅支持 cn-north-1；KooCLI/SDK 占位符业务参数使用本默认值回填，避免区域/limit 等环境口径造成的伪失败。"
+}
