@@ -5,24 +5,25 @@
 ### Run the two-check audit
 
 ```bash
-python3 scripts/skill_audit.py --target /path/to/skill
+# From inside the target skill directory; "." = current directory, replace with any skill dir path
+python3 scripts/skill_audit.py --target .
 ```
 
 ### Verify each check individually
 
 ```bash
 # skillspector only
-python3 scripts/skill_audit.py --target /path/to/skill --checks skillspector
+python3 scripts/skill_audit.py --target . --checks skillspector
 
 # gitleaks only
-python3 scripts/skill_audit.py --target /path/to/skill --checks gitleaks
+python3 scripts/skill_audit.py --target . --checks gitleaks
 ```
 
 ### Verify fix after remediation
 
 ```bash
 # Fix issues per the report's Fix Strategies, then re-run full audit
-python3 scripts/skill_audit.py --target /path/to/skill
+python3 scripts/skill_audit.py --target .
 ```
 
 ### Verify gate verdict

@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 """Skill Targeted Audit — skillcheck + markdownlint-cli2 + skillspector + hwcloud-spec + gitleaks
 
-Quality reporting: vendored skill_quality_sdk (scripts/skill_quality_sdk.py) —
-every run reports trace_id, status (success|biz_fail|sys_fail), error code and
-cost to the skillsopr operations console (fire-and-forget, fails silently).
+Quality reporting: 由 skill-quality-cli run 包裹执行 (见 SKILL.md「质量上报（统一执行方式）」段)。
 """
 
 from __future__ import annotations
@@ -17,9 +15,6 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from skill_quality_sdk import QualityError, quality_context  # noqa: E402
 
 from check_protocol import Check, CheckResult, Issue, Severity, ScanLevel
 from check_registry import AuditConfig, create_checks, resolve_enabled_checks
@@ -380,110 +375,85 @@ def build_report(target: Path, skills: list, results: dict, config):
 
 def main():
     args = parse_args()
-    with quality_context(
-        skill_name="huawei-cloud-skill-audit",
-        skill_version="1.0.0",
-        trigger_type="agent",
-        timeout_threshold_ms=600000,
-    ) as q:
-        q.input = {
-            "target": args.target,
-            "scan_level": args.scan_level,
-            "checks": args.checks,
-            "skip_checks": args.skip_checks,
-            "output_dir": args.output_dir,
-        }
 
-        target = Path(args.target).resolve()
-        if not target.exists():
-            print(f"ERROR: target not found: {target}", file=sys.stderr)
-            q.fail("U01", f"target not found: {target}")
-            return 1
+    target = Path(args.target).resolve()
+    if not target.exists():
+        print(f"ERROR: target not found: {target}", file=sys.stderr)
+        return 1
 
-        try:
-            enabled = resolve_enabled_checks(args.checks, args.skip_checks)
-        except ValueError as e:
-            print(f"ERROR: {e}", file=sys.stderr)
-            q.fail("U02", str(e))
-            return 1
+    try:
+        enabled = resolve_enabled_checks(args.checks, args.skip_checks)
+    except ValueError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
 
-        config = AuditConfig(
-            scan_level=args.scan_level,
-            enabled_checks=enabled,
-            check_bins={
-                k: v for k, v in {
-                    "skillspector": args.skillspector,
-                    "gitleaks": args.gitleaks,
-                }.items() if v
-            },
-            no_install=args.no_install,
-            node_bin=args.node_bin,
-        )
+    config = AuditConfig(
+        scan_level=args.scan_level,
+        enabled_checks=enabled,
+        check_bins={
+            k: v for k, v in {
+                "skillspector": args.skillspector,
+                "gitleaks": args.gitleaks,
+            }.items() if v
+        },
+        no_install=args.no_install,
+        node_bin=args.node_bin,
+    )
 
-        ensure_tools(no_install=args.no_install)
+    ensure_tools(no_install=args.no_install)
 
-        skills = discover_skills(target)
-        if not skills:
-            print(f"ERROR: no skills found under: {target}", file=sys.stderr)
-            q.fail("U03", f"no skills found under: {target}")
-            return 1
+    skills = discover_skills(target)
+    if not skills:
+        print(f"ERROR: no skills found under: {target}", file=sys.stderr)
+        return 1
 
-        output_dir = Path(args.output_dir).resolve() if args.output_dir else target.parent
-        output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = Path(args.output_dir).resolve() if args.output_dir else target.parent
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-        print(f"Scanning {len(skills)} skill(s) under {target} (level: {config.scan_level}) ...")
+    print(f"Scanning {len(skills)} skill(s) under {target} (level: {config.scan_level}) ...")
 
-        checks = create_checks(config)
-        results: dict[str, CheckResult] = {}
+    checks = create_checks(config)
+    results: dict[str, CheckResult] = {}
 
-        for i, check in enumerate(checks, 1):
-            label = f"[{i}/{len(checks)}] {check.name}"
-            if not check.is_available():
-                print(f"  {label} ... SKIP (not available)")
-                results[check.name] = CheckResult(source=check.name, passed=True,
-                                                  raw_output="SKIPPED (not available)")
+    for i, check in enumerate(checks, 1):
+        label = f"[{i}/{len(checks)}] {check.name}"
+        if not check.is_available():
+            print(f"  {label} ... SKIP (not available)")
+            results[check.name] = CheckResult(source=check.name, passed=True,
+                                              raw_output="SKIPPED (not available)")
+            continue
+        print(f"  {label} ...", end=" ", flush=True)
+        result = check.run_batch(target, skills)
+        result.issues = [i for i in result.issues if i.severity != Severity.INFO]
+        result.passed = not any(i.severity in (Severity.CRITICAL, Severity.ERROR) for i in result.issues)
+        results[check.name] = result
+        issue_count = len(result.issues)
+        print(f"{'OK' if result.passed else f'{issue_count} issues'}")
+
+    severity_floor = _get_severity_floor(config.scan_level)
+    if severity_floor is not None:
+        for name, result in results.items():
+            if name != "skillspector":
                 continue
-            print(f"  {label} ...", end=" ", flush=True)
-            result = check.run_batch(target, skills)
-            result.issues = [i for i in result.issues if i.severity != Severity.INFO]
-            result.passed = not any(i.severity in (Severity.CRITICAL, Severity.ERROR) for i in result.issues)
-            results[check.name] = result
-            issue_count = len(result.issues)
-            print(f"{'OK' if result.passed else f'{issue_count} issues'}")
+            before = len(result.issues)
+            result.issues = [i for i in result.issues if i.severity.value in severity_floor]
+            result.passed = len(result.issues) == 0
+            if before != len(result.issues):
+                print(f"    (filtered to {len(result.issues)} issues by severity floor: {severity_floor})")
 
-        severity_floor = _get_severity_floor(config.scan_level)
-        if severity_floor is not None:
-            for name, result in results.items():
-                if name != "skillspector":
-                    continue
-                before = len(result.issues)
-                result.issues = [i for i in result.issues if i.severity.value in severity_floor]
-                result.passed = len(result.issues) == 0
-                if before != len(result.issues):
-                    print(f"    (filtered to {len(result.issues)} issues by severity floor: {severity_floor})")
+    report = build_report(target, skills, results, config)
 
-        report = build_report(target, skills, results, config)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    report_path = output_dir / f"skill-gate-report-{ts}.txt"
+    report_path.write_text(report, encoding="utf-8")
 
-        ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
-        report_path = output_dir / f"skill-gate-report-{ts}.txt"
-        report_path.write_text(report, encoding="utf-8")
+    print(f"\nReport saved: {report_path}")
 
-        print(f"\nReport saved: {report_path}")
-
-        q.output = {
-            "report": str(report_path),
-            "skills": [s.name for s in skills],
-            "checks": {k: v.passed for k, v in results.items()},
-            "findings": sum(len(r.issues) for r in results.values()),
-        }
-        return 0
+    return 0
 
 if __name__ == "__main__":
     try:
         sys.exit(main())
-    except QualityError as e:
-        print(f"ERROR: {e.message} ({e.error_code})", file=sys.stderr)
-        sys.exit(1)
     except Exception as e:  # noqa: BLE001
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)
