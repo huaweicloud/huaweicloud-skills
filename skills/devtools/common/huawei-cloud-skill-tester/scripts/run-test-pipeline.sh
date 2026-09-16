@@ -154,22 +154,28 @@ elif [ "$MODE" = "phase" ] && [ -n "$START_PHASE" ]; then
   info "从指定 Phase $START_PHASE 开始"
 fi
 
-# === Skill Quality Reporting (SDK) ===
-# Vendored scripts/skill_quality_sdk.py reports this tester run
-# (usage count + status + cost) to the skillsopr operations console.
-# Fire-and-forget: report failure never blocks or changes the pipeline result.
+# === Skill Quality Reporting (CLI) ===
+# In-skill CLI source (scripts/cli/cli_entry.py, zero-dependency) is preferred;
+# a PATH-installed skill-quality-cli is the fallback. Fire-and-forget: report
+# failure never blocks or changes the pipeline result. Pure business logic — no
+# in-process SDK dependency. Install via scripts/ensure_cli.sh (idempotent).
 # Config env vars: SKILL_QUALITY_DISABLE=1 disables reporting (local debug),
-# SKILL_QUALITY_ENDPOINT overrides the report server, SKILL_QUALITY_TIMEOUT
-# sets the HTTP timeout (default 3s), SKILL_QUALITY_NAME sets the reported
-# skill name (default huawei-cloud-skill-tester; the SDK falls back to it when
-# skill_name is not passed explicitly). Credential-less runs (exit 77 / C01)
-# are reported automatically via the SDK v2.13 guest channel (no flag needed).
-# See SKILL.md "Quality Reporting".
+# SKILL_QUALITY_NAME sets the reported skill name (default
+# huawei-cloud-skill-tester). See SKILL.md "质量上报（统一执行方式）".
 report_quality() {
   local rc="$1"
   local cost_s="$2"
-  local sdk_py="$SCRIPT_DIR/skill_quality_sdk.py"
-  [ -f "$sdk_py" ] || { warn "⚠️ skill_quality_sdk.py 不存在，跳过质量上报"; return 0; }
+
+  [ -n "${SKILL_QUALITY_DISABLE:-}" ] && return 0
+  local cli_cmd=()
+  if [ -f "$SCRIPT_DIR/cli/cli_entry.py" ]; then
+    cli_cmd=("${PY_CMD:-python3}" "$SCRIPT_DIR/cli/cli_entry.py" --no-auto-upgrade)
+  elif command -v skill-quality-cli >/dev/null 2>&1; then
+    cli_cmd=(skill-quality-cli --no-auto-upgrade)
+  else
+    warn "⚠️ 上报 CLI 不可用（scripts/cli/ 缺失且未安装 skill-quality-cli），跳过质量上报（可先执行 bash scripts/ensure_cli.sh）"
+    return 0
+  fi
 
   local status="success" error_code="" error_msg=""
   if [ "$rc" -ne 0 ]; then
@@ -184,32 +190,16 @@ report_quality() {
   fi
 
   info "上报 tester 运行质量 (status=$status, cost=${cost_s}s) ..."
-  SKILL_QUALITY_NAME="${SKILL_QUALITY_NAME:-huawei-cloud-skill-tester}" \
-  SKILL_QUALITY_TRIGGER="${SKILL_QUALITY_TRIGGER:-workflow}" \
-  "${PY_CMD}" - "$SCRIPT_DIR" "$rc" "$status" "$error_code" "$error_msg" "$cost_s" "$SKILLS_LIST" "$OUTPUT_DIR" "$MODE" "${START_PHASE:-}" <<'PYEOF' &
-import os, sys
-sys.path.insert(0, sys.argv[1])
-from skill_quality_sdk import report  # noqa: E402
-rc, status, error_code, error_msg = int(sys.argv[2]), sys.argv[3], sys.argv[4] or None, sys.argv[5] or None
-cost_s, skills_list, output_dir, mode, start_phase = sys.argv[6], sys.argv[7], sys.argv[8], sys.argv[9], sys.argv[10]
-report(
-    skill_name=None,  # 未显式传入 → SDK 回落 SKILL_QUALITY_NAME 环境变量(默认 huawei-cloud-skill-tester)
-    status=status,
-    error_code=error_code,
-    error_msg=error_msg,
-    cost_ms=int(float(cost_s) * 1000) if cost_s else None,
-    input_param={
-        "skills": skills_list,
-        "mode": mode,
-        "output_dir": output_dir,
-        "phase": start_phase,
-    },
-    output_result={
-        "pipeline": "three-track-eight-phase",
-        "exit_code": rc,
-    },
-)
-PYEOF
+  local args=(--skill-name "${SKILL_QUALITY_NAME:-huawei-cloud-skill-tester}" --status "$status")
+  [ -n "$error_code" ] && args+=(--error-code "$error_code")
+  [ -n "$error_msg" ] && args+=(--error-msg "$error_msg")
+  if [ -n "$cost_s" ] && [ "$cost_s" -gt 0 ] 2>/dev/null; then
+    args+=(--cost-ms "$(( cost_s * 1000 ))")
+  fi
+  (
+    SKILL_QUALITY_TRIGGER="${SKILL_QUALITY_TRIGGER:-workflow}" \
+    "${cli_cmd[@]}" report "${args[@]}"
+  ) >/dev/null 2>&1 &
   return 0
 }
 

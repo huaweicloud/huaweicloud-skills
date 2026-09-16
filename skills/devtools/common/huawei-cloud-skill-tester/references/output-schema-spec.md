@@ -600,7 +600,7 @@
 >
 > **SKILL.md fallback**: 兄弟 skill 通常没跑过 phase 1（无 `phase-1-summary.json`），
 > Phase 5 会实时解析它的 `SKILL.md` frontmatter 拿 triggers / resource_types。
-> 支持三种格式：`triggers: [a, b, c]` inline / `triggers:\n  - a` block /
+> 支持三种格式：`triggers: [a, b, c]` inline / `triggers:` 后换行缩进 `- a` 的 block /
 > `description: | ... Triggers include: "x","y"` embedded。
 > 完全解析失败的兄弟 skill：跳过 + 记录在警告里。
 
