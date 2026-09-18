@@ -1,0 +1,74 @@
+{
+  "skill_name": "huawei-cloud-waf-policy-manage",
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "策略列表查询（只读）",
+      "command": "hcloud WAF ListPolicy --page=1 --pagesize=1",
+      "expected": "返回策略列表 JSON，包含 items 数组",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-02",
+      "name": "策略详情查询（只读）",
+      "command": "hcloud WAF ShowPolicy",
+      "expected": "返回策略详情 JSON",
+      "type": "readonly",
+      "executor": "cli",
+      "depends_on": "TC-01 (需要 policy_id)"
+    },
+    {
+      "id": "TC-03",
+      "name": "创建防护策略（写操作，需确认）",
+      "command": "hcloud WAF CreatePolicy --name=skill_test_policy",
+      "expected": "返回创建的策略 JSON，包含 id 字段",
+      "type": "mutation",
+      "executor": "cli",
+      "requires_confirmation": true
+    },
+    {
+      "id": "TC-04",
+      "name": "更新防护策略（写操作，需确认）",
+      "command": "hcloud WAF UpdatePolicy --policy_id={policy_id} --level=2",
+      "expected": "返回更新后的策略 JSON",
+      "type": "mutation",
+      "executor": "cli",
+      "requires_confirmation": true,
+      "depends_on": "TC-03 (需要 policy_id)"
+    },
+    {
+      "id": "TC-05",
+      "name": "创建精准防护规则（写操作，需确认）",
+      "command": "hcloud WAF CreateCustomRule --policy_id={policy_id} --name=skill_test_custom_rule --priority=100 --action.category=log --conditions.1.category=url --conditions.1.logic_operation=contain --conditions.1.contents.1=/test --time=false",
+      "expected": "返回创建的规则 JSON",
+      "type": "mutation",
+      "executor": "cli",
+      "requires_confirmation": true,
+      "depends_on": "TC-03 (需要 policy_id)"
+    },
+    {
+      "id": "TC-06",
+      "name": "创建黑白名单规则（写操作，需确认）",
+      "command": "hcloud WAF CreateWhiteblackipRule --policy_id={policy_id} --name=skill_test_wb_rule --white=1 --addr=10.0.0.1",
+      "expected": "返回创建的规则 JSON",
+      "type": "mutation",
+      "executor": "cli",
+      "requires_confirmation": true,
+      "depends_on": "TC-03 (需要 policy_id)"
+    },
+    {
+      "id": "TC-07",
+      "name": "删除防护策略（写操作，需确认）",
+      "command": "hcloud WAF DeletePolicy --policy_id={policy_id}",
+      "expected": "返回成功",
+      "type": "mutation",
+      "executor": "cli",
+      "requires_confirmation": true,
+      "depends_on": "TC-03 (需要 policy_id)",
+      "cleanup": true
+    }
+  ],
+  "env_vars_required": ["HUAWEI_ACCESS_KEY", "HUAWEI_SECRET_KEY"],
+  "notes": "写操作需要用户确认后执行。{policy_id} 需要从 TC-01 或 TC-03 的返回结果中获取。{region} 替换为实际区域。"
+}
