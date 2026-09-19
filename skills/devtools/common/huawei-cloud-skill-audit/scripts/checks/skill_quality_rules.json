@@ -4,8 +4,8 @@
     {
       "id": "Q001-local-abs-path",
       "category": "可移植性 / 本机路径硬编码",
-      "description": "硬编码本机绝对路径(Windows 盘符路径 /Users//home/ 等), 其他系统运行必然失败; 应改为 shutil.which / 环境变量探测",
-      "severity": "medium",
+      "description": "硬编码本机绝对路径(Windows 盘符路径、Unix 用户主目录等), 其他系统运行必然失败; 应改为 shutil.which / 环境变量探测",
+      "severity": "critical",
       "scan_level": "quick",
       "patterns": [
         {
@@ -26,7 +26,7 @@
       "id": "Q002-project-id-hardcode",
       "category": "敏感信息泄露 / 项目 ID 硬编码",
       "description": "硬编码个人 Project ID(32 位 hex), 泄漏开发者项目且他人使用会串号; 应改为运行时自动获取(get_project_id / hcloud 配置)或 {project_id} 占位符",
-      "severity": "medium",
+      "severity": "critical",
       "scan_level": "quick",
       "patterns": [
         {
@@ -39,7 +39,7 @@
       "id": "Q003-cred-set-command",
       "category": "安全纪律 / 凭据写入命令",
       "description": "文档/脚本引导执行 hcloud configure set 写入 AK/SK —— 凭据配置属于用户职责域, 只能做 configure list 存在性检查, 无 profile 时提示用户自行 configure init",
-      "severity": "medium",
+      "severity": "critical",
       "scan_level": "quick",
       "patterns": [
         {

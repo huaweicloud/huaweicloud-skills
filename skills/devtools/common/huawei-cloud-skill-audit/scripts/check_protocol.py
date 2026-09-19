@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Check protocol — unified abstractions for skill audit checks."""
 
+import concurrent.futures
 from pathlib import Path
 from dataclasses import dataclass, field
 from enum import Enum
@@ -22,6 +23,7 @@ class Issue:
     file: str = ""
     snippet: str = ""
     category: str = ""
+    skill: str = ""
 
 
 @dataclass
@@ -58,11 +60,47 @@ class Check:
         raise NotImplementedError
 
     def run_batch(self, target: Path, skills: list[Path]) -> CheckResult:
-        """Run check on multiple skills. Default: iterate and merge."""
-        results = [self.run(s) for s in skills]
-        all_issues = [i for r in results for i in r.issues]
+        """Run check on multiple skills with per-skill isolation and timeout.
+
+        - 单 skill 抛异常不再中断整批: 产出显式 CHECK-ERR issue 后继续剩余 skill
+        - 每 skill 限时 self.timeout 秒(线程限时): 恶意正则/巨树最多拖慢一个 skill 的
+          预算, 不会拖垮整个 gate; 到期线程无法强杀, 但结果已按 TIMEOUT 处理并继续
+        """
+        budget = self.timeout if self.timeout and self.timeout > 0 else 30
+        all_issues = []
+        passed = True
+        for s in skills:
+            try:
+                if budget:
+                    ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+                    try:
+                        r = ex.submit(self.run, s).result(timeout=budget)
+                    except concurrent.futures.TimeoutError:
+                        all_issues.append(Issue(
+                            rule="TIMEOUT",
+                            severity=Severity.WARNING,
+                            message=f"{self.name}: exceeded {budget}s on {s.name}, result skipped",
+                            file=s.name, skill=s.name, category="Timeout",
+                        ))
+                        continue
+                    finally:
+                        ex.shutdown(wait=False)
+                else:
+                    r = self.run(s)
+            except Exception as e:  # noqa: BLE001 — 逐 skill 隔离
+                all_issues.append(Issue(
+                    rule="CHECK-ERR",
+                    severity=Severity.WARNING,
+                    message=f"{self.name}: crashed on {s.name}: {e!r}",
+                    file=s.name, skill=s.name, category="RuntimeError",
+                ))
+                continue
+            for i in r.issues:
+                i.skill = i.skill or s.name
+                all_issues.append(i)
+            passed = passed and r.passed
         return CheckResult(
             source=self.name,
             issues=all_issues,
-            passed=all(r.passed for r in results),
+            passed=passed,
         )

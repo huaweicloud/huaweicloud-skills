@@ -4,14 +4,16 @@
 
 ### 1. skillspector — AI Security Scanner
 
-**What it checks (17 categories, 47 rules):**
-- Prompt injection (P1-P5)
-- Data exfiltration (E1-E4)
-- Privilege escalation (PE1-PE3)
-- Behavioral AST (AST1-AST3)
+**What it checks (17 categories, 51 rules):**
+- Prompt injection / system prompt leakage (P1-P8)
+- Data exfiltration (E1-E5)
+- Privilege escalation (PE1-PE5)
+- Behavioral AST (AST1-AST7/9/10)
 - YARA patterns (YR1-YR4)
-- Supply chain (SC1-SC6)
-- MCP analysis (LP1-LP4, TP1-TP4) — deep scan only
+- Supply chain (SC1/SC2/SC3/SC7)
+- Excessive agency (EA1-EA4), memory poisoning (MP1-MP3), output handling (OH1-OH3)
+- Rogue agent (RA1-RA2), agent snooping (AS1-AS3)
+- Server-side request forgery (SSRF1-SSRF3), tool misuse (TM1-TM4)
 
 **Common issues and fixes:**
 
@@ -27,7 +29,7 @@
 ### 2. gitleaks — Credential Leak Detection
 
 **What it checks:**
-- 222 credential patterns (API keys, passwords, private keys, tokens)
+- 42 credential rules (API keys, passwords, private keys, tokens)
 - Generic API key format
 - Private key format
 

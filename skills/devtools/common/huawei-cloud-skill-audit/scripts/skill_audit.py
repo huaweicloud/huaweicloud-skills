@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Skill Targeted Audit — skillcheck + markdownlint-cli2 + skillspector + hwcloud-spec + gitleaks
 
-Quality reporting: 由 skill-quality-cli run 包裹执行 (见 SKILL.md「质量上报（统一执行方式）」段)。
+Quality reporting: 由 skill-quality-cli run 包裹执行 (见 SKILL.md 强制包裹要求)。
 """
 
 from __future__ import annotations
@@ -25,12 +25,12 @@ def parse_args():
     p = argparse.ArgumentParser(description="Skill gate audit")
     p.add_argument("--target", required=True, help="Single skill dir or parent folder of skills")
     p.add_argument("--output-dir", default=None, help="Report output dir (default: parent of target)")
-    p.add_argument("--scan-level", default="critical",
+    p.add_argument("--scan-level", default="high",
                     choices=["critical", "high", "quick", "standard", "deep"],
                     help="Scan depth: critical(CRITICAL only), high(CRITICAL+ERROR), quick(+patterns), standard(+AST+taint), deep(+MCP)")
     p.add_argument("--checks", default=None,
                     help="Comma-separated checks to run (default: all). "
-                         "Available: skillspector,gitleaks")
+                         "Available: skillspector,gitleaks,runtime_security")
     p.add_argument("--skip-checks", default=None,
                    help="Comma-separated checks to skip")
     p.add_argument("--skillspector", default="", help="SkillSpector binary path override")
@@ -65,10 +65,15 @@ def ensure_tools(no_install=False):
 # ── Discover skills ──
 
 def discover_skills(target: Path):
-    """Return list of skill dirs. If target itself has SKILL.md → [target], else find subdirs with SKILL.md."""
+    """Return list of skill dirs. If target itself has SKILL.md → [target],
+    else find SKILL.md recursively at any depth (e.g. skills/<category>/<skill>/)"""
     if (target / "SKILL.md").exists():
         return [target]
-    skills = sorted([d for d in target.iterdir() if d.is_dir() and (d / "SKILL.md").exists()])
+    from checks.skillspector_builtin_check import SKIP_DIRS
+    skills = sorted({
+        sm.parent for sm in target.rglob("SKILL.md")
+        if not any(part in SKIP_DIRS for part in sm.parent.parts)
+    })
     return skills
 
 # ── Run checks ──
@@ -204,10 +209,7 @@ FIX_STRATEGIES = {
     "YR2": "Remove webshell patterns; move server functionality to separate controlled service",
     "SC1": "Pin dependency versions with hashes; use lock files (requirements.txt with --hash, poetry.lock)",
     "SC4": "Update vulnerable dependency to patched version; check osv.dev for fix versions",
-    "LP1": "Reduce MCP tool permissions to minimum required; remove unnecessary file/network access",
-    "TP1": "Validate MCP tool metadata against manifest; ensure descriptions match actual behavior",
     # gitleaks
-    "generic-api-key": "Replace hardcoded API key/secret with environment variable reference (${VAR} or os.environ.get()); add to .gitleaksignore if false positive",
     "private-key": "Remove hardcoded private key; load from file or secret manager at runtime; add key file to .gitignore",
     "gitleaks": "Replace hardcoded credential with environment variable or secret manager reference; see https://gitleaks.io/docs/secrets for rule-specific remediation",
     # 华为云规范
@@ -256,7 +258,7 @@ def build_report(target: Path, skills: list, results: dict, config):
     for source, result in results.items():
         for issue in result.issues:
             entry = {
-                "skill": "", "source": source,
+                "skill": issue.skill, "source": source,
                 "rule": issue.rule, "severity": issue.severity.value,
                 "message": issue.message, "line": issue.line,
                 "file": issue.file, "snippet": issue.snippet,
@@ -444,12 +446,15 @@ def main():
     report = build_report(target, skills, results, config)
 
     ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
-    report_path = output_dir / f"skill-gate-report-{ts}.txt"
+    # pid + 随机后缀: 秒级时间戳在同秒多次运行/多 target 场景会写同一文件互相覆盖
+    report_path = output_dir / f"skill-gate-report-{ts}-{os.getpid()}-{os.urandom(2).hex()}.txt"
     report_path.write_text(report, encoding="utf-8")
 
     print(f"\nReport saved: {report_path}")
 
-    return 0
+    # 退出码反映 gate 结果(与报告 Gate Verdict 一致): 任一 check 未过即返回 1。
+    # 此前恒返回 0, 依赖 rc 的 CI 会放过任何恶意 skill——评审第 1 条的核心闭环。
+    return 1 if any(not r.passed for r in results.values()) else 0
 
 if __name__ == "__main__":
     try:

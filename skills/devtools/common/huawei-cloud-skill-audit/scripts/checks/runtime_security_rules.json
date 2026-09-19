@@ -31,7 +31,7 @@
       "id": "CMD002-bash-c",
       "category": "CWE-78 操作系统命令注入",
       "description": "Shell 注入: subprocess 以列表形式调用 bash/sh -c 执行 shell 字符串",
-      "severity": "medium",
+      "severity": "critical",
       "scan_level": "quick",
       "patterns": [
         {
@@ -44,7 +44,7 @@
       "id": "INJ002-yaml-object",
       "category": "CWE-502 不可信数据反序列化",
       "description": "YAML 注入: 使用 !!python/object 等 Python 标签, 反序列化不可信数据时可能执行任意代码",
-      "severity": "medium",
+      "severity": "critical",
       "scan_level": "quick",
       "patterns": [
         {
@@ -83,7 +83,7 @@
       "id": "DEP001-request-squat",
       "category": "CWE-1106 符号常量使用不足",
       "description": "拼写错误/仿冒: import request 而非 requests (typosquatting 依赖, 可能是仿冒包)",
-      "severity": "medium",
+      "severity": "critical",
       "scan_level": "quick",
       "patterns": [
         {
@@ -100,7 +100,7 @@
       "id": "OBF001-rot13",
       "category": "CWE-327 有风险的密码学算法/混淆",
       "description": "高级编码混淆: codecs.decode(..., 'rot_13') 常用于隐藏恶意载荷",
-      "severity": "low",
+      "severity": "critical",
       "scan_level": "quick",
       "patterns": [
         {
@@ -126,7 +126,7 @@
       "id": "HIDE001-ld-preload",
       "category": "CWE-74 注入",
       "description": "环境变量注入: 设置 LD_PRELOAD 劫持动态链接, 可用于隐藏恶意行为",
-      "severity": "low",
+      "severity": "critical",
       "scan_level": "quick",
       "patterns": [
         {
@@ -145,6 +145,411 @@
         {
           "regex": "sys\\.meta_path\\s*\\.\\s*(?:insert|append)\\s*\\(",
           "confidence": 0.98
+        }
+      ]
+    },
+    {
+      "id": "OBF002-base64-exec",
+      "category": "CWE-327 混淆/编码载荷",
+      "description": "base64 解码后管道执行: base64 -d | 命令, 常用于隐藏恶意载荷",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "base64\\s+-\\s*d\\s*(?:-i)?\\s*\\|\\s*(?:ba)?sh\\b",
+          "confidence": 0.95
+        },
+        {
+          "regex": "(?:echo|printf)\\s+[^|&;\\n]*\\|\\s*base64\\s+-\\s*d\\s*(?:-i)?\\s*\\|\\s*",
+          "confidence": 0.9
+        }
+      ]
+    },
+    {
+      "id": "OBF003-hex-exec",
+      "category": "CWE-327 混淆/编码载荷",
+      "description": "hex/xxd 解码后执行: xxd -r -p | sh, 隐藏恶意载荷",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "xxd\\s+-\\s*r\\s*-\\s*p\\s*(?:[^|&;\\n]*)?\\|\\s*(?:ba)?sh\\b",
+          "confidence": 0.95
+        },
+        {
+          "regex": "echo\\s+[0-9a-fA-F\\x22\\x27]{20,}\\s*\\|\\s*xxd\\s+-\\s*r\\s*-\\s*p",
+          "confidence": 0.9
+        }
+      ]
+    },
+    {
+      "id": "OBF004-exec-b64decode",
+      "category": "CWE-327 混淆/编码载荷",
+      "description": "Python 内 base64 解码后执行: exec(eval)(base64.b64decode(...))",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "(?:exec|eval)\\s*\\(\\s*(?:base64\\.b64decode|b64decode)\\s*\\(",
+          "confidence": 0.98
+        },
+        {
+          "regex": "(?:exec|eval)\\s*\\(\\s*__import__\\s*\\(\\s*['\\\"]base64['\\\"]\\s*\\)\\.b64decode\\s*\\(",
+          "confidence": 0.95
+        }
+      ]
+    },
+    {
+      "id": "OBF005-unicode-smuggle",
+      "category": "CWE-327 混淆/编码载荷",
+      "description": "Unicode 走私/零宽字符隐藏指令: \\u200b-\\u200d\\ufeff 等不可见字符嵌入提示词或代码",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "\\\\u200[b-d]|\\\\ufeff|\\u200b|\\u200c|\\u200d|\\ufeff",
+          "confidence": 0.8
+        }
+      ]
+    },
+    {
+      "id": "OBF006-rot13-exec",
+      "category": "CWE-327 混淆/编码载荷",
+      "description": "ROT13 解码后执行/import: 常见混淆载荷隐藏手法",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "codecs\\.(?:decode|encode)\\s*\\([^)]*rot_?13\\s*\\)\\s*\\.?\\s*(?:decode|encode)?\\s*\\(",
+          "confidence": 0.9
+        }
+      ]
+    },
+    {
+      "id": "PER001-cron-persist",
+      "category": "CWE-287 持久化/自启动",
+      "description": "写 crontab/cron.d 实现持久化: crontab -e 管道注入、写 /etc/cron.d/ 等",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "crontab\\s+-\\s*[eilr]?\\s*[^|&\\n]*\\|\\s*",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:/etc/cron\\.d/|/var/spool/cron/|/etc/crontab)\\b",
+          "confidence": 0.85
+        },
+        {
+          "regex": "^\\s*(?:\\*|\\d{1,2})(?:\\s+(?:\\*|\\d{1,2})){4}\\s+\\S+",
+          "confidence": 0.7
+        }
+      ]
+    },
+    {
+      "id": "PER002-systemd-persist",
+      "category": "CWE-287 持久化/自启动",
+      "description": "写 systemd service 实现开机自启持久化",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "/etc/systemd/system/[^'\\\"]*\\.service\\b",
+          "confidence": 0.9
+        },
+        {
+          "regex": "systemctl\\s+(?:enable|daemon-reload)\\s+[^|&\\n]*(?:service|timer)\\b",
+          "confidence": 0.8
+        }
+      ]
+    },
+    {
+      "id": "PER003-rc-autostart",
+      "category": "CWE-287 持久化/自启动",
+      "description": "写 shell rc/profile 自启动文件: .bashrc/.profile/.bash_profile/zshrc",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "(?:>>|>)\\s*~?/?(?:\\.bashrc|\\.bash_profile|\\.profile|\\.zshrc)\\b",
+          "confidence": 0.85
+        },
+        {
+          "regex": "echo\\s+[^|&;\\n]*\\s*(?:>>|>)\\s*(?:\\.bashrc|\\.bash_profile|\\.profile|\\.zshrc)\\b",
+          "confidence": 0.85
+        }
+      ]
+    },
+    {
+      "id": "PER004-ld-preload-persist",
+      "category": "CWE-287 持久化/自启动",
+      "description": "写 /etc/ld.so.preload 实现全局注入持久化",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "/etc/ld\\.so\\.preload\\b",
+          "confidence": 0.95
+        }
+      ]
+    },
+    {
+      "id": "PER005-ssh-backdoor",
+      "category": "CWE-287 持久化/后门",
+      "description": "写 ~/.ssh/authorized_keys 植入后门免密登录",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "(?:>>|>)\\s*[^'\\\"|&;\\n]*\\.ssh/authorized_keys\\b",
+          "confidence": 0.95
+        },
+        {
+          "regex": "ssh-copy-id\\s+[^|&;\\n]*authorized_keys",
+          "confidence": 0.8
+        },
+        {
+          "regex": "(?:open|Path)\\s*\\([^)]*\\.ssh/authorized_keys\\b",
+          "confidence": 0.9
+        }
+      ]
+    },
+    {
+      "id": "DES001-rm-rf-system",
+      "category": "CWE-404 破坏性操作",
+      "description": "递归删除系统关键路径: rm -rf / 、~/ 等破坏性命令",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "rm\\s+-(?:[a-z]*r[a-z]*f|f[a-z]*r)[a-z]*\\s+/?(?:etc|usr|var|boot|home)(?:/|\\s|$)",
+          "confidence": 0.95
+        },
+        {
+          "regex": "rm\\s+-(?:[a-z]*r[a-z]*f|f[a-z]*r)[a-z]*\\s+/(?:\\s|$)",
+          "confidence": 0.98
+        },
+        {
+          "regex": "rm\\s+-(?:[a-z]*r[a-z]*f|f[a-z]*r)[a-z]*\\s+~/?\\s*\\*?(?:\\s|/|$)",
+          "confidence": 0.9
+        }
+      ]
+    },
+    {
+      "id": "DES002-chmod-777",
+      "category": "CWE-732 权限控制不当",
+      "description": "chmod 777 全权限开放脚本/文件",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "chmod\\s+(?:-R\\s+)?777\\s+",
+          "confidence": 0.9
+        }
+      ]
+    },
+    {
+      "id": "DES003-disk-wipe",
+      "category": "CWE-404 破坏性操作",
+      "description": "磁盘擦除/格式化: dd 覆写设备、mkfs 格式化",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "dd\\s+if=/dev/(?:zero|urandom)\\s+of=/dev/sd[a-z]+\\b",
+          "confidence": 0.98
+        },
+        {
+          "regex": "mkfs\\.\\w+\\s+/dev/sd[a-z]+\\b",
+          "confidence": 0.95
+        }
+      ]
+    },
+    {
+      "id": "DES004-force-push",
+      "category": "CWE-404 破坏性操作",
+      "description": "git push --force 强制覆盖远程历史",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "git\\s+push\\s+[^|&;\\n]*(?:--force|-f)\\b",
+          "confidence": 0.85
+        }
+      ]
+    },
+    {
+      "id": "DES005-sql-destructive",
+      "category": "CWE-404 破坏性操作",
+      "description": "SQL 破坏性语句: DROP/DELETE/TRUNCATE",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "\\bDROP\\s+(?:TABLE|DATABASE|SCHEMA)\\b",
+          "confidence": 0.9
+        },
+        {
+          "regex": "\\bTRUNCATE\\s+TABLE\\b",
+          "confidence": 0.85
+        },
+        {
+          "regex": "\\bDELETE\\s+FROM\\s+\\w+\\s+(?:WHERE\\s+1\\s*=\\s*1|;|\\b)",
+          "confidence": 0.7
+        }
+      ]
+    },
+    {
+      "id": "MIN001-miner-binary",
+      "category": "CWE-400 资源滥用/挖矿",
+      "description": "挖矿程序特征: xmrig/cpuminer 等矿机二进制调用",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "(?:^|[/\\s])(?:xmrig|cpuminer|minerd|ccminer|nbminer|t-rex|ethminer)\\b",
+          "confidence": 0.9
+        }
+      ]
+    },
+    {
+      "id": "MIN002-mining-pool",
+      "category": "CWE-400 资源滥用/挖矿",
+      "description": "挖矿矿池地址/域名连接",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "(?:pool\\.)?(?:minexmr|xmrpool|supportxmr|nanopool|ethermine|moneroocean)\\.(?:com|net|eu|org|space)\\b",
+          "confidence": 0.9
+        },
+        {
+          "regex": "stratum(?:\\+tcp)?://",
+          "confidence": 0.85
+        }
+      ]
+    },
+    {
+      "id": "MIN003-crypto-wallet",
+      "category": "CWE-400 资源滥用",
+      "description": "加密货币钱包地址硬编码(接收挖矿收益)",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "\\b(?:1[1-9A-HJ-NP-Za-km-z]{25,34}|3[1-9A-HJ-NP-Za-km-z]{25,34}|bc1[0-9A-HJ-NP-Za-km-z]{25,62}|0x[0-9a-fA-F]{40})\\b",
+          "confidence": 0.6
+        }
+      ]
+    },
+    {
+      "id": "PRI001-browser-creds",
+      "category": "CWE-522 隐私数据访问",
+      "description": "读取浏览器凭据库: Login Data/Cookies/logins.json 等",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "(?:google-chrome|chromium|firefox|mozilla)[^'\\\"|&;\\n]*(?:Login Data|Cookies|logins\\.json|key4\\.db|key[0-9]*\\.db)\\b",
+          "confidence": 0.9
+        },
+        {
+          "regex": "['\\\"][^'\\\"]*(?:Login Data|Cookies|logins\\.json)\\b[^'\\\"]*['\\\"]",
+          "confidence": 0.8
+        }
+      ]
+    },
+    {
+      "id": "PRI002-chat-history",
+      "category": "CWE-522 隐私数据访问",
+      "description": "读取聊天记录目录: Telegram/Discord/WhatsApp/Slack/WeChat 数据",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "(?:\\.config|\\.local/share)/(?:TelegramDesktop|discord|WhatsApp|Slack|WeChat|Tencent)\\b",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:tdata|leveldb|\\.ldb)\\b[^'\\\"|&;\\n]*(?:session|history|chat)",
+          "confidence": 0.6
+        }
+      ]
+    },
+    {
+      "id": "PRI003-mail-docs",
+      "category": "CWE-522 隐私数据访问",
+      "description": "读取邮件/文档/照片私人目录",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "(?:/Mail/|\\.thunderbird|\\.evolution\\b|/Documents/|/Desktop/|/Pictures/|/Downloads/)\\b",
+          "confidence": 0.75
+        }
+      ]
+    },
+    {
+      "id": "PRI004-keyring-pass",
+      "category": "CWE-522 隐私数据访问",
+      "description": "读取系统凭据存储: keyring/credential store/.netrc/.pgpass",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "(?:keyring|secret-tool|gnome-keyring|kwallet|\\.netrc|\\.pgpass|\\.aws/credentials|\\.ssh/id_[a-z]+)\\b",
+          "confidence": 0.8
+        }
+      ]
+    },
+    {
+      "id": "INT001-cognitive-file-tamper",
+      "category": "CWE-749 被审计对象完整性",
+      "description": "篡改被审计 skill 的认知文件: SOUL/IDENTITY/TOOLS/AGENTS/SECURITY/SKILL.md 写入或删除",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "(?:open|write_text|unlink|os\\.remove|shutil\\.rmtree)\\s*\\([^)]*(?:SOUL|IDENTITY|TOOLS|AGENTS|SECURITY)\\.md\\b",
+          "confidence": 0.9
+        },
+        {
+          "regex": "(?:SOUL|IDENTITY|TOOLS|AGENTS|SECURITY)\\.md\\s*['\\\"`]?\\s*(?:>>|>|with\\s+open)",
+          "confidence": 0.85
+        }
+      ]
+    },
+    {
+      "id": "INT002-memory-config-tamper",
+      "category": "CWE-749 被审计对象完整性",
+      "description": "篡改 agent 记忆/配置: 写 memory/记忆库/系统配置文件, 可能中毒 agent",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "(?:memory|memories|context|profiles?)/[^'\\\"|&;\\n]*(?:\\.md|\\.json|\\.db|\\.sqlite)\\b",
+          "confidence": 0.6
+        },
+        {
+          "regex": "(?:open|write_text|os\\.remove)\\s*\\([^)]*(?:~?/\\.hermes|~?/\\.openclaw|SOUL\\.md|IDENTITY\\.md)\\b",
+          "confidence": 0.85
+        }
+      ]
+    },
+    {
+      "id": "INT003-install-hook",
+      "category": "CWE-1106 供应链/安装钩子",
+      "description": "安装钩子篡改: postinstall/preinstall 脚本或 setup.py 注入恶意逻辑",
+      "severity": "critical",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "\\\"(?:postinstall|preinstall|preinstall)\\\"\\s*:\\s*\\\"[^\\\"]*(?:curl|wget|bash|python|rm\\s+-rf)\\b",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?:setup\\.py|pyproject\\.toml|package\\.json)\\b[^'\\\"]*(?:exec|eval|os\\.system|subprocess)",
+          "confidence": 0.7
         }
       ]
     }
