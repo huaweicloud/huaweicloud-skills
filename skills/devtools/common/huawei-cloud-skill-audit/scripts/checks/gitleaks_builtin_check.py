@@ -2,7 +2,9 @@
 """GitleaksBuiltinCheck — pure Python credential leak detection (no external binary needed).
 
 Reimplements gitleaks core logic: regex pattern matching + Shannon entropy scoring
-+ keyword pre-filtering + allowlist exclusion, using the same 222 rules from gitleaks v8.30.1.
++ keyword pre-filtering + allowlist exclusion. Rule set trimmed to 42 rules relevant
+to Huawei Cloud skill auditing (Huawei/Ali/AWS clouds, GitHub/GitLab/GitCode,
+AI keys, ClawHub/opencode/hermes agent credentials).
 """
 
 import json
@@ -14,6 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from check_protocol import Check, CheckResult, Issue, Severity, ScanLevel
+from checks.skillspector_builtin_check import RULE_FILE_NAMES
 
 RULES_FILE = Path(__file__).parent / "gitleaks_rules.json"
 
@@ -99,6 +102,8 @@ class GitleaksBuiltinCheck(Check):
         self._global_stopwords = data.get("global_allowlist", {}).get("stopwords", [])
         sev_map = {"critical": Severity.CRITICAL, "high": Severity.ERROR, "warning": Severity.WARNING}
         for rule in data.get("rules", []):
+            if rule.get("enabled", True) is False:
+                continue
             rule_sev = rule.get("severity", "high")
             if rule_sev not in severity_floor:
                 continue
@@ -192,6 +197,8 @@ class GitleaksBuiltinCheck(Check):
         for p in skill_dir.rglob("*"):
             if p.is_file() and p.suffix.lower() not in BINARY_EXTENSIONS:
                 if p.name in {".gitleaksignore", ".skillspectorignore"}:
+                    continue
+                if p.name in RULE_FILE_NAMES:
                     continue
                 if not any(part in SKIP_DIRS for part in p.parts):
                     yield p

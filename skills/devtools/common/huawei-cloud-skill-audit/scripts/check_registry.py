@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class AuditConfig:
-    scan_level: str = "critical"
+    scan_level: str = "high"
     enabled_checks: set[str] = field(default_factory=lambda: {
         "skillspector", "gitleaks",
     })

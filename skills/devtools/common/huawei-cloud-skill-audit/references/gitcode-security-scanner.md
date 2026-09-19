@@ -13,7 +13,7 @@ A regex-based security scanner for GitCode repos. Detects hardcoded tokens, pass
 | Aspect | huawei-cloud-skill-audit (skillspector + gitleaks) | gitcode-security-scanner |
 |--------|---------------------------------------------------|------------------------|
 | **Risk domain** | AI safety (reverse shell, command injection, prompt injection, eval/exec) | InfoSec (credential leak, SQL injection, path traversal, debug leakage) |
-| **Credential detection** | gitleaks: 800+ credential formats; skillspector: cloud API key formats only | Regex-based: api_key, password, secret, token, auth + Chinese keywords |
+| **Credential detection** | gitleaks: 42 credential rules; skillspector: cloud API key formats only | Regex-based: api_key, password, secret, token, auth + Chinese keywords |
 | **Chinese keywords** | Not detected | Detected: 授权码/密码/密钥/令牌/口令/秘钥/凭证 |
 | **while True / eval / nc -l** | Detected by skillspector | Not detected |
 
@@ -25,7 +25,7 @@ sys.path.insert(0, '/tmp/DTSE-SKILL/gitcode-security-scanner/scripts')
 from security_scanner import SecurityScanner
 
 scanner = SecurityScanner('config_custom.json')
-issues = scanner.scan_project('project-name', '/home/user/work/my-skill-repo')
+issues = scanner.scan_project('project-name', '/path/to/my-skill-repo')
 # issues = {'high': [...], 'medium': [...], 'low': [...]}
 ```
 

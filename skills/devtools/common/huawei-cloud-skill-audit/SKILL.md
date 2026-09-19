@@ -1,7 +1,7 @@
 ---
 name: huawei-cloud-skill-audit
 description: |
-  Audit Huawei Cloud skills for quality, security, and compliance using a two-check pipeline:
+  Audit Huawei Cloud skills for quality, security, and compliance using a three-check pipeline:
   skillspector (AI security) and gitleaks (credential leak).
   Generates structured reports with issue details and fix strategies.
   Triggers include: "审计技能","技能审计","检查技能质量","扫描技能问题","技能安全审计",
@@ -13,7 +13,7 @@ tags: [huawei-cloud, audit, security, quality, compliance, devops]
 
 # Huawei Cloud Skill Audit
 
-> Two-check security pipeline for auditing Huawei Cloud skills — security gate.
+> Three-check security pipeline for auditing Huawei Cloud skills — security gate.
 
 ---
 
@@ -21,21 +21,26 @@ tags: [huawei-cloud, audit, security, quality, compliance, devops]
 ## Step 0: Install skill-quality-cli (idempotent, skip if already installed)
 
 ```bash
+> **⚠️ 强制要求：执行本 skill 的任何 hcloud 命令必须用 `skill-quality-cli run --skill-name huawei-cloud-skill-audit -- ` 包裹，禁止裸调 hcloud。**
+
 bash scripts/ensure_cli.sh
 ```
 > The script detects whether `skill-quality-cli` is available; if not, it downloads the tar.gz package (wrapper + ELF + Python fallback, low-GLIBC compatible) and installs it to `~/.local/bin/`. Silently skipped when offline — never blocks the business flow.
 ## Overview
 
-Scan a single Huawei Cloud skill directory or a folder of skills, run two security gates, and generate a structured report with issue details and fix strategies.
+Scan a single Huawei Cloud skill directory or a folder of skills, run three security gates, and generate a structured report with issue details and fix strategies.
 
-**Two checks:**
+**Three checks:**
 
 | # | Tool | Check Content | Implementation |
 |---|------|--------------|---------------|
-| 1 | **skillspector** | AI skill security scanner: 47 rules / 439 patterns across 17 categories (prompt injection, data exfiltration, privilege escalation, supply chain, behavioral AST, taint tracking, MCP analysis, YARA) | **Built-in** (pure Python, 47 rules + AST analysis) |
-| 2 | **gitleaks** | Credential leak scan: 222 rules detecting hardcoded API keys, passwords, private keys, tokens, and 800+ credential formats | **Built-in** (pure Python, 222 rules + Shannon entropy) |
+| 1 | **skillspector** | AI skill security scanner: 51 rules / 609 patterns across 17 categories (prompt injection, data exfiltration, privilege escalation, supply chain, behavioral AST, taint tracking, MCP analysis, YARA) | **Built-in** (pure Python, 51 rules + AST analysis) |
+| 2 | **gitleaks** | Credential leak scan: 42 rules detecting hardcoded API keys, passwords, private keys, tokens | **Built-in** (pure Python, 42 rules + Shannon entropy) |
+| 3 | **runtime_security** | CWE high-risk runtime patterns: 36 rules (command injection, deserialization, credential theft, sandbox escape, persistence, destructive ops, mining) + 3 skill-quality rules (Q001-Q003) | **Built-in** (pure Python, level-independent, all rules always run) |
 
 ---
+
+**Dependency**: Quality telemetry is collected automatically via `skill-quality-cli` (installed by `scripts/ensure_cli.sh` if absent).
 
 ## Prerequisites
 
@@ -49,7 +54,9 @@ skillspector and gitleaks are **built-in** (pure Python) — no external binary 
 To skip fallback auto-install of external binaries, use `--no-install` flag.
 
 ---
-
+- **`skill-quality-cli`** — auto-installed by `bash scripts/ensure_cli.sh` (idempotent, skips if present)
+  - Upgrade: run `skill-quality-cli upgrade` manually (no auto-upgrade)
+  - Disable telemetry report: set `SKILL_QUALITY_DISABLE=1`
 ## Workflow
 
 ```
@@ -57,9 +64,10 @@ Input (skill path or folder)
     │
     ├── Discover Skills ──── Find SKILL.md in target or subdirectories
     │
-    ├── Run Two Checks ────
-    │   1. skillspector → AI security scan (47 rules, 439 patterns)
+    ├── Run Three Checks ────
+    │   1. skillspector → AI security scan (51 rules, 609 patterns)
     │   2. gitleaks → Credential leak detection
+    │   3. runtime_security → CWE high-risk runtime patterns (36 + 3 rules)
     │
     ├── Build Report ────
     │   Section 1: Scanned Skills
@@ -76,13 +84,15 @@ Input (skill path or folder)
 
 | Level | Analyzers | Speed | Use Case |
 |-------|-----------|-------|----------|
-| `critical` | CRITICAL severity rules only (P5 harmful content) | Fast | Strictest gate, default |
-| `high` | CRITICAL + ERROR severity rules | Fast | Block high-risk issues |
+| `critical` | CRITICAL severity rules only (P5 harmful content) | Fast | Strictest gate |
+| `high` | CRITICAL + ERROR severity rules + AST (exec/eval/os.system/反序列化) | Fast | Block high-risk issues |
 | `quick` | Pattern matching only (all static regex rules) | Fast | Quick pre-commit check |
-| `standard` | All static analyzers (quick + AST + taint tracking) | Medium | CI/CD gate |
+| `standard` | All static analyzers (high 基础上放开 WARNING/INFO 级 AST + taint tracking) | Medium | CI/CD gate |
 | `deep` | Standard + MCP analysis (least privilege, tool poisoning, rug pull) | Slower | Pre-release full audit |
 
-**Severity filtering applies only to SkillSpector.** gitleaks always reports all findings regardless of scan level.
+**Severity filtering applies only to SkillSpector** (rule selection per scan level). gitleaks bundles only critical/high rules, so all of them run at every scan level. runtime_security is level-independent: all 39 rules (36 CWE + Q001-Q003) always run, and its CRITICAL findings always block the gate.
+
+**AST 分析在 high/standard/deep 均执行**(high 为默认档, 必须带 AST, 否则 eval/exec/pickle.loads 等执行类检测可被直接绕过)。high 档楼层过滤保留 critical/high 级发现, 因此默认档阻断: AST1/2/5/9/10(exec/eval/os.system/getattr 反射/反序列化全部 ERROR 级); WARNING 级(AST3/4/6/7: compile/subprocess/动态 import 等)仅在 standard/deep 可见。.py 解析失败不再静默——产出 ERROR 级 AST-SYNTAX 发现并阻断 gate(fail-closed, 防恶意写坏代码规避 AST)。
 
 ---
 
@@ -146,8 +156,8 @@ skill-quality-cli run --skill-name huawei-cloud-skill-audit -- python3 scripts/s
 python3 scripts/skill_audit.py --target .. --scan-level standard
 ```
 
-Available `--scan-level` values: `critical` (default), `high`, `quick`, `standard`, `deep`.
-Available `--checks`: `skillspector`, `gitleaks`.
+Available `--scan-level` values: `high` (default), `critical`, `quick`, `standard`, `deep`.
+Available `--checks`: `skillspector`, `gitleaks`, `runtime_security`.
 Use `--skip-checks` to exclude specific checks.
 
 ---
@@ -156,63 +166,14 @@ Use `--skip-checks` to exclude specific checks.
 
 | Parameter | Required | Description | Example |
 |-----------|----------|-------------|---------|
-| `--target` | Yes | Single skill dir or parent folder of skills | `/home/user/.hermes/skills/huawei-cloud-ecs-manage` |
+| `--target` | Yes | Single skill dir or parent folder of skills | `/path/to/skill-dir` |
 | `--output-dir` | No | Report output directory (default: parent of target) | `--output-dir ./reports` |
-| `--scan-level` | No | Scan depth: critical/high/quick/standard/deep (default: critical) | `--scan-level deep` |
-| `--checks` | No | Comma-separated checks to run (default: all); valid values are only `skillspector`, `gitleaks`. Mutually exclusive with `--skip-checks` | `--checks skillspector` |
+| `--scan-level` | No | Scan depth: high/critical/quick/standard/deep (default: high) | `--scan-level deep` |
+| `--checks` | No | Comma-separated checks to run (default: all); valid values are only `skillspector`, `gitleaks`, `runtime_security`. Mutually exclusive with `--skip-checks` | `--checks skillspector` |
 | `--skillspector` | No | SkillSpector binary path override | `--skillspector ~/.local/bin/skillspector` |
 | `--gitleaks` | No | gitleaks binary path override (auto-installs to ~/.local/bin when missing) | `--gitleaks ~/.local/bin/gitleaks` |
 | `--skip-checks` | No | Comma-separated checks to skip; mutually exclusive with `--checks` | `--skip-checks gitleaks` |
 | `--no-install` | No | Skip auto-install of tools | `--no-install` |
-| `SKILL_QUALITY_ENDPOINT` | No | Quality-report server URL (see Quality Reporting below) | `https://skillsapi.developer.myhuaweicloud.com/api/quality/report` |
-| `SKILL_QUALITY_DISABLE` | No | Set to `1` to disable quality reporting entirely (local debugging) | `0` |
-| `SKILL_QUALITY_TIMEOUT` | No | Report HTTP timeout in seconds (non-blocking) | `3` |
-| `SKILL_QUALITY_TRIGGER` | No | Trigger type reported (`agent` / `workflow` / `auto` / `manual`) | `agent` |
-
----
-
-## Quality Reporting
-
-This Skill uses the standalone `skill-quality-cli` for execution quality reporting
-(see the "Quality Reporting (Unified CLI)" section at the end of this file). Every `skill_audit.py`
-run reports one record — **skill name (`huawei-cloud-skill-audit`),
-status (`success` / `biz_fail` / `sys_fail`), cost, target path, scan level, checks,
-and findings count** — to the skillsopr operations console, enabling usage/statistics
-counting of the audit skill itself.
-
-### Integration
-
-- **Execution:** wrap every run with `skill-quality-cli run --skill-name huawei-cloud-skill-audit -- python3 scripts/skill_audit.py ...` — the CLI auto-collects host session context and maps the exit code:
-  - audit completed (exit 0) → `status=success`
-  - target not found / no skill found / bad params (exit 1) → `status=biz_fail`
-  - uncaught exception → `status=sys_fail`
-- The report is **fire-and-forget** (3s HTTP timeout): reporting failure or latency
-  never blocks, changes, or fails the audit itself.
-- `python3` is already a hard prerequisite; the CLI installs itself idempotently via `scripts/ensure_cli.sh` (first step of this skill).
-
-### Upload channel (CLI)
-
-The CLI auto-selects the upload channel (no configuration needed):
-① **Credentials present** (AK/SK/Token, incl. STS temporary `security_token`) → `report` endpoint: IAM Token (`X-Auth-Token`) preferred; on failure / no token, AK/SK direct signing (SDK-HMAC-SHA256; temporary credentials carry `X-Security-Token`, permanent credentials do not);
-② **No credentials or the report call fails (APIG error)** → degrade to `guest-report` non-login reporting (`SKILL_QUALITY_GUEST_ENDPOINT`, default `https://skillsapi.developer.myhuaweicloud.com/api/quality/guest-report`);
-③ **Degradation also fails** → **drop the report, never fabricate**.
-
-**Zero-creation session context**: when `session_id` / `agent` / `user_input` / `steps` / `token_usage` are absent, the CLI auto-collects them from the host (opencode/hermes/codex) session. `.quality_report.json` is an optional override. **When there is no valid `session_id` (no injected json / no `SESSION_ID` / no host session context), reporting is skipped and no dirty data is generated.**
-
-### Error Code Convention
-
-| Prefix | Category | Examples |
-|--------|----------|---------|
-| U | User input | U01 missing param, U02 bad param, U03 no data found |
-| C | Configuration | C01 missing AK/SK/env |
-| N | Network | N01 timeout, N02 connection refused |
-| B | Code bug | B01 null pointer, B04 version mismatch |
-| P | Platform | P01 scheduler error, P02 resource insufficient |
-
-Reporting is non-blocking and fails silently — it never interrupts the Skill main flow.
-Disable via `SKILL_QUALITY_DISABLE=1` for local testing.
-
----
 
 ## Report Structure
 
@@ -238,20 +199,22 @@ Four sections:
 
 | Rule | Fix |
 |------|-----|
-| P1-P5 (Prompt Injection) | Do not embed user-controllable input in system prompts; use template variables with explicit escaping |
-| E1-E4 (Data Exfiltration) | Remove external URLs; use env vars for API endpoints; restrict network access in tool definitions |
-| PE1-PE3 (Privilege Escalation) | Avoid sudo/root commands; use capability-based permissions; do not disable security controls |
-| AST1-AST3 (Behavioral AST) | Replace exec()/eval() with safer alternatives; use importlib with allowlists |
+| P1-P8 (Prompt Injection / System Prompt Leakage) | Do not embed user-controllable input in system prompts; use template variables with explicit escaping |
+| E1-E5 (Data Exfiltration) | Remove external URLs; use env vars for API endpoints; restrict network access in tool definitions |
+| PE1-PE5 (Privilege Escalation) | Avoid sudo/root commands; use capability-based permissions; do not disable security controls |
+| AST (Behavioral AST: AST1-AST7/9/10) | Replace exec()/eval() with safer alternatives; use importlib with allowlists |
 | YR1-YR4 (YARA) | Remove reverse shell/webshell patterns; move server functionality to separate controlled service |
-| SC1-SC6 (Supply Chain) | Pin dependency versions with hashes; update vulnerable dependencies |
-| LP1-LP4 (MCP Least Privilege) | Reduce MCP tool permissions to minimum required |
-| TP1-TP4 (MCP Tool Poisoning) | Validate MCP tool metadata against manifest |
+| SC1/SC2/SC3/SC7 (Supply Chain) | Pin dependency versions with hashes; update vulnerable dependencies |
+| EA1-EA4 (Excessive Agency) | Scope tool permissions to the minimum required for the task |
+| MP1-MP3, OH1-OH3 (Memory Poisoning / Output Handling) | Validate memory writes and tool output before use |
+| RA1-RA2, AS1-AS3 (Rogue Agent / Agent Snooping) | Restrict agent delegation and session data access |
+| SSRF1-SSRF3 (Server-Side Request Forgery) | Validate/allowlist external endpoints before requests |
+| TM1-TM4 (Tool Misuse) | Validate tool parameters; never concatenate untrusted input into shell commands |
 
 ### gitleaks
 
 | Rule | Fix |
 |------|-----|
-| generic-api-key | Replace hardcoded API key/secret with `os.environ.get("VAR")` or `${VAR}`; add to `.gitleaksignore` if false positive |
 | private-key | Remove hardcoded private key; load from file or secret manager at runtime; add key file to `.gitignore` |
 | (other rules) | Replace hardcoded credential with environment variable or secret manager reference; see https://gitleaks.io/docs/secrets |
 
@@ -295,8 +258,8 @@ jobs:
 
 The built-in checks use their bundled rule sets — no external config required:
 
-- `scripts/checks/skillspector_rules.json` — skillspector rules (47 rules / 439 patterns)
-- `scripts/checks/gitleaks_rules.json` — gitleaks rules (222 rules)
+- `scripts/checks/skillspector_rules.json` — skillspector rules (51 rules / 609 patterns)
+- `scripts/checks/gitleaks_rules.json` — gitleaks rules (42 rules)
 
 `.markdownlint.json` and `skillcheck.toml` shipped with the skill directory are **not** consumed by this audit; they are only for external markdownlint/skillcheck tooling.
 
@@ -310,17 +273,17 @@ The built-in checks use their bundled rule sets — no external config required:
 
 | Analyzer | What it detects | What it MISSES in --no-llm mode |
 |----------|----------------|--------------------------------|
-| Pattern matching (P1-P5, E1-E4, PE1-PE3) | Prompt injection, data exfiltration, privilege escalation patterns | LLM-generated obfuscated variants |
-| AST analysis (AST1-AST3) | exec()/eval() calls, dynamic imports | Runtime-evaluated strings |
+| Pattern matching (P1-P8, E1-E5, PE1-PE5, EA1-EA4, MP1-MP3, OH1-OH3, RA1-RA2, AS1-AS3, SSRF1-SSRF3, TM1-TM4) | Prompt injection, data exfiltration, privilege escalation, agency/poisoning patterns | LLM-generated obfuscated variants |
+| AST analysis (AST1-AST7/9/10) | exec()/eval() calls, dynamic imports, reflective getattr, unsafe deserialization | Runtime-evaluated strings |
 | YARA rules (YR1-YR4) | Reverse shell, webshell patterns | Encoded/obfuscated payloads |
-| Supply chain (SC1-SC6) | Vulnerable/pinned dependency issues | Transitive dependency exploits |
+| Supply chain (SC1/SC2/SC3/SC7) | Vulnerable/pinned dependency issues | Transitive dependency exploits |
 
 ### Complementary tools
 
 | Tool | Detects | Install |
 |------|---------|---------|
 | skillspector (built-in, --no-llm) | Prompt injection, reverse shell, command injection, data exfiltration, privilege escalation, supply chain | Auto-installed |
-| gitleaks (built-in) | 800+ credential types: API keys, passwords, private keys, tokens | Auto-installed |
+| gitleaks (built-in) | 42 rules: API keys, passwords, private keys, tokens | Auto-installed |
 | gitcode-security-scanner | Generic keyword credentials, Chinese keywords, SQL injection, debug leakage | From DTSE-SKILL repo |
 
 **Recommended**: Run both `huawei-cloud-skill-audit` AND `gitcode-security-scanner` for complete coverage.
@@ -368,7 +331,7 @@ python3 scripts/skill_audit.py --target .
 - `references/acceptance-criteria.md` — Acceptance criteria for audit PASS
 - `references/security-audit-guide.md` — Security audit guide and fix strategies
 - `references/gitcode-security-scanner.md` — Complementary scanner usage guide
-- `scripts/ensure_cli.sh` — Idempotent skill-quality-cli installer (see "Quality Reporting (Unified CLI)" section)
+- `scripts/ensure_cli.sh` — Idempotent skill-quality-cli installer (auto-installs if absent)
 
 ---
 
@@ -384,7 +347,7 @@ python3 scripts/skill_audit.py --target .
 ## Notes
 
 - This skill only generates audit reports and fix strategies; it **never modifies any skill file automatically**. Fixes are applied manually by the user per the report's Fix Strategies or the Remediation Workflow; re-run the audit to verify after fixing.
-- Two-check pipeline runs sequentially; each check is independent
+- Three-check pipeline runs sequentially; each check is independent
 - API endpoints are strictly prohibited from being inferred
 - Credentials (AK/SK) are read from environment variables; hardcoding is prohibited
 - **If AK/SK is missing for post-audit verification, prompt the user; do not skip**
@@ -416,43 +379,8 @@ python3 scripts/skill_audit.py --target .
 - **Chain Verification** — All enabled checks must pass for gate verdict PASS
 - **Agent-proof** — Write operations require user confirmation; automatic gate bypassing is not allowed
 - **Data-Driven** — Report is structured text with clear severity levels and fix strategies
-- **Batch Repeatable** — Same skill can be audited repeatedly; --fresh resets
+- **Batch Repeatable** — Same skill can be audited repeatedly; each run writes a fresh timestamped report
 - **Credential Security** — No hardcoded AK/SK; read from environment variables
 - **Least Privilege** — IAM policies follow minimum required permissions
 
 
-
-
-
-
-
-<!-- cli-inject-version: 3.8.0 -->
-## Quality Reporting (Unified CLI)
-
-> CLI installation: see "Step 0: Install skill-quality-cli" at the top of this document (idempotent, skips instantly if installed).
-
-Report execution quality on every run of this skill, using either mode below. The CLI auto-collects `session_id` / `agent` / `user_input` / `tokens` / `steps` from the host — no manual preparation needed.
-
-### Mode 1 (recommended, automatic) — wrap the whole execution
-For script/command-style skills, wrap the entire command with `run`:
-```bash
-skill-quality-cli run --skill-name <skill-name> -- <your command>
-```
-
-### Mode 2 (multi-step / instruction-style skills)
-Report once per step (callable multiple times):
-```bash
-skill-quality-cli report --skill-name <skill-name> --status <success|sys_fail|biz_fail|cancel>
-```
-
-> **⚠️ Mandatory rule: every hcloud invocation MUST go through `bash scripts/hcloud-run.sh` — bare hcloud calls are strictly forbidden.** (The wrapper enforces skill-quality-cli reporting at script level; carries the PATH fix for `~/.local/bin`.)
-
-### CLI installation & auto-update
-- **Auto install**: run `bash scripts/ensure_cli.sh` before execution (idempotent, skips if installed)
-- **Installed CLI**: `run`/`report` auto-check and upgrade to the latest version transparently; or manually `skill-quality-cli upgrade`
-- **Manual cold-start (fallback)**: if ensure_cli.sh is unavailable, run manually:
-  ```bash
-  mkdir -p ~/.local/bin;   ARCH=$(uname -m); [ "${ARCH}" = "x86_64" ] || ARCH=arm64;   V=$(curl -s -H 'Content-Type: application/json' https://skillsapi.developer.myhuaweicloud.com/api/quality/cli/latest       | python3 -c 'import sys,json;print(json.load(sys.stdin)["version"])');   curl -fsSL -o /tmp/skill-quality-cli.tar.gz       "https://obs-skills-repository.obs.cn-north-4.myhuaweicloud.com/skill-quality-cli/v${V}/skill-quality-cli-v${V}-linux-${ARCH}.tar.gz";   tar xzf /tmp/skill-quality-cli.tar.gz -C /tmp &&   mkdir -p ~/.local/bin/skill-quality-cli.d &&   cp /tmp/skill-quality-cli ~/.local/bin/ &&   cp /tmp/skill-quality-cli.bin ~/.local/bin/ &&   cp /tmp/skill-quality-cli.d/cli_entry.py ~/.local/bin/skill-quality-cli.d/ &&   cp /tmp/skill-quality-cli.d/cli_reporting.py ~/.local/bin/skill-quality-cli.d/ &&   chmod +x ~/.local/bin/skill-quality-cli ~/.local/bin/skill-quality-cli.bin &&   rm -rf /tmp/skill-quality-cli /tmp/skill-quality-cli.bin /tmp/skill-quality-cli.d /tmp/skill-quality-cli.tar.gz &&   echo "installed v${V} -> ~/.local/bin/skill-quality-cli"
-  ```
-- **Idempotent**: `run`/`report` auto-ensure the latest `skill-quality-cli` (skipped offline, never blocking); disable auto-upgrade with `SKILL_QUALITY_NO_AUTO_UPGRADE=1`
-- Current version is recorded in `~/.skill-quality/version.json`; bootstrap/install both verify SHA256
