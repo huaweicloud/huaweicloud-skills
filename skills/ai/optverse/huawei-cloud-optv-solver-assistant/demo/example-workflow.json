@@ -1,0 +1,128 @@
+{
+  "skill": "huawei-cloud-optv-solver-assistant",
+  "description": "Example workflow for solving a facility location optimization problem",
+  "region": "cn-east-3",
+  "agent_type": "optverse",
+  "demo_files": {
+    "requirement_file": "需求分析输入.md",
+    "data_file": "模型数据--农业.xlsx"
+  },
+  "workflow": [
+    {
+      "step": 1,
+      "action": "Upload requirement file",
+      "command": "hcloud OptVerse UploadFile --X-Chat-Route-Id=auto --agent_type=optverse --file=需求分析输入.md --cli-region=cn-east-3",
+      "expected_response": {
+        "chat_id": "8adba10e-4431-44c7-9d51-4b4140e9165b"
+      },
+      "notes": "Record chat_id and filename for subsequent steps"
+    },
+    {
+      "step": 2,
+      "action": "Create chat - submit requirement (Round 1)",
+      "command": "python scripts/create_chat.py --message='Facility location optimization for agricultural warehouses...' --agent_type=optverse --filenames=需求分析输入.md",
+      "expected_response": {
+        "chat_id": "8adba10e-4431-44c7-9d51-4b4140e9165b",
+        "id": "b1f3c7d2-aaaa-bbbb-cccc-dddddddddddd",
+        "content": "Based on the requirement analysis, I have formulated the optimization model...",
+        "tool_calls": []
+      },
+      "notes": "Record chat_id for all subsequent steps"
+    },
+    {
+      "step": 3,
+      "action": "List and download artifacts",
+      "command": "hcloud OptVerse ListArtifacts --chat_id=8adba10e-... --cli-region=cn-east-3",
+      "expected_response": {
+        "artifacts": [
+          {
+            "filenames": ["requirement_analysis.md", "model_formulation.md"],
+            "stage_name": "requirement_analyzer",
+            "create_time": "2025-09-11T06:32:41Z"
+          }
+        ]
+      },
+      "sub_command": "hcloud OptVerse DownloadFile --chat_id=8adba10e-... --filename=requirement_analysis.md --X-Need-Content=true --cli-region=cn-east-3",
+      "expected_download_response": {
+        "download_url": "https://...",
+        "content": "# Requirement Analysis\n\n## Problem: Facility Location Optimization\n..."
+      },
+      "notes": "Present artifacts to user, ask for confirmation"
+    },
+    {
+      "step": 4,
+      "action": "Confirm requirement analysis (Round 2)",
+      "command": "python scripts/create_chat.py --message=确认 --agent_type=optverse --chat_id=8adba10e-...",
+      "expected_response": {
+        "chat_id": "8adba10e-4431-44c7-9d51-4b4140e9165b",
+        "id": "c2f4d8e3-aaaa-bbbb-cccc-eeeeeeeeeeee",
+        "content": "I have generated the mathematical model code and documentation...",
+        "tool_calls": []
+      }
+    },
+    {
+      "step": 5,
+      "action": "Download modeling artifacts",
+      "command": "hcloud OptVerse ListArtifacts --chat_id=8adba10e-... --cli-region=cn-east-3",
+      "expected_response": {
+        "artifacts": [
+          {
+            "filenames": ["requirement_analysis.md", "model_formulation.md"],
+            "stage_name": "requirement_analyzer",
+            "create_time": "2025-09-11T06:32:41Z"
+          },
+          {
+            "filenames": ["model_code.py", "model_documentation.md"],
+            "stage_name": "modeling",
+            "create_time": "2025-09-11T06:35:12Z"
+          }
+        ]
+      },
+      "notes": "Download modeling stage artifacts and present to user"
+    },
+    {
+      "step": 6,
+      "action": "Confirm modeling artifacts (Round 3)",
+      "command": "python scripts/create_chat.py --message=确认 --agent_type=optverse --chat_id=8adba10e-...",
+      "expected_response": {
+        "chat_id": "8adba10e-4431-44c7-9d51-4b4140e9165b",
+        "id": "d3a5e9f4-aaaa-bbbb-cccc-ffffffffffff",
+        "content": "Please upload the data file (xlsx) for data validation...",
+        "tool_calls": []
+      }
+    },
+    {
+      "step": 7,
+      "action": "Upload data file and run data check",
+      "command": "hcloud OptVerse UploadFile --X-Chat-Route-Id=<route-id> --agent_type=optverse --chat_id=8adba10e-... --file=模型数据--农业.xlsx --cli-region=cn-east-3",
+      "sub_command": "python scripts/create_chat.py --message=进行数据检查 --agent_type=optverse --chat_id=8adba10e-...",
+      "expected_response": {
+        "chat_id": "8adba10e-4431-44c7-9d51-4b4140e9165b",
+        "id": "e4b6f0a5-aaaa-bbbb-cccc-111111111111",
+        "content": "Data validation complete. All checks passed...",
+        "tool_calls": []
+      }
+    },
+    {
+      "step": 8,
+      "action": "Confirm data check (Round 4)",
+      "command": "python scripts/create_chat.py --message=确认 --agent_type=optverse --chat_id=8adba10e-...",
+      "expected_response": {
+        "chat_id": "8adba10e-4431-44c7-9d51-4b4140e9165b",
+        "id": "f5c7a1b6-aaaa-bbbb-cccc-222222222222",
+        "content": "Final artifacts generated. Model is ready for publishing...",
+        "tool_calls": []
+      }
+    },
+    {
+      "step": 9,
+      "action": "Download final artifacts and publish",
+      "command": "hcloud OptVerse DownloadFile --chat_id=8adba10e-... --filename=solver_results.json --X-Need-Content=true --cli-region=cn-east-3",
+      "sub_command": "hcloud OptVerse PublishChat --chat_id=8adba10e-... --name=agri-warehouse-optimization --type=optverse --description='Facility location optimization for agricultural warehouses' --cli-region=cn-east-3",
+      "expected_response": {
+        "id": "e476996d-6028-480f-bdb3-b6d4245e4155"
+      },
+      "notes": "Published asset ID returned - workflow complete!"
+    }
+  ]
+}
