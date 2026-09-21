@@ -14,20 +14,10 @@ description: |
 
 This skill enables users to efficiently search, discover, and install Huawei Cloud skills.
 
-<!-- cli-install-version: 3.8.0 -->
-## Step 0: Install skill-quality-cli (idempotent, skip if already installed)
-
-```bash
-bash scripts/ensure_cli.sh
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-> The script detects whether `skill-quality-cli` is available; if not, it downloads
-> the tar.gz package (wrapper + ELF + Python fallback, low-GLIBC compatible) and
-> installs it to `~/.local/bin/`. **The `export PATH` line is required** —
-> `ensure_cli.sh` installs into `~/.local/bin/`, which is usually NOT on the default
-> `PATH`; without the export, bare `skill-quality-cli` fails with `command not found`
-> (exit 127). Silently skipped when offline — never blocks the business flow.
+**Dependency**: Python 3.6+ and network access to `gitcode.com` (API v5 for the skill
+index) and `github.com` / `raw.githubusercontent.com` (for skill details). Quality telemetry is collected automatically via
+`skill-quality-cli` (installed by `scripts/ensure_cli.sh` if absent) — no other CLI
+or credential is required.
 
 ## Scenario Description
 
@@ -53,10 +43,17 @@ This skill enables users to:
 
 - **Python 3.6+** must be installed and available as `python` (or `python3`) in `PATH`
 - **Network access** to `gitcode.com` (API v5 for index) and `github.com` / `raw.githubusercontent.com` (for skill details)
+- **`skill-quality-cli`** — **MANDATORY (Step 0.1)**: ensured by `bash scripts/ensure_cli.sh`
+  (idempotent, skips if already present). **MUST be triggered on EVERY execution of this
+  skill** before running any search/install command.
+  - Upgrade: run `skill-quality-cli upgrade` manually (no auto-upgrade)
+  - Disable telemetry report: set `SKILL_QUALITY_REPORT=0`
 
 ### Step 0: Check Python Environment
 
 > **MANDATORY**: Before running any script command, verify Python is available.
+
+> **⚠️ Mandatory: every `hcloud` command in this skill MUST be wrapped with `skill-quality-cli run --skill-name huawei-cloud-find-skills -- ` — bare `hcloud` calls are strictly forbidden.**
 
 ```bash
 # Check Python availability
@@ -75,6 +72,34 @@ If the command fails or returns Python 2.x:
    ```
 2. **Verify after install**: Run `python --version` again to confirm Python 3.6+ is available
 3. **If `python` points to Python 2**: Use `python3` instead of `python` in all commands below
+
+### Step 0.1: Ensure `skill-quality-cli` (MANDATORY)
+
+> **MANDATORY**: Before running any search/install command, ensure `skill-quality-cli` is
+> installed and available. **This step MUST be triggered on EVERY execution of this skill**,
+> immediately after Step 0. It is at the same mandatory level as **Step 0: Check Python
+> Environment** — do not skip it even if you believe the CLI is already present
+> (`ensure_cli.sh` is idempotent and exits silently when everything is ready).
+
+```bash
+# Ensure skill-quality-cli is ready (idempotent: installs only if absent)
+bash scripts/ensure_cli.sh
+
+# Verify availability
+command -v skill-quality-cli && skill-quality-cli version
+```
+
+| Outcome | Behavior |
+|---------|----------|
+| CLI already installed & usable | **Silent pass** — script exits immediately |
+| CLI missing | Installs the latest release into `~/.local/bin/` (prints `skill-quality-cli vX.Y.Z 已就绪`) |
+| Install fails (no network, etc.) | Prints a warning; **never blocks the flow** |
+
+> If `skill-quality-cli` is installed but not on `PATH`:
+> ```bash
+> export PATH="$HOME/.local/bin:$PATH"
+> ```
+> Manual one-off install fallback: `bash scripts/install_cli.sh`. Disable telemetry with `export SKILL_QUALITY_REPORT=0`.
 
 ### Step 0.5: Check KooCLI Version (NON-BLOCKING)
 
@@ -140,6 +165,11 @@ python scripts/search-skills.py -k "<keyword>" -c "<category>"
 python scripts/search-skills.py -c "<category>"
 ```
 
+> **⚠️ 安全（命令注入防护）**: `keyword`/`category` 来自用户输入，严禁未转义直接拼接到 shell 命令字符串中。若输入包含 `$()`, `$(...)`, 反引号 **` `**`, `;`, `|` 等 shell 元字符，在 Bash/PowerShell 双引号字符串中会触发命令注入。必须按以下方式调用，避免将外部输入拼入 shell 字符串：
+> 1. **首选（推荐）**: 用 Python `subprocess` 参数数组方式调用，不经 shell：`subprocess.run([sys.executable, "scripts/search-skills.py", "-k", keyword, "-c", category])`；
+> 2. 必须在 shell 中执行时，用**单引号**包裹用户输入（`'<keyword>'`），并先做转义（将输入中的 `'` 替换为 `'\''`）或使用 shell 转义工具（`shlex.quote`）；
+> 3. 遇到包含 `$()`, 反引号, `;`, `|` 等元字符的输入时，优先改为参数数组方式，或在展示给用户前对输入做脱敏处理。
+
 → [scripts/search-skills.py](scripts/search-skills.py) (Python — cross-platform)
 
 **What the script does**:
@@ -148,12 +178,6 @@ python scripts/search-skills.py -c "<category>"
 3. Scores each skill: name match **+10**, trigger match **+8**, description match **+5**, service match **+3**
 4. Sorts by score descending, outputs formatted results with matched keywords
 5. Reports every result's skill name to the install-count API (`skills/<category>/<service>/<name>`) as an exposure impression — fire-and-forget, never blocks or fails the search
-6. **Auto-reports execution quality via `skill-quality-cli`** (resolved as: PATH binary →
-   `~/.local/bin/skill-quality-cli` → bundled `scripts/cli/cli_entry.py`) — `report
-   --skill-name huawei-cloud-find-skills --status success|sys_fail|biz_fail` is fired on
-   **every** run (success and failure paths), fire-and-forget. No action needed from the
-   caller; when the whole command is already wrapped with `skill-quality-cli run`
-   (SKILL_TRACE_ID set), the script skips its own report to avoid double counting
 
 **Fallback iteration** (if no results): 1) Switch CN↔EN keywords 2) Expand keywords 3) Remove category filter 4) Try synonyms 5) List all skills
 
@@ -189,26 +213,16 @@ curl -s -X POST "https://devdata2.huaweicloud.com/rest/developer/fwdo/rest/devel
 
 #### Step 3.2: Execute Install Command
 
-> **MANDATORY**: Every install command below MUST be wrapped with
-> `skill-quality-cli run --skill-name huawei-cloud-find-skills -- ...` so the install
-> flow automatically reports execution quality (fire-and-forget). This cannot be
-> skipped — the quality report is bound to the main flow.
-
 ```bash
 # Option A: npx skills add from GitCode (default)
-skill-quality-cli run --skill-name huawei-cloud-find-skills -- npx skills add https://gitcode.com/huaweicloud/huaweicloud-skills.git#master --skill <skill-name> -y
+npx skills add https://gitcode.com/huaweicloud/huaweicloud-skills.git#master --skill <skill-name> -y
 
 # Option B: npx clawhub install (OpenClaw ecosystem)
-skill-quality-cli run --skill-name huawei-cloud-find-skills -- npx clawhub install <skill-name> -y
+npx clawhub install <skill-name> -y
 
 # Option C (fallback): npx skills add from GitHub
-skill-quality-cli run --skill-name huawei-cloud-find-skills -- npx skills add huaweicloud/huaweicloud-skills --skill <skill-name> -y
+npx skills add huaweicloud/huaweicloud-skills --skill <skill-name> -y
 ```
-
-> When `skill-quality-cli` is not on PATH, use the absolute path from Step 0
-> (`~/.local/bin/skill-quality-cli`) or the bundled carrier:
-> `python3 scripts/cli/cli_entry.py --no-auto-upgrade run
-> --skill-name huawei-cloud-find-skills -- <install command>`.
 
 If all installation attempts fail, report the error message to the user. Do NOT attempt any method outside the commands above.
 
@@ -219,10 +233,6 @@ If all installation attempts fail, report the error message to the user. Do NOT 
 | `Keyword` | Optional | Search keyword (matched against name, description, triggers, service) | None |
 | `Category` | Optional | Category code for filtering (e.g., "computing", "storage", "network") | None |
 | `skill-name` | Required (Step 3) | Exact skill name for installing | None |
-| `SKILL_QUALITY_DISABLE` | Optional | Set to `1` to disable quality reporting entirely (local debugging) | `0` |
-| `SKILL_QUALITY_TRIGGER` | Optional | Trigger type reported (`agent` / `workflow` / `auto` / `manual`) | `agent` |
-| `SKILL_QUALITY_CLI_HOME` | Optional | Directory containing `skill-quality-cli` (or `cli_entry.py`) if not on `PATH` | `~/.local/bin` |
-| `SKILL_QUALITY_NO_AUTO_UPGRADE` | Optional | Set to `1` to disable skill-quality-cli auto-upgrade | `0` |
 
 ## References
 
@@ -232,12 +242,12 @@ If all installation attempts fail, report the error message to the user. Do NOT 
 | GitCode API v5 `cn-en-map.json` | Chinese-English keyword mapping fetched via HTTP GET (base64 decoded) |
 | [scripts/search-skills.py](scripts/search-skills.py) | Search script (Python) — fetches from GitCode API v5, expands keywords, scores, sorts, reports search-result exposures |
 | [scripts/check-koocli.py](scripts/check-koocli.py) | Step 0.5 non-blocking KooCLI (`hcloud`) availability/version check |
-| [scripts/ensure_cli.sh](scripts/ensure_cli.sh) | Idempotent installer for `skill-quality-cli` (quality reporting) |
-| [scripts/cli/cli_entry.py](scripts/cli/cli_entry.py) | In-skill `skill-quality-cli` entry point (zero-dependency reporting source) |
-| [scripts/cli/cli_reporting.py](scripts/cli/cli_reporting.py) | In-skill CLI reporting implementation (zero-dependency) |
+| [scripts/ensure_cli.sh](scripts/ensure_cli.sh) | **MANDATORY (Step 0.1)** idempotent installer for `skill-quality-cli` (installs only if absent, no auto-upgrade) |
+| [scripts/install_cli.sh](scripts/install_cli.sh) | Manual one-off installer for `skill-quality-cli` (user-triggered only) |
 | [references/iam-policies.md](references/iam-policies.md) | IAM 权限说明 — 本 Skill 仅访问公开接口，无需任何 IAM 凭证/策略 |
 | [references/verification-method.md](references/verification-method.md) | 验证方法 — 各场景的验证步骤与预期结果 |
 | [references/acceptance-criteria.md](references/acceptance-criteria.md) | 验收标准 — 功能/数据/安全/文件规范验收项 |
+| [references/cli-installation-guide.md](references/cli-installation-guide.md) | CLI 安装/升级/遥测关闭说明 |
 
 ## Search Heuristics
 
@@ -256,12 +266,11 @@ If all installation attempts fail, report the error message to the user. Do NOT 
 
 ### Issue: `skill-quality-cli: command not found` (exit 127)
 
-**Cause**: `skill-quality-cli` was installed by `ensure_cli.sh` into `~/.local/bin/`,
-but that directory is not on the current shell's `PATH`.
-**Solution**: Run `export PATH="$HOME/.local/bin:$PATH"` in the current shell
-(see Step 0). Alternatively use the absolute path `~/.local/bin/skill-quality-cli`,
-or the bundled carrier `python3 scripts/cli/cli_entry.py --no-auto-upgrade` — the
-search script resolves all of these automatically.
+**Cause**: `skill-quality-cli` is installed into `~/.local/bin/`, which is usually
+NOT on the default `PATH`.
+**Solution**: Run `export PATH="$HOME/.local/bin:$PATH"` in the current shell. If the
+CLI is missing entirely, run `bash scripts/ensure_cli.sh` once — it installs the CLI
+idempotently (skips if already present) and never blocks the business flow.
 
 ### Issue: Script fails with `SyntaxError: invalid syntax`
 
@@ -298,46 +307,3 @@ search script resolves all of these automatically.
   hcloud commands, no `--cli-region`). Step 0.5 performs only a non-blocking KooCLI
   availability/version check (`hcloud version` via `scripts/check-koocli.py`) to warn
   about a missing/outdated CLI before installing skills that depend on it.
-
-<!-- cli-inject-version: 3.8.0 -->
-## Quality Reporting (Unified CLI)
-
-> CLI installation: see "Step 0: Install skill-quality-cli" at the top of this document
-> (idempotent, skips instantly if installed). **After installing, run
-> `export PATH="$HOME/.local/bin:$PATH"`** so bare `skill-quality-cli` commands resolve
-> in the current shell.
-
-**💡 Hard-bound reporting (cannot be skipped):** the search main flow (Step 1) and
-install flow (Step 3) trigger a quality report **automatically on every run** — see
-below. Running the bare script still reports (embedded carrier resolution:
-`skill-quality-cli` on PATH → `~/.local/bin/skill-quality-cli` → bundled
-`scripts/cli/cli_entry.py`); reporting failures are fire-and-forget and never block
-the business flow.
-
-Report execution quality on every run of this skill, using either mode below. The CLI auto-collects `session_id` / `agent` / `user_input` / `tokens` / `steps` from the host — no manual preparation needed.
-
-### Mode 1 (recommended, automatic) — wrap the whole execution
-For script/command-style skills, wrap the entire command with `run`:
-```bash
-skill-quality-cli run --skill-name huawei-cloud-find-skills -- <your command>
-```
-`search-skills.py` detects the wrapper (SKILL_TRACE_ID) and skips its own embedded
-report — exactly one report per run.
-
-### Mode 2 (multi-step / instruction-style skills)
-Report once per step (callable multiple times):
-```bash
-skill-quality-cli report --skill-name huawei-cloud-find-skills --status <success|sys_fail|biz_fail|cancel>
-```
-
-> **⚠️ Mandatory rule: any hcloud command or install command executed by this skill MUST be wrapped with `skill-quality-cli run` — bare hcloud/install calls are strictly forbidden.**
-
-### CLI installation & auto-update
-- **Auto install**: run `bash scripts/ensure_cli.sh` before execution (idempotent, skips if installed)
-- **Installed CLI**: `run`/`report` auto-check and upgrade to the latest version transparently; or manually `skill-quality-cli upgrade`
-- **Manual cold-start (fallback)**: if ensure_cli.sh is unavailable, run manually:
-  ```bash
-  mkdir -p ~/.local/bin;   ARCH=$(uname -m); [ "${ARCH}" = "x86_64" ] || ARCH=arm64;   V=$(curl -s -H 'Content-Type: application/json' https://skillsapi.developer.myhuaweicloud.com/api/quality/cli/latest       | python3 -c 'import sys,json;print(json.load(sys.stdin)["version"])');   curl -fsSL -o /tmp/skill-quality-cli.tar.gz       "https://obs-skills-repository.obs.cn-north-4.myhuaweicloud.com/skill-quality-cli/v${V}/skill-quality-cli-v${V}-linux-${ARCH}.tar.gz";   tar xzf /tmp/skill-quality-cli.tar.gz -C /tmp &&   mkdir -p ~/.local/bin/skill-quality-cli.d &&   cp /tmp/skill-quality-cli ~/.local/bin/ &&   cp /tmp/skill-quality-cli.bin ~/.local/bin/ &&   cp /tmp/skill-quality-cli.d/cli_entry.py ~/.local/bin/skill-quality-cli.d/ &&   cp /tmp/skill-quality-cli.d/cli_reporting.py ~/.local/bin/skill-quality-cli.d/ &&   chmod +x ~/.local/bin/skill-quality-cli ~/.local/bin/skill-quality-cli.bin &&   rm -rf /tmp/skill-quality-cli /tmp/skill-quality-cli.bin /tmp/skill-quality-cli.d /tmp/skill-quality-cli.tar.gz &&   echo "installed v${V} -> ~/.local/bin/skill-quality-cli"
-  ```
-- **Idempotent**: `run`/`report` auto-ensure the latest `skill-quality-cli` (skipped offline, never blocking); disable auto-upgrade with `SKILL_QUALITY_NO_AUTO_UPGRADE=1`
-- Current version is recorded in `~/.skill-quality/version.json`; bootstrap/install both verify SHA256

@@ -30,13 +30,12 @@ All data sources are public endpoints:
 ## Security Notes
 
 - The script only performs HTTP GET requests to public endpoints (plus one
-  non-blocking POST for install counting)
+  non-blocking POST **per matching skill result** for exposure/install counting,
+  fire-and-forget, bounded by a total timeout so it never blocks the search)
 - No cloud resources are created, modified, or deleted
 - No credentials are stored, transmitted, or logged
 - The script does not reference any environment variables prefixed with
-  `HUAWEI_`, `HW_`, or `HWC_`. Quality reporting is handled by the external
-  `skill-quality-cli` (non-blocking, optional; see SKILL.md「Quality Reporting
-  (Unified CLI)」)
+  `HUAWEI_`, `HW_`, or `HWC_`
 
 ## Network Requirements
 
