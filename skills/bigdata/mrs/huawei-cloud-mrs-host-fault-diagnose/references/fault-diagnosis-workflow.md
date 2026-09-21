@@ -2,17 +2,19 @@
 
 This document describes the progressive fault diagnosis workflow design used by the MRS host fault diagnosis skill. It explains the three-layer fault model, the progressive investigation strategy, and the scenario identification mechanism.
 
+> **Two modes**: the skill supports lakewatch mode (`lakewatch_api_client.py` + `fault_layer/` + `scenarios/` + `propagation.md`) and manager mode (`manager_api_client.py` + `fault_layer_manager/` + `scenarios_manager/` + `propagation_manager.md`), auto-selected by `check_api_mode.py`. The document paths below show the lakewatch-mode layout; the manager mode uses the `_manager`-suffixed equivalents with the same three-layer structure.
+
 ## Overview
 
 MRS cluster faults are categorized into three layers, each with a dedicated diagnosis document:
 
-| Layer | Document | Description |
-|-------|----------|-------------|
-| Host | `fault_layer/host_fault.md` | Bottom layer — host reachability, resources (disk/memory/CPU), NodeAgent status |
-| Instance | `fault_layer/instance_fault.md` | Middle layer — process, port, HA status; includes scenario identification |
-| Service | `fault_layer/service_fault.md` | Top layer — service overall status, dependency propagation, alarm cause codes |
+| Layer | Document (lakewatch) | Document (manager) | Description |
+|-------|----------------------|--------------------|-------------|
+| Host | `fault_layer/host_fault.md` | `fault_layer_manager/host_fault.md` | Bottom layer — host reachability, resources (disk/memory/CPU), NodeAgent status |
+| Instance | `fault_layer/instance_fault.md` | `fault_layer_manager/instance_fault.md` | Middle layer — process, port, HA status; includes scenario identification |
+| Service | `fault_layer/service_fault.md` | `fault_layer_manager/service_fault.md` | Top layer — service overall status, dependency propagation, alarm cause codes |
 
-The propagation chain between layers is traced by `propagation.md`.
+The propagation chain between layers is traced by `propagation.md` (lakewatch) or `propagation_manager.md` (manager).
 
 ## Progressive Investigation Strategy
 

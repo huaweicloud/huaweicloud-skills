@@ -2,7 +2,7 @@
 name: huawei-cloud-mrs-host-fault-diagnose
 description: |
   Huawei Cloud MRS cluster fault diagnosis skill. Diagnoses service faults, instance faults, and host faults through progressive root cause localization: quick log scan first, host troubleshooting when host issues are found, detailed investigation when no conclusion is reached.
-  Driven by the built-in LakeWatch API client and the per-component knowledge base under components/. No commands outside the knowledge base are fabricated.
+  Diagnosis is driven by the built-in LakeWatch API client (lakewatch mode) or the MRS Manager API client (manager mode) and the per-layer knowledge base under fault_layer/ and scenarios/ (lakewatch) or fault_layer_manager/ and scenarios_manager/ (manager). The API mode is auto-detected by check_api_mode.py. No commands outside the knowledge base are fabricated.
   Applicable to MRS fault diagnosis and root cause localization scenarios where a service name or node name is provided.
   Trigger words: "故障诊断", "故障定位", "fault diagnosis", "fault diagnose", "MRS故障", "服务故障", "实例故障", "主机故障", "集群排查", "集群诊断", "启动失败", "停止异常", "KrbServer故障", "DBService故障", "fault troubleshooting"
 tags: [huawei-cloud, mrs, fault, diagnostics, troubleshooting]
@@ -46,9 +46,9 @@ allowed-tools:
 
 This skill diagnoses Huawei Cloud MRS (MapReduce Service) cluster faults. Given a service name and/or node name, it progressively localizes the root cause: quick log scan first, host troubleshooting when host issues are found, detailed investigation when no conclusion is reached.
 
-**Architecture**: Caller (Agent) -> `lakewatch_api_client.py` (Python, scripts/) -> LakeWatch API -> MRS cluster (node resource data, logs, MRS Manager proxy); per-component knowledge base (components/<service_name>.md) drives the diagnosis flow; three fault layers (host -> instance -> service) with propagation chain tracing.
+**Architecture**: Caller (Agent) -> `check_api_mode.py` (Python, scripts/) determines the API mode -> either `lakewatch_api_client.py` -> LakeWatch API -> MRS cluster (node resource data, logs, MRS Manager proxy) or `manager_api_client.py` -> MRS Manager REST API (28443). Per-layer knowledge base (`fault_layer/` + `scenarios/` + `propagation.md` in lakewatch mode; `fault_layer_manager/` + `scenarios_manager/` + `propagation_manager.md` in manager mode) drives the diagnosis flow; per-component config under `components/` is shared by both modes; three fault layers (host -> instance -> service) with propagation chain tracing.
 
-> **Note on language**: This SKILL.md and the documents under `references/` are written in English per the repository spec. The knowledge base documents under `fault_layer/`, `scenarios/`, `components/`, and `propagation.md` are also in English. Commands and code blocks are English throughout.
+> **Note on language**: This SKILL.md and the documents under `references/` are written in English per the repository spec. The knowledge base documents under `fault_layer/`, `fault_layer_manager/`, `scenarios/`, `scenarios_manager/`, `components/`, `propagation.md`, and `propagation_manager.md` are also in English. Commands and code blocks are English throughout.
 
 **Applicable Scenarios**:
 - A service is reported unhealthy and the root cause must be localized
@@ -79,7 +79,7 @@ This skill diagnoses Huawei Cloud MRS (MapReduce Service) cluster faults. Given 
 - Linux uses CryptoAPI for password encryption (no `cryptography` dependency)
 - Verify installation: `python3 --version` (Linux) / `python --version` (Windows)
 
-> This skill does NOT require KooCLI (`hcloud`). It calls the LakeWatch API through `scripts/lakewatch_api_client.py`. For the LakeWatch client setup, see [CLI Installation Guide](references/cli-installation-guide.md).
+> This skill does NOT require KooCLI (`hcloud`). It calls the LakeWatch API through `scripts/lakewatch_api_client.py` (lakewatch mode) or the MRS Manager REST API through `scripts/manager_api_client.py` (manager mode). For the client setup, see [CLI Installation Guide](references/cli-installation-guide.md).
 
 ### 2. LakeWatch Credential Configuration
 
@@ -90,19 +90,32 @@ This skill diagnoses Huawei Cloud MRS (MapReduce Service) cluster faults. Given 
   - Never ask the user to input the plaintext password in conversation; use the interactive `--encrypt-password` flow
   - The token is cached locally with owner-only file permissions (Win: `%TEMP%\lakewatch_token\`, Linux: `/tmp/lakewatch_token/`)
 
-### 3. Access Permissions
+### 3. MRS Manager Credential Configuration (Manager Mode)
 
-- Reachability to the LakeWatch service endpoint (configured in `scripts/lakewatch_api_config.yaml` `server.host`/`port`)
-- The LakeWatch account must have permission to call the MRS Manager proxy and collect node resource/log data on the target cluster
+Manager mode is enabled when `scripts/manager_api_config.yaml` exists and `auth.encrypted_password` is set.
+
+- A valid MRS Manager account (username + password)
+- Configure the Manager floating IP in `server.host` (port default 28443). To obtain it, run `grep float_ip /opt/huawei/Bigdata/om-server/OMS/workspace/conf/oms.ini` on the OMS node, or ask the cluster administrator.
+- The password MUST be encrypted with `python3 scripts/manager_api_client.py --encrypt-password` and stored in `scripts/manager_api_config.yaml` (`auth.encrypted_password`). Never store the plaintext password.
+- **Security Rules**:
+  - Never expose the Manager password in conversation or command output
+  - Never ask the user to input the plaintext password in conversation; use the interactive `--encrypt-password` flow
+  - Windows AES ciphertext requires the `.aes_key` file to be migrated together to decrypt on another machine; Linux SCC ciphertext is not portable across clusters
+- See [MRS Manager API Client](references/manager-api-client.md) for the full client usage.
+
+### 4. Access Permissions
+
+- **Lakewatch mode**: Reachability to the LakeWatch service endpoint (configured in `scripts/lakewatch_api_config.yaml` `server.host`/`port`); the LakeWatch account must have permission to call the MRS Manager proxy and collect node resource/log data on the target cluster
+- **Manager mode**: The script runtime environment must be able to reach the Manager port 28443; the Manager account needs read permissions on alarm, host, instance, and log APIs
 - See [IAM Policies](references/iam-policies.md) for the access model and required roles
 
-### 4. Dependent Skill: huawei-cloud-mrs-host-alarm-diagnose
+### 5. Dependent Skill: huawei-cloud-mrs-host-alarm-diagnose
 
-This skill references the per-alarm diagnosis knowledge base from the **huawei-cloud-mrs-host-alarm-diagnose** skill (sibling directory under `skills/bigdata/mrs/`). When the fault diagnosis flow encounters a known alarm (12006/12007/25000/25500/27001), it loads the corresponding document from `../huawei-cloud-mrs-host-alarm-diagnose/alarms/<alarm_id>.md`.
+This skill references the per-alarm diagnosis knowledge base from the **huawei-cloud-mrs-host-alarm-diagnose** skill (sibling directory under `skills/bigdata/mrs/`). When the fault diagnosis flow encounters a known alarm (12006/12007/25000/25500/27001), it loads the corresponding document: `../huawei-cloud-mrs-host-alarm-diagnose/alarms/<alarm_id>.md` in lakewatch mode, or `../huawei-cloud-mrs-host-alarm-diagnose/alarm_manager/<alarm_id>.md` in manager mode.
 
 - If the alarm skill exists, load the referenced document and follow its diagnosis flow
 - If NOT exist, inform the user and proceed with the generic fault diagnosis flow
-- The dependency is **document-level reference only** (loading markdown by relative path), NOT a direct skill call. Both skills share the same LakeWatch API client and config format.
+- The dependency is **document-level reference only** (loading markdown by relative path), NOT a direct skill call. Both skills share the same LakeWatch/Manager API clients and config format.
 
 ## Command Format Standard
 
@@ -144,7 +157,58 @@ python <skill_dir>/scripts/lakewatch_api_client.py -a <api_name> -p 'key1=value1
 
 For the full API catalog, parameters, and the token/encryption mechanism, see [LakeWatch API Client](references/lakewatch-api-client.md).
 
+### MRS Manager API Client (Manager Mode)
+
+When `check_api_mode.py` reports `manager`, use `manager_api_client.py` instead of the LakeWatch client. The unified command format is:
+
+```bash
+# Linux
+python3 <skill_dir>/scripts/manager_api_client.py -a <api_name> -p 'key1=value1' -p 'key2=value2' --json
+
+# Windows
+python <skill_dir>/scripts/manager_api_client.py -a <api_name> -p 'key1=value1' -p 'key2=value2' --json
+```
+
+| Element | Rule | Example |
+|---------|------|---------|
+| `python3` / `python` | Linux uses `python3`, Windows uses `python` | `python3 manager_api_client.py` |
+| `-a, --api` | API name to call (defined in `manager_api_apis/`) | `-a get_instances` |
+| `-p, --param` | API parameter in `key=value` form, repeatable | `-p 'service_name=KrbServer'` |
+| `--json` | JSON formatted output | `--json` |
+| `--auth` | Auth mode: `basic` (default) or `cookie` | `--auth cookie` |
+| Quoting | Same quote rules as the LakeWatch client (`'` wrapping; Windows `"` -> `"""`) | `-p 'keywords=["ERROR"]'` |
+
+For the full API catalog, authentication modes, metric names, and password encryption mechanism, see [MRS Manager API Client](references/manager-api-client.md).
+
 ## Workflow
+
+### Step 0: Determine the API Mode
+
+Run the mode check script to determine whether diagnosis is based on MRS Manager or LakeWatch:
+
+- **Windows**: `python scripts/check_api_mode.py`
+- **Linux**: `python3 scripts/check_api_mode.py`
+
+The script checks whether `scripts/manager_api_config.yaml` exists and whether `encrypted_password` is filled in, and returns a JSON result:
+
+```json
+{"mode": "manager", "reason": "..."}     // manager-based
+{"mode": "lakewatch", "reason": "..."}   // lakewatch-based
+```
+
+Rules:
+- `manager_api_config.yaml` does not exist -> default **lakewatch**
+- File exists but `encrypted_password` is empty -> default **lakewatch**
+- File exists and `encrypted_password` is not empty -> **manager**
+
+**The mode determines which knowledge base directories to load throughout the workflow**:
+
+| Mode | Command script | Fault layer | Scenarios | Propagation | Alarm docs (sibling skill) |
+|------|----------------|-------------|-----------|-------------|----------------------------|
+| lakewatch | `lakewatch_api_client.py` | `fault_layer/` | `scenarios/` | `propagation.md` | `../huawei-cloud-mrs-host-alarm-diagnose/alarms/` |
+| manager | `manager_api_client.py` | `fault_layer_manager/` | `scenarios_manager/` | `propagation_manager.md` | `../huawei-cloud-mrs-host-alarm-diagnose/alarm_manager/` |
+
+In the rest of this SKILL.md, `<FAULT_LAYER>` denotes `fault_layer` (lakewatch) or `fault_layer_manager` (manager), `<SCENARIOS>` denotes `scenarios` (lakewatch) or `scenarios_manager` (manager), and `<PROPAGATION>` denotes `propagation.md` (lakewatch) or `propagation_manager.md` (manager).
 
 ### Step 1: Determine Fault Entry
 
@@ -158,22 +222,28 @@ Extract fault information from the user input and determine the diagnosis entry:
 
 ### Step 2: Locate the Fault Object
 
+> **Mode note**: The command blocks below show lakewatch-mode commands. In **manager mode**, use the corresponding `manager_api_client.py` commands — see [Core Commands -> Manager Mode Commands](#manager-mode-commands-manager-mode) and `<SCENARIOS>/data_collection.md` for the per-mode equivalents.
+
 #### Entry A: Service Fault (has service_name, no node_name)
 
 Load `components/<service_name>.md` for component config. Query OMS primary/standby nodes, check process on each node:
 
 ```bash
+# lakewatch mode
 python3 lakewatch_api_client.py -a query-management-node-info \
   -p 'cluster_id=<cluster_id>'
 ```
 
 ```bash
+# lakewatch mode
 python3 lakewatch_api_client.py -a collect_alarm_node_res_data \
   -p 'cluster_id=<cluster_id>' \
   -p 'strategy_name=process-basic-info' \
   -p 'env={"process_name":"<process_name>"}' \
   -p 'node_name=<node_name>'
 ```
+
+**Manager mode equivalents**: `get_oms_info` (OMS primary/standby nodes); `get_host_process` (process status).
 
 **Decision**:
 
@@ -188,12 +258,15 @@ python3 lakewatch_api_client.py -a collect_alarm_node_res_data \
 Load `components/<service_name>.md`. Directly check process on that node:
 
 ```bash
+# lakewatch mode
 python3 lakewatch_api_client.py -a collect_alarm_node_res_data \
   -p 'cluster_id=<cluster_id>' \
   -p 'strategy_name=process-basic-info' \
   -p 'env={"process_name":"<process_name>"}' \
   -p 'node_name=<node_name>'
 ```
+
+**Manager mode equivalent**: `get_host_process` (process status).
 
 **Decision**:
 
@@ -208,23 +281,28 @@ python3 lakewatch_api_client.py -a collect_alarm_node_res_data \
 Query OMS primary/standby nodes, query node IP, ping the faulty node from OMS active node:
 
 ```bash
+# lakewatch mode
 python3 lakewatch_api_client.py -a query-management-node-info \
   -p 'cluster_id=<cluster_id>'
 ```
 
 ```bash
+# lakewatch mode
 python3 lakewatch_api_client.py -a query-node-ip \
   -p 'cluster_id=<cluster_id>' \
   -p 'node_name=<node_name>'
 ```
 
 ```bash
+# lakewatch mode
 python3 lakewatch_api_client.py -a collect_alarm_node_res_data \
   -p 'cluster_id=<cluster_id>' \
   -p 'strategy_name=ping-check' \
   -p 'env={"TARGET_IP":"<target_ip>"}' \
   -p 'node_name=<oms_active_node>'
 ```
+
+**Manager mode equivalents**: `get_oms_info` (OMS primary/standby); `get_hosts -p 'hostname=<node_name>'` (node IP); `check_remote` (remote connectivity — no dedicated ping-check API).
 
 **Decision**:
 
@@ -238,7 +316,7 @@ python3 lakewatch_api_client.py -a collect_alarm_node_res_data \
 For the faulty node, quickly scan three layers of logs (Controller -> NodeAgent -> component), looking for clear ERROR:
 
 ```bash
-# Controller log
+# lakewatch mode - Controller log
 python3 lakewatch_api_client.py -a collect_alarm_log_data \
   -p 'cluster_id=<cluster_id>' \
   -p 'alarm_time=<alarm_time>' \
@@ -248,7 +326,7 @@ python3 lakewatch_api_client.py -a collect_alarm_log_data \
   -p 'log_type=local' \
   -p 'node_name=<oms_active_node>'
 
-# NodeAgent script log
+# lakewatch mode - NodeAgent script log
 python3 lakewatch_api_client.py -a collect_alarm_log_data \
   -p 'cluster_id=<cluster_id>' \
   -p 'alarm_time=<alarm_time>' \
@@ -259,9 +337,12 @@ python3 lakewatch_api_client.py -a collect_alarm_log_data \
   -p 'node_name=<node_name>'
 ```
 
+**Manager mode equivalents** (see `<SCENARIOS>/data_collection.md`): `browse_log` (Controller `exe.log`, NodeAgent `script.log`); `start_log_search` + `get_log_search_progress` (keyword search).
+
 If `service_name` is known, also check the component's own log (path from `components/<service_name>.md`):
 
 ```bash
+# lakewatch mode
 python3 lakewatch_api_client.py -a collect_alarm_log_data \
   -p 'cluster_id=<cluster_id>' \
   -p 'alarm_time=<alarm_time>' \
@@ -285,14 +366,14 @@ python3 lakewatch_api_client.py -a collect_alarm_log_data \
 
 When the quick log scan yields no conclusion, collect complete data:
 
-1. Load [Data Collection](scenarios/data_collection.md) to collect process/port/HA/resource/alarm/framework logs
-2. Load [Instance Fault Diagnosis](fault_layer/instance_fault.md) for instance-level diagnosis (includes scenario identification)
-3. If needed, load [Service Fault Diagnosis](fault_layer/service_fault.md) for service-level diagnosis
-4. If host issue is found, load [Host Fault Diagnosis](fault_layer/host_fault.md) for host-level diagnosis
+1. Load [Data Collection](<SCENARIOS>/data_collection.md) to collect process/port/HA/resource/alarm/framework logs
+2. Load [Instance Fault Diagnosis](<FAULT_LAYER>/instance_fault.md) for instance-level diagnosis (includes scenario identification)
+3. If needed, load [Service Fault Diagnosis](<FAULT_LAYER>/service_fault.md) for service-level diagnosis
+4. If host issue is found, load [Host Fault Diagnosis](<FAULT_LAYER>/host_fault.md) for host-level diagnosis
 
 ### Step 5: Propagation Chain Tracing
 
-Load [Propagation Chain](propagation.md) to trace the root cause propagation path and impact scope.
+Load [Propagation Chain](<PROPAGATION>) to trace the root cause propagation path and impact scope.
 
 ### Step 6: Output Diagnosis Conclusion
 
@@ -426,6 +507,67 @@ python3 lakewatch_api_client.py -a access_manager_get \
 
 > `target_url` MUST NOT start with `/`. The proxy requires Agent >= 1.0.5 and reported OMS node info. Only GET is supported currently.
 
+### Manager Mode Commands (Manager Mode)
+
+When `check_api_mode.py` reports `manager`, use `manager_api_client.py` for the equivalent queries:
+
+```bash
+# Query OMS primary/standby nodes
+python3 manager_api_client.py -a get_oms_info --json
+
+# Query cluster services
+python3 manager_api_client.py -a get_cluster_services \
+  -p 'cluster_id=<cluster_id>' --json
+
+# Query host detail (disk/memory/CPU usage)
+python3 manager_api_client.py -a get_host_detail \
+  -p 'hostname=<node_name>' --json
+
+# Query host process status
+python3 manager_api_client.py -a get_host_process \
+  -p 'hostname=<node_name>' --json
+
+# Query service instances (HA status)
+python3 manager_api_client.py -a get_instances \
+  -p 'cluster_id=<cluster_id>' \
+  -p 'service_name=<service_name>' \
+  -p 'hostname=<node_name>' --json
+
+# Query host monitor metrics (dev_ prefix)
+python3 manager_api_client.py -a get_host_metrics \
+  -p 'hostname=<node_name>' \
+  -p 'metric_names=dev_cpu_surp_avg,dev_load_one_min' --json
+
+# Check remote node connectivity (replaces ping-check/network-connectivity-test)
+python3 manager_api_client.py -a check_remote \
+  -p 'remote_ip=<target_ip>' \
+  -p 'remote_port=22' \
+  -p 'remote_user_name=omm' \
+  -p 'remote_client_path=/opt/huawei/Bigdata/nodeagent' --json
+
+# Browse a log file (file_name must be a full path)
+python3 manager_api_client.py -a browse_log \
+  -p 'hostname=<node_name>' \
+  -p 'file_name=/var/log/Bigdata/controller/exe.log' \
+  -p 'start_line=1' \
+  -p 'end_line=500' \
+  -p 'search=<service_name>' --json
+
+# Search logs by keyword (returns task_id, then poll progress)
+python3 manager_api_client.py -a start_log_search \
+  -p 'cluster_id=<cluster_id>' \
+  -p 'key_word=ERROR' \
+  -p 'start_time=<alarm_time>' \
+  -p 'end_time=<current_time>' \
+  -p 'services=<component>:<service_name>:<role_name>' \
+  -p 'min_log_level=WARN' --json
+
+python3 manager_api_client.py -a get_log_search_progress \
+  -p 'search_id=<task_id>' --json
+```
+
+> `start_log_search` `services` format: `component:service:role` (e.g. `HDFS:HDFS:NameNode`); `start_time`/`end_time` format: `yyyy-MM-ddTHH:mm:ss`. See [MRS Manager API Client](references/manager-api-client.md) for metric names and full parameter rules.
+
 ## Parameter Confirmation
 
 | Parameter | Required/Optional | Description | Default |
@@ -434,13 +576,17 @@ python3 lakewatch_api_client.py -a access_manager_get \
 | `service_name` | Conditionally required | Faulty component (required for service/instance fault entry) | N/A |
 | `node_name` | Conditionally required | Faulty node (required for instance/host fault entry) | N/A |
 | `alarm_time` | Optional | Fault occurrence time, format `yyyy/MM/dd HH:mm:ss GMT+X:XX` | Current time |
-| `strategy_name` | Required by `collect_alarm_node_res_data` | Resource collection strategy | N/A |
-| `log_directory` | Required by `collect_alarm_log_data` | Log directory, must be under `/var/log/` | N/A |
-| `log_file_name` | Required by `collect_alarm_log_data` | Log file name, no path separators | N/A |
-| `keywords` | Required by `collect_alarm_log_data` | Log keyword filter, JSON array | N/A |
-| `log_type` | Required by `collect_alarm_log_data` | `local` or `hdfs` | N/A |
-| `time_pattern` | Optional | Non-standard log time regex, format `regex\|\|format` | N/A |
-| `target_url` | Required by `access_manager_get` | MRS Manager API path, must NOT start with `/` | N/A |
+| `strategy_name` | Required by `collect_alarm_node_res_data` | Resource collection strategy (lakewatch mode) | N/A |
+| `log_directory` | Required by `collect_alarm_log_data` | Log directory, must be under `/var/log/` (lakewatch mode) | N/A |
+| `log_file_name` | Required by `collect_alarm_log_data` | Log file name, no path separators (lakewatch mode) | N/A |
+| `keywords` | Required by `collect_alarm_log_data` | Log keyword filter, JSON array (lakewatch mode) | N/A |
+| `log_type` | Required by `collect_alarm_log_data` | `local` or `hdfs` (lakewatch mode) | N/A |
+| `time_pattern` | Optional | Non-standard log time regex, format `regex\|\|format` (lakewatch mode) | N/A |
+| `target_url` | Required by `access_manager_get` | MRS Manager API path, must NOT start with `/` (lakewatch mode) | N/A |
+| `metric_names` | Required by `get_host_metrics` | Comma-separated monitor metric names with `dev_` prefix (manager mode) | N/A |
+| `key_word` | Required by `start_log_search` | Log keyword to search (manager mode) | N/A |
+| `current_time` | Required by `start_log_search` | Current time, format `yyyy-MM-ddTHH:mm:ss` (manager mode) | N/A |
+| `file_name` | Required by `browse_log` | Full log file path (manager mode) | N/A |
 
 ## Output Format
 
@@ -473,28 +619,37 @@ See [Verification Method](references/verification-method.md) for the installatio
 
 | Document | Description |
 |----------|-------------|
-| [CLI Installation Guide](references/cli-installation-guide.md) | Python dependencies and LakeWatch client setup |
+| [CLI Installation Guide](references/cli-installation-guide.md) | Python dependencies and LakeWatch/Manager client setup |
 | [IAM Policies](references/iam-policies.md) | LakeWatch/MRS Manager access model and required roles |
 | [Verification Method](references/verification-method.md) | Installation, configuration, and function verification |
 | [Acceptance Criteria](references/acceptance-criteria.md) | Pass/fail criteria for skill testing |
 | [Fault Diagnosis Workflow](references/fault-diagnosis-workflow.md) | Progressive fault diagnosis workflow design |
-| [LakeWatch API Client](references/lakewatch-api-client.md) | Full API catalog, parameters, token and encryption mechanism |
-| [Related Commands](references/related-commands.md) | Common LakeWatch API commands quick reference |
-| **huawei-cloud-mrs-host-alarm-diagnose** (sibling skill) | **Dependency**: per-alarm diagnosis knowledge base (`../huawei-cloud-mrs-host-alarm-diagnose/alarms/<alarm_id>.md`). See Prerequisites section 4 for details. |
-| [Data Collection](scenarios/data_collection.md) | Complete data collection flow (Step 4) |
-| [Host Fault Diagnosis](fault_layer/host_fault.md) | Host layer diagnosis |
-| [Instance Fault Diagnosis](fault_layer/instance_fault.md) | Instance layer diagnosis (includes scenario identification) |
-| [Service Fault Diagnosis](fault_layer/service_fault.md) | Service layer diagnosis |
-| [Propagation Chain](propagation.md) | Root cause propagation path tracing |
-| [Common Scenario](scenarios/common.md) | 6-phase common diagnosis framework for all scenarios |
-| `scenarios/<scenario>.md` | Scenario-specific checks (install/start/stop/uninstall/reinstall/reinstall_host/scale_out/scale_in) |
-| `components/<service_name>.md` | Per-component configuration (process, port, log path, etc.) |
+| [LakeWatch API Client](references/lakewatch-api-client.md) | Full LakeWatch API catalog, parameters, token and encryption mechanism |
+| [MRS Manager API Client](references/manager-api-client.md) | Full MRS Manager API catalog, authentication modes, metric names and encryption mechanism |
+| [Related Commands](references/related-commands.md) | Common LakeWatch/Manager API commands quick reference |
+| **huawei-cloud-mrs-host-alarm-diagnose** (sibling skill) | **Dependency**: per-alarm diagnosis knowledge base (`../huawei-cloud-mrs-host-alarm-diagnose/alarms/<alarm_id>.md` in lakewatch mode, `alarm_manager/<alarm_id>.md` in manager mode). See Prerequisites section 5 for details. |
+| [Data Collection](scenarios/data_collection.md) | Complete data collection flow, lakewatch mode (Step 4) |
+| [Data Collection (Manager)](scenarios_manager/data_collection.md) | Complete data collection flow, manager mode (Step 4) |
+| [Host Fault Diagnosis](fault_layer/host_fault.md) | Host layer diagnosis, lakewatch mode |
+| [Instance Fault Diagnosis](fault_layer/instance_fault.md) | Instance layer diagnosis (includes scenario identification), lakewatch mode |
+| [Service Fault Diagnosis](fault_layer/service_fault.md) | Service layer diagnosis, lakewatch mode |
+| [Host Fault Diagnosis (Manager)](fault_layer_manager/host_fault.md) | Host layer diagnosis, manager mode |
+| [Instance Fault Diagnosis (Manager)](fault_layer_manager/instance_fault.md) | Instance layer diagnosis (includes scenario identification), manager mode |
+| [Service Fault Diagnosis (Manager)](fault_layer_manager/service_fault.md) | Service layer diagnosis, manager mode |
+| [Propagation Chain](propagation.md) | Root cause propagation path tracing, lakewatch mode |
+| [Propagation Chain (Manager)](propagation_manager.md) | Root cause propagation path tracing, manager mode |
+| [Common Scenario](scenarios/common.md) | 6-phase common diagnosis framework, lakewatch mode |
+| [Common Scenario (Manager)](scenarios_manager/common.md) | 6-phase common diagnosis framework, manager mode |
+| `scenarios/<scenario>.md` | Scenario-specific checks, lakewatch mode (install/start/stop/uninstall/reinstall/reinstall_host/scale_out/scale_in) |
+| `scenarios_manager/<scenario>.md` | Scenario-specific checks, manager mode (install/start/stop/uninstall/reinstall/reinstall_host/scale_out/scale_in) |
+| `components/<service_name>.md` | Per-component configuration (process, port, log path, etc.) — shared by both modes |
 | `components/_template.md` | Template for new component configuration |
 
 ## Notes
 
-- **Security**: This skill is read-only. It never exposes the LakeWatch password; the password is encrypted via `--encrypt-password` and stored in `lakewatch_api_config.yaml`. Repair steps are suggestions only.
-- **No KooCLI**: This skill does not use `hcloud`; it calls the LakeWatch API through `lakewatch_api_client.py`. Do not mix in `hcloud` commands.
+- **Security**: This skill is read-only. It never exposes the LakeWatch or MRS Manager password; passwords are encrypted via `--encrypt-password` and stored in the corresponding config YAML. Repair steps are suggestions only.
+- **No KooCLI**: This skill does not use `hcloud`; it calls the LakeWatch API through `lakewatch_api_client.py` or the MRS Manager REST API through `manager_api_client.py`. Do not mix in `hcloud` commands.
+- **Mode switching**: Run `check_api_mode.py` (Step 0) to determine the mode. In manager mode use `manager_api_client.py` and the `fault_layer_manager/` + `scenarios_manager/` + `propagation_manager.md` knowledge base; in lakewatch mode use `lakewatch_api_client.py` and `fault_layer/` + `scenarios/` + `propagation.md`. Do not mix clients across modes.
 - **Command failure**: When a command fails, skip the current check item and continue with the other checks; do not abort the whole diagnosis.
-- **Known limitations**: The `access_manager_get` proxy only supports GET requests (PUT is not yet available on the Agent side); `collect_alarm_log_data` requires `log_directory` to be under `/var/log/`; some `strategy_name` values require extra `env` parameters.
-- **Cross-skill dependency**: This skill references alarm diagnosis documents from the huawei-cloud-mrs-host-alarm-diagnose skill (e.g. `../huawei-cloud-mrs-host-alarm-diagnose/alarms/12006.md`, `12007.md`). See [Prerequisites section 4](#4-dependent-skill-huawei-cloud-mrs-host-alarm-diagnose) for the dependency declaration and handling rules. If the alarm skill is not installed, inform the user and proceed with the generic fault diagnosis flow.
+- **Known limitations**: The `access_manager_get` proxy only supports GET requests (PUT is not yet available on the Agent side); `collect_alarm_log_data` requires `log_directory` to be under `/var/log/`; some `strategy_name` values require extra `env` parameters; in manager mode `browse_log` requires the full log file path, `start_log_search` `services` must follow `component:service:role`, and `get_alarms` may return 500 on some Manager versions (fall back to Controller `exe.log` browsing).
+- **Cross-skill dependency**: This skill references alarm diagnosis documents from the huawei-cloud-mrs-host-alarm-diagnose skill (`../huawei-cloud-mrs-host-alarm-diagnose/alarms/<id>.md` in lakewatch mode, `alarm_manager/<id>.md` in manager mode). See [Prerequisites section 5](#5-dependent-skill-huawei-cloud-mrs-host-alarm-diagnose) for the dependency declaration and handling rules. If the alarm skill is not installed, inform the user and proceed with the generic fault diagnosis flow.
