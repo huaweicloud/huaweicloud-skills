@@ -39,8 +39,8 @@ done
 ## hcloud CLI Service Check
 
 ```bash
-# Check if a service is supported
-hcloud --help | grep -i "{service_name}"
+# Check if a service is supported (template; replace {service_name} before running)
+# hcloud --help | grep -i "{service_name}"
 
 # List all available services
 python3 -c "

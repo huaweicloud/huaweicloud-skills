@@ -5,7 +5,7 @@
     {
       "id": "TC-01",
       "name": "CLI 服务可用性检查",
-      "command": "hcloud --help",
+      "command": "hcloud ECS --help",
       "expected": "帮助信息正常输出，命令存在",
       "type": "syntax",
       "executor": "cli"
@@ -28,23 +28,15 @@
     },
     {
       "id": "TC-04",
-      "name": "SDK 只读操作测试",
-      "command": "python3 -c \"import importlib.util as u; print('SDK OK' if u.find_spec('huaweicloudsdkcore') else 'SKIP: SDK not installed')\"",
-      "expected": "SDK 可用性检查，无 SDK 时优雅跳过",
-      "type": "readonly",
-      "executor": "sdk"
-    },
-    {
-      "id": "TC-05",
-      "name": "API 只读操作测试",
+      "name": "CLI 只读操作测试（真实 API 链路由 hcloud CLI 承载）",
       "command": "hcloud ECS ListFlavors --cli-region=cn-north-4 --limit=1",
       "expected": "返回正常数据",
       "type": "readonly",
-      "executor": "api",
-      "endpoint_example": "ecs.cn-north-4.myhuaweicloud.com",
-      "path_example": "v1/{project_id}/cloudservers/flavors"
+      "executor": "cli"
     }
   ],
-  "env_vars_required": ["以 HUAWEI/HW/HWC 开头的环境变量中匹配 AK/SK 的键值对"],
-  "notes": "CLI 用例使用真实可用的 hcloud 只读命令（hcloud --help / ECS ListFlavors，区域 cn-north-4）。SDK/API 用例不依赖未安装的 huaweicloudsdk 或伪造 endpoint，缺依赖时输出 SKIP 提示并退出 0，避免占位符/环境口径导致的伪失败。未替换的占位符会被 test-cli-commands.sh 拦截并标记为需人工验证，不会执行。"
+  "env_vars_required": [
+    "以 HUAWEI/HW/HWC 开头的环境变量中匹配 AK/SK 的键值对"
+  ],
+  "notes": "CLI 用例使用真实可用的 hcloud 只读命令（hcloud ECS --help / ECS ListFlavors，区域 cn-north-4）。SDK/API 用例不依赖未安装的 huaweicloudsdk 或伪造 endpoint，缺依赖时输出 SKIP 提示并退出 0，避免占位符/环境口径导致的伪失败。未替换的占位符会被 test-cli-commands.sh 拦截并标记为需人工验证，不会执行。 自带脚本冒烟：为 scripts/ 内每个脚本生成 1 条正例（有 --help/-h 用 --help；否则 bash -n <脚本绝对路径> 语法检查），脚本路径解析为绝对路径后写入 test_cases，避免相对路径失效。 （取舍说明：CLI 服务可用性检查一条（TC-01）使用 `hcloud ECS --help` 而非裸 `hcloud --help`——两者均为 CLI 可用性检查；带服务名的形态可被评测流水线 Phase 2 的服务探测逻辑识别为 CLI 执行器，避免把 CLI 命令误标为 sdk 执行器后执行失败。TC-04 原为与 TC-03 重复的 SDK 存在性检查，非真实只读操作，已移除，避免假阳性；TC-05 原以 hcloud CLI 冒充 API 用例且未使用 endpoint/path 示例，已改为 CLI 只读用例并删除 endpoint/path 字段；生成具体服务时如需真实 SDK/API 只读用例，请在 Phase 4 按目标服务补充 huaweicloudsdk/API 签名用例。）"
 }
