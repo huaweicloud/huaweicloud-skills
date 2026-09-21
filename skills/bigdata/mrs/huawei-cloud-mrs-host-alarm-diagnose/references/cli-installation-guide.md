@@ -1,12 +1,13 @@
 # CLI Installation Guide - MRS Alarm Diagnosis
 
-This skill does not use KooCLI (`hcloud`). It calls the LakeWatch API through the bundled Python script `scripts/lakewatch_api_client.py`. This guide covers Python dependency installation, LakeWatch client configuration, and verification.
+This skill does not use KooCLI (`hcloud`). It calls the LakeWatch API through the bundled Python script `scripts/lakewatch_api_client.py` (lakewatch mode) or the MRS Manager REST API through `scripts/manager_api_client.py` (manager mode). The mode is auto-detected by `scripts/check_api_mode.py`. This guide covers Python dependency installation, client configuration, and verification.
 
 ## Table of Contents
 
 - [Python Installation](#python-installation)
 - [Python Dependencies](#python-dependencies)
 - [LakeWatch Client Configuration](#lakewatch-client-configuration)
+- [MRS Manager Client Configuration (Manager Mode)](#mrs-manager-client-configuration-manager-mode)
 - [Verify Installation](#verify-installation)
 - [Troubleshooting](#troubleshooting)
 
@@ -115,6 +116,71 @@ crypto:
   verify_ssl: false              # set true to verify; false to skip (self-signed intranet only)
   ca_cert: ""                    # custom CA cert path; empty = system default
 ```
+
+---
+
+## MRS Manager Client Configuration (Manager Mode)
+
+Manager mode is enabled when `scripts/manager_api_config.yaml` exists and `auth.encrypted_password` is set. The MRS Manager client reads `scripts/manager_api_config.yaml` and the API definitions under `scripts/manager_api_apis/`.
+
+### 1. Configure the MRS Manager Endpoint
+
+Edit `scripts/manager_api_config.yaml`:
+
+```yaml
+server:
+  host: "<manager_float_ip>"    # MRS Manager floating IP
+  port: 28443                    # Manager web port
+  scheme: "https"
+  base_path: "/web"
+  timeout: 60
+```
+
+To obtain the Manager floating IP, run on the OMS node:
+
+```bash
+grep float_ip /opt/huawei/Bigdata/om-server/OMS/workspace/conf/oms.ini
+```
+
+### 2. Configure the Authentication Account
+
+```yaml
+auth:
+  username: "admin"             # MRS Manager account
+  # The password MUST be encrypted with --encrypt-password and pasted here.
+  # Never store the plaintext password.
+  encrypted_password: ""
+```
+
+### 3. Encrypt the Password (Interactive, No Echo)
+
+```bash
+# Linux
+python3 scripts/manager_api_client.py --encrypt-password
+
+# Windows
+python scripts/manager_api_client.py --encrypt-password
+```
+
+Paste the output ciphertext into `auth.encrypted_password` in `manager_api_config.yaml`.
+
+> **Platform note**: Linux uses CryptoAPI (SCC); Windows uses AES-256-CBC with a local `.aes_key` file. The two ciphertexts are NOT interchangeable; encrypt on the platform where the skill will run. On Windows, the `.aes_key` file must be migrated together to decrypt on another machine.
+
+### 4. Verify the Mode and the Client
+
+```bash
+# Confirm which mode is active
+python3 scripts/check_api_mode.py
+# Expected when configured: {"mode": "manager", ...}
+
+# List all available Manager APIs (no authentication required)
+python3 scripts/manager_api_client.py --list-apis
+
+# Query OMS info (functional check, requires valid credentials + reachable endpoint)
+python3 scripts/manager_api_client.py -a get_oms_info --json
+```
+
+> If `manager_api_config.yaml` is absent or `encrypted_password` is empty, `check_api_mode.py` reports `lakewatch` and the skill uses the LakeWatch client instead.
 
 ---
 

@@ -1,0 +1,27 @@
+# ==============================================================================
+# 报表相关 API 配置
+# 对应文档: 2.17 报表
+# ==============================================================================
+
+get_host_disk_config:
+  # 2.17.36 查询主机的磁盘配置
+  # 查询指定集群的主机列表的磁盘配置（替代 lsblk / fdisk -l）
+  # 注意: 此接口仅返回集群级磁盘汇总（hostCount/diskCount/totalSpace），不支持按主机过滤
+  # 权限: 集群查看，集群管理
+  desc: "查询主机的磁盘配置（替代 lsblk / fdisk -l）"
+  method: "GET"
+  path: "/api/v2/report/hosts/disks"
+  required_params: []
+  optional_params:
+    - cluster_id
+
+get_host_basic_config:
+  # 2.17.22 查询主机的基本配置
+  # 查询指定集群的主机的基本配置
+  # 权限: 集群查看，集群管理
+  desc: "查询主机的基本配置"
+  method: "GET"
+  path: "/api/v2/report/hosts/basic"
+  required_params: []
+  optional_params:
+    - cluster_id

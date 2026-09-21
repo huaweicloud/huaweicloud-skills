@@ -1,0 +1,50 @@
+# ==============================================================================
+# 用户权限相关 API 配置
+# 对应文档: 2.20 用户权限
+# ==============================================================================
+
+get_users:
+  # 2.20.43 查询用户列表
+  # 权限: 用户查看，用户管理
+  desc: "查询用户列表"
+  method: "GET"
+  path: "/api/v2/permission/users"
+  required_params: []
+  optional_params:
+    - limit
+    - offset
+    - filter
+    - order
+    - order_by
+
+create_user:
+  # 2.20.42 创建用户
+  # 权限: 用户管理
+  desc: "创建用户"
+  method: "POST"
+  path: "/api/v2/permission/users"
+  required_params:
+    - user_data
+  optional_params: []
+  request_body_template: "{user_data}"
+
+get_user_detail:
+  # 2.20.49 查询指定用户
+  # 权限: 用户查看，用户管理
+  desc: "查询指定用户"
+  method: "GET"
+  path: "/api/v2/permission/users/{user_name}"
+  required_params:
+    - user_name
+  optional_params: []
+
+delete_user:
+  # 2.20.44 删除用户
+  # 权限: 用户管理
+  desc: "删除用户"
+  method: "DELETE"
+  path: "/api/v2/permission/users"
+  required_params:
+    - user_data
+  optional_params: []
+  request_body_template: "{user_data}"

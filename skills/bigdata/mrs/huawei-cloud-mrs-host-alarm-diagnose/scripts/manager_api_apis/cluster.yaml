@@ -1,0 +1,81 @@
+# ==============================================================================
+# 集群相关 API 配置
+# 对应文档: 2.31 集群
+# ==============================================================================
+
+get_clusters:
+  # 2.31.2 获取所有集群的基本信息
+  # 查询系统中已经安装的集群信息，包括集群的名称、描述信息、认证模式，以及简单的状态统计信息
+  # 权限: 登录成功即可访问
+  desc: "获取所有集群的基本信息"
+  method: "GET"
+  path: "/api/v2/clusters"
+  required_params: []
+  optional_params: []
+
+get_cluster_info:
+  # 2.31.11 获取集群基本信息
+  # 查询指定集群的信息，包括集群的名称、描述信息、认证模式，以及简单的状态统计信息
+  # 权限: 集群查看，集群管理
+  desc: "获取集群基本信息"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}"
+  required_params:
+    - cluster_id
+  optional_params: []
+
+get_cluster_alarm_stats:
+  # 2.31.14 获取集群的告警统计信息
+  # 查询指定集群上所有服务的告警统计，即按级别统计每个服务上未恢复告警的数量
+  # 权限: 集群查看，集群管理
+  desc: "获取集群的告警统计信息"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/alarm_stat"
+  required_params:
+    - cluster_id
+  optional_params: []
+
+get_cluster_summary:
+  # 2.31.39 查询指定集群的概要信息
+  # 概要信息是一组通过key-value格式描述的属性对
+  # 权限: 集群查看，集群管理
+  desc: "查询指定集群的概要信息"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/summary"
+  required_params:
+    - cluster_id
+  optional_params: []
+
+get_cluster_global_config:
+  # 2.31.35 获取集群全局配置
+  # 查询指定集群的所有非默认值或所有非统一值
+  # 权限: 集群查看，集群管理
+  desc: "获取集群全局配置"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/global_config"
+  required_params:
+    - cluster_id
+  optional_params: []
+
+get_cluster_history_configs:
+  # 2.31.36 获取集群历史配置列表
+  # 查询指定集群的历史配置列表
+  # 权限: 集群查看，集群管理
+  desc: "获取集群历史配置列表"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/history_configuration"
+  required_params:
+    - cluster_id
+  optional_params: []
+
+get_cluster_history_config_detail:
+  # 2.31.37 获取集群指定历史配置修改详情
+  # 查询指定集群指定历史配置修改详情
+  # 权限: 集群查看，集群管理
+  desc: "获取集群指定历史配置修改详情"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/history_configuration/{config_id}"
+  required_params:
+    - cluster_id
+    - config_id
+  optional_params: []

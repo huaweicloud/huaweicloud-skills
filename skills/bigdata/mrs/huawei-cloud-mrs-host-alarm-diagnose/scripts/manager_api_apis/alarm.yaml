@@ -1,0 +1,326 @@
+# ==============================================================================
+# 告警相关 API 配置
+# 对应文档: 2.8 告警
+# ==============================================================================
+
+get_alarms:
+  # 2.8.1 查询告警
+  # 按条件查询告警。支持按告警级别、状态、时间范围、名称等过滤
+  # level: 0=全部(默认) 1=Critical 2=Major 3=Minor 4=Warning
+  # status: 0=全部(默认) 1=未恢复告警 2=已恢复告警
+  # 权限: 集群查看，集群管理，系统管理，租户管理
+  desc: "查询告警"
+  method: "GET"
+  path: "/api/v2/alarms"
+  required_params: []
+  optional_params:
+    - level
+    - status
+    - id
+    - name
+    - object
+    - source
+    - start_time
+    - end_time
+    - is_fuzzy
+    - limit
+    - offset
+    - order
+    - order_by
+
+get_alarm_stats:
+  # 2.8.2 查询告警统计
+  # 告警统计查询，支持按时间范围和统计个数过滤
+  # 权限: 集群查看，集群管理，系统管理，租户管理
+  desc: "查询告警统计"
+  method: "GET"
+  path: "/api/v2/alarms/alarm_stat"
+  required_params: []
+  optional_params:
+    - time_span
+    - stat_num
+
+get_alarm_stat_by_cluster:
+  # 2.8.3 查询top告警集群统计分布
+  # 查询指定告警在各集群中的分布数量
+  # 权限: 集群查看，集群管理，系统管理，租户管理
+  desc: "查询top告警集群统计分布"
+  method: "GET"
+  path: "/api/v2/alarms/alarm_stat_by_cluster"
+  required_params: []
+  optional_params:
+    - id
+    - time_span
+
+get_alarm_stat_by_time:
+  # 2.8.4 查询top告警时间统计分布
+  # 查询指定告警在各日期中的数量
+  # 权限: 集群查看，集群管理，系统管理，租户管理
+  desc: "查询top告警时间统计分布"
+  method: "GET"
+  path: "/api/v2/alarms/alarm_stat_by_time"
+  required_params: []
+  optional_params:
+    - id
+    - time_span
+
+get_alarm_statistics:
+  # 2.8.5 告警统计查询
+  # 查询当天和历史新增与未清除告警数量
+  # 权限: 集群查看
+  desc: "告警统计查询（当天和历史新增与未清除告警数量）"
+  method: "GET"
+  path: "/api/v2/alarms/alarm_statistics"
+  required_params: []
+  optional_params:
+    - time_span
+
+get_alarm_trend:
+  # 2.8.6 告警趋势信息查询
+  # 查询新增告警和未清除告警上报趋势信息，支持按天和告警级别进行查询展示
+  # alarm_level: -1=全部 0=紧急 1=重要 2=次要 3=提示
+  # 权限: 集群查看
+  desc: "告警趋势信息查询"
+  method: "GET"
+  path: "/api/v2/alarms/alarm_trend"
+  required_params: []
+  optional_params:
+    - time_span
+    - alarm_level
+
+get_alarm_sort_view:
+  # 2.8.7 告警归类视图查询
+  # 按照类别查看未恢复告警
+  # level: 0=全部(默认) 1=Critical 2=Major 3=Minor 4=Warning
+  # 权限: 集群查看，集群管理，系统管理，租户管理
+  desc: "告警归类视图查询"
+  method: "GET"
+  path: "/api/v2/alarms/alarmsSortView"
+  required_params: []
+  optional_params:
+    - level
+    - id
+    - name
+    - limit
+    - offset
+    - order
+
+get_alarm_support_services:
+  # 2.8.8 查询指定集群中支持告警的服务列表
+  # 获取指定集群的支持告警的服务列表
+  # 权限: 集群管理
+  desc: "查询指定集群中支持告警的服务列表"
+  method: "GET"
+  path: "/api/v2/alarms/clusters/{cluster_id}/services"
+  required_params:
+    - cluster_id
+  optional_params: []
+
+get_service_alarms_and_events:
+  # 2.8.9 查询服务的关键事件和告警
+  # 获取指定集群和服务的事件和告警列表
+  # 权限: 集群管理
+  desc: "查询服务的关键事件和告警"
+  method: "GET"
+  path: "/api/v2/alarms/clusters/{cluster_id}/services/{service_name}/alarms_and_events"
+  required_params:
+    - cluster_id
+    - service_name
+  optional_params: []
+
+get_alarm_definitions:
+  # 2.8.10 查询指定集群中服务或主机的告警定义
+  # 查询指定集群的服务或主机的告警定义
+  # object: 如果是服务，object为服务名称；如果是主机，object="HOST"
+  # 权限: 集群管理
+  desc: "查询指定集群中服务或主机的告警定义"
+  method: "GET"
+  path: "/api/v2/alarms/definitions/clusters/{cluster_id}"
+  required_params:
+    - cluster_id
+  optional_params:
+    - id
+    - object
+    - is_shield
+    - limit
+    - offset
+    - order
+    - order_by
+
+get_oms_alarm_definitions:
+  # 2.8.11 查询OMS告警定义
+  # 查询OMS告警定义
+  # object: 主机或者OMS服务，object="HOST"
+  # 权限: 集群管理
+  desc: "查询OMS告警定义"
+  method: "GET"
+  path: "/api/v2/alarms/definitions/oms"
+  required_params: []
+  optional_params:
+    - id
+    - object
+    - is_shield
+    - limit
+    - offset
+    - order
+    - order_by
+
+get_host_alarms_and_events:
+  # 2.8.14 查询主机的关键事件和告警
+  # 获取指定主机的事件和告警列表
+  # 权限: 集群管理
+  desc: "查询主机的关键事件和告警"
+  method: "GET"
+  path: "/api/v2/alarms/host/{host_name}/alarms_and_events"
+  required_params:
+    - host_name
+  optional_params: []
+
+get_cluster_maintenance_mode:
+  # 2.8.16 查询集群维护模式视图
+  # 查询指定集群维护模式视图
+  # 权限: 集群管理
+  desc: "查询集群维护模式视图"
+  method: "GET"
+  path: "/api/v2/alarms/maintenance_mode/clusters/{cluster_id}"
+  required_params:
+    - cluster_id
+  optional_params: []
+
+get_host_alarm_metrics:
+  # 2.8.26 获取主机上支持转告警的所有监控指标
+  # 获取指定集群的主机上支持告警的所有监控指标
+  # 权限: 集群管理
+  desc: "获取主机上支持转告警的所有监控指标"
+  method: "GET"
+  path: "/api/v2/alarms/threshold/clusters/{cluster_id}/hosts/metrics"
+  required_params:
+    - cluster_id
+  optional_params: []
+
+get_host_alarm_threshold:
+  # 2.8.27 查询主机告警阈值设置
+  # 查询指定集群指定指标的告警阈值
+  # 权限: 集群管理
+  desc: "查询主机告警阈值设置"
+  method: "GET"
+  path: "/api/v2/alarms/threshold/clusters/{cluster_id}/hosts/metrics/{metric_name}"
+  required_params:
+    - cluster_id
+    - metric_name
+  optional_params: []
+
+get_host_alarm_default_threshold:
+  # 2.8.29 获取主机监控转告警指标默认阈值
+  # gradeAlarmMark: true=开启分级告警，false=关闭分级告警
+  # 权限: 集群管理
+  desc: "获取主机监控转告警指标默认阈值"
+  method: "GET"
+  path: "/api/v2/alarms/threshold/clusters/{cluster_id}/hosts/metrics/{metric_name}/default_threshold"
+  required_params:
+    - cluster_id
+    - metric_name
+  optional_params:
+    - gradeAlarmMark
+
+get_alarm_threshold_services:
+  # 2.8.34 查询指定集群中支持告警阈值设置的服务列表
+  # 获取指定集群的支持告警阈值设置的服务列表
+  # 权限: 集群管理
+  desc: "查询指定集群中支持告警阈值设置的服务列表"
+  method: "GET"
+  path: "/api/v2/alarms/threshold/clusters/{cluster_id}/services"
+  required_params:
+    - cluster_id
+  optional_params: []
+
+get_service_alarm_metrics:
+  # 2.8.35 获取指定服务上支持转告警的所有监控指标
+  # 获取指定集群指定服务上支持转告警的所有监控指标
+  # 权限: 集群管理
+  desc: "获取指定服务上支持转告警的所有监控指标"
+  method: "GET"
+  path: "/api/v2/alarms/threshold/clusters/{cluster_id}/services/{service_name}/metrics"
+  required_params:
+    - cluster_id
+    - service_name
+  optional_params: []
+
+get_service_alarm_threshold:
+  # 2.8.36 查询服务告警阈值设置
+  # 查询指定集群指定服务指定监控指标的阈值
+  # 权限: 集群管理
+  desc: "查询服务告警阈值设置"
+  method: "GET"
+  path: "/api/v2/alarms/threshold/clusters/{cluster_id}/services/{service_name}/metrics/{metric_name}"
+  required_params:
+    - cluster_id
+    - service_name
+    - metric_name
+  optional_params: []
+
+get_service_alarm_default_threshold:
+  # 2.8.38 获取服务监控转告警指标默认阈值
+  # 获取指定集群指定服务指定指标的监控转告警指标的默认阈值
+  # gradeAlarmMark: true=开启分级告警，false=关闭分级告警
+  # 权限: 集群管理
+  desc: "获取服务监控转告警指标默认阈值"
+  method: "GET"
+  path: "/api/v2/alarms/threshold/clusters/{cluster_id}/services/{service_name}/metrics/{metric_name}/default_threshold"
+  required_params:
+    - cluster_id
+    - service_name
+    - metric_name
+  optional_params:
+    - gradeAlarmMark
+
+get_events:
+  # 2.8.43 查询事件
+  # 按条件查询事件
+  # level: 0=全部(默认) 1=Critical 2=Major 3=Minor 4=Warning
+  # 权限: 集群查看，集群管理，系统管理，租户管理
+  desc: "查询事件"
+  method: "GET"
+  path: "/api/v2/events"
+  required_params: []
+  optional_params:
+    - level
+    - id
+    - name
+    - object
+    - source
+    - start_time
+    - end_time
+    - is_fuzzy
+    - limit
+    - offset
+    - order
+    - order_by
+
+clear_alarm:
+  # 2.8.21 清除告警
+  # 权限: 集群管理
+  desc: "清除告警"
+  method: "PUT"
+  path: "/api/v2/alarms/clusters/{cluster_id}/alarms/{alarm_id}/clear"
+  required_params:
+    - cluster_id
+    - alarm_id
+  optional_params: []
+
+shield_alarms:
+  # 2.8.22 屏蔽指定集群中服务或主机的告警
+  # 权限: 集群管理
+  desc: "屏蔽指定集群中服务或主机的告警"
+  method: "POST"
+  path: "/api/v2/alarms/clusters/{cluster_id}/alarms/shield"
+  required_params:
+    - cluster_id
+  optional_params:
+    - alarm_def_ids
+    - service_name
+    - hostname
+  request_body_template:
+    alarmDefIds: "{alarm_def_ids}"
+    serviceName: "{service_name}"
+    hostName: "{hostname}"

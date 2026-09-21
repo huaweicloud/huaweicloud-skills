@@ -1,0 +1,51 @@
+# ==============================================================================
+# 健康检查相关 API 配置
+# 对应文档: 2.6 健康检查
+# ==============================================================================
+
+start_cluster_health_check:
+  # 2.6.1 启动集群健康检查
+  # 对指定集群启动健康检查。集群的健康检查包括集群内所有的服务、主机以及OMS
+  # 权限: 集群管理
+  desc: "启动集群健康检查"
+  method: "POST"
+  path: "/api/v2/health_check/clusters/{cluster_id}"
+  required_params:
+    - cluster_id
+  optional_params:
+    - check_items
+
+get_health_check_config:
+  # 2.6.3 查询健康检查配置
+  # 查询指定集群的健康检查配置，健康检查配置即周期性自动检查设置
+  # 权限: 集群管理
+  desc: "查询健康检查配置"
+  method: "GET"
+  path: "/api/v2/health_check/config"
+  required_params: []
+  optional_params:
+    - cluster_id
+
+get_health_check_reports:
+  # 2.6.8 查询健康检查报告列表
+  # 查询所有的健康检查，包括完成的和正在进行的。返回的信息包括检查对象，起至时间，是否发现问题等
+  # 权限: 集群管理
+  desc: "查询健康检查报告列表"
+  method: "GET"
+  path: "/api/v2/health_check/reports"
+  required_params: []
+  optional_params:
+    - cluster_id
+    - limit
+    - offset
+
+get_health_check_report_detail:
+  # 2.6.9 查询指定的健康检查报告
+  # 查询指定的检查报告，报告返回了所有的检查项目及其结果
+  # 权限: 集群管理
+  desc: "查询指定的健康检查报告"
+  method: "GET"
+  path: "/api/v2/health_check/reports/{report_id}"
+  required_params:
+    - report_id
+  optional_params: []
