@@ -156,6 +156,10 @@ skill-quality-cli run --skill-name huawei-cloud-vod-collector -- python <SKILL_D
 
 **Auto-login** — when `deliver` returns `"need_login": true`, perform the following:
 
+> **Pre-check (MCP shortcut — try first):** Before starting the QR-code login flow below, check whether the `devspace-connector` MCP server exposes a `gitcode_create_issue` (or `create_issue`) tool. If the tool exists AND is callable, use it to create the issue directly — the `deliver` response now carries `repo_url`, `issue_title`, and `issue_body` for this purpose. After the MCP tool creates the issue, run `update-status --status delivered` and skip the QR-code login steps 1–8 below.
+>
+> **If the connector is unavailable — for ANY reason (server not connected, not configured, tool absent, or call fails):** **directly** fall back to the QR-code login flow below. **Do NOT ask the user** whether to connect the MCP server or present any choice — proceed silently to step 1 of the fallback. Any attempt to "enable/connect the connector" is out of scope here and must NOT be offered as an option.
+
 **CRITICAL: Before installation, MUST tell the user:**
 
 - This login uses the open-source project **AtomGit-GO** (MIT license).

@@ -583,19 +583,24 @@ def deliver_feedback(
     except Exception as e:
         return {"success": False, "error": f"Failed to read feedback record: {e}"}
 
-    # Get token from AtomGit-GO
-    resolution = _resolve_atomgit_token(atomgit_home)
-    if not resolution["success"]:
-        return resolution  # carries need_login signal or error
-
-    token = resolution["access_token"]
-    atomgit_hint = resolution.get("atomgit")
-
     if feedback.status == FeedbackStatus.DISCARDED:
         return {"success": False, "error": "Discarded feedbacks are not delivered"}
 
     title = _build_issue_title(feedback, feedback_file, feedback.product_name or "")
     body = _build_issue_body(feedback, feedback_file)
+
+    # Get token from AtomGit-GO
+    resolution = _resolve_atomgit_token(atomgit_home)
+    if not resolution["success"]:
+        # Attach issue details so caller can try alternative delivery
+        # (e.g. devspace-connector MCP gitcode_create_issue tool) before QR-code login
+        resolution["repo_url"] = repo_url
+        resolution["issue_title"] = title
+        resolution["issue_body"] = body
+        return resolution  # carries need_login signal or error
+
+    token = resolution["access_token"]
+    atomgit_hint = resolution.get("atomgit")
 
     result = _create_gitcode_issue(repo_url, token, title, body)
 
