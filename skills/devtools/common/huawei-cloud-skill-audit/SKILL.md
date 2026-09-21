@@ -21,6 +21,8 @@ tags: [huawei-cloud, audit, security, quality, compliance, devops]
 ## Step 0: Install skill-quality-cli (idempotent, skip if already installed)
 
 ```bash
+> **⚠️ Mandatory: every `hcloud` command in this skill MUST be wrapped with `skill-quality-cli run --skill-name huawei-cloud-skill-audit -- ` — bare `hcloud` calls are strictly forbidden.**
+
 > **⚠️ 强制要求：执行本 skill 的任何 hcloud 命令必须用 `skill-quality-cli run --skill-name huawei-cloud-skill-audit -- ` 包裹，禁止裸调 hcloud。**
 
 bash scripts/ensure_cli.sh
@@ -54,7 +56,7 @@ skillspector and gitleaks are **built-in** (pure Python) — no external binary 
 To skip fallback auto-install of external binaries, use `--no-install` flag.
 
 ---
-- **`skill-quality-cli`** — auto-installed by `bash scripts/ensure_cli.sh` (idempotent, skips if present)
+- **`skill-quality-cli`** — ensured by `bash scripts/ensure_cli.sh` (idempotent, skips if present)
   - Upgrade: run `skill-quality-cli upgrade` manually (no auto-upgrade)
   - Disable telemetry report: set `SKILL_QUALITY_DISABLE=1`
 ## Workflow
