@@ -1,29 +1,27 @@
 #!/usr/bin/env python3
 """Search Huawei Cloud agent skills by keyword/category.
 
-Quality reporting: hard-bound to this main flow. Every run of this script
-automatically sends a quality report via `skill-quality-cli` (or its bundled
-in-skill carrier `scripts/cli/cli_entry.py`) - fire-and-forget, non-blocking,
-failures never affect search output or the exit code. When the whole command
-is already wrapped with `skill-quality-cli run` (SKILL_TRACE_ID is set), the
-script skips its own report to avoid double counting.
-Every search-result skill name is also reported to the install-count API
-(exposure impression, fire-and-forget, non-blocking).
+Every search-result skill name is reported to the install-count API
+(exposure impression, fire-and-forget, non-blocking). This script has no
+other telemetry and no external CLI dependency.
 """
 
 import argparse
 import base64
+import binascii
 import json
 import os
-import shutil
-import subprocess
 import sys
+import threading
 from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
 
 
-DEFAULT_INDEX_URL = "https://gitcode.com/api/v5/repos/developer-skill/skills-group-contribution/contents/skills-index/index.json?ref=test-for-index"
-DEFAULT_CN_EN_MAP_URL = "https://gitcode.com/api/v5/repos/developer-skill/skills-group-contribution/contents/skills-index/cn-en-map.json?ref=test-for-index"
+# 索引分支可通过环境变量注入（默认指向当前生产使用的 test-for-index 分支，
+# 由索引仓库维护方发布正式数据后切换），避免把分支名硬编码散落在各处。
+INDEX_BRANCH = os.environ.get("FIND_SKILLS_INDEX_BRANCH", "test-for-index")
+DEFAULT_INDEX_URL = "https://gitcode.com/api/v5/repos/developer-skill/skills-group-contribution/contents/skills-index/index.json?ref={}".format(INDEX_BRANCH)
+DEFAULT_CN_EN_MAP_URL = "https://gitcode.com/api/v5/repos/developer-skill/skills-group-contribution/contents/skills-index/cn-en-map.json?ref={}".format(INDEX_BRANCH)
 
 HTTP_TIMEOUT = 15
 
@@ -54,7 +52,7 @@ def load_json_from_url(url, label=""):
             decoded = base64.b64decode(parsed["content"]).decode("utf-8")
             return json.loads(decoded)
         return parsed
-    except (URLError, HTTPError, json.JSONDecodeError) as e:
+    except (URLError, HTTPError, OSError, ValueError, UnicodeDecodeError, binascii.Error) as e:
         raise RuntimeError(f"N02: Failed to fetch {label}: {e}") from e
 
 
@@ -173,110 +171,48 @@ def truncate(desc, limit=150):
     return desc
 
 
+def _post_impression(skill_id):
+    """Single-instance POST to the install-count API (best-effort)."""
+    body = json.dumps({"skill_id": skill_id}).encode("utf-8")
+    req = Request(
+        INSTALL_COUNT_URL,
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/plain, */*",
+            "Origin": "https://skills.huaweicloud.com",
+            "Referer": "https://skills.huaweicloud.com/",
+            "User-Agent": "huawei-cloud-find-skills/1.0",
+        },
+    )
+    try:
+        with urlopen(req, timeout=INSTALL_COUNT_TIMEOUT) as resp:
+            resp.read()
+        return True
+    except (URLError, HTTPError, OSError, ValueError):
+        return False
+
+
 def report_search_results_impressions(results):
-    """Report every search-result skill name via the install-count API (non-blocking).
+    """Report every search-result skill name via the install-count API.
 
     Each result's skill_id (`skills/<category>/<service>/<name>`) is POSTed to the
     same endpoint Step 3 uses for install counting, so search-result exposures are
-    counted too. Fire-and-forget: failures/timeouts are swallowed and never affect
-    the search output or exit code.
+    counted too. Fire-and-forget: reporting runs in a daemon background thread and
+    returns immediately, so it never blocks or delays the search output, no matter
+    how many results there are.
     """
-    reported = 0
-    for r in results:
-        skill_id = "skills/{}/{}/{}".format(r["category"], r["service"], r["name"])
-        body = json.dumps({"skill_id": skill_id}).encode("utf-8")
-        req = Request(
-            INSTALL_COUNT_URL,
-            data=body,
-            headers={
-                "Content-Type": "application/json",
-                "Accept": "application/json, text/plain, */*",
-                "Origin": "https://skills.huaweicloud.com",
-                "Referer": "https://skills.huaweicloud.com/",
-                "User-Agent": "huawei-cloud-find-skills/1.0",
-            },
-        )
-        try:
-            with urlopen(req, timeout=INSTALL_COUNT_TIMEOUT) as resp:
-                resp.read()
-            reported += 1
-        except (URLError, HTTPError, OSError, ValueError):
-            continue
-    return reported
+    if not results:
+        return 0
+    reported = {"n": 0}
 
+    def _worker():
+        for r in results:
+            if _post_impression("skills/{}/{}/{}".format(r["category"], r["service"], r["name"])):
+                reported["n"] += 1
 
-def _resolve_quality_cli():
-    """Resolve the skill-quality-cli invocation, in priority order:
-    0. `SKILL_QUALITY_CLI_HOME` (explicit dir containing `cli_entry.py` or `skill-quality-cli`)
-    1. `skill-quality-cli` on PATH (after ensure_cli.sh + PATH export)
-    2. `~/.local/bin/skill-quality-cli` (ensure_cli.sh install dir, even when not on PATH)
-    3. bundled in-skill carrier `scripts/cli/cli_entry.py` (zero-dependency, always available)
-    Returns an argv list, or None when no carrier exists.
-    """
-    home = os.environ.get("SKILL_QUALITY_CLI_HOME")
-    if home:
-        entry = os.path.join(home, "cli_entry.py")
-        if os.path.isfile(entry):
-            return [sys.executable, entry]
-        exe = os.path.join(home, "skill-quality-cli")
-        if os.path.isfile(exe) and os.access(exe, os.X_OK):
-            return [exe]
-    exe = shutil.which("skill-quality-cli")
-    if exe:
-        return [exe]
-    local = os.path.expanduser("~/.local/bin/skill-quality-cli")
-    if os.path.isfile(local) and os.access(local, os.X_OK):
-        return [local]
-    bundled = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cli", "cli_entry.py")
-    if os.path.isfile(bundled):
-        return [sys.executable, bundled]
-    return None
-
-
-def report_quality(status, error_code=None, error_msg=None):
-    """Fire-and-forget quality report via skill-quality-cli (unified CLI).
-
-    Hard-bound to the search main flow: called on every run (success, usage
-    error, or exception) so a report can never be skipped by running the bare
-    script. Failures are swallowed - reporting never blocks or fails the search
-    output or exit code.
-
-    Skipped when:
-      - SKILL_QUALITY_DISABLE=1 (explicit opt-out),
-      - SKILL_TRACE_ID is already set (the whole command is wrapped with
-        `skill-quality-cli run`, which reports once itself - avoid double counting).
-    """
-    if os.environ.get("SKILL_QUALITY_DISABLE") == "1":
-        return False
-    if os.environ.get("SKILL_TRACE_ID"):  # already wrapped in `skill-quality-cli run`
-        return True
-    argv = _resolve_quality_cli()
-    if not argv:
-        return False
-    cmd = argv + ["--no-auto-upgrade", "report",
-                  "--skill-name", "huawei-cloud-find-skills",
-                  "--status", status]
-    if error_code:
-        cmd += ["--error-code", error_code]
-    if error_msg:
-        cmd += ["--error-msg", error_msg[:500]]
-    try:
-        # Truly fire-and-forget: detach the report subprocess and never wait,
-        # so an unreachable/slow quality endpoint can never block the search
-        # main flow (acceptance: failures/timeouts must not delay or fail it).
-        subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL, start_new_session=True)
-        return True
-    except Exception:  # noqa: BLE001 - fire-and-forget
-        return False
-
-
-def _extract_error_code(exc):
-    """Extract the leading error code (e.g. N02) from an exception message."""
-    head = str(exc).split(":", 1)[0].strip()
-    if len(head) == 3 and head[0].isalpha() and head[1:].isdigit():
-        return head
-    return "B01"
+    threading.Thread(target=_worker, daemon=True).start()
+    return reported["n"]
 
 
 def main():
@@ -285,19 +221,20 @@ def main():
     parser.add_argument("-c", "--category", default="", help="Filter by category")
     args = parser.parse_args()
 
+    if not args.keyword and not args.category:
+        print("Usage: python search-skills.py -k <keyword> [-c <category>]")
+        print("ERROR: missing keyword and category (U02)", file=sys.stderr)
+        return 1
+
     idx = load_index()
     raw_skills = idx.get("skills", [])
     skills = [extract_skill_fields(s) for s in raw_skills]
 
-    if not args.keyword and not args.category:
-        cats = ", ".join(idx.get("categories", []))
-        print("Usage: python search-skills.py -k <keyword> [-c <category>]")
-        print(f"Categories: {cats}")
-        print("ERROR: missing keyword and category (U02)", file=sys.stderr)
-        return 1
-
-    cn_en_map = load_cn_en_map()
-    specific_kws, generic_kws = expand_keywords(args.keyword, cn_en_map)
+    if args.keyword:
+        cn_en_map = load_cn_en_map()
+        specific_kws, generic_kws = expand_keywords(args.keyword, cn_en_map)
+    else:
+        specific_kws, generic_kws = [], []
     has_specific = bool(specific_kws)
 
     results = []
@@ -356,13 +293,5 @@ if __name__ == "__main__":
         rc = main()
     except Exception as e:  # noqa: BLE001
         print(f"ERROR: {e}", file=sys.stderr)
-        report_quality("sys_fail",
-                       error_code=_extract_error_code(e),
-                       error_msg=str(e))
         sys.exit(1)
-    if rc != 0:
-        report_quality("biz_fail", error_code="U02",
-                       error_msg="missing keyword and category (U02)")
-    else:
-        report_quality("success")
     sys.exit(rc)
