@@ -8,18 +8,18 @@
 
 ```powershell
 # PowerShell — 自动探测仓库根目录（不要硬编码本机绝对路径）
-$env:WS    = $env:SKILLS_HOME          # 设为你的 skill 仓库根目录（或 $PWD 当已在仓库根下运行）
+$env:WS = if ($env:SKILLS_HOME) { $env:SKILLS_HOME } else { $PWD.Path }   # 仓库根目录；SKILLS_HOME 未设置时回退到当前目录（与 Git Bash ${SKILLS_HOME:-$(pwd)} 一致）
 $env:SKILL = "huawei-cloud-rds-query"   # 替换成你要测的 skill
-$env:SCRIPTS = "$env:WS\skills\huawei-cloud-skill-tester\scripts"
-$env:TF_DIR = "$env:WS\skills\$env:SKILL-test-files"  # test artifacts 目录
+$env:SCRIPTS = "$env:WS\skills\devtools\common\huawei-cloud-skill-tester\scripts"
+$env:TF_DIR = "$env:WS\skills\devtools\common\$env:SKILL-test-files"  # test artifacts 目录
 ```
 
 ```bash
 # Git Bash — 自动探测仓库根目录（不要硬编码本机绝对路径）
 export WS="${SKILLS_HOME:-$(pwd)}"   # 设为你的 skill 仓库根目录（或当前目录当已在仓库根下运行）
 export SKILL="huawei-cloud-rds-query"
-export SCRIPTS="$WS/skills/huawei-cloud-skill-tester/scripts"
-export TF_DIR="$WS/skills/${SKILL}-test-files"
+export SCRIPTS="$WS/skills/devtools/common/huawei-cloud-skill-tester/scripts"
+export TF_DIR="$WS/skills/devtools/common/${SKILL}-test-files"
 ```
 
 ---
@@ -151,7 +151,7 @@ $phase3.result.statistics
 read -r HUAWEI_ACCESS_KEY < ~/.secrets/hw_ak 2>/dev/null
 read -r HUAWEI_SECRET_KEY < ~/.secrets/hw_sk 2>/dev/null
 export HUAWEI_ACCESS_KEY HUAWEI_SECRET_KEY
-bash scripts/tier1/phase-4-execute-tests.sh "$WS/skills/$SKILL"
+bash "$SCRIPTS/tier1/phase-4-execute-tests.sh" "$WS/skills/$SKILL"
 ```
 
 ```powershell
@@ -285,15 +285,18 @@ Get-Content "$latest\test-report.md" | Select-String -Pattern "Skills Tested|Pha
 
 ```powershell
 # PowerShell — 单 skill 完整跑（含兄弟编排）
-$env:HUAWEI_ACCESS_KEY = "..."
-$env:HUAWEI_SECRET_KEY = "..."
+# 从受保护文件读取凭据（不要内联字面量，避免进入 shell 历史/进程列表/日志）
+$env:HUAWEI_ACCESS_KEY = (Get-Content -Raw "$env:USERPROFILE\.secrets\hw_ak").Trim()
+$env:HUAWEI_SECRET_KEY = (Get-Content -Raw "$env:USERPROFILE\.secrets\hw_sk").Trim()
 bash "$env:SCRIPTS\run-test-pipeline.sh" --skills $env:SKILL
 ```
 
 ```bash
-# Git Bash — 同上
-HUAWEI_ACCESS_KEY=<your-access-key-id> HUAWEI_SECRET_KEY=<your-secret-access-key> \
-  bash $SCRIPTS/run-test-pipeline.sh --skills $SKILL
+# Git Bash — 同上（从受保护文件读取，不在命令行出现凭据字面量）
+read -r HUAWEI_ACCESS_KEY < ~/.secrets/hw_ak 2>/dev/null
+read -r HUAWEI_SECRET_KEY < ~/.secrets/hw_sk 2>/dev/null
+export HUAWEI_ACCESS_KEY HUAWEI_SECRET_KEY
+bash "$SCRIPTS/run-test-pipeline.sh" --skills "$SKILL"
 ```
 
 **参数**：

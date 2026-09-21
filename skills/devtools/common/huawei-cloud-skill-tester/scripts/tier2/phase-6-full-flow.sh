@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+
+
 # phase-6-full-flow.sh — 全流程走通测试
 # 自动推导场景链 → 用户确认 → 端到端执行 → 状态验证 → 清理
 set -euo pipefail
@@ -216,8 +218,12 @@ for step in steps:
                 script_path = os.path.join(skill_root, script_part.split()[0])
                 script_args = ' '.join(script_part.split()[1:]) if len(script_part.split()) > 1 else ''
                 if os.path.isfile(script_path):
-                    full_cmd = f'python3 {_posix(script_path)} {script_args}'.strip()
-                    r = subprocess.run(['bash', '-c', full_cmd], capture_output=True, text=True, timeout=60, env=os.environ)
+                    import shlex as _shlex
+                    try:
+                        _argv = ['python3', _posix(script_path)] + _shlex.split(script_args)
+                    except ValueError:
+                        _argv = ['python3', _posix(script_path)]
+                    r = subprocess.run(_argv, capture_output=True, text=True, timeout=60, env=os.environ)
                     step['output'] = (r.stdout[:500] + r.stderr[:200]).strip()
                     step['status'] = 'pass' if r.returncode == 0 else 'fail'
                 else:

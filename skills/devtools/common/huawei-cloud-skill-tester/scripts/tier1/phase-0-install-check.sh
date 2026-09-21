@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+
+
 # phase-0-install-check.sh — 安装验证
 # 检查 skill 目录完整性，模拟安装/卸载/重装状态
 set -euo pipefail

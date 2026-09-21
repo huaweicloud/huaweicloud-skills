@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+
+
 # phase-3-gen-testcases.sh — 用例生成
 # 基于 Phase 1+2 生成功能用例 TC-F 和 API 用例 TC-A
 set -euo pipefail

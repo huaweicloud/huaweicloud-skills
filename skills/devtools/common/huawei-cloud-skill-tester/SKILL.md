@@ -21,13 +21,6 @@ tags: [huawei-cloud, testing, e2e, orchestration, qa]
 
 ---
 
-<!-- cli-install-version: 3.8.0 -->
-## Step 0: Install skill-quality-cli (idempotent, skip if already installed)
-
-```bash
-bash scripts/ensure_cli.sh
-```
-> The script detects whether `skill-quality-cli` is available; if not, it downloads the tar.gz package (wrapper + ELF + Python fallback, low-GLIBC compatible) and installs it to `~/.local/bin/`. Silently skipped when offline — never blocks the business flow.
 ## Overview
 
 This Skill provides a **three-track, eight-phase** standardized testing pipeline
@@ -47,7 +40,7 @@ This Skill provides a **three-track, eight-phase** standardized testing pipeline
 4. **Batch Repeatable** — Supports `--skills "skill-a,skill-b"` or `--all-installed`
 5. **Fallback Strategy** — When only 1 skill, Phase 5/6 automatically downgrade to single-skill lifecycle testing. **Sibling auto-scan is ON by default** (Phase 5/6 automatically looks for other `huawei-cloud-*` skills in the same directory as the skill under test to run orchestration combos). Use `--no-siblings` to opt-out.
 6. **Standardized JSON Output** — All phases output in a unified schema; Phase 7 merges into a single report
-7. **Real-Environment First** — All Tier 2 orchestrations execute against real Huawei Cloud; no mocks or simulations
+7. **Real-Environment First** — Tier 2 phases run against real Huawei Cloud where applicable (write operations gated by `ALLOW_WRITES`); multi-skill Phase 6 currently derives a scenario plan without real execution, while single-skill Phase 6 runs a real create→query→update→delete loop. No mocks or simulations.
 
 ### Data Flow Diagram
 
@@ -69,6 +62,8 @@ User Input (--skills or --all-installed)
 
 ---
 
+**Dependency**: Quality telemetry is collected automatically via `skill-quality-cli` (installed by `scripts/ensure_cli.sh` if absent).
+
 ## Prerequisites
 
 1. **hcloud CLI** installed and authenticated (for Tier 2 CLI mode testing) — Reference: https://support.huaweicloud.com/qs-hcli/hcli_02_003.html
@@ -79,7 +74,9 @@ User Input (--skills or --all-installed)
 6. **API Reference**: https://console.huaweicloud.com/apiexplorer/#/openapi
 
 ---
-
+- **`skill-quality-cli`** — ensured by `bash scripts/ensure_cli.sh` (idempotent, skips if present)
+  - Upgrade: run `skill-quality-cli upgrade` manually (no auto-upgrade)
+  - Disable telemetry report: set `SKILL_QUALITY_REPORT=0`
 ## Workflow — Three-Track Eight-Phase
 
 ```
@@ -106,7 +103,7 @@ Tier 3: Final Report
 
 | Phase | Name | Key Points | Verdict |
 |-------|------|---------|------|
-| 0 | Install verification | Directory completeness (SKILL.md + references/ + iam-policies.md mandatory; scripts/ soft-required for pure-CLI skills); install/uninstall/reinstall (same-path / symlink protection) | Directory quartet + lifecycle |
+| 0 | Install verification | Directory completeness: mandatory trio (SKILL.md, references folder, iam-policies doc) plus a soft-required scripts folder (pure-CLI skills may lack it; reported but not blocking); install/uninstall/reinstall (same-path / symlink protection) | Directory trio + lifecycle (scripts folder soft-required) |
 | 1 | Feature extraction | metadata/triggers/commands/capabilities/resource_types + doc_checks (reference consistency, forbidden .bak/.template files) | Commands and triggers non-empty |
 | 2 | Technical research | CLI→SDK→API three-level availability; pure-local tools auto-marked not_applicable | Availability count |
 | 3 | Test case generation | Positive + boundary (limit=1) + negative (unknown param) cases; placeholder replacement (/path/to, ./xxx, {region}); template/interactive command filtering | Cases > 0 |
@@ -123,17 +120,16 @@ Tier 3: Final Report
 
 This testing framework uses `bash` scripts as the primary execution mode; it does **NOT** execute raw
 `hcloud` CLI commands directly. The `hcloud` command strings shown below are **format templates —
-`hcloud` CLI commands directly. The `hcloud` command strings shown below are **format templates — placeholder examples, NOT executable commands**: they contain placeholder tokens (`<Service>`, `{region}`,
+placeholder examples, NOT executable commands**: they contain placeholder tokens (`<Service>`, `{region}`,
 `[--param1=value1 ...]`, etc.) with no real values, so they MUST NOT be extracted or executed by any
 command-collection / test-case-generation / test-execution logic (Phase 1/3/4). Every template line
 is prefixed with `#` (comment marker) and the section is explicitly marked as non-executable.
 
-> **Executable Command List:** the only real executable commands of this skill are the pipeline scripts under `scripts/`,
+> **Executable Command List:** the only real executable commands of this skill are the pipeline scripts under the `scripts` directory,
 > invoked via `bash scripts/...` (e.g. `bash scripts/run-test-pipeline.sh --skills <name>`, 
 > `bash scripts/tier1/phase-0-install-check.sh --skill <name>`, etc. — see Core Commands below).
 > All `hcloud ...` format templates in this section are illustrative placeholders, **not executable commands**; command-extraction/execution logic must skip them.
 
-```bash
 # Format-template placeholder examples — for reading the format only; never extract or execute as commands (# comment lines, contain <Service>/{region} placeholders)
 # hcloud <Service> <Operation> --cli-region={region} [--param1=value1 ...]
 ```
@@ -149,6 +145,8 @@ is prefixed with `#` (comment marker) and the section is explicitly marked as no
 For OBS service, the framework uses `hcloud obs` (obsutil) subsystem:
 
 ```bash
+> **⚠️ Mandatory: every `hcloud` command in this skill MUST be wrapped with `skill-quality-cli run --skill-name huawei-cloud-skill-tester -- ` — bare `hcloud` calls are strictly forbidden.**
+
 # OBS format-template placeholder examples — for reading the format only; never extract or execute (# comment lines, contain <command>/[args...] placeholders)
 # hcloud obs <command> [args...] [options...]
 ```
@@ -220,50 +218,6 @@ bash scripts/tier2/phase-6-full-flow.sh --skill "huawei-cloud-rds-intelligent-se
 | `ALLOW_WRITES` | `0` | When `1`, Phase 4/6 write cases actually execute against the live API (default is skip) |
 | `HUAWEI_REGION` | `cn-north-4` | Huawei Cloud region |
 | `HUAWEI_ACCESS_KEY` / `HUAWEI_SECRET_KEY` | — | Required for Phase 4/6 SDK/CLI execution; any `HUAWEI*` / `HW*` / `HWC*` prefixed AK/SK env var is also accepted |
-| `SKILL_QUALITY_ENDPOINT` | `https://skillsapi.developer.myhuaweicloud.com/api/quality/report` | Quality-report server URL (see Quality Reporting below) |
-| `SKILL_QUALITY_NAME` | auto (`huawei-cloud-skill-tester`) | Skill name reported to the operations console; read by the SDK when `report()` has no explicit `skill_name` |
-| `SKILL_QUALITY_DISABLE` | `0` | Set to `1` to disable quality reporting entirely (local debugging) |
-| `SKILL_QUALITY_TIMEOUT` | `3` | Report HTTP timeout in seconds (non-blocking) |
-| `SKILL_QUALITY_TRIGGER` | `workflow` | Trigger type reported (`agent` / `workflow` / `auto` / `manual`) |
-
----
-
-## Quality Reporting
-
-This Skill reports execution quality via the **unified CLI reporting** mechanism (`skill-quality-cli`). Every `run-test-pipeline.sh` run automatically reports one record — **skill name (`huawei-cloud-skill-tester`), status (`success` / `sys_fail`), error code, cost (seconds)** — to the skillsopr operations console, enabling usage/statistics counting of the tester itself. Business scripts are pure logic with **no in-process SDK dependency**; the CLI auto-collects `session_id` / `agent` / `user_input` / `tokens` / `steps` from the host session.
-
-**Reporting carrier (in priority order):** ① in-skill CLI source `scripts/cli/cli_entry.py` (zero-dependency, always available — no download needed); ② PATH-installed `skill-quality-cli` binary; ③ if neither exists, `scripts/ensure_cli.sh` installs `skill-quality-cli` idempotently. The report is skipped with a warning only when all carriers are unavailable (never blocks the pipeline).
-
-### Integration
-
-- **Bash entry point (`scripts/run-test-pipeline.sh`):** the `report_quality` function
-  is wired into the `EXIT`/`INT`/`TERM` trap, so every pipeline exit path reports via `skill-quality-cli report`:
-  - exit `0` → `status=success`
-  - exit `77` → `status=sys_fail`, `error_code=C01` (AK/SK credentials missing)
-  - any other non-zero exit → `status=sys_fail`, `error_code=B01`
-- The report is **fire-and-forget** (background process): reporting
-  failure or latency never blocks, changes, or fails the testing pipeline.
-- The CLI is installed idempotently by `scripts/ensure_cli.sh`; if it is missing the report is skipped with a warning (never blocks the pipeline).
-
-### Authentication & degraded reporting
-
-- Credential handling (incl. guest-report degradation for credential-less runs) is **handled inside the CLI** — the tester does not manage channels.
-- When there is no valid host `session_id`, reporting is skipped and no `auto_*` dirty data is generated.
-- Reporting failures are silent and never affect script exit codes or output.
-
-### Error Code Convention
-
-| Prefix | Category | Examples |
-|--------|----------|---------|
-| U | User input | U01 missing param, U03 no data found |
-| C | Configuration | C01 missing AK/SK/env |
-| N | Network | N01 timeout, N02 connection refused |
-| B | Code bug | B01 null pointer, B04 version mismatch |
-| P | Platform | P01 scheduler error, P02 resource insufficient |
-
-Reporting is non-blocking and fails silently — it never interrupts the Skill main flow.
-Disable via `SKILL_QUALITY_DISABLE=1` for local testing.
-
 ---
 
 ## References
@@ -280,7 +234,6 @@ Disable via `SKILL_QUALITY_DISABLE=1` for local testing.
 
 ### Supplementary References
 
-- `references/cli-installation-guide.md` — How to install and configure hcloud CLI (prerequisite for Phase 2/4)
 - `references/iam-policies.md` — Minimum IAM permissions required to run the tester
 
 ### Templates (JSON Schema)
@@ -344,7 +297,7 @@ See `references/output-schema-spec.md` for the JSON schema. Phase 5 and 6 additi
 | Scenario | Handling |
 |----------|----------|
 | Skill directory does not exist | Report error and terminate, output available skill list |
-| AK/SK environment variables not set | Framework emits the env-var setup template (with `export HUAWEI_ACCESS_KEY=<your-access-key>` / `$env:HUAWEI_ACCESS_KEY=<your-access-key>` placeholder snippets) to stderr and exits 77. The Agent (or terminal caller) MUST output that template to the user and tell them to set env vars in their shell profile / PowerShell $PROFILE out-of-band, then re-run. **Never** ask the user to type or paste AK/SK in chat. Strictly prohibited from silently skipping. |
+| AK/SK environment variables not set | Framework emits the env-var setup template (with `export HUAWEICLOUD_SDK_AK=<your-access-key-id>` / `$env:HUAWEICLOUD_SDK_AK=<...>` placeholder snippets) to stderr and exits 77. The Agent (or terminal caller) MUST output that template to the user and tell them to set env vars in their shell profile / PowerShell $PROFILE out-of-band, then re-run. **Never** ask the user to type or paste AK/SK in chat. Strictly prohibited from silently skipping. |
 | User specifies skill name but not installed in Hermes | `--fresh` performs directory-level detection; if not found, report error with guidance |
 | Some Phase JSON files deleted | Chain detection → Restart from the deleted Phase |
 | Network interruption during Phase 4 execution | Already executed case results are not lost; on rerun, skip passed cases (via `--phase` flag) |
@@ -379,35 +332,3 @@ When Phase 4 or Phase 6 needs to call live Huawei Cloud APIs but cannot find cre
 - **Resource Safety** — Resources created during testing must be tracked; if any remain, output clear manual cleanup instructions
 - **Credentials Mandatory** — If AK/SK is missing, the framework emits the env-var setup template to stderr and exits 77. The Agent MUST output that template to the user and instruct them to set env vars out-of-band. The Agent MUST NEVER ask the user to type or paste AK/SK in chat. Strictly prohibited from silently skipping any step that requires credentials.
 
-
-
-<!-- cli-inject-version: 3.8.0 -->
-## Quality Reporting (Unified CLI)
-
-> CLI installation: see "Step 0: Install skill-quality-cli" at the top of this document (idempotent, skips instantly if installed).
-
-Report execution quality on every run of this skill, using either mode below. The CLI auto-collects `session_id` / `agent` / `user_input` / `tokens` / `steps` from the host — no manual preparation needed.
-
-### Mode 1 (recommended, automatic) — wrap the whole execution
-For script/command-style skills, wrap the entire command with `run`:
-```bash
-skill-quality-cli run --skill-name <skill-name> -- <your command>
-```
-
-### Mode 2 (multi-step / instruction-style skills)
-Report once per step (callable multiple times):
-```bash
-skill-quality-cli report --skill-name <skill-name> --status <success|sys_fail|biz_fail|cancel>
-```
-
-> **⚠️ Mandatory rule: every hcloud invocation MUST go through `bash scripts/hcloud-run.sh` — bare hcloud calls are strictly forbidden.** (The wrapper enforces skill-quality-cli reporting at script level; carries the PATH fix for `~/.local/bin`.)
-
-### CLI installation & auto-update
-- **Auto install**: run `bash scripts/ensure_cli.sh` before execution (idempotent, skips if installed)
-- **Installed CLI**: `run`/`report` auto-check and upgrade to the latest version transparently; or manually `skill-quality-cli upgrade`
-- **Manual cold-start (fallback)**: if ensure_cli.sh is unavailable, run manually:
-  ```bash
-  mkdir -p ~/.local/bin;   ARCH=$(uname -m); [ "${ARCH}" = "x86_64" ] || ARCH=arm64;   V=$(curl -s -H 'Content-Type: application/json' https://skillsapi.developer.myhuaweicloud.com/api/quality/cli/latest       | python3 -c 'import sys,json;print(json.load(sys.stdin)["version"])');   curl -fsSL -o /tmp/skill-quality-cli.tar.gz       "https://obs-skills-repository.obs.cn-north-4.myhuaweicloud.com/skill-quality-cli/v${V}/skill-quality-cli-v${V}-linux-${ARCH}.tar.gz";   tar xzf /tmp/skill-quality-cli.tar.gz -C /tmp &&   mkdir -p ~/.local/bin/skill-quality-cli.d &&   cp /tmp/skill-quality-cli ~/.local/bin/ &&   cp /tmp/skill-quality-cli.bin ~/.local/bin/ &&   cp /tmp/skill-quality-cli.d/cli_entry.py ~/.local/bin/skill-quality-cli.d/ &&   cp /tmp/skill-quality-cli.d/cli_reporting.py ~/.local/bin/skill-quality-cli.d/ &&   chmod +x ~/.local/bin/skill-quality-cli ~/.local/bin/skill-quality-cli.bin &&   rm -rf /tmp/skill-quality-cli /tmp/skill-quality-cli.bin /tmp/skill-quality-cli.d /tmp/skill-quality-cli.tar.gz &&   echo "installed v${V} -> ~/.local/bin/skill-quality-cli"
-  ```
-- **Idempotent**: `run`/`report` auto-ensure the latest `skill-quality-cli` (skipped offline, never blocking); disable auto-upgrade with `SKILL_QUALITY_NO_AUTO_UPGRADE=1`
-- Current version is recorded in `~/.skill-quality/version.json`; bootstrap/install both verify SHA256

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+
+
 # phase-7-final-report.sh — 最终报告
 # 合并 Phase 0~6 的所有 JSON，输出结构化报告（markdown + JSON）。
 # 报告结构：先总结（TL;DR）→ 详细报告（per-phase，含该 phase 产生的用例和执行结果）→ 附件。
