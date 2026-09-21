@@ -9,12 +9,12 @@
 - 去重：会话内去重时增加 `recurrence_count`；跨会话去重会扫描最近反馈后再交付。
 - 提取：LLM 丰富会填充关键字段（`error_stack`、`user_intent`、`scenario`、`expected_behavior`、`environment`、`dialog_context`）。
 - 交付：`vod_deliver.py deliver` 会将问题提交到配置的 `delivery.channels.gitcode.repo_url`，并更新反馈状态。
-- 自动登录流程：当返回 `need_login` 时，使用 AtomGit-GO 完成安装/登录序列，并将令牌存储在 `~/.atomcode/auth.toml`（权限 0600）下。
+- 自动登录流程：当返回 `need_login` 时，使用 AtomGit-GO 完成安装/登录序列，并将令牌存储在 `${ATOMCODE_HOME:-$HOME/.atomcode}/auth.toml`（权限 0600）下。
 
 ## 非功能
 
 - 日志：脚本应提供有意义的错误信息和非敏感调试日志。
-- 安全：令牌绝不能写入 `~/.atomcode/auth.toml` 以外的位置。
+- 安全：令牌只能写入 `$ATOMCODE_HOME/auth.toml`（默认 `~/.atomcode/auth.toml`），绝不写入其他位置。
 - 限制：遵守 `storage.max_feedbacks_per_session` 和其他配置限制。
 
 ## 测试用例（示例）

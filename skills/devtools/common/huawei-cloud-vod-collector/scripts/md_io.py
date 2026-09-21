@@ -50,24 +50,35 @@ def generate_id(prefix: str, directory: Path) -> str:
     lock_path = directory / ".lock"
     lock_path.touch(exist_ok=True)
     today = datetime.now().strftime("%Y%m%d")
-    pattern = re.compile(rf"^{prefix}-{today}-(\d{{4}})\.md$")
-    max_seq = 0
+    # 动态位数(至少 4 位): 超过 9999 后不再被固定 4 位正则漏扫
+    width = 4
     with open(lock_path, "wb") as lock_file:
         _lock_file(lock_file)
         try:
+            pattern = re.compile(rf"^{prefix}-{today}-(\d{{4,}})\.md$")
+            max_seq = 0
             for f in directory.iterdir():
                 m = pattern.match(f.name)
                 if m:
                     seq = int(m.group(1))
                     if seq > max_seq:
                         max_seq = seq
+            # 锁内原子“认领”ID: O_EXCL 创建占位文件, 并发进程不会分配到同一 ID
+            next_seq = max_seq + 1
+            while True:
+                width = max(4, len(str(next_seq)))
+                stem = f"{prefix}-{today}-{next_seq:0{width}d}"
+                fname = stem + ".md"
+                candidate = directory / fname
+                try:
+                    fd = os.open(candidate, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                    os.close(fd)
+                    break
+                except FileExistsError:
+                    next_seq += 1
         finally:
             _unlock_file(lock_file)
-    next_seq = max_seq + 1
-    return f"{prefix}-{today}-{next_seq:04d}"
-
-
-
+    return stem
 
 
 def _build_error_stack(feedback: FeedbackRecord) -> str | None:
@@ -86,6 +97,32 @@ def _build_error_stack(feedback: FeedbackRecord) -> str | None:
     if not parts:
         return feedback.error_stack
     return "\n\n".join(parts)
+
+
+
+
+def _fence_run(line: str) -> int:
+    """Length of the leading backtick run on a pure-backtick fence line (>=3), else 0."""
+    s = line.strip()
+    if not s.startswith("`"):
+        return 0
+    run = len(s) - len(s.lstrip("`"))
+    if s == "`" * run and run >= 3:
+        return run
+    return 0
+
+
+def _code_fence(content: str) -> str:
+    """Pick a backtick fence longer than any run inside content.
+
+    Content containing ``` would otherwise terminate the fence early and break
+    the generated Markdown (and later parsing). Fence length = max_run + 1.
+    """
+    max_run = 3
+    for m in re.finditer(r"`+", content or ""):
+        if len(m.group(0)) >= max_run:
+            max_run = len(m.group(0)) + 1
+    return "`" * max_run
 
 
 def write_feedback_md(feedback: FeedbackRecord, file_path: Path) -> None:
@@ -116,10 +153,11 @@ def write_feedback_md(feedback: FeedbackRecord, file_path: Path) -> None:
         "- **error_stack**:",
     ])
     if error_stack_content:
-        lines.append("  ```")
+        fence = _code_fence(error_stack_content)
+        lines.append(f"  {fence}")
         for stack_line in error_stack_content.split("\n"):
             lines.append(f"  {stack_line}")
-        lines.append("  ```")
+        lines.append(f"  {fence}")
     else:
         lines.append("  (none)")
 
@@ -143,11 +181,12 @@ def write_feedback_md(feedback: FeedbackRecord, file_path: Path) -> None:
         f"- **user_intent**: {feedback.user_intent or ''}",
     ])
     if feedback.agent_action:
+        fence = _code_fence(feedback.agent_action)
         lines.append("- **agent_action**:")
-        lines.append("  ```")
+        lines.append(f"  {fence}")
         for action_line in feedback.agent_action.split("\n"):
             lines.append(f"  {action_line}")
-        lines.append("  ```")
+        lines.append(f"  {fence}")
     else:
         lines.append("- **agent_action**: ")
     lines.extend([
@@ -196,11 +235,22 @@ def _parse_metadata_section(text: str, section: str) -> dict[str, str]:
     in_multiline = False
     multiline_key = None
     multiline_lines = []
+    in_fence = False
+    fence_run = 0
     normalized = _normalize_section_header(section)
     lines = text.split("\n")
     for i, line in enumerate(lines):
         stripped = line.strip()
-        if stripped.startswith("## "):
+        _run = _fence_run(stripped)
+        if _run >= 3:
+            # 围栏开/关: 关闭需 >= 开启长度, 内容中的短 ``` 不会误关
+            if not in_fence:
+                in_fence = True
+                fence_run = _run
+            elif _run >= fence_run:
+                in_fence = False
+                fence_run = 0
+        if not in_fence and stripped.startswith("## "):
             header = _normalize_section_header(stripped[3:])
             if header == normalized:
                 in_section = True
@@ -214,15 +264,18 @@ def _parse_metadata_section(text: str, section: str) -> dict[str, str]:
         # 正在收集多行值
         if in_multiline:
             # 遇到新字段（以 - ** 开头）或下一行只有空白且再下一行是新字段 → 结束多行
-            if stripped.startswith("- **"):
+            if not in_fence and stripped.startswith("- **"):
                 result[multiline_key] = "\n".join(multiline_lines).strip()
                 in_multiline = False
-                # 继续处理当前行作为新字段（不 continue）
+                multiline_key = None
+                multiline_lines = []
+                # 不 continue: 让当前行落到下方普通字段解析逻辑, 确保该新字段不被跳过
+                # (v6 起显式保证此回归行为; 测试: 多行字段后紧跟新字段可正确解析)
             else:
                 # 检查空行是否是字段分隔：空行 + 下一行是 - **
                 if stripped == "" and i + 1 < len(lines):
                     next_stripped = lines[i + 1].strip()
-                    if next_stripped.startswith("- **"):
+                    if not in_fence and next_stripped.startswith("- **"):
                         result[multiline_key] = "\n".join(multiline_lines).strip()
                         in_multiline = False
                         continue
@@ -230,7 +283,7 @@ def _parse_metadata_section(text: str, section: str) -> dict[str, str]:
                     multiline_lines.append(line.rstrip("\n"))
                     continue
 
-        if stripped.startswith("- **"):
+        if not in_fence and stripped.startswith("- **"):
             m = re.match(r"- \*\*(.+?)\*\*:\s*(.*)", stripped)
             if m:
                 key = m.group(1)
@@ -252,11 +305,27 @@ def _extract_code_block_value(text: str, section: str, field: str) -> str | None
     in_section = False
     in_field = False
     in_code = False
+    fence_run = 0
     code_lines = []
     normalized = _normalize_section_header(section)
     for line in text.split("\n"):
         stripped = line.strip()
-        if stripped.startswith("## "):
+        _run = _fence_run(stripped)
+        # 开围栏: 遇到 >=3 个反引号的纯围栏行; 该行本身不进入内容
+        if not in_code and _run >= 3:
+            in_code = True
+            fence_run = _run
+            continue
+        if in_code:
+            # 关围栏: 需与开围栏等长或更长; 内容中较短的 ``` 不被误判为关闭
+            if _run >= fence_run:
+                in_code = False
+                fence_run = 0
+                continue
+            if in_field:
+                code_lines.append(line[2:] if line.startswith("  ") else line)
+            continue
+        if not in_code and stripped.startswith("## "):
             header = _normalize_section_header(stripped[3:])
             if header == normalized:
                 in_section = True
@@ -268,21 +337,9 @@ def _extract_code_block_value(text: str, section: str, field: str) -> str | None
         if stripped == f"- **{field}**:":
             in_field = True
             continue
-        if in_field and not in_code:
-            if stripped.startswith("```"):
-                in_code = True
-                code_lines = []
-                continue
-            elif stripped.startswith("- **"):
-                in_field = False
-                continue
-        if in_field and in_code:
-            if stripped.startswith("```"):
-                break
-            if line.startswith("  "):
-                code_lines.append(line[2:])
-            else:
-                code_lines.append(line)
+        if in_field and stripped.startswith("- **"):
+            in_field = False
+            continue
     if code_lines:
         return "\n".join(code_lines)
     return None
@@ -291,10 +348,20 @@ def _extract_code_block_value(text: str, section: str, field: str) -> str | None
 def _extract_multiline_section(text: str, header: str) -> str | None:
     result_lines = []
     in_section = False
+    in_fence = False
+    fence_run = 0
     normalized = _normalize_section_header(header)
     for line in text.split("\n"):
         stripped = line.strip()
-        if stripped.startswith("## "):
+        _run = _fence_run(stripped)
+        if _run >= 3:
+            if not in_fence:
+                in_fence = True
+                fence_run = _run
+            elif _run >= fence_run:
+                in_fence = False
+                fence_run = 0
+        if not in_fence and stripped.startswith("## "):
             h = _normalize_section_header(stripped[3:])
             if h == normalized:
                 in_section = True
@@ -320,9 +387,12 @@ def read_feedback_md(file_path: Path) -> FeedbackRecord:
 
     annotations = []
     in_ann = False
+    in_fence = False
     for line in text.split("\n"):
         stripped = line.strip()
-        if stripped.startswith("## "):
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+        if not in_fence and stripped.startswith("## "):
             h = _normalize_section_header(stripped[3:])
             if h == "Annotations":
                 in_ann = True
@@ -563,7 +633,6 @@ def _validate_content(feedback: FeedbackRecord) -> str | None:
 
 
 def main() -> None:
-    from _quality_hook import install; install()
     parser = argparse.ArgumentParser(description="VoD Markdown IO")
     subparsers = parser.add_subparsers(dest="command", required=True)
 

@@ -38,9 +38,9 @@ VoD收集Skill通过OpenClaw的Hook机制集成，在Agent运行时自动捕获�
 
 ## Skill部署步骤
 
-1. 将`vod_collect/`目录复制到OpenClaw workspace的skills目录：
+1. 将`huawei-cloud-vod-collector/`目录复制到OpenClaw workspace的skills目录：
    ```bash
-   cp -r vod_collect/ ~/.openclaw/skills/huawei-cloud-vod-collector
+   cp -r huawei-cloud-vod-collector/ ~/.openclaw/skills/huawei-cloud-vod-collector
    ```
 
 2. 初始化（可选，首次运行时自动创建 `.vod/` 目录和 `config.yaml`）：
