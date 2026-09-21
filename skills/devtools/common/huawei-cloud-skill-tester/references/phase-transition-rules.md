@@ -77,11 +77,18 @@
     if phase-p-summary.json 不存在:
       从 p 开始执行
       break
+  if 0..6 的 summary 全部存在:
+    执行 Phase 7 终报告 (Phase 7 无 phase-7-summary.json,
+    直接产出 test-report.json/md, 永不跳过)
 
 --phase N:
-  检查 phase-(N-1).json 存在
-  if 存在: 从 N 开始
-  if 不存在: 报错 "前置依赖缺失，请从 Phase N-1 开始"
+  if N == 0:
+    无前置依赖, 直接从 Phase 0 开始
+  else:
+    检查 phase-(N-1).json 存在
+    if 存在: 从 N 开始
+    if 不存在: 报错 "前置依赖缺失，请从 Phase N-1 开始"
+  (实际链式验证由每个 phase 脚本的 check_phase_deps 完成; phase-0 无前置依赖)
 
 --fresh:
   archive_phase_files  # 移动 phases/phase-*.json 到 phases/archive/<ts>/

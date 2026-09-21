@@ -68,8 +68,9 @@
 
 | 条件 | verdict |
 |------|---------|
-| directory_integrity.pass == true | pass |
-| directory_integrity.pass == false | fail |
+| directory_integrity.pass == true 且 install/uninstall/reinstall 均非 `fail` 且**至少一项为 `pass`** | pass |
+| directory_integrity.pass == true 且 install/uninstall/reinstall **全部为 `skipped`**（未执行任何生命周期操作） | partial（仅记录，不阻断） |
+| directory_integrity.pass == false，或 install/uninstall/reinstall 任一 status == `fail` | fail |
 
 ---
 
@@ -241,52 +242,57 @@
 
 ## Phase 5 — 多 Skill 编排（触发词冲突 + 数据流 + 并行加载）
 
-> Phase 5 在当前实现中**不清理资源**——清理职责内嵌在 Phase 4 的
-> `execution_results[i].resource_changes` 中。Phase 4 缺业务参数 (manual_test_items)
-> 标 `warn` 并在报告的 Markdown Phase 4 小节里显式列出；Phase 6 残留资源
-> 走 `phase-6-summary.json.result.cleanup.manual_required[]` 输出具体清理命令。
+> Phase 5 在当前实现中**不执行任何清理动作**（清理职责内嵌在 Phase 4 的
+> `execution_results[i].resource_changes` 中）。单 skill 自检模式为
+> `downgraded_self_check`；多 skill 编排模式为 `full`。编排结果（触发词冲突、
+> 数据流候选、并行加载）与标题对应，直接写入下方 result 字段；每个资源粒度的
+> 清理汇总由 Phase 4 提供（此处 `cleanup` 仅聚合计数，不发起新清理）。
+> Phase 6 残留资源的手动清理命令走
+> `phase-6-summary.json.result.cleanup.manual_required[]`。
 > 本节描述 Phase 5 当前的 result 结构。
 
 ### result 字段
 
 ```json
 {
-  "mode": "normal | skipped_no_resources",
-  "resources_to_clean": [
+  "mode": "downgraded_self_check | full",
+  "conflict_scan": {
+    "pairs_checked": <int>,
+    "conflicts": [
+      {
+        "trigger": "<string>",
+        "skills": ["<skill-name>", ...],
+        "severity": "high | medium | low",
+        "detail": "<string>"
+      }
+    ],
+    "no_conflict_pairs": <int>
+  },
+  "data_flow_tests": [
     {
-      "resource_type": "<string>",
-      "resource_id": "<string>",
-      "change_type": "created | modified",
-      "skill": "<skill-name>",
-      "tc_id": "TC-F-XX"
+      "test_id": "DF-01",
+      "source": "<cmd/skill>",
+      "target": "<cmd/skill>",
+      "relation": "<string>",
+      "status": "candidate | skip"
     }
   ],
-  "auto_cleaned": [
-    {
-      "resource_id": "<string>",
-      "status": "success | failed",
-      "attempts": <int>,
-      "error": "<string or null>"
-    }
-  ],
-  "failed_cleanup": [
-    {
-      "resource_id": "<string>",
-      "reason": "<string>",
-      "manual_steps": ["step1", "step2"]
-    }
-  ],
-  "manual_cleanup_instructions": [
-    {
-      "resource_type": "<string>",
-      "resource_id": "<string>",
-      "reason": "<string>",
-      "manual_steps": ["hcloud XXX Delete --id=xxx"],
-      "reference": "华为云控制台 → ..."
-    }
-  ]
+  "parallel_load_test": {
+    "verdict": "pass | fail | skipped",
+    "detail": "<string>"
+  },
+  "cleanup": {
+    "resources_cleaned": <int>,
+    "resources_failed": <int>
+  }
 }
 ```
+
+> 旧版规范中的 `resources_to_clean` / `auto_cleaned` / `failed_cleanup` /
+> `manual_cleanup_instructions` 字段已不再由 Phase 5 输出：资源级清理结果由
+> Phase 4 `execution_results[i].resource_changes` 记录，Phase 6 残留资源的手动
+> 清理见 `phase-6-summary.json.result.cleanup.manual_required[]`，Phase 5 仅产出
+> 上述编排结果与清理计数。
 
 ---
 

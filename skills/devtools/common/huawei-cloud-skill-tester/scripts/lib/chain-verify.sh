@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
+
+
 # chain-verify.sh — Chain verification functions for Huawei Cloud Skill Tester
-set -uo pipefail
+# 注: 本文件是被 source 的函数库, 下方函数的位置参数是函数参数而非 CLI 位置参数;
+#     命名参数(getopts)不适用于函数库, 调用方以位置实参调用即可。
+set -euo pipefail
 
 # utils.sh is sourced by the calling phase script before this file
 

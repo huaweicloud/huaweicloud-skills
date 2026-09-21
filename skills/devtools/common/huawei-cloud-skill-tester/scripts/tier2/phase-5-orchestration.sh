@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+
+
 # phase-5-orchestration.sh — 多Skill编排测试
 # 全量触发词冲突扫描 + 数据传递测试 + 并行加载验证
 set -euo pipefail
@@ -183,7 +185,7 @@ def _phases_dir(skill_dir):
 # Used when phase-1-summary.json doesn't exist (e.g. sibling skills not yet tested).
 # Supports three common trigger declaration patterns found in this repo:
 #   1. `triggers: [a, b, c]` — inline YAML list
-#   2. `triggers:\n  - a\n  - b` — block YAML list
+#   2. block YAML list: triggers on its own line, then a / b on following lines
 #   3. `description: |\n  ... Triggers include: "x","y","z"` — embedded in description
 def parse_skill_md(skill_dir):
     smd = os.path.join(skill_dir, 'SKILL.md')
@@ -201,7 +203,7 @@ def parse_skill_md(skill_dir):
 
     triggers = []
 
-    # Pattern 1+2: triggers: [..] OR triggers:\n  - ..
+    # Pattern 1+2: inline list [..] OR block list (triggers then items on next lines)
     m1 = re.search(r'^triggers\s*:\s*\[([^\]]*)\]', fm, re.MULTILINE)
     if m1:
         triggers += [x.strip().strip('"').strip("'") for x in m1.group(1).split(',') if x.strip()]

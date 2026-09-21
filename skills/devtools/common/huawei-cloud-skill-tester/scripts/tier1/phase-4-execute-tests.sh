@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+
+
 # phase-4-execute-tests.sh — 用例执行
 # 只读自动执行；写操作仅在 ALLOW_WRITES=1 时执行（详见 SKILL.md 边界表）
 set -euo pipefail
@@ -288,12 +290,10 @@ for tc in cases:
                         client_cls_name = svc[0].upper() + svc[1:] + 'Client'
                         client_class = getattr(mod, client_cls_name)
                         from huaweicloudsdkcore.auth.credentials import BasicCredentials, GlobalCredentials
-                        ak, sk = '', ''
-                        for k, v in os.environ.items():
-                            u = k.upper()
-                            if not (u.startswith('HUAWEI') or u.startswith('HW') or u.startswith('HWC')): continue
-                            if 'ACCESS_KEY' in u or u.endswith('_AK') or u == 'AK': ak = v or ak
-                            if 'SECRET_KEY' in u or u.endswith('_SK') or u == 'SK': sk = v or sk
+                        ak = (os.environ.get('HUAWEI_ACCESS_KEY') or os.environ.get('HW_ACCESS_KEY')
+                              or os.environ.get('HUAWEI_AK') or os.environ.get('HW_AK') or '')
+                        sk = (os.environ.get('HUAWEI_SECRET_KEY') or os.environ.get('HW_SECRET_KEY')
+                              or os.environ.get('HUAWEI_SK') or os.environ.get('HW_SK') or '')
                         if svc == 'bss':
                             domain_id = os.environ.get('HUAWEI_DOMAIN_ID', '')
                             cred = GlobalCredentials().with_ak(ak).with_sk(sk).with_domain_id(domain_id)
@@ -340,11 +340,15 @@ for tc in cases:
                 script_path = os.path.join(skill_root, script_part.split()[0])
                 script_args = ' '.join(script_part.split()[1:]) if len(script_part.split()) > 1 else ''
                 if os.path.isfile(script_path):
-                    # _posix: bash -c consumes backslashes in unquoted Windows paths
-                    # (C:\Users\x -> C:Usersx); use POSIX form, the python shim
-                    # converts it back to native before the interpreter runs.
-                    full_cmd = f'python3 {_posix(script_path)} {script_args}'.strip()
-                    r = subprocess.run(['bash', '-c', full_cmd], capture_output=True, text=True, timeout=int(os.environ.get('TIMEOUT_SDK', '60')), env=os.environ)
+                    # _posix: converts Windows drive paths (e.g. C:/Users/x) to
+                    # POSIX form; the python shim converts back before execution.
+                    # 参数列表直传(subprocess.argv), 不拼 shell 字符串, 避免注入。
+                    import shlex as _shlex
+                    try:
+                        _argv = ['python3', _posix(script_path)] + _shlex.split(script_args)
+                    except ValueError:
+                        _argv = ['python3', _posix(script_path)]
+                    r = subprocess.run(_argv, capture_output=True, text=True, timeout=int(os.environ.get('TIMEOUT_SDK', '60')), env=os.environ)
                     output = (r.stdout[:1000] + '\n' + r.stderr[:500]).strip()
                     status = 'pass' if r.returncode == 0 else 'fail'
                 else:

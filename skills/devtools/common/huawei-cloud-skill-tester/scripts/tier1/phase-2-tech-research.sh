@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
+
+
 # phase-2-tech-research.sh — 技术调研
 # 对 Phase 1 提取的每条命令做 CLI→SDK→API 三级降级验证
-set -uo pipefail
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 source "$SCRIPT_DIR/lib/utils.sh"
@@ -274,6 +276,27 @@ for r in d['research']:
     print(f\"  {icon} {r['cmd_id']}: 推荐={exe}, CLI={r['cli']['available']}, SDK={r['sdk']['available']}\")
 "
 }
+
+# 参数解析: getopts 解析命名参数(--skill <dir> / --skill=<dir>), 与 SKILL.md 文档用法一致;
+# 位置参数(管线内部调用)作为兜底追加。
+_arg_skills=()
+while getopts ":h-:" opt; do
+  case "$opt" in
+    h) echo "用法: $(basename "$0") [--skill <dir>]... [<dir>...]"; exit 0 ;;
+    -) case "${OPTARG}" in
+         skill)
+           [ $OPTIND -le $# ] || { echo "错误: --skill 需要参数" >&2; exit 1; }
+           _arg_skills+=("${!OPTIND}"); OPTIND=$((OPTIND + 1)) ;;
+         skill=*) _arg_skills+=("${OPTARG#skill=}") ;;
+         help) echo "用法: $(basename "$0") [--skill <dir>]... [<dir>...]"; exit 0 ;;
+         *) echo "未知参数: --${OPTARG}" >&2; exit 1 ;;
+       esac ;;
+    \?) echo "未知参数: -$OPTARG" >&2; exit 1 ;;
+  esac
+done
+shift $((OPTIND - 1))
+_arg_skills+=("$@")
+set -- "${_arg_skills[@]}"
 
 for skill_dir in "$@"; do
   run_phase2 "$skill_dir" || exit 1

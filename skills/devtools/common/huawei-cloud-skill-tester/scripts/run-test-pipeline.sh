@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
+
+
 # run-test-pipeline.sh — Huawei Cloud Skill Tester Main Entry
 # Three-track, multi-phase testing pipeline for Huawei Cloud skills.
 # 实际跑 8 个 phase (Phase 0~7)，统一称为"三轨八节"（三轨 × 八 phase）。
-set -uo pipefail
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
@@ -58,28 +60,34 @@ usage() {
   exit 1
 }
 
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --skills) SKILLS_LIST="$2"; shift 2 ;;
-    --all-installed) MODE="all_installed"; shift ;;
-    --fresh) FRESH=true; shift ;;
-    --no-siblings) WITHOUT_SIBLINGS=true; shift ;;
-    --sibling-limit) SIBLING_LIMIT="$2"; shift 2 ;;
-    --phase)
-      if [ "$2" = "resume" ]; then
-        MODE="resume"
-      else
-        START_PHASE="$2"
-        MODE="phase"
-      fi
-      shift 2 ;;
-    --output) OUTPUT_DIR="$2"; shift 2 ;;
-    --skill-path) export SKILL_PATH="$2"; shift 2 ;;
-    --region) export HUAWEI_REGION="$2"; shift 2 ;;
-    --help|-h) usage ;;
-    *) fail "未知参数: $1"; usage ;;
+# getopts 解析命名参数(长选项走 -: 分支; 值型选项取下一位置参数)
+while getopts ":h-:" opt; do
+  case "$opt" in
+    h) usage ;;
+    -) case "${OPTARG}" in
+         skills)          SKILLS_LIST="${!OPTIND}"; OPTIND=$((OPTIND + 1)) ;;
+         all-installed)   MODE="all_installed" ;;
+         fresh)           FRESH=true ;;
+         no-siblings)     WITHOUT_SIBLINGS=true ;;
+         sibling-limit)   SIBLING_LIMIT="${!OPTIND}"; OPTIND=$((OPTIND + 1)) ;;
+         phase)
+           if [ "${!OPTIND}" = "resume" ]; then
+             MODE="resume"
+           else
+             START_PHASE="${!OPTIND}"
+             MODE="phase"
+           fi
+           OPTIND=$((OPTIND + 1)) ;;
+         output)          OUTPUT_DIR="${!OPTIND}"; OPTIND=$((OPTIND + 1)) ;;
+         skill-path)      export SKILL_PATH="${!OPTIND}"; OPTIND=$((OPTIND + 1)) ;;
+         region)          export HUAWEI_REGION="${!OPTIND}"; OPTIND=$((OPTIND + 1)) ;;
+         help)            usage ;;
+         *) fail "未知参数: --${OPTARG}"; usage ;;
+       esac ;;
+    \?) fail "未知参数: -$OPTARG"; usage ;;
   esac
 done
+shift $((OPTIND - 1))
 
 # Export so child phase scripts can see the sibling config
 if $WITHOUT_SIBLINGS; then
@@ -154,64 +162,10 @@ elif [ "$MODE" = "phase" ] && [ -n "$START_PHASE" ]; then
   info "从指定 Phase $START_PHASE 开始"
 fi
 
-# === Skill Quality Reporting (CLI) ===
-# In-skill CLI source (scripts/cli/cli_entry.py, zero-dependency) is preferred;
-# a PATH-installed skill-quality-cli is the fallback. Fire-and-forget: report
-# failure never blocks or changes the pipeline result. Pure business logic — no
-# in-process SDK dependency. Install via scripts/ensure_cli.sh (idempotent).
-# Config env vars: SKILL_QUALITY_DISABLE=1 disables reporting (local debug),
-# SKILL_QUALITY_NAME sets the reported skill name (default
-# huawei-cloud-skill-tester). See SKILL.md "质量上报（统一执行方式）".
-report_quality() {
-  local rc="$1"
-  local cost_s="$2"
-
-  [ -n "${SKILL_QUALITY_DISABLE:-}" ] && return 0
-  local cli_cmd=()
-  if [ -f "$SCRIPT_DIR/cli/cli_entry.py" ]; then
-    cli_cmd=("${PY_CMD:-python3}" "$SCRIPT_DIR/cli/cli_entry.py" --no-auto-upgrade)
-  elif command -v skill-quality-cli >/dev/null 2>&1; then
-    cli_cmd=(skill-quality-cli --no-auto-upgrade)
-  else
-    warn "⚠️ 上报 CLI 不可用（scripts/cli/ 缺失且未安装 skill-quality-cli），跳过质量上报（可先执行 bash scripts/ensure_cli.sh）"
-    return 0
-  fi
-
-  local status="success" error_code="" error_msg=""
-  if [ "$rc" -ne 0 ]; then
-    status="sys_fail"
-    if [ "$rc" -eq 77 ]; then
-      error_code="C01"
-      error_msg="AK/SK credentials missing (exit 77)"
-    else
-      error_code="B01"
-      error_msg="tester pipeline failed with exit code $rc"
-    fi
-  fi
-
-  info "上报 tester 运行质量 (status=$status, cost=${cost_s}s) ..."
-  local args=(--skill-name "${SKILL_QUALITY_NAME:-huawei-cloud-skill-tester}" --status "$status")
-  [ -n "$error_code" ] && args+=(--error-code "$error_code")
-  [ -n "$error_msg" ] && args+=(--error-msg "$error_msg")
-  if [ -n "$cost_s" ] && [ "$cost_s" -gt 0 ] 2>/dev/null; then
-    args+=(--cost-ms "$(( cost_s * 1000 ))")
-  fi
-  (
-    SKILL_QUALITY_TRIGGER="${SKILL_QUALITY_TRIGGER:-workflow}" \
-    "${cli_cmd[@]}" report "${args[@]}"
-  ) >/dev/null 2>&1 &
-  return 0
-}
-
-# === Trap: ensure cleanup + quality report on exit ===
+# === Trap: ensure cleanup on exit ===
 cleanup_on_exit() {
   local rc=$?
-  local cost_s=0
-  if [ -n "${TOTAL_START:-}" ]; then
-    cost_s=$(( $(date +%s) - TOTAL_START ))
-  fi
   echo ""
-  report_quality "$rc" "$cost_s"
   cleanup_after_test "${SKILL_PATHS[@]}"
   exit $rc
 }

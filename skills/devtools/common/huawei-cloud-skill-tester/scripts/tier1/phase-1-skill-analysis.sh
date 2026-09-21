@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+
+
 # phase-1-skill-analysis.sh — 功能提取
 # 读取 SKILL.md，提取 metadata、commands、capabilities、resource_types
 set -euo pipefail
@@ -75,7 +77,7 @@ desc_match = re.search(r'description: \|(.*?)(?:^tags:|\Z)', text, re.DOTALL | r
 desc_text = ''
 if desc_match:
     desc_text = desc_match.group(1).strip()
-    trig_match = re.search(r'Triggers include:\s*(.*?)(?:\.|$)', desc_text, re.DOTALL)
+    trig_match = re.search(r'Triggers include:[ \t]*(.*?)(?:\.|$)', desc_text, re.DOTALL)
     if trig_match:
         trig_raw = trig_match.group(1)
         triggers = re.findall(r'"([^"]*)"', trig_raw)
@@ -179,12 +181,8 @@ def build_sdk_snippet(svc, method_name, request_class, code_block):
     sdk_ver = _ver_overrides.get(svc, sdk_ver)
     snippet_lines.append('from huaweicloudsdk%s.%s import %s, %s' % (svc, sdk_ver, client_cls, request_class))
     snippet_lines.append('')
-    snippet_lines.append('ak, sk = "", ""')
-    snippet_lines.append('for k, v in os.environ.items():')
-    snippet_lines.append('    u = k.upper()')
-    snippet_lines.append("    if not (u.startswith('HUAWEI') or u.startswith('HW') or u.startswith('HWC')): continue")
-    snippet_lines.append("    if 'ACCESS_KEY' in u or u.endswith('_AK') or u == 'AK': ak = v or ak")
-    snippet_lines.append("    if 'SECRET_KEY' in u or u.endswith('_SK') or u == 'SK': sk = v or sk")
+    snippet_lines.append('ak = os.environ.get("HUAWEI_ACCESS_KEY") or os.environ.get("HW_ACCESS_KEY") or os.environ.get("HW_AK") or ""')
+    snippet_lines.append('sk = os.environ.get("HUAWEI_SECRET_KEY") or os.environ.get("HW_SECRET_KEY") or os.environ.get("HW_SK") or ""')
     snippet_lines.append("region = os.environ.get('HUAWEI_REGION', 'cn-north-4')")
     if svc == 'bss':
         snippet_lines.append("domain_id = os.getenv('HUAWEI_DOMAIN_ID', '')")
@@ -304,6 +302,18 @@ for lang, block in all_code_blocks:
                     'executor': 'script',
                     'is_write': is_write
                 })
+            elif cl.startswith('bash ') and 'scripts/' in cl:
+                # 自带脚本(bash scripts/xxx.sh ...)也是可执行命令, 提取为正例
+                cmd_id += 1
+                is_write = any(kw in cl.lower() for kw in ['create', 'delete', 'update', 'destroy', 'activate', 'reclaim', 'cleanup'])
+                commands.append({
+                    'id': 'CMD-%02d' % cmd_id,
+                    'source': 'SKILL.md-bash-block',
+                    'description': cl[:80],
+                    'command': cl,
+                    'executor': 'script',
+                    'is_write': is_write
+                })
             elif cl.startswith('hcloud '):
                 cmd_id += 1
                 is_write = any(kw in cl.lower() for kw in ['create', 'delete', 'update', 'destroy'])
@@ -319,9 +329,9 @@ for lang, block in all_code_blocks:
 
 # 2. Fallback: extract from markdown table rows in Core Commands section
 if not commands:
-    core_section = re.search(r'##.*\u6838\u5fc3\u547d\u4ee4.*?(?=## |\Z)', text, re.DOTALL)
+    core_section = re.search(r'^##\s+\u6838\u5fc3\u547d\u4ee4.*?(?=^## |\Z)', text, re.DOTALL | re.MULTILINE)
     if not core_section:
-        core_section = re.search(r'##.*Core Commands.*?(?=## |\Z)', text, re.DOTALL)
+        core_section = re.search(r'^##\s+Core Commands.*?(?=^## |\Z)', text, re.DOTALL | re.MULTILINE)
     for line in (core_section.group() if core_section else text).split('\n'):
         line = line.strip()
         if line.startswith('|') and chr(96) in line:
@@ -339,6 +349,10 @@ if not commands:
             # Skip entries that are not real executable commands (ISSUE-001:
             # parameter names like kubectl, --bin-dir, bin in backticks were
             # extracted as independent script paths, causing all test cases to fail)
+            # 裸路径/文件名 token(如 scripts/、references/、SKILL.md)是表格正文
+            # 而非可执行命令, 一律跳过(修复 SKILL.md 表格中 scripts/ 被误提取)
+            if ' ' not in clean_cmd and re.match(r'^[\w./{}\[\]$~-]+$', clean_cmd):
+                continue
             if not (clean_cmd.startswith('hcloud ') or clean_cmd.startswith('python3 ')
                    or clean_cmd.startswith('bash ') or clean_cmd.startswith('curl ')
                    or clean_cmd.startswith('from ') or clean_cmd.startswith('sh ')):
@@ -413,6 +427,17 @@ if os.path.isdir(_refs_dir):
                                 'command': _cl,
                                 'executor': 'script',
                                 'is_write': any(kw in _cl.lower() for kw in ['create', 'delete', 'update', 'destroy', 'activate', 'reclaim'])
+                            })
+                    elif _cl.startswith('bash ') and 'scripts/' in _cl:
+                        if not any(c.get('command', '') == _cl for c in commands):
+                            cmd_id += 1
+                            commands.append({
+                                'id': 'CMD-%02d' % cmd_id,
+                                'source': 'references/%s-bash-block' % _rf,
+                                'description': _cl[:80],
+                                'command': _cl,
+                                'executor': 'script',
+                                'is_write': any(kw in _cl.lower() for kw in ['create', 'delete', 'update', 'destroy', 'activate', 'reclaim', 'cleanup'])
                             })
                     elif _cl.startswith('hcloud '):
                         _clean = re.sub(r'<[^>]+>', '', _cl).strip()

@@ -32,22 +32,26 @@ __HUAWEI_SKILL_TESTER_CRED_REQUEST_v1__
    in their shell profile / PowerShell `$PROFILE` (out-of-band, NOT in chat).
 4. **Never ask for AK/SK in chat**: Forbidden actions include
    `ask_user`, `read -p`, any web form, any clipboard paste back to the agent,
-   any inline `read` loop, or any path through `~/.hcloud/config.json` /
-   `~/.aliyun/config.json` / `~/.aws/credentials` that the user might
+   any inline `read` loop, or any path through local CLI credential profiles
+   (e.g. hcloud / aliyun / aws config files) that the user might
    silently trust.
 5. **Re-run**: Once the user confirms they have set env vars out-of-band, the
    agent simply re-runs the failing phase:
-   `HUAWEI_ACCESS_KEY=<your-access-key> bash run-test-pipeline.sh --skills <name> --phase 4`
-   (the user is expected to have `export`-ed the vars in the shell where the
-   agent executes the command).
+   `bash run-test-pipeline.sh --skills <name> --phase 4`
+   (the user is expected to have `export`-ed the standard variables
+   HUAWEICLOUD_SDK_AK / HUAWEICLOUD_SDK_SK (or legacy HUAWEI_ACCESS_KEY /
+   HUAWEI_SECRET_KEY) in the shell where the agent executes the command.
+   The agent MUST **not** inline any AK/SK — including placeholder literals —
+   as a command-line prefix: that would leak credentials into process lists,
+   shell history, or chat logs.
 6. **If the user declines**: Surface the decline to the human, do NOT mark
    Phase 4/6 as `pass`. You may abort the whole test, or report a partial run
    explicitly tagged "live phases skipped — no credentials".
 
 **Direct-terminal mode (no agent)**: If a human runs the script directly from
 a real terminal (`[ -t 0 ]` is true), the framework still emits the template
-to stderr and exits 77 — the user runs the same `export HUAWEI_ACCESS_KEY=<your-access-key>`
-in their shell and re-invokes the script. **There is no inline `read`
+to stderr and exits 77 — the user runs the same `export HUAWEICLOUD_SDK_AK=<your-access-key-id>` /
+`export HUAWEICLOUD_SDK_SK=...` lines in their own shell (out-of-band) and re-invokes the script. **There is no inline `read`
 prompt path any more.** The TTY prompt used to exist for human convenience
 but was removed because (a) it can leak values through terminal scrollback
 and clipboard, (b) it is inconsistent with the agent protocol, and (c) it
@@ -64,7 +68,7 @@ Huawei Cloud skill ecosystem.
 [Phase 4] exit code: 77
 <agent detects 77, pauses run>
 <agent outputs the env-var template verbatim to the user, with a one-line instruction>
-<user opens their shell, pastes the export HUAWEI_ACCESS_KEY=<your-access-key> lines, re-runs>
+<user opens their own shell, pastes the export HUAWEICLOUD_SDK_AK / HUAWEICLOUD_SDK_SK lines (filled outside chat), re-runs>
 <agent re-runs: bash run-test-pipeline.sh --skills rds-query --phase 4>
 ```
 

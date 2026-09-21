@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+
+
 # config.sh — Centralized configuration for Huawei Cloud Skill Tester
 # All hardcoded defaults are collected here. Override any value via environment variable.
 set -euo pipefail

@@ -7,7 +7,7 @@
 
 | Phase | Criteria |
 |-------|----------|
-| Phase 0 (install-check) | `SKILL.md`、`scripts/`、`references/`、`references/iam-policies.md` 四项**全部**存在；install / uninstall / reinstall 至少有一项可达状态（`pass` 或 `skipped`） |
+| Phase 0 (install-check) | `SKILL.md`、`references/`、`references/iam-policies.md` 三项**必须**存在；`scripts/` 为**软性**（纯 CLI skill 可缺失，缺失时仅提示不阻断，脚本相关校验跳过）；install / uninstall / reinstall 至少有一项可达状态（`pass` 或 `skipped`），任一为 `fail` 时 verdict=`fail` |
 | Phase 1 (feature-extraction) | metadata / triggers / commands / capabilities / resource_types 全部提取无报错；`commands` 与 `triggers` 至少各 1 条，否则 verdict=`partial` |
 | Phase 2 (tech-research) | 每条 command 至少匹配 CLI / SDK / API 其一，否则 `recommended_executor=manual`，verdict 视未匹配条数降为 `partial` |
 | Phase 3 (test-case-generation) | `functional_cases + api_cases >= 1`；按 is_write 风险等级生成正向 + 边界用例 |

@@ -17,11 +17,11 @@ def _repl_escape(s):
 
 
 def _posix(s):
-    """Convert a Windows native path (C:\\Users\\x) to MSYS/POSIX style (/c/Users/x).
+    """Convert a Windows native drive path (C:/Users/x) to MSYS/POSIX style (/c/Users/x).
 
     POSIX paths contain no backslashes, so commands embedding them are safe when
     executed via `bash -c` (unquoted backslashes get consumed by bash, corrupting
-    `C:\\Users\\x` into `C:Usersx`). The python shim converts /c/... back to a
+    `C:/Users/x` into `C:Usersx`). The python shim converts /c/... back to a
     native path before the real interpreter receives it. POSIX input is unchanged.
     """
     s = s.replace('\\', '/')
