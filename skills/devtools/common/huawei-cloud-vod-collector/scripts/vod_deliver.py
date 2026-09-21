@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import time
@@ -98,28 +99,62 @@ def _read_atomgit_token(atomgit_home: str | None = None) -> dict | None:
         return None
 
     auth_path = _get_atomgit_auth_path(atomgit_home)
-    if not auth_path.exists():
+
+    # ---- 路径安全: 拒绝符号链接 / 非常规文件 / 不安全父目录 ----
+    # 父目录: 属主须为当前用户且 group/other 不可写, 防止本地攻击者替换 auth.toml
+    try:
+        parent_stat = auth_path.parent.stat()
+    except OSError:
+        return None
+    if parent_stat.st_uid != os.getuid() or (parent_stat.st_mode & 0o022):
         return None
 
     try:
-        with open(auth_path, "rb") as f:
+        lst = os.lstat(auth_path)
+    except OSError:
+        return None
+    if not stat.S_ISREG(lst.st_mode):
+        # 符号链接或非常规文件一律拒绝(避免 chmod/读取命中错误目标)
+        return None
+
+    # ---- 凭据安全: 读取前先收紧权限为 0600; 无法收紧则拒绝读取 ----
+    try:
+        current_mode = lst.st_mode & 0o777
+        if current_mode != 0o600:
+            os.chmod(auth_path, 0o600)
+    except OSError:
+        return None
+
+    # ---- O_NOFOLLOW 打开 + fstat 防 TOCTOU(打开后确认仍是同一普通文件) ----
+    try:
+        fd = os.open(auth_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except OSError:
+        return None
+    try:
+        fst = os.fstat(fd)
+    except OSError:
+        os.close(fd)
+        return None
+    if (
+        fst.st_ino != lst.st_ino
+        or fst.st_dev != lst.st_dev
+        or not stat.S_ISREG(fst.st_mode)
+    ):
+        os.close(fd)
+        return None
+
+    try:
+        with os.fdopen(fd, "rb") as f:
             data = tomllib.load(f)
 
         if not data.get("access_token"):
             return None
 
-        try:
-            current_mode = auth_path.stat().st_mode & 0o777
-            if current_mode != 0o600:
-                os.chmod(auth_path, 0o600)
-        except (OSError, PermissionError):
-            pass
-
         return {
             "access_token": data["access_token"],
             "refresh_token": data.get("refresh_token", ""),
-            "expires_in": data.get("expires_in", 0),
-            "created_at": data.get("created_at", 0),
+            "expires_in": data.get("expires_in"),
+            "created_at": data.get("created_at"),
             "user": data.get("user", {}),
             "_source": str(auth_path),
         }
@@ -135,11 +170,24 @@ def _check_atomgit_token(token_data: dict | None) -> tuple[bool, str]:
     if not token_data:
         return False, "AtomGit-GO token not found (auth.toml missing or unparseable)"
 
-    expires_in = token_data.get("expires_in", 0)
-    created_at = token_data.get("created_at", 0)
+    expires_in = token_data.get("expires_in")
+    created_at = token_data.get("created_at")
 
-    if expires_in <= 0:
-        return True, "Token valid (no expiry)"
+    # 显式无效值优先: expires_in 显式为 0(0 秒有效)或负值 → 已过期
+    # (即便 created_at 同样是 0/缺失, 也不能当无过期处理)
+    if expires_in is not None and expires_in <= 0:
+        return False, "Token expired (invalid expires_in)"
+
+    # 两者均缺失(读取时保留 None) → 无过期信息, 视为无过期
+    if expires_in is None and not created_at:
+        return True, "Token valid (no expiry timestamp)"
+
+    # 有 created_at 但缺 expires_in → 无法推算过期时间, 视为无过期
+    if expires_in is None:
+        return True, "Token valid (no expiry timestamp)"
+
+    if not created_at or created_at <= 0:
+        return False, "Token expiry cannot be determined (missing/zero created_at)"
 
     now = time.time()
     expires_at = created_at + expires_in
@@ -211,11 +259,40 @@ def _resolve_atomgit_token(atomgit_home: str | None = None) -> dict:
     }
 
 
+# 从自由文本中提取看起来像产品名的 token(仅作兜底启发式)。
+# 仅接受字母开头的 word-word(-word)+ 形态, 且排除日期(2024-12-31)、UUID、
+# 纯数字请求 ID(req-123456 / id-2024-12-31)、版本号(v1-2-3)等非产品名误匹配。
+_PRODUCT_TOKEN_RE = re.compile(
+    r"(?<![A-Za-z0-9-])([A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)+)(?![A-Za-z0-9-])"
+)
+_UUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+_REQUEST_ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9]*(-\d+)+$")
+
+
+def _extract_product_token(text: str) -> str:
+    """Extract a plausible product token from free-form text (or "")."""
+    if not text:
+        return ""
+    for cand in _PRODUCT_TOKEN_RE.findall(text):
+        if _UUID_RE.fullmatch(cand):
+            continue
+        if _REQUEST_ID_RE.fullmatch(cand):
+            continue
+        # 形如 v1-2-3 / foo-2024-12-31 的版本/时间戳形态不视为产品名
+        segs = cand.split("-")
+        if len(segs) > 1 and all(seg.isdigit() for seg in segs[1:]):
+            continue
+        return cand
+    return ""
+
+
 def _infer_product_name(feedback) -> str:
     if feedback.product_name:
         return feedback.product_name
-    for ann in feedback.annotations:
-        if ann.startswith("skill:"):
+    for ann in getattr(feedback, "annotations", []) or []:
+        if isinstance(ann, str) and ann.startswith("skill:"):
             return ann.split("skill:", 1)[1].strip()
     if feedback.agent_action:
         import re as _re
@@ -223,10 +300,9 @@ def _infer_product_name(feedback) -> str:
         if m:
             return m.group(1).strip()
     if feedback.error_message:
-        import re as _re
-        m = _re.search(r"(\w+-\w+(?:-\w+)+)", feedback.error_message)
-        if m:
-            return m.group(1)
+        token = _extract_product_token(feedback.error_message)
+        if token:
+            return token
     return ""
 
 
@@ -265,11 +341,11 @@ def _infer_voice_sources(feedback) -> str:
         if m:
             _add(m.group(1).strip())
 
-    # 5) error message pattern like word-word(-word)+
+    # 5) error message pattern like word-word(-word)+ (guarded: no date/UUID/request-id)
     if getattr(feedback, "error_message", None):
-        m = re.search(r"(\w+-\w+(?:-\w+)+)", feedback.error_message)
-        if m:
-            _add(m.group(1))
+        token = _extract_product_token(feedback.error_message)
+        if token:
+            _add(token)
 
     return ", ".join(candidates)
 
@@ -574,7 +650,7 @@ def _start_login_server() -> dict:
         return {
             "success": False,
             "error": (
-                "Server binary not found. Install the open-source project AtomGit-GO (MIT license) first:\n"
+                "Server binary not found. Install the open-source project AtomGit-GO (MIT license) first.\n"
                 "  Repo: https://gitcode.com/weixin_45218422/AtomGit-GO\n"
                 "  Linux/macOS: bash <SKILL_DIR>/scripts/vod_install.sh install\n"
                 "  Windows:     powershell <SKILL_DIR>/scripts/vod_install.ps1 install"
@@ -617,7 +693,6 @@ def _stop_login_server(pid: int) -> dict:
         return {"success": False, "error": f"Failed to stop server: {e}"}
 
 def main() -> None:
-    from _quality_hook import install; install()
     parser = argparse.ArgumentParser(description="VoD Feedback Delivery Tool")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -644,7 +719,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    # ── 纯业务执行 ── 质量上报由外部 skill-quality-cli run 包裹 (见 SKILL.md「质量上报」段)
+    # ── 纯业务执行 ──
     if args.command == "server-start":
         result = _start_login_server()
         print(json.dumps(result, ensure_ascii=False))
