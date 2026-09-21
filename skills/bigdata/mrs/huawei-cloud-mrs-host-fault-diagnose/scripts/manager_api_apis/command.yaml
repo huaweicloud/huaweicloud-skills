@@ -1,0 +1,66 @@
+# ==============================================================================
+# 命令相关 API 配置
+# 对应文档: 2.9 命令
+# ==============================================================================
+
+get_commands:
+  # 2.9.1 查询命令列表
+  # 查询系统中所有已完成或进行中的命令，包括命令的名称、起止时间、状态及进度百分比
+  # 权限: 集群管理，用户管理，租户管理，系统管理
+  desc: "查询命令列表"
+  method: "GET"
+  path: "/api/v2/commands"
+  required_params: []
+  optional_params:
+    - cluster_id
+    - command_name
+    - status
+    - start_time
+    - end_time
+
+get_command_detail:
+  # 2.9.2 查询指定命令
+  # 查询指定命令的信息，包括命令的名称、起止时间、状态及进度百分比，以及步骤信息
+  # 权限: 集群管理，用户管理，租户管理，系统管理
+  desc: "查询指定命令"
+  method: "GET"
+  path: "/api/v2/commands/{command_id}"
+  required_params:
+    - command_id
+  optional_params: []
+
+abort_command:
+  # 2.9.3 中止指定任务
+  # 中止指定任务的执行
+  # 权限: 集群管理
+  desc: "中止指定任务"
+  method: "PUT"
+  path: "/api/v2/commands/{command_id}/abort"
+  required_params:
+    - command_id
+  optional_params: []
+
+get_command_step:
+  # 2.9.4 查询指定命令步骤
+  # 查询指定命令指定步骤的信息，包括步骤的名称、起止时间、状态及进度百分比、步骤详细信息等
+  # 权限: 集群管理，用户管理，租户管理，系统管理
+  desc: "查询指定命令步骤"
+  method: "GET"
+  path: "/api/v2/commands/{command_id}/steps/{step_name}"
+  required_params:
+    - command_id
+    - step_name
+  optional_params: []
+
+get_command_step_by_line:
+  # 2.9.5 按行号查询指定命令步骤
+  # 在查询指定命令步骤时，会给出当前步骤详细信息最后一条行数，使用该行号继续查询后续的步骤信息
+  # 权限: 集群管理，用户管理，租户管理，系统管理
+  desc: "按行号查询指定命令步骤"
+  method: "GET"
+  path: "/api/v2/commands/{command_id}/steps/{step_name}/lines/{line_no}"
+  required_params:
+    - command_id
+    - step_name
+    - line_no
+  optional_params: []

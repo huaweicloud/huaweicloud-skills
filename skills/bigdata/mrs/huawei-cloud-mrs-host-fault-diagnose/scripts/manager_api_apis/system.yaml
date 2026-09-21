@@ -1,0 +1,75 @@
+# ==============================================================================
+# 系统(OMS)相关 API 配置
+# 对应文档: 2.24 系统
+# ==============================================================================
+
+get_oms_info:
+  # 2.24.1 查询OMS基本信息
+  # 查询OMS基本信息，包括版本号、HA模式、主备机状态等
+  # 权限: 系统管理
+  desc: "查询OMS基本信息"
+  method: "GET"
+  path: "/api/v2/oms"
+  required_params: []
+  optional_params: []
+
+get_oms_services:
+  # 2.24.10 查询OMS中所有服务
+  # 查询所有OMS服务，包括服务的HA状态
+  # 权限: 系统管理
+  desc: "查询OMS中所有服务"
+  method: "GET"
+  path: "/api/v2/oms/services"
+  required_params: []
+  optional_params:
+    - cluster_id
+
+get_oms_config:
+  # 2.24.4 查询系统参数
+  # 查询系统参数
+  # 权限: 系统管理
+  desc: "查询系统参数"
+  method: "GET"
+  path: "/api/v2/oms/config"
+  required_params: []
+  optional_params: []
+
+get_acs_config:
+  # 2.24.12 查询ACS配置
+  # 查询independent开关状态
+  # 权限: 用户查看，用户管理
+  desc: "查询ACS配置"
+  method: "GET"
+  path: "/api/v2/oms/services/acs/config"
+  required_params: []
+  optional_params: []
+
+get_okerberos_config:
+  # 2.24.16 查询okerberos配置
+  # 查询okerberos服务的配置
+  # 权限: 系统管理
+  desc: "查询okerberos配置"
+  method: "GET"
+  path: "/api/v2/oms/services/okerberos/config"
+  required_params: []
+  optional_params: []
+
+get_oldap_config:
+  # 2.24.18 查询oldap配置
+  # 查询oldap服务的配置
+  # 权限: 系统管理
+  desc: "查询oldap配置"
+  method: "GET"
+  path: "/api/v2/oms/services/oldap/config"
+  required_params: []
+  optional_params: []
+
+get_tomcat_config:
+  # 2.24.20 查询tomcat配置
+  # 查询tomcat服务的一些配置
+  # 权限: 系统管理
+  desc: "查询tomcat配置"
+  method: "GET"
+  path: "/api/v2/oms/services/tomcat/config"
+  required_params: []
+  optional_params: []

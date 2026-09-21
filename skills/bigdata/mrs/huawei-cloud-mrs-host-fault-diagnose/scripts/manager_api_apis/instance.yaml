@@ -1,0 +1,94 @@
+# ==============================================================================
+# 实例相关 API 配置
+# 对应文档: 2.12 实例
+# ==============================================================================
+
+get_instances:
+  # 2.12.11 查询实例
+  # 查询指定服务的实例列表，返回的信息包括实例的运行状态信息，实例所在主机等信息
+  # 权限: 集群查看，集群管理
+  desc: "查询实例"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/services/{service_name}/instances"
+  required_params:
+    - cluster_id
+    - service_name
+  optional_params:
+    - hostname
+    - role_name
+  response_filter:
+    instances:
+      - id
+      - name
+      - runningStatus
+      - haStatus
+      - configStatus
+      - roleName
+      - serviceName
+      - host: hostname
+
+get_instance_detail:
+  # 2.12.13 查询指定实例
+  # 查询指定的实例，返回的信息包括实例的运行状态信息，实例所在主机等信息
+  # 权限: 集群查看，集群管理
+  desc: "查询指定实例"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/services/{service_name}/instances/{instance_id}"
+  required_params:
+    - cluster_id
+    - service_name
+    - instance_id
+  optional_params: []
+
+get_instance_config:
+  # 2.12.16 查询指定实例配置
+  # 查询指定实例配置
+  # 权限: 集群查看，集群管理
+  desc: "查询指定实例配置"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/services/{service_name}/instances/{instance_id}/configs"
+  required_params:
+    - cluster_id
+    - service_name
+    - instance_id
+  optional_params: []
+
+get_instance_configfiles:
+  # 2.12.15 查询指定实例配置文件列表
+  # 查询指定实例配置文件列表
+  # 权限: 集群管理
+  desc: "查询指定实例配置文件列表"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/services/{service_name}/instances/{instance_id}/configfiles"
+  required_params:
+    - cluster_id
+    - service_name
+    - instance_id
+  optional_params: []
+
+get_instance_configfile_content:
+  # 2.12.14 查询指定实例指定配置文件内容
+  # 查询指定实例指定配置文件内容
+  # 权限: 集群管理
+  desc: "查询指定实例指定配置文件内容"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/services/{service_name}/instances/{instance_id}/configfile"
+  required_params:
+    - cluster_id
+    - service_name
+    - instance_id
+  optional_params:
+    - file_name
+
+get_instance_summary:
+  # 2.12.20 查询实例的概要信息
+  # 概要信息是一组通过key-value格式描述的属性对
+  # 权限: 集群查看，集群管理
+  desc: "查询实例的概要信息"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/services/{service_name}/instances/{instance_id}/summary"
+  required_params:
+    - cluster_id
+    - service_name
+    - instance_id
+  optional_params: []

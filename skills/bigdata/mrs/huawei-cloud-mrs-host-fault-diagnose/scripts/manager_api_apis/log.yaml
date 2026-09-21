@@ -1,0 +1,184 @@
+# ==============================================================================
+# 日志相关 API 配置
+# 对应文档: 2.18 日志
+# ==============================================================================
+
+browse_log:
+  # 2.18.9 浏览指定日志文件的内容
+  # 通过指定主机、日志文件、起至行号等，浏览日志文件内容。接口按照行来返回日志文本内容。
+  # 替代 cat/tail/grep 日志
+  # 权限: 集群管理
+  desc: "浏览指定日志文件的内容（替代 cat/tail/grep 日志）"
+  method: "GET"
+  path: "/api/v2/log/browse"
+  required_params:
+    - hostname
+    - file_name
+  optional_params:
+    - start_line
+    - end_line
+    - search
+
+get_log_filename:
+  # 2.18.14 查询指定日志文件的精确名称
+  # 通过指定主机、日志文件类别等，查询日志文件的精确文件名
+  # 替代 ls 确认文件名
+  # 权限: 集群管理
+  # 注意: category_name 是日志类别名（如 hadoop-omm-namenode），不是文件名
+  #       可通过 get_log_search_support_services 查询 categorys[].name 获取
+  desc: "查询指定日志文件的精确名称（替代 ls 确认文件名）"
+  method: "GET"
+  path: "/api/v2/log/logfile"
+  required_params:
+    - hostname
+    - category_name
+    - path
+  optional_params: []
+
+start_log_search:
+  # 2.18.15 启动日志检索
+  # 启动一个日志检索过程，支持指定关键字，主机，服务等。启动检索成功，会返回一个命令id，
+  # 通过该id查询检索状态和结果。替代 grep 关键字搜索日志
+  # 权限: 集群管理
+  # 注意: keyWord 禁止包含 | ; & $ > < ' \ ! 等命令注入字符
+  #       startTime/endTime 格式: yyyy-MM-ddTHH:mm:ss
+  #       services 格式: component:service:role（如 HDFS:HDFS:NameNode），多个以分号分隔
+  #       min_log_level 可选值: TRACE, DEBUG, INFO, WARN, ERROR, FATAL
+  desc: "启动日志检索（替代 grep 关键字搜索日志）"
+  method: "POST"
+  path: "/api/v2/log/search"
+  required_params:
+    - cluster_id
+    - key_word
+    - start_time
+    - end_time
+    - services
+    - min_log_level
+  optional_params:
+    - source_type
+    - hosts
+    - log_file_name
+    - time_out
+    - max_logs_num
+  request_body_template:
+    keyWord: "{key_word}"
+    startTime: "{start_time}"
+    endTime: "{end_time}"
+    minLogLevel: "{min_log_level}"
+    sources:
+      - sourceType: "{source_type:CLUSTER}"
+        clusterId: "{cluster_id}"
+        services: "{services}"
+        hosts: "{hosts}"
+    logFileName: "{log_file_name}"
+    timeOut: "{time_out}"
+    maxLogsNum: "{max_logs_num}"
+
+get_log_search_progress:
+  # 2.18.16 查询指定检索任务
+  # 启动日志检索后，使用该接口查询日志检索的状态和结果，需要指定任务id
+  # 权限: 集群管理
+  desc: "查询指定检索任务的状态和结果"
+  method: "GET"
+  path: "/api/v2/log/search/progress/{search_id}"
+  required_params:
+    - search_id
+  optional_params: []
+
+stop_log_search:
+  # 2.18.17 停止日志检索
+  # 停止一个日志检索过程
+  # 权限: 集群管理
+  desc: "停止日志检索"
+  method: "POST"
+  path: "/api/v2/log/search/stop/{search_id}"
+  required_params:
+    - search_id
+  optional_params: []
+
+get_log_search_support_services:
+  # 2.18.18 查询支持日志检索的服务
+  # 查询支持日志检索的服务（无需参数）
+  # 权限: 集群管理
+  desc: "查询支持日志检索的服务"
+  method: "GET"
+  path: "/api/v2/log/search/support_services"
+  required_params: []
+  optional_params: []
+
+gather_log:
+  # 2.18.12 采集日志
+  # 搜集指定集群的日志，支持指定时间范围、服务（角色）和主机，日志搜集后打包成tar文件
+  # 权限: 集群管理
+  # 注意: services 格式为 ServiceName:RoleName（如 hdfs:NameNode），多个以逗号分隔
+  #       cluster_name 为集群名称（如 LakeWatch），必填
+  #       startTime/endTime 格式: yyyy-MM-ddTHH:mm:ss，必填
+  desc: "采集日志（打包为tar下载）"
+  method: "POST"
+  path: "/api/v2/log/gather"
+  required_params:
+    - cluster_id
+    - cluster_name
+    - services
+    - start_time
+    - end_time
+  optional_params:
+    - hosts
+  request_body_template:
+    sources:
+      - sourceType: "{source_type:CLUSTER}"
+        clusterId: "{cluster_id}"
+        clusterName: "{cluster_name}"
+        services: "{services}"
+    hosts: "{hosts}"
+    startTime: "{start_time}"
+    endTime: "{end_time}"
+
+get_log_gather_support_services:
+  # 2.18.13 查询支持日志采集的服务
+  # 查询指定集群日志采集的所有服务列表，即当前安装的服务（无需参数）
+  # 权限: 集群管理
+  desc: "查询支持日志采集的服务"
+  method: "GET"
+  path: "/api/v2/log/gather/support_services"
+  required_params: []
+  optional_params: []
+
+prepare_log_file:
+  # 2.18.11 准备指定的日志文件
+  # 配合"下载日志文件"接口使用。先指定一个日志文件，再使用下载接口进行下载
+  # 权限: 集群管理
+  desc: "准备指定的日志文件（配合下载接口）"
+  method: "GET"
+  path: "/api/v2/log/file"
+  required_params:
+    - cluster_id
+    - hostname
+    - file
+  optional_params: []
+
+download_log:
+  # 2.18.10 下载日志文件
+  # 配合"采集日志""准备指定的日志文件"接口使用，下载生成的tar压缩包文件
+  # 权限: 集群管理
+  desc: "下载日志文件（tar压缩包）"
+  method: "GET"
+  path: "/api/v2/log/download"
+  is_download: true
+  required_params:
+    - cluster_id
+  optional_params:
+    - file_name
+
+get_instance_logfiles:
+  # 2.12.19 查询指定实例日志文件
+  # 查询指定实例的日志文件列表
+  # 权限: 集群查看，集群管理
+  desc: "查询指定实例的日志文件列表"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/services/{service_name}/instances/{instance_id}/logfiles"
+  required_params:
+    - cluster_id
+    - service_name
+    - instance_id
+  optional_params: []

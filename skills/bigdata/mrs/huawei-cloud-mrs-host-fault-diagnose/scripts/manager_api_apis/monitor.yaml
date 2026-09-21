@@ -1,0 +1,149 @@
+# ==============================================================================
+# 监控指标相关 API 配置
+# 对应文档: 2.21 监控
+# ==============================================================================
+
+get_host_metric_definitions:
+  # 2.21.10 查询主机监控指标定义
+  # 查询主机监控指标定义（查可用指标名）
+  # 权限: 集群查看，集群管理
+  desc: "查询主机监控指标定义（查可用指标名）"
+  method: "GET"
+  path: "/api/v2/metric/definitions/hosts"
+  required_params: []
+  optional_params:
+    - cluster_id
+
+get_service_metric_definitions:
+  # 2.21.8 查询服务监控指标定义
+  # 查询指定集群的指定服务的监控指标定义
+  # 权限: 集群查看，集群管理
+  desc: "查询服务监控指标定义"
+  method: "GET"
+  path: "/api/v2/metric/definitions/clusters/{cluster_id}/services/{service_name}"
+  required_params:
+    - cluster_id
+    - service_name
+  optional_params: []
+
+get_role_metric_definitions:
+  # 2.21.9 查询角色监控指标定义
+  # 查询指定集群指定服务的指定角色的监控指标定义
+  # 权限: 集群查看，集群管理
+  desc: "查询角色监控指标定义"
+  method: "GET"
+  path: "/api/v2/metric/definitions/clusters/{cluster_id}/services/{service_name}/roles/{role_name}"
+  required_params:
+    - cluster_id
+    - service_name
+    - role_name
+  optional_params: []
+
+get_host_metrics:
+  # 2.21.6 查询主机监控指标数据
+  # 查询指定主机的监控指标数据（替代 top/iostat/vmstat）
+  # metric_names: 支持多个，用英文逗号分隔
+  # 权限: 集群查看，集群管理
+  desc: "查询主机监控指标数据（替代 top/iostat/vmstat）"
+  method: "GET"
+  path: "/api/v2/hosts/{hostname}/metrics"
+  required_params:
+    - hostname
+  optional_params:
+    - metric_names
+    - start_time
+    - end_time
+    - include_statistics
+
+export_host_metrics:
+  # 2.21.7 导出主机监控数据
+  # 导出指定的主机的监控数据
+  # 权限: 集群查看，集群管理
+  desc: "导出主机监控数据"
+  method: "GET"
+  path: "/api/v2/hosts/{hostname}/metrics/export"
+  required_params:
+    - hostname
+  optional_params:
+    - metric_names
+    - start_time
+    - end_time
+    - include_statistics
+
+get_service_metrics:
+  # 2.21.4 查询服务监控指标数据
+  # 查询指定集群的指定服务的监控指标数据
+  # metric_names: 支持多个，用英文逗号分隔
+  # 权限: 集群查看，集群管理
+  desc: "查询服务监控指标数据"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/services/{service_name}/metrics"
+  required_params:
+    - cluster_id
+    - service_name
+  optional_params:
+    - metric_names
+    - start_time
+    - end_time
+    - include_statistics
+
+export_service_metrics:
+  # 2.21.5 导出服务监控数据
+  # 导出指定集群的指定服务的监控数据
+  # 权限: 集群查看，集群管理
+  desc: "导出服务监控数据"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/services/{service_name}/metrics/export"
+  required_params:
+    - cluster_id
+    - service_name
+  optional_params:
+    - metric_names
+    - start_time
+    - end_time
+    - include_statistics
+
+get_instance_metrics:
+  # 2.21.2 查询实例监控指标数据
+  # 查询指定集群指定服务的指定实例的监控指标数据
+  # metric_names: 支持多个，用英文逗号分隔
+  # 权限: 集群查看，集群管理
+  desc: "查询实例监控指标数据"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/services/{service_name}/instances/{instance_id}/metrics"
+  required_params:
+    - cluster_id
+    - service_name
+    - instance_id
+  optional_params:
+    - metric_names
+    - start_time
+    - end_time
+    - include_statistics
+
+export_instance_metrics:
+  # 2.21.3 导出实例监控数据
+  # 导出指定集群指定服务的指定实例的监控数据
+  # 权限: 集群查看，集群管理
+  desc: "导出实例监控数据"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/services/{service_name}/instances/{instance_id}/metrics/export"
+  required_params:
+    - cluster_id
+    - service_name
+    - instance_id
+  optional_params:
+    - metric_names
+    - start_time
+    - end_time
+    - include_statistics
+
+get_monitor_dump_config:
+  # 2.22.1 查询监控转储配置
+  # 查询当前的监控转储配置，包括功能开关和协议参数
+  # 权限: 系统管理
+  desc: "查询监控转储配置"
+  method: "GET"
+  path: "/api/v2/monitor_dump"
+  required_params: []
+  optional_params: []

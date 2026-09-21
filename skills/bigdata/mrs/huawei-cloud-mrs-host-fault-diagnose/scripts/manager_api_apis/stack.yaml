@@ -1,0 +1,100 @@
+# ==============================================================================
+# 堆栈采集相关 API 配置
+# 对应文档: 2.18 日志 (堆栈部分)
+# ==============================================================================
+
+collect_instance_stack:
+  # 2.18.2 指定实例采集堆栈信息
+  # 根据下发的实例列表采集堆栈信息（替代 jstack）
+  # 权限: 集群管理
+  # 注意: instance_ids 为实例ID列表（整数数组，如 [101,102]）
+  #       stack_types 可选值: JSTACK, JMAP_HISTO, JMAP_DUMP
+  desc: "指定实例采集堆栈信息（替代 jstack）"
+  method: "POST"
+  path: "/api/v2/clusters/{cluster_id}/services/{service_name}/instances/log/stack/collect"
+  required_params:
+    - cluster_id
+    - service_name
+    - stack_types
+    - stack_file_size_limit
+    - stack_file_count
+    - use_live
+    - stack_file_save_path
+    - collect_timeout
+  optional_params:
+    - instance_ids
+    - continue_collect
+    - collect_interval
+    - run_time
+  request_body_template:
+    instances: "{instance_ids}"
+    stackTypes: "{stack_types}"
+    stackFileSizeLimit: "{stack_file_size_limit}"
+    stackFileCount: "{stack_file_count}"
+    useLive: "{use_live}"
+    stackFileSavePath: "{stack_file_save_path}"
+    collectTimeout: "{collect_timeout}"
+    continueCollect: "{continue_collect}"
+    collectInterval: "{collect_interval}"
+    runTime: "{run_time}"
+
+collect_role_stack:
+  # 2.18.6 指定角色采集堆栈信息
+  # 根据角色列表采集堆栈信息（替代 jstack）
+  # 权限: 集群管理
+  # 注意: role_names 为角色名列表（如 ["NameNode"]）
+  #       stack_types 可选值: JSTACK, JMAP_HISTO, JMAP_DUMP
+  desc: "指定角色采集堆栈信息（替代 jstack）"
+  method: "POST"
+  path: "/api/v2/clusters/{cluster_id}/services/{service_name}/log/stack/collect"
+  required_params:
+    - cluster_id
+    - service_name
+    - stack_types
+    - stack_file_size_limit
+    - stack_file_count
+    - use_live
+    - stack_file_save_path
+    - collect_timeout
+  optional_params:
+    - role_names
+    - continue_collect
+    - collect_interval
+    - run_time
+  request_body_template:
+    roles: "{role_names}"
+    stackTypes: "{stack_types}"
+    stackFileSizeLimit: "{stack_file_size_limit}"
+    stackFileCount: "{stack_file_count}"
+    useLive: "{use_live}"
+    stackFileSavePath: "{stack_file_save_path}"
+    collectTimeout: "{collect_timeout}"
+    continueCollect: "{continue_collect}"
+    collectInterval: "{collect_interval}"
+    runTime: "{run_time}"
+
+get_stack_progress:
+  # 2.18.8 获取堆栈采集进度
+  # 根据任务ID查询堆栈采集进度
+  # 权限: 集群管理
+  # 注意: task_id 为 query parameter（非路径参数），值来自 collect_instance_stack/collect_role_stack 返回的 taskID
+  desc: "获取堆栈采集进度"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/services/{service_name}/log/stack/progress"
+  required_params:
+    - cluster_id
+    - service_name
+    - task_id
+  optional_params: []
+
+get_stack_conf:
+  # 2.18.3 查询堆栈采集参数
+  # 查询已经设置的堆栈采集高级选项参数
+  # 权限: 集群管理
+  desc: "查询堆栈采集参数"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/services/{service_name}/instances/log/stack/conf"
+  required_params:
+    - cluster_id
+    - service_name
+  optional_params: []

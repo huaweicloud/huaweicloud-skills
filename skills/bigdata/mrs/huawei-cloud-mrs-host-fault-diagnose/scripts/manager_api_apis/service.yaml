@@ -1,0 +1,194 @@
+# ==============================================================================
+# 服务相关 API 配置
+# 对应文档: 2.19 服务
+# ==============================================================================
+
+get_cluster_services:
+  # 2.19.4 查询所有服务（含 2.19.2 轻量查询）
+  # 查询指定集群中的服务列表。会给出每个服务的运行状态，配置状态，角色情况，依赖关系等
+  # 权限: 登录成功即可访问
+  desc: "查询所有服务(轻量)"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/services"
+  required_params:
+    - cluster_id
+  optional_params:
+    - service_name
+    - display_name
+    - running_status
+    - config_status
+    - component
+    - limit
+    - offset
+    - order
+    - order_by
+    - no_page
+
+get_cluster_service_detail:
+  # 2.19.5 查询指定服务
+  # 查询指定集群中的指定服务，会给出服务的运行状态，配置状态，角色情况，依赖关系等
+  # 权限: 集群查看，集群管理
+  desc: "查询指定服务"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/services/{service_name}"
+  required_params:
+    - cluster_id
+    - service_name
+  optional_params: []
+
+get_service_alarm_stats:
+  # 2.19.8 获取服务的告警统计信息
+  # 按级别统计指定服务上未恢复告警的数量
+  # 权限: 登录成功即可访问
+  desc: "获取服务的告警统计信息"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/services/{service_name}/alarm_stat"
+  required_params:
+    - cluster_id
+    - service_name
+  optional_params: []
+
+get_service_associates:
+  # 2.19.9 查询指定服务的关联服务
+  # 查询指定服务的关联服务
+  # 权限: 集群查看，集群管理
+  desc: "查询指定服务的关联服务"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/services/{service_name}/associates"
+  required_params:
+    - cluster_id
+    - service_name
+  optional_params:
+    - include_under_service
+    - include_upper_service
+
+get_service_config:
+  # 2.19.28 查询指定服务的配置
+  # 查询指定服务的配置，查询结果包括服务和角色级别的配置，不包括实例组和实例级别的配置
+  # 权限: 集群查看，集群管理
+  desc: "查询指定服务的配置"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/services/{service_name}/configs"
+  required_params:
+    - cluster_id
+    - service_name
+  optional_params:
+    - is_install
+    - type
+
+get_service_db_users:
+  # 2.19.31 查询服务数据库用户名列表
+  # 查询DBservice的数据库密码，包括DBservice自己的管理员密码，以及其它服务在DBservice上建立的用户的密码
+  # 权限: 集群查看，集群管理
+  desc: "查询服务数据库用户名列表"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/services/{service_name}/db_user"
+  required_params:
+    - cluster_id
+    - service_name
+  optional_params: []
+
+get_service_depends:
+  # 2.19.32 查询指定服务的依赖服务
+  # 查询指定服务的依赖服务，包括上层服务和下层服务
+  # 权限: 集群查看，集群管理
+  desc: "查询指定服务的依赖服务"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/services/{service_name}/depends"
+  required_params:
+    - cluster_id
+    - service_name
+  optional_params:
+    - include_under_service
+    - include_upper_service
+    - include_indirect_under
+    - include_indirect_upper
+
+get_service_logic_clusters:
+  # 2.19.33 查询服务的逻辑集群的信息
+  # 查询逻辑集群的信息
+  # 权限: 集群查看，集群管理
+  desc: "查询服务的逻辑集群的信息"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/services/{service_name}/logic_clusters"
+  required_params:
+    - cluster_id
+    - service_name
+  optional_params: []
+
+get_service_nameservice_summary:
+  # 2.19.34 查询服务的NameService的概要信息
+  # 查询NameService的概要信息，每个NameService的概要信息是一组通过key-value格式描述的属性对
+  # 权限: 集群查看，集群管理
+  desc: "查询服务的NameService的概要信息"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/services/{service_name}/nameservice_summary"
+  required_params:
+    - cluster_id
+    - service_name
+  optional_params: []
+
+get_service_nameservices:
+  # 2.19.35 查询服务的NameService的信息
+  # 查询NameService的信息，每个NameService的信息包含与其关联的NameNode列表和JournalNode列表
+  # 权限: 集群查看，集群管理
+  desc: "查询服务的NameService的信息"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/services/{service_name}/nameservices"
+  required_params:
+    - cluster_id
+    - service_name
+  optional_params: []
+
+get_service_nonuniform_configs:
+  # 2.19.36 查询服务级别配置项的差异化配置值
+  # 查询指定配置项的差异化配置值。差异化配置即配置值不同于直接上级对象的值
+  # 权限: 集群查看，集群管理
+  desc: "查询服务级别配置项的差异化配置值"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/services/{service_name}/nonuniform_configs"
+  required_params:
+    - cluster_id
+    - service_name
+  optional_params:
+    - config_file
+    - config_name
+
+get_service_expired_configs:
+  # 2.19.37 查询指定服务的过期配置
+  # 查询指定服务的过期配置
+  # 权限: 集群查看，集群管理
+  desc: "查询指定服务的过期配置"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/services/{service_name}/outofsync_configs"
+  required_params:
+    - cluster_id
+    - service_name
+  optional_params: []
+
+get_role_nonuniform_configs:
+  # 2.19.39 查询角色级别配置项的差异化配置值
+  # 查询指定配置项的差异化配置值。在角色上查询，可以获得实例组和实例上的差异化值
+  # 权限: 集群查看，集群管理
+  desc: "查询角色级别配置项的差异化配置值"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/services/{service_name}/roles/{role_name}/nonuniform_configs"
+  required_params:
+    - cluster_id
+    - service_name
+    - role_name
+  optional_params:
+    - config_file
+    - config_name
+
+get_service_summary:
+  # 2.19.40 查询指定服务的概要信息
+  # 概要信息是一组通过key-value格式描述的属性对，不同的服务可能有不同的概要信息
+  # 权限: 集群查看，集群管理
+  desc: "查询指定服务的概要信息"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/services/{service_name}/summary"
+  required_params:
+    - cluster_id
+    - service_name
+  optional_params: []

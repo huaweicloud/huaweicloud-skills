@@ -1,0 +1,37 @@
+# ==============================================================================
+# 工具相关 API 配置
+# 对应文档: 2.15 工具
+# ==============================================================================
+
+check_remote:
+  # 2.15.1 检查远端节点是否可用
+  # 替代 ping 命令，测试远端节点连通性
+  # 权限: 集群管理
+  # 注意: 需要提供远端节点的SSH连接信息（IP、端口、用户名、客户端路径）
+  desc: "检查远端节点是否可用（替代 ping）"
+  method: "POST"
+  path: "/api/v2/tools/check_remote"
+  required_params:
+    - remote_ip
+    - remote_port
+    - remote_user_name
+    - remote_client_path
+  optional_params:
+    - private_key_location
+    - remote_pwd
+  request_body_template:
+    remoteIp: "{remote_ip}"
+    remotePort: "{remote_port}"
+    remoteUserName: "{remote_user_name}"
+    remoteClientPath: "{remote_client_path}"
+    privateKeyLocation: "{private_key_location}"
+    remotePwd: "{remote_pwd}"
+
+get_nameservices:
+  # 2.15.4 查询所有集群的NameService的信息
+  # 权限: 集群查看，集群管理
+  desc: "查询所有集群的NameService的信息"
+  method: "GET"
+  path: "/api/v2/tools/nameservices"
+  required_params: []
+  optional_params: []
