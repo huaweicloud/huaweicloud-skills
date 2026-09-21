@@ -1,0 +1,52 @@
+# ==============================================================================
+# 审计相关 API 配置
+# 对应文档: 2.14 审计
+# ==============================================================================
+
+get_audits:
+  # 2.14.1 查询审计
+  # 查询所有的审计，支持条件过滤和排序
+  # 权限: 审计管理
+  desc: "查询审计"
+  method: "GET"
+  path: "/api/v2/audits"
+  required_params: []
+  optional_params:
+    - limit
+    - offset
+    - order
+    - orderBy
+    - start_time
+    - end_time
+    - user
+    - user_ip
+    - hostname
+    - instance
+    - source
+    - operations
+    - serviceNames
+    - keyword
+    - levels
+    - result
+
+get_audit_config:
+  # 2.14.2 查询审计配置
+  # 查询审计转储配置（APIAuditConfig）
+  # 返回字段: enableDump(ON/OFF), ftpIp, ftpPort, ftpUserName, ftpPassword(查询时恒为空),
+  #   ftpServicePublicKey, savePath, mode(0=按条数/1=按时间), date
+  # 权限: 审计管理
+  desc: "查询审计配置"
+  method: "GET"
+  path: "/api/v2/audits/config"
+  required_params: []
+  optional_params: []
+
+get_audit_operations:
+  # 2.14.6 查询所有审计操作类型
+  # 查询系统中所有的审计操作类型（已经发生过的操作），在使用"查询审计"接口时可作为操作类型过滤的参考
+  # 权限: 审计管理
+  desc: "查询所有审计操作类型"
+  method: "GET"
+  path: "/api/v2/audits/operations"
+  required_params: []
+  optional_params: []

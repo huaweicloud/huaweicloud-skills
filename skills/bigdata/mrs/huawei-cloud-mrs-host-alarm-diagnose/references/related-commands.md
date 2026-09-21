@@ -2,6 +2,8 @@
 
 Quick reference for the common LakeWatch API commands used by this skill. All commands use `python3` on Linux and `python` on Windows. Every `-p` value MUST be wrapped in single quotes; on Windows PowerShell, escape `"` as `"""`.
 
+> **Two modes**: run `python3 scripts/check_api_mode.py` first. In **lakewatch mode** use `lakewatch_api_client.py`; in **manager mode** use `manager_api_client.py` (sections below marked *Manager Mode*).
+
 ## General Format
 
 ```bash
@@ -160,6 +162,57 @@ python3 scripts/lakewatch_api_client.py -a access_manager_get \
 
 > `target_url` MUST NOT start with `/`. GET only (PUT not yet supported). Requires Agent >= 1.0.5.
 
+## MRS Manager API Commands (Manager Mode)
+
+When `check_api_mode.py` reports `manager`, use these commands:
+
+```bash
+# List all available Manager APIs
+python3 scripts/manager_api_client.py --list-apis
+
+# Encrypt the MRS Manager password (interactive, no echo)
+python3 scripts/manager_api_client.py --encrypt-password
+
+# Query active alarms
+python3 scripts/manager_api_client.py -a get_alarms -p 'status=1' --json
+
+# Query service instance running status
+python3 scripts/manager_api_client.py -a get_instances \
+  -p 'cluster_id=<cluster_id>' -p 'service_name=DBService' --json
+
+# Query host process status
+python3 scripts/manager_api_client.py -a get_host_process \
+  -p 'hostname=<node_name>' --json
+
+# Query host resource usage
+python3 scripts/manager_api_client.py -a get_host_resource \
+  -p 'hostname=<node_name>' --json
+
+# Query host monitor metrics
+python3 scripts/manager_api_client.py -a get_host_metrics \
+  -p 'hostname=<node_name>' -p 'metric_names=dev_cpu_surp_avg,dev_load_one_min' --json
+
+# Confirm the exact log file name
+python3 scripts/manager_api_client.py -a get_log_filename \
+  -p 'hostname=<node_name>' -p 'category_name=agent' -p 'path=/var/log/Bigdata/nodeagent/agentlog' --json
+
+# Browse a log file (file_name must be a full path)
+python3 scripts/manager_api_client.py -a browse_log \
+  -p 'hostname=<node_name>' -p 'file_name=/var/log/Bigdata/nodeagent/agentlog/agent.log' \
+  -p 'start_line=1' -p 'end_line=200' --json
+
+# Search logs by keyword, then poll progress
+python3 scripts/manager_api_client.py -a start_log_search \
+  -p 'cluster_id=<cluster_id>' -p 'key_word=ERROR' \
+  -p 'start_time=<alarm_time>' -p 'end_time=<current_time>' \
+  -p 'services=Manager:Manager:Agent' -p 'min_log_level=ERROR' --json
+
+python3 scripts/manager_api_client.py -a get_log_search_progress \
+  -p 'search_id=<task_id>' --json
+```
+
+> `start_log_search` `services` format: `component:service:role`, multiple separated by `;`; `start_time`/`end_time` format `yyyy-MM-ddTHH:mm:ss`; `min_log_level`: TRACE/DEBUG/INFO/WARN/ERROR/FATAL.
+
 ## Quick Reference Table
 
 | API | Required Params | Purpose |
@@ -173,6 +226,21 @@ python3 scripts/lakewatch_api_client.py -a access_manager_get \
 | `access_manager_get` | `cluster_id`, `target_url` | Proxy MRS Manager GET API |
 | `get_token` | (auto) | Obtain token (built-in, auto-called) |
 
+### Manager Mode API Table
+
+| API | Required Params | Purpose |
+|-----|-----------------|---------|
+| `get_alarms` | `status` (optional) | Query alarm list |
+| `get_instances` | `cluster_id`, `service_name` | Query instance running status |
+| `get_host_process` | `hostname` | Query host process status |
+| `get_host_resource` | `hostname` | Query host resource usage |
+| `get_host_metrics` | `hostname`, `metric_names` | Query host monitor metrics |
+| `get_log_filename` | `hostname`, `category_name`, `path` | Get exact log file name |
+| `browse_log` | `hostname`, `file_name`, `start_line`, `end_line` | Browse a log file |
+| `start_log_search` | `key_word`, `start_time`, `end_time`, `services` | Start a keyword log search |
+| `get_log_search_progress` | `search_id` | Poll log search progress/results |
+| `gather_log` | `cluster_name`, `services`, `start_time`, `end_time` | Collect a service log package |
+
 ## Variable Substitution
 
 | Variable | Description | Example |
@@ -185,3 +253,5 @@ python3 scripts/lakewatch_api_client.py -a access_manager_get \
 | `<pid>` | Process ID | `392208` |
 | `<nic>` | Network adapter name | `eth0` |
 | `<alarm_time>` | Alarm occurrence time | `2026/06/11 16:00:32 GMT+08:00` |
+| `<current_time>` | Current time (manager mode, `yyyy-MM-ddTHH:mm:ss`) | `2026/09/02 11:00:00` |
+| `<task_id>` | Log search task ID (from `start_log_search`) | — |

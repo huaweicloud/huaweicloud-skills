@@ -1,0 +1,179 @@
+# ==============================================================================
+# 主机相关 API 配置
+# 对应文档: 2.4 主机
+# ==============================================================================
+
+get_hosts:
+  # 2.4.3 查询所有主机
+  # 查询系统中的主机列表。主机信息包括主机的主机名、IP地址、操作系统等基本信息，
+  # 以及CPU/内存/网络等基本性能数据。支持查询参数过滤和结果分页。
+  # 权限: 集群查看，集群管理
+  desc: "查询所有主机"
+  method: "GET"
+  path: "/api/v2/hosts"
+  required_params: []
+  optional_params:
+    - cluster_id
+    - hostname
+    - ip
+    - host_type
+    - running_status
+    - service
+    - roles
+    - rack
+    - cpu_lower
+    - cpu_upper
+    - mem_lower
+    - mem_upper
+    - disk_lower
+    - disk_upper
+    - limit
+    - offset
+    - order
+    - order_by
+    - no_page
+  response_filter:
+    hosts:
+      - hostname
+      - ip
+      - businessIp
+      - hostType
+      - runningStatus
+      - cpuUsage
+      - totalMemory
+      - availableMemory
+      - totalHardDiskSpace
+      - availableHardDiskSpace
+      - cpuCores
+      - nodeOMSType
+      - osType
+
+get_host_list:
+  # 2.4.1 查询所有主机(轻量)
+  # 只会给出每个主机的管理ip、业务ip、主机名、机架、clusterID以及节点类型
+  # 权限: 集群查看，集群管理
+  desc: "查询所有主机(轻量，仅IP/主机名/节点类型)"
+  method: "GET"
+  path: "/api/v2/host_list"
+  required_params: []
+  optional_params:
+    - cluster_id
+    - hostname
+    - ip
+    - host_type
+    - rack
+    - limit
+    - offset
+    - order
+    - order_by
+    - no_page
+
+get_host_detail:
+  # 2.4.25 查询指定主机
+  # 查询系统中指定的主机，主机信息包括主机的主机名、IP地址、操作系统等基本信息，
+  # 以及CPU/内存/网络等基本性能数据
+  # 权限: 集群查看，集群管理
+  desc: "查询指定主机信息"
+  method: "GET"
+  path: "/api/v2/hosts/{hostname}"
+  required_params:
+    - hostname
+  optional_params: []
+
+get_host_alarm_stats:
+  # 2.4.26 获取主机的告警统计信息
+  # 查询指定主机上的告警统计，即按级别统计该主机上未恢复告警的数量
+  # 权限: 集群查看，集群管理
+  desc: "获取主机的告警统计信息"
+  method: "GET"
+  path: "/api/v2/hosts/{hostname}/alarm_stat"
+  required_params:
+    - hostname
+  optional_params: []
+
+get_host_instance_logfiles:
+  # 2.4.27 获取主机实例日志文件信息
+  # 查询主机上运行实例的所有日志文件信息（替代 ls /var/log/...）
+  # 权限: 集群查看，集群管理
+  desc: "获取主机所有实例日志文件信息（替代 ls /var/log/...）"
+  method: "GET"
+  path: "/api/v2/hosts/{hostname}/instance_logfiles"
+  required_params:
+    - hostname
+  optional_params: []
+
+get_host_process:
+  # 2.4.28 主机进程基本信息
+  # 获取主机的进程基本信息（替代 ps aux / top）
+  # 权限: 集群查看，集群管理
+  desc: "主机进程基本信息（替代 ps aux / top）"
+  method: "GET"
+  path: "/api/v2/hosts/{hostname}/process"
+  required_params:
+    - hostname
+  optional_params: []
+  response_filter:
+    processes:
+      - serviceName
+      - componentName
+      - roleName
+      - processName
+      - processStatus
+      - processId
+
+get_host_resource:
+  # 2.4.29 主机资源基本信息
+  # 获取主机的资源基本信息（替代 free -h / df -h / uptime）
+  # 权限: 集群查看，集群管理
+  desc: "主机资源基本信息（替代 free -h / df -h / uptime）"
+  method: "GET"
+  path: "/api/v2/hosts/{hostname}/resource"
+  required_params:
+    - hostname
+  optional_params: []
+  response_filter:
+    resources:
+      - serviceName
+      - roleName
+      - cpuUsage
+      - memoryUsage
+      - diskUsage
+
+get_host_racks:
+  # 2.4.8 获取所有主机分配的机架列表
+  # 查询所有的机架，以及该机架下主机的数量
+  # 权限: 集群查看，集群管理
+  desc: "获取所有主机分配的机架列表"
+  method: "GET"
+  path: "/api/v2/hosts/assist/racks"
+  required_params: []
+  optional_params:
+    - cluster_id
+
+get_host_stats:
+  # 2.4.9 获取主机统计信息
+  # 将集群中的主机分类统计，统计结果包括主备管理节点，控制节点和数据节点的数量，及其健康状况
+  # 权限: 集群查看，集群管理
+  desc: "获取主机统计信息"
+  method: "GET"
+  path: "/api/v2/hosts/assist/stat"
+  required_params: []
+  optional_params:
+    - cluster_id
+
+get_disk_isolation:
+  # 2.4.30 查询慢盘隔离信息
+  # 查询慢盘隔离信息，支持按磁盘名、磁盘状态、主机状态过滤
+  # diskStatus: 0=待隔离 1=隔离中 2=自动隔离中止 3=已隔离 4=已解除隔离 5=隔离失败 6=解除隔离失败 7=隔离节点 10=已恢复
+  # 权限: 集群查看，集群管理
+  desc: "查询慢盘隔离信息"
+  method: "GET"
+  path: "/api/v2/clusters/{cluster_id}/hosts/{host_name}/isolation"
+  required_params:
+    - cluster_id
+    - host_name
+  optional_params:
+    - diskName
+    - diskStatus
+    - hostStatus
+    - type

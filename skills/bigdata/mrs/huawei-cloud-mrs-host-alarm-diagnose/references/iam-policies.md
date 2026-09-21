@@ -1,16 +1,18 @@
 # IAM Policies - MRS Alarm Diagnosis
 
-This skill does NOT use Huawei Cloud IAM AK/SK or KooCLI. It authenticates to the LakeWatch service with a LakeWatch account (username + encrypted password) and accesses MRS cluster data through the LakeWatch API. This document describes the access model and the required roles/permissions.
+This skill does NOT use Huawei Cloud IAM AK/SK or KooCLI. It authenticates either to the LakeWatch service with a LakeWatch account (username + encrypted password) and accesses MRS cluster data through the LakeWatch API, or directly to the MRS Manager REST API with a Manager account (manager mode). This document describes the access model and the required roles/permissions.
 
 ## Access Architecture
 
 ```
-Caller (Agent) -> lakewatch_api_client.py -> LakeWatch API -> MRS cluster
-                                                       -> MRS Manager (proxy via manager-access)
+Caller (Agent) -> check_api_mode.py -> lakewatch_api_client.py -> LakeWatch API -> MRS cluster
+                                                        -> MRS Manager (proxy via manager-access)
+Caller (Agent) -> check_api_mode.py -> manager_api_client.py -> MRS Manager REST API (28443)
 ```
 
 - **LakeWatch authentication**: username + encrypted password (CryptoAPI on Linux, AES-256-CBC on Windows). Token is auto-fetched and cached locally.
-- **MRS data access**: granted by the LakeWatch service account; no direct Huawei Cloud IAM AK/SK is involved.
+- **MRS Manager authentication (manager mode)**: username + encrypted password (Basic Auth or Cookie/JSESSIONID) against the Manager floating IP port 28443.
+- **MRS data access**: granted by the LakeWatch service account or the MRS Manager account; no direct Huawei Cloud IAM AK/SK is involved.
 
 ## Required LakeWatch Account Permissions
 
@@ -39,23 +41,42 @@ When the skill calls `access_manager_get` to proxy MRS Manager GET endpoints, th
 
 > `target_url` MUST NOT start with `/`. The proxy only supports GET. PUT is not yet available on the Agent side.
 
+## MRS Manager Permissions (Manager Mode)
+
+In manager mode, the skill calls the MRS Manager REST API directly through `manager_api_client.py`. The Manager account configured in `scripts/manager_api_config.yaml` (`auth.username`) needs read access to:
+
+| MRS Manager API | Purpose | manager_api_client API |
+|-----------------|---------|------------------------|
+| Alarm list | Query active alarms and accompanying alarms | `get_alarms` |
+| Instance status | Query service instance running status | `get_instances` |
+| Host process | Confirm whether a process exists on a host | `get_host_process` |
+| Host resource | View host disk/CPU/memory usage | `get_host_resource` |
+| Host metrics | View monitor metrics (`dev_` prefix) | `get_host_metrics` |
+| Log search/browse | Search logs by keyword or browse log files | `start_log_search`, `get_log_search_progress`, `browse_log`, `get_log_filename` |
+| Log collection | Collect a service log package | `gather_log` |
+
+> The Manager account needs at least read-only (view) permissions on alarm, host, instance, service, and log modules. See [MRS Manager API Client](manager-api-client.md) for the full API catalog.
+
 ## Huawei Cloud IAM (Not Directly Required)
 
 This skill does not call Huawei Cloud public APIs directly, so no Huawei Cloud IAM AK/SK policy is required to run the skill itself. If the deployment environment uses an ECS IAM role to reach the LakeWatch endpoint, ensure the ECS instance has network access to the LakeWatch service host/port configured in `lakewatch_api_config.yaml`.
 
 ## Permission Failure Handling
 
-1. When a LakeWatch API call fails with an authentication error (401) or permission error (403), read this document.
-2. Display the required LakeWatch account permissions and MRS Manager proxy resources to the user.
-3. Guide the user to confirm the LakeWatch account has the required permissions on the target cluster.
+1. When an API call fails with an authentication error (401) or permission error (403), read this document.
+2. Determine the current mode with `check_api_mode.py`:
+   - **Lakewatch mode**: display the required LakeWatch account permissions and MRS Manager proxy resources to the user.
+   - **Manager mode**: display the required MRS Manager account permissions to the user.
+3. Guide the user to confirm the corresponding account has the required permissions on the target cluster.
 4. Pause execution and wait for the user to confirm permissions are granted.
 
 ## Common Errors
 
 | Error | Meaning | Solution |
 |-------|---------|----------|
-| 401 Unauthorized | LakeWatch account credentials invalid or expired | Re-encrypt the password with `--encrypt-password`; verify `auth.username` |
-| 403 Forbidden | LakeWatch account lacks permission on the target cluster | Grant the account access to the target MRS cluster |
-| Connection timeout | LakeWatch endpoint unreachable | Check `server.host`/`port` and network connectivity |
+| 401 Unauthorized | LakeWatch/Manager account credentials invalid or expired | Re-encrypt the password with `--encrypt-password`; verify the username |
+| 403 Forbidden | Account lacks permission on the target cluster | Grant the account access to the target MRS cluster |
+| Connection timeout | LakeWatch endpoint or Manager port 28443 unreachable | Check host/port and network connectivity |
 | `50201` / `RDS.9999` | LakeWatch / Autopilot backend unavailable | Retry later or contact operations |
 | Agent version too low | `access_manager_get` not supported | Upgrade LakeWatch Agent to >= 1.0.5 and ensure OMS node info is reported |
+| Manager login failure | Wrong Manager password or wrong floating IP | Re-run `manager_api_client.py --encrypt-password`; verify `server.host` is the Manager floating IP |
