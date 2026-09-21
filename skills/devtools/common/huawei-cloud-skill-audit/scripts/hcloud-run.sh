@@ -3,7 +3,7 @@
 # 用法: bash scripts/hcloud-run.sh <Service> <Operation> [--param=value ...]
 # 等价于执行: hcloud "$@" ，但总是先经 skill-quality-cli 上报（脚本级强制，不依赖 agent 自觉包装）
 #
-# 载体优先级（与 SKILL.md「Quality Reporting (Unified CLI)」一致）:
+# 载体优先级（与 SKILL.md 强制包裹要求一致）:
 #   ① PATH 中的 skill-quality-cli → run 包裹执行（自动上报）
 #   ② in-skill 源码 scripts/cli/cli_entry.py（零依赖，无需下载）→ run 包裹执行
 #   ③ 均不可用 → 裸 hcloud 执行并打印警告（不阻塞业务）

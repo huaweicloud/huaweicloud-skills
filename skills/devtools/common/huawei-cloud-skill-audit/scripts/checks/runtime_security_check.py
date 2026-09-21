@@ -27,7 +27,13 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from check_protocol import Check, CheckResult, Issue, Severity
-from checks.skillspector_builtin_check import BINARY_EXTENSIONS, SKIP_DIRS, RULE_FILE_NAMES, SELF_SKILL_ROOT
+from checks.skillspector_builtin_check import (
+    BINARY_EXTENSIONS,
+    SKIP_DIRS,
+    RULE_FILE_NAMES,
+    SELF_SKILL_ROOT,
+    PATH_EXPORT_HIJACK_RE,
+)
 
 # 自扫描豁免(与 skillspector 对称): 仅对工具自身安装目录生效, 不影响任何其他目标。
 # 当前自身文档/代码无触发行, 表为空; 未来若 SKILL.md/references 出现 Q001-Q003 或
@@ -116,6 +122,30 @@ class RuntimeSecurityCheck(Check):
                     for pat in rule["patterns"]:
                         m = pat["regex"].search(line)
                         if m:
+                            # PER003 排除 PATH 配置(2026-09-19 修复 PR #648,
+                            # PR #656 收紧): 安装脚本向 ~/.bashrc 追加 export PATH
+                            # 是标准行为, 非自启动持久化; 但真实 PATH 劫持后门
+                            # (export PATH 指向 /tmp/.evil 等攻击者可控目录/下载源)
+                            # 不豁免, 保留 PER003 告警。
+                            if rule["id"].startswith("PER003") and re.search(
+                                    r"export\s+PATH", line):
+                                if not PATH_EXPORT_HIJACK_RE.search(line):
+                                    break
+                            # INT002 写入形态 gating(2026-09-19 误报修复 PR #650,
+                            # PR #656 补漏): 检查/引用形态(grep、[[ -f、2>/dev/null、
+                            # local 赋值、test)只是读取/判断 agent 记忆配置, 非篡改
+                            # 写入; 真实写入(echo >/write_text/os.remove/重定向到
+                            # ~/.hermes 等)仍命中; 带 2>/dev/null 的重定向写入不豁免。
+                            if rule["id"].startswith("INT002"):
+                                _int002_write = re.search(
+                                    r"(?:>>|>)\s*[^|&;\n]*?(?:~?/\.hermes|~?/\.openclaw|SOUL\.md|IDENTITY\.md)\b",
+                                    line)
+                                if _int002_write:
+                                    pass  # 真实写入形态 → 不 gate, 继续命中
+                                elif re.search(
+                                        r"grep\b|\[\[ -f|2>/dev/null|\blocal\s+\w+\s*=|test\b",
+                                        line):
+                                    break
                             ignore_key = f"{rule['id']}:{str(rel)}:{line_no}"
                             if ignore_key in ignores:
                                 break

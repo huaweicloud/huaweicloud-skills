@@ -42,6 +42,18 @@ RULE_FILE_NAMES = {
     "skill_quality_rules.json",
 }
 
+# ── PER003/YR1 export PATH gate(2026-09-19 PR #656 收紧)──
+# e05aa21 引入的 gate 以"行内含 export PATH 子串"为条件 break, 导致携带
+# export PATH 的真实 PATH 劫持后门(echo 'export PATH="/tmp/.evil:$PATH"' >> rc)
+# 被一并豁免(漏报)。收紧: 仅当行内 export PATH 赋值不指向世界可写目录/下载
+# 执行等劫持特征时才豁免; 含劫持特征(PATH 指向 /tmp、/var/tmp、/dev/shm、
+# 下载源、命令替换、管道执行等)仍报 PER003/YR1, 与 e05aa21 提交说明"真后门仍报"一致。
+PATH_EXPORT_HIJACK_RE = re.compile(
+    r"/tmp/|/var/tmp/?|/dev/shm|/run/user|/proc/|"
+    r"\bcurl\b|\bwget\b|https?://|ftp://|"
+    r"\$\s*\(|`|base64|\|\s*(?:ba)?sh\b|\bnc\s+-e\b|\bncat\b"
+)
+
 SEVERITY_MAP = {
     "critical": Severity.CRITICAL,
     "high": Severity.ERROR,
@@ -80,6 +92,7 @@ SELF_SCAN_EXEMPTIONS = frozenset({
     ("P2", "scripts/skill_audit.py", "reverse shell examples"),
     # SC2: CLI 安装脚本/帮助文本的管道示例(PR 剥离后回到基线形态, 自身豁免)
     ("SC2", "scripts/ensure_cli.sh", "| python3 -c"),
+    ("SC2", "scripts/install_cli.sh", "| python3 -c"),
     ("SC2", "scripts/cli/cli_entry.py", "bootstrap"),
     ("AR3", "scripts/skill_audit.py", "override saf" + "ety guardrails"),
     ("P1", "scripts/skill_audit.py", "override saf" + "ety guardrails"),
@@ -266,6 +279,24 @@ class SkillspectorBuiltinCheck(Check):
                 for rule in self._rules:
                     for pat in rule["patterns"]:
                         m = pat["regex"].search(line)
+                        # E2 环境变量收割 gate(2026-09-19 修复 PR #648):
+                        # env = dict(os.environ) 是子进程环境传递的标准用法, 非收割
+                        # (收割通常是消费/外传: os.environ.items() 遍历后外发)
+                        if rule["id"] == "E2" and re.search(
+                                r"=\s*dict\s*\(\s*os\.environ\s*\)", line):
+                            break
+                        # ── YR1 export PATH gate(2026-09-19 PR #656 收紧)──
+                        # 仅豁免无害 PATH 配置(export PATH=...$PATH 标准赋值形态);
+                        # 真实 PATH 劫持后门(值指向 /tmp/.evil 等攻击者可控目录/下载源)
+                        # 不豁免, 保留 YR1 告警(与 runtime_security PER003 同源同口径)。
+                        if rule["id"] == "YR1" and re.search(r"export\s+PATH", line):
+                            if not PATH_EXPORT_HIJACK_RE.search(line):
+                                break
+                        # TM1 注释行过滤(2026-09-19 PR #656): 纯注释行(strip 后 # 开头)
+                        # 提及 rm 是文档/示例, 非实际执行的缓存清理/破坏命令, 不判 TM1;
+                        # 与 DES001 的 ~/(?!\.) 豁免同口径, 消除注释行误报。
+                        if rule["id"] == "TM1" and line.lstrip().startswith("#"):
+                            break
                         if m:
                             ignore_key = f"{rule['id']}:{str(rel)}:{line_no}"
                             if ignore_key in ignores:
@@ -357,6 +388,10 @@ class SkillspectorBuiltinCheck(Check):
                 if not func_name:
                     continue
                 base = func_name.split(".")[-1]
+                # re.compile 是正则编译(标准安全 API), 非动态代码编译 ——
+                # 2026-09-19 误报修复(PR #650 实测 15 条 AST6 全为 re.compile)
+                if func_name == "re.compile":
+                    continue
                 # exec/eval/compile/__import__ / os.system 等危险执行
                 if base in DANGEROUS_EXEC_FUNCS or (func_name.startswith("os.") and base in DANGEROUS_OS_FUNCS):
                     rule_id = "AST1" if base == "exec" else \
@@ -375,6 +410,13 @@ class SkillspectorBuiltinCheck(Check):
                     ))
                 # subprocess.call/run/Popen 等
                 elif func_name.startswith("subprocess.") and base in SUBPROCESS_FUNCS:
+                    # AST4 仅报 shell=True 形态(2026-09-19 误报修复 PR #644/645):
+                    # 无 shell 参数/shell=False/列表或变量参数是安全调用, 不报
+                    _shell_kw = next((kw for kw in node.keywords if kw.arg == "shell"), None)
+                    if _shell_kw is None:
+                        continue
+                    if isinstance(_shell_kw.value, ast.Constant) and _shell_kw.value.value is False:
+                        continue
                     issues.append(Issue(
                         rule="AST4",
                         severity=Severity.WARNING,

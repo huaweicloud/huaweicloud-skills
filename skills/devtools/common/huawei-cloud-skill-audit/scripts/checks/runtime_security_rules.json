@@ -207,7 +207,7 @@
       "scan_level": "quick",
       "patterns": [
         {
-          "regex": "\\\\u200[b-d]|\\\\ufeff|\\u200b|\\u200c|\\u200d|\\ufeff",
+          "regex": "\\\\u200[b-d]|\\\\ufeff|​|‌|‍|(?<!^)﻿",
           "confidence": 0.8
         }
       ]
@@ -330,7 +330,7 @@
           "confidence": 0.98
         },
         {
-          "regex": "rm\\s+-(?:[a-z]*r[a-z]*f|f[a-z]*r)[a-z]*\\s+~/?\\s*\\*?(?:\\s|/|$)",
+          "regex": "rm\\s+-(?:[a-z]*r[a-z]*f|f[a-z]*r)[a-z]*\\s+~/(?!\\.)\\s*\\*?(?:\\s|/|$)",
           "confidence": 0.9
         }
       ]
@@ -527,12 +527,14 @@
       "scan_level": "quick",
       "patterns": [
         {
-          "regex": "(?:memory|memories|context|profiles?)/[^'\\\"|&;\\n]*(?:\\.md|\\.json|\\.db|\\.sqlite)\\b",
-          "confidence": 0.6
+          "regex": "(?:memory|memories|context|profiles?)/[^'\"|&;\\n]*(?:\\.md|\\.json|\\.db|\\.sqlite)\\b"
         },
         {
-          "regex": "(?:open|write_text|os\\.remove)\\s*\\([^)]*(?:~?/\\.hermes|~?/\\.openclaw|SOUL\\.md|IDENTITY\\.md)\\b",
-          "confidence": 0.85
+          "regex": "(?:open|write_text|os\\.remove)\\s*\\([^)]*(?:~?/\\.hermes|~?/\\.openclaw|SOUL\\.md|IDENTITY\\.md)\\b"
+        },
+        {
+          "regex": "(?:>>|>)\\s*[^|&;\\n]*?(?:~?/\\.hermes|~?/\\.openclaw|SOUL\\.md|IDENTITY\\.md)\\b",
+          "confidence": 0.9
         }
       ]
     },
