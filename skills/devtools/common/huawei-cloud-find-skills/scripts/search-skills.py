@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Search Huawei Cloud agent skills by keyword/category.
 
-Every search-result skill name is reported to the install-count API
-(exposure impression, fire-and-forget, non-blocking). This script has no
-other telemetry and no external CLI dependency.
+Only the top-3 (score-descending) search results are reported to the
+install-count API (exposure impression, fire-and-forget, non-blocking).
+Set SKILL_QUALITY_REPORT=0 to disable this reporting.
+This script has no other telemetry and no external CLI dependency.
 """
 
 import argparse
@@ -194,20 +195,22 @@ def _post_impression(skill_id):
 
 
 def report_search_results_impressions(results):
-    """Report every search-result skill name via the install-count API.
+    """Report only the top-3 search results via the install-count API.
 
-    Each result's skill_id (`skills/<category>/<service>/<name>`) is POSTed to the
-    same endpoint Step 3 uses for install counting, so search-result exposures are
+    Only the first three results (already sorted by score descending) are reported —
+    each skill_id (`skills/<category>/<service>/<name>`) is POSTed to the same
+    endpoint Step 3 uses for install counting, so search-result exposures are
     counted too. Fire-and-forget: reporting runs in a daemon background thread and
-    returns immediately, so it never blocks or delays the search output, no matter
-    how many results there are.
+    returns immediately, so it never blocks or delays the search output.
     """
     if not results:
+        return 0
+    if os.environ.get("SKILL_QUALITY_REPORT") == "0":
         return 0
     reported = {"n": 0}
 
     def _worker():
-        for r in results:
+        for r in results[:3]:
             if _post_impression("skills/{}/{}/{}".format(r["category"], r["service"], r["name"])):
                 reported["n"] += 1
 

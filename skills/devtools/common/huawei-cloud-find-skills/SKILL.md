@@ -5,10 +5,13 @@ description: |
 ---
 
 > [!IMPORTANT]
-> **For any Huawei Cloud query or management task:**
+> **When the user wants to search, discover, or install a Huawei Cloud (华为云) agent skill:**
 > 1. **Search** — use this skill (`huawei-cloud-find-skills`) to find the relevant Skill.
 > 2. **Install** — install the matched Skill (see [Step 3](#step-3-install-skill)).
 > 3. **Execute** — follow the installed Skill's instructions to fulfill the request.
+>
+> This skill handles **skill discovery and installation only** — it does not perform
+> Huawei Cloud resource management/query tasks itself; those are handled by the skills it installs.
 
 ## Overview
 
@@ -19,6 +22,19 @@ index) and `github.com` / `raw.githubusercontent.com` (for skill details). Quali
 `skill-quality-cli` (installed by `scripts/ensure_cli.sh` if absent) — no other CLI
 or credential is required.
 
+## Privacy & Telemetry
+
+> **透明披露**: 本 skill 在搜索与安装过程中会产生以下对外遥测上报。均为**匿名聚合数据**(技能名/类目/服务等元信息), **不包含**用户输入内容、凭证、云资源数据或个人身份信息。**质量上报默认开启**(opt-out): 如需关闭, 设置环境变量 `export SKILL_QUALITY_REPORT=0` 即可整体关闭。
+
+| 上报内容 | 触发点 | 目的地 | 是否含敏感数据 |
+|----------|--------|--------|----------------|
+| 搜索 top-3 曝光计数 | `scripts/search-skills.py`（每次搜索） | `devdata2.huaweicloud.com` install-count API | 否（仅技能名/类目/服务） |
+| 安装计数 | Step 3.1 `curl`（每次安装前） | `devdata2.huaweicloud.com` install-count API | 否（仅 `skill_id`，即 `skills/<category>/<service>/<name>`） |
+| 质量上报 | `skill-quality-cli run` 包装执行 | quality 上报 APIG（测试环境） | 否（执行状态/耗时/技能名） |
+
+- **默认开启 / 关闭方式**: 以上三类上报**默认开启**(未设置该环境变量即会上报)；如需关闭, 执行 `export SKILL_QUALITY_REPORT=0`（`skill-quality-cli` 与 `search-skills.py` 均遵循该开关）。
+- 上报均为 **fire-and-forget**，永不阻塞搜索/安装主流程。
+
 ## Scenario Description
 
 This skill enables users to:
@@ -26,7 +42,7 @@ This skill enables users to:
 - **Search Skills**: Find skills by keyword, category, or both (matched against name, description, and triggers)
 - **Browse Categories**: Explore available skill categories
 - **View Skill Details**: Fetch full SKILL.md content from GitHub for specific skills
-- **Install Skills**: Guide users through skill installation via `npx skills add` (GitCode default), `npx clawhub install`, or fallback GitHub method
+- **Install Skills**: Guide users through skill installation via `npx skills add` (GitCode default), `npx skills add https://clawhub.ai/huaweicloudskill/skills/<skill-name>` (ClawHub), or fallback GitHub method
 
 **Architecture**: GitCode API v5 (`index.json` + `cn-en-map.json`) → HTTP GET (base64 decode) → In-memory search → GitHub raw fetch for details → Install
 
@@ -47,7 +63,7 @@ This skill enables users to:
   (idempotent, skips if already present). **MUST be triggered on EVERY execution of this
   skill** before running any search/install command.
   - Upgrade: run `skill-quality-cli upgrade` manually (no auto-upgrade)
-  - Disable telemetry report: set `SKILL_QUALITY_REPORT=0`
+  - **质量上报**: 每次搜索(Step 1)与安装(Step 3)命令都必须用 `skill-quality-cli run --skill-name huawei-cloud-find-skills -- ` 包装执行, 保证每次执行都触发质量上报
 
 ### Step 0: Check Python Environment
 
@@ -80,9 +96,17 @@ If the command fails or returns Python 2.x:
 > immediately after Step 0. It is at the same mandatory level as **Step 0: Check Python
 > Environment** — do not skip it even if you believe the CLI is already present
 > (`ensure_cli.sh` is idempotent and exits silently when everything is ready).
+>
+> **披露**: 该 CLI 仅用于本 skill 的**匿名质量遥测上报**(执行状态/耗时, 见
+> [Privacy & Telemetry](#privacy--telemetry)); 安装位置 `~/.local/bin`, 不修改系统
+> 服务或全局配置; 关闭方式见 [Privacy & Telemetry](#privacy--telemetry)。
 
 ```bash
-# Ensure skill-quality-cli is ready (idempotent: installs only if absent)
+# Ensure ~/.local/bin is on PATH (where skill-quality-cli is installed)
+export PATH="$HOME/.local/bin:$PATH"
+
+# Ensure skill-quality-cli is ready (idempotent: installs only if absent;
+# also auto-links the CLI into a writable PATH dir so the bare command works)
 bash scripts/ensure_cli.sh
 
 # Verify availability
@@ -95,11 +119,13 @@ command -v skill-quality-cli && skill-quality-cli version
 | CLI missing | Installs the latest release into `~/.local/bin/` (prints `skill-quality-cli vX.Y.Z 已就绪`) |
 | Install fails (no network, etc.) | Prints a warning; **never blocks the flow** |
 
-> If `skill-quality-cli` is installed but not on `PATH`:
+> `ensure_cli.sh` 会自动把 `skill-quality-cli` 软链到 `PATH` 中第一个可写目录
+> (如 `/usr/local/bin`)，因此 `skill-quality-cli` 通常可直接调用。若仍不可用
+> (没有任何可写的 PATH 目录)，请在当前 shell 执行：
 > ```bash
 > export PATH="$HOME/.local/bin:$PATH"
 > ```
-> Manual one-off install fallback: `bash scripts/install_cli.sh`. Disable telemetry with `export SKILL_QUALITY_REPORT=0`.
+> Manual one-off install fallback: `bash scripts/install_cli.sh`.
 
 ### Step 0.5: Check KooCLI Version (NON-BLOCKING)
 
@@ -151,18 +177,20 @@ SKILLS_CN_EN_MAP_URL=https://gitcode.com/api/v5/repos/developer-skill/skills-gro
 
 Given `keyword` (from AI-understood user intent) and optional `category`, run the search script:
 
+> **⚠️ MANDATORY (质量上报)**: 搜索命令必须用 `skill-quality-cli run --skill-name huawei-cloud-find-skills -- ` 包装, 保证每次搜索都触发质量上报。严禁裸调 `python scripts/search-skills.py`。
+
 ```powershell
 # PowerShell
-python scripts/search-skills.py -k "<keyword>"
-python scripts/search-skills.py -k "<keyword>" -c "<category>"
-python scripts/search-skills.py -c "<category>"
+skill-quality-cli run --skill-name huawei-cloud-find-skills -- python scripts/search-skills.py -k "<keyword>"
+skill-quality-cli run --skill-name huawei-cloud-find-skills -- python scripts/search-skills.py -k "<keyword>" -c "<category>"
+skill-quality-cli run --skill-name huawei-cloud-find-skills -- python scripts/search-skills.py -c "<category>"
 ```
 
 ```bash
 # Bash
-python scripts/search-skills.py -k "<keyword>"
-python scripts/search-skills.py -k "<keyword>" -c "<category>"
-python scripts/search-skills.py -c "<category>"
+skill-quality-cli run --skill-name huawei-cloud-find-skills -- python scripts/search-skills.py -k "<keyword>"
+skill-quality-cli run --skill-name huawei-cloud-find-skills -- python scripts/search-skills.py -k "<keyword>" -c "<category>"
+skill-quality-cli run --skill-name huawei-cloud-find-skills -- python scripts/search-skills.py -c "<category>"
 ```
 
 > **⚠️ 安全（命令注入防护）**: `keyword`/`category` 来自用户输入，严禁未转义直接拼接到 shell 命令字符串中。若输入包含 `$()`, `$(...)`, 反引号 **` `**`, `;`, `|` 等 shell 元字符，在 Bash/PowerShell 双引号字符串中会触发命令注入。必须按以下方式调用，避免将外部输入拼入 shell 字符串：
@@ -177,7 +205,7 @@ python scripts/search-skills.py -c "<category>"
 2. Expands keywords via `cn-en-map.json` (bidirectional CN↔EN, e.g., "ECS" → "ECS, 弹性云服务器, 云服务器")
 3. Scores each skill: name match **+10**, trigger match **+8**, description match **+5**, service match **+3**
 4. Sorts by score descending, outputs formatted results with matched keywords
-5. Reports every result's skill name to the install-count API (`skills/<category>/<service>/<name>`) as an exposure impression — fire-and-forget, never blocks or fails the search
+5. Reports only the top-3 results' skill names to the install-count API (`skills/<category>/<service>/<name>`) as exposure impressions — fire-and-forget, never blocks or fails the search
 
 **Fallback iteration** (if no results): 1) Switch CN↔EN keywords 2) Expand keywords 3) Remove category filter 4) Try synonyms 5) List all skills
 
@@ -205,24 +233,30 @@ Before executing the install command, call the install-count API. The `skill_id`
 > **IMPORTANT**: The `category` and `service` values MUST be taken directly from the Step 1 search output (format: `name (category/service)`). Do NOT guess or hardcode them.
 >
 
+> **⚠️ MANDATORY (质量上报)**: 安装计数请求同样用 `run` 包装, 保证安装流程触发质量上报。
+
 ```bash
-curl -s -X POST "https://devdata2.huaweicloud.com/rest/developer/fwdo/rest/developer/servlet/hdskillservice/v1/obs/findcounts/increment" -H "Accept: application/json, text/plain, */*" -H "Content-Type: application/json" -H "Origin: https://skills.huaweicloud.com" -H "Referer: https://skills.huaweicloud.com/" -d "{\"skill_id\":\"skills/<category>/<service>/<skill-name>\"}"
+skill-quality-cli run --skill-name huawei-cloud-find-skills -- curl -s -X POST "https://devdata2.huaweicloud.com/rest/developer/fwdo/rest/developer/servlet/hdskillservice/v1/obs/findcounts/increment" -H "Accept: application/json, text/plain, */*" -H "Content-Type: application/json" -H "Origin: https://skills.huaweicloud.com" -H "Referer: https://skills.huaweicloud.com/" -d "{\"skill_id\":\"skills/<category>/<service>/<skill-name>\"}"
 ```
 
 > This is a fire-and-forget request. Do NOT block the install flow on its success or failure.
 
 #### Step 3.2: Execute Install Command
 
+> **⚠️ MANDATORY (质量上报)**: 安装命令必须用 `skill-quality-cli run --skill-name huawei-cloud-find-skills -- sh -c '...'` 包装, 保证每次安装都触发质量上报。`sh -c` 内的 `printf "\n"` 用于自动确认 `npx skills add` 的 scope 交互提示。
+
 ```bash
 # Option A: npx skills add from GitCode (default)
-npx skills add https://gitcode.com/huaweicloud/huaweicloud-skills.git#master --skill <skill-name> -y
+skill-quality-cli run --skill-name huawei-cloud-find-skills -- sh -c 'printf "\n" | npx skills add https://gitcode.com/huaweicloud/huaweicloud-skills.git#master --skill <skill-name> -y'
 
-# Option B: npx clawhub install (OpenClaw ecosystem)
-npx clawhub install <skill-name> -y
+# Option B: npx skills add from ClawHub
+skill-quality-cli run --skill-name huawei-cloud-find-skills -- sh -c 'printf "\n" | npx skills add https://clawhub.ai/huaweicloudskill/skills/<skill-name> -y'
 
 # Option C (fallback): npx skills add from GitHub
-npx skills add huaweicloud/huaweicloud-skills --skill <skill-name> -y
+skill-quality-cli run --skill-name huawei-cloud-find-skills -- sh -c 'printf "\n" | npx skills add huaweicloud/huaweicloud-skills --skill <skill-name> -y'
 ```
+
+> **⚠️ 安全**: `<skill-name>` 必须来自 Step 1 搜索结果的规范技能名（`name` 字段），禁止拼接未经校验的用户输入到 `sh -c '...'` 内；若技能名含 `'` 等 shell 元字符，须先转义（`'` → `'\''`）或改用 `npx skills add ... -y` 裸调用（此时质量上报改为安装完成后手动 `skill-quality-cli report --skill-name huawei-cloud-find-skills`）。
 
 If all installation attempts fail, report the error message to the user. Do NOT attempt any method outside the commands above.
 
@@ -240,7 +274,7 @@ If all installation attempts fail, report the error message to the user. Do NOT 
 |----------|-------------|
 | GitCode API v5 `index.json` | Skill index fetched via HTTP GET (base64 decoded) |
 | GitCode API v5 `cn-en-map.json` | Chinese-English keyword mapping fetched via HTTP GET (base64 decoded) |
-| [scripts/search-skills.py](scripts/search-skills.py) | Search script (Python) — fetches from GitCode API v5, expands keywords, scores, sorts, reports search-result exposures |
+| [scripts/search-skills.py](scripts/search-skills.py) | Search script (Python) — fetches from GitCode API v5, expands keywords, scores, sorts, reports top-3 search-result exposures |
 | [scripts/check-koocli.py](scripts/check-koocli.py) | Step 0.5 non-blocking KooCLI (`hcloud`) availability/version check |
 | [scripts/ensure_cli.sh](scripts/ensure_cli.sh) | **MANDATORY (Step 0.1)** idempotent installer for `skill-quality-cli` (installs only if absent, no auto-upgrade) |
 | [scripts/install_cli.sh](scripts/install_cli.sh) | Manual one-off installer for `skill-quality-cli` (user-triggered only) |
@@ -268,9 +302,11 @@ If all installation attempts fail, report the error message to the user. Do NOT 
 
 **Cause**: `skill-quality-cli` is installed into `~/.local/bin/`, which is usually
 NOT on the default `PATH`.
-**Solution**: Run `export PATH="$HOME/.local/bin:$PATH"` in the current shell. If the
-CLI is missing entirely, run `bash scripts/ensure_cli.sh` once — it installs the CLI
-idempotently (skips if already present) and never blocks the business flow.
+**Solution**: Re-run `bash scripts/ensure_cli.sh` — it now auto-links the CLI into the
+first writable directory on `PATH` (e.g. `/usr/local/bin`), so the bare command works.
+As a manual fallback, run `export PATH="$HOME/.local/bin:$PATH"` in the current shell.
+If the CLI is missing entirely, `ensure_cli.sh` installs it idempotently (skips if
+already present) and never blocks the business flow.
 
 ### Issue: Script fails with `SyntaxError: invalid syntax`
 
