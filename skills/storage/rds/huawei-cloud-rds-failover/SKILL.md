@@ -191,6 +191,6 @@ huawei-cloud-rds-failover/
 | [references/iam-policies.md](references/iam-policies.md) | IAM 权限策略模板与配置说明 |
 | [references/acceptance-criteria.md](references/acceptance-criteria.md) | 功能验收标准与检查清单 |
 | [references/verification-method.md](references/verification-method.md) | 环境与功能验证方法、端到端验证流程 |
-| [华为云 RDS 产品文档](https://support.huaweicloud.com/productdesc-rds/) | RDS 关系型数据库服务产品介绍 |
-| [RDS API 参考 — StartFailover](https://support.huaweicloud.com/api-rds/rds_06_0007.html) | 主备倒换 API 接口说明 |
-| [CES 监控指标 — RDS](https://support.huaweicloud.com/usermanual-ces/ces_03_0042.html) | RDS CES 监控指标列表 |
+| [华为云 RDS 产品文档](https://support.huaweicloud.com/productdesc-rds/zh-cn_topic_dashboard.html) | RDS 关系型数据库服务产品介绍 |
+| [RDS API 参考 — StartFailover](https://support.huaweicloud.com/api-rds/rds_05_0013.html) | 主备倒换 API 接口说明 |
+| [CES 监控指标 — RDS](https://support.huaweicloud.com/usermanual-rds-mysql/rds_06_0001.html) | RDS CES 监控指标列表 |
