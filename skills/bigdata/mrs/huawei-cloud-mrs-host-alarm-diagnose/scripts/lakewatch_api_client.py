@@ -126,16 +126,31 @@ def _call_crypto_api(data: str, crypto_type: str, config: dict) -> str:
     return output
 
 
+def _crypto_engine(config: dict) -> str:
+    """选择加密引擎：auto | aes | cryptoapi
+
+    auto: Windows 用 Python AES，Linux 用 CryptoAPI
+    aes: 强制使用 Python AES-256-CBC（Windows/Linux 均可）
+    cryptoapi: 强制使用 CryptoAPI
+    """
+    engine = config.get("crypto", {}).get("engine", "auto")
+    if isinstance(engine, str):
+        engine = engine.strip().lower()
+    if engine in ("aes", "cryptoapi"):
+        return engine
+    return "aes" if IS_WINDOWS else "cryptoapi"
+
+
 def encrypt(plain_text: str, config: dict) -> str:
-    """加密：Windows 用 AES，Linux 用 CryptoAPI"""
-    if IS_WINDOWS:
+    """加密：按 crypto.engine 选择 AES 或 CryptoAPI"""
+    if _crypto_engine(config) == "aes":
         return _aes_encrypt(plain_text, config)
     return _call_crypto_api(plain_text, "e", config)
 
 
 def decrypt(cipher_text: str, config: dict) -> str:
-    """解密：Windows 用 AES，Linux 用 CryptoAPI"""
-    if IS_WINDOWS:
+    """解密：按 crypto.engine 选择 AES 或 CryptoAPI"""
+    if _crypto_engine(config) == "aes":
         return _aes_decrypt(cipher_text, config)
     return _call_crypto_api(cipher_text, "d", config)
 
