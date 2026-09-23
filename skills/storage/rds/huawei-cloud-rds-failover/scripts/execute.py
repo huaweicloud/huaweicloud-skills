@@ -27,33 +27,9 @@ SKILL_ROOT = os.path.join(SCRIPT_DIR, "..")
 
 # 导入共享配置模块
 sys.path.insert(0, SCRIPT_DIR)
-from config import load_config, get_config_path
-
-
-def run_hcloud(service, action, region, extra_args=None):
-    cmd = ["hcloud", service, action, f"--cli-region={region}"]
-    if extra_args:
-        cmd.extend(extra_args)
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-    except subprocess.TimeoutExpired:
-        return {"_error": True, "stderr": "hcloud command timed out (120s)"}
-    if result.returncode != 0:
-        return {"_error": True, "stderr": result.stderr.strip()}
-    try:
-        return json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return {"_error": True, "stderr": "Non-JSON output", "stdout": result.stdout.strip()}
-
-
-def load_json(filepath):
-    with open(filepath, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def save_json(filepath, data):
-    with open(filepath, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+from config import load_config, get_config_path, run_hcloud, load_json, save_json
+import risk
+from ces_config import ENGINE_CES_CONFIG, get_engine_ces_config, resolve_ces_dim_value, query_ces_metric
 
 
 # ---------------------------------------------------------------------------
@@ -61,23 +37,34 @@ def save_json(filepath, data):
 # ---------------------------------------------------------------------------
 
 def get_instance(region, instance_id):
-    resp = run_hcloud("RDS", "ListInstances", region)
-    if resp.get("_error"):
-        return None, resp.get("stderr")
-    for inst in resp.get("instances", []):
-        if inst.get("id") == instance_id:
-            return inst, None
+    """查询单个 RDS 实例（marker 分页拉取，避免实例多时漏查）"""
+    marker = None
+    while True:
+        extra = ["--limit=100"]
+        if marker:
+            extra.append(f"--marker={marker}")
+        resp = run_hcloud("RDS", "ListInstances", region, extra_args=extra)
+        if resp.get("_error"):
+            return None, resp.get("stderr")
+        instances = resp.get("instances", [])
+        for inst in instances:
+            if inst.get("id") == instance_id:
+                return inst, None
+        marker = (resp.get("page_info") or {}).get("next_marker")
+        if not marker or not instances:
+            break
     return None, f"Instance {instance_id} not found"
 
 
 def get_node_info(node):
     if not node:
-        return {"name": "N/A", "role": "N/A", "status": "N/A", "az": "N/A"}
+        return {"name": "N/A", "role": "N/A", "status": "N/A", "az": "N/A", "id": "N/A"}
     return {
         "name": node.get("name", "N/A"),
         "role": node.get("role", "N/A"),
         "status": node.get("status", "N/A"),
         "az": node.get("availability_zone", "N/A"),
+        "id": node.get("id", "N/A"),
     }
 
 
@@ -117,48 +104,42 @@ def collect_slow_logs(region, instance_id, start_time, end_time):
 # 收集 CES 监控指标
 # ---------------------------------------------------------------------------
 
-# CES 指标名映射: 脚本逻辑名 -> 华为云实际指标名
-CES_METRIC_MAP = {
-    "rds_cpu_util": "rds001_cpu_util",
-    "rds_mem_util": "rds002_mem_util",
-    "rds_disk_util": "rds039_disk_util",
-    "rds_connections_count": "rds006_conn_count",
-    "rds_in_flow": "rds004_bytes_in",
-    "rds_out_flow": "rds005_bytes_out",
-    "rds_iops": "rds003_iops",
-    "rds_replication_delay": "rds073_replication_delay",
-}
 
+def collect_ces_metrics(region, instance_id, metric_names, from_ms=None, to_ms=None,
+                        node_id=None, engine="MySQL"):
+    """收集 CES 监控指标（引擎自适应）
 
-def collect_ces_metrics(region, instance_id, metric_names, from_ms=None, to_ms=None, node_id=None):
-    """收集 CES 监控指标
+    根据引擎类型选择正确的维度名、维度值和指标名映射（与 ces_config.py ENGINE_CES_CONFIG 一致）：
+      - MySQL/TaurusDB: dim=rds_instance_id, value=节点 ID
+      - MariaDB:        dim=mariadb_cluster_id, value=实例 ID
+      - PostgreSQL:     dim=postgresql_cluster_id, value=实例 ID
+      - SQL Server:     dim=rds_cluster_sqlserver_id, value=实例 ID
 
-    华为云 RDS CES 指标使用 rds_instance_id 维度（值为节点 ID），
-    指标名为 rds001_cpu_util 等格式，需通过 CES_METRIC_MAP 映射。
+    Args:
+        engine: 引擎字符串，如 'PostgreSQL 18'、'MySQL 8.0'
+        node_id: 主节点 ID（仅 MySQL/TaurusDB 用作维度值，其余引擎用 instance_id）
     """
     print("  [监控] 收集 CES 指标...")
+    try:
+        ces_config = get_engine_ces_config(engine)
+        dim_key, dim_value = resolve_ces_dim_value(engine, instance_id, node_id)
+    except ValueError as e:
+        print(f"  [监控] {e}，CES 指标采集跳过")
+        return [{"metric_name": m, "available": False, "error": str(e)} for m in metric_names]
+    metric_map = ces_config["metric_map"]
+
     metrics_data = []
-    # 维度 key 固定为 rds_instance_id，维度值优先使用 node_id，回退到 instance_id
-    dim_key = "rds_instance_id"
-    dim_value = node_id if node_id else instance_id
     for metric_name in metric_names:
-        actual_metric = CES_METRIC_MAP.get(metric_name, metric_name)
-        extra_args = [
-            f"--metric_name={actual_metric}",
-            f"--namespace=SYS.RDS",
-            f"--dim.0={dim_key},{dim_value}",
-            f"--period=300",
-            f"--filter=average",
-        ]
-        if from_ms and to_ms:
-            extra_args.append(f"--from={from_ms}")
-            extra_args.append(f"--to={to_ms}")
-        resp = run_hcloud("CES", "ShowMetricData", region, extra_args)
-        if resp.get("_error"):
-            metrics_data.append({"metric_name": metric_name, "available": False, "error": resp.get("stderr", "")})
+        actual_metric = metric_map.get(metric_name, metric_name)
+        result = query_ces_metric(run_hcloud, region, actual_metric, dim_key, dim_value,
+                                  from_ms=from_ms, to_ms=to_ms)
+        if result["available"]:
+            dp = result["datapoints"]
+            metrics_data.append({"metric_name": metric_name, "available": True,
+                                 "datapoints": dp[-20:] if dp else []})
         else:
-            datapoints = resp.get("datapoints", [])
-            metrics_data.append({"metric_name": metric_name, "available": True, "datapoints": datapoints[-20:] if datapoints else []})
+            metrics_data.append({"metric_name": metric_name, "available": False,
+                                 "error": result["error"]})
     return metrics_data
 
 
@@ -189,7 +170,7 @@ def execute_failover(region, instance_id):
     return resp, None
 
 
-def poll_failover(region, instance_id, old_slave_name, max_wait=120, interval=5):
+def poll_failover(region, instance_id, old_slave_id, max_wait=120, interval=5):
     """轮询等待倒换完成，返回时间线"""
     timeline = []
     result = "timeout"
@@ -214,14 +195,38 @@ def poll_failover(region, instance_id, old_slave_name, max_wait=120, interval=5)
         ns = next((n for n in nodes if n.get("role") == "slave"), None)
         nm_name = nm.get("name") if nm else None
         ns_name = ns.get("name") if ns else None
+        nm_id = nm.get("id") if nm else None
 
         print(f"  [{elapsed}s] status={status}, master={nm_name}, slave={ns_name}")
         timeline.append({"elapsed": elapsed, "status": status, "master": nm_name or "", "slave": ns_name or ""})
 
-        if nm_name and old_slave_name and nm_name == old_slave_name:
+        # 用节点 ID 匹配（比 name 更稳定唯一），避免 name 冲突导致误判
+        if nm_id and old_slave_id and nm_id == old_slave_id:
             after_master = get_node_info(nm)
             after_slave = get_node_info(ns)
-            result = "success"
+            # 备节点已提升为主，但实例状态可能仍为 SWITCHOVER
+            # 继续轮询直到状态恢复 ACTIVE 再置 success；等待 ACTIVE 超时则置 timeout
+            while elapsed < max_wait:
+                time.sleep(interval)
+                elapsed = int(time.time() - start)
+                inst2, _ = get_instance(region, instance_id)
+                if inst2 is None:
+                    break
+                status2 = inst2.get("status")
+                nodes2 = inst2.get("nodes", [])
+                nm2 = next((n for n in nodes2 if n.get("role") == "master"), None)
+                ns2 = next((n for n in nodes2 if n.get("role") == "slave"), None)
+                nm_name2 = nm2.get("name") if nm2 else None
+                ns_name2 = ns2.get("name") if ns2 else None
+                print(f"  [{elapsed}s] status={status2}, master={nm_name2}, slave={ns_name2}")
+                timeline.append({"elapsed": elapsed, "status": status2, "master": nm_name2 or "", "slave": ns_name2 or ""})
+                if status2 == "ACTIVE":
+                    result = "success"
+                    break
+            # 等待 ACTIVE 超时：倒换已完成但实例未恢复 ACTIVE，报 timeout 而非 success
+            if result != "success":
+                result = "timeout"
+                print(f"  [警告] 倒换已完成（备节点已提升为主），但实例状态未恢复 ACTIVE，超时退出。")
             break
 
         time.sleep(interval)
@@ -245,6 +250,7 @@ def main():
     parser = argparse.ArgumentParser(description="RDS 主备倒换执行")
     parser.add_argument("--config-dir", required=True, help="实验准备 skill 生成的配置目录")
     parser.add_argument("--yes", action="store_true", help="实际执行（默认预演）")
+    parser.add_argument("--force", action="store_true", help="跳过 prepare 阶段检测出的严重风险拦截（需人工确认已评估风险）")
     args = parser.parse_args()
 
     config_dir = args.config_dir
@@ -269,12 +275,19 @@ def main():
     iam_policy = load_json(os.path.join(config_dir, "iam_policy.json"))
     monitoring = load_json(os.path.join(config_dir, "monitoring.json"))
 
+    # 优先使用 experiment.json 中的 target.instance_id（prepare 阶段选定的实例），
+    # 覆盖 config.json 中的值——prepare 可能自动选中了唯一 HA 实例但未回写 config.json
+    exp_instance_id = experiment.get("target", {}).get("instance_id")
+    if exp_instance_id and exp_instance_id != instance_id:
+        instance_id = exp_instance_id
+        print(f"[配置] instance_id 已从 experiment.json 覆盖为 {instance_id}")
+
     instance_name = experiment["target"].get("instance_name", instance_id)
     safety = experiment.get("safety_checks", {})
 
     print(f"[配置] 实验名称: {experiment.get('experiment_name', 'N/A')}")
     print(f"[配置] region={region} (来自 config.json)")
-    print(f"[配置] instance_id={instance_id} (来自 config.json)")
+    print(f"[配置] instance_id={instance_id}")
     print(f"[配置] 目标实例: {instance_name}")
 
     # 预检查
@@ -291,6 +304,16 @@ def main():
     slave = next((n for n in nodes if n.get("role") == "slave"), None)
     before_master = get_node_info(master)
     before_slave = get_node_info(slave)
+
+    # 节点存在性检查：nodes 为空或 role 缺失时明确退出，避免 poll_failover 恒超时
+    if not master or not slave:
+        print(f"[ERROR] 实例缺少主/备节点（master={'有' if master else '无'}, slave={'有' if slave else '无'}）。")
+        print(f"  nodes 返回 {len(nodes)} 个节点，无法执行倒换。请确认实例为 HA 类型且节点信息完整。")
+        sys.exit(1)
+    if before_slave.get("id", "N/A") == "N/A" or before_master.get("id", "N/A") == "N/A":
+        print(f"[ERROR] 主/备节点缺少 id 字段（master_id={before_master.get('id')}, slave_id={before_slave.get('id')}）。")
+        print(f"  倒换判定依赖节点 id 匹配，缺少 id 将导致轮询恒超时。请确认 API 返回了完整的节点信息。")
+        sys.exit(1)
 
     print(f"  实例: {instance_name} | 状态: {status} | 类型: {inst_type}")
     print(f"  主节点: {before_master['name']} (AZ={before_master['az']})")
@@ -311,11 +334,81 @@ def main():
     checks["iam_rds_access"] = iam_check.get("rds_read_access", False)
     checks["iam_failover_capable"] = iam_check.get("rds_failover_capable", False)
 
+    # IAM 权限检查（与 prepare.py 一致：建议性检查，不阻断 execute）
+    # allow：确认有权限，正常执行
+    # deny：确认无权限，阻止执行（除非 --force）
+    # unknown：无法确认（系统策略无法取证），仅提示不阻断——实际 API 调用决定成败
+    iam_status = iam_check.get("rds_failover_status", "unknown")
+    if iam_status == "deny":
+        print(f"\n[安全拦截] 确认无倒换权限（status=deny），阻止执行。")
+        if not args.yes:
+            print(f"  （预演模式不执行变更；实际执行前请检查 IAM 策略是否包含 rds:instance:switchover）")
+        elif not args.force:
+            print(f"[ERROR] 已阻止执行。请确认 IAM 权限后重新运行 prepare，"
+                  f"或使用 --force 人工放行。")
+            sys.exit(1)
+        else:
+            print(f"[警告] 已使用 --force 跳过 IAM 权限拦截，请确认已人工确认倒换权限。")
+    elif iam_status == "unknown":
+        print(f"\n[安全提示] 倒换权限未知（status=unknown，系统策略无法取证）。")
+        print(f"  此为建议性检查，不阻断执行——实际 API 调用决定成败。")
+        if args.yes and not args.force:
+            print(f"  如需确认权限，请检查 IAM 策略是否包含 rds:instance:switchover。")
+
     print(f"  安全检查: {'全部通过' if all(checks.values()) else '部分未通过'}")
     for k, v in checks.items():
         print(f"    {k}: {'✓' if v else '✗'}")
 
     print(f"\n  倒换后，备节点 {before_slave['name']} (AZ={before_slave['az']}) 将被提升为主节点。")
+
+    # ── 风险预警与拦截（读取 prepare 阶段生成的 risk_assessment.json）──
+    # 先校验风险评估与当前实例/区域一致，防止"换了实例还拿旧评估放行"
+    risk_path = os.path.join(config_dir, "risk_assessment.json")
+    risk_blocked = False
+    if os.path.isfile(risk_path):
+        risk_doc = load_json(risk_path)
+        risk_inst = risk_doc.get("instance_id")
+        risk_region = risk_doc.get("region")
+        risk_mismatch = (risk_inst and risk_inst != instance_id) or (risk_region and risk_region != region)
+        if risk_mismatch:
+            print(f"\n[风险拦截] risk_assessment.json 与当前待倒换实例不一致！")
+            print(f"  风险评估对象: instance={risk_inst} region={risk_region}")
+            print(f"  当前待倒换实例: {instance_id} region={region}")
+            if not args.yes:
+                print(f"  （预演模式不执行变更；实际执行前请重新运行 prepare 生成当前实例的风险评估）")
+            elif not args.force:
+                print(f"[ERROR] 已阻止执行。请先运行 prepare 生成当前实例的风险评估，"
+                      f"或确认实例无误后使用 --force 人工放行。")
+                sys.exit(1)
+            else:
+                print(f"[警告] 已使用 --force 对不一致的风险评估强制演练，请人工确认实例与风险。")
+        else:
+            rlvl = risk_doc.get("overall_level", "low")
+            print(f"\n[风险提示] 总体风险等级: {rlvl}（来源: risk_assessment.json，与当前实例一致）")
+            risk_items = risk_doc.get("items", [])
+            for it in risk_items:
+                if it.get("level") in ("critical", "warning", "unknown"):
+                    mark = {"critical": "🔴", "warning": "🟠", "unknown": "⚪"}.get(it.get("level"), "•")
+                    print(f"  {mark} [{it.get('category')}] {it.get('title')} — {it.get('detail')}")
+                    print(f"      影响: {it.get('impact')}")
+            risk_blocked = risk_doc.get("block_execution", False)
+            if risk_blocked:
+                print(f"\n[风险拦截] prepare 阶段检测到严重风险项，默认阻止倒换。")
+                if not args.yes:
+                    print(f"  （预演模式不执行变更，仅提示；实际执行时需 --force 跳过拦截）")
+                elif not args.force:
+                    print(f"[ERROR] 已阻止执行。如已人工评估并接受风险，请使用 --force 强制演练。")
+                    sys.exit(1)
+                else:
+                    print(f"[警告] 已使用 --force 强制跳过严重风险拦截，请确认已人工评估风险。")
+            elif rlvl == "medium" and args.yes:
+                unk_count = sum(1 for it in risk_items if it.get("level") == "unknown")
+                if unk_count and not any(it.get("level") == "warning" for it in risk_items):
+                    print(f"[预警] 存在 {unk_count} 项无法评估的风险项（接口不可用或无数据），请确认无风险后再继续。")
+                else:
+                    print(f"[预警] 存在预警项，请确认已评估后再继续。")
+    else:
+        print(f"\n[风险提示] 未找到 risk_assessment.json（未运行 prepare 或 prepare 版本过旧），跳过风险拦截。")
 
     if not args.yes:
         print("\n[预演] 传入 --yes 执行倒换。未做任何变更。")
@@ -327,6 +420,20 @@ def main():
             "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         })
         return
+
+    # ── 执行前实时复核（prepare 风险快照可能过期：复核复制状态与复制延迟）──
+    print(f"\n[实时复核] 倒换前复核主备复制状态与复制延迟...")
+    rt = risk.realtime_safety_check(region, instance_id, master.get("id") if master else None, engine=experiment["target"].get("engine", "MySQL"))
+    for sig in rt["signals"]:
+        mark = {"critical": "🔴", "warning": "🟠", "info": "🟢"}.get(sig.get("level"), "•")
+        print(f"  {mark} {sig.get('title')} — {sig.get('detail')}")
+        if sig.get("suggestion"):
+            print(f"      建议: {sig.get('suggestion')}")
+    if rt["blocked"]:
+        if not args.force:
+            print(f"[ERROR] 实时复核发现严重风险，已阻止倒换。如确需演练请使用 --force（不推荐）。")
+            sys.exit(1)
+        print(f"[警告] 实时复核发现严重风险，已使用 --force 强制演练，请人工确认。")
 
     # 执行倒换
     start_time = datetime.datetime.now()
@@ -344,7 +451,7 @@ def main():
     print(f"\n[轮询] 等待倒换完成...")
     max_wait = safety.get("max_failover_duration_seconds", 120)
     interval = safety.get("poll_interval_seconds", 5)
-    poll_result = poll_failover(region, instance_id, before_slave["name"], max_wait, interval)
+    poll_result = poll_failover(region, instance_id, before_slave["id"], max_wait, interval)
 
     if poll_result["result"] == "success":
         print(f"\n[成功] 倒换完成! 耗时 {poll_result['duration_seconds']} 秒")
@@ -363,7 +470,9 @@ def main():
     to_ms = int(end_time.timestamp() * 1000)
     # 使用倒换前主节点的 node ID 作为 CES 维度值
     master_node_id = master.get("id") if master else None
-    ces_metrics = collect_ces_metrics(region, instance_id, metric_names, from_ms, to_ms, node_id=master_node_id)
+    engine = experiment["target"].get("engine", "MySQL")
+    ces_metrics = collect_ces_metrics(region, instance_id, metric_names, from_ms, to_ms,
+                                      node_id=master_node_id, engine=engine)
     alarm_rules = query_alarm_rules(region)
 
     # 保存执行结果

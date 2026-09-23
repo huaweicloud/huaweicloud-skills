@@ -18,6 +18,7 @@ Usage:
 import argparse
 import datetime
 import fnmatch
+import html
 import json
 import os
 import subprocess
@@ -29,25 +30,26 @@ DEFAULT_OUTPUT_BASE = os.path.join(SKILL_ROOT, "experiments")
 
 # 导入共享配置模块
 sys.path.insert(0, SCRIPT_DIR)
-from config import load_config, get_config_path
+from config import load_config, get_config_path, run_hcloud, load_json, save_json
+import risk
 
 
-def run_hcloud(service, action, region, extra_args=None):
-    cmd = ["hcloud", service, action, f"--cli-region={region}"]
-    if extra_args:
-        cmd.extend(extra_args)
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-    except subprocess.TimeoutExpired:
-        return {"_error": True, "stderr": "hcloud 命令超时（120s），请检查网络或减少查询范围"}
-    except FileNotFoundError:
-        return {"_error": True, "stderr": "hcloud 未安装或不在 PATH 中，请参考 cli-installation-guide.md 安装"}
-    if result.returncode != 0:
-        return {"_error": True, "stderr": result.stderr.strip()}
-    try:
-        return json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return {"_error": True, "stderr": "Non-JSON output", "stdout": result.stdout.strip()}
+def _esc(text):
+    """HTML 实体转义 — 防止云 API 返回的外部数据在 HTML 报告中触发存储型 XSS"""
+    return html.escape(str(text)) if text is not None else ""
+
+
+def _md_cell(text):
+    """转义 Markdown 表格单元格中的特殊字符（| 和换行）。
+
+    云 API 返回的实例名称/引擎/规格等外部数据可能包含 | 或换行符，
+    直接插入 Markdown 表格会破坏列结构。用反斜杠转义 |，换行替换为空格。
+    """
+    if text is None:
+        return ""
+    s = str(text)
+    s = s.replace("|", r"\|").replace("\n", " ").replace("\r", " ")
+    return s
 
 
 # ---------------------------------------------------------------------------
@@ -55,12 +57,31 @@ def run_hcloud(service, action, region, extra_args=None):
 # ---------------------------------------------------------------------------
 
 def query_rds_instances(region):
-    """查询区域内所有 RDS 实例，筛选 HA 类型。"""
-    resp = run_hcloud("RDS", "ListInstances", region)
-    if resp.get("_error"):
-        return [], resp.get("stderr", "Unknown error")
+    """查询区域内所有 RDS 实例，筛选 HA 类型。
 
-    instances = resp.get("instances", [])
+    采用 marker 分页逐页拉取，避免租户实例较多时无约束全量拉取导致延迟和内存线性增长。
+    设置最大拉取页数上限（MAX_PAGES），超过后停止并告警。
+    """
+    MAX_PAGES = 50  # 每页 100 条，上限 5000 条实例，覆盖绝大多数租户
+
+    all_instances = []
+    marker = None
+    for page in range(MAX_PAGES):
+        extra = ["--limit=100"]
+        if marker:
+            extra.append(f"--marker={marker}")
+        resp = run_hcloud("RDS", "ListInstances", region, extra_args=extra)
+        if resp.get("_error"):
+            return [], resp.get("stderr", "Unknown error")
+        page_instances = resp.get("instances", [])
+        all_instances.extend(page_instances)
+        marker = (resp.get("page_info") or {}).get("next_marker")
+        if not marker or not page_instances:
+            break
+    else:
+        print(f"  [WARNING] ListInstances 达到最大页数上限 ({MAX_PAGES})，可能未拉取全部实例")
+
+    instances = all_instances
     ha_instances = []
     for inst in instances:
         if inst.get("type", "").lower() in ("ha", "replication"):
@@ -81,9 +102,13 @@ def query_rds_instances(region):
                 "private_ips": inst.get("private_ips", []),
                 "az": inst.get("availability_zone"),
                 "ha_mode": (inst.get("ha") or {}).get("replication_mode", "N/A"),
+                "switch_strategy": inst.get("switch_strategy", "N/A"),
+                "backup_strategy": inst.get("backup_strategy") or {},
                 "master_node": master.get("name") if master else None,
+                "master_node_id": master.get("id") if master else None,
                 "master_az": master.get("availability_zone") if master else None,
                 "slave_node": slave.get("name") if slave else None,
+                "slave_node_id": slave.get("id") if slave else None,
                 "slave_az": slave.get("availability_zone") if slave else None,
                 "enable_ssl": inst.get("enable_ssl"),
                 "vpc_id": inst.get("vpc_id"),
@@ -97,22 +122,35 @@ def query_rds_instances(region):
 # 查询 IAM 权限
 # ---------------------------------------------------------------------------
 
+def _action_matches(policy_action, target_action):
+    """检查策略 Action 是否匹配目标 Action（双向通配匹配）。
+
+    IAM 策略中 Action 可使用通配符（如 rds:*、rds:instance:*、*:*）。
+    fnmatch 将 '*' 视为通配，所以：
+    - 策略 'rds:instance:*' 匹配目标 'rds:instance:switchover'（策略作为 pattern）
+    - 策略 'rds:instance:switchover' 精确匹配目标（两者相同）
+    但不能反过来（目标作为 pattern），因为目标不含通配符——
+    不过双向匹配可覆盖策略用通配符命中的场景。
+    """
+    return (fnmatch.fnmatchcase(target_action, policy_action) or
+            fnmatch.fnmatchcase(policy_action, target_action))
+
+
 def query_iam_permissions(region):
-    """查询当前账号的 IAM 权限信息，检查是否具备 RDS 操作权限。"""
-    ak = (
-        os.environ.get("HUAWEICLOUD_SDK_AK")
-        or os.environ.get("HUAWEI_ACCESS_KEY")
-        or os.environ.get("HWC_AK", "")
-    )
-    sk_present = bool(
-        os.environ.get("HUAWEICLOUD_SDK_SK")
-        or os.environ.get("HUAWEI_SECRET_KEY")
-        or os.environ.get("HWC_SK")
-    )
+    """查询当前账号的 IAM 权限信息，检查是否具备 RDS 操作权限。
+
+    认证状态通过实际只读 API 调用（ListInstances）验证，而非检查环境变量——
+    hcloud 认证只通过 profile（hcloud configure init）或命令行参数完成，
+    环境变量不参与 hcloud 认证，以环境变量存在性判断认证就绪会导致误判。
+    """
+    # 认证就绪性：通过实际只读调用判断，而非环境变量
+    # hcloud 认证依赖 profile 或 --cli-access-key/--cli-secret-key 参数
+    rds_resp = run_hcloud("RDS", "ListInstances", region)
+    rds_access = not rds_resp.get("_error")
+    auth_ready = rds_access  # ListInstances 成功即表明 hcloud 认证可用
 
     policies = []
 
-    resp = run_hcloud("IAM", "KeystoneListAuthDomains", region)
     # 查询策略列表（ListPoliciesV5，按 next_marker 翻页拉取全量）
     policy_list = []
     marker = None
@@ -133,22 +171,19 @@ def query_iam_permissions(region):
     for p in policy_list:
         # ListPoliciesV5 使用 policy_name/policy_id/policy_type；
         # 保留旧版 name/id/type 字段作为兼容兜底
-        policy_name = p.get("policy_name") or p.get("name", "")
-        if "rds" in policy_name.lower():
-            policies.append({
-                "name": p.get("policy_name") or p.get("name"),
-                "id": p.get("policy_id") or p.get("id"),
-                "type": p.get("policy_type") or p.get("type"),
-                "scope": p.get("scope"),
-            })
+        # 不按策略名含 'rds' 过滤——自定义策略命名可能不含 rds 但仍授予 switchover。
+        # 全量纳入，后续 GetPolicyV5 取详情后按 Statement action 精确匹配。
+        policies.append({
+            "name": p.get("policy_name") or p.get("name"),
+            "id": p.get("policy_id") or p.get("id"),
+            "type": p.get("policy_type") or p.get("type"),
+            "scope": p.get("scope"),
+        })
 
-    rds_access = False
-    rds_resp = run_hcloud("RDS", "ListInstances", region)
-    if not rds_resp.get("_error"):
-        rds_access = True
+    # rds_access 已在上方通过 ListInstances 只读调用确认
 
     # 倒换权限不能仅凭 ListInstances 成功推断，需检查 IAM 策略详情中是否包含
-    # rds:instance:failover action。ListPoliciesV5 仅返回策略元数据（name/id/type），
+    # rds:instance:switchover action。ListPoliciesV5 仅返回策略元数据（name/id/type），
     # 不含 statement，因此需对每个 RDS 相关策略调用 GetPolicyV5 获取策略体。
     #
     # 已知限制：GetPolicyV5 对系统策略（policy_type=system）只返回元数据，不含
@@ -162,6 +197,16 @@ def query_iam_permissions(region):
     failover_status = "unknown"
     if rds_access and policies:
         all_checked = True
+        checked_count = 0
+        skipped_count = 0
+        system_full_access = False  # 系统策略名命中全权限模式
+
+        # 已知含 RDS 全权限的系统策略名模式（GetPolicyV5 对系统策略不返回
+        # policy_document，只能按名称推断；此推断标记为 system_full_access，
+        # 最终升级 unknown→allow，但不作为精确匹配的结论）
+        _SYSTEM_FULL_ACCESS_PATTERNS = ("rdsfullaccess", "rdssysaccess",
+                                         "administrator", "admin")
+
         for p in policies:
             policy_id = p.get("id")
             policy_name = (p.get("name") or "").lower()
@@ -169,7 +214,26 @@ def query_iam_permissions(region):
             if not policy_id:
                 all_checked = False
                 continue
+
+            # 系统策略：GetPolicyV5 不返回 policy_document，跳过 API 调用（避免 N+1），
+            # 仅按名称检查是否为已知全权限模式
+            if policy_type == "system":
+                if any(pat in policy_name for pat in _SYSTEM_FULL_ACCESS_PATTERNS):
+                    system_full_access = True
+                skipped_count += 1
+                continue
+
+            # 自定义策略：先按名称预筛——策略名不含 rds/database/db/sql 且不含
+            # 通配类名称（如 all/full/admin）的，大概率不含 rds:instance:switchover，
+            # 跳过 GetPolicyV5 调用以减少串行 N+1 API 开销。
+            # 命中预筛关键词的策略才调用 GetPolicyV5 取 policy_document 精确匹配。
+            _PRESCREEN_KEYWORDS = ("rds", "database", "db", "sql", "all", "full", "admin")
+            if not any(kw in policy_name for kw in _PRESCREEN_KEYWORDS):
+                skipped_count += 1
+                continue
+
             detail = run_hcloud("IAM", "GetPolicyV5", region, extra_args=[f"--policy_id={policy_id}"])
+            checked_count += 1
             if detail.get("_error"):
                 all_checked = False
                 continue
@@ -181,14 +245,7 @@ def query_iam_permissions(region):
                 except json.JSONDecodeError:
                     policy_doc = {}
             if not isinstance(policy_doc, dict):
-                # 系统策略不返回 policy_document — 无法逐条检查 Action
-                # 按策略名推断：已知全权限系统策略包含 rds:*:*
-                if policy_type == "system" and any(
-                    kw in policy_name for kw in ("fullaccess", "administrator", "admin")
-                ):
-                    failover_status = "allow"
-                    break
-                # 无法确认，不判 deny
+                # 自定义策略也缺失 policy_document（异常情况）— 无法检查
                 all_checked = False
                 continue
             statements = policy_doc.get("Statement") or policy_obj.get("Statement") or []
@@ -199,24 +256,36 @@ def query_iam_permissions(region):
                 if isinstance(actions, str):
                     actions = [actions]
                 effect = stmt.get("Effect", stmt.get("effect", ""))
-                if effect in ("Allow", "allow") and any(
-                    fnmatch.fnmatchcase("rds:instance:failover", str(a).strip())
+                matched = any(
+                    _action_matches(str(a).strip(), "rds:instance:switchover")
                     for a in actions
-                ):
-                    failover_status = "allow"
+                )
+                # 评估 Deny 语句：显式 Deny 优先，即使其他策略 Allow 也会被覆盖
+                if effect in ("Deny", "deny") and matched:
+                    failover_status = "deny"
                     break
-            if failover_status == "allow":
-                break
-        if failover_status != "allow":
-            # 仅当所有策略的 policy_document 均成功获取且确认无 failover action 时才判 deny；
-            # 系统策略 body 缺失或分页出错时保持 unknown
-            failover_status = "deny" if (all_checked and not list_error) else "unknown"
+                # Allow + 匹配 → 记录 allow，但 Deny 优先（需遍历完所有策略确认无 Deny）
+                if effect in ("Allow", "allow") and matched and failover_status != "deny":
+                    failover_status = "allow"
+                # 不在此处 break：需继续遍历剩余策略，确认无 Deny 覆盖后再定论
+            # 不在此处 break：需继续遍历剩余策略，确认无 Deny 覆盖后才定论
+
+        print(f"  IAM 策略检查: 自定义策略取详情 {checked_count} 个，系统策略跳过 {skipped_count} 个")
+
+        if failover_status not in ("allow", "deny"):
+            # 未匹配到 Allow 也未匹配到 Deny：
+            #   系统策略名命中全权限模式且无 Deny → allow（基于系统策略名推断）
+            #   所有自定义策略均可读且确认无 switchover action → deny（确认无权限）
+            #   有自定义策略无法读取或分页出错 → unknown
+            if system_full_access and not list_error:
+                failover_status = "allow"
+            else:
+                failover_status = "deny" if (all_checked and not list_error) else "unknown"
 
     failover_capable = (failover_status == "allow")
 
     return {
-        "ak_present": bool(ak),
-        "sk_present": sk_present,
+        "auth_ready": auth_ready,
         "rds_read_access": rds_access,
         "rds_failover_capable": failover_capable,
         "rds_failover_status": failover_status,
@@ -266,11 +335,14 @@ def generate_iam_policy(region):
     return {
         "description": "RDS 主备倒换所需的最小权限集",
         "required_permissions": [
-            {"action": "rds:instance:list", "description": "查询 RDS 实例列表", "required": True},
-            {"action": "rds:instance:failover", "description": "执行 RDS 主备倒换", "required": True},
-            {"action": "rds:log:listErrorLogs", "description": "查询 RDS 错误日志", "required": False},
-            {"action": "rds:log:listSlowLogs", "description": "查询 RDS 慢 SQL 日志", "required": False},
-            {"action": "ces:alarm:list", "description": "查询 CES 告警规则", "required": False},
+            {"action": "rds:instance:listAll", "description": "查询实例列表+存储空间（别名 rds:instance:list）", "required": True},
+            {"action": "rds:instance:getReplicaStatus", "description": "查询主备复制状态（别名 rds:instance:list）", "required": True},
+            {"action": "rds:instance:getParameter", "description": "查询实例参数配置（别名 rds:param:list）", "required": True},
+            {"action": "rds:backup:list", "description": "查询备份列表", "required": True},
+            {"action": "rds:instance:switchover", "description": "执行 RDS 主备倒换", "required": True},
+            {"action": "rds:log:getErrorLogs", "description": "查询错误日志（别名 rds:log:list）", "required": False},
+            {"action": "rds:log:getSlowLogs", "description": "查询慢SQL日志（别名 rds:log:list）", "required": False},
+            {"action": "ces:alarms:list", "description": "查询 CES 告警规则", "required": False},
             {"action": "ces:metricData:get", "description": "查询 CES 监控指标数据", "required": False},
         ],
         "policy_template": {
@@ -278,9 +350,19 @@ def generate_iam_policy(region):
             "description": "RDS 主备倒换演练所需权限",
             "statement": [
                 {"effect": "Allow", "action": [
-                    "rds:*:list", "rds:*:get", "rds:instance:failover",
-                    "rds:log:listErrorLogs", "rds:log:listSlowLogs",
-                    "ces:alarm:list", "ces:metricData:get",
+                    "rds:instance:switchover",
+                    "rds:instance:getReplicaStatus",
+                    "rds:instance:getParameter",
+                    "rds:log:getErrorLogs", "rds:log:getSlowLogs",
+                ], "resource": [
+                    "rds:<region>:<domainId>:instance:<instanceId>",
+                ]},
+                {"effect": "Allow", "action": [
+                    "rds:instance:listAll",
+                    "rds:backup:list",
+                    "ces:alarms:list", "ces:metricData:get",
+                ], "resource": [
+                    "*",
                 ]},
             ],
         },
@@ -363,7 +445,15 @@ def main():
     if not target:
         if len(ha_instances) == 1:
             target = ha_instances[0]
-            print(f"  config.json 中的 instance_id 未匹配，自动选择唯一 HA 实例: {target['name']}")
+            instance_id = target["id"]  # 同步更新，后续 experiment.json 和 execute 均使用新值
+            print(f"  config.json 中的 instance_id 未匹配，区域仅有 1 个 HA 实例:")
+            print(f"    名称: {target['name']}")
+            print(f"    ID: {instance_id}")
+            print(f"    引擎: {target['engine']}  状态: {target['status']}")
+            print(f"  ⚠ 此实例未经 config.json 显式指定，请确认无误。")
+            # 不静默回写 config.json — 仅在 experiment.json 中记录选定实例，
+            # execute 阶段从 experiment.json 读取 target.instance_id（优先于 config.json）。
+            # 用户确认后可手动更新 config.json，避免对未确认实例自动执行倒换。
         else:
             print(f"\n[ERROR] config.json 中的 instance_id={instance_id} 不在 HA 实例列表中。")
             print(f"  可用实例: {', '.join(i['id'] for i in ha_instances)}")
@@ -374,8 +464,7 @@ def main():
 
     print(f"\n[2/4] 检查 IAM 权限...")
     iam_result = query_iam_permissions(region)
-    print(f"  AK 已配置: {'是' if iam_result['ak_present'] else '否'}")
-    print(f"  SK 已配置: {'是' if iam_result['sk_present'] else '否'}")
+    print(f"  hcloud 认证就绪: {'是' if iam_result['auth_ready'] else '否'}")
     print(f"  RDS 读权限: {'是' if iam_result['rds_read_access'] else '否'}")
     _fs = iam_result.get("rds_failover_status", "unknown")
     _fs_label = {"allow": "是", "deny": "否", "unknown": "未知（无法获取策略详情）"}.get(_fs, "未知")
@@ -410,18 +499,26 @@ def main():
     print(f"\n[5/5] 生成准备报告...")
     checks = run_readiness_checks(target, iam_result, monitoring, region, instance_id)
 
+    # ── 风险检测 / 风险评估 / 风险预警（只读探测 + 落盘 risk_assessment.json）──
+    print(f"\n[风险检测] 实时探测主备复制、存储、备份、错误日志与负载指标...")
+    risk_doc = risk.build_risk_assessment(region, instance_id, target, monitoring, output_dir)
+    print(f"  ✓ risk_assessment.json")
+    risk.print_risk_summary(risk_doc)
+
     critical_fails = [c for c in checks if c["critical"] and not c["passed"]]
     all_critical_pass = len(critical_fails) == 0
     total = len(checks)
     passed_count = sum(1 for c in checks if c["passed"])
 
-    html_path = generate_readiness_report_html(checks, target, region, instance_id, output_dir)
+    html_path = generate_readiness_report_html(checks, target, region, instance_id, output_dir, risk_doc=risk_doc)
     print(f"  ✓ readiness_report.html")
-    md_path = generate_readiness_report_md(checks, target, region, instance_id, output_dir)
+    md_path = generate_readiness_report_md(checks, target, region, instance_id, output_dir, risk_doc=risk_doc)
     print(f"  ✓ readiness_report.md")
 
     print(f"\n  ── 准备检查摘要 ──")
     print(f"  总检查项: {total}  通过: {passed_count}  未通过: {total - passed_count}")
+    rlvl_label = {"low": "\u4f4e", "medium": "\u4e2d\uff08\u5b58\u5728\u9884\u8b66\uff09", "blocked": "\u9ad8\uff08\u963b\u6b62\u6267\u884c\uff09"}.get(risk_doc.get("overall_level", "low"), "\u672a\u77e5")
+    print(f"  \u603b\u4f53\u98ce\u9669\u7b49\u7ea7: {rlvl_label}  \u2192  {risk_doc.get('recommendation', '')}")
     if all_critical_pass:
         print(f"  结论: ✅ 准备就绪，可以执行 RDS 主备倒换演练")
     else:
@@ -508,18 +605,18 @@ def run_readiness_checks(target, iam_result, monitoring, region, instance_id):
     checks.append({
         "category": "IAM权限", "item": "RDS 实例列表查询权限",
         "passed": iam_result.get("rds_read_access", False), "critical": True,
-        "detail": "rds:instance:list",
+        "detail": "rds:instance:listAll",
     })
     checks.append({
         "category": "IAM权限", "item": "RDS 主备倒换执行权限",
         "passed": iam_result.get("rds_failover_capable", False), "critical": True,
-        "detail": "rds:instance:failover",
+        "detail": "rds:instance:switchover",
     })
     checks.append({
-        "category": "IAM权限", "item": "AK/SK 环境变量已配置",
-        "passed": iam_result.get("ak_present", False) and iam_result.get("sk_present", False),
-        "critical": False,
-        "detail": "使用 hcloud profile 认证" if not iam_result.get("ak_present") else "AK/SK 在环境变量中",
+        "category": "IAM权限", "item": "hcloud 认证就绪",
+        "passed": iam_result.get("auth_ready", False),
+        "critical": True,
+        "detail": "hcloud profile 认证可用（通过只读调用验证）" if iam_result.get("auth_ready") else "hcloud 认证不可用，请执行 hcloud configure init",
     })
     checks.append({
         "category": "IAM权限", "item": "RDS 相关策略已分配",
@@ -544,7 +641,7 @@ def run_readiness_checks(target, iam_result, monitoring, region, instance_id):
     return checks
 
 
-def generate_readiness_report_html(checks, target, region, instance_id, output_dir):
+def generate_readiness_report_html(checks, target, region, instance_id, output_dir, risk_doc=None):
     """生成 HTML 格式的准备报告"""
     critical_fails = [c for c in checks if c["critical"] and not c["passed"]]
     warning_fails = [c for c in checks if not c["critical"] and not c["passed"]]
@@ -568,19 +665,23 @@ def generate_readiness_report_html(checks, target, region, instance_id, output_d
             icon = "&#9989;" if c["passed"] else "&#10060;"
             crit = '<span class="badge" style="background:#e74c3c">必需</span>' if c["critical"] else '<span class="badge" style="background:#95a5a6">建议</span>'
             status = '<span style="color:#27ae60;font-weight:600">通过</span>' if c["passed"] else '<span style="color:#e74c3c;font-weight:600">未通过</span>'
-            cat_label = f'<td rowspan="{len(cat_checks)}" class="cat">{cat}</td>' if i == 0 else ""
-            rows += f"\n        <tr>{cat_label}<td>{icon}</td><td>{c['item']}</td><td>{crit}</td><td>{status}</td><td>{c['detail']}</td></tr>"
+            cat_label = f'<td rowspan="{len(cat_checks)}" class="cat">{_esc(cat)}</td>' if i == 0 else ""
+            rows += f"\n        <tr>{cat_label}<td>{icon}</td><td>{_esc(c['item'])}</td><td>{crit}</td><td>{status}</td><td>{_esc(c['detail'])}</td></tr>"
 
     if all_critical_pass:
         banner = f'<div class="banner ok">&#9989; 准备就绪 — 可以执行 RDS 主备倒换演练</div>'
     else:
-        fail_list = "<br>".join(f"&#10060; {f['item']} — {f['detail']}" for f in critical_fails)
+        fail_list = "<br>".join(f"&#10060; {_esc(f['item'])} — {_esc(f['detail'])}" for f in critical_fails)
         banner = f'<div class="banner fail">&#10060; 准备未就绪 — 以下必需项未通过：<br>{fail_list}</div>'
 
     warning_section = ""
     if warning_fails:
-        w_items = "".join(f"<li>{w['item']} — {w['detail']}</li>" for w in warning_fails)
+        w_items = "".join(f"<li>{_esc(w['item'])} — {_esc(w['detail'])}</li>" for w in warning_fails)
         warning_section = f'<div class="card"><h2>&#9888; 建议项未通过（不阻止倒换）</h2><ul>{w_items}</ul></div>'
+
+    risk_section = ""
+    if risk_doc:
+        risk_section = risk.risk_section_html(risk_doc)
 
     css = """
     * { margin:0; padding:0; box-sizing:border-box; }
@@ -610,16 +711,18 @@ def generate_readiness_report_html(checks, target, region, instance_id, output_d
     doc = f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>RDS 主备倒换准备报告 - {target['name']}</title>
+<title>RDS 主备倒换准备报告 - {_esc(target['name'])}</title>
 <style>{css}</style></head>
 <body><div class="c">
 
   <div class="hd">
     <h1>&#128203 RDS 主备倒换准备报告</h1>
-    <div class="meta">实例：{target['name']} ｜ 区域：{region} ｜ 生成时间：{now_str}</div>
+    <div class="meta">实例：{_esc(target['name'])} ｜ 区域：{_esc(region)} ｜ 生成时间：{now_str}</div>
   </div>
 
   {banner}
+
+  {risk_section}
 
   <div class="summary">
     <div class="stat"><div class="num" style="color:#27ae60">{passed}</div><div class="lbl">通过项</div></div>
@@ -648,7 +751,7 @@ def generate_readiness_report_html(checks, target, region, instance_id, output_d
     return filepath
 
 
-def generate_readiness_report_md(checks, target, region, instance_id, output_dir):
+def generate_readiness_report_md(checks, target, region, instance_id, output_dir, risk_doc=None):
     """生成 Markdown 格式的准备报告"""
     critical_fails = [c for c in checks if c["critical"] and not c["passed"]]
     warning_fails = [c for c in checks if not c["critical"] and not c["passed"]]
@@ -662,13 +765,13 @@ def generate_readiness_report_md(checks, target, region, instance_id, output_dir
     lines.append(f"")
     lines.append(f"| 项目 | 值 |")
     lines.append(f"|------|-----|")
-    lines.append(f"| 实例名称 | {target['name']} |")
-    lines.append(f"| 实例 ID | {target['id']} |")
-    lines.append(f"| 区域 | {region} |")
-    lines.append(f"| 引擎 | {target['engine']} |")
-    lines.append(f"| 规格 | {target['flavor']} |")
-    lines.append(f"| HA 模式 | {target.get('ha_mode', 'N/A')} |")
-    lines.append(f"| 生成时间 | {now_str} |")
+    lines.append(f"| 实例名称 | {_md_cell(target['name'])} |")
+    lines.append(f"| 实例 ID | {_md_cell(target['id'])} |")
+    lines.append(f"| 区域 | {_md_cell(region)} |")
+    lines.append(f"| 引擎 | {_md_cell(target['engine'])} |")
+    lines.append(f"| 规格 | {_md_cell(target['flavor'])} |")
+    lines.append(f"| HA 模式 | {_md_cell(target.get('ha_mode', 'N/A'))} |")
+    lines.append(f"| 生成时间 | {_md_cell(now_str)} |")
     lines.append(f"")
     lines.append(f"---")
     lines.append(f"")
@@ -680,7 +783,7 @@ def generate_readiness_report_md(checks, target, region, instance_id, output_dir
         lines.append(f"## ❌ 准备未就绪 — 以下必需项未通过")
         lines.append(f"")
         for f in critical_fails:
-            lines.append(f"- ❌ **{f['item']}** — {f['detail']}")
+            lines.append(f"- ❌ **{_md_cell(f['item'])}** — {_md_cell(f['detail'])}")
     lines.append(f"")
     lines.append(f"### 统计摘要")
     lines.append(f"")
@@ -692,6 +795,8 @@ def generate_readiness_report_md(checks, target, region, instance_id, output_dir
     lines.append(f"| 必需项未通过 | {len(critical_fails)} |")
     lines.append(f"| 建议项未通过 | {len(warning_fails)} |")
     lines.append(f"")
+    if risk_doc:
+        lines.extend(risk.risk_section_md(risk_doc))
     lines.append(f"---")
     lines.append(f"")
 
@@ -714,7 +819,7 @@ def generate_readiness_report_md(checks, target, region, instance_id, output_dir
             icon = "✅" if c["passed"] else "❌"
             crit = "必需" if c["critical"] else "建议"
             status = "通过" if c["passed"] else "**未通过**"
-            lines.append(f"| {icon} | {c['item']} | {crit} | {status} | {c['detail']} |")
+            lines.append(f"| {icon} | {_md_cell(c['item'])} | {crit} | {status} | {_md_cell(c['detail'])} |")
         lines.append(f"")
 
     # 建议项未通过
