@@ -94,14 +94,13 @@ hcloud configure init
 > 此命令由用户本人执行并自行输入凭据；工具与文档不代写、不接触 AK/SK 明文。
 > 多 profile 管理等进阶用法请参考 [KooCLI 官方文档](https://support.huaweicloud.com/qs-hcli/hcli_02_003.html)，同样由用户自行配置。
 
-### 环境变量（仅用于脚本建议性检查，非 hcloud 认证方式）
+### 认证就绪性检查（脚本自动执行）
 
-> ⚠️ **KooCLI 不通过环境变量认证**。hcloud 的认证只能通过上述 profile（`hcloud configure init`）或命令行参数（`--cli-access-key`/`--cli-secret-key`）完成。以下环境变量仅被 `scripts/prepare.py` 用于检查"AK/SK 是否已配置"的建议性检查项，不影响 hcloud 的实际认证。
+> ⚠️ **KooCLI 不通过环境变量认证**。hcloud 的认证只能通过上述 profile（`hcloud configure init`）或命令行参数（`--cli-access-key`/`--cli-secret-key`）完成。`scripts/prepare.py` 不再检查 `HUAWEICLOUD_SDK_AK/SK` 等环境变量，而是通过实际只读 API 调用（`RDS ListInstances`）验证 hcloud 认证是否就绪。若 ListInstances 成功返回，则认证就绪；若失败，则提示用户执行 `hcloud configure init`。
 
 ```bash
-# 以下环境变量被脚本用于建议性检查（设置其中任意一组即可）
-export HUAWEICLOUD_SDK_AK="你的AK"
-export HUAWEICLOUD_SDK_SK="你的SK"
+# 验证认证是否就绪（脚本内部执行此调用）
+hcloud RDS ListInstances --cli-region=cn-north-1
 ```
 
 ## 验证认证

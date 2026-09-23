@@ -7,13 +7,16 @@
 | 验收项 | 预期结果 | 验证方式 |
 |--------|---------|---------|
 | 读取 config.json | 正确加载 region 和 instance_id | `python3 scripts/prepare.py` 输出配置信息 |
-| 查询 RDS 实例 | 列出区域内所有 HA 实例 | 输出实例列表，标记选定实例 |
-| 检查 IAM 权限 | 输出 AK/SK/RDS 权限状态 | 输出 4 项权限检查结果 |
+| 查询 RDS 实例 | 分页拉取区域内所有 HA 实例 | 输出实例列表，标记选定实例 |
+| 检查 IAM 权限 | 输出认证就绪/RDS 权限状态 | 输出权限检查结果 |
 | 生成 experiment.json | 文件存在且格式正确 | `cat experiments/experiment.json` |
 | 生成 iam_policy.json | 文件存在且格式正确 | `cat experiments/iam_policy.json` |
 | 生成 monitoring.json | 文件存在且格式正确 | `cat experiments/monitoring.json` |
 | 生成准备报告 | HTML + Markdown 报告生成 | `ls experiments/readiness_report.*` |
 | 15 项检查 | 必需项全部通过 | 输出 "准备就绪" |
+| 风险检测 | 只读探测复制/存储/备份/负载等并输出结果 | prepare 输出 "风险评估总览"，`cat experiments/risk_assessment.json` |
+| 风险评估 | 每项定级（提示/未知/预警/严重）且总体等级正确 | risk_assessment.json 中 overall_level/items 合法，无数据缺失误判严重 |
+| 风险预警 | 控制台 + 报告 + risk_assessment.json 三处落地 | 准备报告含 "风险检测 / 评估 / 预警" 章节 |
 
 ### execute 阶段
 
@@ -21,7 +24,13 @@
 |--------|---------|---------|
 | 加载配置 | 正确读取 3 个配置文件 | 输出实验名称和实例信息 |
 | 预检查 | 实例存在、HA 类型、ACTIVE | 输出 "安全检查: 全部通过" |
+| IAM 权限复核 | 读取 iam_policy.json 复核 RDS 读权限与倒换权限 | 输出 `iam_rds_access: ✓` 和 `iam_failover_capable: ✓` |
 | 预演模式 | 不执行实际倒换 | `python3 scripts/execute.py --config-dir <dir>` 无变更 |
+| 风险预警展示 | 读取 risk_assessment.json 并输出风险提示 | 输出 "[风险提示] 总体风险等级: ..." |
+| 风险拦截 | 存在严重风险项时默认阻止倒换 | 伪造 critical 项后 `--yes` 无 `--force` 应退出并提示 |
+| 强制演练 | `--force` 可跳过拦截 | `--yes --force` 能继续执行（人工确认语义） |
+| 实例一致性校验 | risk_assessment.json 与当前实例不一致时阻止 | 改伪造 instance_id 后 `--yes` 应退出且不触发倒换 |
+| 执行前实时复核 | 倒换前复核复制状态/复制延迟 | `--yes` 输出 `[实时复核]` 且严重异常时阻止 |
 | 执行倒换 | 调用 StartFailover 成功 | 输出 workflowId |
 | 轮询等待 | 主备角色交换完成 | 输出 "倒换完成" 和耗时 |
 | 收集日志 | 错误日志和慢 SQL 日志 | execution_result.json 含日志数据 |
@@ -36,6 +45,7 @@
 | 生成 HTML 报告 | 报告文件生成 | `ls report/failover_report_*.html` |
 | 报告内容完整 | 包含所有板块 | 浏览器打开检查 |
 | 报告独立可用 | 内联 CSS，无外部依赖 | 断网状态下浏览器可正常显示 |
+| HTML 编码 | 外部数据经 html.escape 转义 | 检查 report.py / prepare.py 中 esc()/_esc() 调用覆盖所有外部数据插入点 |
 
 ### 统一入口 run.py
 
@@ -51,7 +61,7 @@
 
 - [ ] 结果横幅（成功/超时状态、耗时、工作流 ID）
 - [ ] 实例信息（名称、ID、引擎、规格、时间）
-- [ ] 安全检查（5 项检查结果）
+- [ ] 安全检查（5 项检查结果：实例存在/状态ACTIVE/HA类型/IAM读权限/IAM倒换权限）
 - [ ] IAM 权限（最小权限集）
 - [ ] 主备拓扑变化（倒换前后对比）
 - [ ] 倒换时间线（轮询记录）
@@ -66,4 +76,6 @@
 - [ ] 倒换前实例状态必须为 ACTIVE
 - [ ] 倒换前实例必须为 HA 类型
 - [ ] execute 阶段默认预演，需 --yes 才实际执行
+- [ ] 严重风险默认阻止倒换，--force 为人工确认后的显式放行
 - [ ] 报告中不泄露敏感凭据信息
+- [ ] HTML 报告中所有来自云 API 的外部数据（实例名称、错误日志、慢 SQL、告警信息、风险检测项等）均经过 HTML 实体编码（html.escape），防止存储型 XSS
