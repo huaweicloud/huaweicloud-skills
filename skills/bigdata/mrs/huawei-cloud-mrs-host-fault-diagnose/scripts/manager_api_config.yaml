@@ -37,9 +37,13 @@ session:
   ttl: 7200
 
 # 加密组件配置
-# Linux: 自动使用 CryptoAPI（生产环境，密钥由安全组件管理）
-# Windows: 自动使用 AES-256-CBC（开发环境，密钥存本地 .aes_key 文件）
+# 加密引擎 engine: auto(默认) | aes | cryptoapi
+#   auto: Windows 自动使用 AES-256-CBC（开发环境，密钥存本地 .aes_key 文件），Linux 自动使用 CryptoAPI（生产环境，密钥由安全组件管理）
+#   aes: 强制使用 Python AES-256-CBC（Windows/Linux 均可，密钥存本地 .aes_key 文件）
+#   cryptoapi: 强制使用 CryptoAPI
 crypto:
+  # 加密引擎，默认 auto
+  engine: "auto"
   # ---------------- CryptoAPI 配置（Linux） ----------------
   bin_path: "/usr/local/seccomponent/bin/CryptoAPI"
   # SCC_CONF 路径，为空则从环境变量 SCC_CONF 读取
