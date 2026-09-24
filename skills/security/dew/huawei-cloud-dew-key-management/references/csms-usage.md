@@ -24,36 +24,43 @@ hcloud CSMS ListSecrets --cli-region=cn-north-4 --limit=50
 Describe a secret (rotation config, KMS key, status — no value):
 
 ```bash
-hcloud CSMS ShowSecret --cli-region=cn-north-4 --secret_name=prod-db-password
+hcloud CSMS ShowSecret --cli-region=cn-north-4 --secret_name={secret_name}
 ```
 
 List versions and stages (no values):
 
 ```bash
-hcloud CSMS ListSecretVersions --cli-region=cn-north-4 --secret_name=prod-db-password
+hcloud CSMS ListSecretVersions --cli-region=cn-north-4 --secret_name={secret_name}
 ```
 
 Enable automatic rotation (R2 — confirm first):
 
 ```bash
-hcloud CSMS UpdateSecret --cli-region=cn-north-4 --secret_name=prod-db-password \
-  --auto_rotation=true --rotation_period=30d --rotation_func_urn=urn:fss:cn-north-4:xxx:function:default:rotate
+hcloud CSMS UpdateSecret --cli-region=cn-north-4 --secret_name={secret_name} \
+  --auto_rotation=true --rotation_period=30d --rotation_func_urn={rotation_func_urn}
 ```
 
 Manually rotate the secret version immediately (R1 — confirm first; new value is generated
 in the background, never passes through the agent):
 
 ```bash
-hcloud CSMS RotateSecret --cli-region=cn-north-4 --secret_name=prod-db-password
+hcloud CSMS RotateSecret --cli-region=cn-north-4 --secret_name={secret_name}
 ```
 
-Store a caller-supplied new value (approved automation only — read via stdin, never echo):
+Store a caller-supplied new value (approved automation only — read via stdin, never echo, never pass
+the secret on the command line — use a protected temp file + `--cli-jsonInput` instead):
 
 ```bash
-read -s -p "new secret value: " NEW_VALUE
-hcloud CSMS CreateSecretVersion --cli-region=cn-north-4 --secret_name=prod-db-password \
-  --secret_string="${NEW_VALUE}"
+SECRET_JSON="$(mktemp --suffix=.json)"
+chmod 600 "$SECRET_JSON"
+read -r -s -p "new secret value: " NEW_VALUE
+# value 经 stdin 进入 JSON 文件(注意: 必须用 stdin/export, 不能依赖未导出的 shell 变量),
+# 不经过任何命令行参数
+printf '%s' "$NEW_VALUE" | python3 -c 'import json,sys; json.dump({"body":{"secret_string":sys.stdin.read()}}, open(sys.argv[1],"w"))' "$SECRET_JSON"
+hcloud CSMS CreateSecretVersion --cli-region=cn-north-4 --secret_name={secret_name} \
+  --cli-jsonInput="$SECRET_JSON"
 unset NEW_VALUE
+rm -f "$SECRET_JSON"
 ```
 
 ## Runtime injection (consuming a value safely)
@@ -76,7 +83,7 @@ data "huaweicloud_csms_secret" "db" {
 ## Rotation
 
 - Enable automatic rotation: `hcloud CSMS UpdateSecret --secret_name={name} --auto_rotation=true --rotation_period={days}` (R2)
-- Rotation function ARN: provide a FuncGraph function that generates the new secret value
+- Rotation function URN: provide a FuncGraph function that generates the new secret value
 - Immediate manual rotation: `hcloud CSMS RotateSecret --secret_name={name}` (R1)
 - Recommended `rotation_period`: ≤ 90 days
 

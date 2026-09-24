@@ -9,7 +9,7 @@ are gated (R2/R1 preview + confirm). **Never decrypt inside the agent context.**
 | --------------- | ----------- | ----- |
 | `huawei_list_kms_keys` | `hcloud KMS ListKeys --cli-region={region}` | R3 auto |
 | `huawei_create_kms_key` | `hcloud KMS CreateKey --cli-region={region} --key_alias={alias}` | R2 confirm |
-| `huawei_delete_kms_key` | `hcloud KMS DeleteKey --cli-region={region} --key_id={id} --pending_days={7..1096}` | R1 confirm, irreversible |
+| `huawei_delete_kms_key` | `hcloud KMS DeleteKey --cli-region={region} --key_id={id} --pending_days=7` | R1 confirm, irreversible |
 | `huawei_analyze_dew_rotation` (KMS side) | `hcloud KMS ShowKeyRotationStatus --cli-region={region} --key_id={id}` | R3 auto |
 
 ## Examples
@@ -30,22 +30,22 @@ hcloud KMS CreateKey --cli-region=cn-north-4 --key_alias=app-encryption-key \
 Show key rotation status:
 
 ```bash
-hcloud KMS ShowKeyRotationStatus --cli-region=cn-north-4 --key_id=CHANGE_ME_KEY_ID
+hcloud KMS ShowKeyRotationStatus --cli-region=cn-north-4 --key_id={key_id}
 ```
 
 Enable key rotation (not a huawei_* action — for reference):
 
 ```bash
-hcloud KMS EnableKeyRotation --cli-region=cn-north-4 --key_id=CHANGE_ME_KEY_ID
+hcloud KMS EnableKeyRotation --cli-region=cn-north-4 --key_id={key_id}
 ```
 
 ## Key deletion — IRREVERSIBLE
 
 ```bash
-hcloud KMS DeleteKey --cli-region=cn-north-4 --key_id=CHANGE_ME_KEY_ID --pending_days=7
+hcloud KMS DeleteKey --cli-region=cn-north-4 --key_id={key_id} --pending_days=7
 ```
 
-- Schedules deletion after `--pending_days` (7-1096; typical 7-30 day window).
+- Schedules deletion after `--pending_days` (7~1096; default 7).
 - Cancellable during the window: `hcloud KMS CancelKeyDeletion --cli-region=cn-north-4 --key_id={id}`
 - **After the window passes, the key is permanently deleted and data encrypted with it is
   UNRECOVERABLE.** Always show this warning and require explicit confirmation (R1).

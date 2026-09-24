@@ -30,7 +30,7 @@
 | AC-20 | Secret value reads blocked end-to-end (DownloadSecretBlob / ShowSecretVersion value / DecryptData) | BLOCKED operations table present; policy blocks these calls |
 | AC-21 | MCP proxy resolve pattern `{{resolve:csms:...}}` documented for runtime injection | Mentioned in SKILL.md + references |
 | AC-22 | Secret values never appear in agent context/output | No value-returning command in Core Commands; masked reporting |
-| AC-23 | KMS deletion irreversible warning (7-30 day window, cancellable, then unrecoverable) | Present in SKILL.md + kms-usage.md |
+| AC-23 | KMS deletion irreversible warning (7~1096 day window, cancellable, then unrecoverable) | Present in SKILL.md + kms-usage.md |
 | AC-24 | No hardcoded AK/SK or credentials anywhere | gitleaks / credential grep clean |
 | AC-25 | Supports AK/SK env vars AND local hcloud profile auth | cli-installation-guide.md documents both |
 | AC-26 | Write operations (R1/R2) require preview + confirmation | Confirmation gates documented in Workflow + per action |
@@ -47,8 +47,8 @@
 
 | # | Criterion | Verification |
 |---|-----------|--------------|
-| AC-40 | scripts/skill_quality_sdk.py present | File existence |
-| AC-41 | SKILL.md Quality Reporting section + SKILL_QUALITY_* env vars | Section and table present |
+| AC-40 | CLI quality reporting carrier present: scripts/ensure_cli.sh + scripts/cli/ (cli_entry.py, cli_reporting.py) | File existence |
+| AC-41 | SKILL.md V3 light embedding: Overview Dependency line + Prerequisites `skill-quality-cli` ensured-by line (`SKILL_QUALITY_REPORT=0` opt-out); no standalone Quality Reporting section | Present (no `SKILL_QUALITY_*` env-var table; no standalone section) |
 | AC-42 | references/iam-policies.md (least privilege), cli-installation-guide.md exist | File existence |
 | AC-43 | SKILL.md ≤ 500 lines; total files ≤ 30; extensions in allowlist | Spec check |
 
