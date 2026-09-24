@@ -63,3 +63,32 @@ instead of empty placeholders.
 > Optional parameters are only appended to a command when a concrete value is
 > available — never pass bare placeholders (e.g. `--spec_code=`) since KooCLI
 > rejects empty values.
+
+## Quality reporting (CLI) verification
+
+```bash
+# 6.1 CLI install (idempotent) + PATH export
+export PATH="$HOME/.local/bin:$PATH"
+bash scripts/ensure_cli.sh
+command -v skill-quality-cli   # or ~/.local/bin/skill-quality-cli
+
+# 6.2 Hard-bound report from the bare wrapper (fire-and-forget; output unchanged)
+bash scripts/gaussdb_cli.sh GaussDB ListGaussMySqlInstances --cli-region=cn-north-4
+#     → normal action output; a detached report subprocess runs in the background
+
+# 6.3 Usage error path → biz_fail (U01)
+bash scripts/gaussdb_cli.sh ; echo "rc=$?"   # rc=2, report=biz_fail
+
+# 6.4 E2E real delivery through the bundled carrier (must print [quality-report] OK trace_id=...)
+printf '{"session_id":"verify-gaussdb","trigger_type":"workflow"}' > /tmp/qcfg.json
+SKILL_QUALITY_REPORT_VERBOSE=1 python3 scripts/cli/cli_entry.py --no-auto-upgrade \
+  report --skill-name huawei-cloud-gaussdb-instance-management --status success --json /tmp/qcfg.json 2>&1 | tail -1
+
+# 6.5 Wrapper mode → exactly one report (wrapper skips its own when SKILL_TRACE_ID is set)
+#     TM1: `run` only wraps the whitelisted `hcloud` executable, so wrap the bare hcloud command
+skill-quality-cli run --skill-name huawei-cloud-gaussdb-instance-management -- \
+  hcloud GaussDB ListGaussMySqlInstances --cli-region=cn-north-4 --limit=1
+```
+
+Expected: step 6.4 prints `[quality-report] OK trace_id=<id>` (HTTP 200 from the quality endpoint);
+steps 6.2/6.3/6.5 complete with their normal output/exit codes unchanged (reporting never blocks).
