@@ -9,7 +9,7 @@ description: |
   require preview and user confirmation (R2); Delete requires explicit confirmation (R1).
   Supports AK/SK credentials and local hcloud profile authentication.
   Triggers include: "CloudDeploy", "CodeArts Deploy", "部署", "deploy task", "deployment",
-  "deployment task", "deploy application", "部署任务", "部署应用", "start deploy", "发布",
+  "deployment task", "deploy application", "部署任务", "部署应用", "start deploy", "发布部署",
   "release", "artifact deployment", "制品部署", "deploy failure", "部署失败",
   "pipeline deployment", "CI/CD deployment".
 triggers:
@@ -23,7 +23,7 @@ triggers:
   - "部署任务"
   - "部署应用"
   - "start deploy"
-  - "发布"
+  - "发布部署"
   - "release"
   - "artifact deployment"
   - "制品部署"
@@ -35,6 +35,23 @@ tags: [huawei-cloud, clouddeploy, codearts, deployment, devops]
 ---
 
 # Huawei Cloud CloudDeploy (CodeArts Deploy)
+
+<!-- cli-install-version: 3.9.0 -->
+## Step 0: Install skill-quality-cli (idempotent, skip if already installed)
+
+The CLI installs into `~/.local/bin/`, which is **not always in `$PATH`** (bare
+`skill-quality-cli` can fail with exit 127). Export it first, then run the installer (it also
+persists the PATH export into `~/.bashrc` / `~/.profile` for future shells):
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+bash scripts/ensure_cli.sh
+```
+
+> The script installs the bundled `scripts/cli/` sources to `~/.local/bin/` when
+> `skill-quality-cli` is not found (offline, no external download), re-exports PATH for the
+> current session and persists it into `~/.bashrc` / `~/.profile`; it never blocks. If still
+> not found, call the absolute path: `~/.local/bin/skill-quality-cli`.
 
 ## Overview
 
@@ -51,6 +68,9 @@ artifacts (default source: OBS) and running deployment tasks created from templa
 > **Always run `hcloud CodeArtsDeploy <Operation> --cli-region={region} --help` before constructing a
 > command** to discover the exact parameter names and required flags for the current KooCLI version.
 > Do not answer from general knowledge — follow the procedures in this document.
+
+**Dependency**: Quality telemetry is collected automatically via `skill-quality-cli` (installed by
+`scripts/ensure_cli.sh` if absent).
 
 ### Critical Warnings
 
@@ -70,11 +90,12 @@ Use this skill when the user asks about CloudDeploy / CodeArts Deploy operations
 creation or management, artifact (OBS) configuration, or deployment failure troubleshooting.
 
 **Trigger phrases**: "CloudDeploy", "CodeArts Deploy", "部署", "deploy task", "deployment",
-"deployment task", "deploy application", "部署任务", "部署应用", "start deploy", "发布", "release",
+"deployment task", "deploy application", "部署任务", "部署应用", "start deploy", "发布部署", "release",
 "artifact deployment", "制品部署", "deploy failure", "部署失败", "pipeline deployment",
 "CI/CD deployment".
 
 **User utterance examples**:
+
 1. "帮我创建一个部署应用/部署任务" (create a deploy application / deployment task)
 2. "启动/查看/删除这个部署任务" (start / view / delete this deployment task)
 3. "部署失败了，帮我分析一下原因" (deployment failed — analyze the root cause)
@@ -96,15 +117,9 @@ creation or management, artifact (OBS) configuration, or deployment failure trou
    (DevCloud) project — an IAM project alone returns `Deploy.00016902 项目不存在`.
 5. **Target hosts**: CloudDeploy agent installed and online on every target host (see Critical
    Warnings), and the OBS bucket/object for artifacts must exist in the same region.
-
-### Quality Reporting Environment Variables
-
-| Environment Variable | Required | Description |
-|---------------------|----------|-------------|
-| `SKILL_QUALITY_ENDPOINT` | No | Report endpoint, default `https://skillsapi.developer.myhuaweicloud.com/api/quality/report` |
-| `SKILL_QUALITY_NAME` | No | Skill name (default auto-detected) |
-| `SKILL_QUALITY_DISABLE` | No | Set to `1` to disable reporting (local debugging) |
-| `SKILL_QUALITY_TIMEOUT` | No | Report timeout seconds (default 3) |
+6. **`skill-quality-cli`** — ensured by `bash scripts/ensure_cli.sh` (idempotent, skips if present)
+   - Upgrade: run `skill-quality-cli upgrade` manually (no auto-upgrade)
+   - Disable telemetry report: set `SKILL_QUALITY_REPORT=0` or `SKILL_QUALITY_DISABLE=1`
 
 ## Workflow
 
@@ -129,23 +144,39 @@ For delete (R1) the user must confirm a second time in plain words (e.g. "确认
 
 ## Core Commands
 
+**Supported service (KooCLI): `CodeArtsDeploy` only.** This is the *single* supported service name
+for this skill. `CloudDeploy` and `Deploy` are **not** supported service names — the hcloud CLI
+rejects them with `[USE_ERROR]不支持的服务名称` (unsupported service), which is the **expected
+correct-rejection** result. Any command in this skill MUST use `hcloud CodeArtsDeploy <Operation>`.
+
 Service name is `CodeArtsDeploy` (KooCLI metadata directory `codeartsdeploy`; `CloudDeploy` is NOT
 accepted). Region parameter `--cli-region={region}` is required on every command. The `--project_id`
 is shown explicitly in examples; omit it only when your hcloud profile has a default project set.
 Run each command as a **single line** (no `\` line continuations) so it stays directly copy-pasteable.
 Parameter names below were verified against `hcloud CodeArtsDeploy <Operation> --help` (KooCLI 7.2.12).
+Service name `CodeArtsDeploy`, every operation `ListAllApp` / `ListDeployTasks` /
+`ShowDeployTaskDetail` / `ListDeployTaskHistoryByDate` / `CheckIsDuplicateAppName` / `CreateApp` /
+`CreateDeployTaskByTemplate` / `StartDeployTask` / `DeleteDeployTask` — see the Parameter Confirmation
+tables below for the exact `--key` names and constraints.
+
+> **⚠️ Mandatory: every `hcloud` command in this skill MUST be wrapped with
+> `skill-quality-cli run --skill-name huawei-cloud-deployment-task-management -- ` — bare `hcloud`
+> calls are strictly forbidden.**
 
 ### Query — Applications (R3, auto)
 
 ```bash
 # List deploy applications in a project (page/size required; default size 1000)
 hcloud CodeArtsDeploy ListAllApp --cli-region={region} --project_id={project_id} --page=1 --size=100
+skill-quality-cli run --skill-name huawei-cloud-deployment-task-management -- hcloud CodeArtsDeploy ListAllApp --cli-region={region} --project_id={project_id} --page=1 --size=100
 
 # Filter by status (abort|failed|not_started|pending|running|succeeded|timeout|not_executed)
 hcloud CodeArtsDeploy ListAllApp --cli-region={region} --project_id={project_id} --page=1 --size=100 --states.1=failed --states.2=running
+skill-quality-cli run --skill-name huawei-cloud-deployment-task-management -- hcloud CodeArtsDeploy ListAllApp --cli-region={region} --project_id={project_id} --page=1 --size=100 --states.1=failed --states.2=running
 
 # Sort by name or start time (DESC|ASC)
 hcloud CodeArtsDeploy ListAllApp --cli-region={region} --project_id={project_id} --page=1 --size=100 --sort_by=DESC --sort_name=startTime
+skill-quality-cli run --skill-name huawei-cloud-deployment-task-management -- hcloud CodeArtsDeploy ListAllApp --cli-region={region} --project_id={project_id} --page=1 --size=100 --sort_by=DESC --sort_name=startTime
 ```
 
 ### Query — Deployment Tasks (R3, auto)
@@ -153,9 +184,11 @@ hcloud CodeArtsDeploy ListAllApp --cli-region={region} --project_id={project_id}
 ```bash
 # List deployment tasks (this legacy interface is maintained; ListAllApp is the new app-list API)
 hcloud CodeArtsDeploy ListDeployTasks --cli-region={region} --project_id={project_id} --page=1 --size=50
+skill-quality-cli run --skill-name huawei-cloud-deployment-task-management -- hcloud CodeArtsDeploy ListDeployTasks --cli-region={region} --project_id={project_id} --page=1 --size=50
 
 # Get deployment task details by task ID
-hcloud CodeArtsDeploy ShowDeployTaskDetail --cli-region={region} --task_id={task_id}
+hcloud CodeArtsDeploy ShowDeployTaskDetail --cli-region={region} --task_id=00000000-0000-0000-0000-000000000000
+skill-quality-cli run --skill-name huawei-cloud-deployment-task-management -- hcloud CodeArtsDeploy ShowDeployTaskDetail --cli-region={region} --task_id={task_id}
 ```
 
 > `ShowDeployTaskDetail` is deprecated after 2024-09-30 (new equivalent `ShowAppDetailById`), but is
@@ -165,7 +198,8 @@ hcloud CodeArtsDeploy ShowDeployTaskDetail --cli-region={region} --task_id={task
 
 ```bash
 # Query historical execution records of a task in a date range (interval ≤ 30 days)
-hcloud CodeArtsDeploy ListDeployTaskHistoryByDate --cli-region={region} --project_id={project_id} --id={task_id} --start_date=2026-09-01 --end_date=2026-09-08 --page=1 --size=20
+hcloud CodeArtsDeploy ListDeployTaskHistoryByDate --cli-region={region} --project_id={project_id} --id=00000000-0000-0000-0000-000000000000 --start_date=2026-09-01 --end_date=2026-09-08 --page=1 --size=20
+skill-quality-cli run --skill-name huawei-cloud-deployment-task-management -- hcloud CodeArtsDeploy ListDeployTaskHistoryByDate --cli-region={region} --project_id={project_id} --id={task_id} --start_date=2026-09-01 --end_date=2026-09-08 --page=1 --size=20
 ```
 
 Diagnose the latest failed record by checking, in order:
@@ -183,13 +217,33 @@ Diagnose the latest failed record by checking, in order:
 
 ```bash
 # 1) Get the task detail and read the artifact configuration (bucket + object/package path)
-hcloud CodeArtsDeploy ShowDeployTaskDetail --cli-region={region} --task_id={task_id}
+hcloud CodeArtsDeploy ShowDeployTaskDetail --cli-region={region} --task_id=00000000-0000-0000-0000-000000000000
+skill-quality-cli run --skill-name huawei-cloud-deployment-task-management -- hcloud CodeArtsDeploy ShowDeployTaskDetail --cli-region={region} --task_id={task_id}
 
-# 2) Verify the OBS object exists (obsutil passthrough; configure first, see cli-installation-guide)
-hcloud obs ls obs://{artifact_bucket}/{artifact_object_path}
+# 2) One-time obsutil setup (before the first OBS check on each machine/region):
+#    `hcloud obs ...` is an obsutil passthrough command (raw CLI, not a KooCLI SDK
+#    API) — configure endpoint + reuse the same AK/SK as hcloud, then self-check
+#    with a bucket-list passthrough that carries an explicit obs:// URI.
+#    Prefer the interactive config below — AK/SK are typed at the terminal and stay
+#    out of shell history / ps aux, avoiding the plaintext-credential leak vector of
+#    passing -i=/-k= on the command line.
+hcloud obs config -interactive
+hcloud obs ls obs://{artifact_bucket}
+
+# 3) Verify the OBS object exists (obsutil passthrough)
+skill-quality-cli run --skill-name huawei-cloud-deployment-task-management -- hcloud obs ls obs://{artifact_bucket}/{artifact_object_path}
 ```
 
-Expected results: task shows an OBS artifact source; `ls` returns the object. If the object is
+> **⚠️ Executor hint: `hcloud obs <command>` is a CLI passthrough to the obsutil binary (raw
+> command-line execution), NOT an OBS SDK call.** Every OBS command in this skill — including
+> `hcloud obs ls obs://...`, `hcloud obs cp`, `hcloud obs rm` — MUST be executed through the **CLI
+> executor** (`hcloud ...` verbatim), and MUST NOT be routed to the OBS SDK (`huaweicloudsdkobs`) or
+> translated into a Python SDK snippet. This is what allows the artifact check to run on any machine
+> where `hcloud` + `obsutil` are installed, without an OBS SDK dependency.
+
+Expected results: task shows an OBS artifact source; `ls` returns the object. If `hcloud obs` prints
+`Warn: Please set ak, sk and endpoint in the configuration file!`, obsutil has not been configured
+yet — run step 2 (config + `bucket list` self-check) before proceeding. If the object is
 missing → advise re-uploading the artifact or fixing the task's artifact path; if access is denied →
 check the OBS bucket policy and the deployment account's `GetObject` permission.
 
@@ -197,10 +251,12 @@ check the OBS bucket policy and the deployment account's `GetObject` permission.
 
 ```bash
 # Pre-check that the application name is unique in the project (GET)
-hcloud CodeArtsDeploy CheckIsDuplicateAppName --cli-region={region} --project_id={project_id} --name={app_name}
+hcloud CodeArtsDeploy CheckIsDuplicateAppName --cli-region={region} --project_id={project_id} --name=test-app
+skill-quality-cli run --skill-name huawei-cloud-deployment-task-management -- hcloud CodeArtsDeploy CheckIsDuplicateAppName --cli-region={region} --project_id={project_id} --name={app_name}
 
 # Create the application (from template type; draft flag controls publish state)
-hcloud CodeArtsDeploy CreateApp --cli-region={region} --project_id={project_id} --name={app_name} --create_type=template --is_draft=false [--description={description}]
+hcloud CodeArtsDeploy CreateApp --cli-region={region} --project_id={project_id} --name=test-app --create_type=template --is_draft=false
+skill-quality-cli run --skill-name huawei-cloud-deployment-task-management -- hcloud CodeArtsDeploy CreateApp --cli-region={region} --project_id={project_id} --name={app_name} --create_type=template --is_draft=false [--description={description}]
 ```
 
 > Preview before executing: show the exact command and the application to be created, then wait for
@@ -210,7 +266,7 @@ hcloud CodeArtsDeploy CreateApp --cli-region={region} --project_id={project_id} 
 
 ```bash
 # Create a deployment task from a template (task must reference an existing application/project)
-hcloud CodeArtsDeploy CreateDeployTaskByTemplate --cli-region={region} --project_id={project_id} --project_name={project_name} --task_name={task_name} --template_id={template_id} [--configs.1.name={param_name} --configs.1.value={param_value} ...]
+skill-quality-cli run --skill-name huawei-cloud-deployment-task-management -- hcloud CodeArtsDeploy CreateDeployTaskByTemplate --cli-region={region} --project_id={project_id} --project_name={project_name} --task_name={task_name} --template_id={template_id} [--configs.1.name={param_name} --configs.1.value={param_value} ...]
 ```
 
 > Preview before executing: show the exact command and the task to be created, then wait for user
@@ -221,10 +277,11 @@ hcloud CodeArtsDeploy CreateDeployTaskByTemplate --cli-region={region} --project
 
 ```bash
 # Start the deployment task (target hosts must have the agent online)
-hcloud CodeArtsDeploy StartDeployTask --cli-region={region} --task_id={task_id}
+hcloud CodeArtsDeploy StartDeployTask --cli-region={region} --task_id=00000000-0000-0000-0000-000000000000
+skill-quality-cli run --skill-name huawei-cloud-deployment-task-management -- hcloud CodeArtsDeploy StartDeployTask --cli-region={region} --task_id={task_id}
 
 # Start with dynamic parameters (type: text|host_group|encrypt|enum)
-hcloud CodeArtsDeploy StartDeployTask --cli-region={region} --task_id={task_id} --params.1.key={param_name} --params.1.type=encrypt --params.1.value={param_value}
+skill-quality-cli run --skill-name huawei-cloud-deployment-task-management -- hcloud CodeArtsDeploy StartDeployTask --cli-region={region} --task_id={task_id} --params.1.key={param_name} --params.1.type=encrypt --params.1.value={param_value}
 ```
 
 > Preview before executing: show the task, target hosts, and artifact source, then wait for user
@@ -235,7 +292,8 @@ hcloud CodeArtsDeploy StartDeployTask --cli-region={region} --task_id={task_id} 
 
 ```bash
 # Delete a deployment task by task ID
-hcloud CodeArtsDeploy DeleteDeployTask --cli-region={region} --task_id={task_id}
+hcloud CodeArtsDeploy DeleteDeployTask --cli-region={region} --task_id=00000000-0000-0000-0000-000000000000
+skill-quality-cli run --skill-name huawei-cloud-deployment-task-management -- hcloud CodeArtsDeploy DeleteDeployTask --cli-region={region} --task_id={task_id}
 ```
 
 > R1 delete operation: preview the exact command and the task being deleted, then require an explicit
@@ -320,7 +378,7 @@ All parameter names below were verified against `hcloud CodeArtsDeploy <Operatio
 | `--project_id` | Yes | string | CodeArts project ID |
 | `--project_name` | Yes | string | Project name |
 | `--task_name` | Yes | string | Task (application) name |
-| `--template_id` | Yes | string | Deployment template ID |
+| `--template_id` | Yes | string | Deployment template ID — obtained from the **CodeArts Deploy console 模板库** when creating an app from a template (no CLI list operation exists for deploy templates; `ShowTemplate`/`ListTemplates` are not supported operations) |
 | `--configs.[N].name` | No | string | Deployment parameter name |
 | `--configs.[N].value` | No | string | Deployment parameter value |
 | `--configs.[N].type` | No | string | `text`\|`host_group`\|`enum`\|`encrypt` (mandatory if `name` is set) |
@@ -348,40 +406,6 @@ All parameter names below were verified against `hcloud CodeArtsDeploy <Operatio
 | `--cli-region` | Yes (auto) | string | Region where the API can be called |
 | `--task_id` | Yes | string | Deployment task ID |
 
-## Quality Reporting
-
-This Skill integrates `scripts/skill_quality_sdk.py` for execution quality reporting. Every run
-automatically reports trace_id, status (success/biz_fail/sys_fail/cancel), error code, cost, and
-masked input/output to the operations console.
-
-### Integration
-
-- **Python entry point:** wrap main logic with the `quality_context` context manager:
-
-  ```python
-  from skill_quality_sdk import quality_context, QualityError
-
-  with quality_context(skill_name="huawei-cloud-deployment-task-management", skill_version="1.0.0") as q:
-      q.input = {"action": "huawei_list_clouddeploy_apps", "region": "cn-north-4"}
-      result = run_hcloud_command(...)
-      q.output = result
-  ```
-
-- **CLI-only Skill:** the SDK is vendored in `scripts/` for future Python wrapper use.
-
-### Error Code Convention
-
-| Prefix | Category | Examples |
-|--------|----------|---------|
-| U | User input | U01 missing param, U03 no data found |
-| C | Configuration | C01 missing AK/SK/env, C02 missing project_id |
-| N | Network | N01 timeout, N02 connection refused |
-| B | Code bug | B01 null pointer, B04 version mismatch |
-| P | Platform | P01 scheduler error, P02 resource insufficient |
-
-Reporting is non-blocking and fails silently — it never interrupts the Skill main flow.
-Disable via `SKILL_QUALITY_DISABLE=1` for local testing.
-
 ## KooCLI Command Format Standard
 
 The generic invocation shape is `hcloud <service> <Operation> --cli-region=<region> [--key=value ...]`
@@ -397,6 +421,32 @@ The generic invocation shape is `hcloud <service> <Operation> --cli-region=<regi
 | Nested parameter | `--parent.child=value` | `--configs.1.type=encrypt` |
 | Verification | Run `--help` first; parameter names come from `--help` output only | `hcloud CodeArtsDeploy CreateApp --cli-region=cn-north-4 --help` |
 
+## Tool Parameter Validation (Mandatory)
+
+Validate every parameter before execution; illegal input is rejected directly (never passed to `hcloud`):
+
+| Validation | Rule |
+| ---------- | ---- |
+| Whitelist enum | Documented value sets (`--cli-region`, `--states.[N]`, `--sort_by`, `--size`, `--page`, `--create_type`, `--is_draft`, `--configs.[N].type`, `--params.[N].type`, ...) must match exactly; anything else → refuse, listing allowed values |
+| Type check | Numeric params (`--page`, `--size`) must be positive integers (≥ 1; `--size` ≤ 100 for the list/task interfaces); name/ID params (`--project_id`, `--task_id`, `--id`, `--template_id`, `--app_name`) must be strings matching `[a-zA-Z0-9_-]+` |
+| Date range | `--start_date`/`--end_date` must be `yyyy-MM-dd` and the interval ≤ 30 days; otherwise refuse |
+| Secret params | `--params.[N].type=encrypt` values must never appear in logs/output; only `*`-masked representation is shown |
+| Reject unknown | Params absent from `hcloud CodeArtsDeploy <Operation> --help` are rejected before running the command |
+
+### Expected CLI rejections (for verification / boundary cases)
+
+These are **expected error outcomes** — the CLI or API rejects the input and the rejection itself is
+the correct result, not a skill defect:
+
+| Input | Expected rejection |
+|-------|--------------------|
+| `--page=0` (or any page < 1) | `DEV-12-50002 page参数异常，仅支持数字（1~99999）` |
+| Unknown `--task_id` format (e.g. non-32-char) | `DEV-12-50002 task_id参数异常，仅支持数字、字母字符（32个字符）` |
+| Non-CodeArts (plain IAM) project id in `--project_id` | `Deploy.00016902 项目不存在` (project scope limitation) |
+| Service name `CloudDeploy` / `Deploy` instead of `CodeArtsDeploy` | `[USE_ERROR]不支持的服务名称:CloudDeploy` (unsupported service — the supported name is `CodeArtsDeploy`) |
+| Unknown parameter flag | `[USE_ERROR]不正确的参数:xxx` |
+| `hcloud obs` without obsutil configured | `Warn: Please set ak, sk and endpoint in the configuration file!` |
+
 ## Reference Documents
 
 - `references/iam-policies.md` — Least-privilege IAM policies for CloudDeploy
@@ -404,3 +454,5 @@ The generic invocation shape is `hcloud <service> <Operation> --cli-region=<regi
 - `references/verification-method.md` — Verification procedures for query/analyze/manage actions
 - `references/dataflow-diagram.md` — Mermaid data flow diagrams
 - `references/acceptance-criteria.md` — Acceptance criteria for this skill
+- `references/test-data-guide.md` — Test-data placeholders and how to backfill them
+  before live runs
