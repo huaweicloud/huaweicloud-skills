@@ -41,6 +41,16 @@
 | # | Criteria | Verification Method |
 |---|----------|--------------------|
 | 17 | All CLI commands execute without error | Execute each command with `--help` against live KooCLI |
-| 18 | SDK scripts import and initialize without exception | Run Python import test |
+| 18 | SDK fallback scripts import and initialize without exception | Run Python import test |
 | 19 | No hardcoded credentials in any file | Grep for AK/SK patterns |
 | 20 | Mutating operations always prompt for user confirmation | Code review of workflow section |
+
+## Quality Reporting (CLI)
+
+| # | Criteria | Verification Method |
+|---|----------|--------------------|
+| 21 | `scripts/ensure_cli.sh` exists and is executable (idempotent `skill-quality-cli` installer) | `test -x scripts/ensure_cli.sh && bash scripts/ensure_cli.sh` |
+| 22 | `scripts/cli/cli_entry.py` + `scripts/cli/cli_reporting.py` are bundled (zero-dependency in-skill carrier) | `ls scripts/cli/` |
+| 23 | `SKILL.md` contains the "Quality Reporting (Unified CLI)" section with Mode 1 (`run` wrap) / Mode 2 (`report`) and the quality-reporting wrapping rule (wrapper is a reporting bypass; native `hcloud ...` stays directly executable) | Review `SKILL.md` |
+| 24 | Every CLI action in `SKILL.md` is documented in its native `hcloud <Service> <Operation> ...` form (directly executable by hcloud), with the `skill-quality-cli run --skill-name huawei-cloud-dds-dcs-instance-management -- ...` quality-reporting wrapper shown alongside as a comment/bypass | `grep` hcloud lines in SKILL.md bash blocks; run `hcloud <Operation> --help` |
+| 25 | No `skill_quality_sdk` / `quality_context` remnants in scripts, SKILL.md, or references | `grep -r "skill_quality_sdk\|quality_context" <skill dir>` returns nothing |
