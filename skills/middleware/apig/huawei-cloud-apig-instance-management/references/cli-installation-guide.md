@@ -33,22 +33,20 @@ Two supported ways (AK/SK never hardcoded in this skill):
 
 ### Option A — Local profile (recommended for interactive agents)
 
-Configures a named profile `default`:
+The agent must NOT write credentials on the user's behalf — never execute a credential-writing
+command (e.g. `configure set`/`configure init`) for them.
 
-```bash
-hcloud configure set --cli-access-key=YOUR_ACCESS_KEY --cli-secret-key=YOUR_SECRET_KEY
-```
-
-Or interactively:
-
-```bash
-hcloud configure
-```
-
-Check the current profile:
+Check whether a profile already exists:
 
 ```bash
 hcloud configure list
+```
+
+- If the output shows an existing profile, use it directly (the agent reads it via the CLI, never prints it).
+- If no profile exists, prompt the user to authenticate themselves (interactive, user-run):
+
+```bash
+hcloud configure init
 ```
 
 ### Option B — Environment variables (recommended for CI/agent runtimes)
@@ -73,7 +71,7 @@ export HUAWEICLOUD_SDK_REGION=cn-north-4
 ### Security rules
 
 - Never print, persist, or hardcode AK/SK — read them from the environment or the local profile only.
-- Never run `hcloud configure set` with keys inside a skill document or script.
+- Never write AK/SK with `configure set` from inside a skill document or script; the agent only checks `hcloud configure list`.
 - Use the most restrictive IAM identity that still allows the needed APIG operations (least privilege, see `references/iam-policies.md`).
 
 ## 3. Region and project

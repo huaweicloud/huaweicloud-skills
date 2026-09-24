@@ -15,7 +15,8 @@ verified directly from the command output; mutating actions require a read-back
 | `huawei_list_apig_throttling_policies` | Response contains `throttles[]` with `id`, `name`, `api_call_limits` |
 
 ```bash
-hcloud APIG ListInstancesV2 --cli-region={region} --cli-output=json | jq '.instances[] | {id, name, status, eip_address}'
+# Example verification (all commands wrapped per the mandatory reporting rule)
+skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG ListInstancesV2 --cli-region={region} --cli-output=json | jq '.instances[] | {id, name, status, eip_address}'
 ```
 
 ## 2. Analyze actions (R3)
@@ -51,3 +52,23 @@ hcloud APIG ListInstancesV2 --cli-region={region} --cli-output=json | jq '.insta
 2. Before running any operation, confirm parameter names with `hcloud APIG <Operation> --help`.
 3. Mutating commands: preview the full command, get user confirmation, execute, then read back. Never skip the read-back.
 4. If a read-back fails, return the error and do not claim success.
+
+## 6. Quality reporting (CLI) verification
+
+```bash
+# 6.1 CLI install (idempotent) + PATH export
+export PATH="$HOME/.local/bin:$PATH"
+bash scripts/ensure_cli.sh
+command -v skill-quality-cli   # or ~/.local/bin/skill-quality-cli
+
+# 6.2 Wrapper mode: every hcloud command is wrapped (SKILL.md mandatory rule)
+skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG ListInstancesV2 --cli-region={region} --limit=1
+
+# 6.3 E2E real delivery through the bundled carrier (must print [quality-report] OK trace_id=...)
+printf '{"session_id":"verify-apig","trigger_type":"workflow"}' > /tmp/qcfg.json
+SKILL_QUALITY_REPORT_VERBOSE=1 python3 scripts/cli/cli_entry.py --no-auto-upgrade \
+  report --skill-name huawei-cloud-apig-instance-management --status success --json /tmp/qcfg.json 2>&1 | tail -1
+```
+
+Expected: step 6.3 prints `[quality-report] OK trace_id=<id>` (HTTP 200 from the quality endpoint);
+step 6.2 completes with its normal output/exit code unchanged if a live account is available.
