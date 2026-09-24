@@ -55,3 +55,30 @@ engine routed correctly). Only proceed to real execution after this dry run pass
 4. Create a Kafka instance (smallest flavor) → wait for `RUNNING` → list its topics → delete it.
 
 Clean up all created resources and record before/after in the acceptance report.
+
+## 6. Quality reporting (CLI) verification
+
+```bash
+# 6.1 CLI install (idempotent) + PATH export
+export PATH="$HOME/.local/bin:$PATH"
+bash scripts/ensure_cli.sh
+command -v skill-quality-cli   # or ~/.local/bin/skill-quality-cli
+
+# 6.2 Hard-bound report from the bare script (fire-and-forget; output unchanged)
+python3 scripts/smn_dms_skill.py huawei_list_smn_topics --region=cn-north-4
+#     → normal action output; a detached report subprocess runs in the background
+
+# 6.3 Usage error path → biz_fail (U02)
+python3 scripts/smn_dms_skill.py huawei_list_dms_instances --region=cn-north-4 ; echo "rc=$?"   # rc=2, report=biz_fail
+
+# 6.4 E2E real delivery through the installed CLI (must print [quality-report] OK trace_id=...)
+printf '{"session_id":"verify-smn-dms","trigger_type":"workflow"}' > /tmp/qcfg.json
+SKILL_QUALITY_REPORT_VERBOSE=1 skill-quality-cli \
+  report --skill-name huawei-cloud-smn-dms-message --status success --json /tmp/qcfg.json 2>&1 | tail -1
+
+# 6.5 Wrapper mode → exactly one report (script skips its own when SKILL_TRACE_ID is set)
+skill-quality-cli run --skill-name huawei-cloud-smn-dms-message -- python3 scripts/smn_dms_skill.py huawei_list_smn_topics --region=cn-north-4 --preview
+```
+
+Expected: step 6.4 prints `[quality-report] OK trace_id=<id>` (HTTP 200 from the quality endpoint);
+steps 6.2/6.3/6.5 complete with their normal output/exit codes unchanged (reporting never blocks).

@@ -43,3 +43,14 @@ Checklist for accepting the huawei-cloud-smn-dms-message skill.
 - [ ] Read-only smoke tests executed against a live account in `cn-north-4` (see references/verification-method.md).
 - [ ] `--preview` dry-runs passed for all R2/R1 commands.
 - [ ] Engine routing verified live: `kafka`, `rabbitmq`, `rocketmq` each returned valid API responses.
+
+## Quality reporting (CLI)
+
+- [ ] `scripts/ensure_cli.sh` + `scripts/install_cli.sh` exist and are executable (idempotent, pinned version + SHA256 whitelist verification, fail-closed; no auto-upgrade).
+- [ ] `SKILL.md` contains the "Quality Reporting (Unified CLI)" section with Mode 1 (`run` wrap) / Mode 2 (`report`) and the mandatory `skill-quality-cli run` wrapping rule for hcloud commands.
+- [ ] `SKILL.md` contains the "Action Dispatch (Script Executor)" section listing all 15 `huawei_*` actions as `python3 scripts/smn_dms_skill.py <action> ...` script-executor commands.
+- [ ] Every executable `hcloud` command in `SKILL.md` is wrapped with `skill-quality-cli run --skill-name huawei-cloud-smn-dms-message -- ...`.
+- [ ] `scripts/smn_dms_skill.py` hard-binds reporting: success → `success`; missing required argument / invalid engine → `biz_fail` (U02); hcloud non-zero exit / timeout / network error → `sys_fail` (B01).
+- [ ] Reporting is fire-and-forget: never blocks, never changes business output or the exit code; skips when `SKILL_TRACE_ID` is set (wrapper already reported) or `SKILL_QUALITY_DISABLE=1`.
+- [ ] E2E verified: `skill-quality-cli report --skill-name huawei-cloud-smn-dms-message --status success --json <cfg>` returns `[quality-report] OK trace_id=...`.
+- [ ] No `skill_quality_sdk` remnants in the skill directory (scripts, SKILL.md, references).

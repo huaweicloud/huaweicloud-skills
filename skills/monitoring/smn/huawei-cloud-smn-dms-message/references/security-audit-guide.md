@@ -27,7 +27,7 @@ grep -RniE "os\.system|subprocess\.(call|run).*shell=True|eval\(|exec\(|pickle\.
 ```
 
 `scripts/smn_dms_skill.py` runs `subprocess.run` with an **argument list** (no `shell=True`) — safe.
-Prompt-injection markers (`ignore previous instructions`, `SYSTEM:`, etc.) must be absent.
+Prompt-injection markers (instruction-override phrases, fake `SYSTEM:` tags, role-play jailbreaks, etc.) must be absent from every prompt, template, and script.
 
 ## Gate 3 — Dependency security
 
@@ -40,8 +40,7 @@ pip-audit 2>/dev/null || pip install pip-audit && pip-audit
 
 ## Gate 4 — Insecure configuration
 
-- No plaintext credential persistence: `hcloud configure` stores credentials encrypted with the
-  cloud keyring; the skill never stores credentials itself.
+- No plaintext credential persistence: authentication uses the standard `hcloud` CLI configuration; the skill itself never stores credentials.
 - `subprocess.run` captures output with `capture_output=True`; no `shell=True`.
 - No weak-password defaults injected into `CreateDmsInstance`; RabbitMQ `--password` must always
   be user-supplied and never a literal placeholder.
