@@ -100,8 +100,8 @@ Key fields for C++ projects:
 
 ```bash
 # Use PowerShell's built-in Compress-Archive
-Compress-Archive -Path "D:\path\cpp_sort\*" \
-  -DestinationPath "D:\path\cpp_sort.zip" -Force
+Compress-Archive -Path "<project-dir>/cpp_sort/*" \
+  -DestinationPath "<project-dir>/cpp_sort.zip" -Force
 ```
 
 Or use this skill's helper script:
@@ -213,7 +213,7 @@ Common symptoms and handling:
 | Symptom | Handling |
 |---|---|
 | `error: undefined reference to xxx` | Check that all `*.cpp` files are uploaded to the same algorithm project; or that `CMakeLists.txt` lists them |
-| `bash ./build.sh` fails with `rm build/* -rf` (build/ doesn't exist on first run) | Change `build.sh` to use `rm -rf build` instead of `rm build/* -rf` |
+| `bash ./build.sh` fails with `rm <output-directory>/* -rf` (build/ doesn't exist on first run) | Change `build.sh` to use `rm -rf <output-directory>` instead of `rm <output-directory>/* -rf` |
 | `evaluator: command not found` | The artefact name (in `CMakeLists.txt`'s `add_executable`) doesn't match `evaluator_func_name` |
 | `output not a number` | The evaluator command outputs a non-number; only allow `%.6f\n` |
-| CMake fails during build and `build/` already exists | Usually historical build residue (`.gitignore` not uploaded or not effective); run `rm -rf build` and retry |
+| CMake fails during build and `<output-directory>/` already exists | Usually historical build residue (`.gitignore` not uploaded or not effective); run `rm -rf <output-directory>` and retry |

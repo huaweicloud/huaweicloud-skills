@@ -28,7 +28,7 @@ hcloud version
 Two common options:
 
 - **winget** (Windows 10/11): `winget install HuaweiCloud.HuaweiCloudCLI` (verify the package id on the official docs)
-- **Manual download**: install the MSI from the official Huawei Cloud download page; the binary lands at `C:\Program Files\Huawei\hcloud\bin\hcloud.exe` and is added to `PATH` automatically
+- **Manual download**: install the MSI from the official Huawei Cloud download page; the binary lands in the **standard Windows install location** (e.g. `Program Files` under the drive Windows was installed on) and is added to `PATH` automatically
 
 After install, open a **new** PowerShell and run `hcloud version` to confirm.
 
@@ -56,14 +56,14 @@ printf "y\n" | hcloud version
 # Linux / macOS / Git Bash
 export HUAWEI_CLOUD_AK="<your-access-key-id>"
 export HUAWEI_CLOUD_SK="<your-secret-access-key>"
-export HUAWEI_CLOUD_REGION="<your-region-id>"  # e.g. "cn-north-1" — check `hcloud configure show`
+export HUAWEI_CLOUD_REGION="<your-region-id>"  # e.g. "cn-east-3" — production recommended
 ```
 
 ```powershell
 # PowerShell
 $env:HUAWEI_CLOUD_AK = "<your-access-key-id>"
 $env:HUAWEI_CLOUD_SK = "<your-secret-access-key>"
-$env:HUAWEI_CLOUD_REGION = "<your-region-id>"  # e.g. "cn-north-1"
+$env:HUAWEI_CLOUD_REGION = "<your-region-id>"  # e.g. "cn-east-3" — production recommended
 ```
 
 ### 2.2 Interactive `hcloud configure init`
@@ -94,11 +94,9 @@ hcloud OptVerse ListBuckets --cli-region=$HUAWEI_CLOUD_REGION --cli-output=json
 
 ### 3.2 Common regions
 
-| Region | Region ID | Notes |
-|---|---|---|
-| North-Beijing-1 | `cn-north-1` | Default for some accounts |
-| North-Beijing-4 | `cn-north-4` | Most accounts; check `hcloud configure show` |
-| East-Shanghai-2 | `cn-east-4` | East |
+| Region              | Region ID | Notes |
+|---------------------|---|---|
+| **East-Shanghai-1** | **`cn-east-3`** | **Production recommended** — OptVerse algorithm design is deployed here; prefer this region for production tasks |
 
 > `hcloud configure show` lists the region you have configured. The OptVerse skill reads region from there (or from the `HUAWEI_CLOUD_REGION` env var) and passes it via `--cli-region` on every call.
 
