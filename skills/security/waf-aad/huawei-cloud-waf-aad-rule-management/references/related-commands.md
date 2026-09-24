@@ -6,10 +6,10 @@ Auxiliary hcloud commands and external context useful when operating the `huawei
 
 ```bash
 # Geo regions supported for geo rules (source of {geoip} values)
-hcloud WAF ShowPolicyGeoipMap --cli-region={region} --project_id={project_id}
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud WAF ShowPolicyGeoipMap --cli-region={region} --project_id={project_id}
 
 # Instance details (dedicated WAF instances)
-hcloud WAF ShowInstance --cli-region={region} --project_id={project_id} --instance_id={instance_id}
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud WAF ShowInstance --cli-region={region} --project_id={project_id} --instance_id={instance_id}
 ```
 
 Verify each auxiliary operation with `--help` before first use; only commands listed in SKILL.md
@@ -31,9 +31,9 @@ Core Commands are guaranteed verified in this skill version.
 ## KooCLI general tips
 
 ```bash
-hcloud configure list                 # show current auth profile
-hcloud WAF ListInstance --help        # authoritative WAF parameter names — always re-check before building commands
-hcloud AAD ListInstance --help        # authoritative AAD parameter names — always re-check before building commands
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud configure list                 # show current auth profile
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud WAF ListInstance --help        # authoritative WAF parameter names — always re-check before building commands
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud AAD ListInstance --help        # authoritative AAD parameter names — always re-check before building commands
 ```
 
 > **Golden rule:** run `hcloud WAF <Operation> --help` / `hcloud AAD <Operation> --help` before

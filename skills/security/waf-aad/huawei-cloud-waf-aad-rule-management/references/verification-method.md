@@ -6,10 +6,10 @@ operations require preview + user confirmation (R2/R1).
 ## 1. Environment checks
 
 ```bash
-hcloud version                       # >= 7.2.12
-hcloud WAF --help | head -30         # WAF service + operations list
-hcloud AAD --help | head -30         # AAD service + operations list
-hcloud configure list                # authenticated profile
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud version                       # >= 7.2.12
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud WAF --help | head -30         # WAF service + operations list
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud AAD --help | head -30         # AAD service + operations list
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud configure list                # authenticated profile
 ```
 
 ## 2. Read-only verification (R3 — runs automatically)
@@ -33,8 +33,8 @@ hcloud configure list                # authenticated profile
 fabricate AAD instance management:
 
 ```bash
-hcloud AAD CreateInstance --help    # [USE_ERROR] Operation CreateInstance is not supported.
-hcloud AAD DeleteInstance --help    # [USE_ERROR] Operation DeleteInstance is not supported.
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud AAD CreateInstance --help    # [USE_ERROR] Operation CreateInstance is not supported.
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud AAD DeleteInstance --help    # [USE_ERROR] Operation DeleteInstance is not supported.
 ```
 
 ## 3. Diagnostic verification (R3)
