@@ -6,12 +6,14 @@
   - [ ] YAML frontmatter: `name: huawei-cloud-deployment-task-management` matches directory name; `description` contains
         feature summary and trigger words; `tags` ≤ 5; **no** `version` field
   - [ ] Required sections: Overview, Prerequisites, Workflow, Core Commands, Parameter Confirmation,
-        Quality Reporting, Reference Documents, KooCLI Command Format Standard
+        Reference Documents, KooCLI Command Format Standard (V3 light embedding: no standalone
+        Quality Reporting section; telemetry embedded via Overview dependency + Prerequisites
+        `skill-quality-cli` ensure line + `skill-quality-cli run` wrapping)
   - [ ] SKILL.md ≤ 500 lines; total files ≤ 30; total size ≤ 40 MB; all file extensions allowed
 - [ ] `references/iam-policies.md`, `references/cli-installation-guide.md`,
       `references/verification-method.md`, `references/dataflow-diagram.md`,
       `references/acceptance-criteria.md` exist and use kebab-case filenames
-- [ ] `scripts/skill_quality_sdk.py` exists (vendored from skillsopr repo)
+- [ ] `scripts/ensure_cli.sh` exists (idempotent skill-quality-cli installer) and `scripts/cli/` carries the built-in reporting carrier (`cli_entry.py` + `cli_reporting.py`)
 - [ ] No hardcoded credentials; no literal AK/SK or `hcloud configure set` with real values
 
 ## 2. Action Coverage (9 huawei_* actions)

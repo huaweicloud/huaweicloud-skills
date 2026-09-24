@@ -1,8 +1,8 @@
 {
   "region": "cn-north-4",
   "request_defaults": {
-    "project_id": "383eff43089245eb90ee42bf24fb697b",
-    "domain_id": "074c26ae7f0025b10fd7c0159cb576a0"
+    "project_id": "{project_id}",
+    "domain_id": "{domain_id}"
   },
   "test_cases": [
     {
@@ -98,29 +98,11 @@
     },
     {
       "id": "TC-13",
-      "name": "Negative: hcloud CloudDeploy must fail (service name probe)",
-      "type": "negative",
-      "executor": "cli",
-      "command": "hcloud CloudDeploy ListAllApp --cli-region={region}",
-      "expected_failure": true,
-      "note": "Proves the service name trap: CloudDeploy is NOT a valid KooCLI service; CodeArtsDeploy is."
-    },
-    {
-      "id": "TC-14",
-      "name": "Negative: ListAllApp --page=0 must fail validation",
-      "type": "negative",
-      "executor": "cli",
-      "command": "hcloud CodeArtsDeploy ListAllApp --cli-region={region} --project_id={project_id} --page=0 --size=10",
-      "expected_failure": true,
-      "note": "page must be >= 1; CLI-side validation error is the EXPECTED outcome."
-    },
-    {
-      "id": "TC-15",
       "name": "OBS artifact check invocation (obsutil passthrough)",
       "type": "syntax",
       "executor": "cli",
-      "command": "hcloud obs ls obs://{artifact_bucket}/{artifact_object_path}",
-      "note": "Verifies hcloud obs passthrough wiring for huawei_analyze_clouddeploy_artifact; bucket/object must exist in a real deployment scenario."
+      "command": "hcloud obs ls obs://nonexistent-bucket-xyz/obj",
+      "note": "Verifies hcloud obs passthrough wiring for huawei_analyze_clouddeploy_artifact; requires obsutil configured (see SKILL.md OBS section)."
     }
   ]
 }

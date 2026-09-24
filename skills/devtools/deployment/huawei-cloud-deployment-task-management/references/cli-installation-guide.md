@@ -81,8 +81,14 @@ Refer to `hcloud configure --help` for additional modes (e.g. SSO login).
 exists. hcloud forwards OBS commands to **obsutil** (`hcloud obs <command>`). Initialize it once:
 
 ```bash
-# Configures the endpoint (per region) and reuses the same AK/SK as hcloud
-hcloud obs config -i={access_key} -k={secret_key} -e=https://obs.cn-north-4.myhuaweicloud.com
+# Interactive configuration (recommended) — type the AK/SK/endpoint at the terminal;
+# the credentials are never placed on the command line, so they do not leak into
+# shell history or process listings (ps aux).
+hcloud obs config -interactive
+# Non-interactive equivalent (CI scripts only) — WARNING: the plaintext AK/SK in the
+# argv is a credential-leak vector (shell history / ps aux). Prefer -interactive or
+# read from environment variables; never log this command.
+# hcloud obs config -i={access_key} -k={secret_key} -e=https://obs.cn-north-4.myhuaweicloud.com
 ```
 
 Then check objects:

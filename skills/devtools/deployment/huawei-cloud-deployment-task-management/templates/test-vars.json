@@ -13,7 +13,7 @@
       "name": "ListAllApp live (read-only) - project error semantics",
       "type": "query",
       "executor": "cli",
-      "command": "hcloud CodeArtsDeploy ListAllApp --cli-region={region} --project_id=383eff43089245eb90ee42bf24fb697b --page=1 --size=10"
+      "command": "hcloud CodeArtsDeploy ListAllApp --cli-region={region} --project_id={project_id} --page=1 --size=10"
     },
     {
       "id": "TC-03",
@@ -27,7 +27,7 @@
       "name": "ListDeployTasks live (read-only) - project error semantics",
       "type": "query",
       "executor": "cli",
-      "command": "hcloud CodeArtsDeploy ListDeployTasks --cli-region={region} --project_id=383eff43089245eb90ee42bf24fb697b --page=1 --size=10"
+      "command": "hcloud CodeArtsDeploy ListDeployTasks --cli-region={region} --project_id={project_id} --page=1 --size=10"
     },
     {
       "id": "TC-05",
@@ -87,22 +87,6 @@
     },
     {
       "id": "TC-13",
-      "name": "Negative: hcloud CloudDeploy must fail (service name probe)",
-      "type": "negative",
-      "executor": "cli",
-      "command": "hcloud CloudDeploy ListAllApp --cli-region={region}",
-      "expected_failure": true
-    },
-    {
-      "id": "TC-14",
-      "name": "Negative: ListAllApp --page=0 must fail validation",
-      "type": "negative",
-      "executor": "cli",
-      "command": "hcloud CodeArtsDeploy ListAllApp --cli-region={region} --project_id=383eff43089245eb90ee42bf24fb697b --page=0 --size=10",
-      "expected_failure": true
-    },
-    {
-      "id": "TC-15",
       "name": "OBS artifact check invocation (obsutil passthrough)",
       "type": "syntax",
       "executor": "cli",

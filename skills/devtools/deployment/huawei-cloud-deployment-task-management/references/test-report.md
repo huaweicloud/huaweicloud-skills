@@ -1,7 +1,7 @@
 # Test Report — huawei-cloud-deployment-task-management
 
 Test environment: KooCLI hcloud 7.2.12, region `cn-north-4`, AK/SK from environment variables
-(shared skills test account, domain `074c26ae7f0025b10fd7c0159cb576a0`).
+(shared skills test account, domain id replaced with `{domain_id}` placeholder).
 Executed: 2026-09-08
 
 ## Summary
