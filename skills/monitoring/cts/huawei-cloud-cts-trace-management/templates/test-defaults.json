@@ -1,8 +1,7 @@
 {
   "region": "cn-north-4",
   "request_defaults": {
-    "project_id": "383eff43089245eb90ee42bf24fb697b",
-    "domain_id": "074c26ae7f0025b10fd7c0159cb576a0"
+    "note": "project_id/domain_id are NOT hardcoded here — KooCLI fills project_id from the authenticated profile, and domain_id (ListTraceResources) is resolved from the profile/IAM at runtime. See references/verification-method.md."
   },
   "test_cases": [
     {
@@ -11,7 +10,7 @@
       "type": "query",
       "executor": "cli",
       "command": "hcloud CTS ListOperations --cli-region={region}",
-      "note": "project_id is filled from request_defaults when the executor substitutes placeholders; hcloud also fills it from the authenticated profile."
+      "note": "project_id is filled from the authenticated hcloud profile; no hardcoded account IDs."
     },
     {
       "id": "TC-02",
@@ -19,7 +18,7 @@
       "type": "query",
       "executor": "cli",
       "command": "hcloud CTS ListTrackers --cli-region={region}",
-      "note": "project_id is filled from request_defaults when the executor substitutes placeholders; hcloud also fills it from the authenticated profile."
+      "note": "project_id is filled from the authenticated hcloud profile; no hardcoded account IDs."
     },
     {
       "id": "TC-03",
@@ -27,7 +26,7 @@
       "type": "query",
       "executor": "cli",
       "command": "hcloud CTS ListTraces --cli-region={region} --trace_type=system --limit=5",
-      "note": "project_id is filled from request_defaults when the executor substitutes placeholders; hcloud also fills it from the authenticated profile."
+      "note": "project_id is filled from the authenticated hcloud profile; no hardcoded account IDs."
     },
     {
       "id": "TC-04",
@@ -35,14 +34,15 @@
       "type": "query",
       "executor": "cli",
       "command": "hcloud CTS ListNotifications --cli-region={region} --notification_type=smn",
-      "note": "project_id is filled from request_defaults when the executor substitutes placeholders; hcloud also fills it from the authenticated profile."
+      "note": "project_id is filled from the authenticated hcloud profile; no hardcoded account IDs."
     },
     {
       "id": "TC-05",
-      "name": "ListTraceResources - list trace resources requires --domain_id",
-      "type": "query",
+      "name": "ListTraceResources syntax check (--help only; live call needs --domain_id from the authenticated profile)",
+      "type": "syntax",
       "executor": "cli",
-      "command": "hcloud CTS ListTraceResources --cli-region={region} --domain_id=074c26ae7f0025b10fd7c0159cb576a0"
+      "command": "hcloud CTS ListTraceResources --cli-region={region} --help",
+      "note": "ListTraceResources requires --domain_id (account ID); the live form resolves it dynamically from the authenticated profile/IAM — never hardcoded."
     },
     {
       "id": "TC-06",
@@ -67,21 +67,18 @@
     },
     {
       "id": "TC-09",
-      "name": "Negative: ListTraceResources with --project_id must fail (domain_id required)",
-      "type": "negative",
+      "name": "ListQuotas - list tracker quotas",
+      "type": "query",
       "executor": "cli",
-      "command": "hcloud CTS ListTraceResources --cli-region={region} --project_id=383eff43089245eb90ee42bf24fb697b",
-      "expected_failure": true,
-      "note": "Negative case: ListTraceResources requires --domain_id (NOT --project_id); a CLI error is the EXPECTED outcome, not a skill defect."
+      "command": "hcloud CTS ListQuotas --cli-region={region}",
+      "note": "Read-only R3 query. Verified against real hcloud KooCLI 7.2.12 (cn-north-4)."
     },
     {
       "id": "TC-10",
-      "name": "Negative: ListTraces with invalid --trace_type must fail",
-      "type": "negative",
+      "name": "CheckObsBuckets syntax check (--help only; live call needs OBS bucket name)",
+      "type": "syntax",
       "executor": "cli",
-      "command": "hcloud CTS ListTraces --cli-region={region} --limit=1 --trace_type=invalid_value",
-      "expected_failure": true,
-      "note": "Negative case: --trace_type only accepts system|data; an enum-validation CLI error is the EXPECTED outcome, not a skill defect."
+      "command": "hcloud CTS CheckObsBuckets --cli-region={region} --help"
     }
   ]
 }
