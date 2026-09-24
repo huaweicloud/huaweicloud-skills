@@ -4,7 +4,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from config import load_credentials, build_http_config
+from config import load_credentials, build_http_config, resolve_project_id
 from huaweicloudsdkcore.auth.credentials import BasicCredentials
 from huaweicloudsdkvpc.v3 import VpcClient
 from huaweicloudsdkvpc.v3.model import ListTrafficMirrorSessionsRequest
@@ -20,7 +20,7 @@ AK, SK, Region, SecurityToken = load_credentials()
 
 # 参数
 parser = argparse.ArgumentParser(description="查询流量镜像会话列表")
-parser.add_argument("--project_id", type=str, required=True, help="项目 ID，可通过 ../iam/get_project_id.py 获取")
+parser.add_argument("--project_id", type=str, required=False, help="项目 ID，可选；未提供时自动通过 IAM API 获取")
 parser.add_argument("--region", type=str, help="区域，默认 cn-north-4")
 parser.add_argument("--marker", type=str, help="分页标记，从上次查询结果的 next_marker 获取")
 parser.add_argument("--id", type=str, help="会话 ID 过滤")
@@ -34,6 +34,7 @@ args = parser.parse_args()
 
 if args.region is not None:
     Region = args.region
+args.project_id = resolve_project_id(Region, args.project_id)
 
 # 参数校验
 if args.top is not None and args.sort_by is None:

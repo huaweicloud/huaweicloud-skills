@@ -4,7 +4,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from config import load_credentials, build_http_config
+from config import load_credentials, build_http_config, resolve_project_id
 from huaweicloudsdkcore.auth.credentials import BasicCredentials
 from huaweicloudsdkvpn.v5 import VpnClient
 from huaweicloudsdkvpn.v5.model import ShowVpnGatewayRoutingTableRequest
@@ -14,7 +14,7 @@ AK, SK, Region, SecurityToken = load_credentials()
 Offset = 0
 
 parser = argparse.ArgumentParser(description="查询 VPN 网关路由表")
-parser.add_argument("--project_id", type=str, required=True, help="项目 ID，可通过 ../iam/get_project_id.py 获取")
+parser.add_argument("--project_id", type=str, required=False, help="项目 ID，可选；未提供时自动通过 IAM API 获取")
 parser.add_argument("--region", type=str, help="区域，默认 cn-north-4")
 parser.add_argument("--vgw_id", type=str, required=True, help="VPN 网关 ID，可通过 list_vgws.py 获取")
 parser.add_argument("--is_include_nexthop_resource", type=str, help="是否包含下一跳资源信息，true/false")
@@ -23,6 +23,7 @@ args = parser.parse_args()
 
 if args.region is not None:
     Region = args.region
+args.project_id = resolve_project_id(Region, args.project_id)
 if args.offset is not None:
     Offset = args.offset
 if Offset < 0:

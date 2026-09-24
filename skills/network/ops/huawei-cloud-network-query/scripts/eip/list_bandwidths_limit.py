@@ -4,7 +4,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from config import load_credentials, build_http_config
+from config import load_credentials, build_http_config, resolve_project_id
 from huaweicloudsdkcore.auth.credentials import BasicCredentials
 from huaweicloudsdkeip.v3 import EipClient
 from huaweicloudsdkeip.v3.model import ListBandwidthsLimitRequest
@@ -20,7 +20,7 @@ AK, SK, Region, SecurityToken = load_credentials()
 
 # 参数
 parser = argparse.ArgumentParser(description="查询租户带宽限制（带宽大小范围）")
-parser.add_argument("--project_id", type=str, required=True, help="项目 ID，可通过 scripts/iam/get_project_id.py 获取")
+parser.add_argument("--project_id", type=str, required=False, help="项目 ID，可选；未提供时自动通过 IAM API 获取")
 parser.add_argument("--region", type=str, help="区域，默认取环境变量 HW_REGION_NAME（未设置则 cn-north-4）")
 parser.add_argument("--charge_mode", type=str, choices=["bandwidth", "traffic", "95peak_plus"], help="计费模式: bandwidth(按带宽)/traffic(按流量)/95peak_plus(按增强型95)")
 parser.add_argument("--sort_by", type=str, help="排序字段和方向（客户端排序），格式: 字段:方向。字段可选: min_size, max_size；方向可选: asc(升序), desc(降序)。例如 min_size:asc 表示按最小带宽升序，max_size:desc 表示按最大带宽降序。与 --top 配合使用可快速查找最值")
@@ -30,6 +30,7 @@ args = parser.parse_args()
 
 if args.region is not None:
     Region = args.region
+args.project_id = resolve_project_id(Region, args.project_id)
 
 # 参数校验
 if args.top is not None and args.sort_by is None:

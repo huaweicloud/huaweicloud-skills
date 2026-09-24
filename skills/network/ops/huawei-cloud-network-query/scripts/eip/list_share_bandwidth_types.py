@@ -4,7 +4,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from config import load_credentials, build_http_config
+from config import load_credentials, build_http_config, resolve_project_id
 from huaweicloudsdkcore.auth.credentials import BasicCredentials
 from huaweicloudsdkeip.v3 import EipClient
 from huaweicloudsdkeip.v3.model import ListShareBandwidthTypesRequest
@@ -19,7 +19,7 @@ AK, SK, Region, SecurityToken = load_credentials()
 
 # 参数
 parser = argparse.ArgumentParser(description="查询共享带宽类型列表")
-parser.add_argument("--project_id", type=str, required=True, help="项目 ID，可通过 scripts/iam/get_project_id.py 获取")
+parser.add_argument("--project_id", type=str, required=False, help="项目 ID，可选；未提供时自动通过 IAM API 获取")
 parser.add_argument("--region", type=str, help="区域，默认取环境变量 HW_REGION_NAME（未设置则 cn-north-4）")
 parser.add_argument("--id", type=str, help="共享带宽类型 ID，精确匹配")
 parser.add_argument("--bandwidth_type", type=str, help="带宽类型，如 bgp/sbgp 等")
@@ -31,6 +31,7 @@ args = parser.parse_args()
 
 if args.region is not None:
     Region = args.region
+args.project_id = resolve_project_id(Region, args.project_id)
 
 
 # 渲染

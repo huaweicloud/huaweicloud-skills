@@ -4,7 +4,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from config import load_credentials, build_http_config
+from config import load_credentials, build_http_config, resolve_project_id
 from huaweicloudsdkcore.auth.credentials import BasicCredentials
 from huaweicloudsdkelb.v3 import ElbClient
 from huaweicloudsdkelb.v3.model import ShowL7PolicyRequest
@@ -13,13 +13,14 @@ from huaweicloudsdkelb.v3.region.elb_region import ElbRegion
 AK, SK, Region, SecurityToken = load_credentials()
 
 parser = argparse.ArgumentParser(description="查询 ELB 转发策略详情")
-parser.add_argument("--project_id", type=str, required=True, help="项目 ID，可通过 ../iam/get_project_id.py 获取")
+parser.add_argument("--project_id", type=str, required=False, help="项目 ID，可选；未提供时自动通过 IAM API 获取")
 parser.add_argument("--region", type=str, help="区域，默认 cn-north-4")
 parser.add_argument("--l7policy_id", type=str, required=True, help="转发策略 ID（必填），可通过 list_l7_policies.py 获取")
 args = parser.parse_args()
 
 if args.region is not None:
     Region = args.region
+args.project_id = resolve_project_id(Region, args.project_id)
 
 try:
     http_config = build_http_config()
