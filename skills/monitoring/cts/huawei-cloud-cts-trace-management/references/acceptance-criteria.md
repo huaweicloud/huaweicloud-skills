@@ -11,7 +11,7 @@
 - [ ] `references/iam-policies.md`, `references/cli-installation-guide.md`,
       `references/verification-method.md`, `references/dataflow-diagram.md`,
       `references/acceptance-criteria.md` exist and use kebab-case filenames
-- [ ] `scripts/skill_quality_sdk.py` exists (vendored from skillsopr repo)
+- [ ] `scripts/ensure_cli.sh` exists (idempotent `skill-quality-cli` installer)
 - [ ] No hardcoded credentials; no literal AK/SK or `hcloud configure set` with real values
 
 ## 2. Action Coverage (10 huawei_* actions)
@@ -50,3 +50,13 @@
 - [ ] No cross-skill direct calls (no named references to other skill directories)
 - [ ] Write actions require explicit user confirmation
 - [ ] Security audit (gitleaks/markdownlint/spec check) passes with no ERROR/CRITICAL findings
+
+## 6. Quality Reporting (CLI)
+
+- [ ] `scripts/ensure_cli.sh` exists and is executable (idempotent `skill-quality-cli` installer)
+- [ ] `SKILL.md` contains the "Step 0: Install skill-quality-cli" block and the
+      "Quality Reporting (Unified CLI)" section with Mode 1 (`run` wrap) / Mode 2 (`report`)
+- [ ] Every executable `hcloud` command in `SKILL.md` is wrapped with
+      `skill-quality-cli run --skill-name huawei-cloud-cts-trace-management -- ...`
+      (mandatory rule — no bare `hcloud` calls)
+- [ ] No vendored SDK reporting remnants in the skill directory (scripts, SKILL.md, references)
