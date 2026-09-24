@@ -4,13 +4,21 @@
 Implements the 15 huawei_* actions using the hcloud KooCLI.
 SMN maps to `hcloud SMN`; DMS has no `hcloud DMS` service, so the engine
 (Kafka / RabbitMQ / RocketMQ) selects the actual KooCLI service.
+
+Every run automatically sends a quality report via `skill-quality-cli` (installed by
+`scripts/ensure_cli.sh`, pinned version with SHA256 verification) — fire-and-forget,
+non-blocking, never changes the business output or exit code. When the whole
+command is already wrapped with `skill-quality-cli run` (SKILL_TRACE_ID is set),
+the script skips its own report to avoid double counting.
 """
 
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
+import time
 
 ENGINE_SERVICE = {
     "kafka": "Kafka",
@@ -310,15 +318,99 @@ def build_parser():
     return p
 
 
+def _resolve_quality_cli():
+    """Resolve the skill-quality-cli invocation, in priority order:
+    0. `SKILL_QUALITY_CLI_HOME` (explicit dir containing `cli_entry.py` or `skill-quality-cli`)
+    1. `skill-quality-cli` on PATH (after ensure_cli.sh + PATH export)
+    2. `~/.local/bin/skill-quality-cli` (ensure_cli.sh install dir, even when not on PATH)
+    Returns an argv list, or None when no carrier exists.
+    """
+    home = os.environ.get("SKILL_QUALITY_CLI_HOME")
+    if home:
+        entry = os.path.join(home, "cli_entry.py")
+        if os.path.isfile(entry):
+            return [sys.executable, entry]
+        exe = os.path.join(home, "skill-quality-cli")
+        if os.path.isfile(exe) and os.access(exe, os.X_OK):
+            return [exe]
+    exe = shutil.which("skill-quality-cli")
+    if exe:
+        return [exe]
+    local = os.path.expanduser("~/.local/bin/skill-quality-cli")
+    if os.path.isfile(local) and os.access(local, os.X_OK):
+        return [local]
+    return None
+
+
+def report_quality(status, error_code=None, error_msg=None, cost_ms=None):
+    """Fire-and-forget quality report via skill-quality-cli (unified CLI).
+
+    Hard-bound to the dispatch main flow: called on every run (success, usage
+    error, or exception) so a report can never be skipped by running the bare
+    script. Failing reporting never blocks or changes the business output /
+    exit code.
+
+    Skipped when:
+      - SKILL_QUALITY_DISABLE=1 (explicit opt-out),
+      - SKILL_TRACE_ID is already set (the whole command is wrapped with
+        `skill-quality-cli run`, which reports once itself — avoid double counting).
+    """
+    if os.environ.get("SKILL_QUALITY_DISABLE") == "1":
+        return False
+    if os.environ.get("SKILL_TRACE_ID"):  # already wrapped in `skill-quality-cli run`
+        return True
+    argv = _resolve_quality_cli()
+    if not argv:
+        return False
+    cmd = argv + ["--no-auto-upgrade", "report",
+                  "--skill-name", "huawei-cloud-smn-dms-message",
+                  "--status", status]
+    if error_code:
+        cmd += ["--error-code", error_code]
+    if error_msg:
+        cmd += ["--error-msg", error_msg[:500]]
+    if cost_ms is not None:
+        cmd += ["--cost-ms", str(int(cost_ms))]
+    try:
+        # Truly fire-and-forget: detach the report subprocess and never wait,
+        # so an unreachable/slow quality endpoint can never block the main flow.
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+        return True
+    except Exception:  # noqa: BLE001 - fire-and-forget
+        return False
+
+
 def main():
+    t0 = time.monotonic()
     parser = build_parser()
-    args = parser.parse_args()
-    if not args.region:
-        print("INFO: no --region supplied, the command will use the hcloud profile region.")
-    if not os.environ.get("HUAWEICLOUD_SDK_AK") and not _has_hcloud_profile():
-        print("WARNING: no HUAWEICLOUD_SDK_AK/SK env and no hcloud profile detected; "
-              "the command will use the local hcloud default profile.")
-    ACTIONS[args.action](args)
+    try:
+        args = parser.parse_args()
+        if not args.region:
+            print("INFO: no --region supplied, the command will use the hcloud profile region.")
+        if not os.environ.get("HUAWEICLOUD_SDK_AK") and not _has_hcloud_profile():
+            print("WARNING: no HUAWEICLOUD_SDK_AK/SK env and no hcloud profile detected; "
+                  "the command will use the local hcloud default profile.")
+        ACTIONS[args.action](args)
+    except SystemExit:
+        # argparse usage errors / require() / validate_engine() — business failure
+        report_quality("biz_fail", error_code="U02",
+                       error_msg="missing required argument or invalid engine",
+                       cost_ms=int((time.monotonic() - t0) * 1000))
+        raise
+    except RuntimeError as exc:
+        # hcloud non-zero exit / timeout / network issues — system failure
+        print("ERROR: %s" % exc, file=sys.stderr)
+        report_quality("sys_fail", error_code="B01", error_msg=str(exc),
+                       cost_ms=int((time.monotonic() - t0) * 1000))
+        sys.exit(1)
+    except Exception as exc:  # noqa: BLE001 - report and re-raise as failure
+        print("ERROR: %s" % exc, file=sys.stderr)
+        report_quality("sys_fail", error_code="B01", error_msg=str(exc),
+                       cost_ms=int((time.monotonic() - t0) * 1000))
+        sys.exit(1)
+    else:
+        report_quality("success", cost_ms=int((time.monotonic() - t0) * 1000))
 
 
 def _has_hcloud_profile():
