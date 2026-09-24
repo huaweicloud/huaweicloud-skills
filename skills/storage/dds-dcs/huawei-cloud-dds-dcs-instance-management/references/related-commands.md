@@ -5,8 +5,8 @@
 | Action | CLI Command |
 |--------|-------------|
 | List instances | `hcloud DDS ListInstances --cli-region={region} [--id={id}] [--name={name}] [--mode={mode}] [--datastore_type={type}] [--limit={n}] [--offset={n}]` |
-| Create instance | `hcloud DDS CreateInstance --cli-region={region} --name={name} --region={region} --availability_zone={az} --datastore.type=DDS-Community --datastore.version={version} --datastore.storage_engine=wiredTiger --mode={mode} --flavor.{N}.type={node_type} --flavor.{N}.num={count} --flavor.{N}.spec_code={spec} --subnet_id={subnet} --security_group_id={sg}` |
-| Add read-only node | `hcloud DDS AddReadonlyNode --cli-region={region} --instance_id={id} --num={n}` |
+| Create instance | `hcloud DDS CreateInstance --cli-region={region} --name={name} --region={region} --availability_zone={az} --datastore.type=DDS-Community --datastore.version={version} --datastore.storage_engine=wiredTiger --mode={mode} --flavor.{N}.type={node_type} --flavor.{N}.num={count} --flavor.{N}.spec_code={spec} --vpc_id={vpc_id} --subnet_id={subnet} --security_group_id={sg}` |
+| Add read-only node | `hcloud DDS AddReadonlyNode --cli-region={region} --instance_id={id} --num={n} --spec_code={spec}` |
 | Add sharding node | `hcloud DDS AddShardingNode --cli-region={region} --instance_id={id} --type={mongos_shard} --num={n} --spec_code={spec}` |
 | Create manual backup | `hcloud DDS CreateManualBackup --cli-region={region} --backup.instance_id={id} --backup.name={name}` |
 | Delete instance | `hcloud DDS DeleteInstance --cli-region={region} --instance_id={id}` |
