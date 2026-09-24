@@ -40,18 +40,17 @@ Alternative accepted variable names: `HUAWEI_ACCESS_KEY` / `HUAWEI_SECRET_KEY`,
 
 ## 3. Authentication mode B — local hcloud profile
 
-Configure a profile once; hcloud encrypts the credentials locally:
-
-```bash
-hcloud configure set --cli-profile=default --cli-mode=AKSK \
-  --access-key=<your-access-key-id> --secret-key=<your-secret-access-key> --cli-region=cn-north-4
-```
-
-Or run the interactive wizard:
+Configure a profile once; hcloud encrypts the credentials locally. **Prefer the interactive
+wizard** — it prompts for the AK/SK without exposing them on the command line or in shell history:
 
 ```bash
 hcloud configure
 ```
+
+For scripted/CI environments, prefer AK/SK environment variables (mode A above) instead of passing
+credentials as command-line arguments (`--cli-access-key=... --cli-secret-key=...` would leak the
+secrets via the process list and shell history). If a profile is required in automation, create it
+in a protected session and keep the credential file permissions tight (`~/.hcloud/config.json`).
 
 Verify the profile:
 

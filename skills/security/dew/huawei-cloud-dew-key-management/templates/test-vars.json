@@ -1,0 +1,85 @@
+{
+  "region": "cn-north-4",
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "huawei_list_csms_secrets - list CSMS secrets (metadata only)",
+      "type": "query",
+      "executor": "cli",
+      "command": "hcloud CSMS ListSecrets --cli-region={region} --limit=10",
+      "note": "Read-only R3 query. Verified against real hcloud KooCLI 7.2.12 (cn-north-4). project_id auto-filled from the authenticated profile."
+    },
+    {
+      "id": "TC-02",
+      "name": "huawei_describe_csms_secret syntax check (live call requires --secret_name)",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CSMS ShowSecret --cli-region={region} --help",
+      "note": "--help syntax check (rc=0). The live form is hcloud CSMS ShowSecret --cli-region={region} --secret_name={secret_name} (SKILL.md Core Commands)."
+    },
+    {
+      "id": "TC-03",
+      "name": "huawei_list_csms_secret_versions syntax check (live call requires --secret_name)",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CSMS ListSecretVersions --cli-region={region} --help",
+      "note": "--help syntax check (rc=0). Live form: hcloud CSMS ListSecretVersions --cli-region={region} --secret_name={secret_name}."
+    },
+    {
+      "id": "TC-04",
+      "name": "huawei_list_kms_keys - list KMS keys",
+      "type": "query",
+      "executor": "cli",
+      "command": "hcloud KMS ListKeys --cli-region={region} --limit=10",
+      "note": "Read-only R3 query. Verified against real hcloud KooCLI 7.2.12 (cn-north-4)."
+    },
+    {
+      "id": "TC-05",
+      "name": "huawei_analyze_dew_rotation - KMS key rotation status syntax check (live call requires --key_id)",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud KMS ShowKeyRotationStatus --cli-region={region} --help",
+      "note": "--help syntax check (rc=0). Live form: hcloud KMS ShowKeyRotationStatus --cli-region={region} --key_id={key_id}."
+    },
+    {
+      "id": "TC-06",
+      "name": "huawei_analyze_dew_key_usage - query CTS system traces (KMS audit)",
+      "type": "query",
+      "executor": "cli",
+      "command": "hcloud CTS ListTraces --cli-region={region} --trace_type=system --limit=5",
+      "note": "Read-only R3 query. Verified against real hcloud KooCLI 7.2.12 (cn-north-4)."
+    },
+    {
+      "id": "TC-07",
+      "name": "huawei_create_kms_key syntax check (--help only, no live mutation; R2 preview+confirm)",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud KMS CreateKey --cli-region={region} --help",
+      "note": "Write op (R2). Live mutation gated by confirmation policy and framework ALLOW_WRITES + allow_writes.yaml. --help only."
+    },
+    {
+      "id": "TC-08",
+      "name": "huawei_enable_csms_secret_rotation syntax check (--help only, no live mutation; R2 preview+confirm)",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CSMS UpdateSecret --cli-region={region} --help",
+      "note": "Write op (R2). Live mutation gated by confirmation policy and framework ALLOW_WRITES + allow_writes.yaml. --help only."
+    },
+    {
+      "id": "TC-09",
+      "name": "huawei_update_csms_secret_version syntax check (--help only, no live mutation; R1 preview+confirm)",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CSMS RotateSecret --cli-region={region} --help",
+      "note": "Manual rotation (R1). Live mutation gated by confirmation policy and framework ALLOW_WRITES + allow_writes.yaml. --help only."
+    },
+    {
+      "id": "TC-10",
+      "name": "huawei_delete_kms_key syntax check (--help only, no live mutation; R1 preview+confirm irreversible)",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud KMS DeleteKey --cli-region={region} --help",
+      "note": "Write op (R1, irreversible). Live deletion gated by confirmation policy and framework ALLOW_WRITES + allow_writes.yaml. --help only."
+    }
+  ]
+}
