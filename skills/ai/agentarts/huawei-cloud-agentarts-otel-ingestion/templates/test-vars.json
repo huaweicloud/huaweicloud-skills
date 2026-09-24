@@ -1,0 +1,116 @@
+{
+  "_description": "Test case templates with placeholder endpoints (not real URLs). All {VARIABLES} are resolved at runtime.",
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "Create tracing business (CLI help check)",
+      "command": "hcloud APM CreateBusiness --cli-region={region} --help",
+      "expected": "Help output displayed with parameter list",
+      "type": "cli_help",
+      "feature_point": "FP-01"
+    },
+    {
+      "id": "TC-02",
+      "name": "Create tracing business (API)",
+      "command": "curl -s -o /dev/null -w '%{http_code}' -X POST {APM_ENDPOINT}/v1/apm2/openapi/tracing/business/create -H 'Content-Type: application/json' -H 'X-Auth-Token: {token}' -d '{\"name\":\"test-otel-business\",\"display_name\":\"test-app\",\"descp\":\"otel business\",\"cmdb_datasource_type\":\"AGENTRUN\"}'",
+      "expected": "HTTP 200 or 201 response with business_id",
+      "type": "api",
+      "mutation": true,
+      "feature_point": "FP-01"
+    },
+    {
+      "id": "TC-03",
+      "name": "Get business token (CLI help check)",
+      "command": "hcloud APM ShowToken --cli-region={region} --help",
+      "expected": "Help output displayed",
+      "type": "cli_help",
+      "feature_point": "FP-02"
+    },
+    {
+      "id": "TC-04",
+      "name": "Get business token (API)",
+      "command": "curl -s -o /dev/null -w '%{http_code}' -X GET {APM_ENDPOINT}/v1/apm2/openapi/tracing/business/token/{business_id} -H 'X-Auth-Token: {token}' -H 'x-business-id: {business_id}'",
+      "expected": "HTTP 200 response with token",
+      "type": "api",
+      "feature_point": "FP-02"
+    },
+    {
+      "id": "TC-05",
+      "name": "Get access point (API)",
+      "command": "curl -s -o /dev/null -w '%{http_code}' -X POST {APM_ENDPOINT}/v1/apm2/openapi/tracing/access/get-access-point/{business_id} -H 'X-Auth-Token: {token}' -H 'x-business-id: {business_id}'",
+      "expected": "HTTP 200 response with access point info",
+      "type": "api",
+      "feature_point": "FP-03"
+    },
+    {
+      "id": "TC-06",
+      "name": "Create deliverConfig (API - user-provided)",
+      "command": "curl -s -o /dev/null -w '%{http_code}' -X POST '{APM_INTERNAL_ENDPOINT}/v2/trace/deliver-config?region={region}' -H 'x-apply-domain-id: {domain_id}' -H 'x-apply-role-name: te_admin' -H 'Content-Type: application/json' -d '{\"config_name\":\"AgentArts-test-app\",\"deliver_otel_trace\":true,\"descp\":\"otel trace deliver\"}'",
+      "expected": "HTTP 200 or 201 response with config id",
+      "type": "api",
+      "mutation": true,
+      "note": "User-provided API path, requires manual verification",
+      "feature_point": "FP-04"
+    },
+    {
+      "id": "TC-07",
+      "name": "Query traces - ShowOpsTrace (API)",
+      "command": "curl -s -o /dev/null -w '%{http_code}' -X POST {AGENT_OPS_ENDPOINT}/v1/ops/observation/traces -H 'X-Auth-Token: {iam_token}' -H 'Content-Type: application/json' -d '{\"start_time\":1720000000000,\"end_time\":1720600000000}'",
+      "expected": "HTTP 200 response with trace list",
+      "type": "api",
+      "feature_point": "FP-05"
+    },
+    {
+      "id": "TC-08",
+      "name": "Query metric trend - ShowOpsAgentMetricTrend (API)",
+      "command": "curl -s -o /dev/null -w '%{http_code}' -X POST {AGENT_OPS_ENDPOINT}/v1/ops/observation/metrics/trend -H 'X-Auth-Token: {iam_token}' -H 'Content-Type: application/json' -d '{\"start_time\":1720000000000,\"end_time\":1720600000000}'",
+      "expected": "HTTP 200 response with metric trend data",
+      "type": "api",
+      "feature_point": "FP-08"
+    },
+    {
+      "id": "TC-09",
+      "name": "Query sessions - ListOpsSession (API - path needs verification)",
+      "command": "curl -s -o /dev/null -w '%{http_code}' -X POST {AGENT_OPS_ENDPOINT}/v1/ops/observation/sessions -H 'X-Auth-Token: {iam_token}' -H 'Content-Type: application/json' -d '{\"start_time\":1720000000000,\"end_time\":1720600000000}'",
+      "expected": "HTTP 200 response with session list",
+      "type": "api",
+      "note": "Path requires manual verification in API Explorer",
+      "feature_point": "FP-07"
+    },
+    {
+      "id": "TC-10",
+      "name": "Query logs - ListOpsAgentLog (API - path needs verification)",
+      "command": "curl -s -o /dev/null -w '%{http_code}' -X POST {AGENT_OPS_ENDPOINT}/v1/ops/observation/logs -H 'X-Auth-Token: {iam_token}' -H 'Content-Type: application/json' -d '{\"start_time\":1720000000000,\"end_time\":1720600000000}'",
+      "expected": "HTTP 200 response with log list",
+      "type": "api",
+      "note": "Path requires manual verification in API Explorer",
+      "feature_point": "FP-10"
+    },
+    {
+      "id": "TC-11",
+      "name": "OTel SDK config validation - Java agent",
+      "command": "echo 'OTEL_EXPORTER_OTLP_ENDPOINT' && echo 'OTEL_SERVICE_NAME'",
+      "expected": "Environment variable names echoed (config template validation)",
+      "type": "doc_validation",
+      "feature_point": "FP-13"
+    },
+    {
+      "id": "TC-12",
+      "name": "GenAI semconv validation",
+      "command": "echo 'gen_ai.system gen_ai.request.model gen_ai.usage.input_tokens gen_ai.usage.output_tokens'",
+      "expected": "GenAI semantic convention attributes echoed",
+      "type": "doc_validation",
+      "feature_point": "FP-12"
+    }
+  ],
+  "variables": {
+    "region": "cn-southwest-301",
+    "APM_ENDPOINT": "https://apm2.cn-southwest-301.beta.myhuaweicloud.com",
+    "APM_INTERNAL_ENDPOINT": "https://apm2.cn-southwest-301.beta.myhuaweicloud.com",
+    "AGENT_OPS_ENDPOINT": "https://agentarts.cn-southwest-301.myhuaweicloud.com",
+    "business_id": "<your-business-id>",
+    "domain_id": "<your-domain-id>",
+    "token": "<your-token>",
+    "iam_token": "<your-iam-token>"
+  }
+}
