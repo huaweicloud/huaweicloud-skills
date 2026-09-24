@@ -41,15 +41,19 @@ hcloud gaussdbforopengauss ListInstances --cli-region=cn-north-4 --limit=1
 
 ## Authentication — Mode B: AK/SK environment variables
 
-KooCLI reads these environment variables when no profile is used (or as an override):
+KooCLI reads these environment variables when no profile is used (or as an override).
+**The lines below are reference descriptions, not standalone commands** — set them
+in your shell profile (e.g. `~/.bashrc`) once, and `hcloud` picks them up on its own:
 
 ```bash
-export HUAWEICLOUD_SDK_AK="your-access-key-id"
-export HUAWEICLOUD_SDK_SK="your-secret-access-key"
-export HUAWEICLOUD_SDK_PROJECT_ID="your-project-id"   # optional
+# Environment-variable references (hcloud reads these automatically):
+#   export HUAWEICLOUD_SDK_AK="your-access-key-id"
+#   export HUAWEICLOUD_SDK_SK="your-secret-access-key"
+#   export HUAWEICLOUD_SDK_PROJECT_ID="your-project-id"   # optional
 ```
 
-Alternative variable names also honoured by the SDK layer: `HUAWEI_ACCESS_KEY` / `HUAWEI_SECRET_KEY`.
+Same keys are also accepted by the SDK layer without the `HUAWEICLOUD_SDK_` prefix:
+`HUAWEI_ACCESS_KEY` / `HUAWEI_SECRET_KEY` (reference names only).
 
 > **Security:** Never commit AK/SK into SKILL.md, scripts, or git. Prefer `hcloud configure` (encrypted local storage) over environment variables for interactive sessions.
 
