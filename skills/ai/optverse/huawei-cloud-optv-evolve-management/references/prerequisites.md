@@ -129,8 +129,8 @@ where.exe python 2>$null; Get-Command python -ErrorAction SilentlyContinue
 Once a usable Python is found, set an environment variable for reuse:
 
 ```bash
-export PYTHON="\PYTHON-PATH\python.exe"  # bash
-$env:PYTHON = "C:\PYTHON-PATH\python.exe"  # PowerShell
+export PYTHON="<python-exe-path>/python.exe"  # bash
+$env:PYTHON = "<python-exe-path>/python.exe"  # PowerShell
 ```
 
 Skill commands can use `"$PYTHON" scripts/cache.py ...` to call scripts.

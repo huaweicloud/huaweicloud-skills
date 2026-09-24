@@ -15,7 +15,7 @@ tags: [huawei-cloud, optverse, llm4ad, code-evolution, python, cpp]
 > - All OptVerse calls in this skill MUST go through KooCLI (command-line entry `hcloud`). Direct calls to the OptVerse OpenAPI via `requests` or any other HTTP library are forbidden.
 > - Files in `scripts/` are **skill-shipped helper tools** (`zip_helper.py` / `cache.py`); all of them are pure-local tools that **do not invoke KooCLI subprocesses**.
 > - **The Agent itself MUST NOT** create one-off temporary `.py` script files; for Python JSON processing, prefer `python -c "..."` inline execution.
-> **Do NOT create temporary script files** (`.py` / `.zip` / `.json` / `.toml` etc.); temporary artefacts (zip packages, JSON caches, scan results) go under `.stats/` or `OPTV_CACHE_DIR` in a fixed location, and **must be cleaned up after use**.
+> **Do NOT create temporary script files** (`.py` / `.sh` etc.); temporary artefacts (zip packages, JSON caches, scan results) go under `.stats/` or `OPTV_CACHE_DIR` in a fixed location, and **must be cleaned up after use**.
 > **⚠️ Security Rule (Must Read)**: Never expose AK / SK in conversation, scripts, or output. Only verify credential presence via `hcloud configure list`.
 
 # Algorithm Auto-Design Skill (English)
@@ -84,7 +84,7 @@ skills/ai/optverse/huawei-cloud-optv-evolve-management/
     └── task_id.csv
 ```
 
-`references`, `scripts`, `templates` (three sub-dirs by role): references describe; scripts execute local-only helpers; templates supply uploadable source.
+`references`, `scripts`, `templates` (three sub-dirs by role): references describe; scripts execute local-only helpers (excl. `scripts/readme.md`); templates supply uploadable source.
 
 ---
 
@@ -613,7 +613,7 @@ Cache tool subcommands: `ensure-algorithm` / `put-algorithm` / `ensure-task` / `
 
 ## 9. Scripts/ Integration
 
-`scripts/` ships only **local-only helpers** (none call `hcloud`). Full usage for each script lives in [`scripts/readme.md`](scripts/readme.md):
+`scripts/` ships **5 helper scripts**. Full usage for each script lives in [`scripts/readme.md`](scripts/readme.md):
 
 - `precheck.sh` / `precheck.ps1`: 5-item one-shot environment check
 - `cache.py`: local CSV cache for `<algorithm_id>` / `<evolve_task_id>` / `last_update_time`
