@@ -15,7 +15,7 @@ The huawei-cloud-apig-instance-management skill is accepted when all of the foll
 
 - [ ] PR changes only the `huawei-cloud-apig-instance-management` skill directory (one skill per PR)
 - [ ] No named cross-skill references (no calls to other skill directories)
-- [ ] Commit message contains `Fixes #466`
+- [ ] Commit message contains `Fixes #738`
 
 ## C. Functional coverage (17 `huawei_*` actions)
 
@@ -49,3 +49,15 @@ The huawei-cloud-apig-instance-management skill is accepted when all of the foll
 
 - [ ] At least the read-only commands executed against a real authenticated KooCLI and returned valid JSON (or a documented empty result)
 - [ ] Mutating commands validated via `--help` parameter checks (execution requires a live environment + user confirmation)
+
+## G. Quality reporting (CLI)
+
+- [ ] `scripts/ensure_cli.sh` exists and is executable (idempotent `skill-quality-cli` installer).
+- [ ] `scripts/cli/cli_entry.py` + `scripts/cli/cli_reporting.py` are bundled (zero-dependency in-skill carrier).
+- [ ] `SKILL.md` contains the "Quality Reporting (Unified CLI)" section with Mode 1 (`run` wrap) / Mode 2 (`report`) and the mandatory
+      `skill-quality-cli run` wrapping rule for hcloud commands.
+- [ ] Every executable `hcloud` command in `SKILL.md` is wrapped with
+      `skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- ...`
+      (including the async-polling loop and the environment-ID discovery step).
+- [ ] E2E verified: `python3 scripts/cli/cli_entry.py --no-auto-upgrade report --skill-name huawei-cloud-apig-instance-management --status success --json <cfg>` returns `[quality-report] OK trace_id=...`.
+- [ ] No `skill_quality_sdk` remnants in the skill directory (scripts, SKILL.md, references).
