@@ -4,7 +4,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from config import load_credentials, build_http_config
+from config import load_credentials, build_http_config, resolve_project_id
 from huaweicloudsdkcore.auth.credentials import BasicCredentials
 from huaweicloudsdknat.v2 import NatClient
 from huaweicloudsdknat.v2.model import ListSpecsRequest
@@ -19,7 +19,7 @@ AK, SK, Region, SecurityToken = load_credentials()
 
 # 参数
 parser = argparse.ArgumentParser(description="查询私网NAT网关规格列表(Small=小型 Medium=中型 Large=大型 Extra-large=超大型 Extra-xlarge=企业型)")
-parser.add_argument("--project_id", type=str, required=True, help="项目 ID，可通过 ../iam/get_project_id.py 获取")
+parser.add_argument("--project_id", type=str, required=False, help="项目 ID，可选；未提供时自动通过 IAM API 获取")
 parser.add_argument("--region", type=str, help="区域，默认 cn-north-4")
 parser.add_argument("--marker", type=str, help="分页标记，从上次查询结果的 next_marker 获取")
 parser.add_argument("--sort_by", type=str, help="排序字段和方向（客户端排序），格式: 字段:方向。字段可选: rule_max, sess_max, bps_max, pps_max, qps_max；方向可选: asc(升序), desc(降序)。例如 rule_max:asc 表示按规则最大数升序，bps_max:desc 表示按带宽最大值降序。与 --top 配合使用可快速查找最值")
@@ -28,6 +28,7 @@ args = parser.parse_args()
 
 if args.region is not None:
     Region = args.region
+args.project_id = resolve_project_id(Region, args.project_id)
 
 # 参数校验
 if args.top is not None and args.sort_by is None:

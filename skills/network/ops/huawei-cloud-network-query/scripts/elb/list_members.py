@@ -4,7 +4,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from config import load_credentials, build_http_config
+from config import load_credentials, build_http_config, resolve_project_id
 from huaweicloudsdkcore.auth.credentials import BasicCredentials
 from huaweicloudsdkelb.v3 import ElbClient
 from huaweicloudsdkelb.v3.model import ListMembersRequest
@@ -17,7 +17,7 @@ FETCH_SIZE = PAGE_SIZE + 1  # 多查1条用于判断是否还有更多
 API_LIMIT = 2000  # 服务端单次请求上限
 
 parser = argparse.ArgumentParser(description="查询 ELB 后端服务器列表")
-parser.add_argument("--project_id", type=str, required=True, help="项目 ID，可通过 ../iam/get_project_id.py 获取")
+parser.add_argument("--project_id", type=str, required=False, help="项目 ID，可选；未提供时自动通过 IAM API 获取")
 parser.add_argument("--region", type=str, help="区域，默认 cn-north-4")
 parser.add_argument("--pool_id", type=str, required=True, help="后端服务器组 ID，可通过 list_pools.py 获取")
 parser.add_argument("--marker", type=str, help="分页标记，从上次查询结果的 next_marker 获取")
@@ -40,6 +40,7 @@ args = parser.parse_args()
 
 if args.region is not None:
     Region = args.region
+args.project_id = resolve_project_id(Region, args.project_id)
 
 # 参数校验
 if args.top is not None and args.sort_by is None:

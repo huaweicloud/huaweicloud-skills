@@ -4,7 +4,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from config import load_credentials, build_http_config
+from config import load_credentials, build_http_config, resolve_project_id
 from huaweicloudsdkcore.auth.credentials import BasicCredentials
 from huaweicloudsdknat.v2 import NatClient
 from huaweicloudsdknat.v2.model import ListNatGatewayDnatRulesRequest
@@ -20,7 +20,7 @@ AK, SK, Region, SecurityToken = load_credentials()
 
 # 参数
 parser = argparse.ArgumentParser(description="查询公网NAT网关DNAT规则列表")
-parser.add_argument("--project_id", type=str, required=True, help="项目 ID，可通过 ../iam/get_project_id.py 获取")
+parser.add_argument("--project_id", type=str, required=False, help="项目 ID，可选；未提供时自动通过 IAM API 获取")
 parser.add_argument("--region", type=str, help="区域，默认 cn-north-4")
 parser.add_argument("--nat_gateway_id", type=str, nargs="+", help="公网NAT网关ID，可多选，可通过 list_nat_gateways.py 获取")
 parser.add_argument("--id", type=str, help="DNAT规则ID，精确过滤")
@@ -44,6 +44,7 @@ args = parser.parse_args()
 
 if args.region is not None:
     Region = args.region
+args.project_id = resolve_project_id(Region, args.project_id)
 
 # 参数校验
 if args.top is not None and args.sort_by is None:

@@ -5,7 +5,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from config import load_credentials, build_http_config
+from config import load_credentials, build_http_config, resolve_project_id
 from huaweicloudsdkcore.auth.credentials import BasicCredentials
 from huaweicloudsdknat.v2 import NatClient
 from huaweicloudsdknat.v2.model import ListTransitIpsByTagsRequest, ListTagResourceInstancesRequestBody, Tags, Match
@@ -20,7 +20,7 @@ AK, SK, Region, SecurityToken = load_credentials()
 
 # 参数
 parser = argparse.ArgumentParser(description="按标签过滤查询中转IP实例")
-parser.add_argument("--project_id", type=str, required=True, help="项目 ID，可通过 ../iam/get_project_id.py 获取")
+parser.add_argument("--project_id", type=str, required=False, help="项目 ID，可选；未提供时自动通过 IAM API 获取")
 parser.add_argument("--region", type=str, help="区域，默认 cn-north-4")
 parser.add_argument("--action", type=str, required=True, choices=["filter", "count"], help="操作类型: filter=过滤查询 count=查询总条数")
 parser.add_argument("--tags", type=str, help="包含标签，JSON格式，如: '[{\"key\":\"env\",\"values\":[\"prod\"]}]'")
@@ -33,6 +33,7 @@ args = parser.parse_args()
 
 if args.region is not None:
     Region = args.region
+args.project_id = resolve_project_id(Region, args.project_id)
 
 
 def parse_tags(json_str):

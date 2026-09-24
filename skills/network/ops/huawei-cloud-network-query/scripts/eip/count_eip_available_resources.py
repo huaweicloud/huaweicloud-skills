@@ -4,7 +4,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from config import load_credentials, build_http_config
+from config import load_credentials, build_http_config, resolve_project_id
 from huaweicloudsdkcore.auth.credentials import BasicCredentials
 from huaweicloudsdkeip.v3 import EipClient
 from huaweicloudsdkeip.v3.model import CountEipAvailableResourcesRequest, EipResourcesAvailableV3RequestBody
@@ -15,7 +15,7 @@ AK, SK, Region, SecurityToken = load_credentials()
 
 # 参数
 parser = argparse.ArgumentParser(description="查询弹性公网IP可用资源数量")
-parser.add_argument("--project_id", type=str, required=True, help="项目 ID，可通过 scripts/iam/get_project_id.py 获取")
+parser.add_argument("--project_id", type=str, required=False, help="项目 ID，可选；未提供时自动通过 IAM API 获取")
 parser.add_argument("--region", type=str, help="区域，默认取环境变量 HW_REGION_NAME（未设置则 cn-north-4）")
 parser.add_argument("--type", type=str, required=True, choices=["5_bgp", "5_sbgp", "5_telcom", "5_union", "5_ipv6", "5_graybgp"], help="公共池类型: 5_bgp(动态BGP)/5_sbgp(静态BGP)/5_telcom(联通)/5_union(联合)/5_ipv6(IPv6)/5_graybgp(灰度BGP)")
 parser.add_argument("--limit", type=int, help="查询的公共池数量限制")
@@ -23,6 +23,7 @@ args = parser.parse_args()
 
 if args.region is not None:
     Region = args.region
+args.project_id = resolve_project_id(Region, args.project_id)
 
 
 # 使用 sdk

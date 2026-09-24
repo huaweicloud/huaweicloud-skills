@@ -4,7 +4,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from config import load_credentials, build_http_config
+from config import load_credentials, build_http_config, resolve_project_id
 from huaweicloudsdkcore.auth.credentials import BasicCredentials
 from huaweicloudsdkdns.v2 import DnsClient
 from huaweicloudsdkdns.v2.model import ListRecordSetsByZoneRequest
@@ -14,7 +14,7 @@ AK, SK, Region, SecurityToken = load_credentials()
 Offset = 0
 
 parser = argparse.ArgumentParser(description="查询域名下的记录集列表")
-parser.add_argument("--project_id", type=str, required=True, help="项目 ID，可通过 ../iam/get_project_id.py 获取")
+parser.add_argument("--project_id", type=str, required=False, help="项目 ID，可选；未提供时自动通过 IAM API 获取")
 parser.add_argument("--region", type=str, help="区域，默认 cn-north-4")
 parser.add_argument("--zone_id", type=str, required=True, help="域名ID")
 parser.add_argument("--search_mode", type=str, choices=["like", "equal"], help="查询条件搜索模式: like(模糊搜索)/equal(精确搜索)")
@@ -32,6 +32,7 @@ args = parser.parse_args()
 
 if args.region is not None:
     Region = args.region
+args.project_id = resolve_project_id(Region, args.project_id)
 
 if args.offset is not None:
     Offset = args.offset

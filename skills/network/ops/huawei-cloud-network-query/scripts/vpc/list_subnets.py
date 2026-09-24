@@ -4,7 +4,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from config import load_credentials, build_http_config
+from config import load_credentials, build_http_config, resolve_project_id
 from huaweicloudsdkcore.auth.credentials import BasicCredentials
 from huaweicloudsdkvpc.v2 import VpcClient
 from huaweicloudsdkvpc.v2.model import ListSubnetsRequest
@@ -18,7 +18,7 @@ API_LIMIT = 1000  # 服务端单次请求上限
 AK, SK, Region, SecurityToken = load_credentials()
 
 parser = argparse.ArgumentParser(description="查询子网列表（v2）")
-parser.add_argument("--project_id", type=str, required=True, help="项目 ID，可通过 ../iam/get_project_id.py 获取")
+parser.add_argument("--project_id", type=str, required=False, help="项目 ID，可选；未提供时自动通过 IAM API 获取")
 parser.add_argument("--region", type=str, help="区域，默认 cn-north-4")
 parser.add_argument("--vpc_id", type=str, help="VPC ID过滤，可通过 list_vpcs.py 获取")
 parser.add_argument("--name_contains", type=str, help="子网名称模糊搜索(客户端过滤)")
@@ -29,6 +29,7 @@ args = parser.parse_args()
 
 if args.region is not None:
     Region = args.region
+args.project_id = resolve_project_id(Region, args.project_id)
 
 # 参数校验
 if args.top is not None and args.sort_by is None:

@@ -4,7 +4,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from config import load_credentials, build_http_config
+from config import load_credentials, build_http_config, resolve_project_id
 from huaweicloudsdkcore.auth.credentials import BasicCredentials
 from huaweicloudsdkelb.v3 import ElbClient
 from huaweicloudsdkelb.v3.model import CountPreoccupyIpNumRequest
@@ -15,7 +15,7 @@ AK, SK, Region, SecurityToken = load_credentials()
 
 # 参数
 parser = argparse.ArgumentParser(description="计算LB预占IP数量")
-parser.add_argument("--project_id", type=str, required=True, help="项目 ID，可通过 ../iam/get_project_id.py 获取")
+parser.add_argument("--project_id", type=str, required=False, help="项目 ID，可选；未提供时自动通过 IAM API 获取")
 parser.add_argument("--region", type=str, help="区域，默认 cn-north-4")
 parser.add_argument("--ip_version", type=int, required=True, help="IP地址类型，4表示IPv4，6表示IPv6（必填）")
 parser.add_argument("--l7_flavor_id", type=str, help="七层规格ID，传入表示计算创建该规格LB的预占IP数量，或变更LB规格到该规格所需新增预占IP数量")
@@ -28,6 +28,7 @@ args = parser.parse_args()
 
 if args.region is not None:
     Region = args.region
+args.project_id = resolve_project_id(Region, args.project_id)
 
 # 使用 sdk
 try:
