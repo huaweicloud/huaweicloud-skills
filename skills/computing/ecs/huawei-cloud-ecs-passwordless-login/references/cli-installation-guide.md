@@ -49,9 +49,9 @@ hcloud IAM KeystoneListAuthDomains/v3
 
 ### Authentication Modes
 
-| Mode | Description |
-|------|-------------|
-| AK/SK | Standard key-based auth via `hcloud configure init` |
+| Mode      | Description                                                           |
+| --------- | --------------------------------------------------------------------- |
+| AK/SK     | Standard key-based auth via `hcloud configure init`                   |
 | ecsAgency | ECS-mounted agency (only applicable when running on Huawei Cloud ECS) |
 
 ## SSH Client
@@ -66,8 +66,8 @@ SSH is typically pre-installed on Linux and macOS. Windows users can use the bui
 
 ## Additional Tools
 
-| Tool | Purpose |
-|------|---------|
-| `ssh-keygen` | Generate SSH key pairs (bundled with SSH) |
-| `base64` | Encode/decode script content for COC (bundled with Linux/macOS) |
-| `jq` | Parse JSON responses from hcloud (optional, recommended) |
+| Tool         | Purpose                                                         |
+| ------------ | --------------------------------------------------------------- |
+| `ssh-keygen` | Generate SSH key pairs (bundled with SSH)                       |
+| `base64`     | Encode/decode script content for COC (bundled with Linux/macOS) |
+| `jq`         | Parse JSON responses from hcloud (optional, recommended)        |

@@ -8,12 +8,12 @@ COC requires a cross-service agency named `ServiceAgencyForCOC` that trusts the 
 
 ### Required Agency Roles
 
-| Role Name | Purpose |
-|-----------|---------|
-| `IAM ReadOnlyAccess` | Read IAM configuration (required by COC to enumerate users/projects) |
-| `RMS ReadOnlyAccess` | Read RMS resource data (required by COC to discover ECS instances) |
-| `DCS UserAccess` | DCS user access (required by COC for distributed cache integration) |
-| `COCServiceAgencyPolicy` | Core COC service permissions for script execution |
+| Role Name                | Purpose                                                              |
+| ------------------------ | -------------------------------------------------------------------- |
+| `IAM ReadOnlyAccess`     | Read IAM configuration (required by COC to enumerate users/projects) |
+| `RMS ReadOnlyAccess`     | Read RMS resource data (required by COC to discover ECS instances)   |
+| `DCS UserAccess`         | DCS user access (required by COC for distributed cache integration)  |
+| `COCServiceAgencyPolicy` | Core COC service permissions for script execution                    |
 
 ### Agency Trust Policy
 
@@ -23,26 +23,22 @@ The agency `ServiceAgencyForCOC` must trust the service account `op_svc_coc`, al
 
 These are the permissions COC uses at script execution time (via the agency):
 
-| Operation | Purpose |
-|-----------|---------|
-| `coc:document:list` | Check if deploy script already exists |
-| `coc:document:create` | Create parameterized SSH key deploy script |
-| `coc:document:delete` | Remove script during cleanup |
-| `coc:instance:executeDocument` | Execute key deployment on target ECS |
-| `coc:job:get` | Poll execution status |
+**Note**: COC script execution depends on the uniagent agent pre-installed on ECS. If uniagent is not installed or has abnormal status, COC script execution will fail. Check uniagent status via `hcloud COC ListResources` command, inspect the `agent_state` field to confirm agent status.
 
-## ECS Read-only (for IP-to-ID Resolution)
-
-| Operation | Purpose |
-|-----------|---------|
-| `ecs:servers:list` | Resolve ECS IP to instance ID |
+| Operation                      | Purpose                                    |
+| ------------------------------ | ------------------------------------------ |
+| `coc:document:list`            | Check if deploy script already exists      |
+| `coc:document:create`          | Create parameterized SSH key deploy script |
+| `coc:document:delete`          | Remove script during cleanup               |
+| `coc:instance:executeDocument` | Execute key deployment on target ECS       |
+| `coc:job:get`                  | Poll execution status                      |
 
 ## Authorization Commands
 
 ### 1. Get Domain ID
 
 ```bash
-hcloud IAM KeystoneListAuthDomains/v3
+hcloud IAM KeystoneListAuthDomains/v3 --cli-region=<coc_region>
 # Extract the "id" field from the first domain in the response
 ```
 
@@ -50,6 +46,7 @@ hcloud IAM KeystoneListAuthDomains/v3
 
 ```bash
 hcloud IAM CreateAgency/v3 \
+  --cli-region=<coc_region> \
   --agency.domain_id="<domain_id>" \
   --agency.name="ServiceAgencyForCOC" \
   --agency.trust_domain_name="op_svc_coc" \
@@ -63,15 +60,19 @@ hcloud IAM CreateAgency/v3 \
 
 ```bash
 hcloud IAM KeystoneListPermissions/v3 \
+  --cli-region=<coc_region> \
   --display_name="IAM ReadOnlyAccess"
 
 hcloud IAM KeystoneListPermissions/v3 \
+  --cli-region=<coc_region> \
   --display_name="RMS ReadOnlyAccess"
 
 hcloud IAM KeystoneListPermissions/v3 \
+  --cli-region=<coc_region> \
   --display_name="DCS UserAccess"
 
 hcloud IAM KeystoneListPermissions/v3 \
+  --cli-region=<coc_region> \
   --display_name="COCServiceAgencyPolicy"
 ```
 
@@ -83,6 +84,7 @@ Run for each of the 4 role IDs:
 
 ```bash
 hcloud IAM AssociateAgencyWithAllProjectsPermission/v3 \
+  --cli-region=<coc_region> \
   --agency_id="<agency_id>" \
   --domain_id="<domain_id>" \
   --role_id="<role_id>"
@@ -92,10 +94,10 @@ hcloud IAM AssociateAgencyWithAllProjectsPermission/v3 \
 
 ## Error Handling
 
-| Error | Cause | Resolution |
-|-------|-------|------------|
-| 401 Unauthorized | Invalid/expired AK/SK | Re-run `hcloud configure init` |
-| 403 Forbidden | Insufficient IAM permissions | User must have admin or `iam:agencies:createAgency` |
-| 409 Conflict (CreateAgency) | Agency already exists | Expected on repeat runs; skip creation |
-| 409 Conflict (Associate) | Role already bound | Expected on repeat runs; skip binding |
-| Role not found | Permission name misspelled or not available | Verify the role name against the IAM console |
+| Error                       | Cause                                       | Resolution                                          |
+| --------------------------- | ------------------------------------------- | --------------------------------------------------- |
+| 401 Unauthorized            | Invalid/expired AK/SK                       | Re-run `hcloud configure init`                      |
+| 403 Forbidden               | Insufficient IAM permissions                | User must have admin or `iam:agencies:createAgency` |
+| 409 Conflict (CreateAgency) | Agency already exists                       | Expected on repeat runs; skip creation              |
+| 409 Conflict (Associate)    | Role already bound                          | Expected on repeat runs; skip binding               |
+| Role not found              | Permission name misspelled or not available | Verify the role name against the IAM console        |
