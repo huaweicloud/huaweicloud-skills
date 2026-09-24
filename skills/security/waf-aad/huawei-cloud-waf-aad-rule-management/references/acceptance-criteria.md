@@ -43,4 +43,4 @@ Maps the 17 `huawei_*` actions from GitCode issue #474 to acceptance checks.
 - [ ] AAD create/delete limitation declared; console guidance + `ListPackage` diagnostic path provided
 - [ ] Critical Warnings present: CNAME redirect, premium instance, Standard vs Enterprise, rule order, report-mode-first
 - [ ] Both AK/SK env credentials and local hcloud profile authentication documented
-- [ ] `references/iam-policies.md`, `references/cli-installation-guide.md` present; quality SDK vendored; no hardcoded credentials
+- [ ] `references/iam-policies.md`, `references/cli-installation-guide.md` present; quality CLI (`scripts/ensure_cli.sh` + `skill-quality-cli run`) integrated; no hardcoded credentials

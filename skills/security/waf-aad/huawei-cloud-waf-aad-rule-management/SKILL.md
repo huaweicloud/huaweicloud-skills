@@ -16,9 +16,20 @@ description: >-
   rate limiting, 地域封禁, geo rule, CNAME接入, WAF诊断, 规则顺序, 误报, EIP防护, 防护覆盖,
   waf aad, huawei-cloud-waf-aad-rule-management.
 tags: [huawei-cloud waf aad security ddos web-firewall]
+triggers: ["WAF", "Web应用防火墙", "Web Application Firewall", "AAD", "Anti-DDoS", "抗DDoS", "DDoS防护", "防火墙", "web protection", "IP黑名单", "IP白名单", "blacklist", "whitelist", "CC防护", "CC攻击", "限速", "rate limiting", "地域封禁", "geo rule", "CNAME接入", "WAF诊断", "规则顺序", "误报", "EIP防护", "防护覆盖", "waf aad", "huawei-cloud-waf-aad-rule-management"]
 ---
 
 # Huawei Cloud WAF / AAD Skill (huawei-cloud-waf-aad-rule-management)
+
+<!-- cli-install-version: 3.7.3 -->
+## 第一步：安装 skill-quality-cli（幂等，已安装则跳过）
+
+```bash
+source scripts/ensure_cli.sh
+```
+
+> 脚本自动检测 `skill-quality-cli` 是否可用（PATH 或 CLI 安装目录双通道检测）。已安装则直接可用；未安装时不执行任何运行时下载，仅提示按 `references/cli-installation-guide.md` 的「安装 skill-quality-cli（固定版本 v1.1.6，SHA256 校验）」手动安装（固定版本 + SHA256 校验，禁止未校验的运行时下载）。CLI 缺失或网络不可用时跳过质量上报，不阻塞业务执行。
+> 用 `source` 执行可让 CLI 安装目录自动加入当前会话 PATH；若环境不支持 source，改用 `bash scripts/ensure_cli.sh`，随后命令报 `command not found` 时先执行 `export PATH="$HOME/.local/bin:$PATH"` 再调用 `skill-quality-cli`。
 
 ## Overview
 
@@ -41,6 +52,8 @@ the right order", and "is every public EIP covered by Anti-DDoS".
   [AAD instance management](#aad-instance-management-console-only).
 - ❌ Does NOT configure DNS records (do that at your DNS provider) and does NOT bind/unbind EIPs.
 
+**Dependency**: Quality telemetry is collected automatically via `skill-quality-cli` (installed by `scripts/ensure_cli.sh` if absent).
+
 ## Critical Warnings
 
 | # | Warning | Why it matters |
@@ -61,25 +74,25 @@ the right order", and "is every public EIP covered by Anti-DDoS".
 2. **Authentication** — one of:
    - **AK/SK environment variables** (`HUAWEICLOUD_SDK_AK`, `HUAWEICLOUD_SDK_SK`, or `HUAWEI_ACCESS_KEY` /
      `HUAWEI_SECRET_KEY`); or
-   - a **local hcloud profile**: `hcloud configure set --cli-access-key=<your-access-key>
-     --cli-secret-key=<your-secret-key>` — never run this inside the skill or any script; credentials
-     are read from the environment or the local profile only (do not hardcode them anywhere).
-3. **Region & project**: WAF operations require `--project_id` (path parameter) plus `--cli-region`.
-   Get the project ID from *My Credentials → Projects* in the console, or pass `--cli-project-id`.
+   - a **local hcloud profile** (user-managed): check existence with `hcloud configure list`; the
+     skill/agent **never** writes credentials (`hcloud configure set` is forbidden inside the skill
+     or any script). If no profile is configured, ask the user to configure one themselves with
+     `hcloud configure init` (or export AK/SK env vars) and confirm before continuing — credentials
+     are read from the environment or the user's own local profile only (do not hardcode them anywhere).
+3. **Region & project**: WAF operations take `--project_id` (path parameter) plus `--cli-region`.
+   KooCLI automatically uses the default project of the authenticated profile when `--project_id` is
+   omitted (verified on KooCLI 7.2.12), so the command examples in this skill omit it; multi-project
+   accounts may append `--project_id=<project_id>` explicitly. To list projects, see the console
+   (*My Credentials → Projects*).
 4. **IAM permissions** (least privilege, see `references/iam-policies.md`):
    - Read/query: `waf:instance:list`, `waf:host:list`, `waf:policy:list`, `waf:rule:list`,
      `antiddos:instance:list`, `antiddos:ip:list`, `antiddos:package:list`, and `eps:*:get`.
    - Write (rule create/delete): `waf:rule:create`, `waf:rule:delete`.
 5. **AAD package context**: AAD is region-based (`cn-north-4`, `ap-southeast-1`, ...). Use
    `hcloud AAD ListPackage` to see purchased packages before checking protection coverage.
-6. **Quality reporting environment variables** (optional):
-
-   | Environment Variable | Required | Description |
-   |---------------------|----------|-------------|
-   | `SKILL_QUALITY_ENDPOINT` | No | Report endpoint; default `https://skillsapi.developer.myhuaweicloud.com/api/quality/report` |
-   | `SKILL_QUALITY_NAME` | No | Skill name (auto-detected by default) |
-   | `SKILL_QUALITY_DISABLE` | No | Set to `1` to disable reporting (local debugging) |
-   | `SKILL_QUALITY_TIMEOUT` | No | Report timeout in seconds (default 3) |
+6. **`skill-quality-cli`** — ensured by `bash scripts/ensure_cli.sh` (idempotent, skips if present)
+   - Upgrade: run `skill-quality-cli upgrade` manually (no auto-upgrade)
+   - Disable telemetry report: set `SKILL_QUALITY_REPORT=0`
 
 ## Action Map (17 actions)
 
@@ -132,112 +145,127 @@ the right order", and "is every public EIP covered by Anti-DDoS".
       New rules default to action=2 (log/report) first unless the user explicitly requests block.
    b. DELETE (R1): list the exact rule to delete (type + rule_id), PREVIEW the command, wait for
       EXPLICIT confirmation ("yes, delete"), then execute.
-5. Output -> structured JSON result + readable summary; report quality metrics (see Quality Reporting)
+5. Output -> structured JSON result + readable summary (quality telemetry is reported automatically via the `skill-quality-cli run` wrapper)
 ```
 
 ## Core Commands
 
 All commands below were verified against KooCLI 7.2.12 (`hcloud <service> <Operation> --help`);
 parameter names are taken verbatim from the CLI metadata. `--cli-region` is required for every
-command; WAF commands additionally require `--project_id`.
+command. For WAF, `--project_id` is a path parameter of the API; KooCLI automatically uses the
+default project of the authenticated profile when it is omitted, so the examples below omit it
+(multi-project accounts may append `--project_id=<project_id>` explicitly — see Parameter
+Confirmation).
+
+Each command is shown in two forms:
+
+- the **bare `hcloud ...` command** (canonical CLI form, used by tooling and automated tests), and
+- the **quality-reporting form** `skill-quality-cli run --skill-name ... -- <command>` (the
+  mandated execution form at runtime).
+
+> **⚠️ Mandatory: every `hcloud` command in this skill MUST be wrapped with `skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- ` — bare `hcloud` calls are strictly forbidden.**
+> **⚠️ 强制要求：Agent/脚本运行时执行本 skill 的任何 hcloud 命令，必须用 `skill-quality-cli run` 包裹，禁止裸调 hcloud（Core Commands 中展示的裸命令仅为规范化 CLI 形式，供工具/测试流水线提取与校验；实际执行一律使用其上方对应的包裹形式）。**
+
+> **可测试性约定（2026-09-17）**: 仅「无业务参数依赖」的查询命令给出裸命令形式，供测试流水线
+> 自动提取并执行（此类命令不传业务 ID 即可真实查询）。依赖 `--policy_id` / `--host_id` /
+> `--package_id` 等业务参数的查询，以及全部写操作（R2/R1），只给出 `skill-quality-cli run`
+> 包裹形式 —— 它们需要真实资源 ID 或显式确认，测试流水线不应自动执行。
 
 ### 1. WAF — Instances & Protected Domains (R3)
 
 ```bash
 # Dedicated WAF instances
-hcloud WAF ListInstance --cli-region={region} --project_id={project_id}
+hcloud WAF ListInstance --cli-region={region}   # 分页参数为--page/--pagesize, 该接口不支持--limit
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud WAF ListInstance --cli-region={region}
 
 # Protected domain names (composite hosts) + CNAME onboarding status
-hcloud WAF ListCompositeHosts --cli-region={region} --project_id={project_id}
+hcloud WAF ListCompositeHosts --cli-region={region}   # 分页参数为--page/--pagesize, 该接口不支持--limit
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud WAF ListCompositeHosts --cli-region={region}
 
-# Detail of one protected domain (CNAME, protocol, protection status)
-hcloud WAF ShowCompositeHost --cli-region={region} --project_id={project_id} --host_id={host_id}
+# Detail of one protected domain (CNAME, protocol, protection status) — needs --host_id (业务参数)
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud WAF ShowCompositeHost --cli-region={region} --host_id={host_id}
 ```
 
 ### 2. WAF — Policies (R3)
 
 ```bash
-hcloud WAF ListPolicy --cli-region={region} --project_id={project_id}
+# WAF policies of the current account
+hcloud WAF ListPolicy --cli-region={region}   # 分页参数为--page/--pagesize, 该接口不支持--limit
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud WAF ListPolicy --cli-region={region}
+
 ```
 
 ### 3. WAF — Rule Queries (R3)
 
+> 以下规则查询都依赖 `--policy_id`（业务参数，需先 `ListPolicy` 获取真实 policy_id），
+> 只给出质量上报包裹形式，不自动执行。
+
 ```bash
 # Custom / precise protection rules of one policy
-hcloud WAF ListCustomRules --cli-region={region} --project_id={project_id} --policy_id={policy_id}
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud WAF ListCustomRules --cli-region={region} --policy_id={policy_id}
 
 # IP blacklist / whitelist rules
-hcloud WAF ListWhiteblackipRule --cli-region={region} --project_id={project_id} --policy_id={policy_id}
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud WAF ListWhiteblackipRule --cli-region={region} --policy_id={policy_id}
 
 # CC (rate limiting) rules
-hcloud WAF ListCcRules --cli-region={region} --project_id={project_id} --policy_id={policy_id}
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud WAF ListCcRules --cli-region={region} --policy_id={policy_id}
 
 # Geo (regional blocking) rules
-hcloud WAF ListGeoipRule --cli-region={region} --project_id={project_id} --policy_id={policy_id}
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud WAF ListGeoipRule --cli-region={region} --policy_id={policy_id}
 ```
 
 ### 4. WAF — Rule Creation (R2, preview + confirm)
 
 ```bash
 # Custom (precise protection) rule — action.category: block|pass|log
-# time=false -> takes effect immediately (recommended "report first": action.category=log)
-hcloud WAF BatchCreateCustomRule --cli-region={region} --project_id={project_id} \
-  --policy_ids.1={policy_id} --name={rule_name} --priority={priority} \
-  --action.category=log --time=false \
-  --conditions.1.category=url --conditions.1.logic_operation=contain --conditions.1.contents.1=/admin
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud WAF BatchCreateCustomRule --cli-region={region} --policy_ids.1={policy_id} --name={rule_name} --priority={priority} --action.category=log --time=false --conditions.1.category=url --conditions.1.logic_operation=contain --conditions.1.contents.1=/admin
 
 # IP blacklist rule (white=0 block / 1 allow / 2 log)
-hcloud WAF BatchCreateWhiteblackipRule --cli-region={region} --project_id={project_id} \
-  --policy_ids.1={policy_id} --name={rule_name} --white=0 --addr=42.123.120.66
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud WAF BatchCreateWhiteblackipRule --cli-region={region} --policy_ids.1={policy_id} --name={rule_name} --white=0 --addr=42.123.120.66
 
 # CC (rate limiting) rule — mode=0 standard / 1 advanced; tag_type=ip|cookie|header|other|...
-hcloud WAF BatchCreateCcRule --cli-region={region} --project_id={project_id} \
-  --policy_ids.1={policy_id} --name={rule_name} --mode=0 \
-  --limit_num=100 --limit_period=60 --tag_type=ip --action.category=log \
-  --conditions.1.category=url --conditions.1.logic_operation=contain --conditions.1.contents.1=/
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud WAF BatchCreateCcRule --cli-region={region} --policy_ids.1={policy_id} --name={rule_name} --mode=0 --limit_num=100 --limit_period=60 --tag_type=ip --action.category=log --conditions.1.category=url --conditions.1.logic_operation=contain --conditions.1.contents.1=/
 
 # Geo rule (geoip from ShowPolicyGeoipMap; white=0 block / 1 allow / 2 log)
-hcloud WAF BatchCreateGeoIpRule --cli-region={region} --project_id={project_id} \
-  --policy_ids.1={policy_id} --geoip={geoip} --white=0
-```
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud WAF BatchCreateGeoIpRule --cli-region={region} --policy_ids.1={policy_id} --geoip={geoip} --white=0
 
-> Batch-create commands add one rule to **multiple policies** at once via `--policy_ids.N`.
-> If no policy exists, create one in the console first, or reuse `ListPolicy` output.
+```
 
 ### 5. WAF — Rule Deletion (R1, preview + explicit confirm)
 
 ```bash
 # Delete a custom rule (rule_id from ListCustomRules)
-hcloud WAF DeleteCustomRule --cli-region={region} --project_id={project_id} \
-  --policy_id={policy_id} --rule_id={rule_id}
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud WAF DeleteCustomRule --cli-region={region} --policy_id={policy_id} --rule_id={rule_id}
 
 # Delete an IP black/white list rule (rule_id from ListWhiteblackipRule)
-hcloud WAF DeleteWhiteBlackIpRule --cli-region={region} --project_id={project_id} \
-  --policy_id={policy_id} --rule_id={rule_id}
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud WAF DeleteWhiteBlackIpRule --cli-region={region} --policy_id={policy_id} --rule_id={rule_id}
 
 # Delete a CC rule (rule_id from ListCcRules)
-hcloud WAF DeleteCcRule --cli-region={region} --project_id={project_id} \
-  --policy_id={policy_id} --rule_id={rule_id}
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud WAF DeleteCcRule --cli-region={region} --policy_id={policy_id} --rule_id={rule_id}
 
 # Delete a geo rule (rule_id from ListGeoipRule)
-hcloud WAF DeleteGeoipRule --cli-region={region} --project_id={project_id} \
-  --policy_id={policy_id} --rule_id={rule_id}
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud WAF DeleteGeoipRule --cli-region={region} --policy_id={policy_id} --rule_id={rule_id}
+
 ```
 
 ### 6. AAD — Instance & Protection Queries (R3)
 
 ```bash
 # AAD instances (NOTE: only --cli-region is required; AAD is region-based)
-hcloud AAD ListInstance --cli-region={region}
+hcloud AAD ListInstance --cli-region={region}   # 该接口不支持--limit
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud AAD ListInstance --cli-region={region}
 
 # Anti-DDoS packages (套餐) — the ONLY supported AAD "package" management entry point
-hcloud AAD ListPackage --cli-region={region}
+hcloud AAD ListPackage --cli-region={region}   # 该接口不支持--limit
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud AAD ListPackage --cli-region={region}
 
 # EIPs currently protected by a package/policy (optional filters: --package_id={package_id}, --policy_id={policy_id})
-hcloud AAD ListProtectedIp --cli-region={region}
+hcloud AAD ListProtectedIp --cli-region={region}   # 可选分页参数为--limit/--offset
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud AAD ListProtectedIp --cli-region={region}
 
-# Unbound protected IPs of a package — key input for huawei_analyze_aad_protection
-hcloud AAD ListUnboundProtectedIp --cli-region={region} --package_id={package_id}
+# Unbound protected IPs of a package — key input for huawei_analyze_aad_protection;
+# needs --package_id (业务参数), wrapper-only (not auto-executed)
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud AAD ListUnboundProtectedIp --cli-region={region} --package_id={package_id}
 ```
 
 ### AAD Instance Management (Console-only)
@@ -256,6 +284,12 @@ Operation CreateInstance is not supported.`). **Do NOT fabricate CLI commands fo
 
 All parameter names below are verified against `hcloud <service> <Operation> --help` (KooCLI 7.2.12).
 `{region}` / `{project_id}` are context values; obtain the project ID from *My Credentials → Projects*.
+
+**参数校验（工具参数安全，强制）**: 所有动作参数在拼装 `hcloud` 命令前必须校验，非法输入直接拒绝并向用户说明，禁止把未经校验的参数传入命令执行：
+
+- 枚举类参数按白名单逐一比对：`--action.category` ∈ {block, pass, log, captcha, dynamic_block}、`--white` ∈ {0,1,2}、`--mode` ∈ {0,1}、`--tag_type` ∈ {ip, cookie, header, other, policy, domain, url}、`--ip_type` ∈ {v4, v6, any}、`--time_mode` ∈ {permanent, customize}、`--logic_operation` ∈ {contain, not_contain, equal, not_equal, begin_with, not_begin_with, end_with, not_end_with}；
+- 数值/格式类参数做类型与范围校验：`--priority`（整数，0–65535）、`--limit_num`（1–2147483647）、`--limit_period`（1–3600）、`--addr`（合法 IPv4/IPv6/CIDR）、`--policy_id`/`--rule_id`/`--host_id`/`--project_id`（华为云资源 UUID 格式）；
+- 所有参数值来自用户输入时，先校验再使用；白名单外或格式非法的值一律拒绝。
 
 ### WAF List / Show (query, R3)
 
@@ -311,41 +345,6 @@ The generic invocation shape is `hcloud <service> <Operation> --cli-region=<regi
 | Simple parameter | `--key=value` | `--policy_id=p1` |
 | Indexed parameter (array) | `--key.N=valueN` | `--policy_ids.1=pol1`, `--conditions.1.contents.1=/admin` |
 
-## Quality Reporting
-
-This Skill integrates [skill_quality_sdk.py](scripts/skill_quality_sdk.py) for execution quality
-reporting. Every run automatically reports trace_id, status (success/biz_fail/sys_fail/cancel),
-error code, cost, and masked input/output to the operations console.
-
-### Integration
-
-**Python entry point** — wrap main logic with the `quality_context` context manager:
-
-```python
-from skill_quality_sdk import quality_context, QualityError
-
-with quality_context(skill_name="huawei-cloud-waf-aad-rule-management", skill_version="1.0.0") as q:
-    q.input = {"action": "huawei_list_waf_policies", "region": "cn-north-4"}
-    result = do_something()
-    q.output = result
-```
-
-**CLI-only Skill** — the SDK is vendored in `scripts/` for future Python wrapper use. Pure CLI
-invocations in this skill do not call the SDK directly; the Agent wraps its own execution.
-
-### Error Code Convention
-
-| Prefix | Category | Examples |
-|--------|----------|---------|
-| U | User input | U01 missing param, U03 no data found |
-| C | Configuration | C01 missing AK/SK/env |
-| N | Network | N01 timeout, N02 connection refused |
-| B | Code bug | B01 null pointer, B04 version mismatch |
-| P | Platform | P01 scheduler error, P02 resource insufficient |
-
-Reporting is non-blocking and fails silently — it never interrupts the Skill main flow. Disable via
-`SKILL_QUALITY_DISABLE=1` for local testing.
-
 ## Reference Documents
 
 - `references/cli-installation-guide.md` — KooCLI installation, AK/SK & profile authentication
@@ -354,13 +353,16 @@ Reporting is non-blocking and fails silently — it never interrupts the Skill m
 - `references/dataflow-diagram.md` — Mermaid data-flow diagram (query / diagnose / manage)
 - `references/acceptance-criteria.md` — Acceptance criteria mapped to the 17 actions
 - `references/related-commands.md` — Auxiliary commands (`ShowPolicyGeoipMap`, EPS, DNS/EIP context)
+- `scripts/ensure_cli.sh` — Idempotent skill-quality-cli installer (see the ⚠️ Mandatory note in Core Commands)
 
 ## Related Commands (auxiliary)
 
 ```bash
 # Query supported geo regions for geo rules (source of {geoip} values)
-hcloud WAF ShowPolicyGeoipMap --cli-region={region} --project_id={project_id}
+hcloud WAF ShowPolicyGeoipMap --cli-region={region}   # 无分页参数, 不支持--limit
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud WAF ShowPolicyGeoipMap --cli-region={region}
 
 # Confirm the authenticated profile / region
-hcloud configure list
+hcloud configure list   # 本地配置查看, 无--limit参数
+skill-quality-cli run --skill-name huawei-cloud-waf-aad-rule-management -- hcloud configure list
 ```
