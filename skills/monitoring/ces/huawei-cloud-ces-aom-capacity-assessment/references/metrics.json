@@ -1,0 +1,4067 @@
+{
+  "dcs": {
+    "DCS 最大CPU使用率": {
+      "service": "dcs",
+      "metric": "DCS 最大CPU使用率",
+      "namespace": "SYS.DCS",
+      "metric_name": "cpu_usage",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-实例"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DCS 内存使用率": {
+      "service": "dcs",
+      "metric": "DCS 内存使用率",
+      "namespace": "SYS.DCS",
+      "metric_name": "memory_usage",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-实例"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DCS 连接数使用率": {
+      "service": "dcs",
+      "metric": "DCS 连接数使用率",
+      "namespace": "SYS.DCS",
+      "metric_name": "connections_usage",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-实例"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DCS 流控次数": {
+      "service": "dcs",
+      "metric": "DCS 流控次数",
+      "namespace": "SYS.DCS",
+      "metric_name": "rx_controlled",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-实例"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-实例"
+        }
+      ],
+      "unit": "count",
+      "ceiling": null
+    },
+    "DCS 带宽使用率": {
+      "service": "dcs",
+      "metric": "DCS 带宽使用率",
+      "namespace": "SYS.DCS",
+      "metric_name": "bandwidth_usage",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-实例"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DCS 命令最大时延": {
+      "service": "dcs",
+      "metric": "DCS 命令最大时延",
+      "namespace": "SYS.DCS",
+      "metric_name": "command_max_delay",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-实例"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-实例"
+        }
+      ],
+      "unit": "ms",
+      "ceiling": null
+    },
+    "DCS 最大时延": {
+      "service": "dcs",
+      "metric": "DCS 最大时延",
+      "namespace": "SYS.DCS",
+      "metric_name": "command_max_rt",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-实例"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-实例"
+        }
+      ],
+      "unit": "μs",
+      "ceiling": null
+    },
+    "DCS 每秒并发操作数": {
+      "service": "dcs",
+      "metric": "DCS 每秒并发操作数",
+      "namespace": "SYS.DCS",
+      "metric_name": "instantaneous_ops",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-实例"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-实例"
+        }
+      ],
+      "unit": "count",
+      "ceiling": null
+    },
+    "DCS 活跃的客户端数量": {
+      "service": "dcs",
+      "metric": "DCS 活跃的客户端数量",
+      "namespace": "SYS.DCS",
+      "metric_name": "connected_clients",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-实例"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-实例"
+        }
+      ],
+      "unit": "count",
+      "ceiling": null
+    },
+    "DCS 网络瞬时输入流量": {
+      "service": "dcs",
+      "metric": "DCS 网络瞬时输入流量",
+      "namespace": "SYS.DCS",
+      "metric_name": "instantaneous_input_kbps",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-实例"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-实例"
+        }
+      ],
+      "unit": "KiB/s",
+      "ceiling": null
+    },
+    "DCS 网络瞬时输出流量": {
+      "service": "dcs",
+      "metric": "DCS 网络瞬时输出流量",
+      "namespace": "SYS.DCS",
+      "metric_name": "instantaneous_output_kbps",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-实例"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-实例"
+        }
+      ],
+      "unit": "KiB/s",
+      "ceiling": null
+    },
+    "DCS 数据节点最大CPU使用率": {
+      "service": "dcs",
+      "metric": "DCS 数据节点最大CPU使用率",
+      "namespace": "SYS.DCS",
+      "metric_name": "cpu_usage",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-数据节点"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-数据节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DCS 数据节点内存利用率": {
+      "service": "dcs",
+      "metric": "DCS 数据节点内存利用率",
+      "namespace": "SYS.DCS",
+      "metric_name": "memory_usage",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-数据节点"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-数据节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DCS 数据节点连接数使用率": {
+      "service": "dcs",
+      "metric": "DCS 数据节点连接数使用率",
+      "namespace": "SYS.DCS",
+      "metric_name": "connections_usage",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-数据节点"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-数据节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DCS 数据节点带宽使用率": {
+      "service": "dcs",
+      "metric": "DCS 数据节点带宽使用率",
+      "namespace": "SYS.DCS",
+      "metric_name": "bandwidth_usage",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-数据节点"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-数据节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DCS 数据节点每秒并发操作数": {
+      "service": "dcs",
+      "metric": "DCS 数据节点每秒并发操作数",
+      "namespace": "SYS.DCS",
+      "metric_name": "instantaneous_ops",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-数据节点"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-数据节点"
+        }
+      ],
+      "unit": "count",
+      "ceiling": null
+    },
+    "DCS 数据节点流控次数": {
+      "service": "dcs",
+      "metric": "DCS 数据节点流控次数",
+      "namespace": "SYS.DCS",
+      "metric_name": "rx_controlled",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-数据节点"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-数据节点"
+        }
+      ],
+      "unit": "count",
+      "ceiling": null
+    },
+    "DCS 数据节点最大时延": {
+      "service": "dcs",
+      "metric": "DCS 数据节点最大时延",
+      "namespace": "SYS.DCS",
+      "metric_name": "command_max_rt",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-数据节点"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-数据节点"
+        }
+      ],
+      "unit": "μs",
+      "ceiling": null
+    },
+    "DCS 数据节点平均时延": {
+      "service": "dcs",
+      "metric": "DCS 数据节点平均时延",
+      "namespace": "SYS.DCS",
+      "metric_name": "command_avg_rt",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-数据节点"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-数据节点"
+        }
+      ],
+      "unit": "μs",
+      "ceiling": null
+    },
+    "DCS 数据节点命令最大时延": {
+      "service": "dcs",
+      "metric": "DCS 数据节点命令最大时延",
+      "namespace": "SYS.DCS",
+      "metric_name": "command_max_delay",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-数据节点"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-数据节点"
+        }
+      ],
+      "unit": "ms",
+      "ceiling": null
+    },
+    "DCS Proxy节点最大CPU使用率": {
+      "service": "dcs",
+      "metric": "DCS Proxy节点最大CPU使用率",
+      "namespace": "SYS.DCS",
+      "metric_name": "cpu_usage",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0 Proxy集群-节点"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0 Proxy集群-节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DCS Proxy节点内存利用率": {
+      "service": "dcs",
+      "metric": "DCS Proxy节点内存利用率",
+      "namespace": "SYS.DCS",
+      "metric_name": "memory_usage",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0 Proxy集群-节点"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0 Proxy集群-节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DCS Proxy节点连接数使用率": {
+      "service": "dcs",
+      "metric": "DCS Proxy节点连接数使用率",
+      "namespace": "SYS.DCS",
+      "metric_name": "connections_usage",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0 Proxy集群-节点"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0 Proxy集群-节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DCS Proxy节点最大时延": {
+      "service": "dcs",
+      "metric": "DCS Proxy节点最大时延",
+      "namespace": "SYS.DCS",
+      "metric_name": "command_max_rt",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0 Proxy集群-节点"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0 Proxy集群-节点"
+        }
+      ],
+      "unit": "μs",
+      "ceiling": null
+    },
+    "DCS Proxy节点平均时延": {
+      "service": "dcs",
+      "metric": "DCS Proxy节点平均时延",
+      "namespace": "SYS.DCS",
+      "metric_name": "command_avg_rt",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0 Proxy集群-节点"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0 Proxy集群-节点"
+        }
+      ],
+      "unit": "μs",
+      "ceiling": null
+    },
+    "DCS Proxy节点每秒并发操作数": {
+      "service": "dcs",
+      "metric": "DCS Proxy节点每秒并发操作数",
+      "namespace": "SYS.DCS",
+      "metric_name": "instantaneous_ops",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0 Proxy集群-节点"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0 Proxy集群-节点"
+        }
+      ],
+      "unit": "count",
+      "ceiling": null
+    },
+    "DCS Proxy节点活跃的客户端数量": {
+      "service": "dcs",
+      "metric": "DCS Proxy节点活跃的客户端数量",
+      "namespace": "SYS.DCS",
+      "metric_name": "connected_clients",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0 Proxy集群-节点"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0 Proxy集群-节点"
+        }
+      ],
+      "unit": "count",
+      "ceiling": null
+    },
+    "DCS Proxy节点网络瞬时输入流量": {
+      "service": "dcs",
+      "metric": "DCS Proxy节点网络瞬时输入流量",
+      "namespace": "SYS.DCS",
+      "metric_name": "instantaneous_input_kbps",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0 Proxy集群-节点"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0 Proxy集群-节点"
+        }
+      ],
+      "unit": "KiB/s",
+      "ceiling": null
+    },
+    "DCS Proxy节点网络瞬时输出流量": {
+      "service": "dcs",
+      "metric": "DCS Proxy节点网络瞬时输出流量",
+      "namespace": "SYS.DCS",
+      "metric_name": "instantaneous_output_kbps",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0 Proxy集群-节点"
+        },
+        {
+          "name": "dcs_cluster_redis_node",
+          "source": "dim_resource_id",
+          "label": "Redis 4.0/5.0/6.0/7.0 Proxy集群-节点"
+        }
+      ],
+      "unit": "KiB/s",
+      "ceiling": null
+    },
+    "DCS读平均时延": {
+      "service": "dcs",
+      "metric": "DCS读平均时延",
+      "namespace": "SYS.DCS",
+      "metric_name": "read_command_avg_rt",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-实例"
+        }
+      ],
+      "unit": "μs",
+      "ceiling": null
+    },
+    "DCS写平均时延": {
+      "service": "dcs",
+      "metric": "DCS写平均时延",
+      "namespace": "SYS.DCS",
+      "metric_name": "write_command_avg_rt",
+      "dimensions": [
+        {
+          "name": "dcs_instance_id",
+          "source": "instance_id",
+          "label": "Redis 4.0/5.0/6.0/7.0-实例"
+        }
+      ],
+      "unit": "μs",
+      "ceiling": null
+    }
+  },
+  "dc": {
+    "DC物理连接网络流入带宽": {
+      "service": "dc",
+      "metric": "DC物理连接网络流入带宽",
+      "namespace": "SYS.DCAAS",
+      "metric_name": "network_incoming_bits_rate",
+      "dimensions": [
+        {
+          "name": "direct_connect_id",
+          "source": "instance_id",
+          "label": "物理连接"
+        }
+      ],
+      "unit": "bit/s",
+      "ceiling": null
+    },
+    "DC物理连接网络流出带宽": {
+      "service": "dc",
+      "metric": "DC物理连接网络流出带宽",
+      "namespace": "SYS.DCAAS",
+      "metric_name": "network_outgoing_bits_rate",
+      "dimensions": [
+        {
+          "name": "direct_connect_id",
+          "source": "instance_id",
+          "label": "物理连接"
+        }
+      ],
+      "unit": "bit/s",
+      "ceiling": null
+    },
+    "DC网络流入带宽": {
+      "service": "dc",
+      "metric": "DC网络流入带宽",
+      "namespace": "SYS.DCAAS",
+      "metric_name": "network_incoming_bits_rate",
+      "dimensions": [
+        {
+          "name": "direct_connect_id",
+          "source": "instance_id",
+          "label": "虚拟接口"
+        }
+      ],
+      "unit": "bit/s",
+      "ceiling": null
+    },
+    "DC网络流出带宽": {
+      "service": "dc",
+      "metric": "DC网络流出带宽",
+      "namespace": "SYS.DCAAS",
+      "metric_name": "network_outgoing_bits_rate",
+      "dimensions": [
+        {
+          "name": "direct_connect_id",
+          "source": "instance_id",
+          "label": "虚拟接口"
+        }
+      ],
+      "unit": "bit/s",
+      "ceiling": null
+    }
+  },
+  "evs": {
+    "EVS平均写操作耗时": {
+      "service": "evs",
+      "metric": "EVS平均写操作耗时",
+      "namespace": "SYS.EVS",
+      "metric_name": "disk_device_write_await",
+      "dimensions": [
+        {
+          "name": "disk_name",
+          "source": "dim_resource_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "ms/op",
+      "ceiling": null
+    },
+    "EVS平均读操作耗时": {
+      "service": "evs",
+      "metric": "EVS平均读操作耗时",
+      "namespace": "SYS.EVS",
+      "metric_name": "disk_device_read_await",
+      "dimensions": [
+        {
+          "name": "disk_name",
+          "source": "dim_resource_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "ms/op",
+      "ceiling": null
+    },
+    "EVS IOPS达到上限(次数)": {
+      "service": "evs",
+      "metric": "EVS IOPS达到上限(次数)",
+      "namespace": "SYS.EVS",
+      "metric_name": "disk_device_io_iops_qos_num",
+      "dimensions": [
+        {
+          "name": "disk_name",
+          "source": "dim_resource_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "count",
+      "ceiling": null
+    },
+    "EVS带宽达到上限(次数)": {
+      "service": "evs",
+      "metric": "EVS带宽达到上限(次数)",
+      "namespace": "SYS.EVS",
+      "metric_name": "disk_device_io_iobw_qos_num",
+      "dimensions": [
+        {
+          "name": "disk_name",
+          "source": "dim_resource_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "count",
+      "ceiling": null
+    },
+    "EVS磁盘读带宽": {
+      "service": "evs",
+      "metric": "EVS磁盘读带宽",
+      "namespace": "SYS.EVS",
+      "metric_name": "disk_device_read_bytes_rate",
+      "dimensions": [
+        {
+          "name": "disk_name",
+          "source": "dim_resource_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "Byte/s",
+      "ceiling": null
+    },
+    "EVS磁盘写带宽": {
+      "service": "evs",
+      "metric": "EVS磁盘写带宽",
+      "namespace": "SYS.EVS",
+      "metric_name": "disk_device_write_bytes_rate",
+      "dimensions": [
+        {
+          "name": "disk_name",
+          "source": "dim_resource_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "Byte/s",
+      "ceiling": null
+    },
+    "EVS磁盘读写使用率": {
+      "service": "evs",
+      "metric": "EVS磁盘读写使用率",
+      "namespace": "SYS.EVS",
+      "metric_name": "disk_device_io_util",
+      "dimensions": [
+        {
+          "name": "disk_name",
+          "source": "dim_resource_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    }
+  },
+  "rds": {
+    "RDS CPU使用率": {
+      "service": "rds",
+      "metric": "RDS CPU使用率",
+      "namespace": "SYS.RDS",
+      "metric_name": "rds001_cpu_util",
+      "dimensions": [
+        {
+          "name": "rds_cluster_id",
+          "source": "instance_id",
+          "label": "MySQL实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "RDS内存使用率": {
+      "service": "rds",
+      "metric": "RDS内存使用率",
+      "namespace": "SYS.RDS",
+      "metric_name": "rds002_mem_util",
+      "dimensions": [
+        {
+          "name": "rds_cluster_id",
+          "source": "instance_id",
+          "label": "MySQL实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "RDS磁盘利用率": {
+      "service": "rds",
+      "metric": "RDS磁盘利用率",
+      "namespace": "SYS.RDS",
+      "metric_name": "rds039_disk_util",
+      "dimensions": [
+        {
+          "name": "rds_cluster_id",
+          "source": "instance_id",
+          "label": "MySQL实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "RDS长事务指标": {
+      "service": "rds",
+      "metric": "RDS长事务指标",
+      "namespace": "SYS.RDS",
+      "metric_name": "rds_long_transaction",
+      "dimensions": [
+        {
+          "name": "rds_cluster_id",
+          "source": "instance_id",
+          "label": "MySQL实例"
+        }
+      ],
+      "unit": "s",
+      "ceiling": null
+    },
+    "RDS磁盘写吞吐量": {
+      "service": "rds",
+      "metric": "RDS磁盘写吞吐量",
+      "namespace": "SYS.RDS",
+      "metric_name": "rds050_disk_write_throughput",
+      "dimensions": [
+        {
+          "name": "rds_cluster_id",
+          "source": "instance_id",
+          "label": "MySQL实例"
+        }
+      ],
+      "unit": "Byte/s",
+      "ceiling": null
+    },
+    "RDS硬盘读耗时": {
+      "service": "rds",
+      "metric": "RDS硬盘读耗时",
+      "namespace": "SYS.RDS",
+      "metric_name": "rds075_avg_disk_ms_per_read",
+      "dimensions": [
+        {
+          "name": "rds_cluster_id",
+          "source": "instance_id",
+          "label": "MySQL实例"
+        }
+      ],
+      "unit": "ms",
+      "ceiling": null
+    },
+    "RDS硬盘写耗时": {
+      "service": "rds",
+      "metric": "RDS硬盘写耗时",
+      "namespace": "SYS.RDS",
+      "metric_name": "rds076_avg_disk_ms_per_write",
+      "dimensions": [
+        {
+          "name": "rds_cluster_id",
+          "source": "instance_id",
+          "label": "MySQL实例"
+        }
+      ],
+      "unit": "ms",
+      "ceiling": null
+    },
+    "RDS活跃连接数使用率": {
+      "service": "rds",
+      "metric": "RDS活跃连接数使用率",
+      "namespace": "SYS.RDS",
+      "metric_name": "rds_conn_active_usage",
+      "dimensions": [
+        {
+          "name": "rds_cluster_id",
+          "source": "instance_id",
+          "label": "MySQL实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "RDS QPS": {
+      "service": "rds",
+      "metric": "RDS QPS",
+      "namespace": "SYS.RDS",
+      "metric_name": "rds008_qps",
+      "dimensions": [
+        {
+          "name": "rds_cluster_id",
+          "source": "instance_id",
+          "label": "MySQL实例"
+        }
+      ],
+      "unit": "count/s",
+      "ceiling": null
+    },
+    "RDS慢日志个数统计": {
+      "service": "rds",
+      "metric": "RDS慢日志个数统计",
+      "namespace": "SYS.RDS",
+      "metric_name": "rds074_slow_queries",
+      "dimensions": [
+        {
+          "name": "rds_cluster_id",
+          "source": "instance_id",
+          "label": "MySQL实例"
+        }
+      ],
+      "unit": "count/min",
+      "ceiling": null
+    },
+    "RDS当前活跃连接数": {
+      "service": "rds",
+      "metric": "RDS当前活跃连接数",
+      "namespace": "SYS.RDS",
+      "metric_name": "rds007_conn_active_count",
+      "dimensions": [
+        {
+          "name": "rds_cluster_id",
+          "source": "instance_id",
+          "label": "MySQL实例"
+        }
+      ],
+      "unit": "count",
+      "ceiling": null
+    },
+    "RDS连接数使用率": {
+      "service": "rds",
+      "metric": "RDS连接数使用率",
+      "namespace": "SYS.RDS",
+      "metric_name": "rds072_conn_usage",
+      "dimensions": [
+        {
+          "name": "rds_cluster_id",
+          "source": "instance_id",
+          "label": "MySQL实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "RDS实时复制时延": {
+      "service": "rds",
+      "metric": "RDS实时复制时延",
+      "namespace": "SYS.RDS",
+      "metric_name": "rds073_replication_delay",
+      "dimensions": [
+        {
+          "name": "rds_cluster_id",
+          "source": "instance_id",
+          "label": "MySQL实例"
+        }
+      ],
+      "unit": "s",
+      "ceiling": null
+    },
+    "RDS等待行锁事务数": {
+      "service": "rds",
+      "metric": "RDS等待行锁事务数",
+      "namespace": "SYS.RDS",
+      "metric_name": "rds_innodb_lock_waits",
+      "dimensions": [
+        {
+          "name": "rds_cluster_id",
+          "source": "instance_id",
+          "label": "MySQL实例"
+        }
+      ],
+      "unit": "count",
+      "ceiling": null
+    },
+    "RDS PG连接数使用率": {
+      "service": "rds",
+      "metric": "RDS PG连接数使用率",
+      "namespace": "SYS.RDS",
+      "metric_name": "rds083_conn_usage",
+      "dimensions": [
+        {
+          "name": "postgresql_instance_id",
+          "source": "instance_id",
+          "label": "PostgreSQL实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "RDS PG最滞后副本滞后量": {
+      "service": "rds",
+      "metric": "RDS PG最滞后副本滞后量",
+      "namespace": "SYS.RDS",
+      "metric_name": "rds045_oldest_replication_slot_lag",
+      "dimensions": [
+        {
+          "name": "postgresql_instance_id",
+          "source": "instance_id",
+          "label": "PostgreSQL实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "RDS PG复制时延": {
+      "service": "rds",
+      "metric": "RDS PG复制时延",
+      "namespace": "SYS.RDS",
+      "metric_name": "rds046_replication_lag",
+      "dimensions": [
+        {
+          "name": "postgresql_instance_id",
+          "source": "instance_id",
+          "label": "PostgreSQL实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "RDS PG最长事务存活时长": {
+      "service": "rds",
+      "metric": "RDS PG最长事务存活时长",
+      "namespace": "SYS.RDS",
+      "metric_name": "oldest_transaction_duration",
+      "dimensions": [
+        {
+          "name": "postgresql_instance_id",
+          "source": "instance_id",
+          "label": "PostgreSQL实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "RDS PG最长未决事务存活时长": {
+      "service": "rds",
+      "metric": "RDS PG最长未决事务存活时长",
+      "namespace": "SYS.RDS",
+      "metric_name": "oldest_transaction_duration_2pc",
+      "dimensions": [
+        {
+          "name": "postgresql_instance_id",
+          "source": "instance_id",
+          "label": "PostgreSQL实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "RDS PG最大数据库年龄": {
+      "service": "rds",
+      "metric": "RDS PG最大数据库年龄",
+      "namespace": "SYS.RDS",
+      "metric_name": "db_max_age",
+      "dimensions": [
+        {
+          "name": "postgresql_instance_id",
+          "source": "instance_id",
+          "label": "PostgreSQL实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "RDS PG已执行3s的SQL数": {
+      "service": "rds",
+      "metric": "RDS PG已执行3s的SQL数",
+      "namespace": "SYS.RDS",
+      "metric_name": "slow_sql_three_second",
+      "dimensions": [
+        {
+          "name": "postgresql_instance_id",
+          "source": "instance_id",
+          "label": "PostgreSQL实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "RDS PG已执行5s的SQL数": {
+      "service": "rds",
+      "metric": "RDS PG已执行5s的SQL数",
+      "namespace": "SYS.RDS",
+      "metric_name": "slow_sql_five_second",
+      "dimensions": [
+        {
+          "name": "postgresql_instance_id",
+          "source": "instance_id",
+          "label": "PostgreSQL实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "RDS PG非活跃逻辑复制槽数量": {
+      "service": "rds",
+      "metric": "RDS PG非活跃逻辑复制槽数量",
+      "namespace": "SYS.RDS",
+      "metric_name": "inactive_logical_replication_slot",
+      "dimensions": [
+        {
+          "name": "postgresql_instance_id",
+          "source": "instance_id",
+          "label": "PostgreSQL实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "RDS MSSQL CPU使用率": {
+      "service": "rds",
+      "metric": "RDS MSSQL CPU使用率",
+      "namespace": "SYS.RDS",
+      "metric_name": "rds001_cpu_util",
+      "dimensions": [
+        {
+          "name": "rds_cluster_id",
+          "source": "instance_id",
+          "label": "SQL Server实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "RDS MSSQL内存使用率": {
+      "service": "rds",
+      "metric": "RDS MSSQL内存使用率",
+      "namespace": "SYS.RDS",
+      "metric_name": "rds002_mem_util",
+      "dimensions": [
+        {
+          "name": "rds_cluster_id",
+          "source": "instance_id",
+          "label": "SQL Server实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "RDS MSSQL磁盘利用率": {
+      "service": "rds",
+      "metric": "RDS MSSQL磁盘利用率",
+      "namespace": "SYS.RDS",
+      "metric_name": "rds039_disk_util",
+      "dimensions": [
+        {
+          "name": "rds_cluster_id",
+          "source": "instance_id",
+          "label": "SQL Server实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "RDS MSSQL磁盘吞吐量使用率": {
+      "service": "rds",
+      "metric": "RDS MSSQL磁盘吞吐量使用率",
+      "namespace": "SYS.RDS",
+      "metric_name": "mssql_disk_throughput_usage_rate",
+      "dimensions": [
+        {
+          "name": "rds_instance_sqlserver_id",
+          "source": "instance_id",
+          "label": "SQL Server实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "RDS MSSQL工作线程使用率": {
+      "service": "rds",
+      "metric": "RDS MSSQL工作线程使用率",
+      "namespace": "SYS.RDS",
+      "metric_name": "mssql_worker_threads_usage_rate",
+      "dimensions": [
+        {
+          "name": "rds_instance_sqlserver_id",
+          "source": "instance_id",
+          "label": "SQL Server实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "RDS MSSQL数据同步延迟": {
+      "service": "rds",
+      "metric": "RDS MSSQL数据同步延迟",
+      "namespace": "SYS.RDS",
+      "metric_name": "rds077_replication_delay",
+      "dimensions": [
+        {
+          "name": "rds_instance_sqlserver_id",
+          "source": "instance_id",
+          "label": "SQL Server实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "RDS MSSQL慢SQL数量": {
+      "service": "rds",
+      "metric": "RDS MSSQL慢SQL数量",
+      "namespace": "SYS.RDS",
+      "metric_name": "mssql_slow_sql_size",
+      "dimensions": [
+        {
+          "name": "rds_instance_sqlserver_id",
+          "source": "instance_id",
+          "label": "SQL Server实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "RDS MSSQL paged pool内存大小": {
+      "service": "rds",
+      "metric": "RDS MSSQL paged pool内存大小",
+      "namespace": "SYS.RDS",
+      "metric_name": "mssql_windows_paged_pool_memory",
+      "dimensions": [
+        {
+          "name": "rds_instance_sqlserver_id",
+          "source": "instance_id",
+          "label": "SQL Server实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "RDS MSSQL modified内存大小": {
+      "service": "rds",
+      "metric": "RDS MSSQL modified内存大小",
+      "namespace": "SYS.RDS",
+      "metric_name": "mssql_windows_modified_memory",
+      "dimensions": [
+        {
+          "name": "rds_instance_sqlserver_id",
+          "source": "instance_id",
+          "label": "SQL Server实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    }
+  },
+  "ecs": {
+    "ECS入方向带宽": {
+      "service": "ecs",
+      "metric": "ECS入方向带宽",
+      "namespace": "SYS.ECS",
+      "metric_name": "network_vm_bandwidth_in",
+      "dimensions": [
+        {
+          "name": "instance_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "Byte/s",
+      "ceiling": null
+    },
+    "ECS出方向带宽": {
+      "service": "ecs",
+      "metric": "ECS出方向带宽",
+      "namespace": "SYS.ECS",
+      "metric_name": "network_vm_bandwidth_out",
+      "dimensions": [
+        {
+          "name": "instance_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "Byte/s",
+      "ceiling": null
+    },
+    "ECS CPU使用率": {
+      "service": "ecs",
+      "metric": "ECS CPU使用率",
+      "namespace": "SYS.ECS",
+      "metric_name": "cpu_util",
+      "dimensions": [
+        {
+          "name": "instance_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "ECS网络连接数": {
+      "service": "ecs",
+      "metric": "ECS网络连接数",
+      "namespace": "SYS.ECS",
+      "metric_name": "network_vm_connections",
+      "dimensions": [
+        {
+          "name": "instance_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "Count",
+      "ceiling": null
+    },
+    "ECS虚拟机入方向PPS": {
+      "service": "ecs",
+      "metric": "ECS虚拟机入方向PPS",
+      "namespace": "SYS.ECS",
+      "metric_name": "network_vm_pps_in",
+      "dimensions": [
+        {
+          "name": "instance_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "Packet/s",
+      "ceiling": null
+    },
+    "ECS虚拟机出方向PPS": {
+      "service": "ecs",
+      "metric": "ECS虚拟机出方向PPS",
+      "namespace": "SYS.ECS",
+      "metric_name": "network_vm_pps_out",
+      "dimensions": [
+        {
+          "name": "instance_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "Packet/s",
+      "ceiling": null
+    },
+    "ECS虚拟机整机新建连接数": {
+      "service": "ecs",
+      "metric": "ECS虚拟机整机新建连接数",
+      "namespace": "SYS.ECS",
+      "metric_name": "network_vm_newconnections",
+      "dimensions": [
+        {
+          "name": "instance_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "connect/s",
+      "ceiling": null
+    }
+  },
+  "elb": {
+    "ELB新建连接数": {
+      "service": "elb",
+      "metric": "ELB新建连接数",
+      "namespace": "SYS.ELB",
+      "metric_name": "m4_ncps",
+      "dimensions": [
+        {
+          "name": "lbaas_instance_id",
+          "source": "instance_id",
+          "label": "独享型负载均衡(v3)"
+        }
+      ],
+      "unit": "Count/s",
+      "ceiling": null
+    },
+    "ELB并发连接数": {
+      "service": "elb",
+      "metric": "ELB并发连接数",
+      "namespace": "SYS.ELB",
+      "metric_name": "m1_cps",
+      "dimensions": [
+        {
+          "name": "lbaas_instance_id",
+          "source": "instance_id",
+          "label": "独享型负载均衡(v3)"
+        }
+      ],
+      "unit": "Count",
+      "ceiling": null
+    },
+    "ELB 7层查询速率": {
+      "service": "elb",
+      "metric": "ELB 7层查询速率",
+      "namespace": "SYS.ELB",
+      "metric_name": "mb_l7_qps",
+      "dimensions": [
+        {
+          "name": "lbaas_instance_id",
+          "source": "instance_id",
+          "label": "独享型负载均衡(v3)"
+        }
+      ],
+      "unit": "Count/s",
+      "ceiling": null
+    },
+    "ELB 4层并发连接使用率": {
+      "service": "elb",
+      "metric": "ELB 4层并发连接使用率",
+      "namespace": "SYS.ELB",
+      "metric_name": "l4_con_usage",
+      "dimensions": [
+        {
+          "name": "lbaas_instance_id",
+          "source": "instance_id",
+          "label": "独享型负载均衡(v3)"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "ELB 4层新建连接数使用率": {
+      "service": "elb",
+      "metric": "ELB 4层新建连接数使用率",
+      "namespace": "SYS.ELB",
+      "metric_name": "l4_ncps_usage",
+      "dimensions": [
+        {
+          "name": "lbaas_instance_id",
+          "source": "instance_id",
+          "label": "独享型负载均衡(v3)"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "ELB 4层入带宽使用率": {
+      "service": "elb",
+      "metric": "ELB 4层入带宽使用率",
+      "namespace": "SYS.ELB",
+      "metric_name": "l4_in_bps_usage",
+      "dimensions": [
+        {
+          "name": "lbaas_instance_id",
+          "source": "instance_id",
+          "label": "独享型负载均衡(v3)"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "ELB 4层出带宽使用率": {
+      "service": "elb",
+      "metric": "ELB 4层出带宽使用率",
+      "namespace": "SYS.ELB",
+      "metric_name": "l4_out_bps_usage",
+      "dimensions": [
+        {
+          "name": "lbaas_instance_id",
+          "source": "instance_id",
+          "label": "独享型负载均衡(v3)"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "ELB 7层新建连接数使用率": {
+      "service": "elb",
+      "metric": "ELB 7层新建连接数使用率",
+      "namespace": "SYS.ELB",
+      "metric_name": "l7_ncps_usage",
+      "dimensions": [
+        {
+          "name": "lbaas_instance_id",
+          "source": "instance_id",
+          "label": "独享型负载均衡(v3)"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "ELB 7层并发连接使用率": {
+      "service": "elb",
+      "metric": "ELB 7层并发连接使用率",
+      "namespace": "SYS.ELB",
+      "metric_name": "l7_con_usage",
+      "dimensions": [
+        {
+          "name": "lbaas_instance_id",
+          "source": "instance_id",
+          "label": "独享型负载均衡(v3)"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "ELB 7层入带宽使用率": {
+      "service": "elb",
+      "metric": "ELB 7层入带宽使用率",
+      "namespace": "SYS.ELB",
+      "metric_name": "l7_in_bps_usage",
+      "dimensions": [
+        {
+          "name": "lbaas_instance_id",
+          "source": "instance_id",
+          "label": "独享型负载均衡(v3)"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "ELB 7层出带宽使用率": {
+      "service": "elb",
+      "metric": "ELB 7层出带宽使用率",
+      "namespace": "SYS.ELB",
+      "metric_name": "l7_out_bps_usage",
+      "dimensions": [
+        {
+          "name": "lbaas_instance_id",
+          "source": "instance_id",
+          "label": "独享型负载均衡(v3)"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "ELB 7层查询速率使用率": {
+      "service": "elb",
+      "metric": "ELB 7层查询速率使用率",
+      "namespace": "SYS.ELB",
+      "metric_name": "l7_qps_usage",
+      "dimensions": [
+        {
+          "name": "lbaas_instance_id",
+          "source": "instance_id",
+          "label": "独享型负载均衡(v3)"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    }
+  },
+  "eip": {
+    "EIP入网带宽": {
+      "service": "eip",
+      "metric": "EIP入网带宽",
+      "namespace": "SYS.VPC",
+      "metric_name": "upstream_bandwidth",
+      "dimensions": [
+        {
+          "name": "publicip_id",
+          "source": "dim_resource_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "bit/s",
+      "ceiling": null
+    },
+    "EIP出网带宽": {
+      "service": "eip",
+      "metric": "EIP出网带宽",
+      "namespace": "SYS.VPC",
+      "metric_name": "downstream_bandwidth",
+      "dimensions": [
+        {
+          "name": "publicip_id",
+          "source": "dim_resource_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "bit/s",
+      "ceiling": null
+    },
+    "EIP入网带宽使用率": {
+      "service": "eip",
+      "metric": "EIP入网带宽使用率",
+      "namespace": "SYS.VPC",
+      "metric_name": "upstream_bandwidth_usage",
+      "dimensions": [
+        {
+          "name": "publicip_id",
+          "source": "dim_resource_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "EIP出网带宽使用率": {
+      "service": "eip",
+      "metric": "EIP出网带宽使用率",
+      "namespace": "SYS.VPC",
+      "metric_name": "downstream_bandwidth_usage",
+      "dimensions": [
+        {
+          "name": "publicip_id",
+          "source": "dim_resource_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    }
+  },
+  "bandwidth": {
+    "Bandwidth出网带宽使用率": {
+      "service": "bandwidth",
+      "metric": "Bandwidth出网带宽使用率",
+      "namespace": "SYS.VPC",
+      "metric_name": "downstream_bandwidth_usage",
+      "dimensions": [
+        {
+          "name": "publicip_id",
+          "source": "dim_resource_id",
+          "label": "Bandwidth"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "Bandwidth入网带宽使用率": {
+      "service": "bandwidth",
+      "metric": "Bandwidth入网带宽使用率",
+      "namespace": "SYS.VPC",
+      "metric_name": "upstream_bandwidth_usage",
+      "dimensions": [
+        {
+          "name": "publicip_id",
+          "source": "dim_resource_id",
+          "label": "Bandwidth"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "Bandwidth出网带宽": {
+      "service": "bandwidth",
+      "metric": "Bandwidth出网带宽",
+      "namespace": "SYS.VPC",
+      "metric_name": "downstream_bandwidth",
+      "dimensions": [
+        {
+          "name": "publicip_id",
+          "source": "dim_resource_id",
+          "label": "Bandwidth"
+        }
+      ],
+      "unit": "bit/s",
+      "ceiling": null
+    },
+    "Bandwidth入网带宽": {
+      "service": "bandwidth",
+      "metric": "Bandwidth入网带宽",
+      "namespace": "SYS.VPC",
+      "metric_name": "upstream_bandwidth",
+      "dimensions": [
+        {
+          "name": "publicip_id",
+          "source": "dim_resource_id",
+          "label": "Bandwidth"
+        }
+      ],
+      "unit": "bit/s",
+      "ceiling": null
+    }
+  },
+  "vpcep": {
+    "VPCEP终端节点流入带宽": {
+      "service": "vpcep",
+      "metric": "VPCEP终端节点流入带宽",
+      "namespace": "SYS.VPCEP",
+      "metric_name": "vpcep_rx_bps",
+      "dimensions": [
+        {
+          "name": "ep_instance_id",
+          "source": "dim_resource_id",
+          "label": "实例节点"
+        }
+      ],
+      "unit": "bit/s",
+      "ceiling": null
+    },
+    "VPCEP终端节点流出带宽": {
+      "service": "vpcep",
+      "metric": "VPCEP终端节点流出带宽",
+      "namespace": "SYS.VPCEP",
+      "metric_name": "vpcep_tx_bps",
+      "dimensions": [
+        {
+          "name": "ep_instance_id",
+          "source": "dim_resource_id",
+          "label": "实例节点"
+        }
+      ],
+      "unit": "bit/s",
+      "ceiling": null
+    },
+    "VPCEP终端节点连接数": {
+      "service": "vpcep",
+      "metric": "VPCEP终端节点连接数",
+      "namespace": "SYS.VPCEP",
+      "metric_name": "vpcep_connections",
+      "dimensions": [
+        {
+          "name": "ep_instance_id",
+          "source": "dim_resource_id",
+          "label": "实例节点"
+        }
+      ],
+      "unit": "count",
+      "ceiling": null
+    },
+    "VPCEP终端节点活跃连接数": {
+      "service": "vpcep",
+      "metric": "VPCEP终端节点活跃连接数",
+      "namespace": "SYS.VPCEP",
+      "metric_name": "vpcep_act_connections",
+      "dimensions": [
+        {
+          "name": "ep_instance_id",
+          "source": "dim_resource_id",
+          "label": "实例节点"
+        }
+      ],
+      "unit": "count",
+      "ceiling": null
+    }
+  },
+  "nat": {
+    "NAT出方向带宽": {
+      "service": "nat",
+      "metric": "NAT出方向带宽",
+      "namespace": "SYS.NAT",
+      "metric_name": "outbound_bandwidth",
+      "dimensions": [
+        {
+          "name": "nat_gateway_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "bit/s",
+      "ceiling": null
+    },
+    "NAT入方向带宽": {
+      "service": "nat",
+      "metric": "NAT入方向带宽",
+      "namespace": "SYS.NAT",
+      "metric_name": "inbound_bandwidth",
+      "dimensions": [
+        {
+          "name": "nat_gateway_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "bit/s",
+      "ceiling": null
+    },
+    "NAT SNAT连接数": {
+      "service": "nat",
+      "metric": "NAT SNAT连接数",
+      "namespace": "SYS.NAT",
+      "metric_name": "snat_connection",
+      "dimensions": [
+        {
+          "name": "nat_gateway_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "Count",
+      "ceiling": null
+    },
+    "NAT SNAT连接数使用率": {
+      "service": "nat",
+      "metric": "NAT SNAT连接数使用率",
+      "namespace": "SYS.NAT",
+      "metric_name": "snat_connection_ratio",
+      "dimensions": [
+        {
+          "name": "nat_gateway_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "NAT丢包数(SNAT连接数超限)": {
+      "service": "nat",
+      "metric": "NAT丢包数(SNAT连接数超限)",
+      "namespace": "SYS.NAT",
+      "metric_name": "packets_drop_count_snat_connection_beyond",
+      "dimensions": [
+        {
+          "name": "nat_gateway_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "Count",
+      "ceiling": null
+    },
+    "NAT丢包数(PPS超限)": {
+      "service": "nat",
+      "metric": "NAT丢包数(PPS超限)",
+      "namespace": "SYS.NAT",
+      "metric_name": "packets_drop_count_pps_beyond",
+      "dimensions": [
+        {
+          "name": "nat_gateway_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "Count",
+      "ceiling": null
+    },
+    "NAT丢包数(EIP端口分配超限)": {
+      "service": "nat",
+      "metric": "NAT丢包数(EIP端口分配超限)",
+      "namespace": "SYS.NAT",
+      "metric_name": "packets_drop_count_eip_port_alloc_beyond",
+      "dimensions": [
+        {
+          "name": "nat_gateway_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "Count",
+      "ceiling": null
+    },
+    "NAT入方向带宽使用率": {
+      "service": "nat",
+      "metric": "NAT入方向带宽使用率",
+      "namespace": "SYS.NAT",
+      "metric_name": "inbound_bandwidth_ratio",
+      "dimensions": [
+        {
+          "name": "nat_gateway_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "NAT出方向带宽使用率": {
+      "service": "nat",
+      "metric": "NAT出方向带宽使用率",
+      "namespace": "SYS.NAT",
+      "metric_name": "outbound_bandwidth_ratio",
+      "dimensions": [
+        {
+          "name": "nat_gateway_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "NAT入方向pps": {
+      "service": "nat",
+      "metric": "NAT入方向pps",
+      "namespace": "SYS.NAT",
+      "metric_name": "inbound_pps",
+      "dimensions": [
+        {
+          "name": "nat_gateway_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "Count",
+      "ceiling": null
+    },
+    "NAT出方向pps": {
+      "service": "nat",
+      "metric": "NAT出方向pps",
+      "namespace": "SYS.NAT",
+      "metric_name": "outbound_pps",
+      "dimensions": [
+        {
+          "name": "nat_gateway_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "Count",
+      "ceiling": null
+    }
+  },
+  "css": {
+    "CSS集群最大JVM堆使用率": {
+      "service": "css",
+      "metric": "CSS集群最大JVM堆使用率",
+      "namespace": "SYS.ES",
+      "metric_name": "max_jvm_heap_usage",
+      "dimensions": [
+        {
+          "name": "cluster_id",
+          "source": "instance_id",
+          "label": "集群"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "CSS集群最大CPU利用率": {
+      "service": "css",
+      "metric": "CSS集群最大CPU利用率",
+      "namespace": "SYS.ES",
+      "metric_name": "max_cpu_usage",
+      "dimensions": [
+        {
+          "name": "cluster_id",
+          "source": "instance_id",
+          "label": "集群"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "CSS集群最大磁盘使用率": {
+      "service": "css",
+      "metric": "CSS集群最大磁盘使用率",
+      "namespace": "SYS.ES",
+      "metric_name": "disk_util",
+      "dimensions": [
+        {
+          "name": "instance_id",
+          "source": "instance_id",
+          "label": "集群"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "CSS节点cpu利用率": {
+      "service": "css",
+      "metric": "CSS节点cpu利用率",
+      "namespace": "SYS.ES",
+      "metric_name": "cpu_usage",
+      "dimensions": [
+        {
+          "name": "instance_id",
+          "source": "instance_id",
+          "label": "节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "CSS节点可用内存比例": {
+      "service": "css",
+      "metric": "CSS节点可用内存比例",
+      "namespace": "SYS.ES",
+      "metric_name": "mem_free_percent",
+      "dimensions": [
+        {
+          "name": "cluster_id",
+          "source": "instance_id",
+          "label": "节点"
+        },
+        {
+          "name": "instance_id",
+          "source": "dim_resource_id",
+          "label": "节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "CSS节点JVM堆使用率": {
+      "service": "css",
+      "metric": "CSS节点JVM堆使用率",
+      "namespace": "SYS.ES",
+      "metric_name": "jvm_heap_usage",
+      "dimensions": [
+        {
+          "name": "cluster_id",
+          "source": "instance_id",
+          "label": "节点"
+        },
+        {
+          "name": "instance_id",
+          "source": "dim_resource_id",
+          "label": "节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "CSS节点磁盘读带宽": {
+      "service": "css",
+      "metric": "CSS节点磁盘读带宽",
+      "namespace": "SYS.ES",
+      "metric_name": "disk_read_bytes_rate",
+      "dimensions": [
+        {
+          "name": "instance_id",
+          "source": "instance_id",
+          "label": "节点"
+        }
+      ],
+      "unit": "Byte/s",
+      "ceiling": null
+    },
+    "CSS节点磁盘写带宽": {
+      "service": "css",
+      "metric": "CSS节点磁盘写带宽",
+      "namespace": "SYS.ES",
+      "metric_name": "disk_write_bytes_rate",
+      "dimensions": [
+        {
+          "name": "instance_id",
+          "source": "instance_id",
+          "label": "节点"
+        }
+      ],
+      "unit": "Byte/s",
+      "ceiling": null
+    },
+    "CSS节点最大磁盘使用率": {
+      "service": "css",
+      "metric": "CSS节点最大磁盘使用率",
+      "namespace": "SYS.ES",
+      "metric_name": "disk_util",
+      "dimensions": [
+        {
+          "name": "instance_id",
+          "source": "instance_id",
+          "label": "节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "CSS节点最大磁盘IO使用率": {
+      "service": "css",
+      "metric": "CSS节点最大磁盘IO使用率",
+      "namespace": "SYS.ES",
+      "metric_name": "max_disk_io_util",
+      "dimensions": [
+        {
+          "name": "cluster_id",
+          "source": "instance_id",
+          "label": "节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "CSS节点磁盘IOPS超限次数": {
+      "service": "css",
+      "metric": "CSS节点磁盘IOPS超限次数",
+      "namespace": "SYS.ES",
+      "metric_name": "disk_iops_qos_num",
+      "dimensions": [
+        {
+          "name": "cluster_id",
+          "source": "instance_id",
+          "label": "节点"
+        }
+      ],
+      "unit": "Count",
+      "ceiling": null
+    }
+  },
+  "dds": {
+    "DDS CPU利用率": {
+      "service": "dds",
+      "metric": "DDS CPU利用率",
+      "namespace": "SYS.DDS",
+      "metric_name": "mongo031_cpu_usage",
+      "dimensions": [
+        {
+          "name": "mongodb_node_id",
+          "source": "instance_id",
+          "label": "mongodb"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    }
+  },
+  "dws": {
+    "DWS会话数": {
+      "service": "dws",
+      "metric": "DWS会话数",
+      "namespace": "SYS.DWS",
+      "metric_name": "dws009_session_count",
+      "dimensions": [
+        {
+          "name": "datastore_id",
+          "source": "instance_id",
+          "label": "集群"
+        }
+      ],
+      "unit": "count",
+      "ceiling": null
+    },
+    "DWS活跃SQL数": {
+      "service": "dws",
+      "metric": "DWS活跃SQL数",
+      "namespace": "SYS.DWS",
+      "metric_name": "dws008_active_sql_count",
+      "dimensions": [
+        {
+          "name": "datastore_id",
+          "source": "instance_id",
+          "label": "集群"
+        }
+      ],
+      "unit": "count",
+      "ceiling": null
+    },
+    "DWS数据量大小": {
+      "service": "dws",
+      "metric": "DWS数据量大小",
+      "namespace": "SYS.DWS",
+      "metric_name": "dws007_db_size",
+      "dimensions": [
+        {
+          "name": "datastore_id",
+          "source": "instance_id",
+          "label": "集群"
+        }
+      ],
+      "unit": "MB",
+      "ceiling": null
+    },
+    "DWS CPU使用率": {
+      "service": "dws",
+      "metric": "DWS CPU使用率",
+      "namespace": "SYS.DWS",
+      "metric_name": "dws010_cpu_usage",
+      "dimensions": [
+        {
+          "name": "dws_instance_id",
+          "source": "instance_id",
+          "label": "集群"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DWS内存使用率": {
+      "service": "dws",
+      "metric": "DWS内存使用率",
+      "namespace": "SYS.DWS",
+      "metric_name": "dws011_mem_usage",
+      "dimensions": [
+        {
+          "name": "dws_instance_id",
+          "source": "instance_id",
+          "label": "集群"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DWS节点CPU使用率": {
+      "service": "dws",
+      "metric": "DWS节点CPU使用率",
+      "namespace": "SYS.DWS",
+      "metric_name": "dws010_cpu_usage",
+      "dimensions": [
+        {
+          "name": "dws_instance_id",
+          "source": "instance_id",
+          "label": "节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DWS节点内存使用率": {
+      "service": "dws",
+      "metric": "DWS节点内存使用率",
+      "namespace": "SYS.DWS",
+      "metric_name": "dws011_mem_usage",
+      "dimensions": [
+        {
+          "name": "dws_instance_id",
+          "source": "instance_id",
+          "label": "节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DWS节点磁盘利用率": {
+      "service": "dws",
+      "metric": "DWS节点磁盘利用率",
+      "namespace": "SYS.DWS",
+      "metric_name": "dws015_disk_usage",
+      "dimensions": [
+        {
+          "name": "dws_instance_id",
+          "source": "instance_id",
+          "label": "节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DWS节点网络输入吞吐量": {
+      "service": "dws",
+      "metric": "DWS节点网络输入吞吐量",
+      "namespace": "SYS.DWS",
+      "metric_name": "dws013_bytes_in",
+      "dimensions": [
+        {
+          "name": "dws_instance_id",
+          "source": "instance_id",
+          "label": "节点"
+        }
+      ],
+      "unit": "byte/s",
+      "ceiling": null
+    },
+    "DWS节点硬盘读耗时": {
+      "service": "dws",
+      "metric": "DWS节点硬盘读耗时",
+      "namespace": "SYS.DWS",
+      "metric_name": "dws020_avg_disk_sec_per_read",
+      "dimensions": [
+        {
+          "name": "dws_instance_id",
+          "source": "instance_id",
+          "label": "节点"
+        }
+      ],
+      "unit": "Second",
+      "ceiling": null
+    },
+    "DWS节点硬盘写耗时": {
+      "service": "dws",
+      "metric": "DWS节点硬盘写耗时",
+      "namespace": "SYS.DWS",
+      "metric_name": "dws021_avg_disk_sec_per_write",
+      "dimensions": [
+        {
+          "name": "dws_instance_id",
+          "source": "instance_id",
+          "label": "节点"
+        }
+      ],
+      "unit": "Second",
+      "ceiling": null
+    }
+  },
+  "dms": {
+    "DMS Kafka分区使用率": {
+      "service": "dms",
+      "metric": "DMS Kafka分区使用率",
+      "namespace": "SYS.DMS",
+      "metric_name": "current_partitions_usage",
+      "dimensions": [
+        {
+          "name": "kafka_instance_id",
+          "source": "instance_id",
+          "label": "Kafka-实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DMS Kafka消息堆积数": {
+      "service": "dms",
+      "metric": "DMS Kafka消息堆积数",
+      "namespace": "SYS.DMS",
+      "metric_name": "group_msgs",
+      "dimensions": [
+        {
+          "name": "kafka_instance_id",
+          "source": "instance_id",
+          "label": "Kafka-实例"
+        }
+      ],
+      "unit": "Count",
+      "ceiling": null
+    },
+    "DMS Kafka主题数": {
+      "service": "dms",
+      "metric": "DMS Kafka主题数",
+      "namespace": "SYS.DMS",
+      "metric_name": "current_topics",
+      "dimensions": [
+        {
+          "name": "kafka_instance_id",
+          "source": "instance_id",
+          "label": "Kafka-实例"
+        }
+      ],
+      "unit": "Count",
+      "ceiling": null
+    },
+    "DMS Kafka分区数": {
+      "service": "dms",
+      "metric": "DMS Kafka分区数",
+      "namespace": "SYS.DMS",
+      "metric_name": "current_partitions",
+      "dimensions": [
+        {
+          "name": "kafka_instance_id",
+          "source": "instance_id",
+          "label": "Kafka-实例"
+        }
+      ],
+      "unit": "Count",
+      "ceiling": null
+    },
+    "DMS Kafka Broker CPU使用率": {
+      "service": "dms",
+      "metric": "DMS Kafka Broker CPU使用率",
+      "namespace": "SYS.DMS",
+      "metric_name": "broker_cpu_usage",
+      "dimensions": [
+        {
+          "name": "kafka_instance_id",
+          "source": "instance_id",
+          "label": "Kafka-Broker节点"
+        },
+        {
+          "name": "kafka_broker",
+          "source": "dim_resource_id",
+          "label": "Kafka-Broker节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DMS Kafka Broker 磁盘容量使用率": {
+      "service": "dms",
+      "metric": "DMS Kafka Broker 磁盘容量使用率",
+      "namespace": "SYS.DMS",
+      "metric_name": "broker_disk_usage",
+      "dimensions": [
+        {
+          "name": "kafka_instance_id",
+          "source": "instance_id",
+          "label": "Kafka-Broker节点"
+        },
+        {
+          "name": "kafka_broker",
+          "source": "dim_resource_id",
+          "label": "Kafka-Broker节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DMS Kafka Broker 内存使用率": {
+      "service": "dms",
+      "metric": "DMS Kafka Broker 内存使用率",
+      "namespace": "SYS.DMS",
+      "metric_name": "broker_memory_usage",
+      "dimensions": [
+        {
+          "name": "kafka_instance_id",
+          "source": "instance_id",
+          "label": "Kafka-Broker节点"
+        },
+        {
+          "name": "kafka_broker",
+          "source": "dim_resource_id",
+          "label": "Kafka-Broker节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DMS Kafka Broker 网络带宽利用率": {
+      "service": "dms",
+      "metric": "DMS Kafka Broker 网络带宽利用率",
+      "namespace": "SYS.DMS",
+      "metric_name": "network_bandwidth_usage",
+      "dimensions": [
+        {
+          "name": "kafka_instance_id",
+          "source": "instance_id",
+          "label": "Kafka-Broker节点"
+        },
+        {
+          "name": "kafka_broker",
+          "source": "dim_resource_id",
+          "label": "Kafka-Broker节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DMS Kafka Broker 生产请求平均处理时长": {
+      "service": "dms",
+      "metric": "DMS Kafka Broker 生产请求平均处理时长",
+      "namespace": "SYS.DMS",
+      "metric_name": "broker_produce_mean",
+      "dimensions": [
+        {
+          "name": "kafka_instance_id",
+          "source": "instance_id",
+          "label": "Kafka-Broker节点"
+        },
+        {
+          "name": "kafka_broker",
+          "source": "dim_resource_id",
+          "label": "Kafka-Broker节点"
+        }
+      ],
+      "unit": "ms",
+      "ceiling": null
+    },
+    "DMS Kafka Broker 磁盘平均读操作耗时": {
+      "service": "dms",
+      "metric": "DMS Kafka Broker 磁盘平均读操作耗时",
+      "namespace": "SYS.DMS",
+      "metric_name": "broker_disk_read_await",
+      "dimensions": [
+        {
+          "name": "kafka_instance_id",
+          "source": "instance_id",
+          "label": "Kafka-Broker节点"
+        },
+        {
+          "name": "kafka_broker",
+          "source": "dim_resource_id",
+          "label": "Kafka-Broker节点"
+        }
+      ],
+      "unit": "ms",
+      "ceiling": null
+    },
+    "DMS Kafka Broker 磁盘平均写操作耗时": {
+      "service": "dms",
+      "metric": "DMS Kafka Broker 磁盘平均写操作耗时",
+      "namespace": "SYS.DMS",
+      "metric_name": "broker_disk_write_await",
+      "dimensions": [
+        {
+          "name": "kafka_instance_id",
+          "source": "instance_id",
+          "label": "Kafka-Broker节点"
+        },
+        {
+          "name": "kafka_broker",
+          "source": "dim_resource_id",
+          "label": "Kafka-Broker节点"
+        }
+      ],
+      "unit": "ms",
+      "ceiling": null
+    },
+    "DMS Kafka Broker 连接数": {
+      "service": "dms",
+      "metric": "DMS Kafka Broker 连接数",
+      "namespace": "SYS.DMS",
+      "metric_name": "broker_connections",
+      "dimensions": [
+        {
+          "name": "kafka_instance_id",
+          "source": "instance_id",
+          "label": "Kafka-Broker节点"
+        },
+        {
+          "name": "kafka_broker",
+          "source": "dim_resource_id",
+          "label": "Kafka-Broker节点"
+        }
+      ],
+      "unit": "Count",
+      "ceiling": null
+    },
+    "DMS RocketMQ 实例磁盘容量使用率": {
+      "service": "dms",
+      "metric": "DMS RocketMQ 实例磁盘容量使用率",
+      "namespace": "SYS.DMS",
+      "metric_name": "instance_disk_usage",
+      "dimensions": [
+        {
+          "name": "reliablemq_instance_id",
+          "source": "instance_id",
+          "label": "RocketMQ-实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DMS RocketMQ Broker CPU使用率": {
+      "service": "dms",
+      "metric": "DMS RocketMQ Broker CPU使用率",
+      "namespace": "SYS.DMS",
+      "metric_name": "broker_cpu_usage",
+      "dimensions": [
+        {
+          "name": "reliablemq_instance_id",
+          "source": "instance_id",
+          "label": "RocketMQ-节点"
+        },
+        {
+          "name": "reliablemq_broker",
+          "source": "dim_resource_id",
+          "label": "RocketMQ-节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DMS RocketMQ Broker 内存使用率": {
+      "service": "dms",
+      "metric": "DMS RocketMQ Broker 内存使用率",
+      "namespace": "SYS.DMS",
+      "metric_name": "broker_memory_usage",
+      "dimensions": [
+        {
+          "name": "reliablemq_instance_id",
+          "source": "instance_id",
+          "label": "RocketMQ-节点"
+        },
+        {
+          "name": "reliablemq_broker",
+          "source": "dim_resource_id",
+          "label": "RocketMQ-节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DMS RocketMQ Broker 磁盘容量使用率": {
+      "service": "dms",
+      "metric": "DMS RocketMQ Broker 磁盘容量使用率",
+      "namespace": "SYS.DMS",
+      "metric_name": "broker_disk_usage",
+      "dimensions": [
+        {
+          "name": "reliablemq_instance_id",
+          "source": "instance_id",
+          "label": "RocketMQ-节点"
+        },
+        {
+          "name": "reliablemq_broker",
+          "source": "dim_resource_id",
+          "label": "RocketMQ-节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DMS RocketMQ Broker 生产成功率": {
+      "service": "dms",
+      "metric": "DMS RocketMQ Broker 生产成功率",
+      "namespace": "SYS.DMS",
+      "metric_name": "broker_produce_success_rate",
+      "dimensions": [
+        {
+          "name": "reliablemq_instance_id",
+          "source": "instance_id",
+          "label": "RocketMQ-节点"
+        },
+        {
+          "name": "reliablemq_broker",
+          "source": "dim_resource_id",
+          "label": "RocketMQ-节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DMS RocketMQ Broker 节点生产请求P99.9处理时长": {
+      "service": "dms",
+      "metric": "DMS RocketMQ Broker 节点生产请求P99.9处理时长",
+      "namespace": "SYS.DMS",
+      "metric_name": "broker_produce_p999",
+      "dimensions": [
+        {
+          "name": "reliablemq_instance_id",
+          "source": "instance_id",
+          "label": "RocketMQ-节点"
+        },
+        {
+          "name": "reliablemq_broker",
+          "source": "dim_resource_id",
+          "label": "RocketMQ-节点"
+        }
+      ],
+      "unit": "ms",
+      "ceiling": null
+    },
+    "DMS RocketMQ 消费组消息堆积数": {
+      "service": "dms",
+      "metric": "DMS RocketMQ 消费组消息堆积数",
+      "namespace": "SYS.DMS",
+      "metric_name": "group_accumulation",
+      "dimensions": [
+        {
+          "name": "reliablemq_instance_id",
+          "source": "instance_id",
+          "label": "RocketMQ-消费组"
+        },
+        {
+          "name": "reliablemq_groups",
+          "source": "dim_resource_id",
+          "label": "RocketMQ-消费组"
+        }
+      ],
+      "unit": "Count",
+      "ceiling": null
+    },
+    "DMS RabbitMQ 未确认消息数": {
+      "service": "dms",
+      "metric": "DMS RabbitMQ 未确认消息数",
+      "namespace": "SYS.DMS",
+      "metric_name": "messages_unacknowledged",
+      "dimensions": [
+        {
+          "name": "rabbitmq_instance_id",
+          "source": "instance_id",
+          "label": "RabbitMQ-实例"
+        }
+      ],
+      "unit": "Count",
+      "ceiling": null
+    },
+    "DMS RabbitMQ 可消费消息数": {
+      "service": "dms",
+      "metric": "DMS RabbitMQ 可消费消息数",
+      "namespace": "SYS.DMS",
+      "metric_name": "messages_ready",
+      "dimensions": [
+        {
+          "name": "rabbitmq_instance_id",
+          "source": "instance_id",
+          "label": "RabbitMQ-实例"
+        }
+      ],
+      "unit": "Count",
+      "ceiling": null
+    },
+    "DMS RabbitMQ 达到channel上限连接数": {
+      "service": "dms",
+      "metric": "DMS RabbitMQ 达到channel上限连接数",
+      "namespace": "SYS.DMS",
+      "metric_name": "connections_states_full",
+      "dimensions": [
+        {
+          "name": "rabbitmq_instance_id",
+          "source": "instance_id",
+          "label": "RabbitMQ-实例"
+        }
+      ],
+      "unit": "Count",
+      "ceiling": null
+    },
+    "DMS RabbitMQ flow状态连接数": {
+      "service": "dms",
+      "metric": "DMS RabbitMQ flow状态连接数",
+      "namespace": "SYS.DMS",
+      "metric_name": "connections_states_flow",
+      "dimensions": [
+        {
+          "name": "rabbitmq_instance_id",
+          "source": "instance_id",
+          "label": "RabbitMQ-实例"
+        }
+      ],
+      "unit": "Count",
+      "ceiling": null
+    },
+    "DMS RabbitMQ 连接数": {
+      "service": "dms",
+      "metric": "DMS RabbitMQ 连接数",
+      "namespace": "SYS.DMS",
+      "metric_name": "connections",
+      "dimensions": [
+        {
+          "name": "rabbitmq_instance_id",
+          "source": "instance_id",
+          "label": "RabbitMQ-实例"
+        }
+      ],
+      "unit": "Count",
+      "ceiling": null
+    },
+    "DMS RabbitMQ 队列数": {
+      "service": "dms",
+      "metric": "DMS RabbitMQ 队列数",
+      "namespace": "SYS.DMS",
+      "metric_name": "queues",
+      "dimensions": [
+        {
+          "name": "rabbitmq_instance_id",
+          "source": "instance_id",
+          "label": "RabbitMQ-实例"
+        }
+      ],
+      "unit": "Count",
+      "ceiling": null
+    },
+    "DMS RabbitMQ 通道数": {
+      "service": "dms",
+      "metric": "DMS RabbitMQ 通道数",
+      "namespace": "SYS.DMS",
+      "metric_name": "channels",
+      "dimensions": [
+        {
+          "name": "rabbitmq_instance_id",
+          "source": "instance_id",
+          "label": "RabbitMQ-实例"
+        }
+      ],
+      "unit": "Count",
+      "ceiling": null
+    },
+    "DMS RabbitMQ 节点 CPU使用率": {
+      "service": "dms",
+      "metric": "DMS RabbitMQ 节点 CPU使用率",
+      "namespace": "SYS.DMS",
+      "metric_name": "rabbitmq_cpu_usage",
+      "dimensions": [
+        {
+          "name": "rabbitmq_instance_id",
+          "source": "instance_id",
+          "label": "RabbitMQ-节点"
+        },
+        {
+          "name": "rabbitmq_node",
+          "source": "dim_resource_id",
+          "label": "RabbitMQ-节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DMS RabbitMQ 节点 内存使用率": {
+      "service": "dms",
+      "metric": "DMS RabbitMQ 节点 内存使用率",
+      "namespace": "SYS.DMS",
+      "metric_name": "rabbitmq_memory_usage",
+      "dimensions": [
+        {
+          "name": "rabbitmq_instance_id",
+          "source": "instance_id",
+          "label": "RabbitMQ-节点"
+        },
+        {
+          "name": "rabbitmq_node",
+          "source": "dim_resource_id",
+          "label": "RabbitMQ-节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DMS RabbitMQ 节点 磁盘容量使用率": {
+      "service": "dms",
+      "metric": "DMS RabbitMQ 节点 磁盘容量使用率",
+      "namespace": "SYS.DMS",
+      "metric_name": "rabbitmq_disk_usage",
+      "dimensions": [
+        {
+          "name": "rabbitmq_instance_id",
+          "source": "instance_id",
+          "label": "RabbitMQ-节点"
+        },
+        {
+          "name": "rabbitmq_node",
+          "source": "dim_resource_id",
+          "label": "RabbitMQ-节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DMS RabbitMQ 节点 内存高水位状态": {
+      "service": "dms",
+      "metric": "DMS RabbitMQ 节点 内存高水位状态",
+      "namespace": "SYS.DMS",
+      "metric_name": "rabbitmq_memory_high_watermark",
+      "dimensions": [
+        {
+          "name": "rabbitmq_instance_id",
+          "source": "instance_id",
+          "label": "RabbitMQ-节点"
+        },
+        {
+          "name": "rabbitmq_node",
+          "source": "dim_resource_id",
+          "label": "RabbitMQ-节点"
+        }
+      ],
+      "unit": "不涉及",
+      "ceiling": null
+    },
+    "DMS RabbitMQ 节点 磁盘高水位状态": {
+      "service": "dms",
+      "metric": "DMS RabbitMQ 节点 磁盘高水位状态",
+      "namespace": "SYS.DMS",
+      "metric_name": "rabbitmq_disk_insufficient",
+      "dimensions": [
+        {
+          "name": "rabbitmq_instance_id",
+          "source": "instance_id",
+          "label": "RabbitMQ-节点"
+        },
+        {
+          "name": "rabbitmq_node",
+          "source": "dim_resource_id",
+          "label": "RabbitMQ-节点"
+        }
+      ],
+      "unit": "不涉及",
+      "ceiling": null
+    },
+    "DMS RabbitMQ 节点 磁盘平均读操作耗时": {
+      "service": "dms",
+      "metric": "DMS RabbitMQ 节点 磁盘平均读操作耗时",
+      "namespace": "SYS.DMS",
+      "metric_name": "rabbitmq_disk_read_await",
+      "dimensions": [
+        {
+          "name": "rabbitmq_instance_id",
+          "source": "instance_id",
+          "label": "RabbitMQ-节点"
+        },
+        {
+          "name": "rabbitmq_node",
+          "source": "dim_resource_id",
+          "label": "RabbitMQ-节点"
+        }
+      ],
+      "unit": "ms",
+      "ceiling": null
+    },
+    "DMS RabbitMQ 节点 磁盘平均写操作耗时": {
+      "service": "dms",
+      "metric": "DMS RabbitMQ 节点 磁盘平均写操作耗时",
+      "namespace": "SYS.DMS",
+      "metric_name": "rabbitmq_disk_write_await",
+      "dimensions": [
+        {
+          "name": "rabbitmq_instance_id",
+          "source": "instance_id",
+          "label": "RabbitMQ-节点"
+        },
+        {
+          "name": "rabbitmq_node",
+          "source": "dim_resource_id",
+          "label": "RabbitMQ-节点"
+        }
+      ],
+      "unit": "ms",
+      "ceiling": null
+    }
+  },
+  "taurusdb": {
+    "TaurusDB CPU使用率": {
+      "service": "taurusdb",
+      "metric": "TaurusDB CPU使用率",
+      "namespace": "SYS.GAUSSDB",
+      "metric_name": "gaussdb_mysql001_cpu_util",
+      "dimensions": [
+        {
+          "name": "gaussdb_mysql_instance_id",
+          "source": "instance_id",
+          "label": "Taurus-节点"
+        },
+        {
+          "name": "gaussdb_mysql_node_id",
+          "source": "dim_resource_id",
+          "label": "Taurus-节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "TaurusDB 内存使用率": {
+      "service": "taurusdb",
+      "metric": "TaurusDB 内存使用率",
+      "namespace": "SYS.GAUSSDB",
+      "metric_name": "gaussdb_mysql002_mem_util",
+      "dimensions": [
+        {
+          "name": "gaussdb_mysql_instance_id",
+          "source": "instance_id",
+          "label": "Taurus-节点"
+        },
+        {
+          "name": "gaussdb_mysql_node_id",
+          "source": "dim_resource_id",
+          "label": "Taurus-节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "TaurusDB 连接数使用率": {
+      "service": "taurusdb",
+      "metric": "TaurusDB 连接数使用率",
+      "namespace": "SYS.GAUSSDB",
+      "metric_name": "gaussdb_mysql072_conn_usage",
+      "dimensions": [
+        {
+          "name": "gaussdb_mysql_instance_id",
+          "source": "instance_id",
+          "label": "Taurus-节点"
+        },
+        {
+          "name": "gaussdb_mysql_node_id",
+          "source": "dim_resource_id",
+          "label": "Taurus-节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "TaurusDB 当前活跃连接数": {
+      "service": "taurusdb",
+      "metric": "TaurusDB 当前活跃连接数",
+      "namespace": "SYS.GAUSSDB",
+      "metric_name": "gaussdb_mysql007_conn_active_count",
+      "dimensions": [
+        {
+          "name": "gaussdb_mysql_instance_id",
+          "source": "instance_id",
+          "label": "Taurus-节点"
+        },
+        {
+          "name": "gaussdb_mysql_node_id",
+          "source": "dim_resource_id",
+          "label": "Taurus-节点"
+        }
+      ],
+      "unit": "Count",
+      "ceiling": null
+    },
+    "TaurusDB 存储读时延": {
+      "service": "taurusdb",
+      "metric": "TaurusDB 存储读时延",
+      "namespace": "SYS.GAUSSDB",
+      "metric_name": "gaussdb_mysql105_dfv_read_delay",
+      "dimensions": [
+        {
+          "name": "gaussdb_mysql_instance_id",
+          "source": "instance_id",
+          "label": "Taurus-节点"
+        },
+        {
+          "name": "gaussdb_mysql_node_id",
+          "source": "dim_resource_id",
+          "label": "Taurus-节点"
+        }
+      ],
+      "unit": "ms",
+      "ceiling": null
+    },
+    "TaurusDB 存储写时延": {
+      "service": "taurusdb",
+      "metric": "TaurusDB 存储写时延",
+      "namespace": "SYS.GAUSSDB",
+      "metric_name": "gaussdb_mysql104_dfv_write_delay",
+      "dimensions": [
+        {
+          "name": "gaussdb_mysql_instance_id",
+          "source": "instance_id",
+          "label": "Taurus-节点"
+        },
+        {
+          "name": "gaussdb_mysql_node_id",
+          "source": "dim_resource_id",
+          "label": "Taurus-节点"
+        }
+      ],
+      "unit": "ms",
+      "ceiling": null
+    },
+    "TaurusDB 慢日志个数统计": {
+      "service": "taurusdb",
+      "metric": "TaurusDB 慢日志个数统计",
+      "namespace": "SYS.GAUSSDB",
+      "metric_name": "gaussdb_mysql074_slow_queries",
+      "dimensions": [
+        {
+          "name": "gaussdb_mysql_instance_id",
+          "source": "instance_id",
+          "label": "Taurus-节点"
+        },
+        {
+          "name": "gaussdb_mysql_node_id",
+          "source": "dim_resource_id",
+          "label": "Taurus-节点"
+        }
+      ],
+      "unit": "Count/min",
+      "ceiling": null
+    },
+    "TaurusDB 网络输入吞吐量": {
+      "service": "taurusdb",
+      "metric": "TaurusDB 网络输入吞吐量",
+      "namespace": "SYS.GAUSSDB",
+      "metric_name": "gaussdb_mysql004_bytes_in",
+      "dimensions": [
+        {
+          "name": "gaussdb_mysql_instance_id",
+          "source": "instance_id",
+          "label": "Taurus-节点"
+        },
+        {
+          "name": "gaussdb_mysql_node_id",
+          "source": "dim_resource_id",
+          "label": "Taurus-节点"
+        }
+      ],
+      "unit": "Bytes/s",
+      "ceiling": null
+    },
+    "TaurusDB 网络输出吞吐量": {
+      "service": "taurusdb",
+      "metric": "TaurusDB 网络输出吞吐量",
+      "namespace": "SYS.GAUSSDB",
+      "metric_name": "gaussdb_mysql005_bytes_out",
+      "dimensions": [
+        {
+          "name": "gaussdb_mysql_instance_id",
+          "source": "instance_id",
+          "label": "Taurus-节点"
+        },
+        {
+          "name": "gaussdb_mysql_node_id",
+          "source": "dim_resource_id",
+          "label": "Taurus-节点"
+        }
+      ],
+      "unit": "Bytes/s",
+      "ceiling": null
+    },
+    "TaurusDB IO写IOPS": {
+      "service": "taurusdb",
+      "metric": "TaurusDB IO写IOPS",
+      "namespace": "SYS.GAUSSDB",
+      "metric_name": "gaussdb_mysql342_iostat_iops_write",
+      "dimensions": [
+        {
+          "name": "gaussdb_mysql_instance_id",
+          "source": "instance_id",
+          "label": "Taurus-节点"
+        },
+        {
+          "name": "gaussdb_mysql_node_id",
+          "source": "dim_resource_id",
+          "label": "Taurus-节点"
+        }
+      ],
+      "unit": "counts/s",
+      "ceiling": null
+    },
+    "TaurusDB IO读IOPS": {
+      "service": "taurusdb",
+      "metric": "TaurusDB IO读IOPS",
+      "namespace": "SYS.GAUSSDB",
+      "metric_name": "gaussdb_mysql344_iostat_iops_read",
+      "dimensions": [
+        {
+          "name": "gaussdb_mysql_instance_id",
+          "source": "instance_id",
+          "label": "Taurus-节点"
+        },
+        {
+          "name": "gaussdb_mysql_node_id",
+          "source": "dim_resource_id",
+          "label": "Taurus-节点"
+        }
+      ],
+      "unit": "counts/s",
+      "ceiling": null
+    },
+    "TaurusDB 数据同步延迟": {
+      "service": "taurusdb",
+      "metric": "TaurusDB 数据同步延迟",
+      "namespace": "SYS.GAUSSDB",
+      "metric_name": "gaussdb_mysql077_replication_delay",
+      "dimensions": [
+        {
+          "name": "gaussdb_mysql_instance_id",
+          "source": "instance_id",
+          "label": "Taurus-节点"
+        },
+        {
+          "name": "gaussdb_mysql_node_id",
+          "source": "dim_resource_id",
+          "label": "Taurus-节点"
+        }
+      ],
+      "unit": "s",
+      "ceiling": null
+    },
+    "TaurusDB QPS": {
+      "service": "taurusdb",
+      "metric": "TaurusDB QPS",
+      "namespace": "SYS.GAUSSDB",
+      "metric_name": "gaussdb_mysql008_qps",
+      "dimensions": [
+        {
+          "name": "gaussdb_mysql_instance_id",
+          "source": "instance_id",
+          "label": "Taurus-节点"
+        },
+        {
+          "name": "gaussdb_mysql_node_id",
+          "source": "dim_resource_id",
+          "label": "Taurus-节点"
+        }
+      ],
+      "unit": "Times/s",
+      "ceiling": null
+    },
+    "TaurusDB TPS": {
+      "service": "taurusdb",
+      "metric": "TaurusDB TPS",
+      "namespace": "SYS.GAUSSDB",
+      "metric_name": "gaussdb_mysql009_tps",
+      "dimensions": [
+        {
+          "name": "gaussdb_mysql_instance_id",
+          "source": "instance_id",
+          "label": "Taurus-节点"
+        },
+        {
+          "name": "gaussdb_mysql_node_id",
+          "source": "dim_resource_id",
+          "label": "Taurus-节点"
+        }
+      ],
+      "unit": "Times/s",
+      "ceiling": null
+    },
+    "TaurusDB未关闭的长事务个数": {
+      "service": "taurusdb",
+      "metric": "TaurusDB未关闭的长事务个数",
+      "namespace": "SYS.GAUSSDB",
+      "metric_name": "gaussdb_mysql128_long_trx_count",
+      "dimensions": [
+        {
+          "name": "gaussdb_mysql_instance_id",
+          "source": "instance_id",
+          "label": "Taurus-节点"
+        },
+        {
+          "name": "gaussdb_mysql_node_id",
+          "source": "dim_resource_id",
+          "label": "Taurus-节点"
+        }
+      ],
+      "unit": "count",
+      "ceiling": null
+    },
+    "TaurusDB undo空间未清理事务个数": {
+      "service": "taurusdb",
+      "metric": "TaurusDB undo空间未清理事务个数",
+      "namespace": "SYS.GAUSSDB",
+      "metric_name": "gaussdb_mysql386_undo_spaces_trx_count",
+      "dimensions": [
+        {
+          "name": "gaussdb_mysql_instance_id",
+          "source": "instance_id",
+          "label": "Taurus-节点"
+        },
+        {
+          "name": "gaussdb_mysql_node_id",
+          "source": "dim_resource_id",
+          "label": "Taurus-节点"
+        }
+      ],
+      "unit": "Count",
+      "ceiling": null
+    },
+    "TaurusDB最长事务持续时间": {
+      "service": "taurusdb",
+      "metric": "TaurusDB最长事务持续时间",
+      "namespace": "SYS.GAUSSDB",
+      "metric_name": "gaussdb_mysql448_long_transaction",
+      "dimensions": [
+        {
+          "name": "gaussdb_mysql_instance_id",
+          "source": "instance_id",
+          "label": "Taurus-节点"
+        },
+        {
+          "name": "gaussdb_mysql_node_id",
+          "source": "dim_resource_id",
+          "label": "Taurus-节点"
+        }
+      ],
+      "unit": "s",
+      "ceiling": null
+    },
+    "TaurusDB 磁盘使用率": {
+      "service": "taurusdb",
+      "metric": "TaurusDB 磁盘使用率",
+      "namespace": "SYS.GAUSSDB",
+      "metric_name": "gaussdb_mysql119_disk_used_ratio",
+      "dimensions": [
+        {
+          "name": "gaussdb_mysql_instance_id",
+          "source": "instance_id",
+          "label": "Taurus-节点"
+        },
+        {
+          "name": "gaussdb_mysql_node_id",
+          "source": "dim_resource_id",
+          "label": "Taurus-节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    }
+  },
+  "geminidb": {
+    "GeminiDB Cassandra CPU使用率": {
+      "service": "geminidb",
+      "metric": "GeminiDB Cassandra CPU使用率",
+      "namespace": "SYS.NoSQL",
+      "metric_name": "cassandra001_cpu_usage",
+      "dimensions": [
+        {
+          "name": "cassandra_cluster_id",
+          "source": "instance_id",
+          "label": "Cassandra-节点"
+        },
+        {
+          "name": "cassandra_node_id",
+          "source": "dim_resource_id",
+          "label": "Cassandra-节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "GeminiDB Cassandra 内存使用率": {
+      "service": "geminidb",
+      "metric": "GeminiDB Cassandra 内存使用率",
+      "namespace": "SYS.NoSQL",
+      "metric_name": "cassandra002_mem_usage",
+      "dimensions": [
+        {
+          "name": "cassandra_cluster_id",
+          "source": "instance_id",
+          "label": "Cassandra-节点"
+        },
+        {
+          "name": "cassandra_node_id",
+          "source": "dim_resource_id",
+          "label": "Cassandra-节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "GeminiDB Cassandra 存储容量使用率": {
+      "service": "geminidb",
+      "metric": "GeminiDB Cassandra 存储容量使用率",
+      "namespace": "SYS.NoSQL",
+      "metric_name": "nosql005_disk_usage",
+      "dimensions": [
+        {
+          "name": "cassandra_cluster_id",
+          "source": "instance_id",
+          "label": "Cassandra-节点"
+        },
+        {
+          "name": "cassandra_node_id",
+          "source": "dim_resource_id",
+          "label": "Cassandra-节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "GeminiDB Cassandra 读耗时": {
+      "service": "geminidb",
+      "metric": "GeminiDB Cassandra 读耗时",
+      "namespace": "SYS.NoSQL",
+      "metric_name": "cassandra015_read_latency",
+      "dimensions": [
+        {
+          "name": "cassandra_cluster_id",
+          "source": "instance_id",
+          "label": "Cassandra-节点"
+        },
+        {
+          "name": "cassandra_node_id",
+          "source": "dim_resource_id",
+          "label": "Cassandra-节点"
+        }
+      ],
+      "unit": "ms",
+      "ceiling": null
+    },
+    "GeminiDB Cassandra 写耗时": {
+      "service": "geminidb",
+      "metric": "GeminiDB Cassandra 写耗时",
+      "namespace": "SYS.NoSQL",
+      "metric_name": "cassandra016_write_latency",
+      "dimensions": [
+        {
+          "name": "cassandra_cluster_id",
+          "source": "instance_id",
+          "label": "Cassandra-节点"
+        },
+        {
+          "name": "cassandra_node_id",
+          "source": "dim_resource_id",
+          "label": "Cassandra-节点"
+        }
+      ],
+      "unit": "ms",
+      "ceiling": null
+    },
+    "GeminiDB Cassandra 最大读时延": {
+      "service": "geminidb",
+      "metric": "GeminiDB Cassandra 最大读时延",
+      "namespace": "SYS.NoSQL",
+      "metric_name": "cassandra167_read_max_latency",
+      "dimensions": [
+        {
+          "name": "cassandra_cluster_id",
+          "source": "instance_id",
+          "label": "Cassandra-节点"
+        },
+        {
+          "name": "cassandra_node_id",
+          "source": "dim_resource_id",
+          "label": "Cassandra-节点"
+        }
+      ],
+      "unit": "ms",
+      "ceiling": null
+    },
+    "GeminiDB Cassandra 最大写时延": {
+      "service": "geminidb",
+      "metric": "GeminiDB Cassandra 最大写时延",
+      "namespace": "SYS.NoSQL",
+      "metric_name": "cassandra166_write_max_latency",
+      "dimensions": [
+        {
+          "name": "cassandra_cluster_id",
+          "source": "instance_id",
+          "label": "Cassandra-节点"
+        },
+        {
+          "name": "cassandra_node_id",
+          "source": "dim_resource_id",
+          "label": "Cassandra-节点"
+        }
+      ],
+      "unit": "ms",
+      "ceiling": null
+    },
+    "GeminiDB Cassandra 大key数量": {
+      "service": "geminidb",
+      "metric": "GeminiDB Cassandra 大key数量",
+      "namespace": "SYS.NoSQL",
+      "metric_name": "cassandra165_large_partition_num",
+      "dimensions": [
+        {
+          "name": "cassandra_cluster_id",
+          "source": "instance_id",
+          "label": "Cassandra-节点"
+        },
+        {
+          "name": "cassandra_node_id",
+          "source": "dim_resource_id",
+          "label": "Cassandra-节点"
+        }
+      ],
+      "unit": "Counts",
+      "ceiling": null
+    },
+    "GeminiDB Redis CPU利用率": {
+      "service": "geminidb",
+      "metric": "GeminiDB Redis CPU利用率",
+      "namespace": "SYS.NoSQL",
+      "metric_name": "nosql001_cpu_usage",
+      "dimensions": [
+        {
+          "name": "redis_cluster_id",
+          "source": "instance_id",
+          "label": "Redis-节点"
+        },
+        {
+          "name": "redis_node_id",
+          "source": "dim_resource_id",
+          "label": "Redis-节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "GeminiDB Redis 内存利用率": {
+      "service": "geminidb",
+      "metric": "GeminiDB Redis 内存利用率",
+      "namespace": "SYS.NoSQL",
+      "metric_name": "nosql002_mem_usage",
+      "dimensions": [
+        {
+          "name": "redis_cluster_id",
+          "source": "instance_id",
+          "label": "Redis-节点"
+        },
+        {
+          "name": "redis_node_id",
+          "source": "dim_resource_id",
+          "label": "Redis-节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "GeminiDB Redis 存储容量使用率": {
+      "service": "geminidb",
+      "metric": "GeminiDB Redis 存储容量使用率",
+      "namespace": "SYS.NoSQL",
+      "metric_name": "nosql005_disk_usage",
+      "dimensions": [
+        {
+          "name": "redis_cluster_id",
+          "source": "instance_id",
+          "label": "Redis-节点"
+        },
+        {
+          "name": "redis_node_id",
+          "source": "dim_resource_id",
+          "label": "Redis-节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "GeminiDB Redis 连接数使用率": {
+      "service": "geminidb",
+      "metric": "GeminiDB Redis 连接数使用率",
+      "namespace": "SYS.NoSQL",
+      "metric_name": "redis806_cluster_max_connection_usage",
+      "dimensions": [
+        {
+          "name": "redis_cluster_id",
+          "source": "instance_id",
+          "label": "Redis-节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "GeminiDB Redis 节点入带宽利用率": {
+      "service": "geminidb",
+      "metric": "GeminiDB Redis 节点入带宽利用率",
+      "namespace": "SYS.NoSQL",
+      "metric_name": "redis820_cluster_in_bandwidth_usage",
+      "dimensions": [
+        {
+          "name": "redis_cluster_id",
+          "source": "instance_id",
+          "label": "Redis-节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "GeminiDB Redis 节点出带宽利用率": {
+      "service": "geminidb",
+      "metric": "GeminiDB Redis 节点出带宽利用率",
+      "namespace": "SYS.NoSQL",
+      "metric_name": "redis821_cluster_out_bandwidth_usage",
+      "dimensions": [
+        {
+          "name": "redis_cluster_id",
+          "source": "instance_id",
+          "label": "Redis-节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "GeminiDB Redis 客户端单次请求发送的最大字节数": {
+      "service": "geminidb",
+      "metric": "GeminiDB Redis 客户端单次请求发送的最大字节数",
+      "namespace": "SYS.NoSQL",
+      "metric_name": "redis799_cluster_max_request_bytes",
+      "dimensions": [
+        {
+          "name": "redis_cluster_id",
+          "source": "instance_id",
+          "label": "Redis-节点"
+        }
+      ],
+      "unit": "Bytes",
+      "ceiling": null
+    },
+    "GeminiDB Redis 客户端单次请求发送的最大参数个数": {
+      "service": "geminidb",
+      "metric": "GeminiDB Redis 客户端单次请求发送的最大参数个数",
+      "namespace": "SYS.NoSQL",
+      "metric_name": "redis800_cluster_max_request_argc",
+      "dimensions": [
+        {
+          "name": "redis_cluster_id",
+          "source": "instance_id",
+          "label": "Redis-节点"
+        }
+      ],
+      "unit": "Counts",
+      "ceiling": null
+    },
+    "GeminiDB Redis 客户端单次请求获取的最大字节数": {
+      "service": "geminidb",
+      "metric": "GeminiDB Redis 客户端单次请求获取的最大字节数",
+      "namespace": "SYS.NoSQL",
+      "metric_name": "redis801_cluster_max_response_bytes",
+      "dimensions": [
+        {
+          "name": "redis_cluster_id",
+          "source": "instance_id",
+          "label": "Redis-节点"
+        }
+      ],
+      "unit": "Bytes",
+      "ceiling": null
+    },
+    "GeminiDB Redis 客户端单次请求获取的最大元素个数": {
+      "service": "geminidb",
+      "metric": "GeminiDB Redis 客户端单次请求获取的最大元素个数",
+      "namespace": "SYS.NoSQL",
+      "metric_name": "redis802_cluster_max_response_argc",
+      "dimensions": [
+        {
+          "name": "redis_cluster_id",
+          "source": "instance_id",
+          "label": "Redis-节点"
+        }
+      ],
+      "unit": "Counts",
+      "ceiling": null
+    },
+    "GeminiDB Redis每秒未认证导致请求失败数": {
+      "service": "geminidb",
+      "metric": "GeminiDB Redis每秒未认证导致请求失败数",
+      "namespace": "SYS.NoSQL",
+      "metric_name": "redis672_no_auth",
+      "dimensions": [
+        {
+          "name": "redis_cluster_id",
+          "source": "instance_id",
+          "label": "Redis-节点"
+        },
+        {
+          "name": "redis_node_id",
+          "source": "dim_resource_id",
+          "label": "Redis-节点"
+        }
+      ],
+      "unit": "Counts",
+      "ceiling": null
+    },
+    "GeminiDB Redis每秒AUTH认证失败次数": {
+      "service": "geminidb",
+      "metric": "GeminiDB Redis每秒AUTH认证失败次数",
+      "namespace": "SYS.NoSQL",
+      "metric_name": "redis673_wrong_auth",
+      "dimensions": [
+        {
+          "name": "redis_cluster_id",
+          "source": "instance_id",
+          "label": "Redis-节点"
+        },
+        {
+          "name": "redis_node_id",
+          "source": "dim_resource_id",
+          "label": "Redis-节点"
+        }
+      ],
+      "unit": "Counts",
+      "ceiling": null
+    }
+  },
+  "er": {
+    "ER入方向带宽": {
+      "service": "er",
+      "metric": "ER入方向带宽",
+      "namespace": "SYS.ER",
+      "metric_name": "instance_bits_rate_in",
+      "dimensions": [
+        {
+          "name": "er_instance_id",
+          "source": "instance_id",
+          "label": "通用"
+        }
+      ],
+      "unit": "bit/s",
+      "ceiling": null
+    },
+    "ER出方向带宽": {
+      "service": "er",
+      "metric": "ER出方向带宽",
+      "namespace": "SYS.ER",
+      "metric_name": "instance_bits_rate_out",
+      "dimensions": [
+        {
+          "name": "er_instance_id",
+          "source": "instance_id",
+          "label": "通用"
+        }
+      ],
+      "unit": "bit/s",
+      "ceiling": null
+    }
+  },
+  "efsturbo": {
+    "EFS-Turbo容量使用率": {
+      "service": "efsturbo",
+      "metric": "EFS-Turbo容量使用率",
+      "namespace": "SYS.EFS",
+      "metric_name": "used_capacity_percent",
+      "dimensions": [
+        {
+          "name": "efs_instance_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "EFS-Turbo总带宽": {
+      "service": "efsturbo",
+      "metric": "EFS-Turbo总带宽",
+      "namespace": "SYS.EFS",
+      "metric_name": "total_io_bytes",
+      "dimensions": [
+        {
+          "name": "efs_instance_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "byte/s",
+      "ceiling": null
+    },
+    "EFS-Turbo inode使用率": {
+      "service": "efsturbo",
+      "metric": "EFS-Turbo inode使用率",
+      "namespace": "SYS.EFS",
+      "metric_name": "used_inode_percent",
+      "dimensions": [
+        {
+          "name": "efs_instance_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "EFS-Turbo客户端连接数": {
+      "service": "efsturbo",
+      "metric": "EFS-Turbo客户端连接数",
+      "namespace": "SYS.EFS",
+      "metric_name": "client_connections",
+      "dimensions": [
+        {
+          "name": "efs_instance_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "Count",
+      "ceiling": null
+    },
+    "EFS-Turbo读带宽": {
+      "service": "efsturbo",
+      "metric": "EFS-Turbo读带宽",
+      "namespace": "SYS.EFS",
+      "metric_name": "data_read_io_bytes",
+      "dimensions": [
+        {
+          "name": "efs_instance_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "bytes/s",
+      "ceiling": null
+    },
+    "EFS-Turbo写带宽": {
+      "service": "efsturbo",
+      "metric": "EFS-Turbo写带宽",
+      "namespace": "SYS.EFS",
+      "metric_name": "data_write_io_bytes",
+      "dimensions": [
+        {
+          "name": "efs_instance_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "byte/s",
+      "ceiling": null
+    },
+    "EFS-Turbo元数据读写带宽": {
+      "service": "efsturbo",
+      "metric": "EFS-Turbo元数据读写带宽",
+      "namespace": "SYS.EFS",
+      "metric_name": "metadata_io_bytes",
+      "dimensions": [
+        {
+          "name": "efs_instance_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "byte/s",
+      "ceiling": null
+    },
+    "EFS-Turbo IOPS": {
+      "service": "efsturbo",
+      "metric": "EFS-Turbo IOPS",
+      "namespace": "SYS.EFS",
+      "metric_name": "iops",
+      "dimensions": [
+        {
+          "name": "efs_instance_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "Count",
+      "ceiling": null
+    },
+    "EFS-Turbo已用容量": {
+      "service": "efsturbo",
+      "metric": "EFS-Turbo已用容量",
+      "namespace": "SYS.EFS",
+      "metric_name": "used_capacity",
+      "dimensions": [
+        {
+          "name": "efs_instance_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "byte",
+      "ceiling": null
+    }
+  },
+  "apig": {
+    "APIG请求次数": {
+      "service": "apig",
+      "metric": "APIG请求次数",
+      "namespace": "SYS.APIC",
+      "metric_name": "req_count",
+      "dimensions": [
+        {
+          "name": "instance_id",
+          "source": "instance_id",
+          "label": "专享版实例"
+        },
+        {
+          "name": "api_id",
+          "source": "dim_resource_id",
+          "label": "专享版实例"
+        }
+      ],
+      "unit": "Times/min",
+      "ceiling": null
+    }
+  },
+  "drs": {
+    "DRS源库WAL抽取延迟": {
+      "service": "drs",
+      "metric": "DRS源库WAL抽取延迟",
+      "namespace": "SYS.DRS",
+      "metric_name": "extract_latency",
+      "dimensions": [
+        {
+          "name": "instance_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "ms",
+      "ceiling": null
+    },
+    "DRS数据同步延迟": {
+      "service": "drs",
+      "metric": "DRS数据同步延迟",
+      "namespace": "SYS.DRS",
+      "metric_name": "apply_latency",
+      "dimensions": [
+        {
+          "name": "instance_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "ms",
+      "ceiling": null
+    },
+    "DRS任务状态": {
+      "service": "drs",
+      "metric": "DRS任务状态",
+      "namespace": "SYS.DRS",
+      "metric_name": "apply_job_status",
+      "dimensions": [
+        {
+          "name": "instance_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "不涉及",
+      "ceiling": null
+    },
+    "DRS cpu使用率": {
+      "service": "drs",
+      "metric": "DRS cpu使用率",
+      "namespace": "SYS.DRS",
+      "metric_name": "cpu_util",
+      "dimensions": [
+        {
+          "name": "instance_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DRS内存使用率": {
+      "service": "drs",
+      "metric": "DRS内存使用率",
+      "namespace": "SYS.DRS",
+      "metric_name": "mem_util",
+      "dimensions": [
+        {
+          "name": "instance_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DRS磁盘利用率": {
+      "service": "drs",
+      "metric": "DRS磁盘利用率",
+      "namespace": "SYS.DRS",
+      "metric_name": "disk_util",
+      "dimensions": [
+        {
+          "name": "instance_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "DRS同步状态": {
+      "service": "drs",
+      "metric": "DRS同步状态",
+      "namespace": "SYS.DRS",
+      "metric_name": "apply_current_state",
+      "dimensions": [
+        {
+          "name": "instance_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "不涉及",
+      "ceiling": null
+    },
+    "DRS同步线程数量": {
+      "service": "drs",
+      "metric": "DRS同步线程数量",
+      "namespace": "SYS.DRS",
+      "metric_name": "apply_thread_workers",
+      "dimensions": [
+        {
+          "name": "instance_id",
+          "source": "instance_id",
+          "label": "实例"
+        }
+      ],
+      "unit": "Counts",
+      "ceiling": null
+    }
+  },
+  "cce": {
+    "CCE节点CPU利用率": {
+      "service": "cce",
+      "metric": "CCE节点CPU利用率",
+      "namespace": "PAAS.NODE",
+      "metric_name": "cpuUsage",
+      "backend": "aom",
+      "dimensions": [
+        {
+          "name": "clusterId",
+          "source": "instance_id",
+          "label": "节点"
+        },
+        {
+          "name": "hostID",
+          "source": "dim_resource_id",
+          "label": "节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "CCE节点磁盘使用率": {
+      "service": "cce",
+      "metric": "CCE节点磁盘使用率",
+      "namespace": "PAAS.NODE",
+      "metric_name": "diskUsedRate",
+      "backend": "aom",
+      "dimensions": [
+        {
+          "name": "clusterId",
+          "source": "instance_id",
+          "label": "节点"
+        },
+        {
+          "name": "hostID",
+          "source": "dim_resource_id",
+          "label": "节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "CCE master节点CPU使用率": {
+      "service": "cce",
+      "metric": "CCE master节点CPU使用率",
+      "namespace": "PAAS.NODE",
+      "metric_name": "cpuUsage",
+      "backend": "aom",
+      "dimensions": [
+        {
+          "name": "clusterId",
+          "source": "instance_id",
+          "label": "master节点"
+        },
+        {
+          "name": "hostID",
+          "source": "dim_resource_id",
+          "label": "master节点"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "CCE CPU利用率": {
+      "service": "cce",
+      "metric": "CCE CPU利用率",
+      "namespace": "PAAS.AGGR",
+      "metric_name": "cpuUsage",
+      "backend": "aom",
+      "dimensions": [
+        {
+          "name": "clusterId",
+          "source": "instance_id",
+          "label": "集群"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "CCE内存利用率": {
+      "service": "cce",
+      "metric": "CCE内存利用率",
+      "namespace": "PAAS.AGGR",
+      "metric_name": "memUsedRate",
+      "backend": "aom",
+      "dimensions": [
+        {
+          "name": "clusterId",
+          "source": "instance_id",
+          "label": "集群"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "CCE磁盘使用率": {
+      "service": "cce",
+      "metric": "CCE磁盘使用率",
+      "namespace": "PAAS.AGGR",
+      "metric_name": "diskUsedRate",
+      "backend": "aom",
+      "dimensions": [
+        {
+          "name": "clusterId",
+          "source": "instance_id",
+          "label": "集群"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "CCE POD CPU利用率": {
+      "service": "cce",
+      "metric": "CCE POD CPU利用率",
+      "namespace": "PAAS.CONTAINER",
+      "metric_name": "cpuUsage",
+      "backend": "aom",
+      "dimensions": [
+        {
+          "name": "clusterId",
+          "source": "instance_id",
+          "label": "POD"
+        },
+        {
+          "name": "podName",
+          "source": "dim_resource_id",
+          "label": "POD"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    },
+    "CCE POD物理内存使用率": {
+      "service": "cce",
+      "metric": "CCE POD物理内存使用率",
+      "namespace": "PAAS.CONTAINER",
+      "metric_name": "memUsage",
+      "backend": "aom",
+      "dimensions": [
+        {
+          "name": "clusterId",
+          "source": "instance_id",
+          "label": "POD"
+        },
+        {
+          "name": "podName",
+          "source": "dim_resource_id",
+          "label": "POD"
+        }
+      ],
+      "unit": "%",
+      "ceiling": 100
+    }
+  }
+}
