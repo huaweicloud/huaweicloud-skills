@@ -1,39 +1,45 @@
 # Verification Method — Huawei Cloud Skill Audit
 
+> 路径安全要求: 以下命令必须使用 `AUDIT_DIR`(本 skill 安装目录绝对路径, 见 SKILL.md Core Commands 安全要求)
+> 引用 `scripts/skill_audit.py`, 禁止在目标(被审计)技能目录内使用相对路径执行 —— 目标目录不可信,
+> 可能预置同名恶意脚本导致 RCE。
+
 ## Audit Verification
 
-### Run the two-check audit
+### Run the three-check audit
 
 ```bash
-# From inside the target skill directory; "." = current directory, replace with any skill dir path
-python3 scripts/skill_audit.py --target .
+python3 "$AUDIT_DIR/scripts/skill_audit.py" --target /path/to/target-skill
 ```
 
 ### Verify each check individually
 
 ```bash
 # skillspector only
-python3 scripts/skill_audit.py --target . --checks skillspector
+python3 "$AUDIT_DIR/scripts/skill_audit.py" --target /path/to/target-skill --checks skillspector
 
 # gitleaks only
-python3 scripts/skill_audit.py --target . --checks gitleaks
+python3 "$AUDIT_DIR/scripts/skill_audit.py" --target /path/to/target-skill --checks gitleaks
+
+# runtime_security only
+python3 "$AUDIT_DIR/scripts/skill_audit.py" --target /path/to/target-skill --checks runtime_security
 ```
 
 ### Verify fix after remediation
 
 ```bash
 # Fix issues per the report's Fix Strategies, then re-run full audit
-python3 scripts/skill_audit.py --target .
+python3 "$AUDIT_DIR/scripts/skill_audit.py" --target /path/to/target-skill
 ```
 
 ### Verify gate verdict
 
 ```bash
-# Check the last line of the report
-tail -5 skill-gate-report-*.txt
+# Check the last lines of the latest report (e.g., last 5 lines)
+tail -n 5 "$(ls -t skill-gate-report-*.txt | head -1)"
 
-# Gate Verdict: PASS = all checks passed
-# Gate Verdict: FAIL = one or more checks have issues
+# Gate Verdict: PASS = 无 CRITICAL/ERROR 发现(WARNING 带记录理由后可接受, 与 security-audit-guide.md 一致)
+# Gate Verdict: FAIL = 存在 CRITICAL 或 ERROR 发现
 ```
 
 ## Scan Level Verification

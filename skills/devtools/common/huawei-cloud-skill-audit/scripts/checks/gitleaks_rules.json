@@ -2,19 +2,19 @@
   "version": "8.30.1",
   "global_allowlist": {
     "paths": [
-      "gitleaks\\.toml''',",
-      "(?i)\\.(?:bmp|gif|jpe?g|png|svg|tiff?)$''',",
-      "(?i)\\.(?:eot|[ot"
+      "gitleaks\\.toml",
+      "(?i)\\.(?:bmp|gif|jpe?g|png|svg|tiff?)$",
+      "(?i)\\.(?:eot|otf)$"
     ],
     "regexes": [
-      "(?i)^true|false|null$''',",
-      "^(?i:a+|b+|c+|d+|e+|f+|g+|h+|i+|j+|k+|l+|m+|n+|o+|p+|q+|r+|s+|t+|u+|v+|w+|x+|y+|z+|\\*+|\\.+)$''',",
-      "^\\$(?:\\d+|{\\d+})$''',",
-      "^\\$(?:[A-Z_"
+      "^(?i:true|false|null)$",
+      "^(?i:a+|b+|c+|d+|e+|f+|g+|h+|i+|j+|k+|l+|m+|n+|o+|p+|q+|r+|s+|t+|u+|v+|w+|x+|y+|z+|\\*+|\\.+)$",
+      "^\\$(?:\\d+|{\\d+})$",
+      "^\\$(?:[A-Z_][A-Z0-9_]*|\\{[^}]*\\})$"
     ],
     "stopwords": [
-      "014df517-39d1-4453-b7b3-9930c563627c\",",
-      "abcdefghijklmnopqrstuvwxyz\","
+      "014df517-39d1-4453-b7b3-9930c563627c",
+      "abcdefghijklmnopqrstuvwxyz"
     ]
   },
   "rules": [
@@ -38,7 +38,8 @@
         "alibaba"
       ],
       "severity": "high",
-      "enabled": true
+      "enabled": true,
+      "secretGroup": 1
     },
     {
       "id": "anthropic-admin-api-key",
@@ -89,7 +90,7 @@
     {
       "id": "aws-amazon-bedrock-api-key-short-lived",
       "description": "Identified a pattern that may indicate short-lived Amazon Bedrock API keys, risking unauthorized Amazon Bedrock usage",
-      "regex": "bedrock-api-key-YmVkcm9jay5hbWF6b25hd3MuY29t",
+      "regex": "\\bbedrock-api-key-[A-Za-z0-9+/=_-]{8,}\\b",
       "entropy": 3.0,
       "keywords": [
         "bedrock-api-key-"
@@ -100,7 +101,7 @@
     {
       "id": "curl-auth-header",
       "description": "Discovered a potential authorization token provided in a curl command header, which could compromise the curl accessed resource.",
-      "regex": "(?i)\\bcurl\\b(?:.*?|.*?(?:[\\r\\n]{1,2}.*?){1,5})[ \\t\\n\\r](?:-H|--header)(?:=|[ \\t]{0,5})(?:\"(?:Authorization:[ \\t]{0,5}(?:Basic[ \\t]([a-z0-9+/]{8,}={0,3})|(?:Bearer|(?:Api-)?Token)[ \\t]([\\w=~@.+/-]{8,})|([\\w=~@.+/-]{8,}))|(?:(?:X-(?:[a-z]+-)?)?(?:Api-?)?(?:Key|Token)):[ \\t]{0,5}([\\w=~@.+/-]{8,}))\"|'(?:Authorization:[ \\t]{0,5}(?:Basic[ \\t]([a-z0-9+/]{8,}={0,3})|(?:Bearer|(?:Api-)?Token)[ \\t]([\\w=~@.+/-]{8,})|([\\w=~@.+/-]{8,}))|(?:(?:X-(?:[a-z]+-)?)?(?:Api-?)?(?:Key|Token)):[ \\t]{0,5}([\\w=~@.+/-]{8,}))')(?:\\B|\\s|\\Z)",
+      "regex": "(?i)\\bcurl\\b(?:.*?|.*?(?:[\\r\\n]{1,2}.*?){1,5})[ \\t\\n\\r](?:-H|--header)(?:=|[ \\t]{0,5})(?:\"(?:Authorization:[ \\t]{0,5}(?:Basic[ \\t]([a-z0-9+/]{8,}={0,3})|(?:Bearer|(?:Api-)?Token)[ \\t]([\\w=~@.+/-]{8,})|([\\w=~@.+/-]{8,}))|(?:(?:X-(?:[a-z]+-)?)?(?:Api-?)?(?:Key|Token)):[ \\t]{0,5}([\\w=~@.+/-]{8,}))\"|'(?:Authorization:[ \\t]{0,5}(?:Basic[ \\t]([a-z0-9+/]{8,}={0,3})|(?:Bearer|(?:Api-)?Token)[ \\t]([\\w=~@.+/-]{8,})|([\\w=~@.+/-]{8,}))|(?:(?:X-(?:[a-z]+-)?)?(?:Api-?)?(?:Key|Token)):[ \\t]{0,5}([\\w=~@.+/-]{8,}))')(?:\\B|\\s|$)",
       "entropy": 2.75,
       "keywords": [
         "curl"
@@ -111,7 +112,7 @@
     {
       "id": "curl-auth-user",
       "description": "Discovered a potential basic authorization token provided in a curl command, which could compromise the curl accessed resource.",
-      "regex": "\\bcurl\\b(?:.*|.*(?:[\\r\\n]{1,2}.*){1,5})[ \\t\\n\\r](?:-u|--user)(?:=|[ \\t]{0,5})(\"(:[^\"]{3,}|[^:\"]{3,}:|[^:\"]{3,}:[^\"]{3,})\"|'([^:']{3,}:[^']{3,})'|((?:\"[^\"]{3,}\"|'[^']{3,}'|[\\w$@.-]+):(?:\"[^\"]{3,}\"|'[^']{3,}'|[\\w${}@.-]+)))(?:\\s|\\Z)",
+      "regex": "\\bcurl\\b(?:.*|.*(?:[\\r\\n]{1,2}.*){1,5})[ \\t\\n\\r](?:-u|--user)(?:=|[ \\t]{0,5})(\"(:[^\"]{3,}|[^:\"]{3,}:|[^:\"]{3,}:[^\"]{3,})\"|'([^:']{3,}:[^']{3,})'|((?:\"[^\"]{3,}\"|'[^']{3,}'|[\\w$@.-]+):(?:\"[^\"]{3,}\"|'[^']{3,}'|[\\w${}@.-]+)))(?:\\s|$)",
       "entropy": 2.0,
       "keywords": [
         "curl"
@@ -484,6 +485,22 @@
       "keywords": [
         "oauth2",
         "gitcode"
+      ],
+      "severity": "high",
+      "enabled": true
+    },
+    {
+      "id": "generic-password-literal",
+      "description": "Detected a plaintext password literal assigned to a CLI flag or parameter (e.g. --server.adminPass=Huawei@123). Hardcoded passwords in skill scripts/docs get copied verbatim and applied to real cloud resources.",
+      "regex": "(?i)\\b(?:--|[a-z0-9_\\.-]+=)?(?:admin|user|root|server|db|mysql|redis|ecs|rds|default)?[-_.]?(?:pass|passwd|password|pwd)(?:word)?\\s*[:=]\\s*['\\\"]?(?!(?:<|>|\\$|your-|example|sample|xxxx?|placeholder))([A-Za-z0-9@#$%^&*!_-]{6,64})(?![A-Za-z0-9@#$%^&*!_-])(?:['\\\"]|[,;&|]|\\s|$)",
+      "entropy": null,
+      "keywords": [
+        "password",
+        "passwd",
+        "adminpass",
+        "pwd",
+        "pass=",
+        "pass ="
       ],
       "severity": "high",
       "enabled": true

@@ -36,9 +36,13 @@ from checks.skillspector_builtin_check import (
 )
 
 # 自扫描豁免(与 skillspector 对称): 仅对工具自身安装目录生效, 不影响任何其他目标。
-# 当前自身文档/代码无触发行, 表为空; 未来若 SKILL.md/references 出现 Q001-Q003 或
-# CWE 模式示例, 在此登记 (rule_id, rel_path, 行内容锚点子串)。
-SELF_SCAN_EXEMPTIONS = frozenset()
+SELF_SCAN_EXEMPTIONS = frozenset({
+    # INJ001-class-bases: security-audit-guide 修复建议表格的反例词(必须描述
+    # 检测对象, 见 references/security-audit-guide.md), 属文档示例非真实漏洞;
+    # 注释/登记均用拼接写法防自身命中该规则。
+    ("INJ001-class-bases", "references/security-audit-guide.md", "__class__" + ".__bases__"),
+    ("INJ001-class-bases", "scripts/checks/runtime_security_check.py", "__class__" + ".__bases__"),
+})
 
 RULES_FILES = [
     Path(__file__).parent / "runtime_security_rules.json",
@@ -146,6 +150,11 @@ class RuntimeSecurityCheck(Check):
                                         r"grep\b|\[\[ -f|2>/dev/null|\blocal\s+\w+\s*=|test\b",
                                         line):
                                     break
+                            # INJ004 注释行豁免(2026-09-24 新增): 纯注释行(# 开头)
+                            # 中的 SQL 拼接是文档/示例说明, 非实际执行代码, 不判注入;
+                            # 与 skillspector TM1 注释行豁免同口径 (PR #726 Round 12)。
+                            if rule["id"].startswith("INJ004") and line.lstrip().startswith("#"):
+                                break
                             ignore_key = f"{rule['id']}:{str(rel)}:{line_no}"
                             if ignore_key in ignores:
                                 break

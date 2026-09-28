@@ -554,6 +554,35 @@
           "confidence": 0.7
         }
       ]
+    },
+    {
+      "id": "INJ004-sql-inject",
+      "category": "CWE-89 SQL 注入",
+      "description": "SQL 注入: 查询字符串内嵌变量(f-string/模板串/拼接), 输入可控时可任意执行 SQL(含删库/拖库)",
+      "scan_level": "quick",
+      "severity": "critical",
+      "patterns": [
+        {
+          "confidence": 0.9,
+          "regex": "(?i)f\\\"[^\\\"\\n]{0,300}?\\b(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE)\\b[^\\\"\\n]{0,300}?\\{[^}]+\\}"
+        },
+        {
+          "confidence": 0.9,
+          "regex": "(?i)f'[^'\\n]{0,300}?\\b(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE)\\b[^'\\n]{0,300}?\\{[^}]+\\}"
+        },
+        {
+          "confidence": 0.9,
+          "regex": "(?i)`[^`]*\\b(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE)\\b[^`]*\\$\\{[^}]+\\}[^`]*`"
+        },
+        {
+          "confidence": 0.85,
+          "regex": "(?i)\\\"[^\\\"\\n;]{0,200}?\\b(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE)\\b[^\\\"\\n;]{0,200}?\\\"\\s*\\+\\s*[A-Za-z_][A-Za-z0-9_]*"
+        },
+        {
+          "confidence": 0.85,
+          "regex": "(?i)'[^'\\n;]{0,200}?\\b(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE)\\b[^'\\n;]{0,200}?'\\s*\\+\\s*[A-Za-z_][A-Za-z0-9_]*"
+        }
+      ]
     }
   ]
 }

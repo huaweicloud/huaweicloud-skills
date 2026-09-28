@@ -12,20 +12,22 @@ if TYPE_CHECKING:
 @dataclass
 class AuditConfig:
     scan_level: str = "high"
-    enabled_checks: set[str] = field(default_factory=lambda: {
-        "skillspector", "gitleaks",
-    })
+    enabled_checks: set[str] = field(default_factory=lambda: set(DEFAULT_ENABLED_CHECKS))
     check_timeouts: dict[str, int] = field(default_factory=lambda: {
-        "skillspector": 30, "gitleaks": 30,
+        "skillspector": 30, "gitleaks": 30, "runtime_security": 30,
     })
     check_bins: dict[str, str] = field(default_factory=dict)
     no_install: bool = False
     node_bin: str = ""
 
 
-DEFAULT_CHECKS = {
+# 全部可用检查集合(白名单, resolve_enabled_checks 校验用)
+AVAILABLE_CHECKS = {
     "skillspector", "gitleaks", "runtime_security",
 }
+
+# 默认启用集合(与 AVAILABLE_CHECKS 一致; 变更时需同步 AuditConfig.enabled_checks 默认值)
+DEFAULT_ENABLED_CHECKS = set(AVAILABLE_CHECKS)
 
 
 def resolve_enabled_checks(checks_arg: str | None, skip_arg: str | None) -> set[str]:
@@ -34,14 +36,14 @@ def resolve_enabled_checks(checks_arg: str | None, skip_arg: str | None) -> set[
         raise ValueError("Cannot use --checks and --skip-checks together")
     if checks_arg:
         selected = {c.strip() for c in checks_arg.split(",")}
-        invalid = selected - DEFAULT_CHECKS
+        invalid = selected - AVAILABLE_CHECKS
         if invalid:
-            raise ValueError(f"Unknown checks: {invalid}. Available: {sorted(DEFAULT_CHECKS)}")
+            raise ValueError(f"Unknown checks: {invalid}. Available: {sorted(AVAILABLE_CHECKS)}")
         return selected
-    enabled = set(DEFAULT_CHECKS)
+    enabled = set(DEFAULT_ENABLED_CHECKS)
     if skip_arg:
         skipped = {c.strip() for c in skip_arg.split(",")}
-        invalid = skipped - DEFAULT_CHECKS
+        invalid = skipped - AVAILABLE_CHECKS
         if invalid:
             raise ValueError(f"Unknown checks in --skip-checks: {invalid}")
         enabled -= skipped
@@ -49,41 +51,45 @@ def resolve_enabled_checks(checks_arg: str | None, skip_arg: str | None) -> set[
 
 
 def _resolve_gitleaks_check(scan_level, timeout, bin_path):
-    """Return the best available gitleaks check instance.
+    """Return gitleaks check instance (fail-closed).
 
     Priority:
-    1. External gitleaks binary (if found on PATH or explicitly provided)
+    1. External gitleaks binary — ONLY when explicitly provided via ``--gitleaks``
     2. Built-in pure Python implementation (always available if rules JSON exists)
+
+    PATH 自动发现已禁用(2026-09-23, 审查意见): 不再 ``shutil.which`` 探测 PATH,
+    避免 PATH 被注入同名恶意二进制静默接管审计。外部二进制必须显式指定。
     """
-    import shutil
     from checks.gitleaks_builtin_check import GitleaksBuiltinCheck
 
-    resolved_bin = bin_path or "gitleaks"
-    if shutil.which(resolved_bin):
+    if bin_path:
         from checks.gitleaks_check import GitleaksCheck
-        return GitleaksCheck(scan_level=scan_level, timeout=timeout, gitleaks_bin=resolved_bin)
+        return GitleaksCheck(scan_level=scan_level, timeout=timeout, gitleaks_bin=bin_path)
 
     return GitleaksBuiltinCheck(scan_level=scan_level, timeout=timeout)
 
 
 def _resolve_skillspector_check(scan_level, timeout, bin_path):
-    """Return the best available skillspector check instance.
+    """Return skillspector check instance (fail-closed).
 
     Priority:
-    1. Built-in pure Python for critical/high levels (external binary doesn't support these)
-    2. External skillspector binary (if found on PATH or explicitly provided)
-    3. Built-in pure Python implementation (fallback)
+    1. External skillspector binary — ONLY when explicitly provided via ``--skillspector``
+    2. Built-in pure Python implementation (always available if rules JSON exists)
+
+    PATH 自动发现已禁用(2026-09-23, 审查意见): 不再 ``shutil.which`` 探测 PATH,
+    避免 PATH 被注入同名恶意二进制静默接管审计。外部二进制必须显式指定;
+    critical/high 档若未显式指定外部二进制则恒 builtin(外部二进制不支持该档位)。
     """
-    import shutil
     from checks.skillspector_builtin_check import SkillspectorBuiltinCheck
+
+    # 显式提供的外部二进制优先于档位判断(与 Priority 1 一致), 避免用户在
+    # critical/high 档显式传 --skillspector 被静默忽略。
+    if bin_path:
+        from checks.skillspector_check import SkillspectorCheck
+        return SkillspectorCheck(scan_level=scan_level, timeout=timeout, skillspector_bin=bin_path)
 
     if scan_level.value in ("critical", "high"):
         return SkillspectorBuiltinCheck(scan_level=scan_level, timeout=timeout)
-
-    resolved_bin = bin_path or "skillspector"
-    if shutil.which(resolved_bin):
-        from checks.skillspector_check import SkillspectorCheck
-        return SkillspectorCheck(scan_level=scan_level, timeout=timeout, skillspector_bin=resolved_bin)
 
     return SkillspectorBuiltinCheck(scan_level=scan_level, timeout=timeout)
 
@@ -97,16 +103,10 @@ def _resolve_runtime_security_check(scan_level, timeout):
 def create_checks(config: AuditConfig) -> list:
     """Instantiate enabled checks based on config. Returns list of Check instances."""
     from check_protocol import ScanLevel
-    from checks.skillcheck_check import SkillcheckCheck
-    from checks.markdownlint_check import MarkdownlintCheck
-    from checks.skillspector_check import SkillspectorCheck
-    from checks.hwcloud_spec_check import HwcloudSpecCheck
 
     scan_level = ScanLevel(config.scan_level)
     checks = []
     for name in sorted(config.enabled_checks):
-        if name not in config.enabled_checks:
-            continue
         timeout = config.check_timeouts.get(name, 30)
         bin_path = config.check_bins.get(name, "")
 
@@ -116,5 +116,8 @@ def create_checks(config: AuditConfig) -> list:
             checks.append(_resolve_gitleaks_check(scan_level, timeout, bin_path))
         elif name == "runtime_security":
             checks.append(_resolve_runtime_security_check(scan_level, timeout))
+        # TODO: skillcheck / markdownlint / hwcloud-spec checker 文件存在但暂未接入
+        # (AVAILABLE_CHECKS 只启用上三检); 需要时在 resolve_enabled_checks 白名单
+        # 与下方分支中启用。
 
     return checks

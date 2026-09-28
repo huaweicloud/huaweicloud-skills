@@ -8,7 +8,7 @@
 #   ② in-skill 源码 scripts/cli/cli_entry.py（零依赖，无需下载）→ run 包裹执行
 #   ③ 均不可用 → 裸 hcloud 执行并打印警告（不阻塞业务）
 #
-# skill 名可通过 SKILL_QUALITY_SKILL_NAME 覆盖，默认 huawei-cloud-skill-creator
+# skill 名可通过 SKILL_QUALITY_SKILL_NAME 覆盖，默认 huawei-cloud-skill-audit
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_NAME="${SKILL_QUALITY_SKILL_NAME:-huawei-cloud-skill-audit}"

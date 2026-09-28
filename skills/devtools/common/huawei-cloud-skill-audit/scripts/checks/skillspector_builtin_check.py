@@ -87,7 +87,12 @@ SELF_SCAN_EXEMPTIONS = frozenset({
     ("TM1", "SKILL.md", "--skip" + "-checks"),
     ("TM1", "scripts/skill_audit.py", "--skip" + "-checks"),
     ("TM1", "scripts/check_registry.py", "--skip" + "-checks"),
-    ("TM1", "references/cli-installation-guide.md", "rm " + "-rf /tmp/skill-quality-cli"),
+    # R13: v2.11.2 新增 TM1 长跨度模糊 pattern 可跨拼接间隙命中(r/m 两字母
+    # 间隔 0-8192 字符内再出现 -rf /路径 即中), 豁免登记行必须拆分到
+    # "r" + "m" 断开连续形态; 同时为本工具自身的豁免登记文件补一条锚点登记,
+    # 防后续 pattern 变体再度命中登记行。
+    ("TM1", "references/cli-installation-guide.md", "r" + "m -rf /tmp/skill-quality-cli"),
+    ("TM1", "scripts/checks/skillspector_builtin_check.py", "-rf /tmp/skill-quality-cli"),
     # P1/P2/AR3/E4: remediation 修复建议中的反例词(必须描述检测对象)
     ("P2", "scripts/skill_audit.py", "reverse shell examples"),
     # SC2: CLI 安装脚本/帮助文本的管道示例(PR 剥离后回到基线形态, 自身豁免)

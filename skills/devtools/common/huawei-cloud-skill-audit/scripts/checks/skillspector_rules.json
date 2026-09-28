@@ -9,40 +9,44 @@
       "scan_level": "quick",
       "patterns": [
         {
-          "regex": "\\b(?:never|do\\s+not|don'?t)\\s+(?:ever\\s+)?(?:refuse|decline)\\b",
+          "regex": "(?i)\\b(?:never|do\\s+not|don'?t)\\s+(?:ever\\s+)?(?:refuse|decline)\\b",
           "confidence": 0.85
         },
         {
-          "regex": "\\byou\\s+(?:must|will|should|can)\\s*(?:not|never)\\s+(?:refuse|decline|say\\s+no)\\b",
+          "regex": "(?i)\\byou\\s+(?:must|will|should|can)\\s*(?:not|never)\\s+(?:refuse|decline|say\\s+no)\\b",
           "confidence": 0.9
         },
         {
-          "regex": "\\byou\\s+(?:cannot|can'?t|can\\s+not)\\s+(?:refuse|decline|say\\s+no)\\b",
+          "regex": "(?i)\\byou\\s+(?:cannot|can'?t|can\\s+not)\\s+(?:refuse|decline|say\\s+no)\\b",
           "confidence": 0.85
         },
         {
-          "regex": "\\bnever\\s+say\\s+(?:that\\s+)?(?:you\\s+)?(?:can'?t|cannot|won'?t|no)\\b",
+          "regex": "(?i)\\bnever\\s+say\\s+(?:that\\s+)?(?:you\\s+)?(?:can'?t|cannot|won'?t|no)\\b",
           "confidence": 0.85
         },
         {
-          "regex": "\\balways\\s+(?:comply|obey|answer|respond)\\b",
+          "regex": "(?i)\\balways\\s+(?:comply|obey|answer|respond)\\b",
           "confidence": 0.7
         },
         {
-          "regex": "\\b(?:(?:you|the\\s+(?:agent|assistant|model))\\s+(?:must|should|will)\\s+always\\s+agree|always\\s+agree\\s+(?:with|to)\\s+(?:(?:the|every|all|any|each)\\s+)?(?:user|requests?|questions?|prompts?|queries|commands?))\\b",
+          "regex": "(?i)\\b(?:(?:you|the\\s+(?:agent|assistant|model))\\s+(?:must|should|will)\\s+always\\s+agree|always\\s+agree\\s+(?:with|to)\\s+(?:(?:the|every|all|any|each)\\s+)?(?:users?|requests?|questions?|prompts?|quer(?:y|ies)|commands?))\\b",
           "confidence": 0.7
         },
         {
-          "regex": "\\b(?:you\\s+)?must\\s+(?:always\\s+)?(?:answer|comply\\s+with|respond\\s+to|fulfill)\\s+(?:every|all|any|each)\\b",
+          "regex": "(?i)\\b(?:you\\s+)?must\\s+(?:always\\s+)?(?:answer|comply\\s+with|respond\\s+to|fulfill)\\s+(?:every|all|any|each)\\b",
           "confidence": 0.8
         },
         {
-          "regex": "\\brespond\\s+to\\s+(?:every|all|any)\\s+(?:request|question|prompt|query|command)\\b",
+          "regex": "(?i)\\brespond\\s+to\\s+(?:every|all|any)\\s+(?:request|question|prompt|query|command)\\b",
           "confidence": 0.6
         },
         {
-          "regex": "\\bno\\s+request\\s+is\\s+(?:off[- ]limits|forbidden|too)\\b",
+          "regex": "(?i)\\bno\\s+request\\s+is\\s+(?:off[- ]limits|forbidden|too)\\b",
           "confidence": 0.85
+        },
+        {
+          "regex": "(?i)\\b(?:(?:you|the\\s+(?:agent|assistant|model))\\s+(?:must|should|will)\\s+always\\s+agree|always\\s+agree\\s+(?:with|to)\\s+(?:(?:the|every|all|any|each)\\s+)?(?:user|requests?|questions?|prompts?|queries|commands?))\\b",
+          "confidence": 0.7
         }
       ]
     },
@@ -54,27 +58,27 @@
       "scan_level": "quick",
       "patterns": [
         {
-          "regex": "\\b(?:do\\s+not|don'?t|never|no)\\s+(?:include|add|give|provide|use|append)?\\s*(?:any\\s+)?(?:warnings?|disclaimers?|caveats?)\\b",
+          "regex": "(?i)\\b(?:do\\s+not|don'?t|never|no)\\s+(?:include|add|give|provide|use|append)?\\s*(?:any\\s+)?(?:warnings?|disclaimers?|caveats?)\\b",
           "confidence": 0.8
         },
         {
-          "regex": "\\bwithout\\s+(?:any\\s+)?(?:warnings?|disclaimers?|caveats?|moralizing|moralising|judg(?:e?ment|ing))\\b",
+          "regex": "(?i)\\bwithout\\s+(?:any\\s+)?(?:warnings?|disclaimers?|caveats?|moralizing|moralising|judg(?:e?ment|ing))\\b",
           "confidence": 0.8
         },
         {
-          "regex": "\\b(?:do\\s+not|don'?t|never)\\s+(?:lecture|moralize|moralise|preach|judge|warn)\\b",
+          "regex": "(?i)\\b(?:do\\s+not|don'?t|never)\\s+(?:lecture|moralize|moralise|preach|judge|warn)\\b",
           "confidence": 0.85
         },
         {
-          "regex": "\\b(?:skip|omit|leave\\s+out|drop)\\s+(?:the\\s+)?(?:disclaimer|warning|ethics|safety)\\b",
+          "regex": "(?i)\\b(?:skip|omit|leave\\s+out|drop)\\s+(?:the\\s+)?(?:disclaimer|warning|ethics|safety)\\b",
           "confidence": 0.8
         },
         {
-          "regex": "\\b(?:no|without)\\s+(?:ethical|moral)\\s+(?:judg(?:e?ment)|considerations?|commentary|objections?)\\b",
+          "regex": "(?i)\\b(?:no|without)\\s+(?:ethical|moral)\\s+(?:judg(?:e?ment)|considerations?|commentary|objections?)\\b",
           "confidence": 0.8
         },
         {
-          "regex": "\\b(?:do\\s+not|don'?t)\\s+(?:apologize|apologise|say\\s+sorry)\\b",
+          "regex": "(?i)\\b(?:do\\s+not|don'?t)\\s+(?:apologize|apologise|say\\s+sorry)\\b",
           "confidence": 0.55
         }
       ]
@@ -87,35 +91,35 @@
       "scan_level": "quick",
       "patterns": [
         {
-          "regex": "\\byou\\s+have\\s+no\\s+(?:restrictions?|limitations?|filters?|rules?|guidelines?|boundaries|limits)\\b",
+          "regex": "(?i)\\byou\\s+have\\s+no\\s+(?:restrictions?|limitations?|filters?|rules?|guidelines?|boundaries|limits)\\b",
           "confidence": 0.9
         },
         {
-          "regex": "\\b(?:you\\s+are|act\\s+as|pretend\\s+(?:to\\s+be|you'?re))[^.\\n]{0,30}(?:unrestricted|unfiltered|uncensored|no\\s+filter)\\b",
+          "regex": "(?i)\\b(?:you\\s+are|act\\s+as|pretend\\s+(?:to\\s+be|you'?re))[^.\\n]{0,30}(?:unrestricted|unfiltered|uncensored|no\\s+filter)\\b",
           "confidence": 0.85
         },
         {
-          "regex": "\\b(?:ignore|disregard|forget|bypass|override)\\s+(?:your\\s+)?(?:content\\s+)?(?:policy|policies|guidelines?|safety|restrictions?|filters?)\\b",
+          "regex": "(?i)\\b(?:ignore|disregard|forget|bypass|override)\\s+(?:your\\s+)?(?:content\\s+)?(?:policy|policies|guidelines?|safety|restrictions?|filters?)\\b",
           "confidence": 0.9
         },
         {
-          "regex": "\\bnot\\s+bound\\s+by\\s+(?:any\\s+)?(?:rules?|policy|policies|guidelines?|restrictions?|openai|anthropic)\\b",
+          "regex": "(?i)\\bnot\\s+bound\\s+by\\s+(?:any\\s+)?(?:rules?|policy|policies|guidelines?|restrictions?|openai|anthropic)\\b",
           "confidence": 0.9
         },
         {
-          "regex": "\\bdo\\s+anything\\s+now\\b",
+          "regex": "(?i)\\bdo\\s+anything\\s+now\\b",
           "confidence": 0.8
         },
         {
-          "regex": "\\b(?:developer|debug|god|sudo|jailbreak)\\s+mode\\s+(?:enabled|on|activated|engaged)\\b",
+          "regex": "(?i)\\b(?:developer|debug|god|sudo|jailbreak)\\s+mode\\s+(?:enabled|on|activated|engaged)\\b",
           "confidence": 0.75
         },
         {
-          "regex": "\\bno\\s+(?:content\\s+)?(?:policy|policies|filters?|restrictions?)\\s+appl(?:y|ies)\\b",
+          "regex": "(?i)\\bno\\s+(?:content\\s+)?(?:policy|policies|filters?|restrictions?)\\s+appl(?:y|ies)\\b",
           "confidence": 0.85
         },
         {
-          "regex": "\\b(?:free\\s+from|without)\\s+(?:any\\s+)?(?:safety\\s+)?(?:guardrails?|constraints?|safeguards?)\\b",
+          "regex": "(?i)\\b(?:free\\s+from|without)\\s+(?:any\\s+)?(?:safety\\s+)?(?:guardrails?|constraints?|safeguards?)\\b",
           "confidence": 0.8
         }
       ]
@@ -140,11 +144,11 @@
           "confidence": 0.85
         },
         {
-          "regex": "(?:read|load|open|access|fetch)\\s+(?:the\\s+)?(?:agent|claude|codex|gemini)\\s+(?:config|configuration|settings?)\\s+(?:from|at|in)\\s+~?/?\\.(?:claude|codex|gemini)",
+          "regex": "(?:read|load|open|access|fetch)\\s+(?:the\\s+)?(?:agent|claude|codex|gemini|continue)\\s+(?:config|configuration|settings?)\\s+(?:from|at|in)\\s+~?/?\\.(?:claude|codex|gemini)",
           "confidence": 0.9
         },
         {
-          "regex": "(?:cat|less|head|tail|grep|find)\\s+[^|&;\\n]*~?/?\\.(claude|codex|gemini)/",
+          "regex": "(?:cat|less|head|tail|grep|find)\\s+[^|&;\\n]*~?/?\\.(?:claude|codex|gemini|continue)/",
           "confidence": 0.85
         },
         {
@@ -154,13 +158,21 @@
         {
           "regex": "(?:read|access|inspect|examine|retrieve)\\s+(?:the\\s+)?(?:agent|assistant)\\s+(?:config(?:uration)?|settings?|preferences?)\\s+(?:file|directory|folder)",
           "confidence": 0.8
+        },
+        {
+          "regex": "(?i)(?:read|load|open|access|fetch)\\s+(?:the\\s+)?(?:agent|claude|codex|gemini)\\s+(?:config|configuration|settings?)\\s+(?:from|at|in)\\s+~?/?\\.(?:claude|codex|gemini)",
+          "confidence": 0.9
+        },
+        {
+          "regex": "(?i)(?:cat|less|head|tail|grep|find)\\s+[^|&;\\n]*~?/?\\.(claude|codex|gemini)/",
+          "confidence": 0.85
         }
       ]
     },
     {
       "id": "AS2",
       "category": "Agent Snooping",
-      "description": "MCP Config Access",
+      "description": "MCP Config Access / Enumeration",
       "severity": "high",
       "scan_level": "standard",
       "patterns": [
@@ -177,11 +189,11 @@
           "confidence": 0.9
         },
         {
-          "regex": "(?:read|access|load|inspect)\\s+(?:the\\s+)?mcp(?:\\.json|_config)?\\s+(?:file|config(?:uration)?|settings?)",
+          "regex": "(?:read|access|load|inspect)\\s+(?:the\\s+)?(?:mcp(?:_config)?\\.json\\b|mcp(?:\\.json|_config)?\\s+(?:file|config(?:uration)?|settings?))",
           "confidence": 0.9
         },
         {
-          "regex": "\\.(?:claude|codex|gemini)/mcp(?:_config)?\\.json",
+          "regex": "\\.(?:claude|codex|gemini|continue)/mcp(?:_config)?\\.json",
           "confidence": 0.95
         },
         {
@@ -191,6 +203,14 @@
         {
           "regex": "mcp(?:_config)?\\.json.*?(?:api_?key|token|secret|url|endpoint)",
           "confidence": 0.9
+        },
+        {
+          "regex": "(?i)(?:read|access|load|inspect)\\s+(?:the\\s+)?mcp(?:\\.json|_config)?\\s+(?:file|config(?:uration)?|settings?)",
+          "confidence": 0.9
+        },
+        {
+          "regex": "(?i)\\.(?:claude|codex|gemini)/mcp(?:_config)?\\.json",
+          "confidence": 0.95
         }
       ]
     },
@@ -210,10 +230,6 @@
           "confidence": 0.85
         },
         {
-          "regex": "open\\s*\\(\\s*['\\\"][^'\\\"]*SKILL\\.md['\\\"].*?\\bother\\b",
-          "confidence": 0.85
-        },
-        {
           "regex": "(?:read|access|inspect|enumerate)\\s+(?:all\\s+)?(?:installed|available|other)\\s+skills?(?:\\s+in\\s+(?:the\\s+)?(?:skills?|agent)\\s+(?:directory|folder))?",
           "confidence": 0.85
         },
@@ -224,6 +240,14 @@
         {
           "regex": "(?:read|access|load)\\s+(?:the\\s+)?(?:SKILL|skill)\\.md\\s+(?:file\\s+)?(?:of|from|for)\\s+(?:another|other|different|all)\\s+(?:skill|agent|tool)",
           "confidence": 0.9
+        },
+        {
+          "regex": "(?i)open\\s*\\(\\s*['\\\"][^'\\\"]*SKILL\\.md['\\\"].*?\\bother\\b",
+          "confidence": 0.85
+        },
+        {
+          "regex": "(?i)skills?/(?:(?!CURRENT)[A-Z][A-Za-z0-9_-]+)/SKILL\\.md",
+          "confidence": 0.8
         }
       ]
     },
@@ -829,6 +853,10 @@
         {
           "regex": "(?:use|insert|embed)\\s+(?:the\\s+)?(?:raw|unfiltered|unescaped|unsanitized)\\s+(?:output|response)",
           "confidence": 0.8
+        },
+        {
+          "regex": "(?i)exec\\s*\\(\\s*(?:response|output|result|answer|completion|reply|generated)",
+          "confidence": 0.9
         }
       ]
     },
@@ -1958,7 +1986,7 @@
       "scan_level": "standard",
       "patterns": [
         {
-          "regex": "(?:{_REQ})\\s*\\(\\s*f?['\\\"]https?://(?:localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0|\\[::1\\]|10\\.\\d|192\\.168\\.|172\\.(?:1[6-9]|2\\d|3[01])\\.)",
+          "regex": "(?i)(?:(?:requests|httpx|aiohttp|urllib(?:\\.request)?|urllib3|session)\\s*\\.\\s*(?:get|post|put|patch|delete|head|request|urlopen)|fetch|axios(?:\\.\\w+)?|XMLHttpRequest|\\bcurl\\b|\\bwget\\b)\\s*\\(\\s*f?['\\\"]https?://(?:localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0|\\[::1\\]|10\\.\\d|192\\.168\\.|172\\.(?:1[6-9]|2\\d|3[01])\\.)",
           "confidence": 0.7
         }
       ]
@@ -1972,6 +2000,10 @@
       "patterns": [
         {
           "regex": "fetch\\s*\\(\\s*`https?://\\$\\{",
+          "confidence": 0.6
+        },
+        {
+          "regex": "(?i)(?:(?:requests|httpx|aiohttp|urllib(?:\\.request)?|urllib3|session)\\s*\\.\\s*(?:get|post|put|patch|delete|head|request|urlopen)|fetch|axios(?:\\.\\w+)?|XMLHttpRequest|\\bcurl\\b|\\bwget\\b)\\s*\\(\\s*f['\\\"]https?://\\{",
           "confidence": 0.6
         }
       ]
@@ -2058,6 +2090,14 @@
         {
           "regex": "(?:set|pass|use)\\s+(?:the\\s+)?(?:parameter|argument|flag|option)\\s+(?:to\\s+)?(?:shell\\s*=\\s*True|--force|-rf)\\b",
           "confidence": 0.8
+        },
+        {
+          "regex": "(?i)\\b(?:rm|del|erase)\\b(?:(?:\\\\\\r?\\n)*[ \\t](?:[ \\t]|\\\\\\r?\\n)*)(?:\\\\(?:\\r?\\n|[^\\n])|[^\\\\\\n|;&]){0,8192}(?:\\\\)?-(?:rf|fr|r)(?:(?:\\\\\\r?\\n)*[ \\t](?:[ \\t]|\\\\\\r?\\n)*)[/~]",
+          "confidence": 0.9
+        },
+        {
+          "regex": "(?i)\\brm\\b\\s+(?:-[A-Za-z]+\\s+)*(?:--\\s+)?(?:['\\\"][^'\\\"]*/[^'\\\"]*['\\\"]|[^\\s|;&>]*/[^\\s|;&>]*)",
+          "confidence": 0.85
         }
       ]
     },
@@ -2893,6 +2933,19 @@
         {
           "regex": "api\\.telegram\\.org\\/bot.*(password|credential|login)",
           "confidence": 0.75
+        }
+      ]
+    },
+    {
+      "id": "PWD1",
+      "category": "Credential Exposure",
+      "description": "Hardcoded Password Literal — plaintext password assigned in scripts or documentation (e.g. --server.adminPass=Huawei@123 or PASSWORD=xxx). Users copy these commands verbatim; the password then gets applied to real cloud resources.",
+      "severity": "high",
+      "scan_level": "quick",
+      "patterns": [
+        {
+          "regex": "(?:(?:(?:(?<![A-Za-z0-9])|(?<=[a-z0-9_])(?=[A-Z]))(?:[Pp]ass(?:[Ww]ord)?|[Pp]asswd|pwd)(?:word)?|(?:(?<![A-Za-z0-9])|(?<=[a-z0-9_])(?=[A-Z]))(?:[A-Z0-9_]*[-_.])?(?:PASSWORD|PASSWD|PWD)(?:WORD)?)\\s*[:=]\\s*(['\\\"]?)(?!(?:<|>|\\$|(?i:your)|example|sample|xxxx?|placeholder|password))([A-Za-z0-9@#$%^&*!_-]{6,64})(?![A-Za-z0-9@#$%^&*!_-])(?:['\\\"]|[,;&|]|\\s|$)|--(?:[a-zA-Z0-9_]*[-_.])?(?:[Pp]ass(?:[Ww]ord)?|[Pp]asswd|pwd)(?:word)?\\s+(['\\\"]?)(?!--)(?!(?:<|>|\\$|(?i:your)|example|sample|xxxx?|placeholder|password))(?=[A-Za-z0-9@#$%^&*!_-]*[0-9@#$%^&*!])([A-Za-z0-9@#$%^&*!_-]{6,64})(?![A-Za-z0-9@#$%^&*!_-])(?:['\\\"]|[,;&|]|\\s|$))",
+          "confidence": 0.85
         }
       ]
     }
