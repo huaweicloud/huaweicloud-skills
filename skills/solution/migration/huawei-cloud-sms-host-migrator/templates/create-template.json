@@ -1,0 +1,51 @@
+{
+  "body": {
+    "template": {
+      "name": "ecs-sms-target-0001",
+      "is_template": false,
+      "region": "cn-north-4",
+      "target_server_name": "ecs-sms-target-0001",
+      "availability_zone": "",
+      "flavor": "st6.large.2",
+      "vpc": {
+        "id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+        "name": "vpc-sms-target-migration",
+        "cidr": "172.16.0.0/12"
+      },
+      "nics": [
+        {
+          "id": "d1e2f3a4-b5c6-7d8e-9f0a-1b2c3d4e5f6a",
+          "name": "subnet-sms-target-migration",
+          "cidr": "172.16.10.0/24",
+          "ip": ""
+        }
+      ],
+      "security_groups": [
+        {
+          "id": "b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e",
+          "name": "sg-sms-target-migration"
+        }
+      ],
+      "disk": [
+        {
+          "id": 0,
+          "index": 0,
+          "name": "SystemDisk0",
+          "diskType": "SAS",
+          "size": 40,
+          "device_use": "NORMAL",
+          "multiattach": false,
+          "passthrough": false,
+          "encrypted": false,
+          "cmkid": ""
+        }
+      ],
+      "publicip": {
+        "type": "5_bgp",
+        "bandwidth_size": 300,
+        "bandwidth_share_type": "PER"
+      },
+      "image_id": "c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f"
+    }
+  }
+}

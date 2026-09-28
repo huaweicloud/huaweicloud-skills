@@ -1,0 +1,71 @@
+{
+  "body": {
+    "name": "WinMigrationTask",
+    "source_server": {
+      "id": "d8c8c498-2e90-499e-a022-4c0463ab1c98"
+    },
+    "enterprise_project_id": "0",
+    "exist_server": true,
+    "target_server": {
+      "vm_id": "e7b8c9d0-1a2b-3c4d-5e6f-7a8b9c0d1e2f",
+      "name": "ecs-windows-uefi-target",
+      "volume_groups": [],
+      "btrfs_list": [],
+      "disks": [
+        {
+          "name": "disk 0",
+          "disk_id": "0",
+          "size": 42949672960,
+          "device_use": "BOOT",
+          "physical_volumes": [
+            {
+              "adjust_size": 0,
+              "device_use": "BOOT",
+              "file_system": "FAT32",
+              "id": 0,
+              "index": 0,
+              "mount_point": "",
+              "name": "System",
+              "need_migration": true,
+              "size": 104857600,
+              "used_size": 31457280,
+              "uuid": "b1c2d3e4-f5a6-7b8c-9d0e-1f2a3b4c5d6e"
+            },
+            {
+              "adjust_size": 0,
+              "device_use": "OS",
+              "file_system": "NTFS",
+              "id": 1,
+              "index": 1,
+              "mount_point": null,
+              "name": "C:\\\\",
+              "need_migration": true,
+              "size": 42844815360,
+              "used_size": 18253611008,
+              "uuid": "c2d3e4f5-a6b7-8c9d-0e1f-2a3b4c5d6e7f"
+            }
+          ]
+        }
+      ]
+    },
+    "vm_template_id": "",
+    "type": "MIGRATE_BLOCK",
+    "use_public_ip": true,
+    "migration_ip": "",
+    "speed_limit": 0,
+    "syncing": false,
+    "os_type": "WINDOWS",
+    "start_target_server": true,
+    "start_network_check": false,
+    "auto_start": false,
+    "uninstall_agent": false,
+    "priority": 1,
+    "region_id": "cn-north-4",
+    "region_name": "cn-north-4",
+    "project_id": "f6a7b89c0d1e2f3a4b5c6d7e8f9a0b1c",
+    "project_name": "cn-north-4",
+    "use_ipv6": false,
+    "is_need_consistency_check": false,
+    "need_migration_test": false
+  }
+}

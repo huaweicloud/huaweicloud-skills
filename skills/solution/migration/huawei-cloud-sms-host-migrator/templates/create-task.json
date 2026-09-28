@@ -1,0 +1,58 @@
+{
+  "body": {
+    "name": "MigrationTask",
+    "source_server": {
+      "id": "d8c8c498-2e90-499e-a022-4c0463ab1c98"
+    },
+    "enterprise_project_id": "0",
+    "exist_server": false,
+    "target_server": {
+      "vm_id": "",
+      "name": "ecs-sms-target-0001",
+      "volume_groups": [],
+      "btrfs_list": [],
+      "disks": [
+        {
+          "name": "/dev/vda",
+          "disk_id": "0",
+          "size": 42949672960,
+          "device_use": "BOOT",
+          "physical_volumes": [
+            {
+              "adjust_size": 0,
+              "device_use": "OS",
+              "file_system": "ext4",
+              "id": 0,
+              "index": 0,
+              "mount_point": "/",
+              "name": "/dev/vda1",
+              "need_migration": true,
+              "size": 42948624384,
+              "used_size": 3625078784,
+              "uuid": "a0b1c2d3-e4f5-6a7b-8c9d-0e1f2a3b4c5d"
+            }
+          ]
+        }
+      ]
+    },
+    "vm_template_id": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b",
+    "type": "MIGRATE_FILE",
+    "use_public_ip": true,
+    "migration_ip": "",
+    "speed_limit": 0,
+    "syncing": false,
+    "os_type": "LINUX",
+    "start_target_server": true,
+    "start_network_check": false,
+    "auto_start": false,
+    "uninstall_agent": false,
+    "priority": 1,
+    "region_id": "cn-north-4",
+    "region_name": "cn-north-4",
+    "project_id": "f6a7b89c0d1e2f3a4b5c6d7e8f9a0b1c",
+    "project_name": "cn-north-4",
+    "use_ipv6": false,
+    "is_need_consistency_check": false,
+    "need_migration_test": false
+  }
+}

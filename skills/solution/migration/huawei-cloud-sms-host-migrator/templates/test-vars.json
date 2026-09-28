@@ -1,0 +1,132 @@
+{
+  "skill": "huawei-cloud-sms-host-migrator",
+  "region": "cn-north-4",
+  "test_cases": [
+    {
+      "id": "TC-SMS-01",
+      "name": "Show SMS Migration Overview Statistics",
+      "type": "read_only",
+      "command": "hcloud SMS ShowOverview --cli-region=cn-north-4",
+      "expected": "replicate"
+    },
+    {
+      "id": "TC-SMS-02",
+      "name": "List Registered SMS Source Servers",
+      "type": "read_only",
+      "command": "hcloud SMS ListServers --cli-region=cn-north-4 --limit=1",
+      "expected": "source_servers"
+    },
+    {
+      "id": "TC-SMS-03",
+      "name": "List SMS Migration Tasks",
+      "type": "read_only",
+      "command": "hcloud SMS ListTasks --cli-region=cn-north-4 --limit=1",
+      "expected": "tasks"
+    },
+    {
+      "id": "TC-SMS-04",
+      "name": "List SMS Migration Projects",
+      "type": "read_only",
+      "command": "hcloud SMS ListMigprojects --cli-region=cn-north-4",
+      "expected": "migprojects"
+    },
+    {
+      "id": "TC-SMS-05",
+      "name": "List SMS Target VM Templates",
+      "type": "read_only",
+      "command": "hcloud SMS ListTemplates --cli-region=cn-north-4",
+      "expected": "templates"
+    },
+    {
+      "id": "TC-SMS-06",
+      "name": "Verify CreateTemplate Command Syntax",
+      "type": "syntax_check",
+      "command": "hcloud SMS CreateTemplate --help",
+      "expected": "template.name"
+    },
+    {
+      "id": "TC-SMS-07",
+      "name": "Verify CreateTask Command Syntax",
+      "type": "syntax_check",
+      "command": "hcloud SMS CreateTask --help",
+      "expected": "source_server.id"
+    },
+    {
+      "id": "TC-SMS-08",
+      "name": "Verify UpdateTaskStatus Command Syntax",
+      "type": "syntax_check",
+      "command": "hcloud SMS UpdateTaskStatus --help",
+      "expected": "operation"
+    },
+    {
+      "id": "TC-SMS-09",
+      "name": "Verify UpdateSpeed Command Syntax",
+      "type": "syntax_check",
+      "command": "hcloud SMS UpdateSpeed --help",
+      "expected": "speed_limit"
+    },
+    {
+      "id": "TC-SMS-10",
+      "name": "Verify DeleteTask Command Syntax",
+      "type": "syntax_check",
+      "command": "hcloud SMS DeleteTask --help",
+      "expected": "task_id"
+    },
+    {
+      "id": "TC-SMS-11",
+      "name": "Verify VPC ListSecurityGroupRules Command Syntax",
+      "type": "syntax_check",
+      "command": "hcloud VPC ListSecurityGroupRules/v3 --help",
+      "expected": "security_group_id"
+    },
+    {
+      "id": "TC-SMS-12",
+      "name": "Verify ECS ShowServer Command Syntax",
+      "type": "syntax_check",
+      "command": "hcloud ECS ShowServer --help",
+      "expected": "server_id"
+    },
+    {
+      "id": "TC-SMS-13",
+      "name": "List OS Images via IMS Using Platform Filter",
+      "type": "read_only",
+      "command": "hcloud IMS ListImages --cli-region=cn-north-4 --status=active --__imagetype=gold --__platform=Ubuntu --limit=1",
+      "expected": "images"
+    },
+    {
+      "id": "TC-SMS-14",
+      "name": "Verify ShowServer Command Syntax",
+      "type": "syntax_check",
+      "command": "hcloud SMS ShowServer --help",
+      "expected": "source_id"
+    },
+    {
+      "id": "TC-SMS-15",
+      "name": "Verify Windows Task Template Serialization (Double-Escaping)",
+      "type": "syntax_check",
+      "command": "hcloud SMS CreateTask --cli-jsonInput=\"templates/create-task-windows.json\" --dryrun",
+      "expected": "C:\\\\"
+    },
+    {
+      "id": "TC-SMS-16",
+      "name": "Query Windows OS Images Under Marketplace Images via IMS Using Platform Filter",
+      "type": "read_only",
+      "command": "hcloud IMS ListImages --cli-region=cn-north-4 --status=active --__imagetype=market --__platform=Windows --limit=1",
+      "expected": "images"
+    },
+    {
+      "id": "TC-SMS-17",
+      "name": "Verify Existing Server Task Template Serialization (UEFI Windows)",
+      "type": "syntax_check",
+      "command": "hcloud SMS CreateTask --cli-jsonInput=\"templates/create-task-existing-server.json\" --dryrun",
+      "expected": "exist_server"
+    },
+    {
+      "id": "TC-SMS-18",
+      "name": "Query Project ID via IAM KeystoneListProjects",
+      "type": "read_only",
+      "command": "hcloud IAM KeystoneListProjects --name=cn-north-4",
+      "expected": "projects"
+    }
+  ]
+}

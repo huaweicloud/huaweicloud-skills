@@ -1,0 +1,58 @@
+{
+  "body": {
+    "name": "MigrationTask-Win",
+    "source_server": {
+      "id": "d8c8c498-2e90-499e-a022-4c0463ab1c98"
+    },
+    "enterprise_project_id": "0",
+    "exist_server": false,
+    "target_server": {
+      "vm_id": "",
+      "name": "ecs-sms-target-win",
+      "volume_groups": [],
+      "btrfs_list": [],
+      "disks": [
+        {
+          "name": "Disk 0",
+          "disk_id": "0",
+          "size": 42949672960,
+          "device_use": "OS",
+          "physical_volumes": [
+            {
+              "adjust_size": 0,
+              "device_use": "OS",
+              "file_system": "NTFS",
+              "id": 0,
+              "index": 1,
+              "mount_point": null,
+              "name": "C:\\\\",
+              "need_migration": true,
+              "size": 42826989568,
+              "used_size": 16587390464,
+              "uuid": "\\\\\\\\?\\\\Volume{53f59b50-349b-4bb2-b625-0c6763337a0a}\\\\"
+            }
+          ]
+        }
+      ]
+    },
+    "vm_template_id": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b",
+    "type": "MIGRATE_BLOCK",
+    "use_public_ip": true,
+    "migration_ip": "",
+    "speed_limit": 0,
+    "syncing": false,
+    "os_type": "WINDOWS",
+    "start_target_server": true,
+    "start_network_check": false,
+    "auto_start": false,
+    "uninstall_agent": false,
+    "priority": 1,
+    "region_id": "cn-north-4",
+    "region_name": "cn-north-4",
+    "project_id": "f6a7b89c0d1e2f3a4b5c6d7e8f9a0b1c",
+    "project_name": "cn-north-4",
+    "use_ipv6": false,
+    "is_need_consistency_check": false,
+    "need_migration_test": false
+  }
+}
