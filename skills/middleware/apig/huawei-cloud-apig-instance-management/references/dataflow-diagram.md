@@ -54,3 +54,25 @@ flowchart LR
     L2 -- No --> E2[No API group]
     L3 -- No --> E3[No API]
 ```
+
+## 5. Signature key lifecycle
+
+```mermaid
+flowchart LR
+    C[huawei_create_apig_signature_key<br/>CreateSignatureKeyV2] -->|sign_id| Q[huawei_list_apig_signature_keys<br/>ListSignatureKeysV2]
+    Q -->|verify exists| A[huawei_analyze_apig_policy_effect<br/>ListApisBindedToSignatureKeyV2]
+    A -->|bound to published API?| E[In effect]
+    A -->|no published bound API| G[Not in effect]
+    D[huawei_delete_apig_signature_key<br/>DeleteSignatureKeyV2] -->|sign_id| Q
+```
+
+## 6. Access control (ACL) policy lifecycle
+
+```mermaid
+flowchart LR
+    C[huawei_create_apig_access_control_policy<br/>CreateAclStrategyV2] -->|acl_id| Q[huawei_list_apig_access_control_policies<br/>ListAclStrategiesV2]
+    Q -->|verify exists| A[huawei_analyze_apig_policy_effect<br/>ListApisBindedToAclPolicyV2]
+    A -->|bound to published API?| E[In effect]
+    A -->|no bound API| UNBIND[Unbind APIs first]
+    UNBIND[Unbind APIs first] --> D[huawei_delete_apig_access_control_policy<br/>DeleteAclV2]
+```

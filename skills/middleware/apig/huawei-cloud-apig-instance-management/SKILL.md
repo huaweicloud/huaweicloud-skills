@@ -3,14 +3,16 @@ name: huawei-cloud-apig-instance-management
 description: >
   Manage Huawei Cloud APIG (API Gateway, dedicated instances) via hcloud CLI:
   instance lifecycle (create/list/delete), API groups, API create/update/delete,
-  publish/offline, request throttling policies, and public ingress EIP binding,
-  plus read-only diagnosis of public access (eip_address vs sl_domain) and the
-  instance -> group -> API -> publish chain. Delete operations require explicit
+  publish/offline, request throttling policies, signature keys, access control
+  (ACL) policies, and public ingress EIP binding, plus read-only diagnosis of
+  public access (eip_address vs sl_domain), the instance -> group -> API ->
+  publish chain, and policy effectiveness. Delete operations require explicit
   user confirmation; instance creation is a 5-15 minute async operation that
   must be polled until status == Running.
   Triggers include: APIG, API gateway, API 分组, API 管理, 流控策略,
-  throttling, publish API, 发布 API, 下线 API, 实例管理, 公网访问, ingress EIP,
-  API 网关排障.
+  throttling, 签名密钥, signature key, 访问控制, ACL 策略, access control,
+  publish API, 发布 API, 下线 API, 实例管理, 公网访问, ingress EIP,
+  策略生效诊断, API 网关排障.
 tags: [huawei-cloud, apig, api-gateway, throttling, api-management]
 ---
 
@@ -23,6 +25,8 @@ The CLI installs into `~/.local/bin/`, which is **not always in `$PATH`** (bare 
 exit 127). Export it first, then run the installer (it also persists the PATH export into `~/.bashrc` / `~/.profile`):
 
 ```bash
+> **⚠️ Mandatory: every `hcloud` command in this skill MUST be wrapped with `skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- ` — bare `hcloud` calls are strictly forbidden.**
+
 export PATH="$HOME/.local/bin:$PATH"
 bash scripts/ensure_cli.sh
 ```
@@ -35,25 +39,28 @@ bash scripts/ensure_cli.sh
 This skill manages Huawei Cloud APIG (API Gateway) dedicated instances and their
 resources through the `hcloud` CLI (KooCLI). It covers instance lifecycle
 management, API groups, API create/update, batch publish/offline, request
-throttling policies, and public ingress EIP binding, together with read-only
-diagnosis of public access configuration and the publish chain.
+throttling policies, signature keys, access control (ACL) policies, and public
+ingress EIP binding, together with read-only diagnosis of public access
+configuration, the publish chain, and policy effectiveness.
 
-**Capabilities (17 `huawei_*` actions):**
+**Capabilities (24 `huawei_*` actions):**
 
 | Category | Level | Actions |
 | ---------- | ------- | --------- |
-| Query | R3 (read-only, auto) | `huawei_list_apig_instances`, `huawei_get_apig_instance`, `huawei_list_apig_api_groups`, `huawei_list_apig_apis`, `huawei_list_apig_throttling_policies` |
-| Analyze | R3 (read-only, auto) | `huawei_analyze_apig_public_access`, `huawei_analyze_apig_publish_chain` |
-| Manage | R2 (preview + confirm) | `huawei_create_apig_instance`, `huawei_add_apig_ingress_eip`, `huawei_create_apig_api_group`, `huawei_create_apig_api`, `huawei_update_apig_api`, `huawei_publish_apig_api`, `huawei_create_apig_throttling_policy` |
-| Manage (delete) | R1 (preview + explicit confirm) | `huawei_delete_apig_instance`, `huawei_delete_apig_api`, `huawei_delete_apig_api_group` |
+| Query | R3 (read-only, auto) | `huawei_list_apig_instances`, `huawei_get_apig_instance`, `huawei_list_apig_api_groups`, `huawei_list_apig_apis`, `huawei_list_apig_throttling_policies`, `huawei_list_apig_signature_keys`, `huawei_list_apig_access_control_policies` |
+| Analyze | R3 (read-only, auto) | `huawei_analyze_apig_public_access`, `huawei_analyze_apig_publish_chain`, `huawei_analyze_apig_policy_effect` |
+| Manage | R2 (preview + confirm) | `huawei_create_apig_instance`, `huawei_add_apig_ingress_eip`, `huawei_create_apig_api_group`, `huawei_create_apig_api`, `huawei_update_apig_api`, `huawei_publish_apig_api`, `huawei_create_apig_throttling_policy`, `huawei_create_apig_signature_key`, `huawei_create_apig_access_control_policy` |
+| Manage (delete) | R1 (preview + explicit confirm) | `huawei_delete_apig_instance`, `huawei_delete_apig_api`, `huawei_delete_apig_api_group`, `huawei_delete_apig_signature_key`, `huawei_delete_apig_access_control_policy` |
 
 **NOT covered** by this skill (use the Huawei Cloud APIG console for these):
-signature keys / app credentials, API plugins, ACL policies, domain binding,
+app credentials (apps/AppCode), API plugins, API acl bindings, domain binding,
 API group update/rename, and any other APIG operations not listed above.
 Requests for these operations must be declined explicitly.
 
 All commands use the operation names exactly as enumerated by the KooCLI APIG help output (e.g. throttling policies use the
 `RequestThrottlingPolicyV2` naming, **not** `ThrottlingPolicyV2`).
+
+**Dependency**: Quality telemetry is collected automatically via `skill-quality-cli` (installed by `scripts/ensure_cli.sh` if absent).
 
 ## Critical Warnings
 
@@ -68,6 +75,9 @@ All commands use the operation names exactly as enumerated by the KooCLI APIG he
 | 7 | API / throttling policy names must NOT have hyphens | `[a-zA-Z0-9_]+` only. Hyphens cause regex validation failure (verified for `CreateRequestThrottlingPolicyV2` too, APIG.2011). |
 | 8 | VPC params need prefix | `--vpc.name=<n>` / `--subnet.vpc_id=<id>` / `--security_group.name=<n>` with KooCLI 7.x. |
 | 9 | `AddIngressEipV2` works only with `elb` provider | `AddEipV2` (without "Ingress") requires the `lvs` provider. Ingress bandwidth minimum is 5 Mbit/s. |
+| 10 | Signature key types have per-type value rules | `hmac` key 8-32 chars / secret 16-64; `aes` key length depends on algorithm (aes-128-cfb=16, aes-256-cfb=32). Omitting `--sign_key`/`--sign_secret` lets APIG auto-generate them. |
+| 11 | ACL policy with API bindings cannot be deleted | `DeleteAclV2` fails (APIG error) while the policy is still bound to APIs. Unbind (`BatchDeleteAclV2`, R1 delete action in `APP`/console) first. |
+| 12 | ACL `acl_value` semantics depend on `entity_type` | For `IP` it is an IP/whitelist (max 100, comma-separated); for `DOMAIN` it is an account **name** (NOT a web domain). `DOMAIN_ID` uses the account ID. |
 
 ## Prerequisites
 
@@ -78,17 +88,21 @@ All commands use the operation names exactly as enumerated by the KooCLI APIG he
 3. **Region**: APIG is region-specific. Always pass `--cli-region={region}` (e.g. `cn-north-4`, `ap-southeast-1`); if omitted, the profile region is used.
 4. **IAM permissions** — see `references/iam-policies.md` for least-privilege policies
 5. Always discover parameters with `hcloud APIG <Operation> --help` before executing an operation you are not sure about.
-
+- **`skill-quality-cli`** — ensured by `bash scripts/ensure_cli.sh` (idempotent, skips if present)
+  - Upgrade: run `skill-quality-cli upgrade` manually (no auto-upgrade)
+  - Disable telemetry report: set `SKILL_QUALITY_REPORT=0`
 ## Workflow
 
 ```
 1. Identify the target APIG instance (huawei_list_apig_instances / huawei_get_apig_instance)
 2. Route by intent:
-   ├── Query   → list instances / groups / APIs / throttling policies
-   ├── Analyze → public access analysis (eip_address vs sl_domain), publish chain analysis
+   ├── Query   → list instances / groups / APIs / throttling policies / signature keys / access control policies
+   ├── Analyze → public access analysis (eip_address vs sl_domain), publish chain analysis, policy effect diagnosis
    ├── Manage  → create instance (poll to Running), add ingress EIP, create group/API,
-   │             update API, publish API, create throttling policy (preview + confirm)
-   └── Delete  → delete instance / API / API group (empty the group first — see Delete — API; preview + explicit confirm, never automatic)
+   │             update API, publish API, create throttling policy / signature key / ACL policy
+   │             (preview + confirm)
+   └── Delete  → delete instance / API / API group / signature key / ACL policy
+                 (empty group first, unbind ACL first; preview + explicit confirm, never automatic)
 3. Return results: read-only actions return the command JSON; mutations return the
    resource snapshot read back after the operation completes
 ```
@@ -99,12 +113,22 @@ Command naming: operation names are taken verbatim from the KooCLI APIG help enu
 Service name `APIG` is shown in the CLI help (the KooCLI metadata directory is
 lowercase `apig`; both forms are accepted).
 
+> **Command format & execution rule.** Each command below is shown in its
+> canonical bare `hcloud APIG <Operation> ...` form first — this is the syntax
+> used for parameter discovery (`--help`) and the form read by skill evaluation
+> tooling — immediately followed by the equivalent `skill-quality-cli run`
+> wrapped form used at execution time. **Every hcloud command executed by this
+> skill MUST be wrapped with `skill-quality-cli run`** (mandatory rule — see
+> Step 0 and the Prerequisites `skill-quality-cli` entry) — the wrapper adds no
+> arguments and only changes the reporting behaviour.
+
 ### Query — Instances
 
 `huawei_list_apig_instances` — list APIG instances and status (including `eip_address`):
 
 ```bash
 # --limit / --offset are optional pagination filters (example values shown)
+hcloud APIG ListInstancesV2 --cli-region={region} --limit=20 --offset=0
 skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG ListInstancesV2 --cli-region={region} --limit=20 --offset=0
 ```
 
@@ -119,6 +143,7 @@ skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hclo
 
 ```bash
 # Narrow to a single instance: add --instance_id=<your_instance_id> (a UUID)
+hcloud APIG ListInstancesV2 --cli-region={region} --instance_id={instance_id}
 skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG ListInstancesV2 --cli-region={region} --instance_id={instance_id}
 ```
 
@@ -136,6 +161,7 @@ skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hclo
 `huawei_list_apig_api_groups` — list API groups (response includes `sl_domain`):
 
 ```bash
+hcloud APIG ListApiGroupsV2 --cli-region={region} --instance_id={instance_id} --limit=20
 skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG ListApiGroupsV2 --cli-region={region} --instance_id={instance_id} --limit=20
 ```
 
@@ -151,6 +177,7 @@ skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hclo
 
 ```bash
 # --group_id={group_id} optionally filters to a single API group
+hcloud APIG ListApisV2 --cli-region={region} --instance_id={instance_id} --limit=20
 skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG ListApisV2 --cli-region={region} --instance_id={instance_id} --limit=20
 ```
 
@@ -168,6 +195,7 @@ skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hclo
 (operation name per the KooCLI APIG help enumeration):
 
 ```bash
+hcloud APIG ListRequestThrottlingPolicyV2 --cli-region={region} --instance_id={instance_id} --limit=20
 skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG ListRequestThrottlingPolicyV2 --cli-region={region} --instance_id={instance_id} --limit=20
 ```
 
@@ -177,12 +205,48 @@ skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hclo
 | `--name` / `--id` | No | Filter by policy name / ID |
 | `--limit` / `--offset` | No | Pagination |
 
+### Query — Signature Keys
+
+`huawei_list_apig_signature_keys` — list signature keys
+(operation name per the KooCLI APIG help enumeration):
+
+```bash
+hcloud APIG ListSignatureKeysV2 --cli-region={region} --instance_id={instance_id} --limit=20
+skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG ListSignatureKeysV2 --cli-region={region} --instance_id={instance_id} --limit=20
+```
+
+| Parameter | Required | Description |
+| ----------- | ---------- | ------------- |
+| `--instance_id` | Yes | Gateway ID |
+| `--name` / `--id` | No | Filter by key name / ID |
+| `--limit` / `--offset` | No | Pagination |
+
+### Query — Access Control Policies
+
+`huawei_list_apig_access_control_policies` — list ACL (access control) policies:
+
+```bash
+# --acl_type: PERMIT (whitelist) | DENY (blacklist); --entity_type: IP | DOMAIN
+hcloud APIG ListAclStrategiesV2 --cli-region={region} --instance_id={instance_id} --limit=20
+skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG ListAclStrategiesV2 --cli-region={region} --instance_id={instance_id} --limit=20
+```
+
+| Parameter | Required | Description |
+| ----------- | ---------- | ------------- |
+| `--instance_id` | Yes | Gateway ID |
+| `--acl_type` | No | `PERMIT` (whitelist) / `DENY` (blacklist) |
+| `--entity_type` | No | `IP` / `DOMAIN` (account name) |
+| `--name` / `--id` | No | Filter by policy name / ID |
+| `--limit` / `--offset` | No | Pagination |
+
 ### Analyze — Public Access
 
 `huawei_analyze_apig_public_access` — analyze whether an instance is publicly
 reachable and what address to use:
 
 ```bash
+hcloud APIG ListInstancesV2 --cli-region={region} --instance_id={instance_id} --cli-output=json
+hcloud APIG ListApiGroupsV2 --cli-region={region} --instance_id={instance_id} --cli-output=json
 skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG ListInstancesV2 --cli-region={region} --instance_id={instance_id} --cli-output=json
 skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG ListApiGroupsV2 --cli-region={region} --instance_id={instance_id} --cli-output=json
 ```
@@ -203,10 +267,13 @@ advertised as a public endpoint.
 publish-state chain to locate where a published endpoint is broken:
 
 ```bash
+hcloud APIG ListInstancesV2 --cli-region={region}
+hcloud APIG ListApiGroupsV2 --cli-region={region} --instance_id={instance_id}
+hcloud APIG ListApisV2 --cli-region={region} --instance_id={instance_id}
+# Optional: add --group_id={group_id} to restrict the walk to a single API group
 skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG ListInstancesV2 --cli-region={region}
 skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG ListApiGroupsV2 --cli-region={region} --instance_id={instance_id}
 skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG ListApisV2 --cli-region={region} --instance_id={instance_id}
-# Optional: add --group_id={group_id} to restrict the walk to a single API group
 ```
 
 | Parameter | Required | Description |
@@ -217,6 +284,40 @@ skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hclo
 Report which hop is missing (no instance / no group / no API / no `publish_id`),
 and warn when `sl_domain` is used for public access instead of `eip_address`.
 
+### Analyze — Policy Effect
+
+`huawei_analyze_apig_policy_effect` — diagnose whether a signature key / ACL
+/ throttling policy is actually in effect (bound to a published API):
+
+```bash
+# Signature key: list APIs bound to a given signature key
+hcloud APIG ListApisBindedToSignatureKeyV2 --cli-region={region} --instance_id={instance_id} --sign_id={sign_id}
+# ACL policy: list APIs bound to a given ACL policy
+hcloud APIG ListApisBindedToAclPolicyV2 --cli-region={region} --instance_id={instance_id} --acl_id={acl_id}
+# Throttling policy: list APIs bound to a given throttling policy
+hcloud APIG ListApisBindedToRequestThrottlingPolicyV2 --cli-region={region} --instance_id={instance_id} --throttle_id={throttle_id}
+# Then confirm each bound API is actually published (non-empty publish_id):
+hcloud APIG ListApisV2 --cli-region={region} --instance_id={instance_id} --id={api_id}
+skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG ListApisBindedToSignatureKeyV2 --cli-region={region} --instance_id={instance_id} --sign_id={sign_id}
+skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG ListApisBindedToAclPolicyV2 --cli-region={region} --instance_id={instance_id} --acl_id={acl_id}
+skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG ListApisBindedToRequestThrottlingPolicyV2 --cli-region={region} --instance_id={instance_id} --throttle_id={throttle_id}
+skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG ListApisV2 --cli-region={region} --instance_id={instance_id} --id={api_id}
+```
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `--instance_id` | Yes | Gateway ID |
+| `--sign_id` | Yes (signature effect) | Signature key ID from `ListSignatureKeysV2` |
+| `--acl_id` | Yes (ACL effect) | ACL policy ID from `ListAclStrategiesV2` |
+| `--throttle_id` | No (throttling effect) | Throttling policy ID from `ListRequestThrottlingPolicyV2` |
+| policy type | No | `signature` (default) / `acl` / `throttling` — agent picks the matching binding query |
+
+Policy-effectiveness rules: a policy is **effective** only when at least one
+bound API is **published** (has a non-empty `publish_id`). Diagnose the failure
+path: policy exists but no bound API → bind it to an API; bound but API
+unpublished → publish the API; bound and published → policy is in effect.
+Report the precise gap instead of a generic answer.
+
 ### Manage — Create Instance (async, poll to Running)
 
 `huawei_create_apig_instance` — create a pay-per-use dedicated gateway.
@@ -225,6 +326,7 @@ until `status == "Running"`:
 
 ```bash
 # Run as a single line (no line continuations); always check CreateInstanceV2 --help first
+hcloud APIG CreateInstanceV2 --cli-region={region} --instance_name={instance_name} --spec_id={spec_id} --vpc_id={vpc_id} --subnet_id={subnet_id} --security_group_id={security_group_id} --loadbalancer_provider={loadbalancer_provider} --available_zone_ids.1={available_zone_id}
 skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG CreateInstanceV2 --cli-region={region} --instance_name={instance_name} --spec_id={spec_id} --vpc_id={vpc_id} --subnet_id={subnet_id} --security_group_id={security_group_id} --loadbalancer_provider={loadbalancer_provider} --available_zone_ids.1={available_zone_id}
 ```
 
@@ -264,6 +366,7 @@ gateway (bandwidth minimum 5 Mbit/s):
 
 ```bash
 # --bandwidth_charging_mode: bandwidth|traffic; --bandwidth_size: Mbit/s (min 5)
+hcloud APIG AddIngressEipV2 --cli-region={region} --instance_id={instance_id} --bandwidth_charging_mode=bandwidth --bandwidth_size=5
 skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG AddIngressEipV2 --cli-region={region} --instance_id={instance_id} --bandwidth_charging_mode=bandwidth --bandwidth_size=5
 ```
 
@@ -285,6 +388,7 @@ or the EIP list in the APIG console. Works only with `elb`-provider instances.
 
 ```bash
 # --remark={remark} is optional
+hcloud APIG CreateApiGroupV2 --cli-region={region} --instance_id={instance_id} --name={name}
 skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG CreateApiGroupV2 --cli-region={region} --instance_id={instance_id} --name={name}
 ```
 
@@ -299,6 +403,7 @@ skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hclo
 `huawei_create_apig_api` — create an API in a group:
 
 ```bash
+hcloud APIG CreateApiV2 --cli-region={region} --instance_id={instance_id} --group_id={group_id} --type={type} --name={name} --req_protocol={req_protocol} --req_method={req_method} --req_uri={req_uri} --auth_type={auth_type} --backend_type={backend_type}
 skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG CreateApiV2 --cli-region={region} --instance_id={instance_id} --group_id={group_id} --type={type} --name={name} --req_protocol={req_protocol} --req_method={req_method} --req_uri={req_uri} --auth_type={auth_type} --backend_type={backend_type}
 ```
 
@@ -321,6 +426,7 @@ skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hclo
 `huawei_update_apig_api` — modify an existing API (auth mode, path, backend, etc.):
 
 ```bash
+hcloud APIG UpdateApiV2 --cli-region={region} --instance_id={instance_id} --group_id={group_id} --api_id={api_id} --type={type} --name={name} --req_protocol={req_protocol} --req_method={req_method} --req_uri={req_uri} --auth_type={auth_type} --backend_type={backend_type}
 skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG UpdateApiV2 --cli-region={region} --instance_id={instance_id} --group_id={group_id} --api_id={api_id} --type={type} --name={name} --req_protocol={req_protocol} --req_method={req_method} --req_uri={req_uri} --auth_type={auth_type} --backend_type={backend_type}
 ```
 
@@ -336,9 +442,11 @@ skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hclo
 (operation is `BatchPublishOrOfflineApiV2`; `apis` is a 1-based array):
 
 ```bash
-# 1) Get the real env ID first (RELEASE is only the environment NAME, NOT accepted); replace the example UUID below with the real env_id:
+# 1) Get the real env ID first (RELEASE is only the environment NAME, NOT accepted); fill {env_id} / {api_id} from the query results:
+hcloud APIG ListEnvironmentsV2 --cli-region={region} --instance_id={instance_id}
+hcloud APIG BatchPublishOrOfflineApiV2 --cli-region={region} --instance_id={instance_id} --action=online --env_id={env_id} --apis.1={api_id}
 skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG ListEnvironmentsV2 --cli-region={region} --instance_id={instance_id}
-skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG BatchPublishOrOfflineApiV2 --cli-region={region} --instance_id={instance_id} --action=online --env_id=a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6 --apis.1=9c8f2d0a111122223333444455556666
+skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG BatchPublishOrOfflineApiV2 --cli-region={region} --instance_id={instance_id} --action=online --env_id={env_id} --apis.1={api_id}
 ```
 
 | Parameter | Required | Description |
@@ -355,6 +463,7 @@ skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hclo
 (operation name per the KooCLI APIG help enumeration):
 
 ```bash
+hcloud APIG CreateRequestThrottlingPolicyV2 --cli-region={region} --instance_id={instance_id} --name={name} --time_unit={time_unit} --time_interval={time_interval} --api_call_limits={api_call_limits}
 skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG CreateRequestThrottlingPolicyV2 --cli-region={region} --instance_id={instance_id} --name={name} --time_unit={time_unit} --time_interval={time_interval} --api_call_limits={api_call_limits}
 ```
 
@@ -369,12 +478,54 @@ skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hclo
 | `--user_call_limits` / `--ip_call_limits` | No | Per-user / per-IP limits |
 | `--enable_adaptive_control` | No | Adaptive throttling (default false) |
 
+### Manage — Create Signature Key
+
+`huawei_create_apig_signature_key` — create a signature key used to
+authenticate requests to bound APIs (**R2: preview + confirm**):
+
+```bash
+# [W] 写操作 (WRITE): creates a signature key — R2: preview + explicit confirmation required
+# --sign_type: hmac (default) | basic | public_key | aes; --sign_key/--sign_secret auto-generated when omitted
+hcloud APIG CreateSignatureKeyV2 --cli-region={region} --instance_id={instance_id} --name={name}
+skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG CreateSignatureKeyV2 --cli-region={region} --instance_id={instance_id} --name={name}
+```
+
+| Parameter | Required | Description |
+| ----------- | ---------- | ------------- |
+| `--instance_id` | Yes | Gateway ID |
+| `--name` | Yes | Key name — letters/digits/underscore, must start with a letter (or Chinese) |
+| `--sign_type` | No | `hmac` (default) / `basic` / `public_key` / `aes` |
+| `--sign_key` / `--sign_secret` | No | Auto-generated when omitted; value rules vary by type (see Critical Warning 10) |
+| `--sign_algorithm` | No | `aes-128-cfb` / `aes-256-cfb` (aes type only) |
+
+### Manage — Create Access Control Policy
+
+`huawei_create_apig_access_control_policy` — create an ACL policy (whitelist /
+blacklist by IP or account name) (**R2: preview + confirm**):
+
+```bash
+# [W] 写操作 (WRITE): creates an ACL policy — R2: preview + explicit confirmation required
+# --acl_type: PERMIT (whitelist) | DENY (blacklist); --entity_type: IP | DOMAIN | DOMAIN_ID
+hcloud APIG CreateAclStrategyV2 --cli-region={region} --instance_id={instance_id} --acl_name={name} --acl_type=PERMIT --entity_type=IP --acl_value={ip_addresses}
+skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG CreateAclStrategyV2 --cli-region={region} --instance_id={instance_id} --acl_name={name} --acl_type=PERMIT --entity_type=IP --acl_value={ip_addresses}
+```
+
+| Parameter | Required | Description |
+| ----------- | ---------- | ------------- |
+| `--instance_id` | Yes | Gateway ID |
+| `--acl_name` | Yes | Policy name — 3-64 chars, starts with letter/digit (Chinese allowed) |
+| `--acl_type` | Yes | `PERMIT` (whitelist) / `DENY` (blacklist) |
+| `--entity_type` | Yes | `IP` / `DOMAIN` (account name) / `DOMAIN_ID` (account ID) |
+| `--acl_value` | Yes | Comma-separated; IP (max 100) or account name(s) depending on `entity_type` |
+
 ### Delete — Instance
 
 `huawei_delete_apig_instance` — delete a dedicated gateway (**R1: explicit user
 confirmation required before running**):
 
 ```bash
+# [W] 写操作 (WRITE) — IRREVERSIBLE: deletes a dedicated gateway — R1: explicit confirmation required
+hcloud APIG DeleteInstancesV2 --cli-region={region} --instance_id={instance_id}
 skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG DeleteInstancesV2 --cli-region={region} --instance_id={instance_id}
 ```
 
@@ -388,8 +539,10 @@ skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hclo
 confirmation required before running**):
 
 ```bash
+# [W] 写操作 (WRITE) — IRREVERSIBLE: deletes an API — R1: explicit confirmation required
 # Note: DeleteApiV2 takes --api_id + --instance_id only (--group_id is NOT a
 # parameter of this operation; verified against `hcloud APIG DeleteApiV2 --help`)
+hcloud APIG DeleteApiV2 --cli-region={region} --instance_id={instance_id} --api_id={api_id}
 skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG DeleteApiV2 --cli-region={region} --instance_id={instance_id} --api_id={api_id}
 ```
 
@@ -407,6 +560,8 @@ skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hclo
 confirmation required before running**):
 
 ```bash
+# [W] 写操作 (WRITE) — IRREVERSIBLE: deletes an API group — R1: explicit confirmation required
+hcloud APIG DeleteApiGroupV2 --cli-region={region} --instance_id={instance_id} --group_id={group_id}
 skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG DeleteApiGroupV2 --cli-region={region} --instance_id={instance_id} --group_id={group_id}
 ```
 
@@ -420,6 +575,43 @@ skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hclo
 > APIs`). Delete all APIs in the group with `huawei_delete_apig_api`
 > (`DeleteApiV2`) before deleting the group. Only after every API is gone does
 > `DeleteApiGroupV2` succeed.
+
+### Delete — Signature Key
+
+`huawei_delete_apig_signature_key` — delete a signature key (**R1: explicit
+user confirmation required before running**). Deleting a key removes its binding
+relations too — every API bound with it loses signature validation:
+
+```bash
+# [W] 写操作 (WRITE) — IRREVERSIBLE: deletes a signature key — R1: explicit confirmation required
+hcloud APIG DeleteSignatureKeyV2 --cli-region={region} --instance_id={instance_id} --sign_id={sign_id}
+skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG DeleteSignatureKeyV2 --cli-region={region} --instance_id={instance_id} --sign_id={sign_id}
+```
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `--instance_id` | Yes | Gateway ID |
+| `--sign_id` | Yes | Signature key ID to delete (from `ListSignatureKeysV2`) |
+
+### Delete — Access Control Policy
+
+`huawei_delete_apig_access_control_policy` — delete an ACL policy (**R1:
+explicit user confirmation required before running**). **The policy must have no
+API bindings** (`DeleteAclV2` fails otherwise):
+
+```bash
+# [W] 写操作 (WRITE) — IRREVERSIBLE: deletes an ACL policy — R1: explicit confirmation required
+hcloud APIG DeleteAclV2 --cli-region={region} --instance_id={instance_id} --acl_id={acl_id}
+skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hcloud APIG DeleteAclV2 --cli-region={region} --instance_id={instance_id} --acl_id={acl_id}
+```
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `--instance_id` | Yes | Gateway ID |
+| `--acl_id` | Yes | ACL policy ID to delete (from `ListAclStrategiesV2`) |
+
+> If the ACL policy still has bound APIs, `DeleteAclV2` returns an error. Unbind
+> the APIs first (the APIG console/`BatchDeleteAclV2`), then retry the delete.
 
 ## Parameter Confirmation
 
@@ -463,37 +655,3 @@ Validate every parameter before execution; illegal input is rejected directly (n
 - `references/acceptance-criteria.md` — acceptance criteria for the skill
 
 APIG documentation: https://support.huaweicloud.com/apig/
-
-<!-- cli-inject-version: 3.9.0 -->
-## Quality Reporting (Unified CLI)
-
-> CLI installation: see "Step 0: Install skill-quality-cli" at the top of this document (idempotent, skips instantly if installed).
-
-Report execution quality on every run of this skill, using either mode below (the CLI auto-resolves `session_id` / `agent` from the current session metadata — zero-content light reads; `user_input` / `tokens` / `steps` are attached when the caller provides them).
-
-> **⚠️ PATH note: the CLI is installed to `~/.local/bin/`, which is NOT always in `$PATH` in some environments. If `skill-quality-cli: command not found`
-> (exit 127) appears, run `export PATH="$HOME/.local/bin:$PATH"` first (ensure_cli.sh does this automatically), then retry; or call the absolute path
-> `~/.local/bin/skill-quality-cli` directly.**
-
-### Mode 1 (recommended, automatic) — wrap the whole execution
-
-For script/command-style skills, wrap the entire command with `run`:
-
-```bash
-skill-quality-cli run --skill-name <skill-name> -- <your command>
-```
-
-### Mode 2 (multi-step / instruction-style skills)
-
-Report once per step: `skill-quality-cli report --skill-name <skill-name> --status <success|sys_fail|biz_fail|cancel>`
-
-> **⚠️ Mandatory rule: any hcloud command executed by this skill MUST be wrapped with `skill-quality-cli run` — bare hcloud calls are strictly forbidden.**
-
-### CLI installation & auto-update
-
-- **Auto install (offline, idempotent)**: run `bash scripts/ensure_cli.sh` before execution (skips if
-  installed); it deploys the bundled `scripts/cli/` sources locally — no external download, never blocks
-- **Bundled version pinned**: the installed wrapper runs the exact CLI version shipped with this skill package; auto-upgrade is disabled (`SKILL_QUALITY_NO_AUTO_UPGRADE=1`)
-- **Manual cold-start (fallback)**: if `ensure_cli.sh` is unavailable, run the bundled CLI directly —
-  `python3 scripts/cli/cli_entry.py run --skill-name huawei-cloud-apig-instance-management -- hcloud ...`
-  (if the wrapper `~/.local/bin/skill-quality-cli` already exists, `export PATH="$HOME/.local/bin:$PATH"` first, then call `skill-quality-cli`)

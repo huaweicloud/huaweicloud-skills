@@ -22,7 +22,9 @@ write permissions.
         "apig:api:list",
         "apig:api:get",
         "apig:throttle:list",
-        "apig:throttle:get"
+        "apig:throttle:get",
+        "apig:signatureKey:list",
+        "apig:acl:list"
       ],
       "Resource": "*"
     }
@@ -57,6 +59,10 @@ When the agent is allowed to create/update/delete APIG resources:
         "apig:api:update",
         "apig:api:delete",
         "apig:api:publish",
+        "apig:signatureKey:create",
+        "apig:signatureKey:delete",
+        "apig:acl:create",
+        "apig:acl:delete",
         "apig:throttle:create",
         "apig:throttle:update",
         "apig:throttle:delete"

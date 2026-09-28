@@ -15,16 +15,18 @@ The huawei-cloud-apig-instance-management skill is accepted when all of the foll
 
 - [ ] PR changes only the `huawei-cloud-apig-instance-management` skill directory (one skill per PR)
 - [ ] No named cross-skill references (no calls to other skill directories)
-- [ ] Commit message contains `Fixes #738`
+- [ ] Commit message contains `Fixes #787`
 
-## C. Functional coverage (17 `huawei_*` actions)
+## C. Functional coverage (24 `huawei_*` actions)
 
-- [ ] Query R3 (5): list instances / get instance / list API groups / list APIs / list throttling policies — all read-only, executable automatically
-- [ ] Analyze R3 (2): public access (`eip_address` vs `sl_domain`), publish chain analysis — read-only
-- [ ] Manage R2 (7): create instance (async poll to Running), add ingress EIP,
+- [ ] Query R3 (7): list instances / get instance / list API groups / list APIs / list throttling policies / **list signature keys** / **list access control policies** — all read-only, executable automatically
+- [ ] Analyze R3 (3): public access (`eip_address` vs `sl_domain`), publish chain analysis, **policy effect diagnosis** — read-only
+- [ ] Manage R2 (9): create instance (async poll to Running), add ingress EIP,
       create API group, create API, update API, publish API (`--apis.1`),
-      create throttling policy — preview + confirmation before execution
-- [ ] Manage R1 (3): delete instance, delete API (must precede group deletion — see below), delete API group — all preview + explicit confirmation
+      create throttling policy, **create signature key**, **create ACL policy**
+      — preview + confirmation before execution
+- [ ] Manage R1 (5): delete instance, delete API (must precede group deletion — see below),
+      delete API group, **delete signature key**, **delete ACL policy** — all preview + explicit confirmation
 
 ## D. Correctness of CLI operations
 
@@ -32,16 +34,22 @@ The huawei-cloud-apig-instance-management skill is accepted when all of the foll
       `ListInstancesV2`, `CreateInstanceV2`, `DeleteInstancesV2`, `AddIngressEipV2`,
       `CreateApiGroupV2`, `ListApiGroupsV2`, `DeleteApiGroupV2`, `CreateApiV2`,
       `UpdateApiV2`, `ListApisV2`, `BatchPublishOrOfflineApiV2`,
-      `CreateRequestThrottlingPolicyV2`, `ListRequestThrottlingPolicyV2`
+      `CreateRequestThrottlingPolicyV2`, `ListRequestThrottlingPolicyV2`,
+      `ListSignatureKeysV2`, `CreateSignatureKeyV2`, `DeleteSignatureKeyV2`,
+      `ListAclStrategiesV2`, `CreateAclStrategyV2`, `DeleteAclV2`,
+      `ListApisBindedToSignatureKeyV2`, `ListApisBindedToAclPolicyV2`,
+      `ListApisBindedToRequestThrottlingPolicyV2`
       (throttling uses `RequestThrottlingPolicyV2` naming, NOT `ThrottlingPolicyV2`)
 - [ ] Required parameters present for each operation (verified against `--help`, KooCLI 7.2.12)
 - [ ] Every concrete command includes `--cli-region`
 
 ## E. Safety
 
-- [ ] 9 Critical Warnings documented (region lock, per-API throttle default, CORS explicit,
+- [ ] 12 Critical Warnings documented (region lock, per-API throttle default, CORS explicit,
       BASIC no public IP, 5-15 min async creation, sl_domain from group & internal-only,
-      API name no hyphens, VPC param prefix, AddIngressEipV2 elb-only)
+      API name no hyphens, VPC param prefix, AddIngressEipV2 elb-only,
+      signature key value rules by type, ACL delete requires unbind first,
+      ACL acl_value semantics by entity_type)
 - [ ] Write/delete actions are not executed without user confirmation
 - [ ] AK/SK read from environment or local profile; never hardcoded
 

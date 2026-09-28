@@ -13,6 +13,8 @@ verified directly from the command output; mutating actions require a read-back
 | `huawei_list_apig_api_groups` | Response contains `groups[]` with `id`, `name`, `sl_domain` |
 | `huawei_list_apig_apis` | Response contains `apis[]` with `id`, `name`, `req_uri`, `auth_type` |
 | `huawei_list_apig_throttling_policies` | Response contains `throttles[]` with `id`, `name`, `api_call_limits` |
+| `huawei_list_apig_signature_keys` | Response contains `signs[]` with `id`, `name`, `sign_key`, `sign_type` |
+| `huawei_list_apig_access_control_policies` | Response contains `acls[]` with `id`, `acl_name`, `acl_type`, `acl_value`, `entity_type` |
 
 ```bash
 # Example verification (all commands wrapped per the mandatory reporting rule)
@@ -25,6 +27,7 @@ skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hclo
 |--------|--------------|
 | `huawei_analyze_apig_public_access` | Conclusion derived from `eip_address` (public) vs null (internal) vs `sl_domain` (internal-only); the report must state which address is safe for public use |
 | `huawei_analyze_apig_publish_chain` | Chain walk completes at each hop: instance -> group -> API -> `publish_id`; missing hop is reported explicitly |
+| `huawei_analyze_apig_policy_effect` | For the target `sign_id`/`acl_id`/`throttle_id`, the report states whether ≥ 1 bound API is published (`publish_id` non-empty): in effect / exists-but-unbound / bound-but-unpublished — never a generic answer |
 
 ## 3. Manage actions (R2 — preview + confirm; then read-back)
 
@@ -37,6 +40,8 @@ skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hclo
 | `huawei_update_apig_api` | `ListApisV2` shows the updated fields (path, auth mode, etc.) |
 | `huawei_publish_apig_api` | `ListApisV2` for the API shows a non-null `publish_id` (published). **`--env_id` must be the real environment ID** obtained from `hcloud APIG ListEnvironmentsV2 --cli-region={region} --instance_id={instance_id}` — the name `RELEASE` is rejected with APIG.3003 |
 | `huawei_create_apig_throttling_policy` | `ListRequestThrottlingPolicyV2 --instance_id` contains the new policy |
+| `huawei_create_apig_signature_key` | `ListSignatureKeysV2 --instance_id` contains the new key (match by name). Note `sign_secret` is only returned at create time; the list shows the key but not the raw secret |
+| `huawei_create_apig_access_control_policy` | `ListAclStrategiesV2 --instance_id` contains the new policy (match by `acl_name`; check `acl_type`/`entity_type`/`acl_value` were honored) |
 
 ## 4. Delete actions (R1 — explicit confirm; then confirm removal)
 
@@ -45,6 +50,8 @@ skill-quality-cli run --skill-name huawei-cloud-apig-instance-management -- hclo
 | `huawei_delete_apig_instance` | `ListInstancesV2 --instance_id` returns empty / instance gone (deletion is async; poll until absent) |
 | `huawei_delete_apig_api` | `ListApisV2 --instance_id --group_id` no longer contains the API id |
 | `huawei_delete_apig_api_group` | `ListApiGroupsV2 --instance_id` no longer contains the group id. **Group must be empty first**: delete every API in it via `huawei_delete_apig_api` (`DeleteApiV2`), otherwise APIG rejects the deletion (`APIG.3415` — group contains APIs) |
+| `huawei_delete_apig_signature_key` | `ListSignatureKeysV2 --instance_id --id` returns empty for the key; confirm its bindings were removed too |
+| `huawei_delete_apig_access_control_policy` | `ListAclStrategiesV2 --instance_id --id` returns empty for the policy. **Policy must have no API bindings**, otherwise `DeleteAclV2` errors — unbind APIs first and retry |
 
 ## 5. General rules
 

@@ -89,3 +89,21 @@ project of the region from the authentication information, then the profile's
 | `Missing required parameter(s)` | Check `hcloud APIG <Op> --help` for required params and include them |
 | `Authentication failed` / 401 | Re-run `hcloud configure` or refresh AK/SK env vars |
 | `No such operation` | Operation names change across API versions — enumerate with `hcloud APIG --help` |
+
+## 5. skill-quality-cli (quality telemetry)
+
+Quality telemetry is collected automatically via `skill-quality-cli`:
+
+```bash
+bash scripts/ensure_cli.sh   # idempotent: installs only if absent (no auto-upgrade)
+export PATH="$HOME/.local/bin:$PATH"
+skill-quality-cli version    # verify it works
+```
+
+- `ensure_cli.sh` deploys the bundled `scripts/cli/` source locally — **no runtime download**,
+  no network dependency beyond the business calls themselves (supply-chain safe), pinned to the
+  bundled CLI version (1.1.8).
+- Upgrade manually: `skill-quality-cli upgrade` (no auto-upgrade).
+- Disable telemetry: `export SKILL_QUALITY_REPORT=0`.
+- If the local deploy fails, the skill degrades silently (business commands still run);
+  re-run `ensure_cli.sh` once back online.
