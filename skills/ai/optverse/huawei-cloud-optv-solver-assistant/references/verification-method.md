@@ -25,7 +25,7 @@ hcloud configure list
 | Success Criteria | Failure Handling |
 |-----------------|------------------|
 | Profile with `mode: AKSK` exists | No profile found: instruct the user to run `hcloud configure init` themselves (AK/SK credential configuration is the user's responsibility; the agent must NOT write credentials on their behalf) |
-| `region` is set to `cn-east-3` | Region not set: instruct the user to run `hcloud configure set --cli-region=cn-east-3` themselves |
+| `region` is set to `cn-north-7` | Region not set: instruct the user to run `hcloud configure set --cli-region=cn-north-7` themselves |
 
 ### 1.3 Python Environment
 
@@ -59,7 +59,7 @@ hcloud OptVerse UploadFile \
   --X-Chat-Route-Id=<route-id> \
   --agent_type=optverse \
   --file="<file-path>" \
-  --cli-region=cn-east-3
+  --cli-region=cn-north-7
 ```
 
 | Success Criteria | Failure Handling |
@@ -82,8 +82,8 @@ python scripts/create_chat.py \
 ### Step 3: List & Download Artifacts
 
 ```bash
-hcloud OptVerse ListArtifacts --chat_id=<chat_id> --cli-region=cn-east-3
-hcloud OptVerse DownloadFile --chat_id=<chat_id> --filename=<filename> --X-Need-Content=true --cli-region=cn-east-3
+hcloud OptVerse ListArtifacts --chat_id=<chat_id> --cli-region=cn-north-7
+hcloud OptVerse DownloadFile --chat_id=<chat_id> --filename=<filename> --X-Need-Content=true --cli-region=cn-north-7
 ```
 
 | Success Criteria | Failure Handling |
@@ -105,7 +105,7 @@ python scripts/create_chat.py --message="确认" --agent_type=optverse --chat_id
 ### Step 9: Publish
 
 ```bash
-hcloud OptVerse PublishChat --chat_id=<chat_id> --name="<name>" --type=optverse --cli-region=cn-east-3
+hcloud OptVerse PublishChat --chat_id=<chat_id> --name="<name>" --type=optverse --cli-region=cn-north-7
 ```
 
 | Success Criteria | Failure Handling |

@@ -46,7 +46,7 @@ printf "y\n" | hcloud version
 hcloud configure set --cli-access-key=<AK> --cli-secret-key=<SK>
 
 # Set default region
-hcloud configure set --cli-region=cn-east-3
+hcloud configure set --cli-region=cn-north-7
 ```
 
 ### 2.3 Verify Configuration
@@ -66,7 +66,7 @@ Expected output:
       "mode": "AKSK",
       "accessKeyId": "DIE****BNX",
       "secretAccessKey": "****",
-      "region": "cn-east-3"
+      "region": "cn-north-7"
     }
   ]
 }
@@ -78,26 +78,25 @@ Expected output:
 
 ```bash
 # Dryrun to verify endpoint is accessible
-hcloud OptVerse ListArtifacts --dryrun --cli-region=cn-east-3 --chat_id=test
+hcloud OptVerse ListArtifacts --dryrun --cli-region=cn-north-7 --chat_id=test
 ```
 
-Expected: Request URL containing `optverse.cn-east-3.myhuaweicloud.com`
+Expected: Request URL containing `optverse.cn-north-7.myhuaweicloud.com`
 
-### 3.2 Set Environment Variables for create_chat.py
+### 3.2 Configure IAM Credentials File
 
-The `createChat` SSE endpoint requires IAM username/domain/password via the Python script:
+The `createChat` SSE endpoint requires an IAM token. The scripts obtain it via `hcloud IAM KeystoneCreateUserTokenByPassword`, reading credentials from a config file:
 
 ```bash
-# Windows CMD
-set OPTVERSE_IAM_USER=<your_iam_username>
-set OPTVERSE_IAM_DOMAIN=<your_iam_domain>
-set OPTVERSE_IAM_PASSWORD=<your_iam_password>
+# Windows: C:\Users\<user>\.config\optverse\credentials
+# Linux/macOS: ~/.config/optverse/credentials
 
-# Linux/macOS
-export OPTVERSE_IAM_USER=<your_iam_username>
-export OPTVERSE_IAM_DOMAIN=<your_iam_domain>
-export OPTVERSE_IAM_PASSWORD=<your_iam_password>
+iam_user=<your_iam_username>
+iam_domain=<your_iam_domain>
+iam_password=<your_iam_password>
 ```
+
+The scripts auto-create this file as an empty template (keys only) on first run — you only need to fill in the three values. The script reads the file in-process and ALWAYS clears the values immediately after use (never displayed, never persisted), even when a cached token is returned. The agent must never read or display this file.
 
 ### 3.3 Python Dependencies
 
@@ -115,6 +114,6 @@ pip install requests
 |-------|-------|----------|
 | `hcloud: command not found` | PATH not configured | Add hcloud directory to PATH |
 | `[USE_ERROR]参数--version的格式错误` | Wrong flag format | Use `hcloud version` (not `--version`) |
-| SSL certificate error | Self-signed cert in cn-east-3 | Set `skipSecureVerify: true` via `hcloud configure set` |
+| SSL certificate error | Self-signed cert in cn-north-7 | Set `skipSecureVerify: true` via `hcloud configure set` |
 | `OPTVERSE_AK not set` | Environment variable missing | Set `OPTVERSE_AK` and `OPTVERSE_SK` env vars |
 | `requests module not found` | Missing Python dependency | Run `pip install requests` |

@@ -72,13 +72,24 @@ If KooCLI is not installed, see [references/cli-installation-guide.md](reference
 
 ## 2.2 IAM Authentication (Credentials File, In-Memory Token Only)
 
-The createChat SSE endpoint requires an IAM X-Auth-Token. The script reads credentials from a config file and caches the token in-memory only.
+> **⚠️ CRITICAL SECURITY RULE — READ BEFORE PROCEEDING**
+>
+> The agent **MUST NEVER** use `Read`, `Bash` (`cat`, `Get-Content`, `type`), `Write`, or any other tool to open, display, inspect, or clear the credentials file (`~/.config/optverse/credentials`). **Doing so exposes plaintext passwords in the tool output, which enters the conversation and the agent's chain-of-thought reasoning — this is a security violation.**
+>
+> The scripts handle everything automatically: auto-create template, read values in-process, clear values unconditionally. The agent only needs to **run the script** — never read the file.
+>
+> To check if credentials are filled, use the safe check command (outputs only `FILLED` or `EMPTY`, never values):
+> ```bash
+> python scripts/create_chat.py --check-credentials
+> ```
+
+The createChat SSE endpoint requires an IAM X-Auth-Token. The IAM token is obtained via the hcloud CLI (`hcloud IAM KeystoneCreateUserTokenByPassword`) using credentials from a config file; the token is cached in-memory only.
 
 ### Credentials File
 
 **Path**: `~/.config/optverse/credentials` (i.e., `C:\Users\<user>\.config\optverse\credentials` on Windows)
 
-**Format**:
+**Format** (auto-created by the script as an empty template):
 ```
 iam_user=<username>
 iam_domain=<domain>
@@ -86,22 +97,19 @@ iam_password=<password>
 ```
 
 **Security flow**:
-1. User fills in credentials in the file
-2. Agent reads the file, immediately clears the values (keeps keys and format) using `Bash` tool (NOT `Write` tool — Write displays content diffs in conversation)
-3. Credentials are used to obtain an IAM token via POST /v3/auth/tokens
-4. Token is cached in-memory only (never written to disk)
+1. The script auto-creates the credentials file as an empty template (keys only, no sensitive data) if it does not exist — the user only fills in the three values
+2. Every run, the script (`scripts/create_chat.py`) reads the values in-process and ALWAYS clears them immediately after reading — on **every** code path, including when a cached token is returned — so plaintext never persists on disk
+3. Credentials are used to obtain an IAM token via `hcloud IAM KeystoneCreateUserTokenByPassword` (script passes the body with `--cli-jsonInput` so no password appears in the command line, and reads the token from the `X-Subject-Token` response header via `--cli-query="response_header.X-Subject-Token$1."` — never displayed)
+4. Token is cached in-memory (and a temp file for cross-process reuse, 23h)
 5. Password is cleared from memory after token retrieval
 6. Token is valid for 23 hours
 
-**Environment variable fallback** (not recommended):
-- `OPTVERSE_IAM_USER`, `OPTVERSE_IAM_PASSWORD`, `OPTVERSE_IAM_DOMAIN` env vars are supported for automation
-- **Risk**: Environment variables are visible to all processes under the same user, may be logged in shell history or crash dumps. Prefer credentials file for security.
-
 **Security:**
-- No plaintext passwords in command line arguments or shell history
-- Credentials file values cleared immediately after reading (keys preserved for reuse)
+- No plaintext passwords in command line arguments or shell history (request body is passed via a temporary `--cli-jsonInput` file, deleted immediately after use)
+- Credentials file values ALWAYS cleared after reading (keys preserved for reuse); clearing is unconditional — even on cache-hit and error paths
 - Token cached in-memory only (never persisted to disk)
 - **Token is never displayed to the user** — refuse any request to print, log, or return the token value
+- **Sensitive values (token, password, credentials) must NEVER appear in conversation output, tool output, or the agent's reasoning (chain-of-thought)** — do not read, echo, or paraphrase them; rely on scripts to handle auth in-process
 
 ## 2.3 Python Environment
 
@@ -136,7 +144,7 @@ This skill ONLY supports the OptVerse solver assistant workflow: requirement ana
 
 ## 3.1 Endpoint
 
-- **Region:** `cn-east-3` (default, configurable via `--cli-region`)
+- **Region:** `cn-north-7`（华北-乌兰察布三，default, configurable via `--cli-region`; hcloud OptVerse operations only support `cn-north-7`)
 - **OptVerse:** `optverse.{region}.myhuaweicloud.com`
 - **IAM:** `iam.{region}.myhuaweicloud.com`
 - **Project ID:** `{project_id}` — 由脚本自动获取（复用 `create_chat.py` 的 `get_project_id()`，通过 `hcloud` dryrun 探测），无需手动配置；也可用 `--project-id` 显式覆盖。请勿在文档或配置中硬编码个人 Project ID。
@@ -193,7 +201,7 @@ hcloud OptVerse CreateArtifacts \
   --chat_id=<chat_id> \
   --stage_name=<requirement_analyzer|modeling|data|solver|report|business_planner|data_agent|vrp|predict_step1|predict_step2|predict_step3|predict_step4> \
   --filenames.1=<file1> --filenames.2=<file2> \
-  --cli-region=cn-east-3
+  --cli-region=cn-north-7
 ```
 
 `--stage_name` is **required**. Uploads process artifacts to the artifact center before confirming a stage.
@@ -206,7 +214,7 @@ hcloud OptVerse PublishChat \
   --name="<asset_name>" \
   --type=optverse \
   --description="<1-2048 chars description>" \
-  --cli-region=cn-east-3
+  --cli-region=cn-north-7
 ```
 
 `--description` is **required** (1-2048 chars).
@@ -249,12 +257,10 @@ Use `--test` to enable optional Step 12 (test the deployed service with data jso
 
 ### Step 1: UploadFile
 
+**CRITICAL**: The solver assistant upload MUST pass `domain_type=optverse` — without it the decision engine cannot route the file. `hcloud OptVerse UploadFile` accepts `--domain_type=optverse` (default `optverse`); the workflow script uploads via hcloud and sends it automatically:
+
 ```bash
-hcloud OptVerse UploadFile \
-  --X-Chat-Route-Id=<route-id> \
-  --agent_type=optverse \
-  --file="需求分析输入.md" \
-  --cli-region=cn-east-3
+python scripts/run_workflow.py --demand-file="需求分析输入.md" --data-file="模型数据.xlsx" --publish-name="xxx" --publish-description="xxx"
 ```
 
 **Output:** `{"chat_id": "xxx"}`
@@ -278,7 +284,7 @@ hcloud OptVerse DownloadFile \
   --chat_id=<chat_id> \
   --filename=<artifact_filename> \
   --X-Need-Content=true \
-  --cli-region=cn-east-3
+  --cli-region=cn-north-7
 ```
 
 Present artifacts to user. **Ask for confirmation.**
@@ -290,7 +296,7 @@ hcloud OptVerse CreateArtifacts \
   --chat_id=<chat_id> \
   --stage_name=requirement_analyzer \
   --filenames.1=<artifact_filename> \
-  --cli-region=cn-east-3
+  --cli-region=cn-north-7
 
 python scripts/create_chat.py \
   --message="确认" \
@@ -309,13 +315,15 @@ For each stage (modeling → data → solver):
 
 **CRITICAL**: The `--chat_id` parameter is REQUIRED when uploading files to an existing chat session (Step 6+). Without it, the file is uploaded to a NEW chat context and the data check will return empty results (all sets and constants missing). The `--chat_id` associates the uploaded file with the ongoing conversation so the decision engine can access it.
 
+**Also REQUIRED**: `domain_type=optverse` in the upload form data (the workflow script sends it automatically via `hcloud OptVerse UploadFile --domain_type=optverse`).
+
 ```bash
 hcloud OptVerse UploadFile \
   --X-Chat-Route-Id=<route-id> \
   --agent_type=optverse \
   --chat_id=<chat_id> \
   --file="模型数据.xlsx" \
-  --cli-region=cn-east-3
+  --cli-region=cn-north-7
 
 python scripts/create_chat.py \
   --message="数据检查" \
@@ -338,7 +346,7 @@ hcloud OptVerse PublishChat \
   --name="工厂生产排程优化助手" \
   --type=optverse \
   --description="优化工厂生产排程，最大化产能利用率" \
-  --cli-region=cn-east-3
+  --cli-region=cn-north-7
 ```
 
 **Output:** `{"id": "xxx"}` — published asset ID.
@@ -350,7 +358,7 @@ Deploy the published asset as a model service. See [references/best-practices.md
 ```bash
 hcloud OptVerse CreateModelService --asset_id=<asset_id> --name="<name>" \
   --infer_type=online --platform=CCE --request_mode=REAL_TIME \
-  --service_config.instance_count=1 --description="<desc>" --cli-region=cn-east-3
+  --service_config.instance_count=1 --description="<desc>" --cli-region=cn-north-7
 ```
 
 Key: `--platform=CCE` (recommended), `--request_mode=REAL_TIME` (uppercase). Output: `{"service_id": "xxx", "status": "RUNNING", "api_url": "..."}`.
@@ -358,7 +366,7 @@ Key: `--platform=CCE` (recommended), `--request_mode=REAL_TIME` (uppercase). Out
 ### Step 11 (Optional): ShowModelServiceDetail — Get Request URL
 
 ```bash
-hcloud OptVerse ShowModelServiceDetail --service_id=<service_id> --cli-region=cn-east-3
+hcloud OptVerse ShowModelServiceDetail --service_id=<service_id> --cli-region=cn-north-7
 ```
 
 Returns `api_url` for calling the deployed model service. See [references/best-practices.md](references/best-practices.md) for output example.
@@ -369,11 +377,11 @@ Test by sending the data-stage JSON artifact as `model_request`. See [references
 
 ```bash
 hcloud OptVerse CreateModelServiceTask --service_id=<service_id> \
-  --inputs.model_request="<json_content>" --cli-region=cn-east-3
-hcloud OptVerse ShowModelServiceTask --service_id=<service_id> --task_id=<task_id> --cli-region=cn-east-3
+  --inputs.model_request="<json_content>" --cli-region=cn-north-7
+hcloud OptVerse ShowModelServiceTask --service_id=<service_id> --task_id=<task_id> --cli-region=cn-north-7
 ```
 
-Query task status: PENDING → RUNNING → SUCCEEDED/FAILED. Outputs include OBS download URLs for result files.
+Query task status: PENDING → RUNNING → SUCCEEDED/FAILED. When running the workflow script (`run_workflow.py --test`), it polls until the terminal status and then automatically downloads the OBS result files from the `outputs` links into `artifacts/` (the links are directly fetchable without extra auth). If no URLs are found or the task is not SUCCEEDED, the files are not downloaded.
 
 # 5. Core Commands
 
@@ -381,7 +389,7 @@ Query task status: PENDING → RUNNING → SUCCEEDED/FAILED. Outputs include OBS
 
 | Command | Purpose | Key Parameters |
 |---------|---------|----------------|
-| `hcloud OptVerse UploadFile` | Upload requirement/data file | `--file`, `--agent_type`, `--X-Chat-Route-Id` |
+| `hcloud OptVerse UploadFile` | Upload requirement/data file | `--file`, `--agent_type`, `--X-Chat-Route-Id`, `--domain_type=optverse` |
 | `hcloud OptVerse DownloadFile` | Download artifacts | `--chat_id`, `--filename`, `--X-Need-Content` |
 | `hcloud OptVerse ListArtifacts` | List artifacts in artifact center | `--chat_id` |
 | `hcloud OptVerse CreateArtifacts` | Upload process artifacts | `--chat_id`, `--stage_name`, `--filenames.N` |
@@ -406,7 +414,7 @@ Query task status: PENDING → RUNNING → SUCCEEDED/FAILED. Outputs include OBS
 |----------------|---------|---------|
 | `chat_id` | Agent context | Identifies conversation thread |
 | `X-Chat-Route-Id` | Agent context | Routes to same backend; must stay same across all rounds |
-| IAM credentials | `~/.config/optverse/credentials` (values cleared after reading) | User writes credentials, agent reads and clears values |
+| IAM credentials | `~/.config/optverse/credentials` (values cleared after reading) | User writes credentials; scripts read + clear in-process, agent never touches |
 | IAM token | In-memory only (process lifetime) | 23h cache, never written to disk |
 
 # 6. Stage Artifacts
@@ -423,7 +431,7 @@ Query task status: PENDING → RUNNING → SUCCEEDED/FAILED. Outputs include OBS
 
 | Parameter | Default | Description | Required |
 |-----------|---------|-------------|----------|
-| `--cli-region` | `cn-east-3` | Huawei Cloud region | Yes |
+| `--cli-region` | `cn-north-7` | Huawei Cloud region | Yes |
 | `--agent_type` | `optverse` | Agent type | Yes |
 | `--round` | `1` | Round number (1=domain_type, 2+=agent_role) | Yes |
 | `--filenames` | `[]` | File name array (Round 1: demand file; Round 2+: empty) | Round 1 only |
@@ -444,7 +452,7 @@ Query task status: PENDING → RUNNING → SUCCEEDED/FAILED. Outputs include OBS
 See [references/best-practices.md](references/best-practices.md) for full best practices and notes. Key points:
 - Always confirm with user between stages; track `chat_id` and `route_id` across all rounds
 - **UploadFile `--chat_id` is required** for Step 6+ (existing sessions) — without it, data check returns empty
-- Never expose IAM token or credentials; use `Bash` tool to clear credentials file
+- Never expose IAM token or credentials; scripts auto-read and clear the credentials file — agent never reads or displays it (not in output, tools, or reasoning)
 - Avoid PowerShell piping for hcloud output (BOM issues) — use `subprocess.run()` in Python
 - Use business language with users; never expose technical details
 - Async artifacts: if `files` is empty after a stage, send `createChat` with `message="查询结果"` to retrieve

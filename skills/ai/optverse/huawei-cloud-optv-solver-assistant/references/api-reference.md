@@ -71,15 +71,18 @@ python scripts/create_chat.py --message="<text>" --agent_type=optverse --filenam
 
 ## 2. UploadFile
 
+> **NOTE**: The solver assistant upload MUST include `domain_type=optverse` in the form data. `hcloud OptVerse UploadFile` accepts `--domain_type=optverse` (default `optverse`); `run_workflow.py` uploads via hcloud and sends it automatically.
+
 ### 2.1 hcloud Command
 
 ```bash
 hcloud OptVerse UploadFile \
   --X-Chat-Route-Id=<route-id> \
   --agent_type=optverse \
+  --domain_type=optverse \
   --file=<file-path> \
   [--chat_id=<chat_id>] \
-  --cli-region=cn-east-3
+  --cli-region=cn-north-7
 ```
 
 ### 2.2 Parameters
@@ -91,6 +94,7 @@ hcloud OptVerse UploadFile \
 | --file | Yes | file | File to upload (< 100MB) |
 | --chat_id | No | string | Existing chat_id (for data file uploads) |
 | --project_id | No | string | Project ID (auto-detected) |
+| --domain_type | No (default `optverse`) | string | Domain type; REQUIRED as `optverse` for the solver assistant |
 
 ### 2.3 Response
 
@@ -109,7 +113,7 @@ hcloud OptVerse DownloadFile \
   --chat_id=<chat_id> \
   --filename=<filename> \
   --X-Need-Content=true \
-  --cli-region=cn-east-3
+  --cli-region=cn-north-7
 ```
 
 ### 3.2 Parameters
@@ -136,7 +140,7 @@ hcloud OptVerse DownloadFile \
 ```bash
 hcloud OptVerse ListArtifacts \
   --chat_id=<chat_id> \
-  --cli-region=cn-east-3
+  --cli-region=cn-north-7
 ```
 
 ### 4.2 Response
@@ -178,7 +182,7 @@ hcloud OptVerse PublishChat \
   --name=<asset-name> \
   --type=optverse \
   [--description=<description>] \
-  --cli-region=cn-east-3
+  --cli-region=cn-north-7
 ```
 
 ### 5.2 Parameters
@@ -208,7 +212,7 @@ All conversation stages must be confirmed before publishing. The server validate
 hcloud OptVerse CancelChat \
   --X-Chat-Route-Id=<route-id> \
   --chat_id=<chat_id> \
-  --cli-region=cn-east-3
+  --cli-region=cn-north-7
 ```
 
 Use this to cancel an in-progress SSE stream if the user wants to abort.
@@ -218,7 +222,7 @@ Use this to cancel an in-progress SSE stream if the user wants to abort.
 ```bash
 hcloud OptVerse ShowChat \
   --chat_id=<chat_id> \
-  --cli-region=cn-east-3
+  --cli-region=cn-north-7
 ```
 
 Returns conversation details including message history.

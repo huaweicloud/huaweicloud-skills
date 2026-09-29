@@ -31,9 +31,9 @@ Usage:
   python create_chat.py --message="确认" --chat_id=<chat_id> --round=2
 
 Authentication:
-  Reads IAM credentials from ~/.config/optverse/credentials (or env vars
-  OPTVERSE_IAM_USER/DOMAIN/PASSWORD), obtains an IAM token, then clears the
-  credentials from the file immediately (never persisted).
+  Reads IAM credentials from ~/.config/optverse/credentials, obtains an IAM
+  token via `hcloud IAM KeystoneCreateUserTokenByPassword`, then clears the
+  credentials from the file immediately (never persisted, never displayed).
   Token is cached in-memory and in a temp file (23h validity, reused across
   process restarts). No interactive input.
 
@@ -49,6 +49,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import uuid
 
@@ -63,11 +64,11 @@ if sys.platform == "win32":
         sys.stdout.reconfigure(encoding="utf-8")
         sys.stderr.reconfigure(encoding="utf-8")
     except Exception:
-        pass
+        print(f"[WARN] Failed to reconfigure console encoding")
 
 
 # ---------------------------------------------------------------------------
-# IAM Token Retrieval (persisted token cache in temp dir, credentials never stored)
+# IAM Token Retrieval via hcloud CLI (credentials file, never displayed)
 # ---------------------------------------------------------------------------
 
 # In-memory token cache (process lifetime only)
@@ -84,6 +85,48 @@ CREDENTIALS_FILE = os.path.join(
 TOKEN_FILE = os.path.join(
     os.environ.get("TEMP", "/tmp"), "optverse_iam_token.txt"
 )
+
+# Empty template written to the credentials file (keys only, no sensitive data)
+CREDENTIALS_TEMPLATE = (
+    "# OptVerse IAM Credentials\n"
+    "# Values are cleared after reading. Refill to reuse.\n"
+    "iam_user=\n"
+    "iam_domain=\n"
+    "iam_password=\n"
+)
+
+
+def _redact(text, limit=500):
+    """Redact sensitive values (tokens, passwords, signed URLs) before logging.
+
+    Applies to every error/response path that prints external CLI or HTTP
+    output, so IAM tokens, passwords and signed URLs never surface in logs.
+    """
+    if not text:
+        return ""
+    text = str(text)
+    text = re.sub(
+        r"(?i)(X-Auth-Token|X-Subject-Token|x-subject-token)\s*[:=]\s*[^\s\"'<,]+",
+        r"\1=***REDACTED***",
+        text,
+    )
+    text = re.sub(
+        r'(?i)("?(?:password|iam_password|secret_key|sk)"?\s*[:=]\s*")[^"\n]*(")',
+        r"\1***REDACTED***\2",
+        text,
+    )
+    text = re.sub(
+        r'(?i)("?(?:token|X-Subject-Token)"?\s*[:=]\s*")[^"\n]{16,}(")',
+        r"\1***REDACTED***\2",
+        text,
+    )
+    text = re.sub(
+        r"(?i)([?&](?:X-Amz-Signature|X-Signature|Signature|AWSAccessKeyId|"
+        r"x-amz-credential|X-Amz-Credential)=)[^&\s\"']+",
+        r"\1***REDACTED***",
+        text,
+    )
+    return text[:limit]
 
 
 def _load_cached_token(region):
@@ -103,7 +146,7 @@ def _load_cached_token(region):
             if cached_region == region and time.time() - ts < 23 * 3600 and token:
                 return token
     except (OSError, IOError, ValueError):
-        pass
+        print(f"[WARN] Failed to load cached token", file=sys.stderr)
     return None
 
 
@@ -113,12 +156,40 @@ def _save_token(token, region):
         with open(TOKEN_FILE, "w", encoding="utf-8") as f:
             f.write(f"{time.time()}\n{region}\n{token}\n")
     except (OSError, IOError):
-        pass
+        print(f"[WARN] Failed to save token cache", file=sys.stderr)
+
+
+def _ensure_credentials_file():
+    """Create the credentials file template if it does not exist.
+
+    Contains only empty keys (no sensitive data) so the user just fills in
+    the values. Called on every run so the file is always available.
+    """
+    try:
+        if not os.path.exists(CREDENTIALS_FILE):
+            os.makedirs(os.path.dirname(CREDENTIALS_FILE), exist_ok=True)
+            with open(CREDENTIALS_FILE, "w", encoding="utf-8") as f:
+                f.write(CREDENTIALS_TEMPLATE)
+    except (OSError, IOError):
+        print(f"[WARN] Failed to create credentials file", file=sys.stderr)
+
+
+def _clear_credentials_file():
+    """Rewrite the credentials file as an empty template (keys only).
+
+    Called unconditionally after reading so plaintext credentials never
+    persist on disk, regardless of which code path ran.
+    """
+    try:
+        with open(CREDENTIALS_FILE, "w", encoding="utf-8") as f:
+            f.write(CREDENTIALS_TEMPLATE)
+    except (OSError, IOError):
+        print(f"[WARN] Failed to clear credentials file", file=sys.stderr)
 
 
 def _read_credentials_file():
     """Read IAM credentials from ~/.config/optverse/credentials.
-    After reading, immediately clear the values (keep keys/format).
+    After reading, ALWAYS clear the values immediately (keep keys/format).
     Returns (iam_user, iam_domain, iam_password) or (None, None, None).
     """
     if not os.path.exists(CREDENTIALS_FILE):
@@ -145,31 +216,123 @@ def _read_credentials_file():
             elif key == "iam_password":
                 iam_password = value
 
-    # Clear values immediately after reading (keep keys and format)
-    if iam_user or iam_domain or iam_password:
-        try:
-            with open(CREDENTIALS_FILE, "w", encoding="utf-8") as f:
-                f.write("# OptVerse IAM Credentials\n")
-                f.write("# Values are cleared after reading. Refill to reuse.\n")
-                f.write("iam_user=\n")
-                f.write("iam_domain=\n")
-                f.write("iam_password=\n")
-        except (OSError, IOError):
-            pass
+    # Unconditionally clear values after reading (keep keys and format)
+    _clear_credentials_file()
 
     return (iam_user, iam_domain, iam_password)
 
 
-def get_iam_token(region, project_name=None):
-    """Obtain an IAM token: persisted temp-file cache > credentials file > env vars.
+def _hcloud_fetch_iam_token(region, project_name, iam_user, iam_domain, iam_password):
+    """Obtain an IAM token via the hcloud CLI (IAM KeystoneCreateUserTokenByPassword).
 
-    Credentials are read from ~/.config/optverse/credentials and cleared
-    immediately after use (never persisted). Token is cached in-memory and
-    in a temp file (23h validity) so multi-round flows reuse it.
+    Credentials are passed in (already read + cleared by get_iam_token, never
+    displayed). The request body is passed via a temporary JSON file
+    (--cli-jsonInput) so no plaintext password appears in command line
+    arguments or shell history. The token is read from the response header via
+    --cli-query="response_header.X-Subject-Token" (the "$1." suffix is rejected
+    as illegal by KooCLI >= 7.3.9; a plain JMESPath header path works instead).
 
     SECURITY: The returned token must never be printed, logged, or shown
     to the user by any calling code.
     """
+    project_name = project_name or region
+    body = {
+        "query": {"nocatalog": ""},
+        "body": {
+            "auth": {
+                "identity": {
+                    "methods": ["password"],
+                    "password": {
+                        "user": {
+                            "domain": {"name": iam_domain},
+                            "name": iam_user,
+                            "password": iam_password,
+                        }
+                    },
+                },
+                "scope": {"project": {"name": project_name}},
+            }
+        },
+    }
+
+    tmp_input = None
+    try:
+        fd, tmp_input = tempfile.mkstemp(suffix=".json", prefix="optverse_iam_")
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(body, f, ensure_ascii=False)
+
+        cmd = [
+            "hcloud", "IAM", "KeystoneCreateUserTokenByPassword",
+            "--cli-region=cn-north-7",
+            f"--cli-jsonInput={tmp_input}",
+            "--cli-output=tsv",
+            "--cli-query=response_header.X-Subject-Token",
+        ]
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=60,
+        )
+    finally:
+        if tmp_input and os.path.exists(tmp_input):
+            try:
+                os.remove(tmp_input)
+            except OSError:
+                pass
+
+    if result.returncode != 0:
+        print(
+            f"[ERROR] IAM token request failed via hcloud (rc={result.returncode})",
+            file=sys.stderr,
+        )
+        # Print stderr only (advisories/errors). stdout may carry the IAM
+        # response body — never echo it, to keep token metadata out of logs.
+        err = (result.stderr or "").strip()
+        if err:
+            print(f"[ERROR] {_redact(err, 500)}", file=sys.stderr)
+        sys.exit(1)
+
+    # KooCLI prints Chinese advisory lines (e.g. "cli-jsonInput中各位置...",
+    # "错误详情参见...") to stdout ahead of the actual result. Strip any JSON
+    # body / advisory text and take the trailing token line only.
+    stdout = (result.stdout or "").strip()
+    if not stdout:
+        print("[ERROR] Empty hcloud IAM response", file=sys.stderr)
+        sys.exit(1)
+    lines = [ln.strip() for ln in stdout.splitlines() if ln.strip()]
+    token = lines[-1] if lines else ""
+    if (token.startswith("{") or token.endswith("}")
+            or token.startswith("json结果") or token.startswith("cli-jsonInput")
+            or token.startswith("错误详情")):
+        print("[ERROR] Failed to extract X-Subject-Token from hcloud response "
+              "(JMESPath query returned no header data)", file=sys.stderr)
+        sys.exit(1)
+    if not token:
+        print("[ERROR] X-Subject-Token not found in hcloud response", file=sys.stderr)
+        sys.exit(1)
+    return token
+
+
+def get_iam_token(region, project_name=None):
+    """Obtain an IAM token: in-memory/temp cache > hcloud IAM CLI.
+
+    The credentials file is auto-created (empty template) if missing and is
+    ALWAYS read + cleared on every call, on every code path — including when a
+    cached token is returned — so plaintext credentials never persist on disk.
+    The token itself is cached (in-memory + temp file, 23h validity).
+
+    SECURITY: The returned token must never be printed, logged, or shown
+    to the user by any calling code.
+    """
+    # Ensure the credentials template exists so the user only needs to fill it
+    _ensure_credentials_file()
+
+    # Read credentials and immediately clear the file (unconditional)
+    iam_user, iam_domain, iam_password = _read_credentials_file()
+
     # Check in-memory cache (23h validity)
     if (_token_cache["token"] and _token_cache["region"] == region
             and time.time() - _token_cache["timestamp"] < 23 * 3600):
@@ -184,84 +347,16 @@ def get_iam_token(region, project_name=None):
         print("  ✅ IAM token reused from cache (23h validity)\n", file=sys.stderr)
         return cached
 
-    print("\n── IAM Authentication ──", file=sys.stderr)
-    print("Tip: Write credentials to ~/.config/optverse/credentials", file=sys.stderr)
-    print("     (values are cleared after reading, password never displayed).\n", file=sys.stderr)
+    print("\n── IAM Authentication (hcloud CLI) ──", file=sys.stderr)
+    print(f"  Reading credentials from {CREDENTIALS_FILE}", file=sys.stderr)
+    print("  (values are cleared after reading, password never displayed).\n", file=sys.stderr)
 
-    # 1. Try credentials file first (preferred, most secure)
-    iam_user, iam_domain, iam_password = _read_credentials_file()
-
-    # 2. Fall back to environment variables
-    if not iam_user:
-        iam_user = os.environ.get("OPTVERSE_IAM_USER")
-        if iam_user:
-            print(f"  IAM Username: {iam_user} (from env)", file=sys.stderr)
-    else:
-        print("  IAM Username: *** (from credentials file)", file=sys.stderr)
-
-    if not iam_domain:
-        iam_domain = os.environ.get("OPTVERSE_IAM_DOMAIN")
-        if iam_domain:
-            print(f"  IAM Domain: {iam_domain} (from env)", file=sys.stderr)
-    else:
-        print("  IAM Domain: *** (from credentials file)", file=sys.stderr)
-
-    if not iam_password:
-        iam_password = os.environ.get("OPTVERSE_IAM_PASSWORD")
-        if iam_password:
-            print("  IAM Password: *** (from env)", file=sys.stderr)
-    else:
-        print("  IAM Password: *** (from credentials file)", file=sys.stderr)
-
-    if not all([iam_user, iam_password, iam_domain]):
+    if not all([iam_user, iam_domain, iam_password]):
         print("[ERROR] IAM credentials incomplete.", file=sys.stderr)
-        print("  Fill ~/.config/optverse/credentials (iam_user/iam_domain/iam_password)", file=sys.stderr)
-        print("  or set OPTVERSE_IAM_USER/OPTVERSE_IAM_DOMAIN/OPTVERSE_IAM_PASSWORD env vars.", file=sys.stderr)
+        print(f"  Fill {CREDENTIALS_FILE} (iam_user/iam_domain/iam_password)", file=sys.stderr)
         sys.exit(1)
 
-    if not project_name:
-        project_name = region
-
-    iam_url = f"https://iam.{region}.myhuaweicloud.com/v3/auth/tokens"
-    body = {
-        "auth": {
-            "identity": {
-                "methods": ["password"],
-                "password": {
-                    "user": {
-                        "domain": {"name": iam_domain},
-                        "name": iam_user,
-                        "password": iam_password,
-                    }
-                },
-            },
-            "scope": {"project": {"name": project_name}},
-        }
-    }
-
-    resp = requests.post(
-        iam_url,
-        json=body,
-        headers={"Content-Type": "application/json"},
-        verify=False,
-        timeout=30,
-        proxies={"http": None, "https": None},
-    )
-
-    # Clear password from memory immediately
-    iam_password = None
-
-    if resp.status_code != 201:
-        print(
-            f"[ERROR] IAM token request failed: {resp.status_code} {resp.text[:500]}",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
-    token = resp.headers.get("X-Subject-Token")
-    if not token:
-        print("[ERROR] X-Subject-Token not found in response headers", file=sys.stderr)
-        sys.exit(1)
+    token = _hcloud_fetch_iam_token(region, project_name, iam_user, iam_domain, iam_password)
 
     # Cache in-memory (process lifetime) and persist to temp-file cache
     # (survives restarts). Token is written to temp dir only, never to the
@@ -270,7 +365,7 @@ def get_iam_token(region, project_name=None):
     _token_cache["timestamp"] = time.time()
     _token_cache["region"] = region
     _save_token(token, region)
-    print("  ✅ IAM token obtained (cached 23h, never displayed)\n", file=sys.stderr)
+    print("  ✅ IAM token obtained via hcloud (cached 23h, never displayed)\n", file=sys.stderr)
     return token
 
 
@@ -301,7 +396,7 @@ def get_project_id(hcloud_path, region):
         if match:
             return match.group(1)
     except Exception:
-        pass
+        print(f"[WARN] get_project_id failed", file=sys.stderr)
     return ""
 
 
@@ -328,14 +423,14 @@ def get_or_create_route_id(existing_route_id=None):
             if route_id:
                 return route_id
         except Exception:
-            pass
+            print(f"[WARN] Failed to read route_id file", file=sys.stderr)
 
     route_id = str(uuid.uuid4())
     try:
         with open(ROUTE_ID_FILE, "w") as f:
             f.write(route_id)
     except Exception:
-        pass
+        print(f"[WARN] Failed to save route_id file", file=sys.stderr)
 
     return route_id
 
@@ -404,7 +499,7 @@ def create_chat(
 
     if resp.status_code != 200:
         print(f"[ERROR] createChat failed: {resp.status_code}", file=sys.stderr)
-        print(f"[ERROR] Response: {resp.text[:2000]}", file=sys.stderr)
+        print(f"[ERROR] Response: {_redact(resp.text, 500)}", file=sys.stderr)
         print(
             f"[ERROR] X-Request-Id: {resp.headers.get('X-Request-Id', 'N/A')}",
             file=sys.stderr,
@@ -457,7 +552,7 @@ def create_chat(
                     try:
                         content = json.loads(content)
                     except json.JSONDecodeError:
-                        pass
+                        print(f"  [WARN] Failed to parse SSE content as JSON", file=sys.stderr)
                 if isinstance(content, dict):
                     name = content.get("name", "")
                     raw_data = content.get("data", {})
@@ -491,7 +586,12 @@ def main():
     parser = argparse.ArgumentParser(
         description="OptVerse createChat SSE client"
     )
-    parser.add_argument("--message", required=True, help="Chat message content")
+    parser.add_argument("--message", help="Chat message content")
+    parser.add_argument(
+        "--check-credentials",
+        action="store_true",
+        help="Safely check if credentials file is filled (prints FILLED or EMPTY, never values)",
+    )
     parser.add_argument(
         "--round",
         type=int,
@@ -519,7 +619,7 @@ def main():
         "--agent_type", default="optverse", help="Agent type (default: optverse)"
     )
     parser.add_argument("--project_id", help="Project ID (auto-detected)")
-    parser.add_argument("--cli-region", default="cn-east-3", help="Region")
+    parser.add_argument("--cli-region", default="cn-north-7", help="Region")
     parser.add_argument("--endpoint", help="OptVerse endpoint")
     parser.add_argument(
         "--hcloud-path",
@@ -528,6 +628,22 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # Ensure the credentials template exists (user only fills in the values)
+    _ensure_credentials_file()
+
+    # Safe credential check mode: print FILLED/EMPTY only, never the values
+    if args.check_credentials:
+        u, d, p = _read_credentials_file()
+        if all([u, d, p]):
+            print("FILLED")
+        else:
+            print("EMPTY")
+        sys.exit(0)
+
+    if not args.message:
+        print("[ERROR] --message is required (or use --check-credentials).", file=sys.stderr)
+        sys.exit(1)
 
     hcloud_path = args.hcloud_path or shutil.which("hcloud")
     if not hcloud_path or not os.path.exists(hcloud_path):

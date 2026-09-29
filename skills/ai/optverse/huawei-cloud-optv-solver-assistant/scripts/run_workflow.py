@@ -25,44 +25,76 @@ Usage:
       --deploy --test
 
 Authentication:
-  Interactive input: IAM username, domain, and password (hidden via getpass).
-  Token is cached in-memory only (never written to disk).
-  Credentials are used to obtain the token, then immediately cleared from memory.
-  Environment variables OPTVERSE_IAM_USER / OPTVERSE_IAM_DOMAIN are read if set
-  (password must always be entered interactively or via OPTVERSE_IAM_PASSWORD env).
+  IAM credentials are read from ~/.config/optverse/credentials (values cleared
+  after reading, never displayed). The IAM token is obtained via
+  `hcloud IAM KeystoneCreateUserTokenByPassword` (shared with create_chat.py)
+  and cached in-memory / temp file (23h validity). No interactive input.
 """
 
 import argparse
 import base64
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
-import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 import requests
 import urllib3
 
-from create_chat import get_project_id
+from create_chat import _ensure_credentials_file, get_iam_token, get_project_id
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+def _redact(text, limit=500):
+    """Redact sensitive values (tokens, passwords, signed URLs) before logging.
+
+    Shared sanitizer for every path that prints CLI/HTTP output, so IAM
+    tokens, passwords and signed URLs never surface in logs.
+    """
+    if not text:
+        return ""
+    text = str(text)
+    text = re.sub(
+        r"(?i)(X-Auth-Token|X-Subject-Token|x-subject-token)\s*[:=]\s*[^\s\"'<,]+",
+        r"\1=***REDACTED***",
+        text,
+    )
+    text = re.sub(
+        r'(?i)("?(?:password|iam_password|secret_key|sk)"?\s*[:=]\s*")[^"\n]*(")',
+        r"\1***REDACTED***\2",
+        text,
+    )
+    text = re.sub(
+        r'(?i)("?(?:token|X-Subject-Token)"?\s*[:=]\s*")[^"\n]{16,}(")',
+        r"\1***REDACTED***\2",
+        text,
+    )
+    text = re.sub(
+        r"(?i)([?&](?:X-Amz-Signature|X-Signature|Signature|AWSAccessKeyId|"
+        r"x-amz-credential|X-Amz-Credential)=)[^&\s\"']+",
+        r"\1***REDACTED***",
+        text,
+    )
+    return text[:limit]
 
 if sys.platform == "win32":
     try:
         sys.stdout.reconfigure(encoding="utf-8")
         sys.stderr.reconfigure(encoding="utf-8")
     except Exception:
-        pass
+        print(f"[WARN] Failed to reconfigure console encoding", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
-DEFAULT_REGION = "cn-east-3"
+DEFAULT_REGION = "cn-north-7"
 REGION = DEFAULT_REGION
 PROJECT_ID = ""
 ENDPOINT = f"optverse.{REGION}.myhuaweicloud.com"
@@ -76,161 +108,21 @@ ARTIFACTS_DIR = os.path.join(SCRIPT_DIR, "..", "artifacts")
 
 
 # ---------------------------------------------------------------------------
-# IAM Token (in-memory only, never persisted to disk)
+# IAM Token (via hcloud CLI, credentials from ~/.config/optverse/credentials)
 # ---------------------------------------------------------------------------
-
-# In-memory token cache (process lifetime only, never written to disk)
-# SECURITY: Token must NEVER be displayed, logged, or returned to the user.
-# The agent must refuse any request to print/show/debug the token value.
-_token_cache = {"token": None, "timestamp": 0}
 
 
 def get_token():
-    """Get IAM token via interactive input.
+    """Get IAM token via the hcloud CLI (reads ~/.config/optverse/credentials).
 
-    Prompts the user for IAM username/password/domain interactively.
-    Password is read via getpass (not echoed to screen).
-    Credentials are used only to obtain the token, then discarded.
-    Token is cached in-memory only (never written to disk).
+    Delegates to create_chat.get_iam_token() so both scripts share the same
+    authentication path: credentials file (read + cleared in-process) and
+    `hcloud IAM KeystoneCreateUserTokenByPassword`. No interactive input.
 
     SECURITY: The returned token must never be printed, logged, or shown
     to the user by any calling code.
     """
-    # Check in-memory cache (23h validity)
-    if _token_cache["token"] and time.time() - _token_cache["timestamp"] < 23 * 3600:
-        return _token_cache["token"]
-
-    print("\n── IAM Authentication ──")
-    print("Please provide your IAM credentials (password will be hidden):")
-    print("Tip: Interactive input is recommended. Environment variables")
-    print("     (OPTVERSE_IAM_USER/PASSWORD/DOMAIN) are supported but less")
-    print("     secure (visible in process list and shell history).\n")
-
-    # Helper: read input from TTY directly when stdin is piped (non-interactive)
-    def _read_input(prompt):
-        """Read a line from the real terminal, bypassing piped stdin."""
-        sys.stdout.write(prompt)
-        sys.stdout.flush()
-        if sys.platform == "win32":
-            try:
-                with open("CONIN$", "r") as tty_in:
-                    return tty_in.readline().strip()
-            except (OSError, IOError):
-                pass
-        else:
-            try:
-                with open("/dev/tty", "r") as tty_in:
-                    return tty_in.readline().strip()
-            except (OSError, IOError):
-                pass
-        return input().strip()
-
-    def _read_password(prompt):
-        """Read a password from the real terminal, hidden from display."""
-        sys.stdout.write(prompt)
-        sys.stdout.flush()
-        if sys.platform == "win32":
-            try:
-                import msvcrt
-                chars = []
-                while True:
-                    ch = msvcrt.getwch()
-                    if ch in ("\r", "\n"):
-                        sys.stdout.write("\n")
-                        sys.stdout.flush()
-                        return "".join(chars)
-                    elif ch == "\x03":
-                        raise KeyboardInterrupt
-                    elif ch == "\x08":
-                        if chars:
-                            chars.pop()
-                            sys.stdout.write("\b \b")
-                            sys.stdout.flush()
-                    else:
-                        chars.append(ch)
-                        sys.stdout.write("*")
-                        sys.stdout.flush()
-            except ImportError:
-                pass
-        else:
-            try:
-                with open("/dev/tty", "r") as tty_in:
-                    import termios
-                    fd = tty_in.fileno()
-                    old = termios.tcgetattr(fd)
-                    try:
-                        new = termios.tcgetattr(fd)
-                        new[3] &= ~termios.ECHO
-                        termios.tcsetattr(fd, termios.TCSANOW, new)
-                        line = tty_in.readline().strip()
-                        sys.stdout.write("\n")
-                        sys.stdout.flush()
-                        return line
-                    finally:
-                        termios.tcsetattr(fd, termios.TCSANOW, old)
-            except (OSError, IOError, ImportError):
-                pass
-        import getpass
-        return getpass.getpass("")
-
-    # Check env vars first, fall back to interactive input
-    iam_user = os.environ.get("OPTVERSE_IAM_USER")
-    if not iam_user:
-        iam_user = _read_input("  IAM Username: ")
-    else:
-        print(f"  IAM Username: {iam_user} (from env)")
-
-    iam_domain = os.environ.get("OPTVERSE_IAM_DOMAIN")
-    if not iam_domain:
-        iam_domain = _read_input("  IAM Domain (Account Name): ")
-    else:
-        print(f"  IAM Domain: {iam_domain} (from env)")
-
-    iam_password = os.environ.get("OPTVERSE_IAM_PASSWORD")
-    if not iam_password:
-        iam_password = _read_password("  IAM Password: ")
-    else:
-        print("  IAM Password: *** (from env)")
-
-    if not all([iam_user, iam_password, iam_domain]):
-        print("[ERROR] IAM credentials incomplete.")
-        sys.exit(1)
-
-    iam_url = f"https://iam.{REGION}.myhuaweicloud.com/v3/auth/tokens"
-    body = {
-        "auth": {
-            "identity": {
-                "methods": ["password"],
-                "password": {
-                    "user": {
-                        "domain": {"name": iam_domain},
-                        "name": iam_user,
-                        "password": iam_password,
-                    }
-                },
-            },
-            "scope": {"project": {"name": REGION}},
-        }
-    }
-    resp = requests.post(
-        iam_url, json=body, headers={"Content-Type": "application/json"},
-        verify=False, timeout=30, proxies={"http": None, "https": None},
-    )
-    # Clear password from memory immediately
-    iam_password = None
-    if resp.status_code != 201:
-        print(f"[ERROR] IAM token request failed: {resp.status_code} {resp.text[:500]}")
-        sys.exit(1)
-    token = resp.headers.get("X-Subject-Token")
-    if not token:
-        print("[ERROR] X-Subject-Token not found in response")
-        sys.exit(1)
-
-    # Cache in-memory only (never to disk)
-    _token_cache["token"] = token
-    _token_cache["timestamp"] = time.time()
-    print("  ✅ IAM token obtained (cached in-memory, 23h validity, never displayed)\n")
-    return token
+    return get_iam_token(REGION)
 
 
 # ---------------------------------------------------------------------------
@@ -238,9 +130,9 @@ def get_token():
 # ---------------------------------------------------------------------------
 
 
-def upload_file(token, route_id, file_path, filename, agent_type="optverse",
-                chat_id=None):
-    """UploadFile → returns chat_id.
+def upload_file(route_id, file_path, filename, agent_type="optverse",
+                domain_type="optverse", chat_id=None):
+    """UploadFile via hcloud CLI → returns chat_id.
 
     For Step 1 (initial upload), chat_id should be None — a new chat session
     is created and its ID is returned.
@@ -249,24 +141,32 @@ def upload_file(token, route_id, file_path, filename, agent_type="optverse",
     passed to associate the file with the ongoing conversation. Without it,
     the file is uploaded to a new chat context and the decision engine
     cannot access it, resulting in empty data check results.
+
+    domain_type="optverse" is REQUIRED for the solver assistant — the
+    decision engine uses it to route the upload to the correct agent domain
+    (hcloud accepts `--domain_type`, default optverse).
     """
-    url = f"https://{ENDPOINT}/v1/{PROJECT_ID}/chats/file/upload"
-    headers = {"X-Auth-Token": token, "X-Chat-Route-Id": route_id}
-    with open(file_path, "rb") as f:
-        files = {"file": (filename, f, "application/octet-stream")}
-        data = {"agent_type": agent_type}
-        if chat_id:
-            data["chat_id"] = chat_id
-        resp = requests.post(
-            url, files=files, data=data, headers=headers,
-            verify=False, timeout=60, proxies={"http": None, "https": None},
-        )
-    if resp.status_code not in (200, 202):
-        print(f"[ERROR] UploadFile failed: {resp.status_code} {resp.text[:500]}")
+    args = [HCLOUD, "OptVerse", "UploadFile",
+            f"--cli-region={REGION}",
+            f"--X-Chat-Route-Id={route_id}",
+            f"--agent_type={agent_type}",
+            f"--file={file_path}"]
+    if chat_id:
+        args.append(f"--chat_id={chat_id}")
+    args.append(f"--domain_type={domain_type}")
+    result = subprocess.run(args, capture_output=True, text=True, timeout=120,
+                            encoding="utf-8", errors="replace")
+    if result.returncode != 0:
+        print(f"[ERROR] UploadFile failed (rc={result.returncode}): "
+              f"{_redact(result.stderr or result.stdout, 500)}")
         return None
-    chat_id = resp.json().get("chat_id")
-    print(f"  [UploadFile] {filename} → chat_id={chat_id}")
-    return chat_id
+    try:
+        data = json.loads(result.stdout)
+        out_chat_id = data.get("chat_id") or data.get("id")
+    except Exception:
+        out_chat_id = None
+    print(f"  [UploadFile] {filename} → chat_id={out_chat_id}")
+    return out_chat_id
 
 
 def create_chat(token, route_id, chat_id, message, filenames, round_num=1):
@@ -298,7 +198,7 @@ def create_chat(token, route_id, chat_id, message, filenames, round_num=1):
         proxies={"http": None, "https": None},
     )
     if resp.status_code != 200:
-        print(f"[ERROR] createChat failed: {resp.status_code} {resp.text[:500]}")
+        print(f"[ERROR] createChat failed: {resp.status_code} {_redact(resp.text, 500)}")
         return None
 
     result = {"chat_id": "", "files": [], "stage": "", "status": "", "content": ""}
@@ -324,7 +224,7 @@ def create_chat(token, route_id, chat_id, message, filenames, round_num=1):
                 try:
                     content = json.loads(content)
                 except json.JSONDecodeError:
-                    pass
+                    print(f"  [WARN] Failed to parse SSE content as JSON", file=sys.stderr)
             if isinstance(content, dict):
                 name = content.get("name", "")
                 raw_data = content.get("data", {})
@@ -374,7 +274,7 @@ def download_file(token, route_id, chat_id, filename):
                 print(f"  [DownloadFile] {filename} → {save_path} ({len(content_bytes)} bytes)")
                 return save_path
         except Exception:
-            pass
+            print(f"  [WARN] Failed to decode base64 content for {filename}", file=sys.stderr)
     # Fallback: raw bytes
     with open(save_path, "wb") as f:
         f.write(resp.content)
@@ -465,9 +365,9 @@ def create_model_service(asset_id, name, infer_type="online", platform="CCE"):
         capture_output=True, text=True, timeout=60,
         encoding="utf-8", errors="replace",
     )
-    print(f"  [CreateModelService] stdout: {result.stdout[:500]}")
+    print(f"  [CreateModelService] stdout: {_redact(result.stdout, 500)}")
     if result.stderr:
-        print(f"  [CreateModelService] stderr: {result.stderr[:500]}")
+        print(f"  [CreateModelService] stderr: {_redact(result.stderr, 500)}")
     try:
         data = json.loads(result.stdout)
         return data.get("service_id") or data.get("id")
@@ -539,9 +439,9 @@ def create_model_service_task(service_id, model_request):
         capture_output=True, text=True, timeout=120,
         encoding="utf-8", errors="replace",
     )
-    print(f"  [CreateModelServiceTask] stdout: {result.stdout[:500]}")
+    print(f"  [CreateModelServiceTask] stdout: {_redact(result.stdout, 500)}")
     if result.stderr:
-        print(f"  [CreateModelServiceTask] stderr: {result.stderr[:500]}")
+        print(f"  [CreateModelServiceTask] stderr: {_redact(result.stderr, 500)}")
     try:
         data = json.loads(result.stdout)
         return {"task_id": data.get("id", ""), "status": data.get("status", "")}
@@ -583,6 +483,74 @@ def show_model_service_task(service_id, task_id):
         return json.loads(result.stdout)
     except Exception:
         return None
+
+
+def _extract_download_urls(data):
+    """Recursively collect http(s) download URLs from the task response.
+
+    Skips URLs belonging to the OptVerse API domain (ENDPOINT) — those are
+    API endpoints, not OBS result links. OBS result links are directly
+    fetchable (signed/unsigned) without extra auth.
+    """
+    exclude = (ENDPOINT.lower(), "iam.")
+    urls = []
+
+    def walk(obj):
+        if isinstance(obj, dict):
+            for v in obj.values():
+                walk(v)
+        elif isinstance(obj, list):
+            for v in obj:
+                walk(v)
+        elif isinstance(obj, str) and obj.startswith(("http://", "https://")):
+            low = obj.lower()
+            if not any(x in low for x in exclude):
+                urls.append(obj)
+
+    walk(data)
+    seen = set()
+    out = []
+    for u in urls:
+        if u not in seen:
+            seen.add(u)
+            out.append(u)
+    return out
+
+
+def download_obs_results(task_detail, dest_dir=None):
+    """Download result files from OBS URLs found in the ShowModelServiceTask response.
+
+    Returns list of saved paths (empty if no URLs found or all failed).
+    """
+    from urllib.parse import unquote, urlparse
+
+    dest_dir = dest_dir or ARTIFACTS_DIR
+    os.makedirs(dest_dir, exist_ok=True)
+    urls = _extract_download_urls(task_detail)
+    saved = []
+    for i, url in enumerate(urls, 1):
+        try:
+            resp = requests.get(
+                url, verify=False, timeout=120,
+                proxies={"http": None, "https": None},
+            )
+            if resp.status_code != 200:
+                print(f"  [OBS Download] {urlparse(url).netloc} → ERROR {resp.status_code}")
+                continue
+            name = unquote(os.path.basename(urlparse(url).path)) or f"result_{i}"
+            save_path = os.path.join(dest_dir, name)
+            base, ext = os.path.splitext(name)
+            j = 2
+            while os.path.exists(save_path):
+                save_path = os.path.join(dest_dir, f"{base}_{j}{ext}")
+                j += 1
+            with open(save_path, "wb") as f:
+                f.write(resp.content)
+            print(f"  [OBS Download] {name} → {save_path} ({len(resp.content)} bytes)")
+            saved.append(save_path)
+        except Exception as e:
+            print(f"  [OBS Download] {urlparse(url).netloc} → ERROR {_redact(str(e), 300)}", file=sys.stderr)
+    return saved
 
 
 # ---------------------------------------------------------------------------
@@ -636,7 +604,7 @@ def run_workflow(demand_file_path, data_file_path, publish_name,
 
     # ── Step 1: UploadFile (requirement analysis) ──
     print("\n── Step 1: Upload requirement file ──")
-    chat_id = upload_file(token, route_id, demand_file_path, demand_filename)
+    chat_id = upload_file(route_id, demand_file_path, demand_filename)
     if not chat_id:
         print("[FATAL] UploadFile failed.")
         sys.exit(1)
@@ -692,7 +660,7 @@ def run_workflow(demand_file_path, data_file_path, publish_name,
         print("[ERROR] --data-file is required for data stage.")
         print("  The xlsx file should be the modeling output template filled with actual data.")
         sys.exit(1)
-    upload_file(token, route_id, data_file_path, data_filename, chat_id=chat_id)
+    upload_file(route_id, data_file_path, data_filename, chat_id=chat_id)
     r4 = create_chat(token, route_id, chat_id, "数据检查", [data_filename], round_num=2)
     if not r4:
         print("[FATAL] createChat data check failed.")
@@ -825,6 +793,28 @@ def run_workflow(demand_file_path, data_file_path, publish_name,
         if task_detail:
             print(f"  [ShowModelServiceTask] Response:")
             print(json.dumps(task_detail, ensure_ascii=False, indent=2))
+            # Poll until terminal status (PENDING/RUNNING → SUCCEEDED/FAILED)
+            status = str(task_detail.get("status", ""))
+            attempts = 0
+            while status in ("PENDING", "RUNNING", "QUEUED") and attempts < 24:
+                time.sleep(5)
+                attempts += 1
+                task_detail = show_model_service_task(service_id, task_id)
+                if not task_detail:
+                    break
+                status = str(task_detail.get("status", ""))
+                print(f"  Status: {status} (waiting... {attempts * 5}s)")
+                if status in ("SUCCEEDED", "SUCCESS", "FAILED"):
+                    break
+            if status in ("SUCCEEDED", "SUCCESS"):
+                print(f"  Status: {status}")
+                saved = download_obs_results(task_detail)
+                if saved:
+                    print(f"  ✅ Downloaded {len(saved)} result file(s) to {ARTIFACTS_DIR}")
+                else:
+                    print("  [WARN] No OBS download URLs found in task response.")
+            else:
+                print(f"  [WARN] Task status is {status}; result files not downloaded.")
         else:
             print("  [ERROR] ShowModelServiceTask failed.")
 
@@ -880,6 +870,9 @@ def main():
         help="Project ID (auto-detected via hcloud dryrun if omitted)",
     )
     args = parser.parse_args()
+
+    # Ensure the credentials template exists (user only fills in the values)
+    _ensure_credentials_file()
 
     REGION = args.cli_region
     ENDPOINT = f"optverse.{REGION}.myhuaweicloud.com"
