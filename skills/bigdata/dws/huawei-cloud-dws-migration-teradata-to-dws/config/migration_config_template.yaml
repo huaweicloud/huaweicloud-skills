@@ -1,0 +1,31 @@
+# ============================================================
+# migration_config.yaml 模板
+# 用途: migrate_views_procs.py（Step 2.5 视图/宏/存储过程迁移）
+#       与 validate_functional.py（Step 3.5 功能性校验）共用连接配置
+#
+# 使用方法:
+#   1. 复制本模板为 config/migration_config.yaml
+#   2. 填写 Teradata / DWS 实际连接信息
+#   3. 密码推荐通过环境变量注入（TD_PASSWORD / DWS_PASSWORD，仅 validate_functional.py 支持），
+#      也可直接填写（migrate_views_procs.py 要求配置文件中必须填写 password）
+# ============================================================
+
+# Teradata 源端连接配置（只读）
+teradata:
+  host: <teradata_host>            # Teradata 主机地址
+  port: 1025                       # Teradata 端口（默认 1025）
+  user: <td_user>                  # Teradata 只读账号（需 SELECT 权限）
+  password: <td_password>          # Teradata 密码（或通过环境变量 TD_PASSWORD 注入）
+  database: DBC                    # 连接数据库（默认 DBC）
+  logmech: TD2                     # 登录机制（默认 TD2）
+  source_database: <source_db>     # 待迁移的源数据库名（必填）
+
+# DWS 目标端连接配置
+dws:
+  host: <dws_host>                 # DWS 集群连接端点（CN 节点地址）
+  port: 25308                      # DWS 端口（默认 25308）
+  database: <dws_database>         # DWS 数据库名
+  user: <dws_user>                 # DWS 账号
+  password: <dws_password>         # DWS 密码（或通过环境变量 DWS_PASSWORD 注入）
+  schema: public                   # 目标 Schema（默认 public）
+  target_schema: public            # 目标 Schema 别名（migrate_views_procs.py 优先使用 target_schema）
