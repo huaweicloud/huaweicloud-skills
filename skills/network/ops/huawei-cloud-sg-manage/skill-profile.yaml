@@ -1,0 +1,31 @@
+name: huawei-cloud-sg-manage
+level: L2
+domain: network
+description: Manage and diagnose Huawei Cloud security groups — CRUD, port connectivity diagnosis, rule conflict detection, over-exposure audit.
+dependencies:
+  - type: cli
+    name: hcloud
+    version: ">= 7.2.2"
+    required: true
+    configuration: local hcloud profile configured with `hcloud configure`, or AK/SK via HUAWEICLOUD_SDK_AK/HUAWEICLOUD_SDK_SK (or HUAWEI_ACCESS_KEY/HUAWEI_SECRET_KEY) environment variables
+tools:
+  - huawei_list_security_groups
+  - huawei_list_security_group_rules
+  - huawei_get_security_group
+  - huawei_diagnose_sg_port_connectivity
+  - huawei_analyze_sg_rule_conflict
+  - huawei_audit_sg_overexposed_rules
+  - huawei_create_security_group
+  - huawei_create_sg_rule
+  - huawei_update_security_group
+  - huawei_delete_security_group
+  - huawei_delete_sg_rule
+references:
+  - references/cli-installation-guide.md
+  - references/iam-policies.md
+  - references/sg-rule-reference.md
+  - references/dataflow-diagram.md
+  - references/verification-method.md
+  - references/acceptance-criteria.md
+guardrails:
+  max_auto_risk: R1
