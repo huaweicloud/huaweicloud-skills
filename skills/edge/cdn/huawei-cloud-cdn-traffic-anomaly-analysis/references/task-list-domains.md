@@ -6,7 +6,7 @@ Get all online CDN domains under the current account.
 
 ```bash
 hcloud CDN ListDomains/v2 \
-  --cli-region=cn-north-4 \
+  --cli-region=cn-north-1 \
   --page_size=100 \
   --page_number=1 \
   --domain_status=online

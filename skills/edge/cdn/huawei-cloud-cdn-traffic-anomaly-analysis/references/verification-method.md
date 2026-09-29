@@ -7,7 +7,7 @@ Verify the analysis results are correct and complete.
 ### 1. Verify Billing Mode
 
 ```bash
-hcloud CDN ShowChargeModes --cli-region=cn-north-4 --product_type=base
+hcloud CDN ShowChargeModes --cli-region=cn-north-1 --product_type=base
 ```
 
 Check that the returned `charge_mode` matches the expected billing mode.
@@ -15,7 +15,7 @@ Check that the returned `charge_mode` matches the expected billing mode.
 ### 2. Verify Domain Exists
 
 ```bash
-hcloud CDN ListDomains/v2 --cli-region=cn-north-4 --page_size=100 --domain_status=online
+hcloud CDN ListDomains/v2 --cli-region=cn-north-1 --page_size=100 --domain_status=online
 ```
 
 Check that the target domain is in the returned list.
@@ -31,7 +31,7 @@ Based on billing mode, run the corresponding query and check the response:
 ### 4. Verify Baseline Metric Query
 
 - **bw_95**: Run `cdn_timestamp.py --baseline` to generate 3 × 30-day windows, then call `ShowBandwidthCalc` for each. Verify 3 aggregate values are returned.
-- **flux/bw**: Verify the 97-day `ShowDomainStats/v2` result contains at least 97 entries. Confirm baseline split (first 90 → baseline, last 7 → current window).
+- **flux/bw**: Run `cdn_timestamp.py --baseline` to generate 3 × 30-day windows, then call `ShowDomainStats/v2` for each (plus the 7-day current query from section 3). Verify each call returns daily values and that a single 97-day query is NOT used (interval=86400 max range 31-32 days).
 
 ### 5. Verify Threshold Judgment
 

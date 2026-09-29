@@ -10,7 +10,7 @@
 1. Verify the domain name spelling
 2. Check if the domain status is `online`
 3. Ensure you're using the correct account
-4. Run `hcloud CDN ListDomains/v2 --cli-region=cn-north-4 --domain_status=online` to see all available domains
+4. Run `hcloud CDN ListDomains/v2 --cli-region=cn-north-1 --domain_status=online` to see all available domains
 
 ### Issue: No Traffic Data
 
@@ -79,7 +79,7 @@ hcloud configure list
 
 ### 2. Use Fixed Region
 
-Always use `--cli-region=cn-north-4` for CDN APIs to avoid confusion.
+Always use `--cli-region=cn-north-1` for CDN APIs to avoid confusion.
 
 ### 3. Check Domain Status
 
@@ -110,7 +110,7 @@ Ensure baseline windows (30 days each) and the current window (7 days) do not ov
 | Timestamp alignment | `interval=86400` must align to UTC+8 midnight, use `cdn_timestamp.py` |
 | ShowBandwidthCalc rate limit | Only 2 calls/s, add sleep(0.6) between calls |
 | ShowBandwidthCalc output | Single aggregate P95 value per query; no per-day breakdown |
-| ShowDomainStats/v2 output | One value per day at interval=86400; supports ≥365-day range |
+| ShowDomainStats/v2 output | One value per day at interval=86400; max query range 31-32 days per call |
 | Overseas domains | Need to confirm service_area parameter |
 | 3-month baseline (bw_95) | Requires 3 separate 30-day queries due to 31-day max range |
-| 3-month baseline (flux/bw) | Single 97-day query, split result into 90d baseline + 7d current |
+| 3-month baseline (flux/bw) | Requires 1 current 7-day + 3 separate 30-day queries (interval=86400 max range 31-32 days; a single 97-day query fails with CDN.0202) |

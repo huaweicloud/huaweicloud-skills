@@ -56,10 +56,10 @@ relative_limit  = baseline_max × 1.5
 
 ### flux / bw Path
 
-From the first 90 entries of the 97-day `ShowDomainStats/v2` result:
+Baseline is computed from 3 × 30-day `ShowDomainStats/v2` windows (interval=86400, max range 31-32 days per call — never a single 97-day query). Collect the daily values of all 3 windows:
 
 ```
-baseline_daily  = result[0:90]          // 90 daily values
+baseline_daily  = daily values from window1 + window2 + window3   // up to 90 daily values
 baseline_mean   = mean(baseline_daily)
 baseline_P95    = percentile(baseline_daily, 95)  // 95th percentile
 baseline_max    = max(baseline_daily)

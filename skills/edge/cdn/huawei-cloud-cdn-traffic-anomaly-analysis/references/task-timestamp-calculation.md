@@ -14,9 +14,9 @@ read START_TIME END_TIME <<< $(python scripts/cdn_timestamp.py --raw --days 7)
 
 # View time range
 python scripts/cdn_timestamp.py --days 7
-# Example output:
-# start_time=1753228800000 end_time=1753833600000
-# Range: 2026-08-02 00:00 ~ 2026-08-09 00:00 (UTC+8)
+# Example output — values vary per run date (illustrative only):
+# start_time=<start_ms> end_time=<end_ms>
+# Range: <YYYY-MM-DD> 00:00 ~ <YYYY-MM-DD> 00:00 (UTC+8)
 ```
 
 ## Baseline Windows (3 × 30 Days)
@@ -27,10 +27,10 @@ python scripts/cdn_timestamp.py --baseline
 
 # Raw output (one line per window, start_ms end_ms)
 python scripts/cdn_timestamp.py --baseline --raw
-# Example output:
-# 1783728000000 1786320000000
-# 1786320000000 1788912000000
-# 1788912000000 1791504000000
+# Example output — values vary per run date (illustrative only):
+# <win1_start_ms> <win1_end_ms>
+# <win2_start_ms> <win2_end_ms>
+# <win3_start_ms> <win3_end_ms>
 ```
 
 **Window layout** (no overlap with current 7-day window):

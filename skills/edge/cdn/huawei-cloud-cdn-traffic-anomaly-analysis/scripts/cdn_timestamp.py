@@ -84,7 +84,7 @@ def main():
     parser.add_argument("--cur-month", action="store_true", help="Current month (1st to today)")
     parser.add_argument("--date", type=str, help="Specific date YYYY-MM-DD")
     parser.add_argument("--raw", action="store_true", help="Output only raw millisecond timestamps")
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
 
     if args.baseline:
         windows = calc_baseline()

@@ -10,16 +10,16 @@
   - Baseline windows (3 × 30-day non-overlapping windows)
 - [ ] Skill selects correct metric based on billing mode:
   - `bw_95` → `ShowBandwidthCalc` (current: 1 × 7d, baseline: 3 × 30d)
-  - `flux` / `combine_flux` → `ShowDomainStats/v2` (stat_type=flux, single 97d query)
-  - `bw` / `bw_peak` → `ShowDomainStats/v2` (stat_type=bw, single 97d query)
-- [ ] Skill correctly splits the 97-day ShowDomainStats result into baseline (first 90 days) and current (last 7 days)
+  - `flux` / `combine_flux` → `ShowDomainStats/v2` (stat_type=flux, current: 1 × 7d, baseline: 3 × 30d)
+  - `bw` / `bw_peak` → `ShowDomainStats/v2` (stat_type=bw, current: 1 × 7d, baseline: 3 × 30d)
+- [ ] Skill never issues a single 97-day ShowDomainStats query — it splits into a 7-day current query + 3×30-day baseline queries (interval=86400 max range 31-32 days)
 - [ ] Skill respects API constraints:
   - ShowBandwidthCalc max range 31 days → baseline uses 30-day windows
   - ShowBandwidthCalc returns single aggregate value → no per-day breakdown expected
-  - ShowDomainStats/v2 supports ≥365 days → single 97-day query is valid
+  - ShowDomainStats/v2 interval=86400 max range 31-32 days → current 7d + baseline 3×30d split queries
 - [ ] Skill computes baseline statistics:
   - bw_95 path: mean, max of 3 aggregate values
-  - flux/bw paths: mean, P95, max of 90 daily values
+  - flux/bw paths: mean, P95, max computed across the 3×30-day windows' daily values
 - [ ] Skill applies dual-threshold anomaly detection:
   - Tier 1 (absolute): bw_95 ≥ 8 Gbps, flux > 5 TB/day, bw ≥ 3 Gbps/day
   - Tier 2 (relative): current > baseline × 1.5 (baseline_max for bw_95, baseline_P95 for flux/bw)
@@ -30,9 +30,10 @@
 
 ## Non-Functional Requirements
 
-- [ ] All API calls use `--cli-region=cn-north-4`
+- [ ] All API calls use `--cli-region=cn-north-1`
 - [ ] No credential hardcoding (AK/SK read from environment or CLI config)
 - [ ] Read-only operations only (no write/delete/modify)
+- [ ] references/prohibited-operations.md lists all 55 prohibited non-GET operations (24 POST + 25 PUT + 6 DELETE)
 - [ ] ShowBandwidthCalc calls respect 2 calls/s rate limit (sleep 0.6s)
 - [ ] Skill directory size ≤ 40 MB
 - [ ] File count ≤ 30

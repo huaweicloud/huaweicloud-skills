@@ -5,13 +5,17 @@ flowchart TD
     subgraph Input[Input Parameters]
         DOMAIN["domain_name<br/>(required)"]
         DAYS["--days=7<br/>(default)"]
-        REGION["--cli-region=cn-north-4"]
+        REGION["--cli-region=cn-north-1"]
     end
 
     subgraph PreCheck[Prerequisites Check]
         CHK_CLI["hcloud version ≥ 3.2.0"]
         CHK_PY["python --version ≥ 3.8"]
         CHK_CRED["hcloud configure list"]
+        CHK_DOM{"Target domain<br/>user-provided?"}
+        ASK_DOM["Ask the user for the domain;<br/>if unknown, list domains via<br/>ListDomains/v2 and let the user choose"]
+        CHK_CRED --> CHK_DOM
+        CHK_DOM -->|no| ASK_DOM
     end
 
     subgraph Phase1[Phase 1: Billing Mode Detection]
@@ -45,10 +49,10 @@ flowchart TD
             Q_BSL --> BW95_BSL["baseline: 3 aggregate values<br/>(mean / max of 3 windows)"]
         end
         subgraph fluxBWPath["flux / bw Path"]
-            Q_COMB["ShowDomainStats/v2<br/>range: past 97 days<br/>(90d baseline + 7d current)"]
-            Q_COMB --> SPLIT{"split result"}
-            SPLIT --> CURR["current: last 7 daily values"]
-            SPLIT --> BASE["baseline: first 90 daily values"]
+            Q_CUR2["ShowDomainStats/v2<br/>range: 7 days (current)"]
+            Q_BSL2["ShowDomainStats/v2<br/>range: 3×30-day windows<br/>(3 API calls)"]
+            Q_CUR2 --> CURR2["current: 7 daily values"]
+            Q_BSL2 --> BASE2["baseline: 3×30-day windows<br/>→ statistics (mean, P95, max)"]
         end
     end
 
@@ -80,7 +84,8 @@ flowchart TD
         REPORT["Structured Analysis Report<br/>- Billing mode & metric<br/>- Current window daily values<br/>- Baseline statistics<br/>- Deviation rate<br/>- Tier conclusion"]
     end
 
-    Input --> PreCheck --> Phase1
+    Input --> PreCheck
+    CHK_DOM -->|provided| Phase1
     B1 --> Phase2 & Phase3
     B2 --> Phase2 & Phase3
     B3 --> Phase2 & Phase3
@@ -97,12 +102,12 @@ flowchart TD
 
 | Phase | bw_95 Path | flux / bw Path |
 |-------|-----------|----------------|
-| **API Calls** | 6 total (1 billing + 1 domain + 1 current + 3 baseline) | 3 total (1 billing + 1 domain + 1 combined 97d query) |
-| **Current Window** | 7-day P95 aggregate (single value, bit/s) | Last 7 daily values from 97-day result |
-| **Baseline** | 3 × 30-day P95 aggregates → statistics (mean, max) | First 90 daily values from 97-day result → statistics (mean, P95, max) |
+| **API Calls** | 6 total (1 billing + 1 domain + 1 current + 3 baseline) | 6 total (1 billing + 1 domain + 1 current + 3 baseline) |
+| **Current Window** | 7-day P95 aggregate (single value, bit/s) | 7 daily values from the 7-day query |
+| **Baseline** | 3 × 30-day P95 aggregates → statistics (mean, max) | 3 × 30-day daily windows → statistics (mean, P95, max) |
 | **Rate Limit** | ShowBandwidthCalc: 2/s, 6 calls ≈ 3s | ShowDomainStats: 15/s, no concern |
 
 ## Key API Constraints
 
 - **ShowBandwidthCalc**: max 31-day range, single aggregate value (no per-day breakdown). Baseline requires 3 separate 30-day queries.
-- **ShowDomainStats/v2**: supports ≥365-day range, returns one data point per day at `interval=86400`. A single 97-day query covers both baseline (first 90 days) and current window (last 7 days).
+- **ShowDomainStats/v2**: `interval=86400` (1 day) max query range is 31-32 days — a single 97-day query fails (`CDN.0202`). Current 7-day window + 3×30-day baseline windows must be queried separately (4 calls total).

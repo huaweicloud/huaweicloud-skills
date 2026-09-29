@@ -6,7 +6,7 @@ Query the account's billing mode to determine which metric to analyze.
 
 ```bash
 hcloud CDN ShowChargeModes \
-  --cli-region=cn-north-4 \
+  --cli-region=cn-north-1 \
   --product_type=base
 ```
 
