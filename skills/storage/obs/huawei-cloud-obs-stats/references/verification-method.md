@@ -2,14 +2,15 @@
 
 ## Table of Contents
 
-- [Verify Bucket List Query](#verify-bucket-list-query)
-- [Verify Traffic Query](#verify-traffic-query)
-- [Verify Request Query](#verify-request-query)
-- [End-to-End Verification Script](#end-to-end-verification-script)
+- [1. Verify Bucket List Query](#1-verify-bucket-list-query)
+- [2. Verify Traffic Query](#2-verify-traffic-query)
+- [3. Verify Request Query](#3-verify-request-query)
+- [4. End-to-End Verification Script](#4-end-to-end-verification-script)
+- [5. Error Handling](#5-error-handling)
 
 ---
 
-## Verify Bucket List Query
+## 1. Verify Bucket List Query
 
 ### Step 1: List buckets
 
@@ -21,17 +22,35 @@ hcloud obs ls
 - Returns a bucket list, each bucket containing `Name`, `Location`, `CreationDate`
 - If no buckets exist, returns an empty list (normal)
 
-### Step 2: Query bucket capacity and object count
+### Step 2: Query bucket capacity and object count (via CES metrics)
 
 ```bash
-hcloud OBS GetBucketStorageInfo \
+# Bucket capacity (Bytes)
+hcloud CES ShowMetricData \
   --region=cn-south-1 \
-  --bucket=<BucketName>
+  --namespace=SYS.OBS \
+  --metric_name=capacity_total \
+  --dim.0=bucket_name,<BucketName> \
+  --period=86400 \
+  --filter=average \
+  --from=<TodayMidnightTimestampMs> \
+  --to=<CurrentTimestampMs>
+
+# Bucket object count
+hcloud CES ShowMetricData \
+  --region=cn-south-1 \
+  --namespace=SYS.OBS \
+  --metric_name=object_num_all \
+  --dim.0=bucket_name,<BucketName> \
+  --period=86400 \
+  --filter=average \
+  --from=<TodayMidnightTimestampMs> \
+  --to=<CurrentTimestampMs>
 ```
 
 **Expected result:**
-- Returns `size` (bytes) and `objectNumber` (object count)
-- size >= 0, objectNumber >= 0
+- Returns `datapoints` array; `datapoints[-1].average` is the bucket capacity (Bytes) / object count
+- capacity >= 0, object count >= 0
 
 ### Step 3: Verify output format
 
@@ -48,7 +67,7 @@ my-bucket-2          0.5           15
 
 ---
 
-## Verify Traffic Query
+## 2. Verify Traffic Query
 
 ### Step 1: Calculate time range
 
@@ -110,7 +129,7 @@ MoM (%) = (Current Month Value - Last Month Value) / Last Month Value × 100%
 
 ---
 
-## Verify Request Query
+## 3. Verify Request Query
 
 ### Step 1: Query current month GET request count
 
@@ -166,7 +185,7 @@ hcloud CES ShowMetricData \
 
 ---
 
-## End-to-End Verification Script
+## 4. End-to-End Verification Script
 
 ```bash
 #!/bin/bash
@@ -198,11 +217,31 @@ obsutil version
 echo -e "\n[3/6] Verifying bucket list query..."
 hcloud obs ls
 
-# 4. Verify bucket capacity
+# 4. Verify bucket capacity and object count (via CES metrics)
+FROM_TS_CAP=$(($(date -d "$(date +%Y-%m-01)" +%s) * 1000))
+TO_TS_CAP=$(($(date +%s) * 1000))
+
 echo -e "\n[4/6] Verifying bucket capacity query..."
-hcloud OBS GetBucketStorageInfo \
+hcloud CES ShowMetricData \
   --region=$REGION \
-  --bucket=$BUCKET_NAME
+  --namespace=SYS.OBS \
+  --metric_name=capacity_total \
+  --dim.0=bucket_name,$BUCKET_NAME \
+  --period=86400 \
+  --filter=average \
+  --from=$FROM_TS_CAP \
+  --to=$TO_TS_CAP
+
+echo -e "\n[4b/6] Verifying bucket object count query..."
+hcloud CES ShowMetricData \
+  --region=$REGION \
+  --namespace=SYS.OBS \
+  --metric_name=object_num_all \
+  --dim.0=bucket_name,$BUCKET_NAME \
+  --period=86400 \
+  --filter=average \
+  --from=$FROM_TS_CAP \
+  --to=$TO_TS_CAP
 
 # 5. Verify CES traffic metrics
 FROM_TS=$(($(date -d "$(date +%Y-%m-01)" +%s) * 1000))
@@ -238,7 +277,7 @@ echo "=========================================="
 
 ---
 
-## Error Handling
+## 5. Error Handling
 
 | Error Code | Description | Troubleshooting Command |
 |------------|-------------|----------------------|

@@ -5,16 +5,16 @@
 
 ## Table of Contents
 
-- [Correct CLI Command Patterns](#correct-cli-command-patterns)
-- [Correct SDK Code Patterns](#correct-sdk-code-patterns)
-- [Response Validation Criteria](#response-validation-criteria)
-- [Security Criteria](#security-criteria)
-- [Month-over-Month Calculation Criteria](#month-over-month-calculation-criteria)
+- [1. Correct CLI Command Patterns](#1-correct-cli-command-patterns)
+- [2. Correct SDK Code Patterns](#2-correct-sdk-code-patterns)
+- [3. Response Validation Criteria](#3-response-validation-criteria)
+- [4. Security Criteria](#4-security-criteria)
+- [5. Month-over-Month Calculation Criteria](#5-month-over-month-calculation-criteria)
 - [References](#references)
 
 ---
 
-## Correct CLI Command Patterns
+## 1. Correct CLI Command Patterns
 
 ### 0. Parameter Format — hcloud must use equals sign format
 
@@ -150,7 +150,7 @@ hcloud CES ShowMetricData \
 
 ---
 
-## Correct SDK Code Patterns
+## 2. Correct SDK Code Patterns
 
 ### 1. Import Patterns
 
@@ -210,26 +210,25 @@ obs_client = ObsClient(
 
 ---
 
-## Response Validation Criteria
+## 3. Response Validation Criteria
 
 ### obs ls response (list buckets)
 ✅ Must include:
 - Bucket name list
 - Region information for each bucket
 
-### obs stat response (bucket attributes)
-✅ Must include:
-- `size` - Total size of objects in the bucket (bytes)
-- `objectNumber` - Total number of objects in the bucket
-
-### CES ShowMetricData response
+### CES ShowMetricData response (bucket capacity and object count)
 ✅ Must include:
 - `datapoints` array, each containing `timestamp`, `unit`, and an aggregate value (`sum`/`average`/`max`/`min`)
 - `metric_name` (string)
+- For capacity: query `capacity_total` with `--filter=average`; read `datapoints[-1].average` (Bytes)
+- For object count: query `object_num_all` with `--filter=average`; read `datapoints[-1].average` (Count)
+
+> **⚠️ Do not use `standard_object_count` / `cold_object_count`** — these metric names do not exist in CES. Use `object_num_all` or the `object_num_*` series.
 
 ---
 
-## Security Criteria
+## 4. Security Criteria
 
 ### ✅ Correct Security Practices
 1. Use `hcloud configure list` to verify credentials (do not echo AK/SK)
@@ -248,10 +247,8 @@ obs_client = ObsClient(
 > **The following delete operations are strictly forbidden, regardless of user requests:**
 
 #### ❌ Absolutely Prohibited
-```bash
-hcloud obs rm obs://my-bucket -r           # Prohibited: Recursively delete all objects in bucket
-hcloud obs rm obs://my-bucket              # Prohibited: Delete bucket
-```
+
+> Bucket deletion, object deletion, recursive deletion, and batch deletion are irreversible and strictly forbidden. Never execute any `hcloud obs rm` or `obsutil rm` delete command in this skill.
 
 #### ✅ Correct: Refuse delete request and direct to console
 ```
@@ -260,7 +257,7 @@ hcloud obs rm obs://my-bucket              # Prohibited: Delete bucket
 
 ---
 
-## Month-over-Month Calculation Criteria
+## 5. Month-over-Month Calculation Criteria
 
 ### ✅ Correct Calculation
 ```

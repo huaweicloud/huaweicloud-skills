@@ -38,7 +38,7 @@ Huawei Cloud OBS Statistics
 
 ## Prerequisites
 
-> **Prerequisite check: Huawei Cloud CLI (hcloud / KooCLI) >= 3.2.0 required**
+> **Prerequisite check 1/3: Huawei Cloud CLI (hcloud / KooCLI) >= 3.2.0 required**
 > Run `hcloud version` to verify version >= 3.2.0. If not installed or version is too low,
 > see [references/cli-installation-guide.md](references/cli-installation-guide.md) for installation guide.
 
@@ -46,7 +46,7 @@ Huawei Cloud OBS Statistics
 hcloud version
 ```
 
-> **Prerequisite check: obsutil >= 5.5.0 required (for OBS bucket listing)**
+> **Prerequisite check 2/3: obsutil >= 5.5.0 required (for OBS bucket listing)**
 > The hcloud OBS module uses obsutil under the hood. Bucket listing requires the obsutil CLI tool.
 > Run `obsutil version` to verify version >= 5.5.0. If not installed,
 > see [references/cli-installation-guide.md](references/cli-installation-guide.md) for installation guide.
@@ -55,7 +55,7 @@ hcloud version
 obsutil version
 ```
 
-> **Prerequisite check: obsutil credential configuration required**
+> **Prerequisite check 3/3: obsutil credential configuration required**
 >
 > The hcloud OBS module uses obsutil under the hood, which requires separate AK/SK and Endpoint configuration.
 > Before performing OBS operations, **you must check whether obsutil credentials are configured**:
@@ -154,9 +154,9 @@ Ensure the IAM user has the required permissions. See [references/iam-policies.m
 
 **Minimum required permissions:**
 - `obs:bucket:list` — List buckets
-- `obs:bucket:get` — Get bucket attributes (capacity, object count)
+- `obs:bucket:get` — Get bucket attributes
 - `obs:object:get` — Read object information
-- `ces:metric:get` — Query CES monitoring metrics (traffic, request count)
+- `ces:metric:get` — Query CES monitoring metrics (capacity, object count, traffic, request count)
 
 ---
 
@@ -164,7 +164,7 @@ Ensure the IAM user has the required permissions. See [references/iam-policies.m
 
 ### Task 1: List Buckets with Capacity and Object Counts
 
-List buckets via obsutil, then query bucket capacity and object count using CES capacity metrics or OBS API.
+List buckets via obsutil, then query bucket capacity and object count via CES. **Prefer the CES `capacity_total` metric** for capacity and **CES `object_num_all` metric** for object count (efficient for batch queries, 30-min collection). Do not use `GetBucketStorageInfo` (not supported by hcloud OBS module).
 
 📄 Detailed steps → [references/task-list-buckets-with-stats.md](references/task-list-buckets-with-stats.md)
 
@@ -187,8 +187,7 @@ Query total requests (sum of GET/PUT/POST/DELETE/HEAD) via CES ShowMetricData, w
 | Command | Description |
 |---------|-------------|
 | `hcloud obs ls` | List all buckets (obsutil mode); filter by region via `grep` |
-| `hcloud CES ShowMetricData --region=<R> --namespace=SYS.OBS --metric_name=<M> --dim.0=bucket_name,<B> --period=86400 --filter=<F> --from=<ms> --to=<ms>` | Query CES metric data |
-| `hcloud OBS GetBucketStorageInfo --region=<R> --bucket=<B>` | Get bucket capacity & object count (may not be supported; fallback: `obsutil ls obs://<B> -limit=0 -s`) |
+| `hcloud CES ShowMetricData --region=<R> --namespace=SYS.OBS --metric_name=<M> --dim.0=bucket_name,<B> --period=86400 --filter=<F> --from=<ms> --to=<ms>` | Query CES metric data (capacity, object count, traffic, requests) |
 | `python3 scripts/obs_traffic_stats.py --region <R> --bucket <B> (--period <P> \| --from <D> --to <D>) [--direction download\|upload\|both]` | Traffic statistics with MoM |
 | `python3 scripts/obs_request_stats.py --region <R> --bucket <B> (--period <P> \| --from <D> --to <D>) [--include-errors]` | Request statistics with MoM |
 
@@ -198,7 +197,8 @@ Query total requests (sum of GET/PUT/POST/DELETE/HEAD) via CES ShowMetricData, w
 >
 > | Metric | `--metric_name` | `--filter` |
 > |--------|----------------|------------|
-> | Bucket capacity | `capacity_total` | `average` |
+> | Bucket capacity (**recommended**) | `capacity_total` | `average` |
+> | Bucket object count (**recommended**) | `object_num_all` | `average` |
 > | Extranet download traffic | `download_traffic_extranet` | `sum` |
 > | Intranet download traffic | `download_traffic_intranet` | `sum` |
 > | GET / PUT / POST / DELETE / HEAD requests | `get_request_count` / `put_request_count` / `post_request_count` / `delete_request_count` / `head_request_count` | `sum` |
@@ -209,14 +209,16 @@ Query total requests (sum of GET/PUT/POST/DELETE/HEAD) via CES ShowMetricData, w
 
 > **Before executing any task, the following parameters must be confirmed with the user. Guessing is prohibited.**
 
-|| Parameter | Required/Optional | Description | Default ||
-|| ----------- | ------------------ | ------------- | --------- ||
-|| `--region` | Required | Huawei Cloud region (e.g., `cn-south-1`, `cn-north-4`); must be explicitly provided by the user | - ||
-|| Bucket name | Required | OBS bucket name; dimension format: `--dim.0=bucket_name,<BucketName>` | - ||
-|| Time range | Required | Must precisely match user's wording: "this month" ≠ "last 30 days" (see table below) | - ||
-|| obsutil credentials | Required | Check via `hcloud obs ls -limit=1` before any OBS operation | - ||
-|| `--direction` | Optional | Traffic direction: `download` / `upload` / `both` | `download` ||
-|| `--include-errors` | Optional | Also query 4xx/5xx error request counts | `false` ||
+| Parameter | Required/Optional | Description | Default |
+|-----------|-------------------|-------------|---------|
+| `--region` | Required | Huawei Cloud region (e.g., `cn-south-1`, `cn-north-4`); must be explicitly provided by the user | - |
+| Bucket name | Required | OBS bucket name; dimension format: `--dim.0=bucket_name,<BucketName>` | - |
+| Time range | Required | Must precisely match user's wording: "this month" ≠ "last 30 days" (see table below) | - |
+| obsutil credentials | Required | Check via `hcloud obs ls -limit=1` before any OBS operation | - |
+| `--direction` | Optional | Traffic direction: `download` / `upload` / `both` | `download` |
+| `--include-errors` | Optional | Also query 4xx/5xx error request counts | `false` |
+| `--compare` | Optional | Show comparison period and MoM change. **Default disabled**; enable only when the user explicitly asks for comparison/MoM | `false` |
+| `--metric` | Optional | Comma-separated metric keys to show only specific rows. `obs_request_stats.py`: `total,get,put,post,delete,head,4xx,5xx`; `obs_traffic_stats.py`: `extranet,intranet,total`. Case-insensitive. Specifying `4xx`/`5xx` auto-enables error query. Example: `--metric 4xx,5xx`, `--metric intranet` | - |
 
 > **Time range disambiguation:**
 >
@@ -233,30 +235,28 @@ Query total requests (sum of GET/PUT/POST/DELETE/HEAD) via CES ShowMetricData, w
 
 This skill provides the following Python scripts that encapsulate best practices for traffic and request statistics:
 
-### obs_traffic_stats.py — Download/Upload Traffic Statistics
+| Script | Description |
+|--------|-------------|
+| [obs_traffic_stats.py](scripts/obs_traffic_stats.py) | Download/upload traffic statistics with MoM comparison. Options: `--direction`, `--compare`, `--metric`. Comparison disabled by default. See Core Commands above for usage. |
+| [obs_request_stats.py](scripts/obs_request_stats.py) | Total request statistics (GET/PUT/POST/DELETE/HEAD) with MoM comparison. Options: `--include-errors`, `--compare`, `--metric`. Comparison disabled by default. See Core Commands above for usage. |
+
+**Usage examples:**
 
 ```bash
-# Last 30 days download traffic
-python3 scripts/obs_traffic_stats.py --region cn-south-1 --bucket obs-60030508 --period last_30d
+# Traffic: last 30 days download traffic
+python3 scripts/obs_traffic_stats.py --region <Region> --bucket <BucketName> --period last_30d
 
-# This month download + upload traffic
-python3 scripts/obs_traffic_stats.py --region cn-south-1 --bucket obs-60030508 --period this_month --direction both
+# Traffic: this month download + upload traffic
+python3 scripts/obs_traffic_stats.py --region <Region> --bucket <BucketName> --period this_month --direction both
 
-# Custom date range
-python3 scripts/obs_traffic_stats.py --region cn-south-1 --bucket obs-60030508 --from 2026-04-20 --to 2026-05-20
-```
+# Requests: last 30 days request count
+python3 scripts/obs_request_stats.py --region <Region> --bucket <BucketName> --period last_30d
 
-### obs_request_stats.py — Total Request Statistics
-
-```bash
-# Last 30 days request count
-python3 scripts/obs_request_stats.py --region cn-south-1 --bucket obs-60030508 --period last_30d
-
-# This month request count (with 4xx/5xx error stats)
-python3 scripts/obs_request_stats.py --region cn-south-1 --bucket obs-60030508 --period this_month --include-errors
+# Requests: this month request count (with 4xx/5xx error stats)
+python3 scripts/obs_request_stats.py --region <Region> --bucket <BucketName> --period this_month --include-errors
 
 # Custom date range
-python3 scripts/obs_request_stats.py --region cn-south-1 --bucket obs-60030508 --from 2026-04-20 --to 2026-05-20
+python3 scripts/obs_request_stats.py --region <Region> --bucket <BucketName> --from <FromDate> --to <ToDate>
 ```
 
 The scripts incorporate key lessons learned: traffic vs. bandwidth metrics, hcloud dimension parameter format, precise time range matching, OBS lacking a single request_count metric, etc.
@@ -276,10 +276,10 @@ hcloud obs ls -limit=1
 obsutil ls -limit=1
 
 # Validate traffic stats script
-python3 scripts/obs_traffic_stats.py --region cn-south-1 --bucket <BucketName> --period last_30d
+python3 scripts/obs_traffic_stats.py --region <Region> --bucket <BucketName> --period last_30d
 
 # Validate request stats script
-python3 scripts/obs_request_stats.py --region cn-south-1 --bucket <BucketName> --period last_30d
+python3 scripts/obs_request_stats.py --region <Region> --bucket <BucketName> --period last_30d
 ```
 
 ---

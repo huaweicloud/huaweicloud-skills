@@ -4,29 +4,28 @@ This document lists all CLI commands and APIs used in the OBS object storage sta
 
 ## Table of Contents
 
-- [API Overview](#api-overview)
-- [API Details](#api-details)
-  - [1. ListBucketsWithStats - List Buckets with Capacity and Object Count](#1-listbucketswithstats---list-buckets-with-capacity-and-object-count)
-  - [2. GetTraffic - Query Extranet/Intranet Download Traffic](#2-gettraffic---query-extranetintranet-download-traffic)
-  - [3. GetRequests - Query Total Request Count](#3-getrequests---query-total-request-count)
-- [Month-over-Month Calculation](#month-over-month-calculation)
+- [1. API Overview](#1-api-overview)
+- [2. API Details](#2-api-details)
+  - [2.1 ListBucketsWithStats - List Buckets with Capacity and Object Count](#21-listbucketswithstats---list-buckets-with-capacity-and-object-count)
+  - [2.2 GetTraffic - Query Extranet/Intranet Download Traffic](#22-gettraffic---query-extranetintranet-download-traffic)
+  - [2.3 GetRequests - Query Total Request Count](#23-getrequests---query-total-request-count)
+- [3. Month-over-Month Calculation](#3-month-over-month-calculation)
 - [References](#references)
 
 ---
 
-## API Overview
+## 1. API Overview
 
 | Product | CLI Command | API Operation | Description |
 |---------|------------|---------------|-------------|
 | OBS | `hcloud obs ls` | obsutil ls | List all buckets (obsutil mode) |
-| OBS | `hcloud OBS GetBucketStorageInfo` | GetBucketStorageInfo | Get bucket storage info (capacity, object count; may not be supported by hcloud) |
-| CES | `hcloud CES ShowMetricData` | ShowMetricData | Query monitoring metric data (traffic, request count, capacity) |
+| CES | `hcloud CES ShowMetricData` | ShowMetricData | Query monitoring metric data (capacity, object count, traffic, request count) |
 
 ---
 
-## API Details
+## 2. API Details
 
-### 1. ListBucketsWithStats - List Buckets with Capacity and Object Count
+### 2.1 ListBucketsWithStats - List Buckets with Capacity and Object Count
 
 > **⚠️ Key: region parameter must be provided by the user**
 >
@@ -65,53 +64,54 @@ hcloud obs ls 2>&1 | awk '/obs:\/\// && /cn-south-1/ {print $1}' | sed 's|obs://
 | `Buckets.Bucket[].Location` | Bucket region |
 | `Buckets.Bucket[].CreationDate` | Bucket creation time |
 
-**Step 2: Get capacity and object count per bucket**
+**Step 2: Get capacity and object count per bucket (via CES metrics)**
 
-> **⚠️ Key: CES capacity metric batch query recommended for higher efficiency**
+> **⚠️ Key: Use CES metrics for capacity and object count**
 >
-> Calling GetBucketStorageInfo per bucket is inefficient; recommended to batch query via CES `capacity_total` metric:
-> ```bash
-> hcloud CES ShowMetricData \
->   --region=<RegionId> \
->   --namespace=SYS.OBS \
->   --metric_name=capacity_total \
->   --dim.0=bucket_name,<BucketName> \
->   --period=86400 \
->   --filter=average \
->   --from=<TodayMidnightTimestampMs> \
->   --to=<CurrentTimestampMs>
-> ```
-> The returned `datapoints[-1].average` is the bucket capacity (Bytes).
+> The hcloud OBS module does not support `GetBucketStorageInfo`. Query capacity via CES `capacity_total` and object count via CES `object_num_all`, both with `--filter=average`:
 
 ```bash
-hcloud OBS GetBucketStorageInfo \
+# Bucket capacity (Bytes)
+hcloud CES ShowMetricData \
   --region=<RegionId> \
-  --bucket=<BucketName>
+  --namespace=SYS.OBS \
+  --metric_name=capacity_total \
+  --dim.0=bucket_name,<BucketName> \
+  --period=86400 \
+  --filter=average \
+  --from=<TodayMidnightTimestampMs> \
+  --to=<CurrentTimestampMs>
+
+# Bucket object count
+hcloud CES ShowMetricData \
+  --region=<RegionId> \
+  --namespace=SYS.OBS \
+  --metric_name=object_num_all \
+  --dim.0=bucket_name,<BucketName> \
+  --period=86400 \
+  --filter=average \
+  --from=<TodayMidnightTimestampMs> \
+  --to=<CurrentTimestampMs>
 ```
 
-**GetBucketStorageInfo response key fields:**
+The returned `datapoints[-1].average` is the bucket capacity (Bytes) / object count.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `size` | long | Total size of objects in the bucket (bytes) |
-| `objectNumber` | int | Total number of objects in the bucket |
+> **⚠️ Do not use invalid metric names**
+>
+> `standard_object_count` / `cold_object_count` do **not exist** in CES and return empty datapoints. The correct object count metrics follow the `object_num_*` pattern: `object_num_all`, `object_num_standard`, `object_num_infrequent_access`, `object_num_archive`, `object_num_deep_archive`.
 
-> **⚠️ Note: hcloud OBS module may not have GetBucketStorageInfo command**
+> **⚠️ Note: Unrestored archived objects may not be counted**
 >
-> If hcloud does not support `GetBucketStorageInfo`, alternatives:
-> - Query bucket info via obsutil: `obsutil ls -bucket=<BucketName> -limit=0 -s`
-> - Call OBS API directly: `GET /?storageInfo` to get bucket storage info
->
-> If obsutil also does not support this query, you can get it by listing all objects in the bucket and summing their sizes (poor performance, use as fallback only).
+> Objects in the Archive / Deep Archive storage class must be restored before access; unrestored objects may be excluded from CES capacity and object count metrics.
 
 **Error handling:**
 1. If "Access Denied" is reported, prompt the user to check IAM permissions or bucket policy
 2. If bucket count is 0, prompt the user that no buckets exist in the current region; they may need to switch regions
-3. If GetBucketStorageInfo errors, skip the bucket and mark "query failed" in the output
+3. If CES returns empty datapoints, skip the bucket and mark "query failed" in the output
 
 ---
 
-### 2. GetTraffic - Query Extranet/Intranet Download Traffic
+### 2.2 GetTraffic - Query Extranet/Intranet Download Traffic
 
 > **⚠️ Key: Traffic data is obtained via CES, not directly from OBS API**
 >
@@ -220,7 +220,7 @@ hcloud CES ShowMetricData \
 
 ---
 
-### 3. GetRequests - Query Total Request Count
+### 2.3 GetRequests - Query Total Request Count
 
 > **⚠️ Key: Request data is obtained via CES, not directly from OBS API**
 
@@ -275,7 +275,7 @@ hcloud CES ShowMetricData \
 
 ---
 
-## Month-over-Month Calculation
+## 3. Month-over-Month Calculation
 
 **Formula:**
 

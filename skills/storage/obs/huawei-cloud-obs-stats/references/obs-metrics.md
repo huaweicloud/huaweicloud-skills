@@ -108,12 +108,12 @@ OBS monitoring metrics reported in CES (Cloud Eye Service), with namespace `SYS.
 > **⚠️ Capacity metric collection notes**
 >
 > - CES capacity metrics are collected every 30 minutes, not real-time
-> - For exact bucket capacity and object count, prefer using `GetBucketStorageInfo` API
-> - CES capacity metrics are suitable for trend analysis and alerting
+> - CES capacity metrics are suitable for trend analysis, alerting, and batch ranking
+> - Use `--filter=average` and read `datapoints[-1].average` to get the latest sampled value
 
 > **💡 Best Practice: Batch query bucket capacity via CES capacity metrics**
 >
-> When ranking multiple buckets by capacity, calling GetBucketStorageInfo per bucket is slow. Use CES batch query instead:
+> When ranking multiple buckets by capacity, use CES batch query (one call per bucket, no per-bucket REST API):
 >
 > ```bash
 > hcloud CES ShowMetricData \
@@ -130,6 +130,46 @@ OBS monitoring metrics reported in CES (Cloud Eye Service), with namespace `SYS.
 > - Use `filter=average` (not sum), to get the latest sampled value
 > - `datapoints[-1].average` is the current bucket capacity (Bytes)
 > - CES capacity metrics are collected every 30 minutes, sufficiently accurate for ranking
+
+---
+
+## Object Count Metrics
+
+| Metric Name | Metric ID | Unit | Description |
+|-------------|-----------|------|-------------|
+| Total object count | `object_num_all` | Count | Total number of objects in the bucket (all storage classes) |
+| Standard storage object count | `object_num_standard` | Count | Number of objects in Standard storage class |
+| Infrequent access object count | `object_num_infrequent_access` | Count | Number of objects in Infrequent Access storage class |
+| Archive object count | `object_num_archive` | Count | Number of objects in Archive storage class |
+| Deep archive object count | `object_num_deep_archive` | Count | Number of objects in Deep Archive storage class |
+
+> **⚠️ Key: Use `object_num_all` for bucket object count**
+>
+> - Query bucket object count via CES `object_num_all` with `--filter=average`; read `datapoints[-1].average`
+> - Do **not** use `standard_object_count` / `cold_object_count` — these metric names do **not exist** in CES and return empty datapoints
+> - Correct metric names follow the `object_num_*` pattern (e.g., `object_num_standard`, `object_num_archive`)
+> - CES object count metrics are collected every 30 minutes, not real-time
+
+> **⚠️ Note: Unrestored archived objects may not be counted**
+>
+> Objects in the Archive / Deep Archive storage class must be restored before access; unrestored objects may be excluded from CES object count metrics. If a bucket contains archived objects, the reported `object_num_all` may be lower than the actual total.
+
+> **💡 Best Practice: Batch query bucket object count via CES object_num_all**
+>
+> ```bash
+> hcloud CES ShowMetricData \
+>   --region=cn-south-1 \
+>   --namespace=SYS.OBS \
+>   --metric_name=object_num_all \
+>   --dim.0=bucket_name,<BucketName> \
+>   --period=86400 \
+>   --filter=average \
+>   --from=<TodayMidnightTimestampMs> \
+>   --to=<CurrentTimestampMs>
+> ```
+>
+> - Use `filter=average` (not sum), to get the latest sampled value
+> - `datapoints[-1].average` is the current bucket object count
 
 ---
 

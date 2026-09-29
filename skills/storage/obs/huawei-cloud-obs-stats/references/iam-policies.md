@@ -7,10 +7,9 @@ IAM permission policies required for this skill.
 | Operation | IAM Action (Legacy v3) | IAM Action (New v5) | Description |
 |-----------|----------------------|---------------------|-------------|
 | List buckets | `obs:bucket:ListAllMyBuckets` | `obs:bucket:listAllMyBuckets` | List all buckets in the current account |
-| Get bucket storage info | `obs:bucket:GetBucketStorageInfo` | `obs:bucket:getBucketStorageInfo` | Get bucket capacity and object count |
 | Get bucket attributes | `obs:bucket:GetBucketMetadata` | `obs:bucket:getBucketMetadata` | Get bucket metadata |
 | List objects | `obs:bucket:ListBucket` | `obs:bucket:listBucket` | List objects in bucket |
-| Query CES metrics | `ces:metric:get` | `ces:metric:get` | Query CES monitoring metrics |
+| Query CES metrics | `ces:metric:get` | `ces:metric:get` | Query CES monitoring metrics (capacity, object count, traffic, requests) |
 
 ---
 
@@ -26,7 +25,6 @@ IAM permission policies required for this skill.
       "Effect": "Allow",
       "Action": [
         "obs:bucket:ListAllMyBuckets",
-        "obs:bucket:GetBucketStorageInfo",
         "obs:bucket:GetBucketMetadata",
         "obs:bucket:ListBucket",
         "ces:metric:get"
@@ -46,7 +44,6 @@ IAM permission policies required for this skill.
       "Effect": "Allow",
       "Action": [
         "obs:bucket:listAllMyBuckets",
-        "obs:bucket:getBucketStorageInfo",
         "obs:bucket:getBucketMetadata",
         "obs:bucket:listBucket",
         "ces:metric:get"
@@ -74,7 +71,7 @@ Restrict to specific buckets for enhanced security:
       "Effect": "Allow",
       "Action": [
         "obs:bucket:listAllMyBuckets",
-        "obs:bucket:getBucketStorageInfo",
+
         "obs:bucket:getBucketMetadata",
         "obs:bucket:listBucket"
       ],
@@ -110,7 +107,7 @@ For viewing bucket info and monitoring data only (no upload allowed):
       "Effect": "Allow",
       "Action": [
         "obs:bucket:listAllMyBuckets",
-        "obs:bucket:getBucketStorageInfo",
+
         "obs:bucket:getBucketMetadata",
         "obs:bucket:listBucket",
         "ces:metric:get"
@@ -156,8 +153,7 @@ In addition to IAM policies, you can also authorize via Bucket Policy:
       "Effect": "Allow",
       "Principal": {"ID": ["<IAMUserId>"]},
       "Action": [
-        "obs:bucket:ListBucket",
-        "obs:bucket:GetBucketStorageInfo"
+        "obs:bucket:ListBucket"
       ],
       "Resource": [
         "my-bucket",

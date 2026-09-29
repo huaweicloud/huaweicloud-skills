@@ -20,11 +20,12 @@
 hcloud obs ls
 ```
 
-**Step 2: Query bucket capacity (CES capacity metric recommended for efficiency)**
+**Step 2: Query bucket capacity and object count (via CES metrics)**
 
-When batch-querying the capacity of multiple buckets, prefer the CES `capacity_total` metric to avoid per-bucket API calls:
+Query bucket capacity via CES `capacity_total` and object count via CES `object_num_all`. Both use `--filter=average` and read `datapoints[-1].average`:
 
 ```bash
+# Bucket capacity (Bytes)
 hcloud CES ShowMetricData \
   --region=<RegionId> \
   --namespace=SYS.OBS \
@@ -34,30 +35,27 @@ hcloud CES ShowMetricData \
   --filter=average \
   --from=<TodayMidnightTimestamp(ms)> \
   --to=<CurrentTimestamp(ms)>
-```
 
-> **⚠️ Capacity metric uses `filter=average`** (to get the latest sampled value), not `filter=sum`.
-> The returned `datapoints[-1].average` is the current bucket capacity (Bytes).
-
-**Step 2 (Alternative): Query capacity and object count per bucket (via OBS API)**
-
-If you need an exact object count, use `hcloud OBS GetBucketStorageInfo`:
-
-```bash
-hcloud OBS GetBucketStorageInfo \
+# Bucket object count
+hcloud CES ShowMetricData \
   --region=<RegionId> \
-  --bucket=<BucketName>
+  --namespace=SYS.OBS \
+  --metric_name=object_num_all \
+  --dim.0=bucket_name,<BucketName> \
+  --period=86400 \
+  --filter=average \
+  --from=<TodayMidnightTimestamp(ms)> \
+  --to=<CurrentTimestamp(ms)>
 ```
 
-> **⚠️ Note: GetBucketStorageInfo may not be supported by hcloud**
-> If it returns "No such command", use the alternative: `obsutil ls obs://<BucketName> -limit=0 -s`
+> **⚠️ Both metrics use `filter=average`** (to get the latest sampled value), not `filter=sum`.
+> The returned `datapoints[-1].average` is the current bucket capacity (Bytes) / object count.
+> CES collects these metrics every 30 minutes.
 
-**Key response fields:**
-
-| Field | Description |
-|------|------|
-| `size` | Total size of objects in the bucket (bytes) |
-| `objectNumber` | Total number of objects in the bucket |
+> **⚠️ Do not use `GetBucketStorageInfo`**
+>
+> The hcloud OBS module does not support `GetBucketStorageInfo`. Use CES `capacity_total` and `object_num_all` metrics instead.
+> Do **not** use metric names `standard_object_count` / `cold_object_count` — they do not exist in CES; the correct names follow the `object_num_*` pattern (e.g., `object_num_all`, `object_num_standard`).
 
 **Output format example:**
 
@@ -68,10 +66,9 @@ my-bucket-2         0.5           15
 my-bucket-3         2048.0        50000
 ```
 
-> **⚠️ Note: GetBucketStorageInfo does not count unrestored archived objects**
+> **⚠️ Note: Unrestored archived objects may not be counted**
 >
-> Objects in the Archive storage class must be restored before access; unrestored objects are not counted.
-> If a bucket contains archived objects, the returned capacity and object count may exclude unrestored archived objects.
+> Objects in the Archive / Deep Archive storage class must be restored before access; unrestored objects may be excluded from CES capacity and object count metrics. If a bucket contains archived objects, the reported values may be lower than the actual totals.
 
 > **💡 Best Practice: Fast Top-N Bucket Capacity Query**
 >
@@ -80,4 +77,4 @@ my-bucket-3         2048.0        50000
 > 2. Query CES `capacity_total` metric per bucket to get capacity
 > 3. Sort by capacity descending and take the top N
 >
-> This approach is significantly faster than calling GetBucketStorageInfo for each bucket.
+> This approach is significantly faster than calling a per-bucket REST API for each bucket.

@@ -2,14 +2,14 @@
 
 ## Table of Contents
 
-- [hcloud CLI Issues](#hcloud-cli-issues)
-- [CES Monitoring Data Issues](#ces-monitoring-data-issues)
-- [Bucket Capacity Query Issues](#bucket-capacity-query-issues)
-- [Month-over-Month Calculation Issues](#month-over-month-calculation-issues)
+- [1. hcloud CLI Issues](#1-hcloud-cli-issues)
+- [2. CES Monitoring Data Issues](#2-ces-monitoring-data-issues)
+- [3. Bucket Capacity Query Issues](#3-bucket-capacity-query-issues)
+- [4. Month-over-Month Calculation Issues](#4-month-over-month-calculation-issues)
 
 ---
 
-## hcloud CLI Issues
+## 1. hcloud CLI Issues
 
 ### 1. hcloud OBS module has no ListAllMyBucketsType command
 
@@ -37,12 +37,12 @@ hcloud obs ls 2>&1 | awk '/obs:\/\// && /cn-south-1/ {print $1}' | sed 's|obs://
 Running `hcloud OBS GetBucketStorageInfo` returns command not found.
 
 **Root cause:**
-The hcloud CLI OBS module may not include all OBS API operations; `GetBucketStorageInfo` is a bucket extension API not supported by some hcloud versions.
+The hcloud CLI OBS module does not include the `GetBucketStorageInfo` operation. This skill does not use it.
 
-**Solution:**
+**Solution: Use CES metrics for capacity and object count**
 
-**Method 1: Use CES capacity metric (recommended for batch queries)**
 ```bash
+# Bucket capacity (Bytes)
 hcloud CES ShowMetricData \
   --region=cn-south-1 \
   --namespace=SYS.OBS \
@@ -52,32 +52,24 @@ hcloud CES ShowMetricData \
   --filter=average \
   --from=<TodayMidnightTimestampMs> \
   --to=<CurrentTimestampMs>
-```
-The returned `datapoints[-1].average` is the bucket capacity (Bytes).
 
-**Method 2: Use obsutil as alternative**
-```bash
-# Use obsutil to list objects and get statistics
-obsutil ls obs://<BucketName> -limit=0 -s
-```
-
-**Method 3: Use OBS REST API directly**
-```bash
-# Call OBS REST API via curl to get bucket storage info
-# GET /?storageInfo
-curl -X GET "https://<BucketName>.obs.<RegionId>.myhuaweicloud.com/?storageInfo" \
-  -H "Date: $(date -u '+%a, %d %b %Y %H:%M:%S GMT')" \
-  -H "Authorization: OBS <Signature>"
+# Bucket object count
+hcloud CES ShowMetricData \
+  --region=cn-south-1 \
+  --namespace=SYS.OBS \
+  --metric_name=object_num_all \
+  --dim.0=bucket_name,<BucketName> \
+  --period=86400 \
+  --filter=average \
+  --from=<TodayMidnightTimestampMs> \
+  --to=<CurrentTimestampMs>
 ```
 
-**Method 4: Use OBS SDK**
-```python
-from obs import ObsClient
+The returned `datapoints[-1].average` is the bucket capacity (Bytes) / object count.
 
-obs_client = ObsClient(...)
-resp = obs_client.getBucketStorageInfo(bucketName)
-print(f"Size: {resp.body.size}, Objects: {resp.body.objectNumber}")
-```
+> **⚠️ Do not use invalid metric names**
+>
+> `standard_object_count` / `cold_object_count` do **not exist** in CES and return empty datapoints. Use `object_num_all` (total) or the `object_num_*` series (`object_num_standard`, `object_num_infrequent_access`, `object_num_archive`, `object_num_deep_archive`).
 
 ### 3. hcloud CES ShowMetricData parameter format issue
 
@@ -141,7 +133,7 @@ CES ShowMetricData dimensions parameter format is incorrect.
 
 ---
 
-## CES Monitoring Data Issues
+## 2. CES Monitoring Data Issues
 
 ### 1. CES query returns empty data
 
@@ -210,32 +202,33 @@ Last month traffic or request data is 0, making MoM calculation impossible.
 
 ---
 
-## Bucket Capacity Query Issues
+## 3. Bucket Capacity Query Issues
 
 ### 1. Archived bucket capacity display is incomplete
 
 **Problem:**
-GetBucketStorageInfo returns capacity and object count less than actual values.
+CES capacity and object count metrics return values lower than actual.
 
 **Root cause:**
-Archived storage class objects need to be restored before they can be accessed; unrestored objects are not counted.
+Archived storage class objects need to be restored before they can be accessed; unrestored objects may be excluded from CES capacity and object count metrics.
 
 **Solution:**
 - Archived objects must be restored (RestoreObject) before they can be counted
-- For accurate archived object statistics, use CES monitoring metrics `cold_storage_bytes` / `cold_object_count`
+- For archived object statistics, use CES metrics `capacity_archive` / `object_num_archive` (and `capacity_deep_archive` / `object_num_deep_archive` for deep archive)
 
-### 2. GetBucketStorageInfo performance issues
+### 2. CES capacity/object count query performance
 
 **Problem:**
-Querying capacity for buckets with large numbers of objects (millions+) takes a long time.
+Querying capacity for buckets with large numbers of objects (millions+) via CES may have collection delay.
 
 **Solution:**
-- Use CES monitoring metrics `standard_storage_bytes` / `standard_object_count` as an alternative (slightly less real-time but better performance)
-- Set query timeout and retry
+- CES capacity and object count metrics are collected every 30 minutes; allow for this delay
+- Use `--filter=average` and read `datapoints[-1].average` for the latest sampled value
+- For batch ranking, query CES `capacity_total` per bucket (faster than per-bucket REST APIs)
 
 ---
 
-## Month-over-Month Calculation Issues
+## 4. Month-over-Month Calculation Issues
 
 ### 1. Time range calculation errors
 

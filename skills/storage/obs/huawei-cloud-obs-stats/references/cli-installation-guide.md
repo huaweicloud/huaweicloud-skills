@@ -4,15 +4,16 @@ This skill requires two CLI tools: hcloud (KooCLI) and obsutil.
 
 ## Table of Contents
 
-- [hcloud (KooCLI) Installation](#hcloud-kocli-installation)
-- [obsutil Installation](#obsutil-installation)
-- [Credential Configuration](#credential-configuration)
-- [Verify Installation](#verify-installation)
-- [Troubleshooting](#troubleshooting)
+- [1. hcloud (KooCLI) Installation](#1-hcloud-kocli-installation)
+- [2. obsutil Installation](#2-obsutil-installation)
+- [3. Credential Configuration](#3-credential-configuration)
+- [4. Verify Installation](#4-verify-installation)
+- [5. Troubleshooting](#5-troubleshooting)
+- [6. Security Best Practices](#6-security-best-practices)
 
 ---
 
-## hcloud (KooCLI) Installation
+## 1. hcloud (KooCLI) Installation
 
 ### macOS
 
@@ -56,7 +57,7 @@ Expand-Archive hcloudcli.zip
 
 ---
 
-## obsutil Installation
+## 2. obsutil Installation
 
 ### macOS
 
@@ -95,7 +96,7 @@ Expand-Archive obsutil.zip
 
 ---
 
-## Credential Configuration
+## 3. Credential Configuration
 
 ### hcloud Credential Configuration
 
@@ -147,7 +148,7 @@ obsutil config -ak=<AK> -sk=<SK> -e=obs.cn-south-1.myhuaweicloud.com
 
 ---
 
-## Verify Installation
+## 4. Verify Installation
 
 ### Verify hcloud
 
@@ -173,7 +174,7 @@ obsutil ls -limit=1
 
 ---
 
-## Troubleshooting
+## 5. Troubleshooting
 
 ### hcloud Common Issues
 
@@ -195,7 +196,7 @@ obsutil ls -limit=1
 
 ---
 
-## Security Best Practices
+## 6. Security Best Practices
 
 1. **Never provide AK/SK directly in conversation** — always use interactive configuration or environment variables
 2. **Rotate AK/SK regularly** — recommended every 90 days
