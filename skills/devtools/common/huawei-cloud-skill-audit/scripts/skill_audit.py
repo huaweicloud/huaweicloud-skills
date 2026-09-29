@@ -443,6 +443,29 @@ def main():
             if before != len(result.issues):
                 print(f"    (filtered to {len(result.issues)} issues by severity floor: {severity_floor})")
 
+    # LLM 误报仲裁(2026-09-28, 试点 23/23=100% 后集成): 确定性降噪/级别过滤
+    # 覆盖不到的语义歧义交给 LLM 二次判断; 无 key/调用失败降级纯规则, 不阻断。
+    try:
+        from checks.llm_arbiter import adjudicate_issues as _arbitrate
+        all_issues = []
+        for name, result in results.items():
+            for i in result.issues:
+                all_issues.append({"rule": i.rule, "file": str(i.file), "line": i.line,
+                                   "message": i.message, "_issue": i})
+        if all_issues:
+            kept, _stats = _arbitrate(all_issues, str(target), log=None)
+            removed_keys = {(i.get("_issue").rule, str(i.get("_issue").file), i.get("_issue").line)
+                            for i in all_issues if i not in kept}
+            for name, result in results.items():
+                before = len(result.issues)
+                result.issues = [i for i in result.issues
+                                 if (i.rule, str(i.file), i.line) not in removed_keys]
+                result.passed = len(result.issues) == 0
+                if before != len(result.issues):
+                    print(f"    (LLM 仲裁剔除 {before - len(result.issues)} 条误报)")
+    except Exception as _e:
+        print(f"    (LLM 仲裁不可用, 按纯规则结论: {_e})")
+
     report = build_report(target, skills, results, config)
 
     ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")

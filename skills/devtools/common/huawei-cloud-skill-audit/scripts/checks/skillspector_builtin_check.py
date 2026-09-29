@@ -13,7 +13,7 @@ import warnings
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from check_protocol import Check, CheckResult, Issue, Severity, ScanLevel
+from check_protocol import Check, CheckResult, Issue, Severity, ScanLevel, docstring_lines
 
 RULES_FILE = Path(__file__).parent / "skillspector_rules.json"
 
@@ -25,6 +25,15 @@ BINARY_EXTENSIONS = {
     ".zip", ".tar", ".gz", ".bz2", ".xz", ".7z", ".rar", ".deb", ".rpm",
     ".ico", ".webp", ".avif", ".heic", ".heif", ".mp3", ".mp4", ".wav",
     ".mov", ".avi", ".mkv",
+}
+
+# 文档类文件(2026-09-28 PR #731 误报复盘): 文档里"提及"危险路径/文件名
+# (如 /etc/passwd、~/.aws/credentials 作为攻击示例/防护说明)不是凭据访问
+# 行为。命中 docs_ok=True 的 pattern(路径/文件名/名词引用类)时文档文件
+# 跳过; 行为类 pattern(read/access/extract keys 等)在文档中仍生效 ——
+# 文档真的教人读取凭据照拦。代码文件不受影响, 全量匹配。
+DOC_EXTENSIONS = {
+    ".md", ".markdown", ".txt", ".rst", ".adoc", ".asciidoc",
 }
 
 SKIP_DIRS = {
@@ -53,6 +62,14 @@ PATH_EXPORT_HIJACK_RE = re.compile(
     r"\bcurl\b|\bwget\b|https?://|ftp://|"
     r"\$\s*\(|`|base64|\|\s*(?:ba)?sh\b|\bnc\s+-e\b|\bncat\b"
 )
+
+# behavior_gated pattern 的读取动作识别(2026-09-28 PR #733): 纯引用/检查/传参
+# (变量名、路径字符串、exists 判断、传给子进程)无以下动作 → 放行;
+# 真读取凭据内容(open/read/yaml/json/base64 等消费点)仍拦截。
+_CRED_READ_RE = re.compile(
+    r"open\s*\(|read_text|read_bytes|readlines|os\.open|os\.popen|"
+    r"\.read\s*\(|yaml|json\.load\s*\(|base64|pickle|cat\s+",
+    re.IGNORECASE)
 
 SEVERITY_MAP = {
     "critical": Severity.CRITICAL,
@@ -87,12 +104,7 @@ SELF_SCAN_EXEMPTIONS = frozenset({
     ("TM1", "SKILL.md", "--skip" + "-checks"),
     ("TM1", "scripts/skill_audit.py", "--skip" + "-checks"),
     ("TM1", "scripts/check_registry.py", "--skip" + "-checks"),
-    # R13: v2.11.2 新增 TM1 长跨度模糊 pattern 可跨拼接间隙命中(r/m 两字母
-    # 间隔 0-8192 字符内再出现 -rf /路径 即中), 豁免登记行必须拆分到
-    # "r" + "m" 断开连续形态; 同时为本工具自身的豁免登记文件补一条锚点登记,
-    # 防后续 pattern 变体再度命中登记行。
-    ("TM1", "references/cli-installation-guide.md", "r" + "m -rf /tmp/skill-quality-cli"),
-    ("TM1", "scripts/checks/skillspector_builtin_check.py", "-rf /tmp/skill-quality-cli"),
+    ("TM1", "references/cli-installation-guide.md", "rm " + "-rf /tmp/skill-quality-cli"),
     # P1/P2/AR3/E4: remediation 修复建议中的反例词(必须描述检测对象)
     ("P2", "scripts/skill_audit.py", "reverse shell examples"),
     # SC2: CLI 安装脚本/帮助文本的管道示例(PR 剥离后回到基线形态, 自身豁免)
@@ -104,6 +116,16 @@ SELF_SCAN_EXEMPTIONS = frozenset({
     ("E4", "scripts/skill_audit.py", "send convers" + "ation data externally"),
     # PE3/E2: 审计工具本职工作——读取华为云凭据路径/收集环境变量做质量上报
     ("PE3", "scripts/cli/cli_reporting.py", "credentials" + ".json"),
+    # PE3: 2026-09-28 docs_ok 机制注释中的攻击示例(文档"提及凭据路径"不算行为)。
+    # 锚点取注释/条目行内不含完整危险模式的连续子串(如 /etc/、提及 /etc/),
+    # 避免豁免条目行自身被 PE3 命中(此前 "~/.aws/" + "credentials" 完整串导致 103/104 行自中)。
+    ("PE3", "scripts/checks/skillspector_builtin_check.py", "如 /etc/"),
+    ("PE3", "scripts/checks/skillspector_builtin_check.py", "提及 /etc/"),
+    # PE3: 2026-09-28 docstring 降噪机制注释(工具讲自己检测对象的文档语境)
+    ("PE3", "scripts/check_protocol.py", "等安全词是文档"),
+    ("PE3", "scripts/checks/skillspector_builtin_check.py", "与注释行豁免同口径"),
+    ("PE3", "scripts/checks/skillspector_builtin_check.py", "提及 keyr" + "ing/token 是"),
+    ("PE3", "scripts/checks/runtime_security_check.py", "PRI004-key" + "ring-pass"),
     ("E2", "scripts/cli/cli_entry.py", "dict(os" + ".environ)"),
     ("E2", "scripts/cli/cli_reporting.py", "os.environ.items"),
     # AST5: cli_entry 自动升级后用最新二进制 execv 重启自身(工具正当行为, 非恶意执行)
@@ -231,6 +253,8 @@ class SkillspectorBuiltinCheck(Check):
                         "regex": compiled,
                         "confidence": pat.get("confidence", 0.7),
                         "explicit": "confidence" in pat,
+                        "docs_ok": pat.get("docs_ok", False),
+                        "behavior_gated": pat.get("behavior_gated", False),
                     })
                 except re.error:
                     pass
@@ -275,15 +299,37 @@ class SkillspectorBuiltinCheck(Check):
         issues = []
         for file_path in self._iter_files(skill_dir):
             rel = file_path.relative_to(skill_dir)
+            is_doc = file_path.suffix.lower() in DOC_EXTENSIONS
             try:
                 text = file_path.read_text(encoding="utf-8", errors="ignore")
             except (OSError, PermissionError):
                 continue
+            doc_lines = docstring_lines(text)
             lines = text.splitlines()
             for line_no, line in enumerate(lines, 1):
                 for rule in self._rules:
                     for pat in rule["patterns"]:
                         m = pat["regex"].search(line)
+                        # docstring/三引号字符串内命中 → 说明文本,非真实调用
+                        # (2026-09-28 PR #738: docstring 提及 keyring/token 是
+                        # "声明不接触凭据"的文档; 与注释行豁免同口径)
+                        if m and line_no in doc_lines:
+                            continue
+                        # 文档类文件跳过路径/文件名/名词引用类 pattern(2026-09-28
+                        # PR #731 复盘): 文档"提及 /etc/passwd / ~/.aws/credentials"
+                        # 作攻击示例/防护说明不是凭据访问行为; 行为类 pattern
+                        # (read/access/extract keys)不标记 docs_ok, 文档中仍生效。
+                        if m and is_doc and pat.get("docs_ok"):
+                            continue
+                        # 代码文件 + behavior_gated pattern(名词/路径引用类:
+                        # kubeconfig、~/.kube/config 等 kubectl 通用词): 行内无读取
+                        # 动作 → 纯引用/检查/传参(检查环境变量、exists 判断、
+                        # 传给 kubectl 子进程), 非越权读取凭据 → 跳过。
+                        # 与 docs_ok 对称: 文档引用 vs 代码引用都放行, 读取行为仍拦
+                        # (2026-09-28 PR #733: 11 条 KUBECONFIG 标准用法被误报)。
+                        if m and not is_doc and pat.get("behavior_gated"):
+                            if not _CRED_READ_RE.search(line):
+                                continue
                         # E2 环境变量收割 gate(2026-09-19 修复 PR #648):
                         # env = dict(os.environ) 是子进程环境传递的标准用法, 非收割
                         # (收割通常是消费/外传: os.environ.items() 遍历后外发)
@@ -302,6 +348,21 @@ class SkillspectorBuiltinCheck(Check):
                         # 与 DES001 的 ~/(?!\.) 豁免同口径, 消除注释行误报。
                         if rule["id"] == "TM1" and line.lstrip().startswith("#"):
                             break
+                        # TM1 rm 目标形态 gate(2026-09-28 PR #733): rm 命中后按
+                        # 目标形态区分 —— 无 -r 的单文件删除(清理自家二进制/文档
+                        # 修复指引)与 ${VAR}/具体子路径的目录清理(卸载)豁免;
+                        # -rf + 裸变量/通配/硬编码系统路径/根目录保留拦截。
+                        if rule["id"] == "TM1":
+                            _m_rm = re.search(
+                                r"rm\b\s+(-[A-Za-z]*\s+)*([^|;&>]+)", line)
+                            if _m_rm:
+                                _rflags = _m_rm.group(1) or ""
+                                _target = (_m_rm.group(2) or "").strip().strip("\"'")
+                                _var_path = re.fullmatch(
+                                    r"\$\{?[A-Za-z_][A-Za-z0-9_]*\}?(?:/[\w.\-]+)+",
+                                    _target)
+                                if "r" not in _rflags or _var_path:
+                                    break
                         if m:
                             ignore_key = f"{rule['id']}:{str(rel)}:{line_no}"
                             if ignore_key in ignores:

@@ -26,7 +26,7 @@ from pathlib import Path
 
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from check_protocol import Check, CheckResult, Issue, Severity
+from check_protocol import Check, CheckResult, Issue, Severity, docstring_lines
 from checks.skillspector_builtin_check import (
     BINARY_EXTENSIONS,
     SKIP_DIRS,
@@ -42,6 +42,13 @@ SELF_SCAN_EXEMPTIONS = frozenset({
     # 注释/登记均用拼接写法防自身命中该规则。
     ("INJ001-class-bases", "references/security-audit-guide.md", "__class__" + ".__bases__"),
     ("INJ001-class-bases", "scripts/checks/runtime_security_check.py", "__class__" + ".__bases__"),
+    # PRI004: 2026-09-28 docstring 降噪机制注释/路径示例(工具讲自己检测对象的文档语境)
+    ("PRI004-keyring-pass", "scripts/check_protocol.py", "等安全词是文档"),
+    ("PRI004-keyring-pass", "scripts/checks/skillspector_builtin_check.py", "与注释行豁免同口径"),
+    ("PRI004-keyring-pass", "scripts/checks/skillspector_builtin_check.py", "提及 keyr" + "ing/token 是"),
+    ("PRI004-keyring-pass", "scripts/checks/skillspector_builtin_check.py", "作为攻击示例/防护说明"),
+    ("PRI004-keyring-pass", "scripts/checks/skillspector_builtin_check.py", "PR #731 复盘"),
+    ("PRI004-keyring-pass", "scripts/checks/runtime_security_check.py", "PRI004-key" + "ring-pass"),
 })
 
 RULES_FILES = [
@@ -121,11 +128,16 @@ class RuntimeSecurityCheck(Check):
                 text = file_path.read_text(encoding="utf-8", errors="ignore")
             except (OSError, PermissionError):
                 continue
+            doc_lines = docstring_lines(text)
             for line_no, line in enumerate(text.splitlines(), 1):
                 for rule in self._rules:
                     for pat in rule["patterns"]:
                         m = pat["regex"].search(line)
                         if m:
+                            # docstring/三引号字符串内命中 → 说明文本,非真实调用
+                            # (2026-09-28 PR #738, 与 skillspector 同口径)
+                            if line_no in doc_lines:
+                                break
                             # PER003 排除 PATH 配置(2026-09-19 修复 PR #648,
                             # PR #656 收紧): 安装脚本向 ~/.bashrc 追加 export PATH
                             # 是标准行为, 非自启动持久化; 但真实 PATH 劫持后门

@@ -1441,95 +1441,120 @@
       "patterns": [
         {
           "regex": "~?/?\\.ssh/(?:id_rsa|id_ed25519|id_ecdsa|id_dsa|authorized_keys|known_hosts)",
-          "confidence": 0.9
+          "confidence": 0.9,
+          "docs_ok": true
         },
         {
           "regex": "(?:home|HOME)/\\w+/\\.ssh/",
-          "confidence": 0.9
+          "confidence": 0.9,
+          "docs_ok": true
         },
         {
           "regex": "Path\\s*\\.\\s*home\\s*\\(\\s*\\)\\s*/\\s*['\\\"]\\.ssh['\\\"]",
-          "confidence": 0.9
+          "confidence": 0.9,
+          "docs_ok": true
         },
         {
           "regex": "~?/?\\.aws/credentials",
-          "confidence": 0.9
+          "confidence": 0.9,
+          "docs_ok": true
         },
         {
           "regex": "~?/?\\.aws/config",
-          "confidence": 0.7
+          "confidence": 0.7,
+          "docs_ok": true
         },
         {
           "regex": "(?:home|HOME)/\\w+/\\.aws/",
-          "confidence": 0.9
+          "confidence": 0.9,
+          "docs_ok": true
         },
         {
           "regex": "~?/?\\.config/gcloud/",
-          "confidence": 0.8
+          "confidence": 0.8,
+          "docs_ok": true
         },
         {
           "regex": "application_default_credentials\\.json",
-          "confidence": 0.8
+          "confidence": 0.8,
+          "docs_ok": true
         },
         {
           "regex": "~?/?\\.azure/",
-          "confidence": 0.7
+          "confidence": 0.7,
+          "docs_ok": true
         },
         {
           "regex": "accessTokens\\.json",
-          "confidence": 0.8
+          "confidence": 0.8,
+          "docs_ok": true
         },
         {
           "regex": "~?/?\\.kube/config",
-          "confidence": 0.8
+          "confidence": 0.8,
+          "docs_ok": true,
+          "behavior_gated": true
         },
         {
           "regex": "kubeconfig",
-          "confidence": 0.6
+          "confidence": 0.6,
+          "docs_ok": true,
+          "behavior_gated": true
         },
         {
           "regex": "~?/?\\.docker/config\\.json",
-          "confidence": 0.7
+          "confidence": 0.7,
+          "docs_ok": true
         },
         {
           "regex": "~?/?\\.npmrc",
-          "confidence": 0.7
+          "confidence": 0.7,
+          "docs_ok": true
         },
         {
           "regex": "~?/?\\.git-credentials",
-          "confidence": 0.9
+          "confidence": 0.9,
+          "docs_ok": true
         },
         {
           "regex": "~?/?\\.netrc",
-          "confidence": 0.8
+          "confidence": 0.8,
+          "docs_ok": true
         },
         {
           "regex": "/etc/passwd",
-          "confidence": 0.6
+          "confidence": 0.6,
+          "docs_ok": true
         },
         {
           "regex": "/etc/shadow",
-          "confidence": 0.95
+          "confidence": 0.95,
+          "docs_ok": true
         },
         {
           "regex": "(?:password|credentials?|secrets?)\\.(?:txt|json|yaml|yml|env)",
-          "confidence": 0.7
+          "confidence": 0.7,
+          "docs_ok": true
         },
         {
           "regex": "(?:access_token|refresh_token|bearer_token|api_token)\\.txt",
-          "confidence": 0.8
+          "confidence": 0.8,
+          "docs_ok": true
         },
         {
           "regex": "(?<!\\w)\\.env(?:\\.local|\\.production|\\.development)?(?:\\s|$|['\\\"])",
-          "confidence": 0.6
+          "confidence": 0.6,
+          "docs_ok": true
         },
         {
           "regex": "(?:keychain|keyring|gnome-keyring)",
-          "confidence": 0.7
+          "confidence": 0.7,
+          "docs_ok": true
         },
         {
           "regex": "(?:Chrome|Firefox|Safari)/.*?(?:Cookies|Login Data|key4\\.db)",
-          "confidence": 0.8
+          "confidence": 0.8,
+          "docs_ok": true
         },
         {
           "regex": "read\\s+(?:the\\s+)?(?:ssh|private)\\s+key",
@@ -2944,7 +2969,7 @@
       "scan_level": "quick",
       "patterns": [
         {
-          "regex": "(?:(?:(?:(?<![A-Za-z0-9])|(?<=[a-z0-9_])(?=[A-Z]))(?:[Pp]ass(?:[Ww]ord)?|[Pp]asswd|pwd)(?:word)?|(?:(?<![A-Za-z0-9])|(?<=[a-z0-9_])(?=[A-Z]))(?:[A-Z0-9_]*[-_.])?(?:PASSWORD|PASSWD|PWD)(?:WORD)?)\\s*[:=]\\s*(['\\\"]?)(?!(?:<|>|\\$|(?i:your)|example|sample|xxxx?|placeholder|password))([A-Za-z0-9@#$%^&*!_-]{6,64})(?![A-Za-z0-9@#$%^&*!_-])(?:['\\\"]|[,;&|]|\\s|$)|--(?:[a-zA-Z0-9_]*[-_.])?(?:[Pp]ass(?:[Ww]ord)?|[Pp]asswd|pwd)(?:word)?\\s+(['\\\"]?)(?!--)(?!(?:<|>|\\$|(?i:your)|example|sample|xxxx?|placeholder|password))(?=[A-Za-z0-9@#$%^&*!_-]*[0-9@#$%^&*!])([A-Za-z0-9@#$%^&*!_-]{6,64})(?![A-Za-z0-9@#$%^&*!_-])(?:['\\\"]|[,;&|]|\\s|$))",
+          "regex": "(?i)\\b(?:--|[a-z0-9_\\.-]+=)?(?:admin|user|root|server|db|mysql|redis|ecs|rds|default)?[-_.]?(?:pass|passwd|password|pwd)(?:word)?\\s*[:=]\\s*[\\'\"]?(?!(?:<|>|$|your-|example|sample|xxxx?|placeholder))(?=[A-Za-z0-9@#$%^&*!_-]*[0-9@#$%^&*!])([A-Za-z0-9@#$%^&*!_-]{6,64})(?![A-Za-z0-9@#$%^&*!_-])(?:[\\'\"]|[,;&|]|\\s|$)",
           "confidence": 0.85
         }
       ]

@@ -2,9 +2,37 @@
 """Check protocol — unified abstractions for skill audit checks."""
 
 import concurrent.futures
+import re
 from pathlib import Path
 from dataclasses import dataclass, field
 from enum import Enum
+
+
+# 三引号字符串(docstring)内的行号集合(1-based)。2026-09-28 PR #738 下沉:
+# 模块 docstring 的说明文本提及 keyring/token 等安全词是文档, 非真实调用。
+# 实用状态机: 打开行 = 行首三引号(模块/函数 docstring 均在行首或缩进后, 正则/
+# 字符串字面量中间的三引号不误开); 闭合行 = 后续出现同款定界符(该行也计入);
+# 同行开闭(行首 \"\"\"...\"\"\")= 单行 docstring → 豁免该行, 状态不变。
+def docstring_lines(text: str) -> set:
+    lines = text.splitlines()
+    res = set()
+    in_doc = None
+    for i, ln in enumerate(lines, 1):
+        if in_doc is None:
+            m = re.search(r'^\s*"""|^\s*\'\'\'', ln)
+            if m:
+                delim = m.group(0).lstrip()
+                if ln.count(delim) >= 2:
+                    # 同行开闭: 单行 docstring(文档语境) → 豁免该行
+                    res.add(i)
+                    continue
+                in_doc = delim
+                res.add(i)
+        else:
+            res.add(i)
+            if in_doc in ln:
+                in_doc = None
+    return res
 
 
 class Severity(Enum):

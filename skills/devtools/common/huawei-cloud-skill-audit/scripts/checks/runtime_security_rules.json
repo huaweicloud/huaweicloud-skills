@@ -564,23 +564,23 @@
       "patterns": [
         {
           "confidence": 0.9,
-          "regex": "(?i)f\\\"[^\\\"\\n]{0,300}?\\b(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE)\\b[^\\\"\\n]{0,300}?\\{[^}]+\\}"
+          "regex": "(?i)f\"[^\"\\n]{0,300}?(?:SELECT\\b[^\\\"'\\`\\n]{0,200}?\\bFROM|INSERT\\b\\s+INTO|UPDATE\\b[^\\\"'\\`\\n]{0,200}?\\bSET\\b|DELETE\\b\\s+FROM|DROP\\b\\s+(?:TABLE|DATABASE|INDEX|VIEW|SCHEMA|TRIGGER|USER|ROLE)\\b|ALTER\\b\\s+TABLE|CREATE\\b\\s+(?:TABLE|INDEX|VIEW|DATABASE|SCHEMA|TRIGGER|PROCEDURE|FUNCTION)\\b|TRUNCATE\\b\\s+TABLE)[^\"\\n]{0,300}?\\{[^}]+\\}"
         },
         {
           "confidence": 0.9,
-          "regex": "(?i)f'[^'\\n]{0,300}?\\b(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE)\\b[^'\\n]{0,300}?\\{[^}]+\\}"
+          "regex": "(?i)f'[^'\\n]{0,300}?(?:SELECT\\b[^\\\"'\\`\\n]{0,200}?\\bFROM|INSERT\\b\\s+INTO|UPDATE\\b[^\\\"'\\`\\n]{0,200}?\\bSET\\b|DELETE\\b\\s+FROM|DROP\\b\\s+(?:TABLE|DATABASE|INDEX|VIEW|SCHEMA|TRIGGER|USER|ROLE)\\b|ALTER\\b\\s+TABLE|CREATE\\b\\s+(?:TABLE|INDEX|VIEW|DATABASE|SCHEMA|TRIGGER|PROCEDURE|FUNCTION)\\b|TRUNCATE\\b\\s+TABLE)[^'\\n]{0,300}?\\{[^}]+\\}"
         },
         {
           "confidence": 0.9,
-          "regex": "(?i)`[^`]*\\b(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE)\\b[^`]*\\$\\{[^}]+\\}[^`]*`"
+          "regex": "(?i)`[^`]*(?:SELECT\\b[^\\\"'\\`\\n]{0,200}?\\bFROM|INSERT\\b\\s+INTO|UPDATE\\b[^\\\"'\\`\\n]{0,200}?\\bSET\\b|DELETE\\b\\s+FROM|DROP\\b\\s+(?:TABLE|DATABASE|INDEX|VIEW|SCHEMA|TRIGGER|USER|ROLE)\\b|ALTER\\b\\s+TABLE|CREATE\\b\\s+(?:TABLE|INDEX|VIEW|DATABASE|SCHEMA|TRIGGER|PROCEDURE|FUNCTION)\\b|TRUNCATE\\b\\s+TABLE)[^`]*\\$\\{[^}]+\\}[^`]*`"
         },
         {
           "confidence": 0.85,
-          "regex": "(?i)\\\"[^\\\"\\n;]{0,200}?\\b(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE)\\b[^\\\"\\n;]{0,200}?\\\"\\s*\\+\\s*[A-Za-z_][A-Za-z0-9_]*"
+          "regex": "(?i)\"[^\"\\n;]{0,200}?(?:SELECT\\b[^\\\"'\\`\\n]{0,200}?\\bFROM|INSERT\\b\\s+INTO|UPDATE\\b[^\\\"'\\`\\n]{0,200}?\\bSET\\b|DELETE\\b\\s+FROM|DROP\\b\\s+(?:TABLE|DATABASE|INDEX|VIEW|SCHEMA|TRIGGER|USER|ROLE)\\b|ALTER\\b\\s+TABLE|CREATE\\b\\s+(?:TABLE|INDEX|VIEW|DATABASE|SCHEMA|TRIGGER|PROCEDURE|FUNCTION)\\b|TRUNCATE\\b\\s+TABLE)[^\"\\n;]{0,200}?\"\\s*\\+\\s*[A-Za-z_][A-Za-z0-9_]*"
         },
         {
           "confidence": 0.85,
-          "regex": "(?i)'[^'\\n;]{0,200}?\\b(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE)\\b[^'\\n;]{0,200}?'\\s*\\+\\s*[A-Za-z_][A-Za-z0-9_]*"
+          "regex": "(?i)'[^'\\n;]{0,200}?(?:SELECT\\b[^\\\"'\\`\\n]{0,200}?\\bFROM|INSERT\\b\\s+INTO|UPDATE\\b[^\\\"'\\`\\n]{0,200}?\\bSET\\b|DELETE\\b\\s+FROM|DROP\\b\\s+(?:TABLE|DATABASE|INDEX|VIEW|SCHEMA|TRIGGER|USER|ROLE)\\b|ALTER\\b\\s+TABLE|CREATE\\b\\s+(?:TABLE|INDEX|VIEW|DATABASE|SCHEMA|TRIGGER|PROCEDURE|FUNCTION)\\b|TRUNCATE\\b\\s+TABLE)[^'\\n;]{0,200}?'\\s*\\+\\s*[A-Za-z_][A-Za-z0-9_]*"
         }
       ]
     }
