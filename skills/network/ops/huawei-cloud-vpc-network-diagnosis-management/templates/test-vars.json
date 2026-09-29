@@ -1,0 +1,160 @@
+{
+  "skill_name": "huawei-cloud-vpc-network-diagnosis-management",
+  "region": "cn-north-4",
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "CLI 服务可用性检查",
+      "command": "hcloud VPC ListVpcs/v3 --cli-region=cn-north-4 --help",
+      "expected": "帮助信息正常输出，命令存在，参数名与 SKILL.md 一致",
+      "type": "syntax",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-02",
+      "name": "查询 VPC 列表",
+      "command": "hcloud VPC ListVpcs/v3 --cli-region=cn-north-4 --limit=5",
+      "expected": "返回 vpcs 数组，无错误",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-03",
+      "name": "查询子网列表",
+      "command": "hcloud VPC ListSubnets --cli-region=cn-north-4 --limit=5",
+      "expected": "返回 subnets 数组，无错误",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-04",
+      "name": "查询 VPC 详情",
+      "command": "hcloud VPC ShowVpc/v3 --cli-region=cn-north-4 --vpc_id={vpc_id}",
+      "expected": "返回 vpc 对象，无错误",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-05",
+      "name": "查询子网详情",
+      "command": "hcloud VPC ShowSubnet --cli-region=cn-north-4 --subnet_id={subnet_id}",
+      "expected": "返回 subnet 对象，无错误",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-06",
+      "name": "列出路由表",
+      "command": "hcloud VPC ListRouteTables --cli-region=cn-north-4 --limit=5",
+      "expected": "返回 routetables 数组，无错误",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-07",
+      "name": "查询路由表详情",
+      "command": "hcloud VPC ShowRouteTable --cli-region=cn-north-4 --routetable_id={routetable_id}",
+      "expected": "返回 routetable 对象，无错误",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-08",
+      "name": "列出端口",
+      "command": "hcloud VPC ListPorts/v3 --cli-region=cn-north-4 --limit=5",
+      "expected": "返回 ports 数组，无错误",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-09",
+      "name": "查询端口详情",
+      "command": "hcloud VPC ShowPort/v3 --cli-region=cn-north-4 --port_id={port_id}",
+      "expected": "返回 port 对象，无错误",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-10",
+      "name": "查询安全组详情",
+      "command": "hcloud VPC ShowSecurityGroup --cli-region=cn-north-4 --security_group_id={security_group_id}",
+      "expected": "返回 security_group 对象，无错误",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-11",
+      "name": "创建 VPC 语法检查",
+      "command": "hcloud VPC CreateVpc --cli-region=cn-north-4 --help",
+      "expected": "帮助信息正常输出，必填参数 --vpc.name/--vpc.cidr 存在",
+      "type": "syntax",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-12",
+      "name": "创建子网语法检查",
+      "command": "hcloud VPC CreateSubnet --cli-region=cn-north-4 --help",
+      "expected": "帮助信息正常输出，必填参数 --subnet.vpc_id/--subnet.name/--subnet.cidr/--subnet.gateway_ip 存在",
+      "type": "syntax",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-13",
+      "name": "更新 VPC 语法检查",
+      "command": "hcloud VPC UpdateVpc --cli-region=cn-north-4 --help",
+      "expected": "帮助信息正常输出，必填参数 --vpc_id 存在",
+      "type": "syntax",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-14",
+      "name": "更新子网语法检查",
+      "command": "hcloud VPC UpdateSubnet --cli-region=cn-north-4 --help",
+      "expected": "帮助信息正常输出，必填参数 --vpc_id/--subnet_id/--subnet.name 存在",
+      "type": "syntax",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-15",
+      "name": "删除 VPC 语法检查",
+      "command": "hcloud VPC DeleteVpc --cli-region=cn-north-4 --help",
+      "expected": "帮助信息正常输出，必填参数 --vpc_id 存在",
+      "type": "syntax",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-16",
+      "name": "删除子网语法检查",
+      "command": "hcloud VPC DeleteSubnet --cli-region=cn-north-4 --help",
+      "expected": "帮助信息正常输出，必填参数 --vpc_id/--subnet_id 存在",
+      "type": "syntax",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-17",
+      "name": "SDK 可用性检查",
+      "command": "python3 -c \"from huaweicloudsdkvpc.v3 import VpcClient; print('SDK OK')\"",
+      "expected": "SDK 导入成功",
+      "type": "syntax",
+      "executor": "sdk"
+    },
+    {
+      "id": "TC-18",
+      "name": "网络连通性诊断（组件数据完整性）",
+      "command": "hcloud VPC ListVpcs/v3 --cli-region=cn-north-4 --limit=5; hcloud VPC ListSubnets --cli-region=cn-north-4 --limit=5; hcloud VPC ListRouteTables --cli-region=cn-north-4 --limit=5",
+      "expected": "三个查询均返回正常数据，供诊断引擎组合分析",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-19",
+      "name": "子网 CIDR 冲突分析（本地计算逻辑）",
+      "command": "python3 -c \"import ipaddress; a=ipaddress.ip_network('192.168.1.0/24'); b=ipaddress.ip_network('192.168.1.128/25'); print('overlap' if a.overlaps(b) else 'no')\"",
+      "expected": "输出 overlap（验证冲突检测逻辑用 ipaddress.overlaps）",
+      "type": "syntax",
+      "executor": "sdk"
+    }
+  ],
+  "env_vars_required": ["以 HUAWEI/HW/HWC 开头的环境变量中匹配 AK/SK 的键值对"],
+  "notes": "TC-01~TC-18 使用 hcloud VPC CLI；TC-17/TC-19 使用 huaweicloudsdkvpc SDK（仅验证 SDK 导入与本地计算逻辑）。写操作（TC-11~TC-16）仅做 --help 语法检查，实际执行需用户确认。"
+}
