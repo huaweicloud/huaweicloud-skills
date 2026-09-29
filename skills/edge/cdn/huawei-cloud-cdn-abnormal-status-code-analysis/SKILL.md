@@ -12,6 +12,7 @@ tags:
   - troubleshooting
 ---
 
+
 # CDN Abnormal Status Code Analysis
 
 ## Overview
@@ -34,6 +35,29 @@ It answers four questions for any 4xx/5xx anomaly:
 
 **Tools**: hcloud CLI (KooCLI) + Python log helper (`scripts/fetch_cdn_log.py`).
 **Core Principle**: Read-only diagnosis; **no configuration changes**.
+
+## Triggers
+
+Use when the user input matches any of the following (**user-phrase level**, bilingual):
+
+| Language | Trigger examples (user phrasing) |
+|----------|----------------------------------|
+| 中文 | 「CDN 域名 403 突然变多，帮我查一下」「为什么最近一直 502」「4xx/5xx 状态码异常分析」「这个问题是边缘还是回源？帮忙区分一下」「业务异常码排查」「CDN 限流/封禁排查」「状态码异常」 |
+| English | "403 spike on my CDN domain" / "root-cause a 5xx burst" / "status code analysis" / "is this edge or origin?" / "abnormal status codes during daily inspection" |
+
+Keyword triggers (also in the frontmatter `description`): 状态码异常, 业务异常码, 4xx, 5xx, 403, 404, 502, 503, 504, status code, abnormal status, CDN异常, 边缘/回源, 限流, status code analysis, edge vs origin.
+
+## Near-miss / Do NOT use
+
+Do **NOT** use this skill when:
+
+| Scenario | What to do instead |
+|----------|--------------------|
+| The domain is not onboarded to Huawei Cloud CDN | Confirm CDN onboarding / domain existence first; non-CDN HTTP issues are out of scope |
+| The user wants to **change CDN config / refresh / preheat / ban URLs / enable-disable domains** | **Refuse** — this skill is read-only; guide to the CDN console or manual hcloud CLI (see [Prohibited Operations](#-prohibited-operations-security-constraints)) |
+| Pure bandwidth / traffic analysis with **no status-code focus** | Not this skill's scope (no 4xx/5xx anomaly to explain) |
+| User pastes AK/SK or asks to configure credentials in chat | **Refuse** — see [Authentication](#authentication); emit the secure setup template and wait |
+| Non-CDN business exceptions (ECS / ELB / OBS / application-layer issues unrelated to CDN semantics) | Redirect to the relevant service skill |
 
 ## ⛔ Prohibited Operations (Security Constraints)
 
@@ -134,8 +158,8 @@ hcloud CDN <Operation> --cli-region=<region> [--key=value ...]
 
 ## IAM Permission Policies
 
-See [references/iam-policies.md](references/iam-policies.md). Minimum: read-only CDN query scope (`cdn:domain:get` + statistics/log query).
-The simplest grant is the system read-only policy **CDN Domain Viewer** ("Allow Query Domains"). No write permissions are required or included.
+See [references/iam-policies.md](references/iam-policies.md). Minimum: `cdn:*:query*` (plus `cdn:configuration:queryDomains`) and `cdn:log:*` for log forensics.
+This skill is strictly read-only: no create / update / delete / refresh / ban permission is required or included.
 
 ## Core Commands
 
@@ -182,6 +206,12 @@ The simplest grant is the system read-only policy **CDN Domain Viewer** ("Allow 
 
 ## Core Workflows
 
+> **Target domain is required before any diagnosis step.**
+>
+> - If the user did not provide a target domain, ask the user for the domain name and wait for the reply before starting.
+> - Only if the user does not know the domain or asks you to look it up, list the account's domains via `hcloud CDN ListDomains/v2` and ask the user to choose one.
+> - Never start the diagnosis without an explicit user-provided domain: do not guess a domain, do not fall back to an example/default domain, and do not pick a domain from the list yourself.
+
 ### Step 1: Discovery & Quantification — find 4xx/5xx, size, traffic correlation
 
 📄 Detailed steps → [references/task-discovery.md](references/task-discovery.md)
@@ -206,6 +236,143 @@ The simplest grant is the system read-only policy **CDN Domain Viewer** ("Allow 
 
 📄 Detailed steps → [references/task-report.md](references/task-report.md)
 
+## FAQ (Q&A)
+
+> Detailed troubleshooting and the full error-code reference are in [references/troubleshooting.md](references/troubleshooting.md).
+
+### Q1: Why do ListBanUrl / ListAccessControlTask return CDN.0004?
+
+A: These two query APIs require a 工单 (support-ticket) whitelist; they are still query-class GET operations.
+Record the error, do not bypass, continue with the other evidence, and mark "unconfirmed via CLI" in the report.
+
+### Q2: Why does ShowDomainStats return an empty result?
+
+A: No traffic in the window, the status code did not occur, or the timestamps are not aligned to the interval
+(`interval=86400` requires CST 0:00 points). Widen the window (e.g. 31 days), align the time points,
+and confirm the domain had traffic, then retry.
+
+### Q3: Can `status_code_*` and `bs_status_code_*` be combined in one query?
+
+A: **No.** Edge and back-to-source statistics must be run as two separate `ShowDomainStats/v2` calls.
+
+### Q4: Why is there no status code in the Top-N results?
+
+A: The Top-N family (TopIps/Path/OriginUrl/Refers/Uas) `stat_type` supports only `flux`/`req_num` — there is
+no status-code dimension. Use Top-N to shortlist suspect IPs/paths, then cross-check the actual status codes
+via `ShowLogs` / `ShowDomainStats`.
+
+### Q5: Why does ShowLogs return logs: [] / total: 0?
+
+A: No log file covers the window, the window is not left-closed right-open / hour-aligned, or the domain
+had no traffic in that period. Align to whole-hour CST points, widen the window, and confirm traffic, then retry.
+
+### Q6: How do I handle fetch_cdn_log.py errors?
+
+A: See the error-code table in [references/troubleshooting.md](references/troubleshooting.md) (9 `error.reason` values:
+`connect_timeout` / `connect_failed` / `http_error` / `bad_gzip` / `invalid_url` / `invalid_timeout` /
+`invalid_max_lines` / `invalid_status` / `missing_library`). Soft failures exit 0 (JSON `error` included),
+argument/missing-library errors exit 2. Common fixes: raise `--timeout` (≤60), re-run `ShowLogs/v2` to
+refresh an expired link, or `python -m pip install requests>=2.25`.
+
+### Q7: Why does a CDN query return 403 Insufficient permission?
+
+A: The IAM user lacks the CDN read-only scope. Grant `cdn:*:query*` (plus `cdn:configuration:queryDomains`
+and `cdn:log:*` for log forensics) per [references/iam-policies.md](references/iam-policies.md).
+**Never elevate to any write action.**
+
+### Known Issues and Limitations
+
+| Limitation | Description |
+|------|------|
+| `ShowLogs/v2` | Single domain only; span ≤ 30 days |
+| Top-N `stat_type` | Only `flux`/`req_num`; no status-code dimension (cross-check required) |
+| `ListDomainClientStats` | `ip_num` supports 1-day granularity only (CST 0:00); the unique-visitor metric supports 5-min granularity |
+| `ListBanUrl` / `ListAccessControlTask` | Require a 工单 (support-ticket) whitelist (`CDN.0004`); record and continue |
+| Log parsing | `fetch_cdn_log.py` parses the official Huawei Cloud 14-field log format; fields containing spaces (time, user_agent) are kept as one token / quoted ([official doc](https://support.huaweicloud.com/intl/zh-cn/bestpractice-cdn/cdn_01_0252.html)) |
+| CDN region | Only `cn-north-1` / `ap-southeast-1`; `cn-north-1` recommended uniformly; `cn-north-4` is not supported |
+
+### Error Code Quick Reference
+
+| Error | Meaning | Action |
+|-------|---------|--------|
+| `CDN.0004` | Not in the 工单 whitelist (`ListBanUrl` / `ListAccessControlTask`) | Record, continue, mark "unconfirmed via CLI" |
+| `cli-region的值不支持` | Region not supported by CDN | Use `--cli-region=cn-north-1` (or `ap-southeast-1`) |
+| `403 Insufficient permission` | IAM lacks the CDN read-only scope | Grant `cdn:*:query*` (+ `cdn:log:*`); never elevate |
+
+## Failure Modes
+
+> Detailed troubleshooting is in [references/troubleshooting.md](references/troubleshooting.md). Each task step's **Exit criteria** is the self-check.
+
+### Known failure modes and recovery strategy
+
+| Failure mode | Symptom | Recovery strategy (retry / fallback / degrade / report) |
+|----------|------|----------|
+| Region not supported | `cli-region的值不支持`, only cn-north-4/ru-moscow-1 hinted | Switch to `--cli-region=cn-north-1` (or `ap-southeast-1`) |
+| CDN.0004 whitelist | `ListBanUrl` / `ListAccessControlTask` return "not in the whitelist" | **Degrade**: record unconfirmed via CLI, continue with other evidence, mark it in the report; do not bypass |
+| Empty result | `ShowDomainStats` returns `{}` | **Retry**: widen the window (31 days), align to the interval points (CST 0:00 for 86400), confirm traffic |
+| Edge/origin mixed query | Passing `status_code_*` and `bs_status_code_*` together errors | Split into two `ShowDomainStats/v2` calls |
+| Top-N has no status codes | Top-N returns request counts only | **Cross-check**: confirm the actual codes via `ShowLogs` / `ShowDomainStats` |
+| ShowLogs returns no links | `logs: []` / `total: 0` | **Retry**: align to whole-hour CST points, widen the window, confirm traffic in the window |
+| Log download failure | `fetch_cdn_log.py` `error.reason` = connect_timeout / connect_failed / http_error / bad_gzip | **Retry / refresh**: raise `--timeout` (≤60), re-run `ShowLogs/v2` to refresh the expired link, check gzip |
+| Permission denied | Query returns 403 Insufficient permission | Check the IAM read-only scope (`cdn:*:query*` + `cdn:log:*`); **never elevate to write actions** |
+
+### Error propagation and handling protocol (fetch_cdn_log.py)
+
+- **exit 0**: probe ran to completion (including soft failures — HTTP non-200, empty result, bad gzip, timeout); emits JSON `error.reason` for the caller.
+- **exit 2**: argument error or missing dependency library (`requests`).
+- `error.reason` enum (9 values): `connect_timeout` / `connect_failed` / `http_error` / `bad_gzip` / `invalid_url` / `invalid_timeout` / `invalid_max_lines` / `invalid_status` / `missing_library`.
+
+### Self-check before output
+
+- [ ] Does the report contain all required sections (Summary / Distribution / Root Cause / Conclusion / Remediation boundary)?
+- [ ] Does every claim have evidence (config state / bs verdict / log rows / rule list)?
+- [ ] Are unconfirmed items (e.g. blocked by CDN.0004) marked "unconfirmed via CLI"?
+- [ ] Does the report avoid recommending any write operation to be executed by this skill? (**must** be yes)
+
+## Output Format
+
+This skill has two output contracts.
+
+### 1. Diagnosis report (plain text)
+
+Report template: [references/task-report.md](references/task-report.md). Required sections and fields:
+
+| Section | Required fields |
+|---------|----------|
+| Header | Analysis Time (ISO8601), Target Domain, Region |
+| Summary | Abnormal status-code set, anomaly window (CST), volume / ratio, edge-origin verdict (`bs_status_code_<X>` empty → edge / non-empty → origin) |
+| Distribution | Top IP/URL/UA/Referer, client verdict (few-IP burst / many real users, with ip_num/req_num), bandwidth peak |
+| Root Cause | Candidate mechanism, evidence, ruled-out items, unconfirmed-via-CLI items |
+| Conclusion | Status (Edge-generated / Origin-generated / Partial), suggestion, remediation boundary (write ops only via the CDN console or manual hcloud CLI) |
+
+### 2. fetch_cdn_log.py JSON (structured)
+
+Schema: [references/related-apis.md](references/related-apis.md). Top-level fields:
+
+| Field | Type | Description |
+|------|------|------|
+| `url` | string | Log download link |
+| `http_status` | int | Download HTTP status |
+| `byte_size` | int | Downloaded bytes |
+| `status_filter` | int[] | Status-code filter set |
+| `rows[]` | object[] | Matched rows (field enum: `status`(int 100-599), `cache_status`(HIT/MISS), `time`, ...), incl. `client_ip`, `url`, `user_agent`, `edge_node_ip` |
+| `count` | int | Number of matched rows |
+| `duration_ms` | int | Elapsed time |
+| `error` | object/null | `null` or `{reason, message}` (reason enum — see [Failure Modes](#failure-modes)) |
+
+### Output example (fetch_cdn_log.py JSON excerpt)
+
+```json
+{"status":403,"client_ip":"120.46.140.45","url":"/index.html","cache_status":"HIT","user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64)","edge_node_ip":"39.136.130.12","time":"[10/Aug/2026:15:55:13 +0800]"}
+```
+
+### Content to NEVER include in the output
+
+- AK/SK and any credentials (see [Authentication](#authentication))
+- Internal / sensitive addresses and customer private information (output only the fields needed for diagnosis)
+- The raw full log text (output only the extracted rows fields)
+- Conclusions beyond the evidence (unconfirmed items must be marked "unconfirmed")
+
 ## References
 
 | Document | Description |
@@ -224,3 +391,15 @@ The simplest grant is the system read-only policy **CDN Domain Viewer** ("Allow 
 | [acceptance-criteria.md](references/acceptance-criteria.md) | Acceptance criteria checklist |
 | [troubleshooting.md](references/troubleshooting.md) | Troubleshooting |
 | [cli-installation-guide.md](references/cli-installation-guide.md) | CLI installation guide |
+
+## Changelog / Version History
+
+| Version | Date | Maintainer | Changes |
+|------|------|--------|----------|
+| v1.0.0 | 2026-08-10 | cdn-ops | Initial release: read-only 6-step diagnosis workflow (discovery / localize / distribution / root-cause / forensics / report), 55 prohibited operations, `fetch_cdn_log.py` log-forensics helper, 14 reference documents |
+
+> Versioning follows SemVer (`major.minor.patch`); current frontmatter `version: 1.0.0`. Append a row to the
+table and bump the frontmatter `version` on every major change.
+> Maintainer: `cdn-ops`. If a CDN query API this skill depends on (e.g. `ShowLogs/v2`, `bs_status_code_*`
+statistics) is **deprecated / sunset** or changes behavior, update [references/related-apis.md](references/related-apis.md)
+and [references/troubleshooting.md](references/troubleshooting.md) accordingly.

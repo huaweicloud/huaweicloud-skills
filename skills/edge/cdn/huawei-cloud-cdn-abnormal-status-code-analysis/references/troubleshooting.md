@@ -60,6 +60,5 @@
 
 - Symptom: `403` / `Insufficient permission` on `Show*` config/stats.
 - Cause: IAM user lacks CDN read scope.
-- Fix: attach the system read-only policy `CDN Domain Viewer` (or grant
-  `cdn:domain:get` + confirmed statistics/log read actions per the official
-  IAM reference). Never elevate to write actions.
+- Fix: grant the read-only CDN scope (`cdn:*:query*`, `cdn:configuration:queryDomains`,
+  and `cdn:log:*`). Never elevate to write actions.

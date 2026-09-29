@@ -148,7 +148,7 @@ def main() -> int:
                         help="Request timeout in seconds, range [1, 60]")
     parser.add_argument("--max-lines", type=int, default=200,
                         help="Maximum matching rows to return, range [1, 10000]")
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
 
     # Validate args.
     if not (args.url.lower().startswith("http://") or args.url.lower().startswith("https://")):

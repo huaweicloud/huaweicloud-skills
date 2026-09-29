@@ -12,6 +12,10 @@ flowchart TD
         CHK_CLI["hcloud >= 3.2.0"]
         CHK_PY["python >= 3.8 + requests >= 2.25"]
         CHK_CRED["hcloud configure list"]
+        CHK_DOM{"Target domain<br/>user-provided?"}
+        ASK_DOM["Ask the user for the domain;<br/>if unknown, list domains via<br/>ListDomains/v2 and let the user choose"]
+        CHK_CRED --> CHK_DOM
+        CHK_DOM -->|no| ASK_DOM
     end
 
     subgraph S1[Step 1: Discovery & Quantify]
@@ -50,8 +54,8 @@ flowchart TD
     end
 
     Input --> PreCheck
-    PreCheck -->|valid| S1
-    PreCheck -->|invalid| ERR["Abort: configure credentials"]
+    CHK_CRED -->|invalid| ERR["Abort: configure credentials"]
+    CHK_DOM -->|provided| S1
     S1 --> S2
     S2 --> EDGE --> S3
     S2 --> ORIGIN --> S3

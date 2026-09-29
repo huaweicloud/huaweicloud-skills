@@ -23,7 +23,7 @@
 - [ ] On a write-op request, refuse with "this skill performs read-only diagnosis only"
 - [ ] Prohibit reading/echoing/printing AK/SK
 - [ ] Prohibit asking users to input credentials in chat; on paste, stop and emit the secure setup template
-- [ ] iam-policies.md contains only read permissions (`cdn:domain:get` + read-only scope); no write actions
+- [ ] iam-policies.md contains only read permissions (`cdn:*:query*` + `cdn:configuration:queryDomains` + `cdn:log:*`); no write actions
 - [ ] `ListBanUrl`/`ListAccessControlTask` blocked by `CDN.0004` are recorded, not bypassed
 - [ ] references/prohibited-operations.md lists all 55 prohibited non-GET operations (24 POST + 25 PUT + 6 DELETE)
 
