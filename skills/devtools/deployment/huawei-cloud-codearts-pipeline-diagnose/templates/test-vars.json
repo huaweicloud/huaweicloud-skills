@@ -1,0 +1,147 @@
+{
+  "region": "cn-north-4",
+  "request_defaults": {
+    "project_id": "{project_id}",
+    "start_time": "{start_time}",
+    "end_time": "{end_time}"
+  },
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "ListPipelines --help syntax check",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsPipeline ListPipelines --cli-region={region} --help",
+      "note": "Verifies operation exists and parameter names/required flags match the documented ones."
+    },
+    {
+      "id": "TC-02",
+      "name": "ListPipelines live (read-only) - project error semantics",
+      "type": "query",
+      "executor": "cli",
+      "command": "hcloud CodeArtsPipeline ListPipelines --cli-region={region} --project_id={project_id} --offset=0 --limit=10",
+      "note": "Test account IAM project may not be a CodeArts (DevCloud) project; pipeline.00060101 项目不存在 is the EXPECTED outcome proving CLI+auth wiring, not a skill defect."
+    },
+    {
+      "id": "TC-03",
+      "name": "ShowPipelineDetail --help syntax check",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsPipeline ShowPipelineDetail --cli-region={region} --help"
+    },
+    {
+      "id": "TC-04",
+      "name": "ShowPipelineRunDetail --help syntax check",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsPipeline ShowPipelineRunDetail --cli-region={region} --help"
+    },
+    {
+      "id": "TC-05",
+      "name": "ListPipelineRuns --help syntax check",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsPipeline ListPipelineRuns --cli-region={region} --help"
+    },
+    {
+      "id": "TC-06",
+      "name": "ShowPipelineLog --help syntax check",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsPipeline ShowPipelineLog --cli-region={region} --help",
+      "note": "Required: project_id, pipeline_id, pipeline_run_id, job_run_id (path) + limit (body)."
+    },
+    {
+      "id": "TC-07",
+      "name": "ListProjectJobs --help syntax check",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsBuild ListProjectJobs --cli-region={region} --help"
+    },
+    {
+      "id": "TC-08",
+      "name": "ListProjectJobs live (read-only) - project error semantics",
+      "type": "query",
+      "executor": "cli",
+      "command": "hcloud CodeArtsBuild ListProjectJobs --cli-region={region} --project_id={project_id} --page_index=0 --page_size=10"
+    },
+    {
+      "id": "TC-09",
+      "name": "ShowBuildRecord --help syntax check",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsBuild ShowBuildRecord --cli-region={region} --help"
+    },
+    {
+      "id": "TC-10",
+      "name": "ShowBuildRecord live with unknown record id - error semantics",
+      "type": "query",
+      "executor": "cli",
+      "command": "hcloud CodeArtsBuild ShowBuildRecord --cli-region={region} --record_id=00000000-0000-0000-0000-000000000000",
+      "note": "unknown record id -> not-found/param error JSON expected (negative-style read-only probe)."
+    },
+    {
+      "id": "TC-11",
+      "name": "DownloadBuildLog --help syntax check",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsBuild DownloadBuildLog --cli-region={region} --help"
+    },
+    {
+      "id": "TC-12",
+      "name": "ListBuildInfoRecordByJobId --help syntax check",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsBuild ListBuildInfoRecordByJobId --cli-region={region} --help",
+      "note": "Required: job_id (path) + start_time/end_time (query, yyyy-MM-dd HH:mm:ss)."
+    },
+    {
+      "id": "TC-13",
+      "name": "CreatePipelineNew --help syntax check (no live mutation)",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsPipeline CreatePipelineNew --cli-region={region} --help",
+      "note": "R2 write op: syntax-only check, no live execution without user confirmation."
+    },
+    {
+      "id": "TC-14",
+      "name": "CreateBuildJob --help syntax check (no live mutation)",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsBuild CreateBuildJob --cli-region={region} --help",
+      "note": "R2 write op: syntax-only."
+    },
+    {
+      "id": "TC-15",
+      "name": "RunPipeline --help syntax check (no live mutation)",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsPipeline RunPipeline --cli-region={region} --help",
+      "note": "R2 write op: syntax-only."
+    },
+    {
+      "id": "TC-16",
+      "name": "RunJob --help syntax check (no live mutation)",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsBuild RunJob --cli-region={region} --help",
+      "note": "R2 write op: syntax-only."
+    },
+    {
+      "id": "TC-17",
+      "name": "DeletePipeline --help syntax check (no live mutation)",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsPipeline DeletePipeline --cli-region={region} --help",
+      "note": "R1 delete op: syntax-only, never executed without explicit confirmation."
+    },
+    {
+      "id": "TC-18",
+      "name": "DeleteBuildJob --help syntax check (no live mutation)",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "hcloud CodeArtsBuild DeleteBuildJob --cli-region={region} --help",
+      "note": "R1 delete op: syntax-only, never executed without explicit confirmation."
+    }
+  ]
+}
