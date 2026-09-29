@@ -269,10 +269,10 @@ Ensure the IAM user has the required permissions. See [references/iam-policies.m
 
 **Minimum required permissions:**
 
-- `cdn:domain:get` — Query domain details
-- `cdn:ip:info` — Query IP attribution information (if the IAM policy can be split)
+- `cdn:*:query*` — All CDN query-class actions used by this skill (`ListDomains/v2`, `ShowDomainDetailByName`, `ShowIpInfo/v2`)
+- `cdn:configuration:queryDomains` — List CDN domains (listed explicitly alongside the wildcard)
 
-> The actual minimum permissions are subject to the CDN service policy. Typically `cdn:domain:get` covers the read-only queries of ShowDomainDetailByName and ShowIpInfo/v2.
+> `ShowIpInfo/v2` (IP attribution) is a query-class read interface and is covered by `cdn:*:query*`; no separate IP-information action is required.
 
 ---
 
@@ -313,6 +313,12 @@ Before executing the diagnosis, confirm the following parameters with the user:
 ---
 
 ## Core Workflows
+
+> **Target domain is required before any diagnosis step.**
+>
+> - If the user did not provide a target domain, ask the user for the domain name and wait for the reply before starting.
+> - Only if the user does not know the domain or asks you to look it up, list the account's domains via `hcloud CDN ListDomains/v2` and ask the user to choose one.
+> - Never start the diagnosis without an explicit user-provided domain: do not guess a domain, do not fall back to an example/default domain, and do not pick a domain from the list yourself.
 
 ### Step 1: Credential Validation and Domain Permission Check
 
@@ -379,7 +385,7 @@ and read-only; they can be chained in any order.
 |-------|------------------|
 | Q1: "Credentials not configured" | Run `hcloud configure` interactively, or set the environment variables `HUAWEICLOUD_SDK_AK` / `HUAWEICLOUD_SDK_SK`, then verify with `hcloud configure list` |
 | Q2: ShowDomainDetailByName returns 404 / CDN.0171 | The domain is not under the current account or not onboarded to CDN; check the spelling and account, or list onboarded domains with `hcloud CDN ListDomains/v2 --cli-region=<region> --page_size=100` |
-| Q3: 403 permission denied | Verify the IAM user has `cdn:domain:get` / `cdn:ip:info`; contact the primary account administrator to grant permissions if needed (see references/iam-policies.md) |
+| Q3: 403 permission denied | Verify the IAM user has the CDN query permission (`cdn:*:query*`, plus `cdn:configuration:queryDomains`); contact the primary account administrator to grant permissions if needed (see references/iam-policies.md) |
 | Q4: dns_resolve.py returns dns_timeout | Check local network and DNS configuration; switch the system DNS resolver (e.g., 8.8.8.8 / 114.114.114.114) and retry `python scripts/dns_resolve.py --domain <domain> --timeout 10` |
 | Q5: missing_library (exit code 2) | Install dnspython: `pip install dnspython>=2.1` (preferred: `python -m pip install dnspython>=2.1`) and retry |
 
@@ -412,7 +418,7 @@ and read-only; they can be chained in any order.
 |---|--------------|-----------------|-------------------|
 | 1 | Credentials not configured / expired | Step 1 `hcloud configure list` | Abort; guide the user to `hcloud configure` or environment variables, then retry |
 | 2 | Domain not found (404 / CDN.0171) | Step 1 `ShowDomainDetailByName` | Abort; prompt to confirm domain ownership |
-| 3 | Permission denied (403) | Step 1 `ShowDomainDetailByName` | Abort; prompt to contact the administrator to grant `cdn:domain:get` |
+| 3 | Permission denied (403) | Step 1 `ShowDomainDetailByName` | Abort; prompt to contact the administrator to grant `cdn:*:query*` (+ `cdn:configuration:queryDomains`) |
 | 4 | API call failure (500 / network error) | Step 1 / Step 3 | **Degrade**: output probe results only and note "API query failed; verify IP attribution manually" in the report |
 | 5 | Domain not resolved (`data.resolved_ips` empty) | Step 2 JSON | Skip Step 3; report "domain not resolved" + CNAME remediation suggestion |
 | 6 | Probe timeout (`dns_timeout`) | Step 2 JSON | Mark "probe timeout"; return partial results; suggest switching the DNS resolver and retrying |

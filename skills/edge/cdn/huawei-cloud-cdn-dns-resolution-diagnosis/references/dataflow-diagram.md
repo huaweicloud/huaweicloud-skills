@@ -12,6 +12,10 @@ flowchart TD
         CHK_PY["python ≥ 3.8"]
         CHK_DNSPY["dnspython ≥ 2.1 importable"]
         CHK_CRED["hcloud configure list<br/>credentials valid?"]
+        CHK_DOM{"Target domain<br/>user-provided?"}
+        ASK_DOM["Ask the user for the domain;<br/>if unknown, list domains via<br/>ListDomains/v2 and let the user choose"]
+        CHK_CRED --> CHK_DOM
+        CHK_DOM -->|no| ASK_DOM
     end
 
     subgraph Step1[Step 1: Permission Check and CNAME Retrieval]
@@ -53,8 +57,8 @@ flowchart TD
     end
 
     Input --> PreCheck
-    PreCheck -->|credentials valid| Step1
-    PreCheck -->|credentials invalid| ERR_CRED["Abort: prompt to configure credentials"]
+    CHK_CRED -->|credentials invalid| ERR_CRED["Abort: prompt to configure credentials"]
+    CHK_DOM -->|provided| Step1
     Step1 -->|200 JSON {id, cname}| Step2
     Step2 -->|"JSON data.resolved_ips"| Step3
     Step2 -->|"empty data.resolved_ips"| Step4

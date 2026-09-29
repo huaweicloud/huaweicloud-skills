@@ -30,7 +30,7 @@
 **Symptom**: `ShowDomainDetailByName` returns 403 or a permission denied error
 
 **Resolution**:
-1. Check whether the IAM user has the `cdn:domain:get` permission
+1. Check whether the IAM user has the CDN query permission (`cdn:*:query*`, plus `cdn:configuration:queryDomains` for the domain list)
 2. Confirm the AK/SK belongs to the correct account
 3. Contact the primary account administrator to grant CDN domain query permission
 4. See [iam-policies.md](iam-policies.md) for details

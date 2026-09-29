@@ -29,7 +29,7 @@
 - [ ] Prohibited from reading/echoing/printing AK/SK values
 - [ ] Prohibited from asking the user to input credentials directly in the conversation
 - [ ] When the user provides AK/SK in the conversation, stop immediately and guide secure configuration
-- [ ] iam-policies.md includes the `cdn:domain:get` permission statement
+- [ ] iam-policies.md includes the `cdn:*:query*` and `cdn:configuration:queryDomains` permission statements
 - [ ] Permission statements do not include any write operation permissions
 - [ ] references/prohibited-operations.md lists all 55 prohibited non-GET operations (24 POST + 25 PUT + 6 DELETE)
 

@@ -198,7 +198,7 @@ def main():
         default=10,
         help="Query lifetime in seconds (default 10, range 1-30).",
     )
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
 
     # Validate domain
     valid, reason = validate_domain(args.domain)
