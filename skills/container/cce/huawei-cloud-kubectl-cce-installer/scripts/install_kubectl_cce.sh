@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PLUGIN_VERSION="0.1.0"
+PLUGIN_VERSION="0.2.1"
 PLUGIN_REPOSITORY="pancake0001/kubectl-cce-plugin"
 PLUGIN_RELEASE_BASE_URL="https://gitee.com/${PLUGIN_REPOSITORY}/releases/download"
 KUBERNETES_REPOSITORY="https://github.com/kubernetes/kubernetes.git"
 PLUGIN_SOURCE_REPOSITORY="https://gitee.com/${PLUGIN_REPOSITORY}.git"
 BIN_DIR="/usr/local/bin"
 MODE="plan"
+REINSTALL_PLUGIN=false
 OBS_BASE_URL="https://cce-north-4.obs.cn-north-4.myhuaweicloud.com"
 CONNECT_TIMEOUT="${KUBECTL_CCE_CONNECT_TIMEOUT:-10}"
 DOWNLOAD_TIMEOUT="${KUBECTL_CCE_DOWNLOAD_TIMEOUT:-300}"
@@ -16,10 +17,11 @@ SOURCE_BUILD_TIMEOUT="${KUBECTL_CCE_SOURCE_BUILD_TIMEOUT:-900}"
 
 usage() {
   cat <<'EOF'
-Usage: install_kubectl_cce.sh [--check] [--execute] [--bin-dir <directory>]
+Usage: install_kubectl_cce.sh [--check] [--execute] [--reinstall] [--bin-dir <directory>]
 
 Without --execute, print the installation plan only. --execute installs missing
-executables and must be used only after user confirmation.
+executables and must be used only after user confirmation. --reinstall replaces
+an existing kubectl-cce plugin only when used with --execute.
 EOF
 }
 
@@ -27,6 +29,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --check) MODE="check" ;;
     --execute) MODE="execute" ;;
+    --reinstall) REINSTALL_PLUGIN=true ;;
     --bin-dir)
       BIN_DIR="${2:?--bin-dir requires a directory}"
       shift
@@ -190,6 +193,7 @@ echo "platform=${OS} arch=${ARCH}"
 echo "kubectl_present=${KUBECTL_PRESENT}"
 echo "kubectl_cce_present=${PLUGIN_PRESENT}"
 echo "bin_dir=${BIN_DIR}"
+echo "reinstall_plugin=${REINSTALL_PLUGIN}"
 
 if [[ "$MODE" == "check" ]]; then
   if "$KUBECTL_PRESENT"; then kubectl version --client 2>/dev/null || true; fi
@@ -212,8 +216,10 @@ if [[ "$KUBECTL_PRESENT" == false ]]; then
 fi
 if [[ "$PLUGIN_PRESENT" == false ]]; then
   echo "PLAN: download kubectl-cce v${PLUGIN_VERSION} for ${OS} ${ARCH} from Gitee Release when available; otherwise build tag v${PLUGIN_VERSION} from source."
+elif [[ "$REINSTALL_PLUGIN" == true ]]; then
+  echo "PLAN: replace ${BIN_DIR}/kubectl-cce with kubectl-cce v${PLUGIN_VERSION} for ${OS} ${ARCH}; use the Gitee Release when available, otherwise build tag v${PLUGIN_VERSION} from source."
 fi
-if [[ "$KUBECTL_PRESENT" == true && "$PLUGIN_PRESENT" == true ]]; then
+if [[ "$KUBECTL_PRESENT" == true && "$PLUGIN_PRESENT" == true && "$REINSTALL_PLUGIN" == false ]]; then
   echo "Nothing to install. Run with --check to verify versions and plugin discovery."
   exit 0
 fi
@@ -243,7 +249,7 @@ if [[ "$KUBECTL_PRESENT" == false ]]; then
   fi
 fi
 
-if [[ "$PLUGIN_PRESENT" == false ]]; then
+if [[ "$PLUGIN_PRESENT" == false || "$REINSTALL_PLUGIN" == true ]]; then
   if [[ "$OS" == "Linux" ]]; then
     ASSET_NAME="kubectl-cce_${PLUGIN_VERSION}_linux_${ARCH}.tar.gz"
     ASSET_URL="${PLUGIN_RELEASE_BASE_URL}/v${PLUGIN_VERSION}/${ASSET_NAME}"
