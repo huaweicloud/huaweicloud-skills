@@ -1,0 +1,168 @@
+{
+  "skill_name": "huawei-cloud-ecs-manage",
+  "region": "cn-north-4",
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "CLI 服务可用性检查 - ECS",
+      "command": "hcloud ECS ListServersDetails --cli-region=cn-north-4 --help",
+      "expected": "帮助信息正常输出，命令存在，参数与 SKILL.md 一致",
+      "type": "syntax",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-02",
+      "name": "查询 ECS 实例列表",
+      "command": "hcloud ECS ListServersDetails --cli-region=cn-north-4 --limit=5",
+      "expected": "返回 servers 数组（可能为空），无 error_code",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-03",
+      "name": "查询 ECS 实例详情 - help 校验",
+      "command": "hcloud ECS ShowServer --cli-region=cn-north-4 --help",
+      "expected": "帮助信息正常输出，必填参数 server_id 存在",
+      "type": "syntax",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-04",
+      "name": "查询 ECS 实例详情（真实实例）",
+      "command": "hcloud ECS ShowServer --cli-region=cn-north-4 --server_id={server_id}",
+      "expected": "返回 server 对象（status/addresses/flavor），无 error_code；无实例时记录 skipped",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-05",
+      "name": "查询 ECS 规格列表",
+      "command": "hcloud ECS ListFlavors --cli-region=cn-north-4 --limit=5",
+      "expected": "返回 flavors 数组，无 error_code",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-06",
+      "name": "按规格ID过滤查询",
+      "command": "hcloud ECS ListFlavors --cli-region=cn-north-4 --flavor_id={flavor_id}",
+      "expected": "返回含该 flavor_id 的结果；不存在时返回空数组而非报错",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-07",
+      "name": "查询 ECS 镜像列表",
+      "command": "hcloud IMS ListImages --cli-region=cn-north-4 --limit=5",
+      "expected": "返回 images 数组，无 error_code",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-08",
+      "name": "查询 ECS 配额",
+      "command": "hcloud ECS ShowServerLimits --cli-region=cn-north-4",
+      "expected": "返回 absolute limits 与用量（maxTotalInstances/totalInstancesUsed 等）",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-09",
+      "name": "诊断-网络检查: 子网列表",
+      "command": "hcloud VPC ListSubnets --cli-region=cn-north-4 --limit=5",
+      "expected": "返回 subnets 数组，无 error_code",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-10",
+      "name": "诊断-网络检查: 安全组列表",
+      "command": "hcloud VPC ListSecurityGroups/v2 --cli-region=cn-north-4 --limit=5",
+      "expected": "返回 security_groups 数组，无 error_code",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-11",
+      "name": "诊断-网络检查: EIP 列表",
+      "command": "hcloud EIP ListPublicips/v2 --cli-region=cn-north-4 --limit=5",
+      "expected": "返回 publicips 数组，无 error_code",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-12",
+      "name": "诊断-密钥对检查: KPS 密钥对列表",
+      "command": "hcloud KPS ListKeypairs --cli-region=cn-north-4 --limit=5",
+      "expected": "返回 keypairs 数组，无 error_code；403 时记为权限受限并降级提示",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-13",
+      "name": "诊断-云盘检查: EVS 卷列表",
+      "command": "hcloud EVS ListVolumes --cli-region=cn-north-4 --limit=5",
+      "expected": "返回 volumes 数组，无 error_code",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-14",
+      "name": "诊断-任务追踪: ShowJob help 校验",
+      "command": "hcloud ECS ShowJob --cli-region=cn-north-4 --help",
+      "expected": "帮助信息正常输出，必填参数 job_id 存在",
+      "type": "syntax",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-15",
+      "name": "健康分析: 卷挂载列表 help 校验",
+      "command": "hcloud ECS ListServerVolumeAttachments --cli-region=cn-north-4 --help",
+      "expected": "帮助信息正常输出，必填参数 server_id 存在",
+      "type": "syntax",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-16",
+      "name": "创建实例 - 参数校验 (dry-run)",
+      "command": "hcloud ECS CreatePostPaidServers --cli-region=cn-north-4 --dry_run=true --server.flavorRef={flavor_id} --server.imageRef={image_id} --server.name=ecs-manage-test --server.root_volume.volumetype=SATA --server.vpcid={vpc_id}",
+      "expected": "返回校验结果（不创建资源）；确认参数合法。写操作，需确认后执行",
+      "type": "write",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-17",
+      "name": "启动实例 help 校验",
+      "command": "hcloud ECS BatchStartServers --cli-region=cn-north-4 --help",
+      "expected": "帮助信息正常输出，os-start.servers.N.id 参数存在",
+      "type": "syntax",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-18",
+      "name": "停止实例 help 校验",
+      "command": "hcloud ECS BatchStopServers --cli-region=cn-north-4 --help",
+      "expected": "帮助信息正常输出，os-stop.servers.N.id 与 os-stop.type 参数存在",
+      "type": "syntax",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-19",
+      "name": "重启实例 help 校验",
+      "command": "hcloud ECS BatchRebootServers --cli-region=cn-north-4 --help",
+      "expected": "帮助信息正常输出，reboot.servers.N.id 与 reboot.type 参数存在",
+      "type": "syntax",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-20",
+      "name": "删除实例 help 校验",
+      "command": "hcloud ECS DeleteServers --cli-region=cn-north-4 --help",
+      "expected": "帮助信息正常输出，servers.N.id 与 delete_publicip/delete_volume 参数存在",
+      "type": "syntax",
+      "executor": "cli"
+    }
+  ],
+  "env_vars_required": ["HUAWEICLOUD_SDK_AK", "HUAWEICLOUD_SDK_SK"],
+  "notes": "TC-16/17/18/19/20 为写操作或写操作参数校验：仅 dry-run 或 --help 执行，禁止自动执行真实写操作；真实生命周期测试（create->start->stop->restart->delete）需测试人员确认并清理资源。{server_id}/{flavor_id}/{image_id}/{vpc_id} 需在运行时填充真实值。凭证 401(APIGW.0301) 时只读用例记为 blocked-env，不算技能缺陷。"
+}
