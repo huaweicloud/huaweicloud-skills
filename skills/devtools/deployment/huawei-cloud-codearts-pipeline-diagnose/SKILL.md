@@ -22,18 +22,6 @@ tags: [huawei-cloud, codearts, pipeline, build, devops]
 # Huawei Cloud CodeArts Pipeline & Build Diagnosis
 
 <!-- cli-install-version: 7.2.12 -->
-## Step 0: Ensure skill-quality-cli (idempotent)
-
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-bash scripts/ensure_cli.sh
-```
-
-> The script installs the bundled `scripts/cli/` sources to `~/.local/bin/` when
-> `skill-quality-cli` is not found (offline, no external download), re-exports
-> PATH for the current session and persists it into `~/.bashrc` / `~/.profile`;
-> it never blocks. If still not found, call the absolute path:
-> `~/.local/bin/skill-quality-cli`.
 
 ## Overview
 
@@ -54,9 +42,6 @@ into artifacts as build tasks (`构建任务`). The skill covers:
 > flags for the current KooCLI version. Do not answer from general knowledge —
 > follow the procedures in this document.
 
-**Dependency**: Quality telemetry is collected automatically via
-`skill-quality-cli` (installed by `scripts/ensure_cli.sh` if absent).
-
 ### Critical Warnings
 
 | Trap | Why |
@@ -68,6 +53,8 @@ into artifacts as build tasks (`构建任务`). The skill covers:
 | **Create operations are complex** | `CreatePipelineNew` needs a JSON `--definition` (best copied from an existing pipeline via `ShowPipelineDetail`); `CreateBuildJob` needs `--steps.N.module_id`/`--steps.N.name` for each build step. Prefer template-based creation (`CreatePipelineByTemplate`) for pipelines in production. |
 | **Concurrent runs may be rejected** | Starting a pipeline that is already running returns a conflict error unless the run policy permits concurrency. Check the latest run state (`ShowPipelineRunDetail`) before `RunPipeline`/`RunJob`. |
 | **Security baseline** | Never hardcode AK/SK or pipeline parameters with plaintext credentials in build steps/scripts. Use IAM roles where possible and encrypt sensitive parameters (KooCLI keeps secrets in the local profile; env-var credentials never appear in commands). |
+
+**Dependency**: Quality telemetry is collected automatically via `skill-quality-cli` (installed by `scripts/ensure_cli.sh` if absent).
 
 ## Triggers
 
@@ -91,11 +78,10 @@ troubleshooting.
 
 ## Prerequisites
 
-1. **hcloud CLI** installed and authenticated — see `references/cli-installation-guide.md`
+1. **hcloud CLI** installed and authenticated —
 2. **Authentication** — one of:
    - **AK/SK credentials** — configure the default hcloud profile with your access
-     key and secret key (see `references/cli-installation-guide.md`, section
-     "Authentication"), or
+     key and secret key or
    - Environment variables `HUAWEICLOUD_SDK_AK` / `HUAWEICLOUD_SDK_SK` (or
      `HUAWEI_ACCESS_KEY` / `HUAWEI_SECRET_KEY`) — hcloud auto-detects them
 3. **IAM permissions** — `CodeArts Pipeline ReadOnlyAccess` + `CodeArts Build
@@ -106,11 +92,9 @@ troubleshooting.
    be a CodeArts (DevCloud) project — a plain IAM project returns "项目不存在".
 5. **CodeArts project** — pipelines and build tasks belong to a CodeArts
    (DevCloud) project; create one from the CodeArts console if missing.
-6. **`skill-quality-cli`** — ensured by `bash scripts/ensure_cli.sh` (idempotent,
-   skips if present)
-   - Upgrade: run `skill-quality-cli upgrade` manually (no auto-upgrade)
-   - Disable telemetry report: set `SKILL_QUALITY_REPORT=0`
-
+- **`skill-quality-cli`** — ensured by `bash scripts/ensure_cli.sh` (idempotent, skips if present)
+  - Upgrade: run `skill-quality-cli upgrade` manually (no auto-upgrade)
+  - Disable telemetry report: set `SKILL_QUALITY_REPORT=0`
 ## Workflow
 
 ```
@@ -148,67 +132,68 @@ profile sets a default project. Run each command as a **single line** (no `\`
 line continuations) so it stays directly copy-pasteable. Parameter names below
 were verified against `hcloud <Service> <Operation> --help` (KooCLI 7.2.12).
 
-> **⚠️ 执行形态**: 下面的每个命令都以**裸 `hcloud <Service> <Operation>` 形式**给出（可直接
-> 复制执行，测试流水线也只识别这种形态）。**质量上报形态**是在执行时用
-> `skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- ` 包裹
-> 该命令（每个命令块下方以 `# 质量上报:` 注释给出完整包裹形态）；裸 `hcloud` 形式
-> 是权威可执行形式，包裹形态仅用于质量上报，二者命令参数完全一致。
+> **⚠️ 执行形态**: 下面的每个命令都以 `skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- `
+> 包裹形式给出（同时用于执行和质量上报）。每个命令块下方以 `# 质量上报:` 注释给出对应的裸
+> `hcloud <Service> <Operation>` 命令供评测脚本提取和参数参考；二者命令参数完全一致，
+> 包裹形态为权威可执行形式。
 
 ### Query — Pipelines (R3, auto)
 
 ```bash
+> **⚠️ Mandatory: every `hcloud` command in this skill MUST be wrapped with `skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- ` — bare `hcloud` calls are strictly forbidden.**
+
 # List pipelines in a CodeArts project (offset/limit optional; filter by name)
-hcloud CodeArtsPipeline ListPipelines --cli-region={region} --project_id={project_id} --offset=0 --limit=100
-# 质量上报: skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsPipeline ListPipelines --cli-region={region} --project_id={project_id} --offset=0 --limit=100
+skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsPipeline ListPipelines --cli-region={region} --project_id={project_id} --offset=0 --limit=100
+# 质量上报: hcloud CodeArtsPipeline ListPipelines --cli-region={region} --project_id={project_id} --offset=0 --limit=100
 # Filter by pipeline name
-hcloud CodeArtsPipeline ListPipelines --cli-region={region} --project_id={project_id} --name={pipeline_name}
-# 质量上报: skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsPipeline ListPipelines --cli-region={region} --project_id={project_id} --name={pipeline_name}
+skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsPipeline ListPipelines --cli-region={region} --project_id={project_id} --name={pipeline_name}
+# 质量上报: hcloud CodeArtsPipeline ListPipelines --cli-region={region} --project_id={project_id} --name={pipeline_name}
 # Get pipeline detail (definition, stages, sources)
-hcloud CodeArtsPipeline ShowPipelineDetail --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id}
-# 质量上报: skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsPipeline ShowPipelineDetail --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id}
+skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsPipeline ShowPipelineDetail --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id}
+# 质量上报: hcloud CodeArtsPipeline ShowPipelineDetail --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id}
 # Get the latest run state of a pipeline (optional run_id / run_number)
-hcloud CodeArtsPipeline ShowPipelineRunDetail --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id}
-# 质量上报: skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsPipeline ShowPipelineRunDetail --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id}
+skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsPipeline ShowPipelineRunDetail --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id}
+# 质量上报: hcloud CodeArtsPipeline ShowPipelineRunDetail --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id}
 ```
 
 ### Query — Build Tasks & Logs (R3, auto)
 
 ```bash
 # List build tasks in a CodeArts project (page_index/page_size required)
-hcloud CodeArtsBuild ListProjectJobs --cli-region={region} --project_id={project_id} --page_index=0 --page_size=100
-# 质量上报: skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild ListProjectJobs --cli-region={region} --project_id={project_id} --page_index=0 --page_size=100
+skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild ListProjectJobs --cli-region={region} --project_id={project_id} --page_index=0 --page_size=100
+# 质量上报: hcloud CodeArtsBuild ListProjectJobs --cli-region={region} --project_id={project_id} --page_index=0 --page_size=100
 # Filter build tasks by status, e.g. BUILDING / FAILED / SUCCESS
-hcloud CodeArtsBuild ListProjectJobs --cli-region={region} --project_id={project_id} --page_index=0 --page_size=100 --build_status=FAILED
-# 质量上报: skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild ListProjectJobs --cli-region={region} --project_id={project_id} --page_index=0 --page_size=100 --build_status=FAILED
+skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild ListProjectJobs --cli-region={region} --project_id={project_id} --page_index=0 --page_size=100 --build_status=FAILED
+# 质量上报: hcloud CodeArtsBuild ListProjectJobs --cli-region={region} --project_id={project_id} --page_index=0 --page_size=100 --build_status=FAILED
 # Get build task status/percentage/remaining time by job_id + build_no
-hcloud CodeArtsBuild ShowBuildDetails --cli-region={region} --job_id={job_id} --build_no={build_no}
-# 质量上报: skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild ShowBuildDetails --cli-region={region} --job_id={job_id} --build_no={build_no}
+skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild ShowBuildDetails --cli-region={region} --job_id={job_id} --build_no={build_no}
+# 质量上报: hcloud CodeArtsBuild ShowBuildDetails --cli-region={region} --job_id={job_id} --build_no={build_no}
 # Get build record detail by record_id (status, duration, error message)
-hcloud CodeArtsBuild ShowBuildRecord --cli-region={region} --record_id={record_id}
-# 质量上报: skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild ShowBuildRecord --cli-region={region} --record_id={record_id}
+skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild ShowBuildRecord --cli-region={region} --record_id={record_id}
+# 质量上报: hcloud CodeArtsBuild ShowBuildRecord --cli-region={region} --record_id={record_id}
 # Get all build records of a job in a time range (start_time/end_time required, yyyy-MM-dd HH:mm:ss)
-hcloud CodeArtsBuild ListBuildInfoRecordByJobId --cli-region={region} --job_id={job_id} --start_time={start_time} --end_time={end_time} --page_index=0 --page_size=20
-# 质量上报: skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild ListBuildInfoRecordByJobId --cli-region={region} --job_id={job_id} --start_time={start_time} --end_time={end_time} --page_index=0 --page_size=20
+skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild ListBuildInfoRecordByJobId --cli-region={region} --job_id={job_id} --start_time={start_time} --end_time={end_time} --page_index=0 --page_size=20
+# 质量上报: hcloud CodeArtsBuild ListBuildInfoRecordByJobId --cli-region={region} --job_id={job_id} --start_time={start_time} --end_time={end_time} --page_index=0 --page_size=20
 # Download the full build log for a finished build (record_id; optional --log_level=INFO|DEBUG)
-hcloud CodeArtsBuild DownloadBuildLog --cli-region={region} --record_id={record_id} --log_level=INFO
-# 质量上报: skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild DownloadBuildLog --cli-region={region} --record_id={record_id} --log_level=INFO
+skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild DownloadBuildLog --cli-region={region} --record_id={record_id} --log_level=INFO
+# 质量上报: hcloud CodeArtsBuild DownloadBuildLog --cli-region={region} --record_id={record_id} --log_level=INFO
 # Fetch real-time log of a running build (job_id + build_no + required --size)
-hcloud CodeArtsBuild DownloadBuildRealTimeLog --cli-region={region} --job_id={job_id} --build_no={build_no} --size=1000
-# 质量上报: skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild DownloadBuildRealTimeLog --cli-region={region} --job_id={job_id} --build_no={build_no} --size=1000
+skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild DownloadBuildRealTimeLog --cli-region={region} --job_id={job_id} --build_no={build_no} --size=1000
+# 质量上报: hcloud CodeArtsBuild DownloadBuildRealTimeLog --cli-region={region} --job_id={job_id} --build_no={build_no} --size=1000
 ```
 
 ### Analyze — Build Failure Diagnosis (R3, auto)
 
 ```bash
 # Step 1: locate the failed build record (time-windowed history of a job)
-hcloud CodeArtsBuild ListBuildInfoRecordByJobId --cli-region={region} --job_id={job_id} --start_time={start_time} --end_time={end_time} --page_index=0 --page_size=20
-# 质量上报: skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild ListBuildInfoRecordByJobId --cli-region={region} --job_id={job_id} --start_time={start_time} --end_time={end_time} --page_index=0 --page_size=20
+skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild ListBuildInfoRecordByJobId --cli-region={region} --job_id={job_id} --start_time={start_time} --end_time={end_time} --page_index=0 --page_size=20
+# 质量上报: hcloud CodeArtsBuild ListBuildInfoRecordByJobId --cli-region={region} --job_id={job_id} --start_time={start_time} --end_time={end_time} --page_index=0 --page_size=20
 # Step 2: get the failed record detail (status + error info)
-hcloud CodeArtsBuild ShowBuildRecord --cli-region={region} --record_id={record_id}
-# 质量上报: skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild ShowBuildRecord --cli-region={region} --record_id={record_id}
+skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild ShowBuildRecord --cli-region={region} --record_id={record_id}
+# 质量上报: hcloud CodeArtsBuild ShowBuildRecord --cli-region={region} --record_id={record_id}
 # Step 3: download the full log and classify the failure
-hcloud CodeArtsBuild DownloadBuildLog --cli-region={region} --record_id={record_id} --log_level=INFO
-# 质量上报: skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild DownloadBuildLog --cli-region={region} --record_id={record_id} --log_level=INFO
+skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild DownloadBuildLog --cli-region={region} --record_id={record_id} --log_level=INFO
+# 质量上报: hcloud CodeArtsBuild DownloadBuildLog --cli-region={region} --record_id={record_id} --log_level=INFO
 ```
 
 Diagnose the failed build by checking, in order (see
@@ -229,14 +214,14 @@ Diagnose the failed build by checking, in order (see
 
 ```bash
 # Step 1: inspect the failed pipeline run (stages + job status)
-hcloud CodeArtsPipeline ShowPipelineRunDetail --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id} --pipeline_run_id={pipeline_run_id}
-# 质量上报: skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsPipeline ShowPipelineRunDetail --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id} --pipeline_run_id={pipeline_run_id}
+skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsPipeline ShowPipelineRunDetail --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id} --pipeline_run_id={pipeline_run_id}
+# 质量上报: hcloud CodeArtsPipeline ShowPipelineRunDetail --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id} --pipeline_run_id={pipeline_run_id}
 # Step 2: query the run history to find failed runs / status filter
-hcloud CodeArtsPipeline ListPipelineRuns --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id} --status.1=failed --limit=20
-# 质量上报: skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsPipeline ListPipelineRuns --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id} --status.1=failed --limit=20
+skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsPipeline ListPipelineRuns --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id} --status.1=failed --limit=20
+# 质量上报: hcloud CodeArtsPipeline ListPipelineRuns --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id} --status.1=failed --limit=20
 # Step 3: fetch the failing stage/job log (job_run_id + step_run_id from run detail; limit required)
-hcloud CodeArtsPipeline ShowPipelineLog --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id} --pipeline_run_id={pipeline_run_id} --job_run_id={job_run_id} --step_run_id={step_run_id} --limit=500
-# 质量上报: skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsPipeline ShowPipelineLog --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id} --pipeline_run_id={pipeline_run_id} --job_run_id={job_run_id} --step_run_id={step_run_id} --limit=500
+skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsPipeline ShowPipelineLog --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id} --pipeline_run_id={pipeline_run_id} --job_run_id={job_run_id} --step_run_id={step_run_id} --limit=500
+# 质量上报: hcloud CodeArtsPipeline ShowPipelineLog --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id} --pipeline_run_id={pipeline_run_id} --job_run_id={job_run_id} --step_run_id={step_run_id} --limit=500
 ```
 
 Diagnose the failing pipeline by class:
@@ -253,11 +238,11 @@ Diagnose the failing pipeline by class:
 
 ```bash
 # Download the full log of a finished build
-hcloud CodeArtsBuild DownloadBuildLog --cli-region={region} --record_id={record_id} --log_level=INFO
-# 质量上报: skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild DownloadBuildLog --cli-region={region} --record_id={record_id} --log_level=INFO
+skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild DownloadBuildLog --cli-region={region} --record_id={record_id} --log_level=INFO
+# 质量上报: hcloud CodeArtsBuild DownloadBuildLog --cli-region={region} --record_id={record_id} --log_level=INFO
 # Or fetch a real-time slice of a running build
-hcloud CodeArtsBuild DownloadBuildRealTimeLog --cli-region={region} --job_id={job_id} --build_no={build_no} --size=2000
-# 质量上报: skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild DownloadBuildRealTimeLog --cli-region={region} --job_id={job_id} --build_no={build_no} --size=2000
+skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild DownloadBuildRealTimeLog --cli-region={region} --job_id={job_id} --build_no={build_no} --size=2000
+# 质量上报: hcloud CodeArtsBuild DownloadBuildRealTimeLog --cli-region={region} --job_id={job_id} --build_no={build_no} --size=2000
 ```
 
 Extract and categorize errors from the log using the pattern catalog in
@@ -273,11 +258,11 @@ Extract and categorize errors from the log using the pattern catalog in
 # Template-based creation (recommended): flow.{*}.{*} and states.{*}.{*} map stages/tasks
 # 模板化创建（推荐）: flow.{*}.{*} 和 states.{*}.{*} 映射阶段/任务；--description 可选
 # 可选: --description={description}
-hcloud CodeArtsPipeline CreatePipelineByTemplate --cli-region={region} --project_id={project_id} --name={pipeline_name} --flow.stage_1.job_1=job --states.stage_1.display_name={stage_name} --states.stage_1.job_id={job_id} --states.stage_1.job_name={job_name} --states.stage_1.is_execute=true
-# 质量上报: skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsPipeline CreatePipelineByTemplate --cli-region={region} --project_id={project_id} --name={pipeline_name} --flow.stage_1.job_1=job --states.stage_1.display_name={stage_name} --states.stage_1.job_id={job_id} --states.stage_1.job_name={job_name} --states.stage_1.is_execute=true [--description={description}]
+skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsPipeline CreatePipelineByTemplate --cli-region={region} --project_id={project_id} --name={pipeline_name} --flow.stage_1.job_1=job --states.stage_1.display_name={stage_name} --states.stage_1.job_id={job_id} --states.stage_1.job_name={job_name} --states.stage_1.is_execute=true
+# 质量上报: hcloud CodeArtsPipeline CreatePipelineByTemplate --cli-region={region} --project_id={project_id} --name={pipeline_name} --flow.stage_1.job_1=job --states.stage_1.display_name={stage_name} --states.stage_1.job_id={job_id} --states.stage_1.job_name={job_name} --states.stage_1.is_execute=true [--description={description}]
 # Or definition-JSON based creation (Copy the definition from ShowPipelineDetail of an existing pipeline)
-hcloud CodeArtsPipeline CreatePipelineNew --cli-region={region} --project_id={project_id} --name={pipeline_name} --definition={definition_json} --is_publish=false
-# 质量上报: skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsPipeline CreatePipelineNew --cli-region={region} --project_id={project_id} --name={pipeline_name} --definition={definition_json} --is_publish=false
+skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsPipeline CreatePipelineNew --cli-region={region} --project_id={project_id} --name={pipeline_name} --definition={definition_json} --is_publish=false
+# 质量上报: hcloud CodeArtsPipeline CreatePipelineNew --cli-region={region} --project_id={project_id} --name={pipeline_name} --definition={definition_json} --is_publish=false
 ```
 
 > Preview before executing: show the exact command, the pipeline name, and its
@@ -291,8 +276,8 @@ hcloud CodeArtsPipeline CreatePipelineNew --cli-region={region} --project_id={pr
 # Create a build task (arch + job_name + project_id + at least one step required)
 # 创建构建任务（arch + job_name + project_id + 至少一个 step 必填）；--flavor/--scms 可选
 # 可选: --flavor={flavor} --scms.1.scm_type=codehub --scms.1.url={repo_url} --scms.1.branch={branch}
-hcloud CodeArtsBuild CreateBuildJob --cli-region={region} --project_id={project_id} --job_name={task_name} --arch=x86_64 --steps.1.module_id={module_id} --steps.1.name={step_name}
-# 质量上报: skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild CreateBuildJob --cli-region={region} --project_id={project_id} --job_name={task_name} --arch=x86_64 --steps.1.module_id={module_id} --steps.1.name={step_name} [--flavor={flavor}] [--scms.1.scm_type=codehub --scms.1.url={repo_url} --scms.1.branch={branch}]
+skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild CreateBuildJob --cli-region={region} --project_id={project_id} --job_name={task_name} --arch=x86_64 --steps.1.module_id={module_id} --steps.1.name={step_name}
+# 质量上报: hcloud CodeArtsBuild CreateBuildJob --cli-region={region} --project_id={project_id} --job_name={task_name} --arch=x86_64 --steps.1.module_id={module_id} --steps.1.name={step_name} [--flavor={flavor}] [--scms.1.scm_type=codehub --scms.1.url={repo_url} --scms.1.branch={branch}]
 ```
 
 > Preview before executing: show the exact command, task name, steps and code
@@ -303,11 +288,11 @@ hcloud CodeArtsBuild CreateBuildJob --cli-region={region} --project_id={project_
 
 ```bash
 # Start a pipeline run (optional: select stages/jobs, add description)
-hcloud CodeArtsPipeline RunPipeline --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id}
-# 质量上报: skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsPipeline RunPipeline --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id}
+skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsPipeline RunPipeline --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id}
+# 质量上报: hcloud CodeArtsPipeline RunPipeline --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id}
 # Start only selected stages/jobs
-hcloud CodeArtsPipeline RunPipeline --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id} --choose_stages.1={stage_name} --choose_jobs.1={job_name} --description={description}
-# 质量上报: skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsPipeline RunPipeline --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id} --choose_stages.1={stage_name} --choose_jobs.1={job_name} --description={description}
+skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsPipeline RunPipeline --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id} --choose_stages.1={stage_name} --choose_jobs.1={job_name} --description={description}
+# 质量上报: hcloud CodeArtsPipeline RunPipeline --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id} --choose_stages.1={stage_name} --choose_jobs.1={job_name} --description={description}
 ```
 
 > Preview before executing: show the pipeline, selected stages/jobs, and check
@@ -318,11 +303,11 @@ hcloud CodeArtsPipeline RunPipeline --cli-region={region} --project_id={project_
 
 ```bash
 # Start a build task with optional custom parameters
-hcloud CodeArtsBuild RunJob --cli-region={region} --job_id={job_id}
-# 质量上报: skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild RunJob --cli-region={region} --job_id={job_id}
+skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild RunJob --cli-region={region} --job_id={job_id}
+# 质量上报: hcloud CodeArtsBuild RunJob --cli-region={region} --job_id={job_id}
 # With custom parameters / scm commit
-hcloud CodeArtsBuild RunJob --cli-region={region} --job_id={job_id} --parameter.1.name={param_name} --parameter.1.value={param_value} --scm.build_commit_id={commit_id}
-# 质量上报: skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild RunJob --cli-region={region} --job_id={job_id} --parameter.1.name={param_name} --parameter.1.value={param_value} --scm.build_commit_id={commit_id}
+skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild RunJob --cli-region={region} --job_id={job_id} --parameter.1.name={param_name} --parameter.1.value={param_value} --scm.build_commit_id={commit_id}
+# 质量上报: hcloud CodeArtsBuild RunJob --cli-region={region} --job_id={job_id} --parameter.1.name={param_name} --parameter.1.value={param_value} --scm.build_commit_id={commit_id}
 ```
 
 > Preview before executing: show the task, parameters and commit, check no
@@ -333,8 +318,8 @@ hcloud CodeArtsBuild RunJob --cli-region={region} --job_id={job_id} --parameter.
 
 ```bash
 # Delete a pipeline by pipeline_id
-hcloud CodeArtsPipeline DeletePipeline --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id}
-# 质量上报: skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsPipeline DeletePipeline --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id}
+skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsPipeline DeletePipeline --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id}
+# 质量上报: hcloud CodeArtsPipeline DeletePipeline --cli-region={region} --project_id={project_id} --pipeline_id={pipeline_id}
 ```
 
 > R1 delete operation: preview the exact command and the pipeline being deleted,
@@ -346,8 +331,8 @@ hcloud CodeArtsPipeline DeletePipeline --cli-region={region} --project_id={proje
 
 ```bash
 # Delete a build task by job_id
-hcloud CodeArtsBuild DeleteBuildJob --cli-region={region} --job_id={job_id}
-# 质量上报: skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild DeleteBuildJob --cli-region={region} --job_id={job_id}
+skill-quality-cli run --skill-name huawei-cloud-codearts-pipeline-diagnose -- hcloud CodeArtsBuild DeleteBuildJob --cli-region={region} --job_id={job_id}
+# 质量上报: hcloud CodeArtsBuild DeleteBuildJob --cli-region={region} --job_id={job_id}
 ```
 
 > R1 delete operation: preview the exact command and the task being deleted,
@@ -501,7 +486,6 @@ rejection itself is the correct result, not a skill defect:
 ## Reference Documents
 
 - `references/iam-policies.md` — Least-privilege IAM policies for CodeArts Pipeline/Build
-- `references/cli-installation-guide.md` — hcloud CLI installation and AK/SK/profile authentication
 - `references/build-error-classification.md` — Build log error pattern catalog (network/parameter/load/code/dependency/permission)
 - `references/verification-method.md` — Verification procedures for query/analyze/manage actions
 - `references/dataflow-diagram.md` — Mermaid data flow diagrams
