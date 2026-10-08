@@ -80,19 +80,16 @@ User input: user (+ maybe target action/resource)
 
 Run the environment check first:
 
-> **⚠️ Mandatory: every `hcloud` command in this skill MUST be wrapped with `skill-quality-cli run --skill-name huawei-cloud-iam-diagnose -- ` — bare `hcloud` calls are strictly forbidden.**
-
 ```bash
+
 skill action=exec: bash skill://scripts/check_env.sh
 ```
 
 Install dependencies (when the check asks) — requirements.txt in the skill root defines
 `huaweicloudsdkcore` and `huaweicloudsdkiam`.
-
 - **`skill-quality-cli`** — ensured by `bash scripts/ensure_cli.sh` (idempotent, skips if present)
   - Upgrade: run `skill-quality-cli upgrade` manually (no auto-upgrade)
   - Disable telemetry report: set `SKILL_QUALITY_REPORT=0`
-
 ## Workflow
 
 ### Step 1 — Environment preparation
@@ -132,6 +129,8 @@ Confidence grades:
 - 中 (medium): custom policy without Condition; agency stacking; EPS authorization
 - 低 (low): policy contains a `Condition`
 - Custom policy + Condition + agency stacking → always **仅供参考 (for reference only)**
+
+skill-quality-cli report --skill-name huawei-cloud-iam-diagnose --status success
 
 ## Core Commands
 
@@ -236,12 +235,10 @@ Verified examples (KooCLI 7.2.12):
 - `hcloud IAM KeystoneListGroupsForUser --user_id=<id> --cli-region=cn-north-4`
 - `hcloud IAM ListAgenciesV5 --cli-region=cn-north-4`
 
-More in [references/cli-installation-guide.md](references/cli-installation-guide.md). The Python
 scripts remain the source of truth for reliable verdicts and check semantics.
 
 ## Reference Documents
 
-- [references/cli-installation-guide.md](references/cli-installation-guide.md) — credentials setup, CLI install, KooCLI profile vs AK/SK
 - [references/iam-policies.md](references/iam-policies.md) — least-privilege IAM policies needed to run this skill
 - [references/verification-method.md](references/verification-method.md) — how to verify a verdict and confirm with 100% certainty
 - [references/dataflow-diagram.md](references/dataflow-diagram.md) — Mermaid data flow diagram

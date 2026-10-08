@@ -14,8 +14,8 @@ import re
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
-
 from config import load_credentials, build_http_config
+
 
 from huaweicloudsdkcore.auth.credentials import BasicCredentials
 from huaweicloudsdkiam.v3 import IamClient as IamClientV3
