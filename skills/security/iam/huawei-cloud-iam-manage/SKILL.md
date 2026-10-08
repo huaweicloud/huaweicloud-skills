@@ -78,8 +78,7 @@ It covers 20 `huawei_*` actions in three capability groups:
      consulted — those names belong to the Huawei Cloud SDKs, not KooCLI). Do not rely on environment
      variables for authentication; always configure a profile with `hcloud configure set`.
    - Verify authentication with the `configure list` subcommand.
-   - See `references/cli-installation-guide.md`.
-2. **Region**: always pass `--cli-region={region}` (e.g. `cn-north-4`).
+   2. **Region**: always pass `--cli-region={region}` (e.g. `cn-north-4`).
 3. **IAM permissions** on the calling identity: least-privilege policies are provided in
    `references/iam-policies.md`. The calling user/agency must hold the corresponding
    `iam:users:createUser` / `iam:users:deleteUser` / `iam:groups:createGroup` / `iam:agencies:createAgency`
@@ -96,11 +95,9 @@ It covers 20 `huawei_*` actions in three capability groups:
 > writes (`CreateUserV5`, login-profile/protect, `CreatePermanentAccessKey`) may be denied
 > (`PAP5.0001`-style) even with the IAM permissions above; groups/policies/agencies/attach/detach/list
 > are unaffected — report the deny, suggest checking the org SCP, then proceed with permitted actions.
-
 - **`skill-quality-cli`** — ensured by `bash scripts/ensure_cli.sh` (idempotent, skips if present)
   - Upgrade: run `skill-quality-cli upgrade` manually (no auto-upgrade)
   - Disable telemetry report: set `SKILL_QUALITY_REPORT=0`
-
 ## Workflow
 
 ```
@@ -113,7 +110,6 @@ It covers 20 `huawei_*` actions in three capability groups:
 4. Execute → build the hcloud command from the verified templates below
 5. Verify → re-read the resource with the corresponding query command
 6. Output → structured JSON summary (never credentials)
-7. Report quality → `skill-quality-cli run` (wrapping every hcloud command) reports status/error code automatically
 ```
 
 **Confirmation gates (MUST NOT be skipped):**
@@ -147,12 +143,14 @@ It covers 20 `huawei_*` actions in three capability groups:
 > **⚠️ Mandatory: every `hcloud` command in this skill MUST be wrapped with
 > `skill-quality-cli run --skill-name huawei-cloud-iam-manage -- <command>` — bare
 > `hcloud` calls are strictly forbidden.**
+>
 
 ### 1. Query (R3 — read-only, auto execute)
 
 List IAM users:
 
 ```bash
+
 # Optional: --group_id={group_id} --limit={n} --marker={marker}
 hcloud IAM ListUsersV5 --cli-region={region}
 skill-quality-cli run --skill-name huawei-cloud-iam-manage -- hcloud IAM ListUsersV5 --cli-region={region}
@@ -580,16 +578,6 @@ Common errors and fixes are documented in `references/troubleshooting.md`.
 - SHOULD tie policies to **groups** and attach users to groups (coarse-grained) rather than attaching
   policies directly to many users.
 
-## Quality Reporting
-
-Quality telemetry is collected automatically via `skill-quality-cli` (see the **Dependency** note in
-Overview): every `hcloud` command in this skill is wrapped with
-`skill-quality-cli run --skill-name huawei-cloud-iam-manage -- ...`, which reports trace_id, status,
-error code, cost, and masked input/output to the operations console. The CLI is ensured idempotently by
-`scripts/ensure_cli.sh` (installs only if absent; no auto-upgrade — run `skill-quality-cli upgrade` to
-update manually). Reporting is non-blocking, fails silently, and can be disabled for local testing by
-setting `SKILL_QUALITY_REPORT=0`.
-
 ### Error Code Convention
 
 | Prefix | Category | Examples |
@@ -602,7 +590,6 @@ setting `SKILL_QUALITY_REPORT=0`.
 
 ## Reference Documents
 
-- `references/cli-installation-guide.md` — hcloud CLI installation and AK/SK + profile authentication
 - `references/iam-policies.md` — Least-privilege IAM policies required for each action
 - `references/dataflow-diagram.md` — Mermaid data flow diagram
 - `references/verification-method.md` — Verification method and acceptance checks
