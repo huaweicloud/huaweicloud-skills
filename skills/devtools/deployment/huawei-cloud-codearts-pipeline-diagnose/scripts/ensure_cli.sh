@@ -1,53 +1,43 @@
 #!/bin/bash
-# ensure_cli.sh — 确保 skill-quality-cli 可用（幂等, 离线可用）
-# 从技能包内置源码 scripts/cli/ 本地部署, 不再从外网下载脚本/包。
-set -euo pipefail
+# ensure_cli.sh — 确保 skill-quality-cli 就绪。
+# 行为: 已装可用 → 静默退出; 未装 → 执行一次安装(载体=全局 ~/.local/bin)。
+# 升级: 不自动升级, 需手动 `skill-quality-cli upgrade`。失败静默, 不阻塞业务。
+# 由 huawei-cloud-skill-quality-cli-inject v3.0.0 生成，请勿手动修改
 
-# 0. 定位技能包内置的 CLI 源码（相对本脚本所在目录, 不依赖当前工作目录）
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BUNDLE_ENTRY="${SCRIPT_DIR}/cli/cli_entry.py"
-BUNDLE_REPORTING="${SCRIPT_DIR}/cli/cli_reporting.py"
-if [ ! -f "${BUNDLE_ENTRY}" ] || [ ! -f "${BUNDLE_REPORTING}" ]; then
-    echo "错误: 技能包内置 CLI 源码缺失 (${SCRIPT_DIR}/cli/)" >&2
-    exit 1
-fi
-
-# 1. PATH 兜底: 安装目录 ~/.local/bin 可能不在 PATH(裸命令 exit 127)
-#    启动即导出到当前会话, 并幂等持久化到 ~/.bashrc / ~/.profile
-case ":$PATH:" in
-  *":$HOME/.local/bin:"*) ;;
-  *) export PATH="$HOME/.local/bin:$PATH" ;;
-esac
-if ! grep -qsF "$HOME/.local/bin" ~/.bashrc; then
-    echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-fi
-if ! grep -qsF "$HOME/.local/bin" ~/.profile; then
-    echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.profile
-fi
-
-# 2. 已安装且可用则直接返回（优先 PATH, 兜底绝对路径）
-CLI_BIN="$(command -v skill-quality-cli 2>/dev/null || true)"
-if [ -z "$CLI_BIN" ] && [ -x "$HOME/.local/bin/skill-quality-cli" ]; then
-    CLI_BIN="$HOME/.local/bin/skill-quality-cli"
-fi
-if [ -n "$CLI_BIN" ] && "$CLI_BIN" version >/dev/null 2>&1; then
-    echo "skill-quality-cli 已就绪: $CLI_BIN"
+# 1. 已安装且可用 → 退出
+if command -v skill-quality-cli &>/dev/null && skill-quality-cli version &>/dev/null 2>&1; then
     exit 0
 fi
 
-# 3. 未安装 → 用技能包内置源码本地部署 wrapper + Python fallback（无网络下载）
-mkdir -p "$HOME/.local/bin/skill-quality-cli.d"
-cp "${BUNDLE_ENTRY}" "$HOME/.local/bin/skill-quality-cli.d/cli_entry.py"
-cp "${BUNDLE_REPORTING}" "$HOME/.local/bin/skill-quality-cli.d/cli_reporting.py"
-cat > "$HOME/.local/bin/skill-quality-cli" <<'EOF'
-#!/bin/bash
-# skill-quality-cli — 本地 wrapper: 直接执行技能包内置 Python 实现
-# 使用技能包内置版本, 关闭运行时自动升级(不产生外部下载)
-export SKILL_QUALITY_NO_AUTO_UPGRADE=1
-SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
-exec python3 "${SELF_DIR}/skill-quality-cli.d/cli_entry.py" "$@"
-EOF
-chmod +x "$HOME/.local/bin/skill-quality-cli"
+# 2. 未安装 → 执行安装(幂等; 载体=全局 CLI; 失败静默不阻塞)
+API_URL="https://skillsapi.developer.myhuaweicloud.com/api/quality/cli/latest"
+OBS_BASE="https://obs-skills-repository.obs.cn-north-4.myhuaweicloud.com/skill-quality-cli"
 
-echo "skill-quality-cli 安装完成（内置源码部署）: $HOME/.local/bin/skill-quality-cli"
-echo "PATH 已导出并持久化(~/.bashrc ~/.profile), 可直接执行: skill-quality-cli ..."
+V=$(curl -s "${API_URL}" | python3 -c 'import sys,json;print(json.load(sys.stdin)["version"])' 2>/dev/null)
+if [ -z "$V" ]; then
+    echo "警告: 无法获取 skill-quality-cli 最新版本，跳过安装" >&2
+    exit 0
+fi
+
+ARCH=$(uname -m)
+[ "$ARCH" = "x86_64" ] || ARCH=arm64
+
+TMPDIR=$(mktemp -d)
+curl -fsSL -o "${TMPDIR}/sqc.tar.gz" "${OBS_BASE}/v${V}/skill-quality-cli-v${V}-linux-${ARCH}.tar.gz" 2>/dev/null
+if [ ! -f "${TMPDIR}/sqc.tar.gz" ]; then
+    echo "警告: 下载 skill-quality-cli 失败，跳过安装" >&2
+    rm -rf "${TMPDIR}"
+    exit 0
+fi
+
+tar xzf "${TMPDIR}/sqc.tar.gz" -C "${TMPDIR}"
+
+mkdir -p ~/.local/bin/skill-quality-cli.d
+cp "${TMPDIR}/skill-quality-cli" ~/.local/bin/ 2>/dev/null
+cp "${TMPDIR}/skill-quality-cli.bin" ~/.local/bin/ 2>/dev/null
+cp "${TMPDIR}/skill-quality-cli.d/cli_entry.py" ~/.local/bin/skill-quality-cli.d/ 2>/dev/null
+cp "${TMPDIR}/skill-quality-cli.d/cli_reporting.py" ~/.local/bin/skill-quality-cli.d/ 2>/dev/null
+chmod +x ~/.local/bin/skill-quality-cli ~/.local/bin/skill-quality-cli.bin 2>/dev/null
+
+rm -rf "${TMPDIR}"
+echo "skill-quality-cli v${V} 已就绪"
