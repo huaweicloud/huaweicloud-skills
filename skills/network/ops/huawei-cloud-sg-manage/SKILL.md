@@ -26,20 +26,6 @@ Always run `hcloud VPC <Operation> --help` before constructing commands to disco
 parameter names and requirements.
 
 <!-- cli-install-version: 3.9.0 -->
-## Step 0: Install skill-quality-cli (idempotent, skip if already installed)
-
-The CLI installs into `~/.local/bin/`, which is **not always in `$PATH`** (bare
-`skill-quality-cli` can fail with exit 127). Export it first, then run the installer:
-
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-bash scripts/ensure_cli.sh
-```
-
-> The script detects whether `skill-quality-cli` is available; if not, it installs a
-> pinned release (fixed version + SHA256 whitelist verification, see the script header) into
-> `~/.local/bin/` (idempotent, silently skipped on failure — never blocks the business flow).
-> Upgrade manually via `skill-quality-cli upgrade`.
 
 ## Overview
 
@@ -73,9 +59,6 @@ User request → Action Router (scripts/huawei-cloud.py dispatcher)
 **All cloud operations execute through the local `hcloud` (KooCLI) CLI — no Python SDK, no
 raw HTTP API calls.** The bundled dispatcher builds and runs the hcloud commands.
 
-**Dependency**: Quality telemetry is collected automatically via `skill-quality-cli`
-(installed by `scripts/ensure_cli.sh` if absent).
-
 ### Scope boundaries
 
 - ✅ List/query security groups and their rules
@@ -86,6 +69,8 @@ raw HTTP API calls.** The bundled dispatcher builds and runs the hcloud commands
 - ❌ Doesn't manage other VPC resources (VPCs, subnets, routers, firewalls, network
   queries) — those are out of scope for this skill
 - ❌ Doesn't resolve remote-security-group / address-group member IPs (not exposed by the API)
+
+**Dependency**: Quality telemetry is collected automatically via `skill-quality-cli` (installed by `scripts/ensure_cli.sh` if absent).
 
 ## Critical Warnings
 
@@ -100,7 +85,7 @@ raw HTTP API calls.** The bundled dispatcher builds and runs the hcloud commands
 ## Prerequisites
 
 1. **hcloud CLI** (KooCLI 7.2.x or later) installed and authenticated.
-   - Installation and configuration guide: see `references/cli-installation-guide.md`
+   - Installation and configuration guide:
    - Two supported authentication modes:
      - **AK/SK credentials**: environment variables `HUAWEICLOUD_SDK_AK` / `HUAWEICLOUD_SDK_SK`
        (or `HUAWEI_ACCESS_KEY` / `HUAWEI_SECRET_KEY` / `HW_ACCESS_KEY` / `HW_SECRET_KEY`)
@@ -111,10 +96,9 @@ raw HTTP API calls.** The bundled dispatcher builds and runs the hcloud commands
    `project_id=` if the profile cannot resolve it.
 3. **IAM permissions**: least-privilege policies in `references/iam-policies.md`
    (`vpc:securityGroups:*`, `vpc:securityGroupRules:*`).
-4. **`skill-quality-cli`** — ensured by `bash scripts/ensure_cli.sh` (idempotent, skips if present)
-   - Upgrade: run `skill-quality-cli upgrade` manually (no auto-upgrade)
-   - Disable telemetry report: set `SKILL_QUALITY_REPORT=0`
-
+- **`skill-quality-cli`** — ensured by `bash scripts/ensure_cli.sh` (idempotent, skips if present)
+  - Upgrade: run `skill-quality-cli upgrade` manually (no auto-upgrade)
+  - Disable telemetry report: set `SKILL_QUALITY_REPORT=0`
 ## Workflow
 
 ```
@@ -143,21 +127,19 @@ raw HTTP API calls.** The bundled dispatcher builds and runs the hcloud commands
 
 > All direct `hcloud` commands below are shown in **dual form**: the bare executable
 > command and the identical command wrapped with
-> `skill-quality-cli run --skill-name huawei-cloud-sg-manage -- ...` for quality reporting.
+> `skill-quality-cli run --skill-name huawei-cloud-sg-manage -- ` for quality reporting.
 > The bundled dispatcher (`python3 scripts/huawei-cloud.py <action> key=value ...`) is the
 > recommended entry — it routes the 11 actions, builds the hcloud commands and prints JSON.
 > No Python SDK package is needed for any business command.
-
-> **⚠️ Mandatory: every `hcloud` command in this skill MUST be wrapped with
-> `skill-quality-cli run --skill-name huawei-cloud-sg-manage -- <command>` — bare `hcloud`
-> calls are strictly forbidden.** (Once installed, quality reporting is automatic for the
-> wrapped form; set `SKILL_QUALITY_REPORT=0` to opt out without changing the command.)
 
 ### 1. Query (R3 — read-only, auto execute)
 
 **`huawei_list_security_groups`** — list security groups:
 
 ```bash
+> **⚠️ Mandatory: every direct `hcloud` command in this skill MUST be wrapped with `skill-quality-cli run --skill-name huawei-cloud-sg-manage -- ` — bare `hcloud` calls are strictly forbidden.**
+> **Exception**: the bundled dispatcher (`python3 scripts/huawei-cloud.py <action> key=value ...`) is the recommended entry — it builds and executes `hcloud` commands internally with quality reporting attached. The wrapping requirement applies only to direct `hcloud VPC ...` CLI calls.
+
 python3 scripts/huawei-cloud.py huawei_list_security_groups region=cn-north-4
 python3 scripts/huawei-cloud.py huawei_list_security_groups region=cn-north-4 name=my-sg
 # Direct CLI (optional filters: --name.1=, --id.1=, --enterprise_project_id=, --limit=)
@@ -392,7 +374,6 @@ auto-filled from the authenticated profile when omitted).
 | ----- | ---------------- |
 | `获取项目ID失败` / APIGW.0301 Unauthorized | Invalid/expired AK/SK or profile → refresh credentials ("hcloud configure list" / re-configure) |
 | `缺少必填参数:project_id` | Profile can't resolve project id → pass `project_id=` / `--project_id={id}` explicitly |
-| hcloud not found | Install KooCLI (see `references/cli-installation-guide.md`) |
 | Empty rule list but SG exists | Wrong region/project → check `--cli-region`, `project_id` |
 | Diagnose returns INDETERMINATE | Probe matches a remote security group / address group rule — member IPs are not exposed by the API |
 | DeleteSecurityGroup fails | SG still associated with instances/ports or has dependent resources → detach first |
@@ -412,7 +393,6 @@ auto-filled from the authenticated profile when omitted).
 ## Reference Documents
 
 - `references/iam-policies.md` — Least-privilege IAM policies (`vpc:securityGroups:*`, `vpc:securityGroupRules:*`)
-- `references/cli-installation-guide.md` — hcloud CLI installation + AK/SK and profile authentication + skill-quality-cli
 - `references/sg-rule-reference.md` — Security-group rule field semantics (direction/ethertype/protocol/ports/priority/action)
 - `references/dataflow-diagram.md` — Mermaid data flow diagram
 - `references/verification-method.md` — Verification method and acceptance checks
