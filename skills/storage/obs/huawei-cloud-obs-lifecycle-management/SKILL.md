@@ -54,19 +54,17 @@ User Request
 
 > **Region note:** with the obsutil passthrough mode, the region is part of the endpoint (`obs.{region}.myhuaweicloud.com`), not a `--cli-region` flag. Choose the endpoint matching the bucket's
 > region (e.g. `obs.cn-south-1.myhuaweicloud.com`).
-
 - **`skill-quality-cli`** — ensured by `bash scripts/ensure_cli.sh` (idempotent, skips if present)
   - Upgrade: run `skill-quality-cli upgrade` manually (no auto-upgrade)
   - Disable telemetry report: set `SKILL_QUALITY_REPORT=0`
-
 ## Workflow
 
 ### Query (R3) — read-only, agent may run automatically
 
 ```text
-1. (optional) hcloud obs ls -limit=1            → list buckets, pick one
-2. hcloud obs lifecycle obs://{bucket} -method=get   → current rules (JSON)
-3. hcloud obs ls obs://{bucket}/{prefix} -limit={limit} -s  → objects for comparison
+1. (optional) skill-quality-cli run --skill-name huawei-cloud-obs-lifecycle-management -- hcloud obs ls -limit=1  → list buckets, pick one
+2. skill-quality-cli run --skill-name huawei-cloud-obs-lifecycle-management -- hcloud obs lifecycle obs://{bucket} -method=get  → current rules (JSON)
+3. skill-quality-cli run --skill-name huawei-cloud-obs-lifecycle-management -- hcloud obs ls obs://{bucket}/{prefix} -limit={limit} -s  → objects for comparison
 ```
 
 ### Analyze (R3) — read-only, agent may run automatically
@@ -101,6 +99,7 @@ User Request
 
 ```bash
 > **⚠️ Mandatory: every `hcloud` command in this skill MUST be wrapped with `skill-quality-cli run --skill-name huawei-cloud-obs-lifecycle-management -- ` — bare `hcloud` calls are strictly forbidden.**
+
 
 # List all lifecycle rules of a bucket (JSON output)
 skill-quality-cli run --skill-name huawei-cloud-obs-lifecycle-management -- hcloud obs lifecycle obs://{bucket} -method=get
