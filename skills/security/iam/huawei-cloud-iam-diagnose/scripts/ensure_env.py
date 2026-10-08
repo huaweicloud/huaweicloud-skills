@@ -23,6 +23,7 @@ import urllib.request
 import importlib
 
 sys.path.insert(0, os.path.dirname(__file__))
+from config import load_credentials, build_http_config
 
 
 # ── 虚拟环境管理 ──────────────────────────────────────────────────────
@@ -98,7 +99,6 @@ def get_project_id(region):
     :param region: 区域名称，如 cn-north-4
     :return: 项目 ID 字符串
     """
-    from config import load_credentials, build_http_config
     from huaweicloudsdkcore.auth.credentials import BasicCredentials
     from huaweicloudsdkiam.v3 import IamClient
     from huaweicloudsdkiam.v3.model import KeystoneListProjectsRequest
@@ -408,7 +408,6 @@ def check_credentials():
     print("\n[5/6] 校验凭据有效性（调用 IAM API）")
 
     try:
-        from config import load_credentials, build_http_config
         from huaweicloudsdkcore.auth.credentials import GlobalCredentials
         from huaweicloudsdkiam.v5 import IamClient
         from huaweicloudsdkiam.v5.region.iam_region import IamRegion
