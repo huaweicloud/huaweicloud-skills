@@ -1,0 +1,77 @@
+name: HuaweiCloudPartnerScoutCatalog
+type: semantic_catalog
+description: 薄路由；查询语义 → primary_facts + ontology_files。provider_gate、workflow、拒答、触发词补全归 SKILL.md。
+coverage:
+  expected_query_operations: 30
+  source_version: huaweicloudsdkbss 3.1.211 (SDK mode; KooCLI 7.2.12 ships BSS operations - CN-site metadata api_count=87)
+entry_points:
+  sub_customer:
+    required_context:
+      scope: [partner, sub_customer]
+      time: [point_in_time]
+    triggers: [客户列表, 我的客户, 伙伴客户, 子客户列表, 客户新客标签]
+    primary_facts: [SubCustomer, SubCustomerNewTag]
+    ontology_files: [models/customer.yml]
+  account_balance:
+    required_context:
+      scope: [partner, indirect_partner, sub_customer]
+      time: [point_in_time]
+    triggers: [账户余额, 伙伴余额, 客户余额, 经销商余额, 账户欠费]
+    primary_facts: [PartnerBalance, CustomerBalance]
+    ontology_files: [models/partner.yml]
+  account_flow:
+    required_context:
+      scope: [partner, sub_customer]
+      time: [date_range]
+    triggers: [收支明细, 账户流水, 伙伴流水, 收支记录, 调账记录, 拨款回收]
+    primary_facts: [PartnerAccountChangeRecord, PartnerAdjustRecord]
+    ontology_files: [models/partner.yml]
+  indirect_partner:
+    required_context:
+      scope: [partner]
+      time: [point_in_time]
+    triggers: [云经销商, 二级经销商, 经销商列表]
+    primary_facts: [IndirectPartner]
+    ontology_files: [models/partner.yml]
+  coupon_quota:
+    required_context:
+      scope: [partner, indirect_partner]
+      time: [date_range, point_in_time]
+    triggers: [代金券额度, 优惠券额度, 已发放代金券, 券额度操作记录]
+    primary_facts: [QuotaCoupon, IssuedCouponQuota, CouponQuotaRecord]
+    ontology_files: [models/coupon.yml]
+  coupon_issue:
+    required_context:
+      scope: [partner, sub_customer]
+      time: [date_range, point_in_time]
+    triggers: [优惠券列表, 已发优惠券, 优惠券发放回收, 客户优惠券]
+    primary_facts: [SubCustomerCoupon, IssuedPartnerCoupon, PartnerCouponRecord]
+    ontology_files: [models/coupon.yml]
+  customer_bill:
+    required_context:
+      scope: [partner, sub_customer]
+      time: [bill_cycle, date_range]
+    triggers: [客户消费账单, 消费账单, 客户消费, 子客户账单, 月度消费账单, 消费子客户, 消费明细]
+    primary_facts: [ConsumeSubCustomer, SubCustomerBillDetail, SubcustomerMonthlyBill]
+    ontology_files: [models/bill.yml]
+  customer_resource:
+    required_context:
+      scope: [partner, sub_customer]
+      time: [point_in_time, date_range]
+    triggers: [客户资源, 包年包月资源, 按需资源, 资源列表, 资源包]
+    primary_facts: [PayPerUseCustomerResource, CustomerOnDemandResource, FreeResourceInfo]
+    ontology_files: [models/resource.yml]
+  customer_order:
+    required_context:
+      scope: [partner, sub_customer]
+      time: [point_in_time, date_range]
+    triggers: [订单列表, 订单详情, 退款详情, 客户订单]
+    primary_facts: [CustomerOrder, OrderDetail, RefundOrderDetail]
+    ontology_files: [models/order.yml]
+  reference_dictionary:
+    required_context:
+      scope: [not_applicable]
+      time: [not_applicable]
+    triggers: [云服务类型, 资源类型, 使用量类型, 计量单位, 单位换算, 省份城市区县]
+    primary_facts: [ReferenceCatalog]
+    ontology_files: [models/partner.yml]

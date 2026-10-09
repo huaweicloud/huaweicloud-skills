@@ -1,0 +1,97 @@
+name: PartnerScoutPartnerModel
+type: semantic_model
+business_process: partner
+description: 伙伴账务与经销商维度事实 — 伙伴/客户余额、收支明细、调账记录、云经销商、参考字典。
+facts:
+  - name: PartnerBalance
+    kind: fact
+    domain: partner_account
+    source_operations: [BssClient.list_partner_balances]
+    grain: 伙伴/经销商账户 × 时点
+    summary: 伙伴自身账户余额及云经销商账户余额（现金/信用/欠费）
+    required_context: []
+    dimensions: [Dim_Partner, Dim_IndirectPartner, Dim_Time]
+    measures:
+      - name: amount
+        type: decimal
+        additivity: semi_additive
+      - name: debt_amount
+        type: decimal
+        additivity: semi_additive
+    evidence_boundary: 时点快照；非流水/消费归因
+  - name: CustomerBalance
+    kind: fact
+    domain: partner_account
+    source_operations: [BssClient.list_customers_balances_detail]
+    grain: 子客户账户 × 时点
+    summary: 客户账户余额批量查询（含欠费状态）
+    required_context: [customer_infos]
+    dimensions: [Dim_Customer, Dim_Partner, Dim_IndirectPartner, Dim_Time]
+    measures:
+      - name: amount
+        type: decimal
+        additivity: semi_additive
+      - name: debt_amount
+        type: decimal
+        additivity: non_additive
+    evidence_boundary: 时点快照；客户欠费状态
+  - name: PartnerAccountChangeRecord
+    kind: fact
+    domain: partner_account
+    source_operations: [BssClient.list_partner_account_change_records]
+    grain: 收支流水行
+    summary: 伙伴账户收支明细（现金/信用账户流水）
+    required_context: []
+    dimensions: [Dim_Partner, Dim_IndirectPartner, Dim_Time]
+    measures:
+      - name: amount
+        type: decimal
+        additivity: additive
+    evidence_boundary: 结算流水；非资源消费归因
+  - name: PartnerAdjustRecord
+    kind: fact
+    domain: partner_account
+    source_operations: [BssClient.list_partner_adjust_records]
+    grain: 调账流水行
+    summary: 拨款/回收调账记录；按客户过滤
+    required_context: []
+    dimensions: [Dim_Customer, Dim_Partner, Dim_IndirectPartner, Dim_Time]
+    measures:
+      - name: amount
+        type: decimal
+        additivity: additive
+    evidence_boundary: 调账流水；非余额快照
+  - name: IndirectPartner
+    kind: fact
+    domain: partner_channel
+    source_operations: [BssClient.list_indirect_partners]
+    grain: 云经销商 × 时点
+    summary: 名下云经销商（二级经销商）列表及详情
+    required_context: []
+    dimensions: [Dim_IndirectPartner, Dim_Partner, Dim_Time]
+    measures:
+      - name: indirect_partner_count
+        type: count
+        additivity: additive
+    evidence_boundary: 经销商档案；非余额/额度证据
+  - name: ReferenceCatalog
+    kind: dimension_loader
+    domain: reference_dictionary
+    source_operations:
+      - BssClient.list_service_types
+      - BssClient.list_resource_types
+      - BssClient.list_usage_types
+      - BssClient.list_measure_units
+      - BssClient.list_conversions
+      - BssClient.list_provinces
+      - BssClient.list_cities
+      - BssClient.list_counties
+    grain: 字典条目
+    summary: 云服务类型/资源类型/使用量类型/计量单位/换算/地域字典
+    required_context: []
+    dimensions: [Dim_ServiceType, Dim_ResourceType, Dim_UsageType, Dim_MeasureUnit, Dim_Region]
+    measures:
+      - name: conversion_ratio
+        type: decimal
+        additivity: non_additive
+    evidence_boundary: 字典值；非账务数据
