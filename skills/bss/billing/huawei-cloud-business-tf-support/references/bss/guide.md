@@ -222,6 +222,7 @@ Usage: python scripts/bss/list_usage_types.py -h
 ### show_customer_account_balances.py — Query Customer Account Balance
 
 Purpose: Query customer account balance, including account ID, account_type, amount, currency, designated_amount, credit_amount, measurement unit ID.
+Note: 本脚本仅查询账户余额（现金/信用/奖励金/保证金）与欠费，**不包含预算（Budget）信息**。如需了解预算设置与使用情况，请前往华为云控制台「费用中心 → 预算管理」查看。
 Usage: python scripts/bss/show_customer_account_balances.py -h
 
 ---
