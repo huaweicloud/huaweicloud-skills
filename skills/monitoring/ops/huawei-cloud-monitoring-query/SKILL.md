@@ -1,6 +1,6 @@
 ---
 name: huawei-cloud-monitoring-query
-description: "Queries Huawei Cloud monitoring and enterprise project resources (CES/EPS). Covers alarm rules, alarm histories, alarm templates, dashboards, notification masks, resource groups, one-click alarms, and enterprise projects (list/detail/quotas/bound resources/migration records). No write operations. Use this skill when the user needs to check alarm status, view monitoring dashboards, query alarm rules, or manage enterprise project info. Triggers: 云监控, 告警, 告警规则, 告警历史, 仪表盘, 企业项目, CES, EPS, 告警模板, 资源分组, alarm, monitoring, alert."
+description: "Queries Huawei Cloud monitoring and enterprise project resources (CES/EPS). Covers alarm rules, alarm histories, alarm templates, dashboards, notification masks, resource groups, one-click alarms, and enterprise projects (list/detail/quotas/bound resources/migration records). Only management-plane queries are supported; querying raw metric data points (e.g., ShowMetricData/ListMetrics) and service-level metric values (RDS, DCS, DMS, EVS, ELB, etc.) is NOT supported. No write operations. Use this skill when the user needs to check alarm status, view monitoring dashboards, query alarm rules, or manage enterprise project info. Triggers: 云监控, 告警, 告警规则, 告警历史, 仪表盘, 企业项目, CES, EPS, 告警模板, 资源分组, alarm, monitoring, alert."
 ---
 # Huawei Cloud Resource Query
 
@@ -45,6 +45,24 @@ Capabilities provided by this skill include:
 2. Query individual resource details
 3. Query selection information such as available specifications, images, and disk types
 4. Query key identifiers and dependency relationships of existing resources
+
+### Out of Scope (Not Supported)
+
+To avoid misleading users, the following scenarios are **explicitly NOT supported** by this skill. If a user asks for any of them, directly state that it is unsupported and do not attempt to return unreliable results:
+
+1. **Querying raw metric data points** — There is no script wrapping `ShowMetricData` / `BatchListMetricData` / `ListMetrics`. The skill cannot retrieve time-series values of metrics (e.g., "RDS CPU utilization over the last 1 hour", "EVS disk throughput in the past 24 hours").
+2. **Service-level metric value queries** — Although CES aggregates metrics from services such as `SYS.RDS`, `SYS.DCS`, `SYS.DMS`, `SYS.EVS`, `SYS.ELB`, `SYS.ECS`, etc., this skill does not provide scripts to fetch the actual metric values of these namespaces. The non-exhaustive list of services whose metric data cannot be queried via this skill:
+   - RDS (Relational Database Service) — `SYS.RDS`
+   - DCS (Distributed Cache Service) — `SYS.DCS`
+   - DMS (Distributed Message Service) — `SYS.DMS`
+   - EVS (Elastic Volume Service) — `SYS.EVS`
+   - ELB (Elastic Load Balance) — `SYS.ELB`
+   - ECS (Elastic Cloud Server) — `SYS.ECS`
+   - Other `SYS.*` namespaces not listed above are likewise unsupported for metric-value queries
+3. **Services other than CES and EPS** — Scripts only exist under `scripts/ces/` and `scripts/eps/`. Any service that does not appear in `references/ces/guide.md` or `references/eps/guide.md` is unsupported.
+4. **Creating / modifying / deleting resources** — Write operations are out of scope.
+
+> Note: For querying actual monitoring metric data points, use the Huawei Cloud console, CES API directly, or a dedicated metric-data skill if available.
 
 ---
 
