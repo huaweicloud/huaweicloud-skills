@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: change-storage-class-config
+  namespace: velero
+  labels:
+    velero.io/plugin-config: ""
+    velero.io/change-storage-class: RestoreItemAction
+data:
+  # Map source storage classes to Huawei Cloud CCE Everest storage classes:
+  # Block storage mapping (e.g. AWS gp2/gp3, Azure managed-premium, Ceph RBD to CCE EVS)
+  # Use 'csi-disk-topology' (WaitForFirstConsumer) for multi-AZ clusters; 'csi-disk' for single-AZ
+  gp2: csi-disk-topology
+  gp3: csi-disk-topology
+  standard: csi-disk-topology
+  local-path: csi-disk-topology
+  managed-csi: csi-disk-topology
+  # Shared file storage mapping (e.g. NFS client, AWS EFS to CCE SFS Turbo)
+  nfs-client: csi-sfsturbo
+  efs-sc: csi-sfsturbo
+  # Object storage mapping
+  s3-storage: csi-obs

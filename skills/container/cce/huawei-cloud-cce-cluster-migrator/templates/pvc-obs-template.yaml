@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: example-obs-pvc
+  namespace: default
+  annotations:
+    everest.io/obs-volume-type: STANDARD # Options: STANDARD, WARM, COLD
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: csi-obs

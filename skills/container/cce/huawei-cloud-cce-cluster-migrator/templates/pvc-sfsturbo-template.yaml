@@ -1,0 +1,39 @@
+# Static SFS Turbo PersistentVolume & PersistentVolumeClaim Binding Template
+# Pre-requisite: SFS Turbo instance must be pre-created in Huawei Cloud before binding.
+# SFS Turbo does not support dynamic instance creation via PVC; it must be created first
+# (via Console or KooCLI: hcloud SFSTurbo CreateShare) and then bound to CCE.
+# For sharing one SFS Turbo instance across multiple PVCs (< 500 GiB), use templates/pvc-sfsturbo-subpath-template.yaml.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: example-sfsturbo-pv
+  annotations:
+    pv.kubernetes.io/provisioned-by: everest-csi-provisioner
+spec:
+  accessModes:
+    - ReadWriteMany
+  capacity:
+    storage: 500Gi # Must match or describe pre-created SFS Turbo capacity (>= 500Gi for Standard/Performance, >= 1.2TB for HPC)
+  csi:
+    driver: sfsturbo.csi.everest.io
+    fsType: nfs
+    volumeHandle: <sfsturbo_id> # Pre-created SFS Turbo instance ID (query via: hcloud SFSTurbo ListShares --cli-region=<region>)
+    volumeAttributes:
+      storage.kubernetes.io/csiProvisionerIdentity: everest-csi-provisioner
+      everest.io/share-export-location: <export_location> # Pre-created SFS Turbo export location, e.g. 192.168.1.100:/
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: csi-sfsturbo
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: example-sfsturbo-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 500Gi
+  storageClassName: csi-sfsturbo
+  volumeName: example-sfsturbo-pv
