@@ -1,17 +1,16 @@
 ---
 name: huawei-cloud-cts-trace-management
-description: >
+description: |
   Huawei Cloud CTS (Cloud Trace Service / 云审计服务) management and audit analysis via the hcloud CLI.
-  Covers tracker lifecycle (list/create/delete), audit trace query and analysis (filter by time/user/
-  service), cloud service operation listing, key event notifications, trace resources, and retention
-  compliance analysis (7-day default vs LTS long retention vs OBS delivery). Query and Analyze actions
-  run automatically (R3); Create/Delete actions require preview and explicit user confirmation (R2/R1).
-  Service keywords: cts, CTS, cloud trace service, Cloud Trace Service, 云审计服务, audit, 审计,
-  tracker, 追踪器, trace, 审计事件, operation record, 操作记录, notification, 通知规则, retention,
-  保留策略, compliance, 合规, KooCLI, hcloud.
-  Triggers include: CTS, cts, Cloud Trace Service, 云审计服务, audit log, 审计日志, tracker, 追踪器,
-  trace, 审计事件, operation record, 操作记录, notification, 通知规则, retention, 保留策略,
-  compliance, 合规, audit, 审计.
+  Covers tracker lifecycle (list/create/delete), audit trace query and analysis (filter by time/user/service),
+  cloud service operation listing, key event notifications, trace resources, and retention compliance analysis
+  (7-day default vs LTS long retention vs OBS delivery). Query and Analyze actions run automatically (R3);
+  Create/Delete actions require preview and explicit user confirmation (R2/R1).
+  Trigger words: CTS, cts, Cloud Trace Service, 云审计服务, audit log, 审计日志, tracker, 追踪器, trace,
+  审计事件, query, 查询, list, 列表, create, 创建, delete, 删除, 审计, audit, retention, 保留策略.
+  Service keywords: cts, CTS, cloud trace service, Cloud Trace Service, 云审计服务, audit, 审计, tracker,
+  追踪器, trace, 审计事件, operation record, 操作记录, notification, 通知规则, retention, 保留策略,
+  compliance, 合规, KooCLI, hcloud.
 tags: [huawei-cloud, cts, audit, tracker, trace]
 ---
 
