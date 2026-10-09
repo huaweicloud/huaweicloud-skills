@@ -1,0 +1,32 @@
+{
+  "skill_name": "huawei-cloud-account-onboarding",
+  "execution_mode": "sdk",
+  "region": "cn-north-1",
+  "endpoint": "https://bss.myhuaweicloud.com",
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "ShowRealNameAuthStatus - query real-name auth status",
+      "command": "python3 scripts/show_real_name_auth_status.py",
+      "executor": "script",
+      "expected": "exit 0; JSON with verified_status in {-1,0,1,2} and verified_type in {0,1}",
+      "status": "pass"
+    },
+    {
+      "id": "TC-02",
+      "name": "ShowRealNameAuthQrCode - get face real-name auth QR code",
+      "command": "python3 scripts/show_real_name_auth_qr_code.py",
+      "executor": "script",
+      "expected": "exit 0; JSON with qr_code_url starting with https://; or for a sub-account, structured JSON with error_code CBC.99007297 (documented main-account-only outcome)",
+      "status": "pass"
+    },
+    {
+      "id": "TC-03",
+      "name": "Missing credentials - graceful error",
+      "command": "python3 scripts/show_real_name_auth_status.py --missing-creds-check",
+      "executor": "script",
+      "expected": "exit 0; JSON confirming the graceful missing-credential behavior (exit 2, clear 'AK/SK not found' message, no traceback)",
+      "status": "pass"
+    }
+  ]
+}
