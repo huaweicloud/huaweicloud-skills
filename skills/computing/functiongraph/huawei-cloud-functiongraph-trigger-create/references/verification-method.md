@@ -45,7 +45,7 @@ def verify_trigger(client, function_urn, trigger_name):
     request = ListFunctionTriggersRequest(function_urn=function_urn)
     response = client.list_function_triggers(request)
     
-    for trigger in response.triggers:
+    for trigger in (response.triggers or []):
         if trigger.trigger_name == trigger_name:
             print(f"✓ Trigger found: {trigger.trigger_id}")
             print(f"  Type: {trigger.trigger_type}")
@@ -123,7 +123,7 @@ hcloud functiongraph v2 update-function-trigger \
     --function-urn "..." \
     --trigger-id "timer-xxx" \
     --body '{
-        "trigger_config": "{\"schedule\":\"0 */1 * * * ?\",\"scheduleType\":\"Rate\"}"
+        "trigger_config": "{\"schedule\":\"1 minute\",\"scheduleType\":\"Rate\"}"
     }'
 
 # Monitor for 1-2 executions
@@ -191,7 +191,7 @@ class TriggerVerifier:
         results = []
         
         # 1. List triggers
-        triggers = self._list_triggers(function_urn)
+        triggers = self._list_triggers(function_urn) or []
         trigger = next((t for t in triggers if t.trigger_name == trigger_name), None)
         
         if not trigger:
@@ -202,7 +202,14 @@ class TriggerVerifier:
         results.append(("enable_status", trigger.enable_status == "active"))
         
         # 3. Verify cron
-        config = json.loads(trigger.trigger_config)
+        try:
+            config = json.loads(trigger.trigger_config)
+        except (json.JSONDecodeError, TypeError) as e:
+            return {"status": "failed", "error": f"Invalid trigger_config JSON: {e}"}
+
+        if not isinstance(config, dict) or "schedule" not in config:
+            return {"status": "failed", "error": "trigger_config is missing required 'schedule' field"}
+
         results.append(("cron_match", config.get("schedule") == expected_cron))
         
         # 4. Summary
@@ -218,7 +225,7 @@ class TriggerVerifier:
         from huaweicloudsdkfunctiongraph.v2.model.list_function_triggers_request import ListFunctionTriggersRequest
         request = ListFunctionTriggersRequest(function_urn=function_urn)
         response = self.client.list_function_triggers(request)
-        return response.triggers
+        return response.triggers or []
 
 # Usage
 if __name__ == "__main__":

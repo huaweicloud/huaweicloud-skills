@@ -1,6 +1,7 @@
 ---
 name: huawei-cloud-functiongraph-trigger-create
 description: Create and configure scheduled TIMER triggers for Huawei Cloud FunctionGraph functions using Quartz Cron expressions. Use this skill when users ask to create triggers, schedule function execution, set up periodic tasks, or configure timers for functions. Triggered by keywords like "create trigger", "set up trigger", "schedule function", "periodic task", "timer", "cron", "创建云函数触发器", "配置云函数触发器", "云函数定时触发", "定时执行", "定时任务", "创建定时器", "FunctionGraph trigger", "schedule function execution".
+version: 1.0.0
 tags:
   - functiongraph
   - trigger
@@ -34,13 +35,62 @@ Before using this skill, ensure the following requirements are met:
 4. **FunctionGraph Function**: Target function must already exist in the specified region
 5. **Network Access**: Stable network connection to Huawei Cloud API endpoints
 
+# Workflow（工作流）
+
+The complete workflow for creating a scheduled TIMER trigger consists of the following steps:
+
+**Step 1: Load environment variables and authenticate（加载环境变量/鉴权）**
+
+The script reads the following environment variables at startup:
+
+- `HUAWEI_AK`: Huawei Cloud Access Key (required)
+- `HUAWEI_SK`: Huawei Cloud Secret Key (required)
+- `HUAWEI_REGION`: Target region, defaults to `cn-north-4`
+- `HUAWEI_PROJECT_ID`: Project ID
+
+If `HUAWEI_AK` or `HUAWEI_SK` is missing, the script prints `Config error: Please set environment variables HUAWEI_AK and HUAWEI_SK` and exits before any API call.
+
+**Step 2: Confirm the target function URN（确认 function_urn）**
+
+Pass the target function URN via `--function-urn`, e.g. `urn:fss:cn-north-4:project_id:function:default:my-function:latest`. Before creating the trigger, the script verifies that the function exists by calling `ShowFunctionConfig`. If the function is not found, it returns `FunctionNotFound` and stops without creating anything.
+
+**Step 3: Confirm the trigger configuration（确认触发配置）**
+
+Verify the trigger parameters (see [Parameters Confirmation](#parameters-confirmation)):
+
+- `--name`: Trigger name, 1-64 characters
+- `--schedule`: Quartz Cron expression (6-7 fields) for `Cron`, or a rate value such as `5m` for `Rate`
+- `--schedule-type`: `Cron` (default) or `Rate`
+- `--status`: `ACTIVE` (default) or `DISABLED`
+- `--user-event`: Optional additional user event data
+
+The script validates all parameters (required fields, Cron syntax, name length, status value) before calling the API.
+
+**Step 4: Execute the creation script（执行 create_trigger.py）**
+
+Run from the skill directory:
+
+```bash
+python3 scripts/create_trigger.py \
+    --function-urn "urn:fss:cn-north-4:project_id:function:default:my-function:latest" \
+    --name "daily-trigger" \
+    --schedule "0 0 2 * * ?" \
+    --schedule-type "Cron" \
+    --status "ACTIVE"
+```
+
+**Step 5: Verify the result（验证结果）**
+
+- On success, the script prints a JSON response with `status: "success"`, containing the created `trigger_id`, `trigger_name`, `trigger_type` (`TIMER`), `schedule` and `enable_status`.
+- On failure, it prints `status: "failed"` with an `error_code` (`InvalidParameter`, `FunctionNotFound`, `TriggerAlreadyExists`, `TriggerLimitExceeded`, `InternalError`) and exits with a non-zero code. Fix the corresponding parameter and re-run the script.
+- You can also confirm the result in the FunctionGraph console: Function details → Triggers tab, where the new TIMER trigger should be listed with Active status.
+
 # Usage
 
 ## Basic Command Structure
 
 ```bash
-cd scripts
-python create_trigger.py \
+python3 scripts/create_trigger.py \
     --function-urn "urn:fss:cn-north-4:project_id:function:default:my-function:latest" \
     --name "daily-trigger" \
     --schedule "0 0 2 * * ?" \
@@ -53,10 +103,9 @@ python create_trigger.py \
 ### Cron Expression Trigger
 
 ```bash
-cd scripts
-python create_trigger.py \
+python3 scripts/create_trigger.py \
     --function-urn "urn:fss:cn-north-4:project_id:function:default:my-function:latest" \
-    --name "daily-trigger" \
+    --name "hourly-report" \
     --schedule "0 0 8 * * ?" \
     --schedule-type "Cron"
 ```
@@ -64,8 +113,7 @@ python create_trigger.py \
 ### Fixed Rate Trigger
 
 ```bash
-cd scripts
-python create_trigger.py \
+python3 scripts/create_trigger.py \
     --function-urn "urn:fss:cn-north-4:project_id:function:default:my-function:latest" \
     --name "every-5min" \
     --schedule "5m" \
@@ -74,7 +122,7 @@ python create_trigger.py \
 
 ## Cron Expression Format
 
-FunctionGraph uses **Quartz Cron** format with 6 or 7 fields:
+FunctionGraph uses **Quartz Cron** format with 6 or 7 fields (the 7th field `year` is optional):
 
 ```
 ┌───────────── second (0-59)
@@ -83,8 +131,9 @@ FunctionGraph uses **Quartz Cron** format with 6 or 7 fields:
 │ │ │ ┌───────────── day of month (1-31)
 │ │ │ │ ┌───────────── month (1-12)
 │ │ │ │ │ ┌───────────── day of week (1-7, 1=Sunday)
-│ │ │ │ │ │
-* * * * * ?
+│ │ │ │ │ │ ┌───────────── year (optional, e.g. 2026)
+│ │ │ │ │ │ │
+* * * * * ? *
 ```
 
 For detailed Cron expression reference including special characters and common examples, see [Cron Expression Reference](./references/cron-reference.md).
@@ -93,14 +142,14 @@ For detailed Cron expression reference including special characters and common e
 
 Before creating the trigger, confirm the following parameters:
 
-| Parameter | Required | Description | Example |
-|-----------|----------|-------------|---------|
-| `function_urn` | Yes | Target function URN | `urn:fss:cn-north-4:xxx:function:default:my-func:latest` |
-| `trigger_name` | Yes | Trigger name (1-64 chars) | `daily-trigger` |
-| `schedule` | Yes | Cron expression or Rate value | `0 0 2 * * ?` or `5m` |
-| `schedule_type` | No | `Cron` (default) or `Rate` | `Cron` |
-| `enable_status` | No | `ACTIVE` (default) or `DISABLED` | `ACTIVE` |
-| `user_event` | No | Additional user event data | `optional info` |
+| Parameter | CLI Argument | Required | Description | Example |
+|-----------|--------------|----------|-------------|---------|
+| `function_urn` | `--function-urn` | Yes | Target function URN | `urn:fss:cn-north-4:xxx:function:default:my-func:latest` |
+| `trigger_name` | `--name` | Yes | Trigger name (1-64 chars) | `daily-trigger` |
+| `schedule` | `--schedule` | Yes | Cron expression or Rate value | `0 0 2 * * ?` or `5m` |
+| `schedule_type` | `--schedule-type` | No | `Cron` (default) or `Rate` | `Cron` |
+| `enable_status` | `--status` | No | `ACTIVE` (default) or `DISABLED` | `ACTIVE` |
+| `user_event` | `--user-event` | No | Additional user event data | `optional info` |
 
 ## Confirmation Checklist
 
@@ -204,7 +253,7 @@ For detailed information, refer to:
 
 ## Compatibility Notes
 
-This skill is designed to work with Huawei Cloud FunctionGraph API. The `tags` field helps with skill discovery and categorization, while the `version` field follows semantic versioning for skill updates.
+This skill is designed to work with Huawei Cloud FunctionGraph API. The `tags` field helps with skill discovery and categorization.
 
 ## Limitations
 

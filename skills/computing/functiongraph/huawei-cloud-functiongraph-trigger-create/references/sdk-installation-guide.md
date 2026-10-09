@@ -134,31 +134,35 @@ python -c "import sys; print(sys.path)"
 ### Issue 2: Authentication Failed
 
 ```bash
-# Verify environment variables are set
+# Verify environment variables are set (without printing their values)
 # Linux/macOS:
-echo $HUAWEI_AK
-echo $HUAWEI_SK
+[ -n "$HUAWEI_AK" ] && echo 'HUAWEI_AK is set'
+[ -n "$HUAWEI_SK" ] && echo 'HUAWEI_SK is set'
 
 # Windows PowerShell:
-$env:HUAWEI_AK
-$env:HUAWEI_SK
+Test-Path Env:HUAWEI_AK
+Test-Path Env:HUAWEI_SK
 ```
+
+Never print the AK/SK values themselves — treat them as secrets and only check whether they exist.
 
 ### Issue 3: SSL Certificate Error
 
-```python
-# Disable SSL verification (not recommended for production)
-from huaweicloudsdkcore.http.http_config import HttpConfig
+Do **not** disable TLS/SSL verification — `ignore_ssl_verification = True` exposes requests to man-in-the-middle attacks. Instead, ensure the correct CA certificates are installed and trusted:
 
-config = HttpConfig.get_default_http_config()
-config.ignore_ssl_verification = True
+```bash
+# Linux/macOS: update the system CA certificate bundle
+sudo apt-get update && sudo apt-get install -y ca-certificates
+sudo update-ca-certificates
 
-client = FunctionGraphClient.new_builder() \
-    .with_http_config(config) \
-    .with_credentials(credentials) \
-    .with_region(region) \
-    .build()
+# If behind a corporate proxy with a private CA, add that CA to the trusted store:
+#   1. Obtain the corporate CA certificate (e.g. corporate-ca.crt)
+#   2. Copy it into the system trust store and refresh
+sudo cp corporate-ca.crt /usr/local/share/ca-certificates/
+sudo update-ca-certificates
 ```
+
+After the CA chain is trusted, the SDK performs normal TLS verification automatically. If the error persists, check the `HUAWEI_REGION` endpoint and your network/proxy configuration rather than bypassing certificate validation.
 
 ### Issue 4: Region Not Found
 
