@@ -22,22 +22,22 @@ python3 -c "from huaweicloudsdkcore.exceptions import exceptions; print('✅ SDK
 ### 3. Verify AK/SK Configuration
 
 ```bash
-env | grep CLOUD_SDK
+env | grep HW_
 # Should output:
-# CLOUD_SDK_AK=xxx
-# CLOUD_SDK_SK=xxx
+# HW_ACCESS_KEY=xxx
+# HW_SECRET_KEY=xxx
+# HW_SECURITY_TOKEN=xxx  (optional, for temporary credentials)
 ```
 
 ### 4. Verify Connection
 
 ```bash
-python3 {baseDir}/scripts/query_instances.py list
+python3 {baseDir}/scripts/password_unified.py test
 ```
 
 **Success Output:**
 ```
-📋 Querying Flexus L instances...
-✅ Query successful, credentials are valid
+SUCCESS: Connection successful
 ```
 
 ### 5. Verify Instance Query
@@ -70,8 +70,10 @@ pip3 install -e . --break-system-packages -i https://repo.huaweicloud.com/reposi
 
 **Solution:**
 ```bash
-export CLOUD_SDK_AK="your_access_key"
-export CLOUD_SDK_SK="your_secret_key"
+export HW_ACCESS_KEY="your_access_key"
+export HW_SECRET_KEY="your_secret_key"
+# Optional: for temporary credentials
+export HW_SECURITY_TOKEN="your_security_token"
 ```
 
 ### Issue 3: Insufficient Permissions
