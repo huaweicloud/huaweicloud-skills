@@ -46,7 +46,7 @@ printf "y\n" | hcloud version
 hcloud configure set --cli-access-key=<AK> --cli-secret-key=<SK>
 
 # Set default region
-hcloud configure set --cli-region=cn-north-7
+hcloud configure set --cli-region=cn-east-3
 ```
 
 ### 2.3 Verify Configuration
@@ -66,7 +66,7 @@ Expected output:
       "mode": "AKSK",
       "accessKeyId": "DIE****BNX",
       "secretAccessKey": "****",
-      "region": "cn-north-7"
+      "region": "cn-east-3"
     }
   ]
 }
@@ -78,10 +78,10 @@ Expected output:
 
 ```bash
 # Dryrun to verify endpoint is accessible
-hcloud OptVerse ListArtifacts --dryrun --cli-region=cn-north-7 --chat_id=test
+hcloud OptVerse ListArtifacts --dryrun --cli-region=cn-east-3 --chat_id=test
 ```
 
-Expected: Request URL containing `optverse.cn-north-7.myhuaweicloud.com`
+Expected: Request URL containing `optverse.cn-east-3.myhuaweicloud.com`
 
 ### 3.2 Configure IAM Credentials File
 
@@ -114,6 +114,6 @@ pip install requests
 |-------|-------|----------|
 | `hcloud: command not found` | PATH not configured | Add hcloud directory to PATH |
 | `[USE_ERROR]参数--version的格式错误` | Wrong flag format | Use `hcloud version` (not `--version`) |
-| SSL certificate error | Self-signed cert in cn-north-7 | Set `skipSecureVerify: true` via `hcloud configure set` |
+| SSL certificate error | Self-signed cert in cn-east-3 | Set `skipSecureVerify: true` via `hcloud configure set` |
 | `OPTVERSE_AK not set` | Environment variable missing | Set `OPTVERSE_AK` and `OPTVERSE_SK` env vars |
 | `requests module not found` | Missing Python dependency | Run `pip install requests` |

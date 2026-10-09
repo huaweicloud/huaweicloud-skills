@@ -74,9 +74,11 @@ If KooCLI is not installed, see [references/cli-installation-guide.md](reference
 
 > **⚠️ CRITICAL SECURITY RULE — READ BEFORE PROCEEDING**
 >
-> The agent **MUST NEVER** use `Read`, `Bash` (`cat`, `Get-Content`, `type`), `Write`, or any other tool to open, display, inspect, or clear the credentials file (`~/.config/optverse/credentials`). **Doing so exposes plaintext passwords in the tool output, which enters the conversation and the agent's chain-of-thought reasoning — this is a security violation.**
+> The agent **MUST NEVER** use `Read`, `Bash` (`cat`, `Get-Content`, `type`), or any other tool to open, display, inspect, or clear the credentials file (`~/.config/optverse/credentials`). **Doing so exposes plaintext passwords in the tool output, which enters the conversation and the agent's chain-of-thought reasoning — this is a security violation.**
 >
-> The scripts handle everything automatically: auto-create template, read values in-process, clear values unconditionally. The agent only needs to **run the script** — never read the file.
+> **Creating the empty template is SAFE**: if the credentials file does not exist, the agent creates it directly with only the three keys (`iam_user=` / `iam_domain=` / `iam_password=`, empty values) — no sensitive data is involved. Do NOT write any actual credential values into the file; the user fills them in manually.
+>
+> The scripts handle reading and clearing values in-process: read values, then clear unconditionally. The agent only needs to **run the script** — never read the file.
 >
 > To check if credentials are filled, use the safe check command (outputs only `FILLED` or `EMPTY`, never values):
 > ```bash
@@ -89,7 +91,7 @@ The createChat SSE endpoint requires an IAM X-Auth-Token. The IAM token is obtai
 
 **Path**: `~/.config/optverse/credentials` (i.e., `C:\Users\<user>\.config\optverse\credentials` on Windows)
 
-**Format** (auto-created by the script as an empty template):
+**Format** (empty template — agent creates it directly if missing):
 ```
 iam_user=<username>
 iam_domain=<domain>
@@ -97,7 +99,7 @@ iam_password=<password>
 ```
 
 **Security flow**:
-1. The script auto-creates the credentials file as an empty template (keys only, no sensitive data) if it does not exist — the user only fills in the three values
+1. If the credentials file does not exist, the agent creates the empty template directly (keys only, empty values) — do NOT write real credential values; the user fills them in manually. No need to run any script to generate the template
 2. Every run, the script (`scripts/create_chat.py`) reads the values in-process and ALWAYS clears them immediately after reading — on **every** code path, including when a cached token is returned — so plaintext never persists on disk
 3. Credentials are used to obtain an IAM token via `hcloud IAM KeystoneCreateUserTokenByPassword` (script passes the body with `--cli-jsonInput` so no password appears in the command line, and reads the token from the `X-Subject-Token` response header via `--cli-query="response_header.X-Subject-Token$1."` — never displayed)
 4. Token is cached in-memory (and a temp file for cross-process reuse, 23h)
@@ -144,7 +146,7 @@ This skill ONLY supports the OptVerse solver assistant workflow: requirement ana
 
 ## 3.1 Endpoint
 
-- **Region:** `cn-north-7`（华北-乌兰察布三，default, configurable via `--cli-region`; hcloud OptVerse operations only support `cn-north-7`)
+- **Region:** `cn-east-3`（华北-乌兰察布三，default, configurable via `--cli-region`; hcloud OptVerse operations only support `cn-east-3`)
 - **OptVerse:** `optverse.{region}.myhuaweicloud.com`
 - **IAM:** `iam.{region}.myhuaweicloud.com`
 - **Project ID:** `{project_id}` — 由脚本自动获取（复用 `create_chat.py` 的 `get_project_id()`，通过 `hcloud` dryrun 探测），无需手动配置；也可用 `--project-id` 显式覆盖。请勿在文档或配置中硬编码个人 Project ID。
@@ -201,7 +203,7 @@ hcloud OptVerse CreateArtifacts \
   --chat_id=<chat_id> \
   --stage_name=<requirement_analyzer|modeling|data|solver|report|business_planner|data_agent|vrp|predict_step1|predict_step2|predict_step3|predict_step4> \
   --filenames.1=<file1> --filenames.2=<file2> \
-  --cli-region=cn-north-7
+  --cli-region=cn-east-3
 ```
 
 `--stage_name` is **required**. Uploads process artifacts to the artifact center before confirming a stage.
@@ -214,7 +216,7 @@ hcloud OptVerse PublishChat \
   --name="<asset_name>" \
   --type=optverse \
   --description="<1-2048 chars description>" \
-  --cli-region=cn-north-7
+  --cli-region=cn-east-3
 ```
 
 `--description` is **required** (1-2048 chars).
@@ -284,7 +286,7 @@ hcloud OptVerse DownloadFile \
   --chat_id=<chat_id> \
   --filename=<artifact_filename> \
   --X-Need-Content=true \
-  --cli-region=cn-north-7
+  --cli-region=cn-east-3
 ```
 
 Present artifacts to user. **Ask for confirmation.**
@@ -296,7 +298,7 @@ hcloud OptVerse CreateArtifacts \
   --chat_id=<chat_id> \
   --stage_name=requirement_analyzer \
   --filenames.1=<artifact_filename> \
-  --cli-region=cn-north-7
+  --cli-region=cn-east-3
 
 python scripts/create_chat.py \
   --message="确认" \
@@ -323,7 +325,7 @@ hcloud OptVerse UploadFile \
   --agent_type=optverse \
   --chat_id=<chat_id> \
   --file="模型数据.xlsx" \
-  --cli-region=cn-north-7
+  --cli-region=cn-east-3
 
 python scripts/create_chat.py \
   --message="数据检查" \
@@ -346,7 +348,7 @@ hcloud OptVerse PublishChat \
   --name="工厂生产排程优化助手" \
   --type=optverse \
   --description="优化工厂生产排程，最大化产能利用率" \
-  --cli-region=cn-north-7
+  --cli-region=cn-east-3
 ```
 
 **Output:** `{"id": "xxx"}` — published asset ID.
@@ -358,7 +360,7 @@ Deploy the published asset as a model service. See [references/best-practices.md
 ```bash
 hcloud OptVerse CreateModelService --asset_id=<asset_id> --name="<name>" \
   --infer_type=online --platform=CCE --request_mode=REAL_TIME \
-  --service_config.instance_count=1 --description="<desc>" --cli-region=cn-north-7
+  --service_config.instance_count=1 --description="<desc>" --cli-region=cn-east-3
 ```
 
 Key: `--platform=CCE` (recommended), `--request_mode=REAL_TIME` (uppercase). Output: `{"service_id": "xxx", "status": "RUNNING", "api_url": "..."}`.
@@ -366,7 +368,7 @@ Key: `--platform=CCE` (recommended), `--request_mode=REAL_TIME` (uppercase). Out
 ### Step 11 (Optional): ShowModelServiceDetail — Get Request URL
 
 ```bash
-hcloud OptVerse ShowModelServiceDetail --service_id=<service_id> --cli-region=cn-north-7
+hcloud OptVerse ShowModelServiceDetail --service_id=<service_id> --cli-region=cn-east-3
 ```
 
 Returns `api_url` for calling the deployed model service. See [references/best-practices.md](references/best-practices.md) for output example.
@@ -377,11 +379,11 @@ Test by sending the data-stage JSON artifact as `model_request`. See [references
 
 ```bash
 hcloud OptVerse CreateModelServiceTask --service_id=<service_id> \
-  --inputs.model_request="<json_content>" --cli-region=cn-north-7
-hcloud OptVerse ShowModelServiceTask --service_id=<service_id> --task_id=<task_id> --cli-region=cn-north-7
+  --inputs.model_request="<json_content>" --cli-region=cn-east-3
+hcloud OptVerse ShowModelServiceTask --service_id=<service_id> --task_id=<task_id> --cli-region=cn-east-3
 ```
 
-Query task status: PENDING → RUNNING → SUCCEEDED/FAILED. When running the workflow script (`run_workflow.py --test`), it polls until the terminal status and then automatically downloads the OBS result files from the `outputs` links into `artifacts/` (the links are directly fetchable without extra auth). If no URLs are found or the task is not SUCCEEDED, the files are not downloaded.
+Query task status: PENDING → RUNNING → SUCCEEDED/FAILED. When running the workflow script (`run_workflow.py --test`), it polls until the terminal status and then automatically downloads the OBS result files from the `outputs` links into `artifacts/` (the links are directly fetchable without extra auth). **The `outputs` map may contain MULTIPLE artifacts (e.g. `result.sol` AND `progress.info`) — download every fetchable OBS link in the map, not just the first.** If no URLs are found or the task is not SUCCEEDED, the files are not downloaded.
 
 # 5. Core Commands
 
@@ -431,7 +433,7 @@ Query task status: PENDING → RUNNING → SUCCEEDED/FAILED. When running the wo
 
 | Parameter | Default | Description | Required |
 |-----------|---------|-------------|----------|
-| `--cli-region` | `cn-north-7` | Huawei Cloud region | Yes |
+| `--cli-region` | `cn-east-3` | Huawei Cloud region | Yes |
 | `--agent_type` | `optverse` | Agent type | Yes |
 | `--round` | `1` | Round number (1=domain_type, 2+=agent_role) | Yes |
 | `--filenames` | `[]` | File name array (Round 1: demand file; Round 2+: empty) | Round 1 only |

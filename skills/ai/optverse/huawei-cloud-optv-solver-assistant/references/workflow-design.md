@@ -123,7 +123,7 @@ Final content: "Based on the requirement... the optimal model is... a mixed inte
 - AK/SK are read from environment variables only
 - Never written to files, logs, debug output, or the agent's reasoning (chain-of-thought)
 - Script debug output masks AK as `XXXX****XXX`
-- HTTPS is used for all requests (SSL verification can be disabled for cn-north-7)
+- HTTPS is used for all requests (SSL verification can be disabled for cn-east-3)
 
 ## 5. Error Handling Design
 

@@ -82,7 +82,7 @@ hcloud OptVerse UploadFile \
   --domain_type=optverse \
   --file=<file-path> \
   [--chat_id=<chat_id>] \
-  --cli-region=cn-north-7
+  --cli-region=cn-east-3
 ```
 
 ### 2.2 Parameters
@@ -113,7 +113,7 @@ hcloud OptVerse DownloadFile \
   --chat_id=<chat_id> \
   --filename=<filename> \
   --X-Need-Content=true \
-  --cli-region=cn-north-7
+  --cli-region=cn-east-3
 ```
 
 ### 3.2 Parameters
@@ -140,7 +140,7 @@ hcloud OptVerse DownloadFile \
 ```bash
 hcloud OptVerse ListArtifacts \
   --chat_id=<chat_id> \
-  --cli-region=cn-north-7
+  --cli-region=cn-east-3
 ```
 
 ### 4.2 Response
@@ -182,7 +182,7 @@ hcloud OptVerse PublishChat \
   --name=<asset-name> \
   --type=optverse \
   [--description=<description>] \
-  --cli-region=cn-north-7
+  --cli-region=cn-east-3
 ```
 
 ### 5.2 Parameters
@@ -212,7 +212,7 @@ All conversation stages must be confirmed before publishing. The server validate
 hcloud OptVerse CancelChat \
   --X-Chat-Route-Id=<route-id> \
   --chat_id=<chat_id> \
-  --cli-region=cn-north-7
+  --cli-region=cn-east-3
 ```
 
 Use this to cancel an in-progress SSE stream if the user wants to abort.
@@ -222,7 +222,7 @@ Use this to cancel an in-progress SSE stream if the user wants to abort.
 ```bash
 hcloud OptVerse ShowChat \
   --chat_id=<chat_id> \
-  --cli-region=cn-north-7
+  --cli-region=cn-east-3
 ```
 
 Returns conversation details including message history.
