@@ -511,10 +511,33 @@ def renewal_resources(
     period_type_value = period_type_map.get(period_type, 2)
     
     if dry_run:
+        # Verify resource IDs exist before reporting success
+        try:
+            client = create_bss_client(ak, sk, security_token)
+            for rid in resource_ids:
+                req = ListPayPerUseCustomerResourcesRequest()
+                req.body = QueryResourcesReq(resource_ids=[rid])
+                resp = client.list_pay_per_use_customer_resources(req)
+                records = getattr(resp, 'data', []) or []
+                if not records:
+                    return {
+                        "success": False,
+                        "error": f"Resource {rid} not found in your account"
+                    }
+        except exceptions.ClientRequestException as e:
+            return {
+                "success": False,
+                "error": f"Resource validation failed: {e.error_code} - {e.error_msg}"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Resource validation failed: {str(e)}"
+            }
         return {
             "success": True,
             "dry_run": True,
-            "message": "Dry run successful",
+            "message": "Dry run successful, resources verified",
             "params": {
                 "resource_ids": resource_ids,
                 "period_num": period_num,
@@ -569,10 +592,33 @@ def unsubscribe_resources(
     
     if dry_run:
         type_desc = "Immediate unsubscribe" if unsubscribe_type == 1 else "Expire unsubscribe"
+        # Verify resource IDs exist before reporting success
+        try:
+            client = create_bss_client(ak, sk, security_token)
+            for rid in resource_ids:
+                req = ListPayPerUseCustomerResourcesRequest()
+                req.body = QueryResourcesReq(resource_ids=[rid])
+                resp = client.list_pay_per_use_customer_resources(req)
+                records = getattr(resp, 'data', []) or []
+                if not records:
+                    return {
+                        "success": False,
+                        "error": f"Resource {rid} not found in your account"
+                    }
+        except exceptions.ClientRequestException as e:
+            return {
+                "success": False,
+                "error": f"Resource validation failed: {e.error_code} - {e.error_msg}"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Resource validation failed: {str(e)}"
+            }
         return {
             "success": True,
             "dry_run": True,
-            "message": "Dry run successful",
+            "message": "Dry run successful, resources verified for unsubscribe",
             "params": {
                 "resource_ids": resource_ids,
                 "unsubscribe_type": unsubscribe_type,
@@ -716,28 +762,63 @@ def show_unsubscribe_policy():
 # CLI Interface
 # ============================================================================
 
-def main():
+GLOBAL_OPTION_DESTS = ("ak", "sk", "security_token", "region", "dry_run", "confirm")
+
+
+def build_global_parser(suppress_defaults: bool = False) -> argparse.ArgumentParser:
+    """Build a parser holding the global (shared) CLI options.
+
+    Args:
+        suppress_defaults: When True, options use `argparse.SUPPRESS` as their
+            default. Used when re-parsing the extra arguments collected by
+            `parse_known_args` so that only options that were actually written
+            by the user are merged into the parsed namespace.
+
+    Returns:
+        An ArgumentParser (add_help=False) intended to be used via `parents=`.
+    """
+    def _no_default(value):
+        return argparse.SUPPRESS if suppress_defaults else value
+
+    global_parser = argparse.ArgumentParser(add_help=False)
+    global_parser.add_argument("--ak", default=_no_default(None), help="Huawei Cloud Access Key AK (can be temporary AK, or set HW_ACCESS_KEY env var)")
+    global_parser.add_argument("--sk", default=_no_default(None), help="Huawei Cloud Access Key SK (can be temporary SK, or set HW_SECRET_KEY env var)")
+    global_parser.add_argument("--security-token", default=_no_default(None), help="Security token for temporary credentials (required when using temporary AK/SK, or set HW_SECURITY_TOKEN env var)")
+    global_parser.add_argument("--region", default=_no_default("cn-north-4"), help="Region ID")
+    global_parser.add_argument("--dry-run", action="store_true", default=_no_default(False), help="Dry run")
+    global_parser.add_argument("--confirm", action="store_true", default=_no_default(False), help="Force confirm")
+    return global_parser
+
+
+def build_cli_parser() -> argparse.ArgumentParser:
+    """Build the complete CLI parser.
+
+    Global options (--ak/--sk/--region/--dry-run/--confirm/--security-token)
+    are registered ONLY on the main (root) parser. Subcommand parsers do NOT
+    inherit them, so a global option written before the subcommand can never
+    be silently overwritten by the subparser's own default (FLEXUS2-ISSUE-004).
+    parse_known_args (see parse_cli_args) collects global options written AFTER
+    the subcommand and merges them back, so both positions are supported:
+      python3 flexus_lifecycle.py --region cn-north-4 renewal --resource-ids x
+      python3 flexus_lifecycle.py renewal --region cn-north-4 --resource-ids x
+    """
+    global_parser = build_global_parser(suppress_defaults=False)
+
     parser = argparse.ArgumentParser(
+        parents=[global_parser],
         description="Huawei Cloud Flexus L Instance Lifecycle Management Tool",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    
-    parser.add_argument("--ak", help="Huawei Cloud Access Key AK (can be temporary AK, or set HW_ACCESS_KEY env var)")
-    parser.add_argument("--sk", help="Huawei Cloud Access Key SK (can be temporary SK, or set HW_SECRET_KEY env var)")
-    parser.add_argument("--security-token", help="Security token for temporary credentials (required when using temporary AK/SK, or set HW_SECURITY_TOKEN env var)")
-    parser.add_argument("--region", default="cn-north-4", help="Region ID")
-    parser.add_argument("--dry-run", action="store_true", help="Dry run")
-    parser.add_argument("--confirm", action="store_true", help="Force confirm")
-    
+
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
-    
+
     subparsers.add_parser("show-regions", help="Show all available regions")
-    
+
     subparsers.add_parser("show-images", help="Show available images for a region")
-    
+
     show_specs_parser = subparsers.add_parser("show-specs", help="Show available specs for an image")
     show_specs_parser.add_argument("--image", required=True, help="Image name")
-    
+
     create_parser = subparsers.add_parser("create-instance", help="Create Flexus L instance")
     create_parser.add_argument("--plan-spec", help="Instance spec")
     create_parser.add_argument("--image", default="Ubuntu", help="Image name")
@@ -748,24 +829,52 @@ def main():
     create_parser.add_argument("--instance-name")
     create_parser.add_argument("--auto-renew", type=lambda x: x.lower() != 'false', default=True)
     create_parser.add_argument("--auto-pay", type=lambda x: x.lower() != 'false', default=True)
-    
+
     renewal_parser = subparsers.add_parser("renewal", help="Renew instance")
     renewal_parser.add_argument("--resource-ids", required=True)
     renewal_parser.add_argument("--period-num", type=int, default=1)
     renewal_parser.add_argument("--period-type", default="month", choices=["month", "year"])
     renewal_parser.add_argument("--auto-pay", type=lambda x: x.lower() != 'false', default=True)
-    
+
     unsubscribe_parser = subparsers.add_parser("unsubscribe", help="Unsubscribe instance")
     unsubscribe_parser.add_argument("--resource-ids", required=True)
     unsubscribe_parser.add_argument("--type", type=int, choices=[1, 2], default=1)
     unsubscribe_parser.add_argument("--reason")
-    
+
     subparsers.add_parser("unsubscribe-policy", help="Show unsubscribe policy")
-    
-    args = parser.parse_args()
-    
+
+    return parser
+
+
+def parse_cli_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    """Parse CLI arguments, supporting global options before or after the subcommand.
+
+    Global options written after the subcommand land in the `unknown` list of
+    `parse_known_args`. They are re-parsed with a SUPPRESS-default global parser
+    so only explicitly given options are merged, preserving values already
+    parsed by the main parser (FLEXUS2-ISSUE-004 regression guard).
+    """
+    parser = build_cli_parser()
+
+    args, unknown = parser.parse_known_args(argv)
+
+    if unknown:
+        extra_parser = build_global_parser(suppress_defaults=True)
+        extra_ns, leftover = extra_parser.parse_known_args(unknown)
+        for dest in GLOBAL_OPTION_DESTS:
+            if dest in vars(extra_ns):
+                setattr(args, dest, getattr(extra_ns, dest))
+        if leftover:
+            parser.error(f"unrecognized arguments: {' '.join(leftover)}")
+
+    return args
+
+
+def main(argv: Optional[List[str]] = None):
+    args = parse_cli_args(argv)
+
     if not args.command:
-        parser.print_help()
+        build_cli_parser().print_help()
         return
     
     try:

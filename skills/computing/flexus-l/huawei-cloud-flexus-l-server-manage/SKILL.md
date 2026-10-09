@@ -123,12 +123,12 @@ Pass credentials via environment variables `HW_ACCESS_KEY`, `HW_SECRET_KEY`, `HW
 
 ```bash
 # Temporary credentials
-python scripts/flexus_lifecycle.py create-instance \
+python3 scripts/flexus_lifecycle.py create-instance \
   --ak <AK> --sk <SK> --security-token <TOKEN> \
   --image Ubuntu --cpu 2 --memory 4
 
 # Permanent credentials
-python scripts/flexus_lifecycle.py create-instance \
+python3 scripts/flexus_lifecycle.py create-instance \
   --ak <AK> --sk <SK> \
   --image Ubuntu --cpu 2 --memory 4
 ```
@@ -304,7 +304,7 @@ When user confirms the preview order and the purchase fails:
 ### Basic Command Format
 
 ```bash
-python scripts/flexus_lifecycle.py <command> [options]
+python3 scripts/flexus_lifecycle.py <command> [options]
 ```
 
 ### Global Parameters
@@ -318,26 +318,45 @@ python scripts/flexus_lifecycle.py <command> [options]
 | `--dry-run` | Dry run, don't actually execute | No | - |
 | `--confirm` | Force confirmation, skip interactive | No | - |
 
+**⚠️ Global options (`--ak`/`--sk`/`--security-token`/`--region`/`--dry-run`/`--confirm`) can be written BOTH before AND after the subcommand.** Both positions are equivalent and must keep working:
+
+```bash
+# Global option BEFORE subcommand (前置写法)
+python3 scripts/flexus_lifecycle.py --region cn-east-3 show-images
+python3 scripts/flexus_lifecycle.py --dry-run unsubscribe --resource-ids <id>
+python3 scripts/flexus_lifecycle.py --confirm create-instance --image Ubuntu
+
+# Global option AFTER subcommand (后置写法)
+python3 scripts/flexus_lifecycle.py show-images --region cn-east-3
+python3 scripts/flexus_lifecycle.py unsubscribe --resource-ids <id> --dry-run
+python3 scripts/flexus_lifecycle.py create-instance --confirm --image Ubuntu
+```
+
+Regression reference (FLEXUS2-ISSUE-004): `--dry-run`/`--region`/`--confirm` written BEFORE the subcommand must be honored, not silently reset to default:
+- `--dry-run unsubscribe --resource-ids <id>` must enter dry-run WITHOUT prompting for real confirmation
+- `--region cn-east-3 show-images` must query cn-east-3, NOT the default cn-north-4
+- `--confirm create-instance ...` must skip the interactive confirmation prompt
+
 ### Credential Configuration Examples
 
 **Method 1: Using Environment Variables (Primary - Strongly Recommended)**
 
 ```bash
-python scripts/flexus_lifecycle.py create-instance --image Ubuntu --cpu 2 --memory 4
+python3 scripts/flexus_lifecycle.py create-instance --image Ubuntu --cpu 2 --memory 4
 ```
 
 **Method 2: Using Command-line Parameters (Secondary - Accepted)**
 
 ```bash
 # Temporary credentials
-python scripts/flexus_lifecycle.py create-instance \
+python3 scripts/flexus_lifecycle.py create-instance \
   --ak <AK> --sk <SK> --security-token <TOKEN> \
   --image Ubuntu \
   --cpu 2 \
   --memory 4
 
 # Permanent credentials
-python scripts/flexus_lifecycle.py create-instance \
+python3 scripts/flexus_lifecycle.py create-instance \
   --ak <AK> --sk <SK> \
   --image Ubuntu \
   --cpu 2 \
@@ -353,19 +372,19 @@ python scripts/flexus_lifecycle.py create-instance \
 **Show available regions:**
 
 ```bash
-python scripts/flexus_lifecycle.py show-regions
+python3 scripts/flexus_lifecycle.py show-regions
 ```
 
 **Show available images for a region:**
 
 ```bash
-python scripts/flexus_lifecycle.py --region cn-north-4 show-images
+python3 scripts/flexus_lifecycle.py --region cn-north-4 show-images
 ```
 
 **Show available specs for an image:**
 
 ```bash
-python scripts/flexus_lifecycle.py --region cn-north-4 show-specs --image Ubuntu
+python3 scripts/flexus_lifecycle.py --region cn-north-4 show-specs --image Ubuntu
 ```
 
 ---
@@ -377,7 +396,7 @@ Purchase new Flexus L instances, supports Windows/Linux.
 #### Method 1: Auto-match Spec (Recommended)
 
 ```bash
-python scripts/flexus_lifecycle.py create-instance \
+python3 scripts/flexus_lifecycle.py create-instance \
   --region cn-north-4 \
   --image Ubuntu \
   --cpu 2 \
@@ -387,7 +406,7 @@ python scripts/flexus_lifecycle.py create-instance \
 #### Method 2: Specify Spec
 
 ```bash
-python scripts/flexus_lifecycle.py create-instance \
+python3 scripts/flexus_lifecycle.py create-instance \
   --region cn-north-4 \
   --image Ubuntu \
   --plan-spec hf.medium.1.linux
@@ -396,7 +415,7 @@ python scripts/flexus_lifecycle.py create-instance \
 #### Method 3: Use Default Spec
 
 ```bash
-python scripts/flexus_lifecycle.py create-instance \
+python3 scripts/flexus_lifecycle.py create-instance \
   --region cn-north-4 \
   --image Ubuntu
 ```
@@ -427,21 +446,21 @@ Renew existing Flexus L instances.
 
 ```bash
 # Preview renewal (recommended)
-python scripts/flexus_lifecycle.py renewal \
+python3 scripts/flexus_lifecycle.py renewal \
   --resource-ids <resource-id> \
   --period-num 1 \
   --period-type month \
   --dry-run
 
 # Confirm renewal
-python scripts/flexus_lifecycle.py renewal \
+python3 scripts/flexus_lifecycle.py renewal \
   --resource-ids <resource-id> \
   --period-num 6 \
   --period-type month \
   --confirm
 
 # Renew multiple instances
-python scripts/flexus_lifecycle.py renewal \
+python3 scripts/flexus_lifecycle.py renewal \
   --resource-ids id1,id2,id3 \
   --period-num 1 \
   --period-type year \
@@ -465,24 +484,24 @@ Cancel Flexus L instance subscription.
 
 ```bash
 # Preview unsubscribe (recommended)
-python scripts/flexus_lifecycle.py unsubscribe \
+python3 scripts/flexus_lifecycle.py unsubscribe \
   --resource-ids <resource-id> \
   --dry-run
 
 # Immediate unsubscribe (type 1)
-python scripts/flexus_lifecycle.py unsubscribe \
+python3 scripts/flexus_lifecycle.py unsubscribe \
   --resource-ids <resource-id> \
   --type 1 \
   --confirm
 
 # Expiry unsubscribe (type 2)
-python scripts/flexus_lifecycle.py unsubscribe \
+python3 scripts/flexus_lifecycle.py unsubscribe \
   --resource-ids <resource-id> \
   --type 2 \
   --confirm
 
 # Batch unsubscribe
-python scripts/flexus_lifecycle.py unsubscribe \
+python3 scripts/flexus_lifecycle.py unsubscribe \
   --resource-ids id1,id2,id3 \
   --type 1 \
   --reason "Project ended" \
