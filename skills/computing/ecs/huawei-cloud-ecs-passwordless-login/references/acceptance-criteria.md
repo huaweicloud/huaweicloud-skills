@@ -42,6 +42,14 @@ Criteria for a successful passwordless SSH configuration via COC.
 - [ ] Test command returns `SSH_OK` for every target
 - [ ] SSH connection string provided to user for each target
 
+## Persistent Connection (ControlMaster)
+
+- [ ] `Host <EIP>` block appended to `~/.ssh/config` for each target
+- [ ] Config specifies `ControlMaster auto`, `ControlPath`, and `ControlPersist`
+- [ ] Config specifies `ServerAliveInterval` and `ServerAliveCountMax` for TCP keepalive
+- [ ] Master connection started in background (`ssh -N -f`)
+- [ ] Multiplexing verified with `ssh <ssh_user>@<EIP> "echo SSH_MUX_OK"` without key file
+
 ## Security Cleanup
 
 - [ ] Remote key removed from `authorized_keys` on **every** target (via SSH or COC fallback)

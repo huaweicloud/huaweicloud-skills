@@ -99,7 +99,7 @@ Test passwordless SSH using the generated key — **for every target ECS**:
 
 Set up SSH ControlMaster so the agent can continue accessing **every target ECS** after keys are removed in Step 7.
 
-1. **Append SSH config** — For each target, add a `Host <EIP>` block to `~/.ssh/config` with `ControlMaster auto`, `ControlPath /tmp/coc_ssh_%r@%h:%p`, and `ControlPersist <persist_timeout>`.
+1. **Append SSH config** — For each target, add a `Host <EIP>` block to `~/.ssh/config` with `ControlMaster auto`, `ControlPath /tmp/coc_ssh_%r@%h:%p`, `ControlPersist <persist_timeout>`, `ServerAliveInterval <server_alive_interval>`, and `ServerAliveCountMax <server_alive_count_max>`.
 2. **Start master** — For each target, run `ssh -N -f <ssh_user>@<EIP> -i <key>` to background a persistent master connection.
 3. **Verify** — For each target, run `ssh <ssh_user>@<EIP> "echo SSH_MUX_OK"` without a key file. If `SSH_MUX_OK` is returned, multiplexing works.
 
@@ -261,6 +261,8 @@ Host $eip
   ControlMaster auto
   ControlPath /tmp/coc_ssh_%r@%h:%p
   ControlPersist <persist_timeout>
+  ServerAliveInterval <server_alive_interval>
+  ServerAliveCountMax <server_alive_count_max>
   StrictHostKeyChecking no
   UserKnownHostsFile /dev/null
 EOF
@@ -297,7 +299,9 @@ echo "Cleanup scheduled in <cleanup_delay>s (PID: $!, log: <temp_dir>/coc_cleanu
 | `coc_region`      | No          | `cn-north-4` | **COC service region**. COC is a **global-level** service — only `cn-north-4` (China site) and `ap-southeast-3` (International site) are supported. All COC/IAM API calls must target this region; it is independent of the ECS region |
 | `ssh_user`        | No          | `root`       | SSH username on the target ECS. Root or non-root supported; key is deployed to the user's `~/.ssh/authorized_keys`                                                                                                                     |
 | `cleanup_delay`   | No          | `60`         | Seconds to wait before automatic key cleanup (min 10, max 300)                                                                                                                                                                         |
-| `persist_timeout` | No          | `3600`       | Seconds to keep ControlMaster alive after all sessions close (min 60, max 86400)                                                                                                                                                       |
+| `persist_timeout`         | No          | `3600`       | Seconds to keep ControlMaster alive after all sessions close (min 60, max 86400)                                                                                                                                                       |
+| `server_alive_interval`   | No          | `30`         | Seconds between keepalive packets sent to the remote host to maintain active TCP connection (min 5, max 300)                                                                                                                         |
+| `server_alive_count_max`  | No          | `3`          | Number of unanswered keepalive probes before the client disconnects (min 1, max 10)                                                                                                                                                    |
 
 ## Output Format
 
@@ -322,7 +326,7 @@ Verify the workflow step by step:
 3. **Script** — `coc_ssh_key_setup` exists with `PUBLIC_KEY` parameter and valid `script_uuid`
 4. **Execution** — `GetScriptJobInfo` shows `SUCCESS` for the batch within 2 minutes
 5. **SSH Test** — each target connects without password prompt; all test commands return `SSH_OK`
-6. **Persistent Connection** — SSH config appended, `ssh -N -f <ssh_user>@<EIP>` starts master, `ssh <ssh_user>@<EIP> "echo SSH_MUX_OK"` succeeds for each target
+6. **Persistent Connection** — SSH config appended (with ControlMaster, ControlPersist, and ServerAliveInterval), `ssh -N -f <ssh_user>@<EIP>` starts master, `ssh <ssh_user>@<EIP> "echo SSH_MUX_OK"` succeeds for each target
 7. **Cleanup** — remote key removed on every target, COC script deleted, local key files deleted; `ssh <ssh_user>@<EIP>` still connects via ControlMaster
 
 See [Verification Method](references/verification-method.md) and [Acceptance Criteria](references/acceptance-criteria.md) for detailed checklists.
@@ -341,6 +345,7 @@ See [Verification Method](references/verification-method.md) and [Acceptance Cri
 - Batch targets may span **multiple ECS regions** — always confirm each target's region via `COC ListResources` in Step 4 (which returns `region_id` without needing it in advance); never assume all targets share `ecs_region`
 - Test SSH and run cleanup for **every** target in the batch; a single failed target aborts the run and preserves keys for debugging
 - SSH config entries persist after cleanup as harmless dead entries; they can be removed later if desired
+- Configure `ServerAliveInterval` (default 30s) and `ServerAliveCountMax` (default 3) in `~/.ssh/config` to prevent NAT gateways and stateful firewalls from silently dropping idle ControlMaster connections
 
 ## Reference Documents
 
