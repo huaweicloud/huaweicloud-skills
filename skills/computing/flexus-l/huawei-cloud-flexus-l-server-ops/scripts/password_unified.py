@@ -82,7 +82,7 @@ def main():
         print("Commands: test (test connection) / list (list servers) / reset --instance-id <ID> --password <PWD> (reset password)")
         sys.exit(1)
     
-    region = os.environ.get("CLOUD_SDK_REGION") or os.environ.get("HUAWEICLOUD_SDK_REGION") or "cn-north-4"
+    region = "cn-north-4"
     ak, sk, security_token = None, None, None
     cmd = None
     i = 1
