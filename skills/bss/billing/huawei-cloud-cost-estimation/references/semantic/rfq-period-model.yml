@@ -1,0 +1,56 @@
+name: RFQPeriodModel
+type: semantic_ontology
+description: |
+  RFQ 包年/包月（period）输入侧事实；对齐 BSS/ListRateOnPeriodDetail 的 PeriodProductInfo。
+  维度均引用 rfq-shared-dimensions.yml，不重复定义。
+  required_fields / 可执行命令模板均在 references/commands.md。
+pricing_mode: period
+source_evidence:
+  partner_api_doc: https://support.huaweicloud.com/api-bpconsole/bcloud_01002.html
+shared_dimensions_file: rfq-shared-dimensions.yml
+
+facts:
+  - name: RFQ_Header
+    role: primary
+    grain: 每次 ListRateOnPeriodDetail 请求一条记录
+    dimensions: [Dim_Project]
+    child_facts: [RFQ_Line]
+    attributes:
+      - { name: project_id, type: string, max_length: 64, dimension: Dim_Project }
+
+  - name: RFQ_Line
+    role: primary
+    grain: product_infos[] 中每个 PeriodProductInfo 一条记录
+    parent_fact: RFQ_Header
+    cardinality_max: 100
+    degenerate_dimensions: [id, resource_spec]
+    dimensions:
+      - Dim_CloudServiceType
+      - Dim_ResourceType
+      - Dim_Region
+      - Dim_AvailabilityZone
+      - Dim_MeasureUnit
+      - Dim_ResourceSpec
+    attributes:
+      - { name: id,                   type: string,  max_length: 64,  notes: "同次询价唯一，回映射响应 id（响应路径见 commands.md response_contract）" }
+      - { name: cloud_service_type,   type: string,  max_length: 400, dimension: Dim_CloudServiceType }
+      - { name: resource_type,        type: string,  max_length: 400, dimension: Dim_ResourceType }
+      - { name: resource_spec,        type: string,  max_length: 400, dimension: Dim_ResourceSpec }
+      - { name: region,               type: string,  max_length: 64,  dimension: Dim_Region }
+      - { name: period_type,          type: integer, notes: "枚举见 commands.md 字段对照（0天/2月/3年/4小时）" }
+      - { name: period_num,           type: integer, min: 1, max: 214783647 }
+      - { name: subscription_num,     type: integer, min: 1, max: 10000 }
+      - { name: available_zone,       type: string,  max_length: 64, dimension: Dim_AvailabilityZone, required: false, notes: "空/null = 不筛选；大小写不敏感" }
+      - { name: resource_size,        type: integer, max: 214783647, required: conditional, condition: linear_product }
+      - { name: size_measure_id,      type: integer, dimension: Dim_MeasureUnit, required: conditional, condition: linear_product }
+      - { name: fee_installment_mode, type: string,  max_length: 64, required: false, notes: "默认 NA（仅 CloudPond）；枚举见 commands.md 字段对照" }
+
+linear_product_indicators:
+  resource_type_in:
+    - hws.resource.type.volume
+    - hws.resource.type.bandwidth
+    - hws.resource.type.share_bandwidth
+
+evidence_boundary:
+  - 字段必填以 references/commands.md 中 BSS/ListRateOnPeriodDetail 的 contract 块为唯一真源。
+  - 不替代历史账单事实；余额/已发生账单/对账超出 RFQ 范围。

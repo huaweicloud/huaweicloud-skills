@@ -1,0 +1,67 @@
+name: RFQOnDemandModel
+type: semantic_ontology
+description: |
+  RFQ 按需（on-demand）输入侧事实；对齐 BSS/ListOnDemandResourceRatings 的 DemandProductInfo。
+  与 rfq-period-model.yml 完全独立解耦；维度引用 rfq-shared-dimensions.yml。
+  required_fields / 可执行命令模板均在 references/commands.md。
+pricing_mode: on_demand
+source_evidence:
+  partner_api_doc: https://support.huaweicloud.com/api-bpconsole/bcloud_01001.html
+shared_dimensions_file: rfq-shared-dimensions.yml
+
+facts:
+  - name: RFQ_OnDemand_Header
+    role: primary
+    grain: 每次 ListOnDemandResourceRatings 请求一条记录
+    dimensions: [Dim_Project]
+    child_facts: [RFQ_OnDemand_Line]
+    attributes:
+      - { name: project_id, type: string, max_length: 64, dimension: Dim_Project }
+      - { name: inquiry_precision, type: integer, required: false, notes: "默认 0；枚举见 commands.md 字段对照" }
+
+  - name: RFQ_OnDemand_Line
+    role: primary
+    grain: product_infos[] 中每个 DemandProductInfo 一条记录
+    parent_fact: RFQ_OnDemand_Header
+    cardinality_max: 100
+    degenerate_dimensions: [id, resource_spec]
+    dimensions:
+      - Dim_CloudServiceType
+      - Dim_ResourceType
+      - Dim_Region
+      - Dim_AvailabilityZone
+      - Dim_MeasureUnit
+      - Dim_ResourceSpec
+      - Dim_UsageType
+    attributes:
+      - { name: id,                 type: string,  max_length: 64, notes: "同次询价唯一" }
+      - { name: cloud_service_type, type: string,  max_length: 400, dimension: Dim_CloudServiceType }
+      - { name: resource_type,      type: string,  max_length: 400, dimension: Dim_ResourceType }
+      - { name: resource_spec,      type: string,  max_length: 400, dimension: Dim_ResourceSpec }
+      - { name: region,             type: string,  max_length: 64, dimension: Dim_Region }
+      - { name: usage_factor,       type: string,  max_length: 64, dimension: Dim_UsageType, notes: "ListUsageTypes.code；禁止默认 Duration" }
+      - { name: usage_value,        type: number, notes: "用量槽标量；见 commands.md Measure Resolve" }
+      - { name: usage_measure_id,   type: integer, dimension: Dim_MeasureUnit, notes: "用量槽≠size_measure_id；见 Measure Resolve" }
+      - { name: subscription_num,   type: integer, min: 1, max: 10000 }
+      - { name: available_zone,     type: string, max_length: 64, dimension: Dim_AvailabilityZone, required: false, notes: "空/null = 不筛选" }
+      - { name: resource_size,      type: integer, max: 214783647, required: conditional, condition: linear_product }
+      - { name: size_measure_id,    type: integer, dimension: Dim_MeasureUnit, required: conditional, condition: linear_product }
+
+linear_product_indicators:
+  resource_type_in:
+    - hws.resource.type.volume
+    - hws.resource.type.bandwidth
+    - hws.resource.type.share_bandwidth
+
+dimensions:
+  - name: Dim_UsageType
+    kind: conformed_dimension
+    business_key: usage_factor_code
+    source_operations: [BSS/ListUsageTypes]
+    attributes: [code, name, resource_type_code, service_type_code]
+    query_keys: [resource_type_code]
+    notes: 必带 --resource_type_code；无 measure → Measure Resolve（commands.md）。
+
+evidence_boundary:
+  - 字段必填以 references/commands.md 中 ListOnDemandResourceRatings contract 为唯一真源。
+  - usage_value 是询价标量，非历史用量；账单/余额/对账超出 RFQ。
