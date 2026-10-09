@@ -46,6 +46,24 @@ Query Huawei Cloud MaaS (Model as a Service) usage statistics via the ShowStatis
 
 > **If a user requests a prohibited operation, you must refuse and explain the security constraint.**
 
+## 🚫 Unsupported Operations (Capability Boundary)
+
+> **This skill only supports the ShowStatistics aggregate statistics query. The MaaS monitoring API family contains 10 APIs; the other 9 are outside this skill's capability boundary and are not implemented.**
+
+| Unsupported API | Purpose | Why Not Covered |
+|-----------------|---------|-----------------|
+| `ListServiceStatistics` | List per-service statistics | Skill focuses on aggregate tokens usage, not per-service breakdown |
+| `ShowDetailChart` | Show detail chart data | Skill returns a summary table, not chart series |
+| `ListErrors` | List error details | Skill reports error count/rate only, not error detail records |
+| `ListServices` | List services | Skill queries statistics, not service inventory |
+| `ListSourceIps` | List source IPs | Skill does not track caller IP distribution |
+| `GetServiceDetailMetricData` | Get service detail metrics | Skill provides aggregate metrics, not per-service detail |
+| `ListVersionStatistics` | List version statistics | Skill does not segment by model version |
+| `GetGenerationSupportedMetrics` | Get supported metrics | Skill uses the fixed metric set from ShowStatistics response |
+| `ShowErrorCodeChart` | Show error code chart | Skill reports error rate, not error code distribution |
+
+> **If a user requests any of the above APIs or their underlying capabilities (per-service breakdown, error detail, chart data, source IP list, version statistics, error code distribution, etc.), you must refuse and clarify: this skill only supports the ShowStatistics aggregate statistics query (total/prompt/completion tokens, request count, error count, error rate).**
+
 ## Architecture
 
 ```
