@@ -1,0 +1,16 @@
+{
+  "StorageClass": {
+    "gp2": "csi-disk-topology",
+    "gp3": "csi-disk-topology",
+    "standard": "csi-disk-topology",
+    "local-path": "csi-disk-topology",
+    "nfs-client": "csi-sfsturbo",
+    "efs-sc": "csi-sfsturbo",
+    "minio-sc": "csi-obs"
+  },
+  "ImageRepo": {
+    "docker.io": "swr.cn-north-4.myhuaweicloud.com/cce-migration-repo",
+    "quay.io": "swr.cn-north-4.myhuaweicloud.com/cce-migration-repo",
+    "registry.k8s.io": "swr.cn-north-4.myhuaweicloud.com/cce-migration-repo"
+  }
+}

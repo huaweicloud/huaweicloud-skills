@@ -1,0 +1,12 @@
+{
+  "source-registry.example.com/namespace": {
+    "username": "source-user",
+    "password": "source-password",
+    "insecure": false
+  },
+  "swr.cn-north-4.myhuaweicloud.com": {
+    "username": "cn-north-4@<HUAWEI_ACCESS_KEY>",
+    "password": "<swr-login-key>",
+    "insecure": false
+  }
+}

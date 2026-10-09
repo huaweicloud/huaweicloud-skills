@@ -1,0 +1,22 @@
+# Dynamic SFS Turbo Subpath PVC Template
+# Pre-requisite: SFS Turbo instance must be pre-created in Huawei Cloud before creating subpaths.
+# SFS Turbo does not support dynamic instance creation; multiple PVCs share one pre-created instance via isolated subpaths.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: example-sfsturbo-subpath-pvc
+  namespace: default
+  annotations:
+    # Use dynamic SFS Turbo subpath provisioning to share one pre-created SFS Turbo instance across multiple PVCs
+    everest.io/volume-as: absolute-path # Fixed value indicating SFS Turbo subpath mode
+    everest.io/sfsturbo-share-id: <sfsturbo_id> # Existing SFS Turbo instance ID
+    everest.io/path: /app-data # Auto-created subpath (must be an absolute path)
+    everest.io/reclaim-policy: retain-volume-only # Options: retain-volume-only (retain dir on PVC deletion), delete (delete dir)
+    everest.io/csi.enable-sfsturbo-dir-quota: "true" # Enable directory quota limit (requires Everest >= 2.4.73)
+spec:
+  accessModes:
+    - ReadWriteMany # SFS Turbo requires ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi # Subpath quota capacity in GiB (minimum 1Gi; rounded up if decimal)
+  storageClassName: csi-sfsturbo # CCE SFS Turbo StorageClass

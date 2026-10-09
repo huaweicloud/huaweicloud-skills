@@ -1,0 +1,82 @@
+{
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "List CCE Clusters",
+      "command": "hcloud CCE ListClusters --cli-region=cn-north-4",
+      "expected": "Cluster"
+    },
+    {
+      "id": "TC-02",
+      "name": "Query CCE Cluster Flavor Specs",
+      "command": "hcloud CCE GetClusterFlavorSpecs --cli-region=cn-north-4 --clusterType=VirtualMachine",
+      "expected": "clusterFlavorSpecs"
+    },
+    {
+      "id": "TC-03",
+      "name": "List CCE Addon Templates",
+      "command": "hcloud CCE ListAddonTemplates --cli-region=cn-north-4",
+      "expected": "Addon"
+    },
+    {
+      "id": "TC-04",
+      "name": "Verify CCE IAM Schema",
+      "command": "hcloud IAM GetAuthorizationSchemaV5 --cli-region=cn-north-4 --service_code=cce",
+      "expected": "cce:cluster:list"
+    },
+    {
+      "id": "TC-05",
+      "name": "Verify CCEFullPolicy IAM Version",
+      "command": "hcloud IAM GetPolicyVersionV5 --cli-region=cn-north-4 --policy_id=CCEFullPolicy --version_id=v1",
+      "expected": "5.0"
+    },
+    {
+      "id": "TC-06",
+      "name": "Verify CCEReadOnlyPolicy IAM Version",
+      "command": "hcloud IAM GetPolicyVersionV5 --cli-region=cn-north-4 --policy_id=CCEReadOnlyPolicy --version_id=v1",
+      "expected": "5.0"
+    },
+    {
+      "id": "TC-07",
+      "name": "List NAT Gateways in Target Region",
+      "command": "hcloud NAT ListNatGateways --cli-region=cn-north-4",
+      "expected": "nat_gateways"
+    },
+    {
+      "id": "TC-08",
+      "name": "List NAT Gateway SNAT Rules for Egress Whitelisting",
+      "command": "hcloud NAT ListNatGatewaySnatRules --cli-region=cn-north-4",
+      "expected": "snat_rules"
+    },
+    {
+      "id": "TC-09",
+      "name": "Generate SWR Login Secret",
+      "command": "hcloud SWR CreateSecret --cli-region={region}",
+      "expected": "auths"
+    },
+    {
+      "id": "TC-10",
+      "name": "List SWR Organizations",
+      "command": "hcloud SWR ListNamespaces --cli-region={region}",
+      "expected": "namespaces"
+    },
+    {
+      "id": "TC-11",
+      "name": "List VPCs in Target Region",
+      "command": "hcloud VPC ListVpcs --cli-region={region}",
+      "expected": "vpcs"
+    },
+    {
+      "id": "TC-12",
+      "name": "List ELB Loadbalancers",
+      "command": "hcloud ELB ListLoadBalancers/v3 --cli-region={region}",
+      "expected": "loadbalancers"
+    },
+    {
+      "id": "TC-13",
+      "name": "List EIPs Associated with ELB",
+      "command": "hcloud EIP ListPublicips/v3 --cli-region={region} --associate_instance_type.1=ELB",
+      "expected": "publicips"
+    }
+  ]
+}

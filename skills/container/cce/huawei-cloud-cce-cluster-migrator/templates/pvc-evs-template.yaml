@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: example-evs-pvc
+  namespace: default
+  annotations:
+    everest.io/disk-volume-type: SSD # Options: SAS, SSD, GPSSD, ESSD
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: csi-disk-topology # Use 'csi-disk-topology' (WaitForFirstConsumer) for multi-AZ; 'csi-disk' for single-AZ
+  # Note: csi-disk-topology delays EVS volume creation until the pod is scheduled to a node,
+  # guaranteeing that the EVS volume and the pod reside in the exact same Availability Zone.

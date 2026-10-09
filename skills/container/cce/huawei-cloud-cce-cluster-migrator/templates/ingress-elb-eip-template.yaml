@@ -1,0 +1,113 @@
+# CCE Ingress Configuration Template (Dedicated ELB + EIP)
+# ==============================================================================
+# Architecture Rules:
+# 1. Ingress Class & Path Routing:
+#    - Use 'spec.ingressClassName: cce' to bind to Huawei Cloud CCE Ingress Controller.
+#    - Set 'pathType: ImplementationSpecific' along with the CCE property extension:
+#      'property.ingress.beta.kubernetes.io/url-match-mode: STARTS_WITH' (or 'EXACT').
+# 2. Cluster Type Compatibility:
+#    - CCE Turbo (Recommended): Supports direct-to-pod routing. Backend Service can be 'ClusterIP'.
+#    - CCE Standard: Backend Service MUST be 'NodePort'. 'ClusterIP' is NOT supported by ELB Ingress
+#      on CCE Standard and will trigger 'GeneratePolicyFailed' / 'can not found protocol port of pod'.
+# 3. elb.autocreate Semantics:
+#    - 'vip_subnet_cidr_id': IPv4 subnet CIDR ID (Neutron subnet ID, e.g. from 'hcloud VPC ListSubnets').
+#    - 'vip_address': Internal VIP address of the load balancer (optional).
+#    - 'elb_virsubnet_ids': Array of VPC subnet network IDs (VPC Subnet ID 'id' field).
+#    - 'available_zone': Mandatory array of Availability Zones (e.g., ["cn-north-4a"] or ["ap-southeast-1a"]).
+#    - 'l7_flavor_name': Dedicated ELB L7 flavor (e.g., "L7_flavor.elb.s1.small" or "L7_flavor.elb.pro.max").
+#    - 'bandwidth_chargemode': 'bandwidth' or 'traffic'.
+#    - 'bandwidth_sharetype': 'PER' (dedicated) or 'WHOLE' (shared).
+# 4. elb.autocreate Immutability:
+#    - The 'kubernetes.io/elb.autocreate' annotation CANNOT be updated after creation.
+#    - To modify any ELB parameter, delete the Ingress and recreate: 'kubectl delete ingress <name>'.
+# ==============================================================================
+
+# Option 1: Ingress with Auto-Created Dedicated ELB + Public EIP
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress-test
+  namespace: default
+  annotations:
+    kubernetes.io/elb.class: performance
+    kubernetes.io/elb.port: "80"
+    # Auto-create Dedicated ELB + EIP
+    # Note: Immutable once applied. Must delete and recreate to update.
+    kubernetes.io/elb.autocreate: '{
+      "type": "public",
+      "bandwidth_name": "cce-bandwidth-******",
+      "bandwidth_chargemode": "bandwidth",
+      "bandwidth_size": 5,
+      "bandwidth_sharetype": "PER",
+      "eip_type": "5_bgp",
+      "vip_subnet_cidr_id": "*****",
+      "vip_address": "**.**.**.**",
+      "elb_virsubnet_ids": [
+      "*****"
+      ],
+      "available_zone": [
+      "cn-north-4a"
+      ],
+      "l7_flavor_name": "L7_flavor.elb.s1.small"
+      }'
+    kubernetes.io/elb.tags: key1=value1,key2=value2 # ELB resource tags
+spec:
+  rules:
+    - host: "" # Host domain (empty '' for default, or specify domain like 'app.example.com')
+      http:
+        paths:
+          - path: "/"
+            backend:
+              service:
+                name: <your_service_name> # Replace with target service name
+                port:
+                  number: <your_service_port> # Replace with target service port
+            property:
+              ingress.beta.kubernetes.io/url-match-mode: STARTS_WITH
+            pathType: ImplementationSpecific
+  ingressClassName: cce
+---
+# Option 2: Ingress with Pre-Provisioned Dedicated ELB (by ELB ID)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress-existing-elb
+  namespace: default
+  annotations:
+    kubernetes.io/elb.class: performance
+    kubernetes.io/elb.id: "<target-elb-id>" # Reference existing Dedicated ELB ID
+    kubernetes.io/elb.port: "443" # Listener port (e.g. 443 for HTTPS)
+    kubernetes.io/elb.cert-id: "<huawei-cloud-ssl-cert-id>" # Mandatory if using HTTPS (port 443)
+    kubernetes.io/elb.tags: key1=value1,key2=value2 # ELB resource tags
+spec:
+  rules:
+    - host: app.example.com
+      http:
+        paths:
+          - path: "/"
+            backend:
+              service:
+                name: <your_service_name>
+                port:
+                  number: <your_service_port>
+            property:
+              ingress.beta.kubernetes.io/url-match-mode: STARTS_WITH
+            pathType: ImplementationSpecific
+  ingressClassName: cce
+---
+# Backend Service Definition
+apiVersion: v1
+kind: Service
+metadata:
+  name: <your_service_name>
+  namespace: default
+spec:
+  # CCE Turbo: Use ClusterIP (direct Pod ENI routing via Dedicated ELB)
+  # CCE Standard: MUST use NodePort! ClusterIP will fail Ingress member addition.
+  type: ClusterIP # Change to 'NodePort' if running on CCE Standard
+  selector:
+    app: <your_app_selector>
+  ports:
+    - protocol: TCP
+      port: <your_service_port>
+      targetPort: <your_service_port>
