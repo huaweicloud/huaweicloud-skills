@@ -1,0 +1,52 @@
+name: PartnerScoutSharedDimensions
+type: semantic_dimensions
+description: 9 个一致性维度（Kimball conformed dimensions），所有 fact 通过维度键关联；维度字典值来自 ReferenceCatalog 事实的只读查询。
+dimensions:
+  - name: Dim_Customer
+    key: customer_id
+    alternate_keys: [domain_id, account_name]
+    attributes: [customer_name, customer_real_name, association_type, new_customer_tag, associated_on]
+    source_operations: [BssClient.list_sub_customers, BssClient.list_sub_customer_new_tag]
+    description: 子客户维度；association_type 1=顾问销售 2=代售
+  - name: Dim_Partner
+    key: partner_id
+    alternate_keys: [domain_id]
+    attributes: [partner_name, account_level]
+    source_operations: []
+    description: 伙伴自身（一级经销商/解决方案提供商），由当前 AK/SK profile 决定
+  - name: Dim_IndirectPartner
+    key: indirect_partner_id
+    alternate_keys: [account_name]
+    attributes: [indirect_partner_name, associated_on]
+    source_operations: [BssClient.list_indirect_partners]
+    description: 云经销商（二级经销商）维度
+  - name: Dim_ServiceType
+    key: service_type_code
+    attributes: [service_type_name]
+    source_operations: [BssClient.list_service_types]
+    description: 云服务类型字典，如 hws.service.type.obs
+  - name: Dim_ResourceType
+    key: resource_type_code
+    attributes: [resource_type_name, service_type_code]
+    source_operations: [BssClient.list_resource_types]
+    description: 资源类型字典
+  - name: Dim_UsageType
+    key: usage_type_code
+    attributes: [usage_type_name, resource_type_code]
+    source_operations: [BssClient.list_usage_types]
+    description: 使用量类型字典
+  - name: Dim_MeasureUnit
+    key: measure_id
+    attributes: [measure_name, conversion_ratio, measure_type]
+    source_operations: [BssClient.list_measure_units, BssClient.list_conversions]
+    description: 计量单位与换算字典
+  - name: Dim_Region
+    key: region_code
+    attributes: [province_code, city_code, county_code, province_name, city_name, county_name]
+    source_operations: [BssClient.list_provinces, BssClient.list_cities, BssClient.list_counties]
+    description: 地域字典（省份/城市/区县），partner 查询固定 region cn-north-1
+  - name: Dim_Time
+    key: time_key
+    attributes: [bill_cycle, trade_time, effective_time, expire_time, create_time]
+    source_operations: []
+    description: 时间维度；账期 YYYY-MM，时间戳 UTC ISO8601

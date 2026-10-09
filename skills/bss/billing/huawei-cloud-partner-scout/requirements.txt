@@ -1,0 +1,2 @@
+huaweicloudsdkbss>=3.1.211
+huaweicloudsdkcore>=3.1.214

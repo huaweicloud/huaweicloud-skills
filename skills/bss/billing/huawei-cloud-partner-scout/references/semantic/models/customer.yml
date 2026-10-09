@@ -1,0 +1,31 @@
+name: PartnerScoutCustomerModel
+type: semantic_model
+business_process: customer
+description: 客户管理维度事实 — 子客户列表与客户新客标签。
+facts:
+  - name: SubCustomer
+    kind: fact
+    domain: partner_customer
+    source_operations: [BssClient.list_sub_customers]
+    grain: 子客户 × 时点
+    summary: 伙伴名下子客户列表；按关联类型/客户名/客户ID筛选
+    required_context: []
+    dimensions: [Dim_Customer, Dim_Partner, Dim_IndirectPartner, Dim_Time]
+    measures:
+      - name: customer_count
+        type: count
+        additivity: additive
+    evidence_boundary: 列表快照；非账户余额/消费金额证据
+  - name: SubCustomerNewTag
+    kind: fact
+    domain: partner_customer
+    source_operations: [BssClient.list_sub_customer_new_tag]
+    grain: 子客户 × 时点
+    summary: 客户新客标签批量查询
+    required_context: [customer_ids]
+    dimensions: [Dim_Customer, Dim_Time]
+    measures:
+      - name: new_tag
+        type: string
+        additivity: non_additive
+    evidence_boundary: 标签值；非消费/余额证据

@@ -1,0 +1,52 @@
+name: PartnerScoutOrderModel
+type: semantic_model
+business_process: order
+description: 订单维度事实 — 客户订单、订单详情（child）、退款详情（child）。
+facts:
+  - name: CustomerOrder
+    kind: fact
+    domain: partner_order
+    source_operations: [BssClient.list_customer_orders]
+    grain: 订单 × 时点
+    summary: 客户订单列表（状态/时间筛选）
+    required_context: []
+    dimensions: [Dim_Customer, Dim_ServiceType, Dim_Time]
+    measures:
+      - name: order_amount
+        type: decimal
+        additivity: additive
+      - name: order_count
+        type: count
+        additivity: additive
+    evidence_boundary: 订单头；明细见 OrderDetail
+  - name: OrderDetail
+    kind: child_fact
+    parent: CustomerOrder
+    domain: partner_order
+    source_operations: [BssClient.show_customer_order_details]
+    grain: 订单行项目
+    summary: 订单详情（订单项、价格、状态）
+    required_context: [order_id]
+    dimensions: [Dim_Customer, Dim_ServiceType, Dim_ResourceType, Dim_Time]
+    measures:
+      - name: amount
+        type: decimal
+        additivity: additive
+      - name: unit_price
+        type: decimal
+        additivity: non_additive
+    evidence_boundary: 订单行；不得跨订单汇总金额
+  - name: RefundOrderDetail
+    kind: child_fact
+    parent: CustomerOrder
+    domain: partner_order
+    source_operations: [BssClient.show_refund_order_details]
+    grain: 退款单行
+    summary: 退款详情（退款金额、状态）
+    required_context: []
+    dimensions: [Dim_Customer, Dim_Time]
+    measures:
+      - name: refund_amount
+        type: decimal
+        additivity: additive
+    evidence_boundary: 退款流水；非订单行

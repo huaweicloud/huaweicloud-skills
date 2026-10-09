@@ -1,0 +1,53 @@
+name: PartnerScoutBillModel
+type: semantic_model
+business_process: bill
+description: 客户消费账单维度事实 — 有消费客户、消费明细、月度消费汇总。
+facts:
+  - name: ConsumeSubCustomer
+    kind: fact
+    domain: partner_bill
+    source_operations: [BssClient.list_consume_sub_customers]
+    grain: 账期 × 子客户
+    summary: 有消费的子客户列表（可用于消费排行）
+    required_context: [bill_cycle]
+    dimensions: [Dim_Customer, Dim_Time]
+    measures:
+      - name: consume_amount
+        type: decimal
+        additivity: additive
+    evidence_boundary: 账期消费；非订单/资源证据
+  - name: SubCustomerBillDetail
+    kind: fact
+    domain: partner_bill
+    source_operations: [BssClient.list_sub_customer_bill_detail]
+    grain: 账期 × 子客户 × 资源 × 计费模式 明细行
+    summary: 子客户消费明细（18个月历史）
+    required_context: [bill_cycle]
+    dimensions: [Dim_Customer, Dim_ServiceType, Dim_ResourceType, Dim_Region, Dim_Time]
+    measures:
+      - name: consume_amount
+        type: decimal
+        additivity: additive
+      - name: official_amount
+        type: decimal
+        additivity: additive
+      - name: discount_amount
+        type: decimal
+        additivity: additive
+    evidence_boundary: 详单行；行合计与月度汇总可有精度差
+  - name: SubcustomerMonthlyBill
+    kind: fact
+    domain: partner_bill
+    source_operations: [BssClient.list_subcustomer_monthly_bills]
+    grain: 账期 × 子客户 × 云服务类型 × 计费模式
+    summary: 子客户月度消费汇总（包年包月/按需）
+    required_context: []
+    dimensions: [Dim_Customer, Dim_ServiceType, Dim_Time]
+    measures:
+      - name: consume_amount
+        type: decimal
+        additivity: additive
+      - name: customer_amount
+        type: decimal
+        additivity: additive
+    evidence_boundary: 月度汇总；非详单/订单

@@ -1,0 +1,86 @@
+name: PartnerScoutCouponModel
+type: semantic_model
+business_process: coupon
+description: 代金券/优惠券维度事实 — 券额度、已发放额度、操作记录、优惠券列表。
+facts:
+  - name: QuotaCoupon
+    kind: fact
+    domain: partner_coupon
+    source_operations: [BssClient.list_quota_coupons]
+    grain: 券额度 × 时点
+    summary: 伙伴自身代金券/现金券额度
+    required_context: []
+    dimensions: [Dim_Partner, Dim_IndirectPartner, Dim_Time]
+    measures:
+      - name: quota_amount
+        type: decimal
+        additivity: semi_additive
+      - name: used_amount
+        type: decimal
+        additivity: semi_additive
+    evidence_boundary: 额度快照；非发放记录
+  - name: IssuedCouponQuota
+    kind: fact
+    domain: partner_coupon
+    source_operations: [BssClient.list_issued_coupon_quotas]
+    grain: 已发放券额度 × 时点
+    summary: 已发放给经销商的代金券额度
+    required_context: []
+    dimensions: [Dim_Partner, Dim_IndirectPartner, Dim_Time]
+    measures:
+      - name: amount
+        type: decimal
+        additivity: semi_additive
+    evidence_boundary: 发放额度快照；非客户优惠券
+  - name: CouponQuotaRecord
+    kind: fact
+    domain: partner_coupon
+    source_operations: [BssClient.list_coupon_quotas_records]
+    grain: 额度操作记录行
+    summary: 代金券额度发放/回收操作记录
+    required_context: []
+    dimensions: [Dim_Partner, Dim_IndirectPartner, Dim_Time]
+    measures:
+      - name: amount
+        type: decimal
+        additivity: additive
+    evidence_boundary: 操作流水；非额度余额
+  - name: SubCustomerCoupon
+    kind: fact
+    domain: partner_coupon
+    source_operations: [BssClient.list_sub_customer_coupons]
+    grain: 优惠券 × 时点
+    summary: 伙伴自身优惠券列表（状态/有效期）
+    required_context: []
+    dimensions: [Dim_Partner, Dim_Time]
+    measures:
+      - name: face_value
+        type: decimal
+        additivity: semi_additive
+    evidence_boundary: 券状态；非核销金额
+  - name: IssuedPartnerCoupon
+    kind: fact
+    domain: partner_coupon
+    source_operations: [BssClient.list_issued_partner_coupons]
+    grain: 已发放优惠券 × 时点
+    summary: 已发放给客户的优惠券列表
+    required_context: []
+    dimensions: [Dim_Customer, Dim_Partner, Dim_Time]
+    measures:
+      - name: face_value
+        type: decimal
+        additivity: semi_additive
+    evidence_boundary: 发放记录；非核销金额
+  - name: PartnerCouponRecord
+    kind: fact
+    domain: partner_coupon
+    source_operations: [BssClient.list_partner_coupons_record]
+    grain: 优惠券操作记录行
+    summary: 优惠券发放/回收记录
+    required_context: []
+    dimensions: [Dim_Customer, Dim_Partner, Dim_IndirectPartner, Dim_Time]
+    measures:
+      - name: amount
+        type: decimal
+        additivity: additive
+    evidence_boundary: 操作流水；非券余额

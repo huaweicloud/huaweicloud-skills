@@ -1,0 +1,44 @@
+name: PartnerScoutResourceModel
+type: semantic_model
+business_process: resource
+description: 客户资源维度事实 — 包年包月资源、按需资源、资源包。
+facts:
+  - name: PayPerUseCustomerResource
+    kind: fact
+    domain: partner_resource
+    source_operations: [BssClient.list_pay_per_use_customer_resources]
+    grain: 包年包月资源实例 × 时点
+    summary: 客户包年包月资源列表（到期时间筛选）
+    required_context: []
+    dimensions: [Dim_Customer, Dim_ServiceType, Dim_Time]
+    measures:
+      - name: resource_count
+        type: count
+        additivity: additive
+    evidence_boundary: 资源存续状态；非消费金额
+  - name: CustomerOnDemandResource
+    kind: fact
+    domain: partner_resource
+    source_operations: [BssClient.list_customer_on_demand_resources]
+    grain: 按需资源实例 × 时点
+    summary: 客户按需资源列表
+    required_context: [customer_id]
+    dimensions: [Dim_Customer, Dim_ServiceType, Dim_Region, Dim_Time]
+    measures:
+      - name: resource_count
+        type: count
+        additivity: additive
+    evidence_boundary: 资源状态；非消费金额
+  - name: FreeResourceInfo
+    kind: fact
+    domain: partner_resource
+    source_operations: [BssClient.list_free_resource_infos]
+    grain: 资源包 × 时点
+    summary: 资源包列表（需权限）
+    required_context: []
+    dimensions: [Dim_Customer, Dim_ServiceType, Dim_Region, Dim_Time]
+    measures:
+      - name: remaining_amount
+        type: decimal
+        additivity: semi_additive
+    evidence_boundary: 资源包余量；非订单证据
