@@ -51,7 +51,16 @@ Success verification criteria for each workflow step.
 | SSH_OK returned | Each response contains `SSH_OK` |
 | Connection string displayed | Agent shows user the SSH command for each target |
 
-## Step 6: Security Cleanup
+## Step 6: Persistent Connection
+
+| Check | Method |
+|--------|--------|
+| SSH config appended | `~/.ssh/config` contains `Host <EIP>` entry with `ControlMaster auto`, `ControlPath`, and `ControlPersist` |
+| Keepalive configured | `~/.ssh/config` contains `ServerAliveInterval <server_alive_interval>` and `ServerAliveCountMax <server_alive_count_max>` |
+| Master connection started | `ssh -N -f <ssh_user>@<EIP> -i <key>` runs in background and creates control socket |
+| Multiplexing verified | `ssh <ssh_user>@<EIP> "echo SSH_MUX_OK"` succeeds without passing `-i <key>` |
+
+## Step 7: Security Cleanup
 
 | Check | Method |
 |--------|--------|
