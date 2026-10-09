@@ -103,7 +103,7 @@ def create_ecs(ecs_client, args, password):
         admin_pass=password,
         vpcid=args.vpc_id,
         nics=[PostPaidServerNic(subnet_id=args.subnet_id)],
-        root_volume=PostPaidServerRootVolume(volumetype="SSD", size=40),
+        root_volume=PostPaidServerRootVolume(volumetype=args.root_volume_type, size=args.root_volume_size),
         availability_zone=args.az,
     )
     if args.security_group_id:
@@ -637,6 +637,8 @@ def main():
     create_p.add_argument("--ecs-name", default="devkit-kunpeng")
     create_p.add_argument("--server-id", default=None, help="Existing server_id to skip ECS creation")
     create_p.add_argument("--security-group-id", default=None, help="Security group ID to attach to ECS")
+    create_p.add_argument("--root-volume-type", default="SSD", help="Root volume type (e.g., SSD, SAS, GPSSD)")
+    create_p.add_argument("--root-volume-size", type=int, default=40, help="Root volume size in GB (minimum 40)")
 
     install_p = subparsers.add_parser("install", help="Phase 2: SSH install DevKit")
     install_p.add_argument("--region", required=True)

@@ -35,15 +35,12 @@ SUPPORTED_OS=false
 if [[ -f /etc/os-release ]]; then
     . /etc/os-release
     case "${ID}" in
-        openeuler) [[ "${VERSION_ID}" == "24.03"* ]] && SUPPORTED_OS=true ;;
         centos) [[ "${VERSION_ID}" == "7"* ]] && SUPPORTED_OS=true ;;
         ubuntu) [[ "${VERSION_ID}" == "18.04"* ]] && SUPPORTED_OS=true ;;
-        kylin) [[ "${VERSION_ID}" == "V10"* || "${VERSION_ID}" == "10"* ]] && SUPPORTED_OS=true ;;
-        uos) [[ "${VERSION_ID}" == "20"* ]] && SUPPORTED_OS=true ;;
     esac
 fi
 if [[ "${SUPPORTED_OS}" != "true" ]]; then
-    echo "Warning: Current OS is not compatibility-verified. Supported: openEuler 24.03 LTS / CentOS 7.6 / Ubuntu 18.04 / Kylin V10 / UOS 20"
+    echo "Warning: Current OS is not compatibility-verified. Supported: CentOS 7.6 / Ubuntu 18.04"
 fi
 
 AVAILABLE_SPACE=$(df / | awk 'NR==2{print $4}')
