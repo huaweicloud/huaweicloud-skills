@@ -9,101 +9,95 @@ tags:
   - database
   - agent
 metadata:
-  version: 1.2.1
+  version: 1.2.2
   license: MIT
   category: devtools
 ---
 
 # Huawei Cloud Agent Integration (OpenViking Long-Term Memory)
 
-## Overview
-
-Integrate and unbind OpenViking long-term memory with coding agents. Agents run in bwrap sandboxes under `/root/job-envs/sandboxes/` and use their **native mechanism** — MCP (`mcp__openviking__*` tools) or HTTP memory provider — so integration survives agent upgrades.
-
-Integration writes are **template-level persistent**: config is injected into the agent's `start.sh` / config templates under `/root/template/<agent>/`, so sandbox `stop + start` preserves the integration.
+Integrate / unbind OpenViking long-term memory for coding agents running in bwrap sandboxes (`/root/job-envs/sandboxes/`). Every agent uses its **native mechanism** (MCP, HTTP memory provider, TS extension hooks, settings.json), so integration survives agent upgrades. Writes are **template-level persistent**: config is injected into `/root/template/<agent>/start.sh`, so sandbox `stop + start` preserves the integration.
 
 ## Supported Agents
 
-| Agent | Mechanism | Persistence |
-|-------|-----------|-------------|
-| CodeArts CLI | `@openviking/opencode-plugin` → `.codeartsdoer/node_modules/` | Template + live |
-| OpenCode | `@openviking/opencode-plugin` (npm mirror → GitHub fallback) | Template start.sh |
-| OpenClaw | `clawhub:@openviking/openclaw-plugin` + `contextEngine` slot | Template start.sh |
-| | ↳ **Optimization**: disables `session-memory` hook + denies `memory_search` tool (OpenViking handles recall; local memory degrades quality) |
-| Hermes | Built-in `memory.provider: openviking` (HTTP REST, no MCP) | Template + live |
-| WorkSwarm | Dual-channel: native provider + MCP (13 tools) + code-mode patch | Template + live + runtime patch |
-| KimiCode | MCP via `mcp.json` | Template + live |
-| DeepSeek Harness | `@openviking/dsh-memory-plugin` bundle (on-demand from GitHub) | Template start.sh |
-| Prime Agent | `@openviking/pi-coding-agent-extension` (on-demand from GitHub) | Template start.sh |
+| Agent | Mechanism |
+|-------|-----------|
+| CodeArts CLI | `@openviking/opencode-plugin` → `.codeartsdoer/` |
+| OpenCode | `@openviking/opencode-plugin` (npm mirror → GitHub fallback) |
+| OpenClaw | `clawhub:@openviking/openclaw-plugin` + `contextEngine` slot (disables `session-memory` hook, denies `memory_search`) |
+| Hermes | Built-in `memory.provider: openviking` (HTTP REST, no MCP) |
+| WorkSwarm | Dual-channel: native provider + MCP (15 tools) + code-mode patch |
+| KimiCode | hooks + MCP (session lifecycle) — `config.toml [[hooks]]` → `ov-kimi-hook.sh` + MCP via `mcp.json` |
+| DeepSeek Harness | `@openviking/dsh-memory-plugin` bundle (on-demand from GitHub) |
+| Prime Agent | `@openviking/pi-coding-agent-extension` (on-demand from GitHub) |
 
-Per-agent config details: [references/agent-configs.md](references/agent-configs.md).
+Per-agent config paths and details: [references/agent-configs.md](references/agent-configs.md).
 
 ## Prerequisites
 
-- OpenViking server running at `http://127.0.0.1:1933` (`curl -s http://127.0.0.1:1933/health`).
-- Agent sandboxes exist under `/root/job-envs/sandboxes/` (managed by job-env-manager).
-- Host tools: `curl`, `python3`, `bash`. OpenCode/OpenClaw additionally need `npm`.
-- No Huawei Cloud IAM policies required — this skill operates on local bwrap sandboxes only.
+- OpenViking server healthy: `curl -s http://127.0.0.1:1933/health` → `healthy`.
+- Target sandbox exists under `/root/job-envs/sandboxes/`.
+- Host tools: `curl`, `python3`, `bash`; `npm` for OpenCode/OpenClaw; `pip install --upgrade "mcp>=2.0"` for `verify_mcp.sh`.
+- No Huawei Cloud IAM required — operates on local bwrap sandboxes only.
 
-## 参数确认 (Required Inputs)
+## 参数 (Parameters)
 
-| Parameter | Required | Description | Example |
-|-----------|----------|-------------|---------|
-| `--agent <name>` | Yes (unless `--all`) | Target agent (see table above) | `--agent opencode` |
-| `--all` | Yes (unless `--agent`) | Operate on all 8 agents | `--all` |
-| `--endpoint <url>` | No | OpenViking server URL (default `http://127.0.0.1:1933`) | `--endpoint http://192.168.1.100:1933` |
-| `--api-key <key>` | No | OpenViking API key (dev mode needs none). Never echo in chat | `--api-key sk-xxx` |
-| `--dry-run` | No | Show changes without applying | `--dry-run` |
-| `--yes` / `-y` | No | Skip authorization prompt (automation only) | `--yes` |
-| `--json` | No | `status.sh`: machine-readable output | `--json` |
+| Flag | Required | Meaning |
+|------|----------|---------|
+| `--agent <name>` | Yes (unless `--all`) | Target agent |
+| `--all` | Yes (unless `--agent`) | Operate on all 8 agents |
+| `--endpoint <url>` | No | OpenViking URL (default `http://127.0.0.1:1933`) |
+| `--api-key <key>` | No | For auth-mode servers. Never echo in chat. Must be consumed by an agent config or `verify_mcp.sh`; an unconsumed `--api-key` is reported as a warning. |
+| `--dry-run` | No | Show changes without applying |
+| `--yes` / `-y` | No | Skip confirmation (automation only) |
+| `--json` | No | `status.sh`: machine-readable output |
 
 ## 核心命令
 
 | 功能 | 命令 |
 |------|------|
-| 查看集成状态 | `scripts/status.sh`（`--json` 机器可读，`--agent <name>` 指定） |
-| 验证 MCP 端点 | `scripts/verify_mcp.sh` |
-| 集成单个 Agent | `scripts/integrate.sh --agent <name> [--endpoint URL] [--api-key KEY] [--dry-run] [--yes]` |
-| 集成全部 Agent | `scripts/integrate.sh --all` |
-| 解绑单个 Agent | `scripts/unbind.sh --agent <name> [--dry-run] [--yes]` |
-| 解绑全部 Agent | `scripts/unbind.sh --all` |
+| 查看状态 | `scripts/status.sh`（`--json` / `--agent <name>`） |
+| 验证 MCP | `scripts/verify_mcp.sh` |
+| 集成 | `scripts/integrate.sh --agent <name> [--endpoint URL] [--dry-run] [--yes]`（或 `--all`） |
+| 解绑 | `scripts/unbind.sh --agent <name> [--dry-run] [--yes]`（或 `--all`） |
 
 ## Workflow
 
 ```bash
 SKILL_DIR=/root/.agents/skills/huawei-cloud-openviking-agent-integration
+$SKILL_DIR/scripts/status.sh          # per-agent: template+live / template only / live only / none
+$SKILL_DIR/scripts/verify_mcp.sh      # full MCP handshake (initialize → tools/list → health)
+$SKILL_DIR/scripts/integrate.sh --agent <name> [--yes]
+$SKILL_DIR/scripts/unbind.sh  --agent <name> [--yes]
 ```
 
-1. **Check status**: `$SKILL_DIR/scripts/status.sh` — per-agent state: `template + live` (active), `template only` (activates on restart), `live only` (lost on restart).
-2. **Verify MCP**: `$SKILL_DIR/scripts/verify_mcp.sh` — full MCP handshake (initialize → tools/list → health).
-3. **Integrate**: `$SKILL_DIR/scripts/integrate.sh --agent <name>` (or `--all`).
-4. **Unbind**: `$SKILL_DIR/scripts/unbind.sh --agent <name>` (or `--all`).
-5. **Rebuild OpenClaw**: `stop + start` via job-env-manager API re-runs `start.sh`. Scripts: [references/related-commands.md](references/related-commands.md).
+1. **Status first** — never claim integrated before `status.sh` confirms (do not fabricate state).
+2. **Verify MCP** — `verify_mcp.sh` before integration.
+3. **Integrate / Unbind** — each requires explicit `confirm` (or `--yes`); `--dry-run` previews safely.
+4. States: `template + live` = active; `template only` = activates on restart; `live only` = **lost on restart** (warn user).
 
 ## Authorization & Safety
 
-- **Authorization is mandatory** — `integrate.sh` and `unbind.sh` require explicit `confirm` (or `--yes` for automation). `--dry-run` previews without authorization.
-- **Do not fabricate integration state** — always run `status.sh` to verify before reporting.
-- **Never edit agent configs directly** — all changes go through the skill scripts.
-- **No API keys in logs** — `--api-key` values must never appear in output.
-- Every config modification creates a `.bak.<timestamp>` backup for rollback.
+- `integrate.sh` / `unbind.sh` require explicit confirmation; never edit agent configs directly — go through the skill scripts.
+- Every config modification creates `.bak.<timestamp>` (keep 5) for rollback.
+- `--api-key` values must never appear in output.
 
-Full rules: [references/guardrails.md](references/guardrails.md). Troubleshooting: [references/troubleshooting.md](references/troubleshooting.md).
+## 能力边界（Cannot Do）
 
-## Plugin Sources
+本技能只做"OpenViking 记忆 ↔ 编码 agent 的集成/解绑/状态/验证"。以下操作**明确不做**，遇到请改走对应路径或明确报错：
 
-The skill ships **no plugin code** — plugins are installed on demand at integrate time via domestic-first mirrors (Huawei Cloud npm → npmmirror → npmjs; GitHub raw mirrors for non-npm plugins). All downloads are byte-verified against GitHub blob SHA. Installed copies under `/root/runtime/` are reused if upstream is unreachable (3-tier cache: sandbox `node_modules` → runtime cache → online).
+- 不直接读写 agent 配置文件、sandbox 内业务数据或用户代码——一律通过 `scripts/integrate.sh` / `unbind.sh` 等入口执行。
+- 不删除、不修改用户自装的第三方包/目录/数据。卸载只清理 OpenViking 自身产物（`@openviking/*` 插件、注入的配置段、OV 专属目录）；`node_modules` 整目录删除等越界行为是缺陷，不执行。
+- 服务器不可达/健康检查失败时**不报告成功**：`integrate.sh`、`unbind.sh`、`verify_mcp.sh` 均先做健康门禁，失败即失败（exit 非 0），绝不假成功。
+- `--dry-run` 只预览改动，不写任何持久文件；预览后续真实执行仍需确认。
+- `--api-key` 必须被某个 agent 配置或验证流程实际消费；若传入却无处消费，脚本会告警（而非静默忽略）。
+- 不做 embedding 模型切换、向量库重建、服务器自身配置变更——那是 `huawei-cloud-openviking-embedding-switch` 等技能的范围。
+- 不支持在集成/解绑过程中创建或修改 OpenViking 账号、用户、权限体系。
+- 不承诺"查看 → 已集成"：一律以 `status.sh` 实测结果为准，禁止凭模板猜测 live 状态。
 
 ## References
 
-| Document | Description |
-|----------|-------------|
-| [agent-configs.md](references/agent-configs.md) | Per-agent config details, MCP tools, server info |
-| [guardrails.md](references/guardrails.md) | Safety, authorization, access permissions |
-| [troubleshooting.md](references/troubleshooting.md) | Failure scenarios and fixes |
-| [verification.md](references/verification.md) | Verification methods and acceptance criteria |
-| [related-commands.md](references/related-commands.md) | Restart/rebuild scripts, env vars |
-
-## Scripts (OO Architecture)
-
-Base class (`lib/base.sh`) + registry (`lib/registry.sh`) + per-agent subclasses (`agents/*.sh`). Entry points (`integrate/unbind/status.sh`) are thin CLI parsers. All scripts are idempotent with `.bak.<timestamp>` backups. Adding a new agent = one file in `agents/`.
+| Document | When to read |
+|----------|--------------|
+| [agent-configs.md](references/agent-configs.md) | Per-agent config paths/formats, MCP tools, server info |
+| [notes.md](references/notes.md) | Guardrails, env vars, sandbox restart, plugin sources, troubleshooting, adding a new agent |
