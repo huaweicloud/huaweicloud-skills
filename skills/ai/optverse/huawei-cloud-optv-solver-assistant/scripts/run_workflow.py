@@ -94,7 +94,7 @@ if sys.platform == "win32":
 # Configuration
 # ---------------------------------------------------------------------------
 
-DEFAULT_REGION = "cn-north-7"
+DEFAULT_REGION = "cn-east-3"
 REGION = DEFAULT_REGION
 PROJECT_ID = ""
 ENDPOINT = f"optverse.{REGION}.myhuaweicloud.com"

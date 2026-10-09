@@ -48,7 +48,7 @@ hcloud OptVerse CreateModelService \
   --request_mode=REAL_TIME \
   --service_config.instance_count=1 \
   --description="<description>" \
-  --cli-region=cn-north-7
+  --cli-region=cn-east-3
 ```
 
 **Parameters:**
@@ -63,7 +63,7 @@ hcloud OptVerse CreateModelService \
 
 **Verify deployment:**
 ```bash
-hcloud OptVerse ShowModelServiceList --cli-region=cn-north-7
+hcloud OptVerse ShowModelServiceList --cli-region=cn-east-3
 ```
 
 ### Step 11: ShowModelServiceDetail — Get Request URL
@@ -71,7 +71,7 @@ hcloud OptVerse ShowModelServiceList --cli-region=cn-north-7
 ```bash
 hcloud OptVerse ShowModelServiceDetail \
   --service_id=<service_id> \
-  --cli-region=cn-north-7
+  --cli-region=cn-east-3
 ```
 
 **Output:** Full service details JSON including `service_id`, `service_name`, `status`, `api_url`, `asset_id`, `chat_id`, `use_type`. Present the `api_url` to the user for API calls.
@@ -87,7 +87,7 @@ hcloud OptVerse ShowModelServiceDetail \
 hcloud OptVerse CreateModelServiceTask \
   --service_id=<service_id> \
   --inputs.model_request="<json_content_as_string>" \
-  --cli-region=cn-north-7
+  --cli-region=cn-east-3
 ```
 
 **Output:** `{"id": "task_id", "type": "optverse", "status": "PENDING", "outputs": {}}`
@@ -97,10 +97,12 @@ hcloud OptVerse CreateModelServiceTask \
 hcloud OptVerse ShowModelServiceTask \
   --service_id=<service_id> \
   --task_id=<task_id> \
-  --cli-region=cn-north-7
+  --cli-region=cn-east-3
 ```
 
 **Output:** Full task details including `status` (PENDING/RUNNING/SUCCESS/FAILED) and `outputs` (solution results with OBS download URLs).
+
+**Download ALL output artifacts (not just one):** The `outputs` map can contain MULTIPLE artifacts (e.g. `result.sol` AND `progress.info`). Iterate every key in `outputs` and download each fetchable OBS URL — do not assume a single result file. `run_workflow.py --test` already does this via `download_obs_results()` (recursively collects all http(s) URLs in the task response and downloads each into `artifacts/`).
 
 **Automatic download:** `run_workflow.py --test` polls `ShowModelServiceTask` until the terminal status (PENDING/RUNNING → SUCCEEDED/FAILED, up to 120s) and then automatically downloads every OBS result URL found in `outputs` into `artifacts/` (links are directly fetchable via a plain GET, no extra auth). Saved files are listed; if the task fails or no URLs are present, the files are not downloaded.
 
@@ -108,5 +110,5 @@ hcloud OptVerse ShowModelServiceTask \
 ```bash
 hcloud OptVerse ListModelServiceTasks \
   --service_id=<service_id> \
-  --cli-region=cn-north-7
+  --cli-region=cn-east-3
 ```

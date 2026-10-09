@@ -263,7 +263,7 @@ def _hcloud_fetch_iam_token(region, project_name, iam_user, iam_domain, iam_pass
 
         cmd = [
             "hcloud", "IAM", "KeystoneCreateUserTokenByPassword",
-            "--cli-region=cn-north-7",
+            "--cli-region=cn-east-3",
             f"--cli-jsonInput={tmp_input}",
             "--cli-output=tsv",
             "--cli-query=response_header.X-Subject-Token",
@@ -619,7 +619,7 @@ def main():
         "--agent_type", default="optverse", help="Agent type (default: optverse)"
     )
     parser.add_argument("--project_id", help="Project ID (auto-detected)")
-    parser.add_argument("--cli-region", default="cn-north-7", help="Region")
+    parser.add_argument("--cli-region", default="cn-east-3", help="Region")
     parser.add_argument("--endpoint", help="OptVerse endpoint")
     parser.add_argument(
         "--hcloud-path",
