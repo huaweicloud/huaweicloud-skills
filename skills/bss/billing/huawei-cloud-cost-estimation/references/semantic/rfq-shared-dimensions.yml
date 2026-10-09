@@ -1,0 +1,71 @@
+name: RFQSharedDimensions
+type: semantic_ontology
+description: |
+  RFQ 共享一致性维度。被 period 与 on-demand 模型共同引用；
+  具体 code、spec、measure 与命令纪律由 ../commands.md 维护。
+source_evidence:
+  partner_api_doc: https://support.huaweicloud.com/api-bpconsole/bcloud_01002.html
+
+dimensions:
+  - name: Dim_Project
+    kind: scope_dimension
+    business_key: project_id
+    source_operations: [IAM/KeystoneListProjects, IAM/KeystoneListAuthProjects, IAM/KeystoneListAuthDomains]
+    attributes: [id, name, domain_id, parent_id, enabled]
+
+  - name: Dim_CloudServiceType
+    kind: conformed_dimension
+    business_key: service_type_code
+    source_operations: [BSS/ListServiceTypes]
+    attributes: [service_type_code, service_type_name, abbreviation]
+
+  - name: Dim_ResourceType
+    kind: conformed_dimension
+    business_key: resource_type_code
+    parent_dimension: Dim_CloudServiceType
+    source_operations: [BSS/ListServiceResources, BSS/ListResourceTypes]
+    attributes: [resource_type_code, resource_type_name, resource_type_desc, service_type_code]
+    selection_rules:
+      - "优先 ListServiceResources(service_type_code)；多候选让用户选。"
+      - "错 type 可能 Specs 有行但询价失败（CBC.6006 / billing item）。"
+
+  - name: Dim_Region
+    kind: conformed_dimension
+    business_key: region_code
+    source_documents: [https://developer.huaweicloud.com/endpoint]
+    attributes: [region_code, region_name, site]
+    notes: 无统一 region 字典 API；以官方 endpoint 页为准；BSS 端点固定在 cn-north-1，产品部署区在询价 line 的 region 字段
+
+  - name: Dim_AvailabilityZone
+    kind: snowflake_dimension
+    business_key: az_code
+    parent_dimension: Dim_Region
+    source_operations: [ECS/NovaListAvailabilityZones]
+    attributes: [az_code, az_state]
+    notes: 可选；账号在该 region 无 ECS 范围时可能 403（APIGW.0802），此时跳过不阻塞询价
+
+  - name: Dim_MeasureUnit
+    kind: conformed_dimension
+    business_key: measure_id
+    source_operations: [BSS/ListMeasureUnits]
+    attributes: [measure_id, measure_name, abbreviation, measure_type]
+
+  - name: Dim_ResourceSpec
+    kind: conformed_dimension
+    business_key: resource_spec
+    source_operations: [BSS/ListResourceSpecs]
+    source_documents: [https://support.huaweicloud.com/api-oce/qct_00008.html]
+    query_keys: [cloud_service_type, resource_type, region_code, charge_mode]
+    attributes: [resource_spec, resource_spec_name, cloud_service_type, resource_type, charge_mode, region_code]
+    pairing_rules:
+      - name: charge_mode_alignment
+        rule: "period → 1；on-demand → 3。"
+      - name: region_alignment
+        rule: "region_code = 询价 line 的 region。"
+    selection_rules:
+      - "只取当次 ListResourceSpecs；OS 已含在返回值，不拼接。"
+      - "多候选/跨规格族让用户选；有行仍可能不可询价（CBC.99006006/CBC.6006）。"
+
+evidence_boundary:
+  - resource_spec 唯一来源为当次 ListResourceSpecs；检索纪律在 commands.md。
+  - 本维度仅服务询价输入解析；历史账单/余额/对账超出边界。

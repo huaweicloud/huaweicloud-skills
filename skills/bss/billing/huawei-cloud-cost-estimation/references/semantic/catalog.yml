@@ -1,0 +1,42 @@
+name: HuaweiCloudCostEstimationSemanticCatalog
+type: semantic_catalog
+version: 1.0.0
+domain: huawei_cloud_cost_estimation
+modeling_method: kimball_star_constellation
+description: 薄路由；按 pricing_mode 映射到独立 model 文件。共享维度集中在 rfq-shared-dimensions.yml。触发词/对话流/拒答归 SKILL.md。
+
+entry_points:
+  rfq_period_quote:
+    pricing_mode: period
+    primary_facts: [RFQ_Header, RFQ_Line]
+    ontology_files:
+      - rfq-shared-dimensions.yml
+      - rfq-period-model.yml
+    required_context:
+      quadruple: [cloud_service_type, resource_type, region, resource_spec]
+      period: [period_type, period_num, subscription_num]
+
+  rfq_ondemand_quote:
+    pricing_mode: on_demand
+    primary_facts: [RFQ_OnDemand_Header, RFQ_OnDemand_Line]
+    ontology_files:
+      - rfq-shared-dimensions.yml
+      - rfq-ondemand-model.yml
+    required_context:
+      quadruple: [cloud_service_type, resource_type, region, resource_spec]
+      usage: [usage_factor, usage_value, usage_measure_id, subscription_num]
+
+  dimension_lookup:
+    ontology_files:
+      - rfq-shared-dimensions.yml
+
+primary_operations:
+  - BSS/ListRateOnPeriodDetail
+  - BSS/ListOnDemandResourceRatings
+  - BSS/ListResourceSpecs
+primary_doc_urls:
+  - https://support.huaweicloud.com/api-bpconsole/bcloud_01002.html
+  - https://support.huaweicloud.com/api-bpconsole/bcloud_01001.html
+  - https://support.huaweicloud.com/api-oce/qct_00008.html
+hcloud_version: "7.2.2"
+command_contracts_file: ../commands.md
