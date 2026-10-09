@@ -71,7 +71,7 @@ systemctl status gunicorn_plugin --no-pager
 ## 4. Port Listening Verification
 
 ```bash
-ss -tlnp | grep -E "8086|8002|5001|7996"
+ss -tlnp | grep -E "8086|8002|50051|7996"
 ```
 
 **Expected Output**:

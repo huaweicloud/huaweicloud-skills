@@ -165,12 +165,16 @@ RESULT=$(python scripts/create_ecs_and_setup_devkit.py create \
   --image-id $IMAGE_ID \
   --az $AZ \
   --ecs-name devkit-kunpeng \
-  --security-group-id $SECURITY_GROUP_ID 2>/dev/null)
+  --security-group-id $SECURITY_GROUP_ID \
+  --root-volume-type ${ROOT_VOLUME_TYPE:-SSD} \
+  --root-volume-size ${ROOT_VOLUME_SIZE:-40} 2>/dev/null)
 
 SERVER_ID=$(echo "$RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['server_id'])")
 KMS_KEY_ID=$(echo "$RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['kms_key_id'])")
 KMS_CIPHER_TEXT_FILE=$(echo "$RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['kms_cipher_text_file'])")
 ```
+
+> **Optional root volume parameters:** `--root-volume-type` (default: `SSD`; options: SSD/SAS/GPSSD) and `--root-volume-size` (default: `40` GB; minimum 40). Override via the `ROOT_VOLUME_TYPE` / `ROOT_VOLUME_SIZE` environment variables.
 
 > **The password is never exported.** Only `kms_key_id` and `kms_cipher_text_file` are available for the SSH install phase. The cipher text is stored in a local file with mode 600 (owner read/write only), never passed via command line arguments. The password exists only in:
 > - Python process memory (during script execution, then garbage collected)
@@ -250,19 +254,19 @@ Please confirm when done.
 ```bash
 hcloud VPC CreateSecurityGroupRule \
   --cli-region=$REGION \
-  --security_group_id=$SG_ID \
-  --direction=ingress \
-  --protocol=tcp \
-  --port_range_min=22 \
-  --port_range_max=22 \
-  --remote_ip_prefix=0.0.0.0/0
+  --security_group_rule.security_group_id=$SG_ID \
+  --security_group_rule.direction=ingress \
+  --security_group_rule.protocol=tcp \
+  --security_group_rule.multiport=22 \
+  --security_group_rule.remote_ip_prefix=${REMOTE_IP_PREFIX:-0.0.0.0/0}
 
 hcloud VPC CreateSecurityGroupRule \
   --cli-region=$REGION \
-  --security_group_id=$SG_ID \
-  --direction=ingress \
-  --protocol=tcp \
-  --port_range_min=8086 \
-  --port_range_max=8086 \
-  --remote_ip_prefix=0.0.0.0/0
+  --security_group_rule.security_group_id=$SG_ID \
+  --security_group_rule.direction=ingress \
+  --security_group_rule.protocol=tcp \
+  --security_group_rule.multiport=8086 \
+  --security_group_rule.remote_ip_prefix=${REMOTE_IP_PREFIX:-0.0.0.0/0}
 ```
+
+> **⚠️ Restricted/SCP-controlled accounts:** `0.0.0.0/0` (allow all sources) may be rejected by Service Control Policies (SCP) or security compliance rules. If the command fails with a permission/policy error, set a restricted source CIDR instead — e.g. `export REMOTE_IP_PREFIX=<your_public_ip>/32`. Determine your outbound IP via `curl -s ifconfig.me` or `curl -s ip.sb`.

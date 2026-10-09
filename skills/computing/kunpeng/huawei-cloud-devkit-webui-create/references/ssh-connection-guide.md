@@ -38,7 +38,6 @@ Agent Machine                          Target ECS
 │ exec_command ────┼──────────────────►│  bash install.sh │
 │                  │                   │                  │
 │ del password ────│                   │                  │
-│ KMS delete key ──│                   │                  │
 └─────────────────┘                   └──────────────────┘
 ```
 
@@ -49,7 +48,8 @@ The `create_ecs_and_setup_devkit.py install` command:
 4. Executes `install_devkit_webui.sh` on remote ECS
 5. Executes `verify_devkit.sh` on remote ECS
 6. Deletes password variable (`del password`)
-7. Schedules KMS key deletion (7 days)
+
+> **⚠️ KMS key is NOT cleaned up by `install`.** The key remains active for retry. Run the `cleanup-kms` subcommand separately after Task 3 verification passes.
 
 ---
 
@@ -104,8 +104,9 @@ Optional parameters:
 2. paramiko connect(password=var) → SSH session established
 3. SFTP upload + exec_command → DevKit installed
 4. del password → variable garbage collected
-5. KMS key scheduled for deletion → password ceases to exist after 7 days
 ```
+
+KMS key remains active (preserved for retry). Cleanup is a separate `cleanup-kms` step after verification passes.
 
 ---
 

@@ -12,7 +12,7 @@ uname -m
 
 # Check operating system (must be in the compatible list)
 cat /etc/os-release
-# Compatible list: openEuler 24.03 LTS / CentOS 7.6 / Ubuntu 18.04 / Kylin V10 / UOS 20
+# Compatible list: CentOS 7.6 / Ubuntu 18.04
 
 # Check disk space (requires >= 2GB available)
 df -h /
@@ -113,7 +113,11 @@ expect {
         send "y\r"
         exp_continue
     }
-    "Enter theBinstallation path" {
+    "Do you want to set image sources" {
+        send "y\r"
+        exp_continue
+    }
+    "Enter the installation path" {
         send "\r"
         exp_continue
     }
