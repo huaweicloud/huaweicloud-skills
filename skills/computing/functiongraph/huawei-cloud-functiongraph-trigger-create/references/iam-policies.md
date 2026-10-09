@@ -92,7 +92,7 @@ hcloud iam v3 create-custom-policy \
                 "Statement": [
                     {
                         "Effect": "Allow",
-                        "Action": ["functiongraph:trigger:create"],
+                        "Action": ["functiongraph:function:get", "functiongraph:trigger:create"],
                         "Resource": ["urn:fss:*:*:function:*"]
                     }
                 ]
@@ -225,6 +225,7 @@ hcloud functiongraph v2 list-functions --limit 1
 import os
 from huaweicloudsdkcore.auth.credentials import BasicCredentials
 from huaweicloudsdkfunctiongraph.v2 import FunctionGraphClient
+from huaweicloudsdkfunctiongraph.v2.region import FunctionGraphRegion
 
 def test_permission():
     credentials = BasicCredentials(

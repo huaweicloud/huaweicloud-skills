@@ -251,8 +251,6 @@ def main():
     parser.add_argument('--status', choices=['ACTIVE', 'DISABLED'], default='ACTIVE',
                         help='Trigger status: ACTIVE (default) or DISABLED')
     parser.add_argument('--user-event', default='', help='Additional user event data')
-    parser.add_argument('--skip-check', action='store_true',
-                        help='Skip function existence check')
 
     args = parser.parse_args()
 
@@ -278,14 +276,11 @@ def main():
         project_id=config['project_id']
     )
 
-    if args.skip_check:
-        exists = True
-    else:
-        exists, error = creator.check_function_exists(params['function_urn'])
-        if not exists:
-            print(json.dumps({'status': 'failed', 'error_code': 'FunctionNotFound', 'message': error},
-                             indent=2, ensure_ascii=False))
-            sys.exit(1)
+    exists, error = creator.check_function_exists(params['function_urn'])
+    if not exists:
+        print(json.dumps({'status': 'failed', 'error_code': 'FunctionNotFound', 'message': error},
+                         indent=2, ensure_ascii=False))
+        sys.exit(1)
 
     result = creator.create_trigger(params)
     print(json.dumps(result, indent=2, ensure_ascii=False))
