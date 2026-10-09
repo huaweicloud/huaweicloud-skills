@@ -128,6 +128,15 @@ def fmt_tokens(val_k):
     return f"{val_k:,.2f} K tokens"
 
 
+def _parse_date(value, label):
+    try:
+        return datetime.strptime(value, "%Y-%m-%d")
+    except ValueError:
+        print(f"Error: Invalid {label} date format: '{value}'", file=sys.stderr)
+        print("       Date format should be YYYY-MM-DD, e.g. 2026-08-10", file=sys.stderr)
+        sys.exit(1)
+
+
 def main():
     parser = argparse.ArgumentParser(description="MaaS usage statistics via ShowStatistics API")
     parser.add_argument("--region", default="cn-southwest-2", help="Region (default: cn-southwest-2)")
@@ -188,8 +197,8 @@ def main():
     endpoint = f"modelarts.{region}.myhuaweicloud.com"
 
     local_tz = datetime.now().astimezone().tzinfo
-    from_dt = datetime.strptime(args.from_date, "%Y-%m-%d").replace(tzinfo=local_tz)
-    to_dt = datetime.strptime(args.to_date, "%Y-%m-%d").replace(tzinfo=local_tz)
+    from_dt = _parse_date(args.from_date, "--from").replace(tzinfo=local_tz)
+    to_dt = _parse_date(args.to_date, "--to").replace(tzinfo=local_tz)
 
     project_id = get_project_id(ak, sk, region, security_token)
 
