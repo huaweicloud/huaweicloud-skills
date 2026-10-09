@@ -1,0 +1,255 @@
+# Network Audit Rules Directory - Version 1.0
+# Updated: 2026-09-02
+
+- id: NET-SEC-001
+  resource_type: [elb_listener, eip, nat, ecs_nic]
+  condition: public port 22 open
+  severity: critical
+  description: 公网暴露 SSH(22) 端口，可直接被暴力破解
+  remediation: 关闭 22 端口公网放通；改用堡垒机/VPN/Bastion 访问
+- id: NET-SEC-002
+  resource_type: [rds_instance, dcs_instance]
+  condition: public database port 3306/6379 open
+  severity: critical
+  description: 数据库端口对公网开放，数据可被直接攻击或拖库
+  remediation: 数据库实例关闭公网访问；仅允许应用子网安全组访问
+- id: NET-SEC-003
+  resource_type: [security_group]
+  condition: ingress 0.0.0.0/0 allows management ports 22/3389/8848
+  severity: high
+  description: 管理端口对全网开放，缺乏最小权限
+  remediation: 收敛源地址到堡垒机子网/IP 段
+- id: NET-SEC-004
+  resource_type: [security_group]
+  condition: ingress 0.0.0.0/0 allows all ports 1-65535
+  severity: critical
+  description: 安全组对全网全端口放通，相当于无防护
+  remediation: 移除全通规则，按需配置最小权限规则
+- id: NET-SEC-005
+  resource_type: [eip]
+  condition: EIP attached without restrictive security group
+  severity: medium
+  description: EIP 绑定的实例缺少合理安全组限制
+  remediation: 为 EIP 绑定的实例附加最小权限安全组
+- id: NET-SEC-006
+  resource_type: [security_group]
+  condition: ingress HTTP/HTTPS 80/443 from 0.0.0.0/0
+  severity: info
+  description: HTTP/HTTPS 对公网开放（业务需要时可忽略）
+  remediation: 如非必要，收敛源地址到 CDN 或 WAF 回源地址
+- id: NET-SEC-007
+  resource_type: [ecs_nic]
+  condition: ECS has public IP instead of NAT/ELB
+  severity: high
+  description: ECS 直连公网，缺少 NAT/ELB 前置防护层
+  remediation: 移除 ECS 公网 IP，通过 NAT 网关或 ELB 暴露服务
+- id: NET-SEC-008
+  resource_type: [security_group]
+  condition: more than 50 security group rules
+  severity: low
+  description: 安全组规则数量过大，可能包含冗余或冲突规则
+  remediation: 清理冗余规则，按功能拆分为多个安全组
+- id: NET-SEC-009
+  resource_type: [security_group]
+  condition: wide port range 1024-65535
+  severity: medium
+  description: 安全组规则端口范围过宽，违反最小权限原则
+  remediation: 按实际需要收敛端口范围
+- id: NET-SEC-010
+  resource_type: [security_group]
+  condition: egress allow-all without restriction
+  severity: info
+  description: 安全组出方向全通，缺少最小权限控制
+  remediation: 按需收敛出方向规则
+- id: NET-SEC-011
+  resource_type: [ecs_nic]
+  condition: subnet missing network ACL
+  severity: low
+  description: 子网未配置网络 ACL，缺少子网级防护
+  remediation: 配置网络 ACL 作为安全组补充层
+- id: NET-ROU-001
+  resource_type: [route_table]
+  condition: 0.0.0.0/0 route not pointing to NAT
+  severity: medium
+  description: 默认路由未指向 NAT 网关，子网出口可能不受管控
+  remediation: 将 0.0.0.0/0 下一跳改为 NAT 网关或修改指向
+- id: NET-ROU-002
+  resource_type: [route_table]
+  condition: missing VPC peering route
+  severity: info
+  description: 跨 VPC 对等连接路由缺失
+  remediation: 添加对等连接路由到路由表
+- id: NET-NAT-001
+  resource_type: [nat_snat]
+  condition: SNAT rule without EIP
+  severity: high
+  description: SNAT 规则缺少有效 EIP，子网可能无法访问公网
+  remediation: 为 SNAT 规则绑定可用 EIP 或扩容已有 EIP
+- id: NET-NAT-002
+  resource_type: [nat_dnat]
+  condition: DNAT exposes management port to public
+  severity: critical
+  description: DNAT 规则将公网端口映射到实例管理端口
+  remediation: 移除 DNAT 管理端口映射；改用堡垒机或 VPN
+- id: NET-NAT-003
+  resource_type: [nat]
+  condition: NAT no EIP or insufficient bandwidth
+  severity: medium
+  description: NAT 网关缺少 EIP 或带宽不足
+  remediation: 为 NAT 网关绑定合适带宽的 EIP
+- id: NET-ELB-001
+  resource_type: [elb_listener]
+  condition: HTTP without HTTPS
+  severity: medium
+  description: ELB 使用 HTTP 监听，数据传输未加密
+  remediation: 启用 HTTPS 监听器并配置 SSL 证书
+- id: NET-ELB-002
+  resource_type: [elb_listener]
+  condition: health check disabled
+  severity: medium
+  description: 后端服务器缺少健康检查，异常实例仍接收流量
+  remediation: 为监听器启用健康检查
+- id: NET-ELB-003
+  resource_type: [elb_backend]
+  condition: session persistence disabled
+  severity: low
+  description: 有状态应用缺少会话保持
+  remediation: 按业务需求配置会话保持策略
+- id: NET-ELB-004
+  resource_type: [elb_listener]
+  condition: ACL/whitelist not configured
+  severity: low
+  description: ELB 缺少访问控制
+  remediation: 按业务需要启用 IP 白名单访问控制
+- id: NET-ELB-005
+  resource_type: [elb_listener]
+  condition: idle timeout under 60s
+  severity: low
+  description: ELB 空闲超时过短
+  remediation: 按业务需要调整空闲超时
+- id: NET-VPC-001
+  resource_type: [vpc]
+  condition: flow logs not enabled
+  severity: low
+  description: 未启用流日志，事后无法追溯攻击路径
+  remediation: 为关键子网启用 VPC 流日志并投递到 LTS
+- id: NET-VPC-002
+  resource_type: [vpc]
+  condition: single subnet across all AZs
+  severity: info
+  description: 子网规划不合理，缺乏可用区级隔离
+  remediation: 按可用区拆分子网，实现故障域隔离
+- id: NET-VPC-003
+  resource_type: [vpc]
+  condition: CIDR overlaps with peered VPC
+  severity: high
+  description: VPC CIDR 冲突会导致路由问题和无法建立对等连接
+  remediation: 重新规划 VPC CIDR 避免重叠
+- id: NET-ECS-001
+  resource_type: [ecs_nic]
+  condition: multi-nic missing policy routing
+  severity: medium
+  description: 多网卡 ECS 缺少策略路由，流量可能误出错误网卡
+  remediation: 配置策略路由确保流量从正确网卡出入
+- id: NET-ECS-002
+  resource_type: [ecs_nic]
+  condition: ECS without security group
+  severity: high
+  description: ECS 未关联任何安全组，无网络访问控制
+  remediation: 为 ECS 绑定最小权限安全组
+- id: NET-RDS-001
+  resource_type: [rds_instance]
+  condition: public access enabled
+  severity: high
+  description: RDS 实例开启了公网访问，数据库暴露在公网
+  remediation: 关闭 RDS 公网访问，仅允许应用子网访问
+- id: NET-RDS-002
+  resource_type: [rds_instance]
+  condition: SG allows overly broad source
+  severity: high
+  description: RDS 安全组允许过宽范围的源地址
+  remediation: 收紧 RDS 安全组源地址范围到仅应用子网
+- id: NET-RDS-003
+  resource_type: [rds_instance]
+  condition: auto backup disabled
+  severity: medium
+  description: RDS 缺少自动备份，数据在灾难时不可恢复
+  remediation: 启用 RDS 自动备份策略
+- id: NET-RDS-004
+  resource_type: [rds_instance]
+  condition: SSL not enforced
+  severity: low
+  description: RDS 未强制 SSL 加密连接，数据传输未加密
+  remediation: 启用 SSL 连接
+- id: NET-DCS-001
+  resource_type: [dcs_instance]
+  condition: public access enabled
+  severity: critical
+  description: DCS Redis 实例公网暴露，可能导致数据泄漏
+  remediation: 关闭 DCS 公网访问，使用 VPC 内连接
+- id: NET-DCS-002
+  resource_type: [dcs_instance]
+  condition: backup not configured
+  severity: medium
+  description: DCS 缺少备份策略，数据无法在灾难时恢复
+  remediation: 配置自动备份策略
+- id: NET-DCS-003
+  resource_type: [dcs_instance]
+  condition: using default security group
+  severity: low
+  description: DCS 使用默认安全组，可能权限过宽
+  remediation: 为 DCS 创建专用安全组
+- id: NET-CCE-001
+  resource_type: [cce_cluster]
+  condition: public control plane access
+  severity: high
+  description: CCE 集群控制面暴露在公网
+  remediation: 关闭 CCE 集群控制面公网访问
+- id: NET-CCE-002
+  resource_type: [cce_cluster]
+  condition: version below latest stable
+  severity: medium
+  description: CCE 集群运行在旧版本
+  remediation: 升级 CCE 集群至最新稳定版本
+- id: NET-CCE-003
+  resource_type: [cce_node]
+  condition: node has public IP
+  severity: high
+  description: CCE 工作节点直接绑定公网 IP
+  remediation: 移除 CCE 节点公网 IP
+- id: NET-CCE-004
+  resource_type: [cce_service, cce_ingress]
+  condition: LoadBalancer without whitelist
+  severity: medium
+  description: LoadBalancer 类型 Service 未限制访问源
+  remediation: 为 LoadBalancer 配置白名单
+- id: NET-CCE-005
+  resource_type: [cce_service]
+  condition: NodePort for external exposure
+  severity: medium
+  description: NodePort 方式暴露服务绕过集群入口管控
+  remediation: 改用 LoadBalancer 或 Ingress
+- id: NET-SUB-001
+  resource_type: [subnet]
+  condition: DHCP disabled
+  severity: low
+  description: 子网禁用 DHCP，实例无法自动获取 IP
+  remediation: 启用子网 DHCP 功能
+- id: NET-SUB-002
+  resource_type: [subnet]
+  condition: no NAT for internet-facing subnet
+  severity: info
+  description: 子网需要公网访问但缺少 NAT 网关
+  remediation: 为子网关联 NAT 网关
+- id: NET-EIP-001
+  resource_type: [eip]
+  condition: EIP unbound idle
+  severity: info
+  description: EIP 闲置未被使用，持续产生费用
+  remediation: 释放未使用的 EIP
+- id: NET-EIP-002
+  resource_type: [eip]
+  condition: bandwidth >500Mbps no high-load validation
+  severity: info
+  description: EIP 带宽配置可能过大，造成成本浪费
+  remediation: 按实际业务量调整带宽大小
