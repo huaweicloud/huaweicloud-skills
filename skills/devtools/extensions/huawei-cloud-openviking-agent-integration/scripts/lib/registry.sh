@@ -35,6 +35,13 @@ registry_discover() {
     if declare -f "$reg_fn" &>/dev/null; then
       agent::clear_meta
       "$reg_fn"
+      # P2-4: Contract validation — warn if required methods are missing
+      local _method
+      for _method in integrate unbind status; do
+        if ! declare -f "agent_${name}_${_method}" &>/dev/null; then
+          log_warn "Agent '$name' missing required method: ${_method}() — will use default"
+        fi
+      done
     fi
   done
 }
@@ -47,7 +54,6 @@ registry_add() {
   REGISTRY_AGENTS+=("$name")
 }
 registry_list() { printf '%s\n' "${REGISTRY_AGENTS[@]}"; }
-registry_count() { echo "${#REGISTRY_AGENTS[@]}"; }
 registry_validate() {
   local target="$1"
   target=$(registry_normalize "$target")
@@ -70,15 +76,4 @@ registry_dispatch() {
   if declare -f "$reg_fn" &>/dev/null; then "$reg_fn"; fi
   local method_fn="agent_${name}_${method}"
   if declare -f "$method_fn" &>/dev/null; then "$method_fn"; else "agent::default_${method}"; fi
-}
-registry_display_name() {
-  local name="$1"
-  local reg_fn="agent_${name}_register"
-  if declare -f "$reg_fn" &>/dev/null; then
-    agent::clear_meta
-    "$reg_fn"
-    agent::get_meta display_name
-  else
-    echo "$name"
-  fi
 }

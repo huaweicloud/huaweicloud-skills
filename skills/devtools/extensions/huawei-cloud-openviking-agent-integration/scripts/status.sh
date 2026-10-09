@@ -3,36 +3,40 @@
 # Usage: ./status.sh [--json] [--agent <name>]
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/lib/ui.sh"
-source "$SCRIPT_DIR/lib/json.sh"
-source "$SCRIPT_DIR/lib/plugins.sh"
-source "$SCRIPT_DIR/lib/base.sh"
-source "$SCRIPT_DIR/lib/registry.sh"
-OV_ENDPOINT="${OV_ENDPOINT:-http://127.0.0.1:1933}"
+source "$SCRIPT_DIR/lib/entrypoint.sh"
+# Register agents early so usage()/error paths can list supported agents (ISSUE-006)
+registry_init
+registry_discover "$SCRIPT_DIR/agents"
 JSON_OUTPUT=false
 AGENT=""
+usage() {
+  echo "Usage: $0 [--json] [--agent <name>]"
+  echo "Without --agent: shows status for all agents."
+  echo "Supported agents: $(ov_supported_agents 2>/dev/null || echo "(none)")"
+}
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --json) JSON_OUTPUT=true; shift ;;
-    --agent) AGENT="$2"; shift 2 ;;
-    --help|-h)
-      echo "Usage: $0 [--json] [--agent <name>]"
-      echo "Without --agent: shows status for all agents."
-      exit 0 ;;
-    *) echo "Unknown option: $1"; exit 1 ;;
+    --agent)
+      if [[ $# -lt 2 ]]; then log_error "--agent requires a value"; usage; exit 1; fi
+      AGENT="$2"; shift 2 ;;
+    --help|-h) usage; exit 0 ;;
+    # ISSUE-006: reject unknown options (e.g. --all) with the usage line
+    *) log_error "Unknown option: $1"; usage; exit 1 ;;
   esac
 done
-registry_init
-registry_discover "$SCRIPT_DIR/agents"
 agents=()
 if [[ -n "$AGENT" ]]; then
+  # ISSUE-006: reject unknown agent names with the supported list up front
+  # (previously fell through to a generic "dispatch failed" on first use)
+  ov_require_supported_agent "$AGENT" || exit 1
   agents=("$AGENT")
 else
   while IFS= read -r a; do agents+=("$a"); done < <(registry_list)
 fi
 check_ov() {
   local resp status version auth_mode
-  resp=$(curl -sf --connect-timeout 5 --max-time 10 "${OV_ENDPOINT}/health" 2>/dev/null) || {
+  resp=$("$OV_CURL_BIN" -sf --connect-timeout 5 --max-time 10 "${OV_ENDPOINT}/health" 2>/dev/null) || {
     if [[ "$JSON_OUTPUT" == "true" ]]; then
       echo '{"status":"unreachable","endpoint":"'"$OV_ENDPOINT"'"}'
     else
@@ -40,9 +44,9 @@ check_ov() {
     fi
     return 1
   }
-  status=$(echo "$resp" | "$OV_PY" -c "import sys,json; d=json.load(sys.stdin); print(d.get('status','unknown'))" 2>/dev/null)
-  version=$(echo "$resp" | "$OV_PY" -c "import sys,json; d=json.load(sys.stdin); print(d.get('version','unknown'))" 2>/dev/null)
-  auth_mode=$(echo "$resp" | "$OV_PY" -c "import sys,json; d=json.load(sys.stdin); print(d.get('auth_mode','unknown'))" 2>/dev/null)
+  status=$(echo "$resp" | _ov_health parse-field - status 2>/dev/null)
+  version=$(echo "$resp" | _ov_health parse-field - version 2>/dev/null)
+  auth_mode=$(echo "$resp" | _ov_health parse-field - auth_mode 2>/dev/null)
   if [[ "$JSON_OUTPUT" == "true" ]]; then
     echo "{\"status\":\"$status\",\"version\":\"$version\",\"auth_mode\":\"$auth_mode\",\"endpoint\":\"$OV_ENDPOINT\"}"
   else
@@ -57,21 +61,19 @@ get_agent_json() {
   printf '{"agent":"%s","status":"%s","detail":"%s"}' "$s_name" "$s_status" "$s_detail"
 }
 if [[ "$JSON_OUTPUT" == "true" ]]; then
-  # JSON mode
-  ov_json=$(check_ov 2>/dev/null || echo '{"status":"unreachable"}')
+  # JSON mode — exit code mirrors human mode (non-zero on unreachable / agent errors)
+  overall_rc=0
+  ov_json=$(check_ov 2>/dev/null) || overall_rc=1
   # Build agents array
   agent_jsons=()
   for a in "${agents[@]}"; do
-    agent_jsons+=("$(get_agent_json "$a")")
+    local_aj=$(get_agent_json "$a")
+    agent_jsons+=("$local_aj")
+    [[ "$local_aj" == *'"status":"error"'* ]] && overall_rc=1
   done
   # Emit JSON
-  "$OV_PY" -c "
-import json, sys
-ov = json.loads('''$ov_json''')
-agent_strs = sys.argv[1:]
-agents = [json.loads(s) for s in agent_strs]
-print(json.dumps({'openviking': ov, 'agents': agents}, indent=2))
-" "${agent_jsons[@]}"
+  _ov_json merge-agents "$ov_json" "${agent_jsons[@]}"
+  exit $overall_rc
 else
   # Human-readable mode
   echo "━━━ OpenViking Integration Status ━━━"

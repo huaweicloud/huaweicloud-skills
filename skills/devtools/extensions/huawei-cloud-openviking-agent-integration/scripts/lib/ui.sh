@@ -22,9 +22,8 @@ ov_detect_lang() {
   echo "zh"
 }
 # i18n-aware logging: ov_log_info "中文" "English" (picks by detected language)
+# (ov_log_ok / ov_log_warn had no callers and were removed)
 ov_log_info() { local zh="$1" en="${2:-$1}"; if [[ "$(ov_detect_lang)" == "zh" ]]; then log_info "$zh"; else log_info "$en"; fi; }
-ov_log_ok()   { local zh="$1" en="${2:-$1}"; if [[ "$(ov_detect_lang)" == "zh" ]]; then log_ok "$zh"; else log_ok "$en"; fi; }
-ov_log_warn() { local zh="$1" en="${2:-$1}"; if [[ "$(ov_detect_lang)" == "zh" ]]; then log_warn "$zh"; else log_warn "$en"; fi; }
 # Globals used: AUTO_YES, DRY_RUN
 require_confirmation() {
   local action="$1" agent="$2" details="$3"
