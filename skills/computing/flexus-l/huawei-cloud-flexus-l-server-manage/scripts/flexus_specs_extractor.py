@@ -253,6 +253,25 @@ class FlexusSpecsExtractor:
         """Validate spec data"""
         return spec_info['vcpu'] > 0 and spec_info['memory'] > 0 and spec_info['disk'] > 0
     
+    def _identify_image_columns(self, header: List[str]) -> Dict[str, int]:
+        """Build column mapping from image table header"""
+        col_map = {}
+        for i, h in enumerate(header):
+            h_lower = h.lower()
+            if '区域' in h or 'region' in h_lower or '可用区' in h:
+                col_map['region'] = i
+            elif '镜像' in h or 'image' in h_lower or '镜像名称' in h:
+                col_map['image'] = i
+            elif '规格' in h or 'spec' in h_lower or '规格编码' in h:
+                col_map['spec'] = i
+            elif '计费' in h or 'billing' in h_lower or '计费模式' in h:
+                col_map['billing'] = i
+        return col_map
+
+    def _clean_text(self, text: str) -> str:
+        """Clean HTML entity text"""
+        return re.sub(r'&nbsp;', ' ', text).strip()
+
     def get_system_images(self) -> Dict:
         """Get system images"""
         if not self.html_content and not self.fetch_page():
@@ -265,75 +284,136 @@ class FlexusSpecsExtractor:
         
         for table in image_tables:
             data = table['data']
+            header = table['header']
+            col_map = self._identify_image_columns(header) if len(header) >= 3 else {}
+            
+            # Detect flat vs legacy format
+            is_flat = bool(col_map and 'image' in col_map and 'spec' in col_map)
             
             for row in data:
                 try:
-                    if len(row) < 7:
+                    # Dynamic column check: use header col count if available, otherwise fallback to 4
+                    min_cols = len(header) if len(header) >= 3 else 4
+                    if len(row) < min_cols:
+                        continue
+                    image_info = self._parse_image_row(row, header)
+                    if not image_info:
                         continue
                     
-                    image_name = row[0].strip()
-                    
-                    is_valid = False
-                    for known in KNOWN_IMAGE_NAMES:
-                        if known.lower() in image_name.lower() or image_name.lower() in known.lower():
-                            is_valid = True
-                            break
-                    
-                    if not is_valid:
-                        for i, cell in enumerate(row):
-                            cell_clean = cell.strip()
-                            for known in KNOWN_IMAGE_NAMES:
-                                if known.lower() == cell_clean.lower():
-                                    image_name = known
-                                    is_valid = True
-                                    row = row[i:] + row[:i]
-                                    break
-                            if is_valid:
+                    if is_flat:
+                        # Flat table: each row is (region, image, spec, ...)
+                        image_name = image_info.pop('_image_name', '')
+                        region_key = image_info.pop('_region_key', 'beijing')
+                        specs = image_info.get('specs', [])
+                        if not image_name:
+                            continue
+                        if image_name not in system_images:
+                            system_images[image_name] = {}
+                        if region_key not in system_images[image_name]:
+                            system_images[image_name][region_key] = {'version': '', 'specs': []}
+                        existing_specs = system_images[image_name][region_key]['specs']
+                        for s in specs:
+                            if s not in existing_specs:
+                                existing_specs.append(s)
+                    else:
+                        # Legacy format: image_name -> {region: {version, specs}}
+                        image_name = row[0].strip()
+                        is_valid = False
+                        for known in KNOWN_IMAGE_NAMES:
+                            if known.lower() in image_name.lower() or image_name.lower() in known.lower():
+                                is_valid = True
                                 break
-                    
-                    if not is_valid:
-                        continue
-                    
-                    image_info = self._parse_image_row(row)
-                    if image_info:
-                        system_images[image_name] = image_info
-                        
+                        if not is_valid:
+                            continue
+                        if image_name not in system_images:
+                            system_images[image_name] = {}
+                        # Merge region data
+                        for region_key in ['beijing', 'hongkong', 'guizhou', 'shanghai', 'guangzhou', 'singapore']:
+                            region_data = image_info.get(region_key)
+                            if region_data:
+                                if region_key not in system_images[image_name]:
+                                    system_images[image_name][region_key] = {'version': '', 'specs': []}
+                                if region_data.get('version'):
+                                    system_images[image_name][region_key]['version'] = region_data['version']
+                                for s in region_data.get('specs', []):
+                                    if s not in system_images[image_name][region_key]['specs']:
+                                        system_images[image_name][region_key]['specs'].append(s)
+                
                 except Exception:
                     continue
         
         return system_images
-    
-    def _parse_image_row(self, row: List[str]) -> Optional[Dict]:
-        """Parse image row - supports all 6 regions"""
+
+    def _parse_image_row(self, row: List[str], header: Optional[List[str]] = None) -> Optional[Dict]:
+        """Parse image row - supports dynamic column layout
+        
+        Handles both the legacy 7-col per-region table and the new flat
+        (region, image, spec, billing) table format.
+        """
         def parse_specs(text: str) -> List[str]:
             specs = []
-            for line in text.split('\n'):
+            for line in text.split(chr(10)):
                 line = line.strip()
                 if not line or line == '-':
                     continue
-                line = re.sub(r'（[^）]+）', '', line)
+                line = re.sub(r'\uff08[^\uff09]+\uff09', '', line)
                 line = re.sub(r'\([^)]+\)', '', line)
                 for spec in line.split():
                     if spec and '.' in spec and (spec.endswith('.linux') or spec.endswith('.win')):
                         specs.append(spec)
             return specs
-        
+
         def parse_version(text: str) -> str:
-            versions = [v.strip() for v in text.split('\n') if v.strip() and v.strip() != '-']
-            return '\n'.join(versions) if versions else ''
-        
+            versions = [v.strip() for v in text.split(chr(10)) if v.strip() and v.strip() != '-']
+            return chr(10).join(versions) if versions else ''
+
         try:
-            if len(row) < 7:
+            # Detect format from header if available
+            col_map = {}
+            if header and len(header) >= 3:
+                col_map = self._identify_image_columns(header)
+
+            # Flat table format: each row -> (region, image, spec, billing)
+            if col_map and 'image' in col_map and 'spec' in col_map:
+                image_name_text = row[col_map['image']].strip() if col_map['image'] < len(row) else ''
+                spec_code_text = row[col_map['spec']].strip() if col_map['spec'] < len(row) else ''
+                region_val = row[col_map['region']].strip() if col_map.get('region', -1) < len(row) else ''
+
+                # Map region value to internal region key
+                region_key = 'beijing'
+                if 'hong' in region_val.lower() or 'ap-southeast' in region_val:
+                    region_key = 'hongkong'
+                elif 'gui' in region_val.lower() or '西南' in region_val:
+                    region_key = 'guizhou'
+                elif 'shang' in region_val.lower() or '华东' in region_val:
+                    region_key = 'shanghai'
+                elif 'guang' in region_val.lower() or '华南' in region_val:
+                    region_key = 'guangzhou'
+                elif 'sing' in region_val.lower():
+                    region_key = 'singapore'
+
+                if not image_name_text or not spec_code_text:
+                    return None
+
+                spec_codes = parse_specs(spec_code_text)
+                return {
+                    '_image_name': image_name_text,
+                    '_region_key': region_key,
+                    'specs': spec_codes,
+                }
+
+            # Legacy format check: at least 4 columns
+            if len(row) < 4:
                 return None
-            
-            # Parse base regions from table columns
+
+            # Parse base regions from table columns (legacy 7-col format)
             beijing_version = parse_version(row[1] if len(row) > 1 else '')
             beijing_specs = parse_specs(row[2] if len(row) > 2 else '')
             hongkong_version = parse_version(row[3] if len(row) > 3 else '')
             hongkong_specs = parse_specs(row[4] if len(row) > 4 else '')
             guizhou_version = parse_version(row[5] if len(row) > 5 else '')
             guizhou_specs = parse_specs(row[6] if len(row) > 6 else '')
-            
+
             return {
                 # Primary regions from table
                 'beijing': {
@@ -364,6 +444,7 @@ class FlexusSpecsExtractor:
             }
         except IndexError:
             return None
+
     
     def get_all(self) -> Dict:
         """Get all data"""
