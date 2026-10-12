@@ -1,6 +1,6 @@
 # DevBridge CLI Command Reference
 
-This document provides a complete reference for all DevBridge CLI commands, including command structure, flags, and usage examples. Use this as a lookup when constructing DevBridge commands.
+This document provides a complete reference for all DevBridge CLI commands (v0.2.x), including command structure, flags, and usage examples. Use this as a lookup when constructing DevBridge commands.
 
 ## Command Structure
 
@@ -13,10 +13,9 @@ devbridge [command] [subcommand] [flags]
 | Flag | Description | Default |
 |------|-------------|---------|
 | `-h, --help` | Show help | - |
-| `-j, --json` | Output in JSON format | false |
-| `-v, --verbose` | Verbose output | false |
-| `--region` | Huawei Cloud region | From config |
-| `--debug` | Debug mode | false |
+| `-v, --verbose` | Enable debug logging | false |
+
+> **Removed**: `-j/--json` global flag, `--region`, `--debug`, `-j` on `list`/`port list`, AK/SK flags (`--access-key`, `--secret-key`, `--security-token`), `--huaweicloud`, `loginType`.
 
 ## Commands
 
@@ -24,24 +23,25 @@ devbridge [command] [subcommand] [flags]
 
 #### `devbridge auth login`
 
-Log in to Huawei Cloud.
+Log in to DevBridge.
 
 ```bash
 # Interactive login (browser)
 devbridge auth login
 
-# AK/SK login
-devbridge auth login --access-key <AK> --secret-key <SK>
+# API Key login
+devbridge auth login --api-key <key>
 
-# Temporary credentials (STS)
-devbridge auth login --access-key <AK> --secret-key <SK> --security-token <TOKEN>
+# API Key via environment variable
+export HW_API_KEY="<your-api-key>"
+devbridge auth login
 ```
 
 | Flag | Description | Required |
 |------|-------------|----------|
-| `--access-key` | Access Key ID | No |
-| `--secret-key` | Secret Access Key | No |
-| `--security-token` | Security token (STS) | No |
+| `--api-key` | API Key | No (alternative to interactive) |
+
+> **v0.2.x change**: AK/SK login (`--access-key`, `--secret-key`, `--security-token`) has been removed. Use API Key or interactive login. API Keys are managed at `https://devstation.connect.huaweicloud.com/space/devbridge/apikey`.
 
 #### `devbridge auth status`
 
@@ -72,13 +72,12 @@ devbridge create <name> [flags]
 | Flag | Description | Default | Required |
 |------|-------------|---------|----------|
 | `-d, --description` | Tunnel description (Chinese chars, digits, letters only, max 64) | - | No |
-| `-e, --expiration` | Expiration in hours | 24 | No |
-| `--auto-delete` | Auto-delete on expiration | false | No |
+| `-e, --expiration` | Expiration in hours | 72 | No |
 
 **Example:**
 
 ```bash
-devbridge create my-tunnel -d "Development tunnel" -e 48
+devbridge create my-tunnel -d "开发隧道" -e 48
 ```
 
 **✅ Correct usage:**
@@ -100,29 +99,25 @@ devbridge create my-tunnel -d "frontend dev env" -e 8
 ```text
 Tunnel ID:            <tunnelId>
 Name:                 my-tunnel
-Description:          Development tunnel
-Tunnel Expiration:    24 hours
+Description:          前端开发环境
+Tunnel Expiration:    72 hours
 ```
 
 ---
 
 ### `list` — List Tunnels
 
-List all tunnels for the current account.
-
-```bash
-devbridge list [flags]
-```
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `-j, --json` | JSON output | false |
-
-**Example:**
+List all active tunnels for the current workspace. v0.2.x has **no `--json` flag** — output is a text table.
 
 ```bash
 devbridge list
-devbridge list -j
+```
+
+**Output:**
+
+```text
+Tunnel ID  Name             Description  Tunnel Expiration  Port Count
+dwskt2pg   dev-tunnel-5941  开发隧道     3 days             1
 ```
 
 ---
@@ -135,11 +130,7 @@ Display detailed information about a specific tunnel.
 devbridge show <tunnelId>
 ```
 
-**Example:**
-
-```bash
-devbridge show abc123
-```
+Includes tunnel ID, name, description, expiration, Host/Connect connection counts, and upload/download traffic statistics.
 
 ---
 
@@ -160,7 +151,7 @@ devbridge update <tunnelId> [flags]
 **Example:**
 
 ```bash
-devbridge update abc123 -n new-name -d "Updated description"
+devbridge update abc123 -n new-name -d "Updated description" -e 48
 ```
 
 ---
@@ -173,10 +164,12 @@ Delete a tunnel and all its ports.
 devbridge delete <tunnelId>
 ```
 
-**Example:**
+### `delete-all` — Delete All Tunnels
+
+Delete all tunnels in the current workspace.
 
 ```bash
-devbridge delete abc123
+devbridge delete-all
 ```
 
 ---
@@ -185,7 +178,7 @@ devbridge delete abc123
 
 #### `devbridge port create`
 
-Add a port to an existing tunnel.
+Add a port to an existing tunnel. **Anonymous access is denied by default**.
 
 ```bash
 devbridge port create <tunnelId> [flags]
@@ -193,20 +186,27 @@ devbridge port create <tunnelId> [flags]
 
 | Flag | Description | Default | Required |
 |------|-------------|---------|----------|
-| `-p, --port` | Port number | - | Yes |
-| `--protocol` | Protocol: `http`, `https`, `tcp` | http | No |
-| `--anonymous` | Allow anonymous access | false | No |
+| `-p, --port-number` | Port number | - | Yes |
+| `--protocol` | Protocol: `http`, `https`, `auto` | auto | No |
+| `-a, --allow-anonymous` | Allow anonymous access | false | No |
+| `--deny-anonymous` | Deny anonymous access | default | No |
 
 **Example:**
 
 ```bash
+# Deny anonymous access (default)
 devbridge port create abc123 -p 8080 --protocol http
-devbridge port create abc123 -p 3000 --protocol https --anonymous
+
+# Allow anonymous access
+devbridge port create abc123 -p 8080 --protocol http -a
+
+# Default auto protocol
+devbridge port create abc123 -p 3000
 ```
 
 #### `devbridge port list`
 
-List all ports for a tunnel.
+List all ports for a tunnel (no JSON flag in v0.2.x).
 
 ```bash
 devbridge port list <tunnelId>
@@ -222,7 +222,7 @@ devbridge port show <tunnelId> -p <portNumber>
 
 #### `devbridge port update`
 
-Update a port's configuration.
+Update a port's anonymous access policy. **Cannot change protocol — delete and recreate.**
 
 ```bash
 devbridge port update <tunnelId> -p <portNumber> [flags]
@@ -230,8 +230,8 @@ devbridge port update <tunnelId> -p <portNumber> [flags]
 
 | Flag | Description |
 |------|-------------|
-| `--protocol` | New protocol |
-| `--anonymous` | Enable/disable anonymous access |
+| `-a, --allow-anonymous` | Allow anonymous access |
+| `--deny-anonymous` | Deny anonymous access |
 
 #### `devbridge port delete`
 
@@ -245,7 +245,7 @@ devbridge port delete <tunnelId> -p <portNumber>
 
 ### `host` — Host Local Service
 
-Start hosting a local service through a tunnel.
+Start hosting local service through a tunnel. Runs in the foreground; supports auto-reconnect.
 
 ```bash
 devbridge host <tunnelId> [flags]
@@ -253,21 +253,30 @@ devbridge host <tunnelId> [flags]
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--port` | Specific port to host | All ports |
-| `--log-level` | Log level: `debug`, `info`, `warn`, `error` | info |
+| `-p, --ports` | Local port(s) to host (`-1` = all configured ports) | All ports |
+| `-d, --description` | Description when creating a temp tunnel | - |
+| `-e, --expiration` | Expiration when creating a temp tunnel (hours) | 72 |
+| `-k, --api-key` | Use API Key auth (skip token issuance) | - |
+| `-t, --token` | Use JWT token auth (skip API and port lookup) | - |
 
 **Example:**
 
 ```bash
+# Host all ports of an existing tunnel
 devbridge host abc123
-devbridge host abc123 --port 8080 --log-level debug
+
+# Create a temporary tunnel and host port 8080 immediately (expires in 8h)
+devbridge host -p 8080 -d "隧道描述" -e 8
+
+# Host with API Key auth
+devbridge host abc123 --api-key <key>
 ```
 
 **Output:**
 
 ```text
 Hosting port: 8080
-Tunnel URL: https://<tunnelId>-8080.cn-north-4-bridge.myhuaweicloud.com
+Tunnel URL: https://<tunnelId>.<clusterId>.myhuaweicloud.com
 Ready to accept connections
 Auto reconnect: enabled
 ```
@@ -276,7 +285,7 @@ Auto reconnect: enabled
 
 ### `connect` — Connect to Tunnel
 
-Connect to a tunnel from a remote device, establishing local port mapping.
+Connect to a tunnel from a remote device, establishing local port mapping. Runs in the foreground.
 
 ```bash
 devbridge connect <tunnelId> [flags]
@@ -284,21 +293,28 @@ devbridge connect <tunnelId> [flags]
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--port` | Specific port to connect | All ports |
-| `--local-port` | Local port to map to | Same as tunnel port |
+| `-k, --api-key` | Use API Key auth (skip token issuance) | - |
+| `-t, --token` | Use JWT token auth | - |
 
 **Example:**
 
 ```bash
 devbridge connect abc123
-devbridge connect abc123 --port 8080 --local-port 9090
+devbridge connect abc123 --api-key <key>
+```
+
+**Output:**
+
+```text
+Connecting to tunnel abc123...
+Forwarding localhost:8080 -> tunnel port: 8080
 ```
 
 ---
 
 ### `token` — Issue Tunnel Token
 
-Issue an access token for a tunnel (for programmatic access).
+Issue an access token for a tunnel.
 
 ```bash
 devbridge token <tunnelId> [flags]
@@ -306,13 +322,72 @@ devbridge token <tunnelId> [flags]
 
 | Flag | Description | Default | Required |
 |------|-------------|---------|----------|
-| `-s, --scope` | Token scope: `host`, `connect`, `admin` | - | Yes |
-| `-e, --expiration` | Token expiration in hours | 24 | No |
+| `-s, --scope` | Token scope: `host`, `connect` | - | Yes |
 
 **Example:**
 
 ```bash
-devbridge token abc123 -s host -e 24
+devbridge token abc123 -s host
+devbridge token abc123 -s connect
+```
+
+---
+
+### `limits` — Quota and Balance
+
+Show account quota and current usage.
+
+```bash
+devbridge limits
+```
+
+Output includes reset time, traffic quota/usage, active tunnel count, limits for tunnels/ports/Host, tunnel bandwidth, single-port HTTP request rate, single-port connection count.
+
+---
+
+### `echo` — Diagnostic Echo Service
+
+Start an HTTP echo service to verify tunnel links.
+
+```bash
+devbridge echo [flags]
+```
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `-p, --port` | Listen port | Random |
+| `-i, --interface` | Listen interface | 127.0.0.1 |
+
+---
+
+### `ping` — Connectivity Test
+
+Send HTTP ping to a URI.
+
+```bash
+devbridge ping <uri> [flags]
+```
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `-i, --interval` | Interval between messages (ms) | 1000 |
+
+**Example:**
+
+```bash
+devbridge ping https://<tunnelId>.<clusterId>.myhuaweicloud.com
+# HTTP 200 OK -- 4 ms
+```
+
+---
+
+### `set` / `unset` — Default Tunnel
+
+Save or clear the default tunnel for this machine.
+
+```bash
+devbridge set <tunnelId>
+devbridge unset
 ```
 
 ---
@@ -341,10 +416,12 @@ devbridge completion powershell  # PowerShell
 | Code | Meaning |
 |------|---------|
 | 0 | Success |
-| 1 | General error |
-| 2 | Invalid arguments |
-| 3 | Authentication error |
-| 4 | Network error |
-| 5 | Permission denied |
-| 6 | Resource not found |
-| 7 | Rate limited |
+| Non-zero | Error — inspect command output for details |
+
+## Version-Specific Notes (v0.2.x)
+
+- Authentication uses **API Key** (`--api-key` / `HW_API_KEY`) or interactive login; **AK/SK is removed**.
+- Tunnel domain switched 2026-09-20: old `*.cn-north-4-bridge.myhuaweicloud.com` no longer works; use v0.2.x client and recreate tunnels.
+- `list` and `port list` no longer support `--json` output.
+- `host`/`connect` support `--api-key`/`-k` to skip token issuance and `--token`/`-t` for explicit JWT.
+- Port protocol default is `auto`; anonymous access default is **deny**.

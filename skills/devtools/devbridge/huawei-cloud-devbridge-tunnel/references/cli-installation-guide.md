@@ -2,7 +2,9 @@
 
 ## Overview
 
-DevBridge CLI is a command-line tool for creating and managing development tunnels on Huawei Cloud. It allows developers to securely expose local services to remote devices without opening public inbound ports.
+DevBridge CLI is a command-line tool for creating and managing development tunnels on Huawei Cloud. It allows developers to securely expose local services to remote devices without opening public inbound ports. **Target version: v0.2.x.**
+
+> **Important (2026-09-20)**: DevBridge tunnel domain switched from `*.cn-north-4-bridge.myhuaweicloud.com` to the new cluster domain (`*.devbridge-s2.hwtunnel.com`). Old clients (v0.1.x) can no longer connect. Always install/upgrade to the latest v0.2.x.
 
 ## System Requirements
 
@@ -18,22 +20,44 @@ DevBridge CLI is a command-line tool for creating and managing development tunne
 
 ### Linux / macOS (Bash + curl)
 
+Choose any one of the three official channels:
+
+**GitHub:**
+
 ```bash
-curl -fsSL https://res-hd.hc-cdn.cn/sharedata/hdspace/devbridge/install.sh | bash
+curl -fsSL https://github.com/huaweicloud/devspace-devbridge/releases/latest/download/install.sh -o /tmp/devbridge_install.sh\nbash /tmp/devbridge_install.sh
 ```
 
-The installation script will:
+**GitCode:**
 
-1. Detect the operating system and architecture.
-2. Download the corresponding CLI binary.
-3. Install the binary to `~/.huawei/bin/`.
-4. Add `~/.huawei/bin` to the system PATH (via `.bashrc` or `.zshrc`).
-5. Create the configuration directory `~/.huawei/devbridge/`.
+```bash
+curl -fsSL https://gitcode.com/CloudDeveloperDepartment/devbrige/releases/download/latest/install.sh -o /tmp/devbridge_install.sh\nbash /tmp/devbridge_install.sh
+```
+
+**OBS:**
+
+```bash
+curl -fsSL https://tools-artifact.developer.huaweicloud.com/sharedata/devbridge/install.sh -o /tmp/devbridge_install.sh\nbash /tmp/devbridge_install.sh
+```
+
+### Headless / non-interactive environments
+
+> **CRITICAL** — In automation/CI/headless environments, always add the silent flag `-s`. Without it, when the CLI is already present the script reads `/dev/tty` for an "overwrite?" prompt and fails with `unbound variable` where no terminal exists.
+
+```bash
+curl -fsSL https://gitcode.com/CloudDeveloperDepartment/devbrige/releases/download/latest/install.sh -o /tmp/devbridge_install.sh\nbash /tmp/devbridge_install.sh -s
+```
+
+Specify a version explicitly:
+
+```bash
+curl -fsSL https://gitcode.com/CloudDeveloperDepartment/devbrige/releases/download/latest/install.sh -o /tmp/devbridge_install.sh\nbash /tmp/devbridge_install.sh -s -v 0.2.2-release
+```
 
 ### Windows (PowerShell)
 
 ```powershell
-irm https://res-hd.hc-cdn.cn/sharedata/hdspace/devbridge/install.ps1 | iex
+irm https://github.com/huaweicloud/devspace-devbridge/releases/latest/download/install.ps1 | iex
 ```
 
 ### Manual Installation
@@ -91,7 +115,7 @@ devbridge --help
 
 ```bash
 $ devbridge version
-0.1.12-release
+0.2.2-release
 ```
 
 **❌ Installation failure (command not found):**
@@ -100,6 +124,14 @@ $ devbridge version
 $ devbridge version
 bash: devbridge: command not found
 # Fix: run 'source ~/.bashrc' or add ~/.huawei/bin to PATH
+```
+
+**❌ Old version (will not connect after 2026-09-20 domain switch):**
+
+```bash
+$ devbridge version
+0.1.x-...
+# Upgrade: rerun the official install script
 ```
 
 ## Directory Structure
@@ -117,13 +149,13 @@ After installation, the following directories are created:
 
 ## Upgrade
 
-To upgrade to the latest version, rerun the installation script:
+To upgrade to the latest version, rerun the installation script (use `-s` in headless environments):
 
 ```bash
-curl -fsSL https://res-hd.hc-cdn.cn/sharedata/hdspace/devbridge/install.sh | bash
+curl -fsSL https://gitcode.com/CloudDeveloperDepartment/devbrige/releases/download/latest/install.sh -o /tmp/devbridge_install.sh\nbash /tmp/devbridge_install.sh -s
 ```
 
-The script detects existing installations and upgrades in place.
+The script detects existing installations; in silent mode it compares SHA256 hashes and skips if already up to date.
 
 ## Uninstall
 
@@ -154,8 +186,16 @@ If `devbridge` is not found after installation:
 chmod +x ~/.huawei/bin/devbridge
 ```
 
+### Install script fails with "unbound variable" / "/dev/tty: No such device"
+
+The script is prompting interactively but there is no terminal. Re-run with the silent flag:
+
+```bash
+curl -fsSL https://gitcode.com/CloudDeveloperDepartment/devbrige/releases/download/latest/install.sh -o /tmp/devbridge_install.sh\nbash /tmp/devbridge_install.sh -s
+```
+
 ### Download failed
 
 - Verify network connectivity to the installation source.
 - Check if a proxy is needed: `echo $http_proxy`
-- Retry with an explicit proxy: `curl --proxy <proxy-url> -fsSL <install-url> | bash`
+- Retry with an explicit proxy: `curl --proxy <proxy-url> -fsSL <install-url> -o /tmp/devbridge_install.sh\nbash /tmp/devbridge_install.sh`

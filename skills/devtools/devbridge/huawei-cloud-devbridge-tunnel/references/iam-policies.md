@@ -1,60 +1,50 @@
-# IAM Permission Policies and Authentication
+# API Key Authentication and Access Control
 
 ## Overview
 
-DevBridge CLI supports two authentication methods:
+DevBridge CLI v0.2.x supports two authentication methods:
 
-1. **Interactive login** (recommended for personal development) — browser-based OAuth flow.
-2. **AK/SK authentication** (for automation environments) — Access Key / Secret Key credentials.
+1. **Interactive login** (recommended for personal development) — browser-based OAuth flow, credentials managed via the OS secure storage (falls back to a config file).
+2. **API Key authentication** (for automation environments) — fixed service account or automated task login.
+
+> **v0.2.x change**: AK/SK authentication (`--access-key`, `--secret-key`, `--security-token`) has been **removed**. Use API Key or interactive login.
 
 ## Authentication Methods
 
-### Method 1: Interactive Login (Recommended)
+### Method 1: Interactive Login (Recommended for personal use)
 
 ```bash
 devbridge auth login
 ```
 
-This command opens a browser for Huawei Cloud account login. After successful login, credentials are stored locally in `~/.huawei/devbridge/config`.
+The CLI opens a browser to complete identity authentication and saves the login credential to the local protected storage. Credential storage prefers the OS secure storage, falling back to a config file when unavailable.
 
-**Advantages:**
-- No need to manually manage AK/SK.
-- Automatic support for MFA and SSO.
-- Short-lived credentials with automatic refresh.
-
-### Method 2: AK/SK Authentication
+### Method 2: API Key (Recommended for automation)
 
 ```bash
-devbridge auth login --access-key <AK> --secret-key <SK>
+devbridge auth login --api-key "$HW_API_KEY"
 ```
 
-For temporary credentials (STS):
+Or inject via environment variable — the CLI reads it automatically:
 
 ```bash
-devbridge auth login --access-key <AK> --secret-key <SK> --security-token <TOKEN>
+export HW_API_KEY="<your-api-key>"
+devbridge auth login
 ```
 
-**Use cases:**
-- CI/CD pipelines.
-- Automation scripts.
-- Service accounts.
+> **Security note**: Never write a real API Key directly into commands, scripts, or pipeline definitions. Inject it through a protected environment variable or secret service.
 
-> **Security note:** Never hardcode AK/SK in scripts, config files, or version control. Use environment variables or a secret manager.
+### Get an API Key
 
-**✅ Correct usage (environment variables):**
+Create and manage API Keys at the DevBridge management page:
 
-```bash
-export DEVBRIDGE_AK="your-access-key"
-export DEVBRIDGE_SK="your-secret-key"
-devbridge auth login --access-key "$DEVBRIDGE_AK" --secret-key "$DEVBRIDGE_SK"
+```
+https://devstation.connect.huaweicloud.com/space/devbridge/apikey
 ```
 
-**❌ Incorrect usage (hardcoded in script):**
-
-```bash
-# Security risk: credentials exposed in source code
-devbridge auth login --access-key AKXYZ123 --secret-key SKABC456
-```
+- API Keys are distinguished by usage scenario (DevBridge / DevBox); **up to 20 API Keys per scenario**.
+- The **full API Key value is shown only once at creation time**; the list shows a masked value and last usage time.
+- Deleting an API Key invalidates it immediately.
 
 ### Check Authentication Status
 
@@ -62,134 +52,87 @@ devbridge auth login --access-key AKXYZ123 --secret-key SKABC456
 devbridge auth status
 ```
 
+The status command confirms the current identity and credential validity; it must not output the full API Key.
+
 ### Logout
 
 ```bash
 devbridge auth logout
 ```
 
-This command clears all locally stored credentials.
+Logging out clears CLI-saved credentials but does not delete created tunnels. Do not delete the config directory manually as a substitute for a normal logout (unless the CLI is unusable and you confirm local state is not needed).
+
+## Using API Key with Host / Connect
+
+`host` and `connect` support `--api-key` / `-k` to authenticate directly via API Key, skipping TunnelToken issuance:
+
+```bash
+devbridge host <tunnelId> --api-key <key>
+devbridge connect <tunnelId> --api-key <key>
+```
+
+Explicit JWT token mode (for integrating other clients, skips API calls):
+
+```bash
+devbridge host <tunnelId> --token <jwt>
+devbridge connect <tunnelId> --token <jwt>
+```
+
+`--token` mode skips token issuance and port lookup; ports are delivered by the gateway over the relay channel. The tunnel ID must be explicitly specified. Host tokens cannot be used for Connect, and Connect tokens cannot be used for Host.
+
+## Quota and Limits
+
+```bash
+devbridge limits
+```
+
+Shows account quota and current usage: reset time, traffic quota and used traffic, active tunnel count, tunnel/port/Host count limits, tunnel bandwidth limit, single-port HTTP request rate limit, single-port connection count limit.
 
 ## Required Permissions
 
-DevBridge tunnel operations require the following IAM permissions:
+DevBridge uses its own account/scenario model rather than Huawei Cloud IAM resource permissions. In failure scenarios, the error message points to the API Key management page — delete and re-create the key, then retry. Typical cases:
 
-### Tunnel Management Permissions
+| Symptom | Likely Cause | Fix |
+|---------|-------------|-----|
+| `401 Unauthorized` / `token not found` | Invalid or missing API Key | `devbridge auth login --api-key "$HW_API_KEY"` with a valid key |
+| `403 Forbidden` | API Key deleted, expired, or insufficient for the scenario | Re-create an API Key (DevBridge scenario) at the management page |
+| Repeated login failures | Key revoked | Delete the old key at the management page and re-create |
+| Quota exceeded | Account at limits | `devbridge limits` to inspect; delete unused tunnels/resources |
 
-| Operation | Required Permission |
-|-----------|-------------------|
-| Create tunnel | `devbridge:tunnels:create` |
-| List tunnels | `devbridge:tunnels:list` |
-| View tunnel details | `devbridge:tunnels:get` |
-| Update tunnel | `devbridge:tunnels:update` |
-| Delete tunnel | `devbridge:tunnels:delete` |
-| Issue tunnel token | `devbridge:tunnels:token` |
+## Auth Failure Handling Procedure
 
-### Port Management Permissions
+When any DevBridge command fails due to invalid or missing credentials:
 
-| Operation | Required Permission |
-|-----------|-------------------|
-| Create port | `devbridge:ports:create` |
-| List ports | `devbridge:ports:list` |
-| View port details | `devbridge:ports:get` |
-| Update port | `devbridge:ports:update` |
-| Delete port | `devbridge:ports:delete` |
-
-### Host/Connect Permissions
-
-| Operation | Required Permission |
-|-----------|-------------------|
-| Host tunnel | `devbridge:tunnels:host` |
-| Connect tunnel | `devbridge:tunnels:connect` |
-
-## IAM Policy Examples
-
-### Minimum Development Policy
-
-```json
-{
-  "Version": "1.1",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "devbridge:tunnels:create",
-        "devbridge:tunnels:list",
-        "devbridge:tunnels:get",
-        "devbridge:tunnels:update",
-        "devbridge:tunnels:delete",
-        "devbridge:tunnels:token",
-        "devbridge:tunnels:host",
-        "devbridge:tunnels:connect",
-        "devbridge:ports:create",
-        "devbridge:ports:list",
-        "devbridge:ports:get",
-        "devbridge:ports:update",
-        "devbridge:ports:delete"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
-```
-
-### Read-Only Policy
-
-For users who only need to view and connect to existing tunnels:
-
-```json
-{
-  "Version": "1.1",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "devbridge:tunnels:list",
-        "devbridge:tunnels:get",
-        "devbridge:tunnels:connect",
-        "devbridge:ports:list",
-        "devbridge:ports:get"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
-```
-
-## Security Best Practices
-
-1. **Use interactive login for personal development** — Provides MFA/SSO support and short-lived tokens.
-2. **Use temporary AK/SK (STS) for automation** — Temporary credentials auto-expire, reducing risk.
-3. **Apply least privilege policies** — Grant only the permissions required for the user's role.
-4. **Never share credentials** — Each developer should use their own authentication.
-5. **Do not commit `~/.huawei/devbridge/` to version control** — This directory contains auth tokens and tunnel state.
-6. **Rotate AK/SK regularly** — If using permanent AK/SK, rotate them periodically.
-7. **Logout on shared machines** — Run `devbridge auth logout` after finishing work on shared or public machines.
-
-## Permission Failure Handling
-
-When a DevBridge command fails due to insufficient permissions, follow this procedure:
-
-1. **Identify the required permission** — Check the error message and cross-reference with the permission tables above.
-2. **Display the minimum policy** — Show the user the Minimum Development Policy JSON (see above) or a subset matching their use case.
-3. **Guide the user to create the policy** — In the Huawei Cloud console, navigate to IAM > Policies > Create Custom Policy, paste the JSON, and attach it to the user or group.
-4. **Wait for confirmation** — Pause execution until the user confirms the policy has been granted.
-5. **Retry the command** — After confirmation, re-run the failed command.
+1. **Check status** — `devbridge auth status`; confirm whether the CLI is logged in.
+2. **Identify the API Key** — if an API Key is in use, verify it still exists and is not deleted; the full value was shown only at creation time.
+3. **Re-create or re-inject** — create a new API Key at `https://devstation.connect.huaweicloud.com/space/devbridge/apikey`, inject via `HW_API_KEY`, and re-login.
+4. **Wait for confirmation** — pause execution until the user confirms credentials have been updated.
+5. **Retry the command** — after confirmation, re-run the failed command.
 
 **✅ Correct handling:**
 
 ```text
-Error: devbridge:tunnels:create permission denied
-→ Display minimum policy JSON to user
-→ Guide user to IAM console
-→ Wait for user confirmation
+Error: authentication failed
+→ devbridge auth status
+→ Guide user to API Key management page (devstation.connect.huaweicloud.com/space/devbridge/apikey)
+→ Wait for user confirmation that a new API Key is injected
 → Retry command
 ```
 
 **❌ Incorrect handling:**
 
 ```text
-Error: devbridge:tunnels:create permission denied
+Error: authentication failed
 → Immediately fail without guidance
-→ User left without knowing what permissions are needed
+→ User left without knowing how to fix credentials
 ```
+
+## Security Best Practices
+
+1. **Use interactive login for personal development** — no manual credential management.
+2. **Use API Key for automation** — inject through environment variables, never hardcoded.
+3. **Never share credentials** — API Key full values are shown once; treat them as secrets.
+4. **Do not commit `~/.huawei/devbridge/` to version control** — contains auth tokens and tunnel state.
+5. **Do not pass API Key via chat, logs, or tickets**.
+6. **Suspect credential leak?** Immediately log out, revoke, and re-issue.
+7. **Host/Connect tokens are short-lived** — only for the corresponding tunnel and direction; don't treat them as long-term identity.

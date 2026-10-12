@@ -2,31 +2,53 @@
 
 ## API Overview
 
-DevBridge provides a REST API for programmatic tunnel management. The API base URL is region-specific:
+DevBridge provides a REST API for programmatic tunnel management. The public API service base URL (v1) is:
 
 ```
-https://devbridge.<region>.myhuaweicloud.com/v1
+https://hdspace-partner.cn-north-4.myhuaweicloud.com/open-api-public/v1/relay
 ```
+
+> **Response envelope**: all responses wrap the payload in `{error_code, error_msg, result}`. Success code is `0000`.
 
 ## Authentication
 
-All API requests require an IAM token in the `X-Auth-Token` header:
+Authenticate with an **API Key** (AK/SK is no longer supported in v0.2.x):
 
 ```http
-GET /v1/tunnels HTTP/1.1
-Host: devbridge.cn-north-4.myhuaweicloud.com
-X-Auth-Token: <iam-token>
+GET /open-api-public/v1/relay/tunnels HTTP/1.1
+Host: hdspace-partner.cn-north-4.myhuaweicloud.com
+X-Api-Key: <api-key>
 Content-Type: application/json
 ```
 
+Create and manage API Keys at `https://devstation.connect.huaweicloud.com/space/devbridge/apikey`.
+
+## Response Envelope
+
+```json
+{
+  "error_code": "0000",
+  "error_msg": "success",
+  "result": { }
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `error_code` | `0000` = success; non-zero = error code (e.g. `HD.98310001`, `HD.98300005`, `HD.98320078`) |
+| `error_msg` | Human-readable message |
+| `result` | Operation payload (depends on endpoint) |
+
 ## API Endpoints
+
+> The exact request/response schemas below reflect the CLI behavior documented for v0.2.x; verify field names against the live API (CLI source or `devbridge -v` debug logs) before building integrations.
 
 ### Tunnels
 
 #### Create Tunnel
 
 ```http
-POST /v1/tunnels
+POST /open-api-public/v1/relay/tunnels
 ```
 
 **Request body:**
@@ -35,24 +57,11 @@ POST /v1/tunnels
 {
   "name": "my-tunnel",
   "description": "Development tunnel",
-  "expiration_hours": 24,
-  "auto_delete": false
+  "expiration_hours": 72
 }
 ```
 
-**Response (201 Created):**
-
-```json
-{
-  "id": "<tunnelId>",
-  "name": "my-tunnel",
-  "description": "Development tunnel",
-  "expiration_hours": 24,
-  "tunnel_expiration": 1700000000,
-  "port_count": 0,
-  "created_at": "2024-01-01T00:00:00Z"
-}
-```
+**Response (result):** tunnel ID, name, description, expiration.
 
 **✅ Correct request (valid name and description):**
 
@@ -77,55 +86,23 @@ POST /v1/tunnels
 #### List Tunnels
 
 ```http
-GET /v1/tunnels
+GET /open-api-public/v1/relay/tunnels
 ```
 
-**Response (200 OK):**
-
-```json
-[
-  {
-    "id": "<tunnelId>",
-    "name": "my-tunnel",
-    "description": "Development tunnel",
-    "expiration_hours": 24,
-    "tunnel_expiration": 1700000000,
-    "port_count": 2
-  }
-]
-```
+**Response (result):** list of tunnels (ID, name, description, expiration, port count).
 
 #### Get Tunnel Details
 
 ```http
-GET /v1/tunnels/{tunnelId}
+GET /open-api-public/v1/relay/tunnels/{tunnelId}
 ```
 
-**Response (200 OK):**
-
-```json
-{
-  "id": "<tunnelId>",
-  "name": "my-tunnel",
-  "description": "Development tunnel",
-  "expiration_hours": 24,
-  "tunnel_expiration": 1700000000,
-  "port_count": 2,
-  "ports": [
-    {
-      "port": 8080,
-      "protocol": "http",
-      "anonymous_access": "denied"
-    }
-  ],
-  "created_at": "2024-01-01T00:00:00Z"
-}
-```
+**Response (result):** tunnel details including ports, connection counts, and traffic stats.
 
 #### Update Tunnel
 
 ```http
-PATCH /v1/tunnels/{tunnelId}
+PATCH /open-api-public/v1/relay/tunnels/{tunnelId}
 ```
 
 **Request body:**
@@ -138,24 +115,18 @@ PATCH /v1/tunnels/{tunnelId}
 }
 ```
 
-**Response (200 OK):** Updated tunnel object.
-
 #### Delete Tunnel
 
 ```http
-DELETE /v1/tunnels/{tunnelId}
+DELETE /open-api-public/v1/relay/tunnels/{tunnelId}
 ```
-
-**Response (204 No Content):** Empty body.
-
----
 
 ### Ports
 
 #### Create Port
 
 ```http
-POST /v1/tunnels/{tunnelId}/ports
+POST /open-api-public/v1/relay/tunnels/{tunnelId}/ports
 ```
 
 **Request body:**
@@ -163,199 +134,83 @@ POST /v1/tunnels/{tunnelId}/ports
 ```json
 {
   "port": 8080,
-  "protocol": "http",
+  "protocol": "auto",
   "anonymous_access": "denied"
 }
 ```
 
-**Response (201 Created):**
-
-```json
-{
-  "port": 8080,
-  "protocol": "http",
-  "anonymous_access": "denied",
-  "created_at": "2024-01-01T00:00:00Z"
-}
-```
+Protocol: `http`, `https`, `auto` (default `auto`). Anonymous access defaults to `denied`; use `allowed` only for explicitly public content.
 
 #### List Ports
 
 ```http
-GET /v1/tunnels/{tunnelId}/ports
-```
-
-**Response (200 OK):**
-
-```json
-[
-  {
-    "port": 8080,
-    "protocol": "http",
-    "anonymous_access": "denied"
-  },
-  {
-    "port": 3000,
-    "protocol": "https",
-    "anonymous_access": "allowed"
-  }
-]
+GET /open-api-public/v1/relay/tunnels/{tunnelId}/ports
 ```
 
 #### Get Port Details
 
 ```http
-GET /v1/tunnels/{tunnelId}/ports/{portNumber}
+GET /open-api-public/v1/relay/tunnels/{tunnelId}/ports/{portNumber}
 ```
 
 #### Update Port
 
 ```http
-PATCH /v1/tunnels/{tunnelId}/ports/{portNumber}
+PATCH /open-api-public/v1/relay/tunnels/{tunnelId}/ports/{portNumber}
 ```
 
 **Request body:**
 
 ```json
 {
-  "protocol": "https",
   "anonymous_access": "allowed"
 }
 ```
 
+> Protocol cannot be changed in place — delete and recreate the port.
+
 #### Delete Port
 
 ```http
-DELETE /v1/tunnels/{tunnelId}/ports/{portNumber}
+DELETE /open-api-public/v1/relay/tunnels/{tunnelId}/ports/{portNumber}
 ```
-
-**Response (204 No Content):** Empty body.
-
----
 
 ### Tokens
 
 #### Issue Tunnel Token
 
 ```http
-POST /v1/tunnels/{tunnelId}/tokens
+POST /open-api-public/v1/relay/tunnels/{tunnelId}/tokens
 ```
 
 **Request body:**
 
 ```json
 {
-  "scope": "host",
-  "expiration_hours": 1
+  "scope": "host"
 }
 ```
 
-**Response (201 Created):**
+Scope: `host` or `connect`. Tokens have a fixed short lifetime.
 
-```json
-{
-  "token": "<token-value>",
-  "scope": "host",
-  "expires_at": "2024-01-01T01:00:00Z"
-}
-```
+## Error Codes
 
----
+Errors use the outer envelope with non-zero `error_code`. Known codes (from changelog):
 
-### Host & Connect
+| Code | Description |
+|------|-------------|
+| `0000` | Success |
+| `HD.98310001` | Check the error message and handle accordingly |
+| `HD.98300005` | Check the error message and handle accordingly |
+| `HD.98320078` | Check the error message and handle accordingly |
 
-#### Start Host
+Verify full code semantics against the live API / error message text before building automations.
 
-```http
-POST /v1/tunnels/{tunnelId}/host
-```
+## Host & Connect via API
 
-**Request body:**
+Programmatic Host/Connect is normally done through the CLI (`devbridge host` / `devbridge connect`). The CLI supports:
 
-```json
-{
-  "port": 8080,
-  "log_level": "info"
-}
-```
+- `--api-key` / `-k` — API Key auth, skip Token issuance
+- `--token` / `-t` — JWT token auth, skip API and port lookup (tunnel ID required)
 
-**Response (200 OK):**
-
-```json
-{
-  "address": "https://<tunnelId>-<port>.<region>-bridge.myhuaweicloud.com",
-  "port": 8080,
-  "status": "running"
-}
-```
-
-#### Start Connect
-
-```http
-POST /v1/tunnels/{tunnelId}/connect
-```
-
-**Request body:**
-
-```json
-{
-  "port": 8080,
-  "local_port": 8080
-}
-```
-
-**Response (200 OK):**
-
-```json
-{
-  "local_port": 8080,
-  "remote_port": 8080,
-  "status": "connected"
-}
-```
-
----
-
-## Error Responses
-
-All errors use a consistent format:
-
-```json
-{
-  "error": {
-    "code": "RESOURCE_NOT_FOUND",
-    "message": "Tunnel <tunnelId> not found",
-    "request_id": "<requestId>"
-  }
-}
-```
-
-### Error Codes
-
-| HTTP Status | Error Code | Description |
-|-------------|-----------|-------------|
-| 400 | INVALID_REQUEST | Invalid request body or parameters |
-| 401 | UNAUTHORIZED | Missing or invalid IAM token |
-| 403 | FORBIDDEN | Insufficient IAM permissions |
-| 404 | RESOURCE_NOT_FOUND | Tunnel or port not found |
-| 409 | CONFLICT | Duplicate resource (e.g., port already exists) |
-| 429 | RATE_LIMITED | Too many requests |
-| 500 | INTERNAL_ERROR | Server-side error |
-
-## Rate Limits
-
-| Resource | Limit |
-|----------|-------|
-| Create tunnel | 10 per minute |
-| List tunnels | 60 per minute |
-| Create port | 20 per minute |
-| Host/Connect | 5 per minute |
-| Other operations | 60 per minute |
-
-Rate limit headers:
-
-```http
-X-RateLimit-Limit: 60
-X-RateLimit-Remaining: 59
-X-RateLimit-Reset: 1700000060
-```
+For detailed behavior, see [cli-command-reference.md](cli-command-reference.md).

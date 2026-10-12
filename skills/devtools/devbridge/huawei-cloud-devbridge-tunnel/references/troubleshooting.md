@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-This document covers common issues and their solutions when using DevBridge CLI.
+This document covers common issues and their solutions when using DevBridge CLI (v0.2.x).
 
 ## Table of Contents
 
@@ -11,7 +11,7 @@ This document covers common issues and their solutions when using DevBridge CLI.
 5. [Host Issues](#host-issues)
 6. [Connect Issues](#connect-issues)
 7. [Network Issues](#network-issues)
-8. [Permission Issues](#permission-issues)
+8. [Permission / Auth Failure Issues](#permission--auth-failure-issues)
 
 ---
 
@@ -49,15 +49,32 @@ echo 'export PATH="$HOME/.huawei/bin:$PATH"' >> ~/.bashrc
 chmod +x ~/.huawei/bin/devbridge
 ```
 
-### Problem: Installation script fails
+### Problem: Installation script fails with `unbound variable` / `/dev/tty: No such device`
+
+**Cause:** Script detected an existing installation and prompted "overwrite?" reading `/dev/tty`; no terminal exists in headless/CI environments.
+
+**Solution:** Always run the installer with the silent flag:
+
+```bash
+curl -fsSL https://gitcode.com/CloudDeveloperDepartment/devbrige/releases/download/latest/install.sh -o /tmp/devbridge_install.sh
+bash /tmp/devbridge_install.sh -s
+```
+
+### Problem: Version is 0.1.x (old client cannot connect after 2026-09-20)
+
+**Cause:** The installed client predates the tunnel domain switch from `*.cn-north-4-bridge.myhuaweicloud.com` to the new cluster domain.
+
+**Solution:** Reinstall from the official channel (see [CLI Installation Guide](cli-installation-guide.md)) to get v0.2.x, then **re-create tunnels** (old tunnels were invalidated).
+
+### Problem: Installation script fails to download
 
 **Cause:** Network issues or unsupported platform.
 
 **Solution:**
 
-1. Verify network connectivity: `curl -I https://res-hd.hc-cdn.cn`
-2. Check if proxy is needed: `export https_proxy=<proxy-url>`
-3. Verify OS and architecture: `uname -m` (should be `x86_64` or `aarch64`)
+1. Verify network connectivity to the installation source.
+2. Check if a proxy is needed: `export https_proxy=<proxy-url>`
+3. Verify OS and architecture: `uname -m` (should be `x86_64`/`amd64` or `aarch64`/`arm64`)
 
 ---
 
@@ -70,50 +87,56 @@ chmod +x ~/.huawei/bin/devbridge
 **Solution:**
 
 1. The CLI will display a URL — copy and open it manually in a browser.
-2. For headless environments, use AK/SK authentication:
+2. For headless environments, use an **API Key**:
 
 ```bash
-devbridge auth login --access-key <AK> --secret-key <SK>
+export HW_API_KEY="<your-api-key>"
+devbridge auth login --api-key "$HW_API_KEY"
 ```
 
 ### Problem: `Authentication failed: invalid credentials`
 
-**Cause:** Invalid AK/SK or expired token.
+**Cause:** Invalid, expired, or deleted API Key.
 
 **Solution:**
 
-1. Verify AK/SK are correct.
-2. For STS tokens, verify the security token has not expired.
-3. Re-login: `devbridge auth logout && devbridge auth login`
+1. Re-create an API Key at `https://devstation.connect.huaweicloud.com/space/devbridge/apikey` (full value shown only at creation; up to 20 per scenario).
+2. Re-inject via environment variable and re-login:
+
+```bash
+export HW_API_KEY="<new-api-key>"
+devbridge auth logout
+devbridge auth login --api-key "$HW_API_KEY"
+```
 
 ### Problem: `Authentication failed: access denied`
 
-**Cause:** IAM user lacks required permissions.
+**Cause:** Credential lacks permission / wrong scenario.
 
 **Solution:**
 
-1. Check current permissions with an account admin.
-2. Apply the minimum DevBridge policy (see [IAM Policies](iam-policies.md)).
-3. Re-authenticate after permissions are granted.
+1. Check auth status: `devbridge auth status`.
+2. Delete the old key and create a new DevBridge-scenario API Key at the management page.
+3. Re-authenticate after the new key is injected.
 
 **✅ Correct approach:**
 
 ```bash
-# Check auth status, identify missing permissions, grant policy, then retry
+# Check auth status, identify credential issue, re-create key, retry
 devbridge auth status
-# → Review iam-policies.md for required permissions
-# → Grant policy in IAM console
-devbridge auth login
+# → Re-create API Key if deleted/expired
+# → Inject via HW_API_KEY
+devbridge auth login --api-key "$HW_API_KEY"
 ```
 
 **❌ Incorrect approach:**
 
 ```bash
-# Repeatedly retrying without fixing permissions
+# Repeatedly retrying without fixing credentials
 devbridge create my-tunnel -d "测试" -e 8
-# → Error: access denied
+# → Error: authentication failed
 devbridge create my-tunnel -d "测试" -e 8
-# → Error: access denied (still fails)
+# → Error: authentication failed (still fails)
 ```
 
 ---
@@ -122,13 +145,13 @@ devbridge create my-tunnel -d "测试" -e 8
 
 ### Problem: `Failed to create tunnel: quota exceeded`
 
-**Cause:** Account has reached the maximum number of tunnels.
+**Cause:** Account has reached the maximum number of tunnels (default 10 per workspace).
 
 **Solution:**
 
 1. List existing tunnels: `devbridge list`
-2. Delete unused tunnels: `devbridge delete <tunnelId>`
-3. Contact Huawei Cloud support to request a quota increase.
+2. Check usage: `devbridge limits`
+3. Delete unused tunnels: `devbridge delete <tunnelId>`
 
 ### Problem: `Failed to create tunnel: invalid name`
 
@@ -136,9 +159,8 @@ devbridge create my-tunnel -d "测试" -e 8
 
 **Solution:**
 
-- Use only letters, numbers, and hyphens.
-- Name must be 3-64 characters long.
-- Example: `devbridge create my-tunnel-001`
+- Use letters, numbers, and hyphens; no spaces in descriptions.
+- Example: `devbridge create my-tunnel-001 -d "测试隧道"`
 
 ### Problem: `Failed to create tunnel: network error`
 
@@ -147,8 +169,8 @@ devbridge create my-tunnel -d "测试" -e 8
 **Solution:**
 
 1. Check network connectivity.
-2. Verify the correct region is configured.
-3. Try a different region: `devbridge create my-tunnel --region cn-north-4`
+2. Run `devbridge ping <uri>` to test connectivity.
+3. Confirm your client is v0.2.x (old clients cannot connect after the domain switch).
 
 ---
 
@@ -165,7 +187,7 @@ devbridge create my-tunnel -d "测试" -e 8
 
 ```bash
 devbridge port delete <tunnelId> -p 8080
-devbridge port create <tunnelId> -p 8080 --protocol http
+devbridge port create <tunnelId> -p 8080 --protocol auto
 ```
 
 ### Problem: `Invalid port number`
@@ -176,6 +198,17 @@ devbridge port create <tunnelId> -p 8080 --protocol http
 
 - Use port numbers between 1 and 65535.
 - Ports below 1024 may require elevated privileges.
+
+### Problem: Need to change a port's protocol
+
+**Cause:** CLI does not support modifying an existing port's protocol.
+
+**Solution:** Delete the port and recreate with the new protocol:
+
+```bash
+devbridge port delete <tunnelId> -p 8080
+devbridge port create <tunnelId> -p 8080 --protocol https
+```
 
 ---
 
@@ -203,6 +236,7 @@ curl http://localhost:8080
 
 1. Check tunnel status: `devbridge show <tunnelId>`
 2. If expired, create a new tunnel and reconfigure ports.
+3. Host can also create a temporary tunnel: `devbridge host -p 8080 -e 8`.
 
 ### Problem: `Host disconnected unexpectedly`
 
@@ -213,11 +247,17 @@ curl http://localhost:8080
 1. Check local service status.
 2. Check network connectivity.
 3. Restart host: `devbridge host <tunnelId>`
-4. Use `--log-level debug` for detailed logs:
+4. Use debug logging for details:
 
 ```bash
-devbridge host <tunnelId> --log-level debug
+devbridge -v host <tunnelId>
 ```
+
+### Problem: Host output shows old domain (`cn-north-4-bridge`)
+
+**Cause:** Client is outdated (v0.1.x); the 2026-09-20 domain switch invalidated old endpoints.
+
+**Solution:** Upgrade to v0.2.x and recreate tunnels.
 
 ---
 
@@ -245,11 +285,7 @@ lsof -i :8080
 kill <PID>
 ```
 
-2. Or use a different local port:
-
-```bash
-devbridge connect <tunnelId> --port 8080 --local-port 9090
-```
+2. Release the port or change the local service port, then reconnect.
 
 ### Problem: `Connection drops frequently`
 
@@ -293,29 +329,35 @@ devbridge host <tunnelId>
 export SSL_CERT_FILE=/path/to/ca-bundle.crt
 ```
 
+### Problem: Old domain no longer works
+
+**Cause:** 2026-09-20 domain switch: old `*.cn-north-4-bridge.myhuaweicloud.com` endpoints stopped working; old clients cannot connect.
+
+**Solution:** Upgrade client to v0.2.x and recreate tunnels. New addresses use the new cluster domain, e.g. `https://<tunnelId>.<clusterId>.myhuaweicloud.com` (in practice `*.devbridge-s2.hwtunnel.com`).
+
 ---
 
-## Permission Issues
+## Permission / Auth Failure Issues
 
-### Problem: `403 Forbidden: insufficient permissions`
+### Problem: `401 Unauthorized` / `token not found`
 
-**Cause:** IAM user lacks required DevBridge permissions.
+**Cause:** Missing or invalid API Key.
 
 **Solution:**
 
-1. Review required permissions in [IAM Policies](iam-policies.md).
-2. Ask an account admin to grant the DevBridge policy.
-3. Re-authenticate: `devbridge auth logout && devbridge auth login`
+1. Re-create an API Key at `https://devstation.connect.huaweicloud.com/space/devbridge/apikey`.
+2. Inject and re-login: `export HW_API_KEY=<key>` then `devbridge auth login --api-key "$HW_API_KEY"`.
 
 ### Problem: `403 Forbidden: token expired`
 
-**Cause:** IAM token has expired.
+**Cause:** API Key deleted/revoked.
 
 **Solution:**
 
 ```bash
 devbridge auth logout
-devbridge auth login
+export HW_API_KEY="<new-api-key>"
+devbridge auth login --api-key "$HW_API_KEY"
 ```
 
 ---
@@ -324,13 +366,13 @@ devbridge auth login
 
 If the issue persists after trying the solutions above:
 
-1. **Enable debug mode** for detailed logs:
+1. **Enable verbose logging** for detailed logs:
 
 ```bash
-devbridge --debug <command>
+devbridge -v <command>
 ```
 
-2. **Check version** — ensure you are using the latest version:
+2. **Check version** — ensure you are using v0.2.x:
 
 ```bash
 devbridge version
@@ -341,7 +383,8 @@ devbridge version
 ```bash
 devbridge auth status
 devbridge list
-devbridge --debug <failing-command>
+devbridge -v <failing-command>
 ```
 
 4. **Contact Huawei Cloud support** with the diagnostic information.
+5. Report issues to the DevBridge team: DevBridge team Issue feedback (see official docs).

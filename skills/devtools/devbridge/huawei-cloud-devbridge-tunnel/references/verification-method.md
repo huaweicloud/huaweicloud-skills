@@ -1,20 +1,21 @@
 # Verification Method
 
-This document provides step-by-step verification procedures for DevBridge CLI installation, authentication, tunnel creation, port management, and host/connect functionality.
+This document provides step-by-step verification procedures for DevBridge CLI (v0.2.x) installation, authentication, tunnel creation, port management, and host/connect functionality.
 
 ## Verification Checklist
 
 | # | Verification Item | Command | Expected Result |
 |---|------------------|---------|-----------------|
-| 1 | CLI installation | `devbridge version` | Displays version number |
+| 1 | CLI installation (v0.2.x) | `devbridge version` | Displays version 0.2.x |
 | 2 | Authentication | `devbridge auth status` | Shows logged-in status |
-| 3 | Tunnel creation | `devbridge create test-tunnel` | Returns tunnel ID |
+| 3 | Tunnel creation | `devbridge create test-tunnel -e 1` | Returns tunnel ID |
 | 4 | Tunnel list | `devbridge list` | Shows test tunnel |
-| 5 | Port creation | `devbridge port create <id> -p 8080` | Port created successfully |
+| 5 | Port creation (deny anon default) | `devbridge port create <id> -p 8080 --protocol auto` | Port created successfully |
 | 6 | Port list | `devbridge port list <id>` | Lists port 8080 |
-| 7 | Host | `devbridge host <id>` | Host running, displays address |
-| 8 | Connect | `devbridge connect <id>` | Local port mapping established |
-| 9 | Cleanup | `devbridge delete <id>` | Tunnel deleted |
+| 7 | Limits | `devbridge limits` | Shows quota/usage |
+| 8 | Host | `devbridge host <id>` | Host running, displays new-format address |
+| 9 | Connect | `devbridge connect <id>` | Local port mapping established |
+| 10 | Cleanup | `devbridge delete <id>` | Tunnel deleted |
 
 ## Step 1: Verify CLI Installation
 
@@ -25,7 +26,7 @@ devbridge version
 **✅ Correct output:**
 
 ```text
-0.1.12-release
+0.2.2-release
 ```
 
 **❌ Incorrect output (not installed):**
@@ -33,6 +34,14 @@ devbridge version
 ```text
 command not found: devbridge
 ```
+
+**❌ Incorrect output (old version):**
+
+```text
+0.1.x-...
+```
+
+> v0.1.x clients can no longer connect after the 2026-09-20 domain switch. Upgrade to v0.2.x via the official installer (see [CLI Installation Guide](cli-installation-guide.md)).
 
 **If failed:**
 - Check if `~/.huawei/bin/devbridge` exists.
@@ -49,7 +58,6 @@ devbridge auth status
 
 ```text
 Logged in as: <account>
-Region: <region>
 ```
 
 **Expected output (not logged in):**
@@ -61,13 +69,18 @@ Not logged in. Run 'devbridge auth login' to authenticate.
 **If not logged in:**
 
 ```bash
+# Personal: interactive login
 devbridge auth login
+
+# Automation: API Key login
+export HW_API_KEY="<your-api-key>"
+devbridge auth login --api-key "$HW_API_KEY"
 ```
 
 ## Step 3: Verify Tunnel Creation
 
 ```bash
-devbridge create verify-test -d "Verification test tunnel" -e 1
+devbridge create verify-test -d "验证测试隧道" -e 1
 ```
 
 **Expected output:**
@@ -81,8 +94,8 @@ Tunnel Expiration:    1 hours
 
 **If failed:**
 - Verify authentication status (Step 2).
-- Check IAM permissions (see [IAM Policies](iam-policies.md)).
-- Check network connectivity.
+- Check quota: `devbridge limits`.
+- Check network connectivity: `devbridge ping <uri>`.
 
 ## Step 4: Verify Tunnel List
 
@@ -93,39 +106,30 @@ devbridge list
 **Expected output:**
 
 ```text
-Tunnel ID    Name          Description                  Expires
-<tunnelId>   verify-test   Verification test tunnel      <timestamp>
+Tunnel ID    Name          Description                   Tunnel Expiration    Port Count
+<tunnelId>   verify-test   验证测试隧道                  1 hours              0
 ```
 
-**JSON format:**
-
-```bash
-devbridge list -j
-```
-
-```json
-[
-  {
-    "id": "<tunnelId>",
-    "name": "verify-test",
-    "description": "Verification test tunnel",
-    "expiration_hours": 1,
-    "tunnel_expiration": <epoch>,
-    "port_count": 0
-  }
-]
-```
+> v0.2.x removed the `--json` output flag from `list`. Use the text table; parse with `awk`/`grep` if needed.
 
 ## Step 5: Verify Port Creation
 
 ```bash
-devbridge port create <tunnelId> -p 8080 --protocol http
+devbridge port create <tunnelId> -p 8080 --protocol auto
 ```
+
+Port protocol defaults to `auto`; anonymous access defaults to **deny** (do not pass `-a` unless you explicitly want anonymous access).
 
 **Expected output:**
 
 ```text
 Port added: TunnelId=<tunnelId>, Port=8080
+```
+
+To allow anonymous access (only for explicitly public content):
+
+```bash
+devbridge port create <tunnelId> -p 8081 --protocol http -a
 ```
 
 ## Step 6: Verify Port List
@@ -138,10 +142,18 @@ devbridge port list <tunnelId>
 
 ```text
 Port    Protocol    Anonymous Access
-8080    http        denied
+8080    auto        denied
 ```
 
-## Step 7: Verify Host
+## Step 7: Verify Limits
+
+```bash
+devbridge limits
+```
+
+**Expected output:** quota and usage info (traffic quota/usage, tunnel limits, bandwidth limits, rate limits).
+
+## Step 8: Verify Host
 
 Start a local service in one terminal:
 
@@ -159,16 +171,16 @@ devbridge host <tunnelId>
 
 ```text
 Hosting port: 8080
-Tunnel URL: https://<tunnelId>-8080.cn-north-4-bridge.myhuaweicloud.com
+Tunnel URL: https://<tunnelId>.<clusterId>.myhuaweicloud.com
 Ready to accept connections
 Auto reconnect: enabled
 ```
 
 **Verification:**
-- Access `https://<tunnelId>-8080.cn-north-4-bridge.myhuaweicloud.com` from a browser.
-- Should return the local service's response.
+- Access the tunnel URL from a browser (behavior depends on the port's anonymous policy).
+- The URL should use the **new cluster domain** (e.g. `*.devbridge-s2.hwtunnel.com`), never the old `cn-north-4-bridge` domain.
 
-## Step 8: Verify Connect
+## Step 9: Verify Connect
 
 On another device with DevBridge CLI installed and authenticated:
 
@@ -180,7 +192,7 @@ devbridge connect <tunnelId>
 
 ```text
 Connecting to tunnel <tunnelId>...
-Local port mapping established: localhost:8080 -> tunnel port 8080
+Forwarding localhost:8080 -> tunnel port: 8080
 
 Connect is running. Press Ctrl+C to stop.
 ```
@@ -189,7 +201,7 @@ Connect is running. Press Ctrl+C to stop.
 - Access `http://localhost:8080` on the remote device.
 - Should return the hosted service's response.
 
-## Step 9: Cleanup
+## Step 10: Cleanup
 
 Stop Host and Connect processes with `Ctrl+C`.
 
@@ -235,12 +247,15 @@ echo "=== Step 4: Tunnel List ==="
 devbridge list
 
 echo "=== Step 5: Port Creation ==="
-devbridge port create "$TUNNEL_ID" -p 8080 --protocol http
+devbridge port create "$TUNNEL_ID" -p 8080 --protocol auto
 
 echo "=== Step 6: Port List ==="
 devbridge port list "$TUNNEL_ID"
 
-echo "=== Step 9: Cleanup ==="
+echo "=== Step 7: Limits ==="
+devbridge limits
+
+echo "=== Step 10: Cleanup ==="
 devbridge delete "$TUNNEL_ID"
 
 echo "=== Verification Complete ==="
