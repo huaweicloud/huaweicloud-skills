@@ -1,24 +1,41 @@
 ---
 name: huawei-cloud-cost-estimation
-description: "Estimate Huawei Cloud resource prices before purchase — read-only pre-order price estimation. Triggers include: 华为云/huaweicloud/hcloud + 报价/询价/价格/价格估算/预算/比价/费用预估/budget/cost estimation/quote/pricing. Use when the user asks how much a Huawei Cloud resource will cost (period 包年包月 or on-demand 按需) on 华为云/Huawei Cloud/hcloud. Runs a 4-step RFQ flow (Parse → Clarify → Query → Verify & Present) over hcloud BSS pricing APIs in fixed region cn-north-1: period quote (ListRateOnPeriodDetail) and on-demand quote (ListOnDemandResourceRatings), with dimension resolution chains (ListServiceTypes/ListServiceResources/ListResourceSpecs/ListUsageTypes/ListMeasureUnits). Refuses any history bill/balance/reconciliation, purchase/provision, unsubscribe/delete, credentials in chat, and non-Huawei pricing."
-tags: [huawei-cloud, bss, pricing, cost-estimation, finops]
+description: |
+  Generates Huawei Cloud pre-order estimates, provisions allowlisted resources through hcloud, and
+  routes unsubscribe requests to console guidance. Use for Huawei Cloud pricing, budgets, creation,
+  provisioning, or unsubscribe. Creates require runtime help, --dryrun, fee review, and confirmation.
+  Never emits or runs unsubscribe operations, accepts credentials, or performs non-allowlisted writes.
+  Triggers include: "华为云报价", "报价", "价格估算", "费用预估", "比价", "询价", "开通报价", "创建报价",
+  "华为云价格", "价格查询", "预算评估", "费用计算", "price estimate", "cost estimation", "budget",
+  "quote", "pricing", "provision", "create", "purchase", "价格", "费用", "华为云多少钱".
+tags: [huawei-cloud, bss, billing, cost-estimation, provisioning]
 ---
 
-# Huawei Cloud · Pre-Purchase Price Estimation · Read-Only RFQ
+# Huawei Cloud Cost Estimation and Provisioning
+
+Prices come only from the current response: never guess, analogize, or recall them. Provisioning is
+the only permitted write path; unsubscribe is console guidance only.
 
 ## Overview
 
-Huawei Cloud cost estimation via **hcloud** ≥7.2.2 — BSS read-only pricing. **Use when** the user
-mentions Huawei Cloud / 华为云 / hcloud together with pricing intents: 报价, 询价, 价格,
-价格估算, 预算, budget, 比价, cost estimation, quote, pricing, price estimate. Triggers include
-these pricing/estimation keywords on Huawei Cloud contexts. Answer: how much will this resource
-cost (period or on-demand), where the difference is between specs/billing modes, what a combined
-quote sums to. Query only; no provisioning, no purchase, no unsubscribe, no history bills, no
-credentials.
+Estimates Huawei Cloud pre-order costs and, when the user wants to buy or create, provisions
+resources through an allowlisted `hcloud` command set, then routes unsubscribe requests to console
+guidance. **Use when** the user asks about Huawei Cloud / 华为云 / hcloud pricing, budgets, creation or
+provisioning in Chinese or English: 报价, 询价, 价格估算, 费用预估, 比价, 开通, 创建, price estimate,
+budget, quote, pricing, provision, create, purchase. Answer: how much a resource will cost, which
+spec/billing-mode combination fits, whether a resource can be provisioned, and how to unsubscribe —
+never by guessing prices, inventing parameters, or running non-allowlisted writes.
+
+- Pricing runs a 4-step RFQ flow (Parse → Clarify → Query → Verify & Present) over `hcloud BSS`
+  read-only APIs in the fixed region `cn-north-1`.
+- Lifecycle Create is limited to the 74 allowlisted operations in `references/lifecycle/commands.md`
+  and only after `--help`, fee review, `--dryrun`, and explicit confirmation.
+- Unsubscribe is console guidance only; no unsubscribe CLI/API is ever emitted or executed.
 
 ## Prerequisites
 
-> **Prerequisite check: Huawei Cloud CLI (hcloud) >= 7.2.2** and BSS read-only IAM.
+> **Prerequisite check: Huawei Cloud CLI (hcloud) >= 7.2.2** and an authenticated profile with
+> BSS read-only + lifecycle dependency IAM permissions (see `references/iam-policies.md`).
 > `hcloud BSS` always uses the fixed region `--cli-region=cn-north-1`; the resource deploy region is
 > carried inside each quote line's `region` field.
 
@@ -32,68 +49,111 @@ If not installed or authenticated, point the user to
 [references/cli-installation-guide.md](references/cli-installation-guide.md). Do NOT configure
 credentials on the user's behalf and do NOT accept AK/SK/token pasted in chat.
 
+> **Environment dependency (BSS pricing chain)**: the price-inquiry chain
+> (`ListServiceTypes`, `ListServiceResources`, `ListResourceSpecs`, `ListUsageTypes`,
+> `ListMeasureUnits`, `ListRateOnPeriodDetail`, `ListOnDemandResourceRatings`) runs against the
+> authenticated account's BSS (Business Support System) APIs. In sandboxed or restricted
+> environments where BSS access is not provisioned (no service metadata, no executor mapping), the
+> pricing chain cannot be verified end-to-end. In that case state clearly that prices cannot be
+> queried in the current environment, then stop — never guess, estimate from memory, or fabricate
+> amounts.
+
 ## Scope
 
-### In scope (read-only)
+### In scope
 
-| Step | What it answers |
+| Request | Handling |
 | --- | --- |
-| Dimension resolve | service type, resource type, resource spec, usage type, measure unit codes |
-| Period quote | year/month package price for one or more lines |
-| On-demand quote | pay-per-use price for one or more lines |
-| Presentation | line-item sum = total; CNY; official price by default, discounted only if returned |
+| Quote, budget, or comparison | Pricing (4-step RFQ) |
+| Provision, purchase, or create | Lifecycle Create, limited to `references/lifecycle/commands.md` |
+| Unsubscribe or stop using | console-only Unsubscribe Guidance |
 
 ### Out of scope — route, don't execute
 
 | Request | Routing |
 | --- | --- |
-| History bills / balance / reconciliation | 费用中心 or BSS read-only billing APIs (do not use this skill) |
-| Purchase / provision / create / renew / delete / unsubscribe | console guidance only; never run CLI write commands |
+| Historical bills, balance, or reconciliation | 费用中心 or read-only BSS billing APIs (do not use this skill) |
 | Non-Huawei cloud pricing | refuse politely |
-| AK/SK/token in chat | point to cli-installation-guide.md |
+| Non-allowlisted writes | console guidance; never run them |
+| AK/SK/token in chat | point to `references/cli-installation-guide.md` |
 | Remembering or guessing prices | prices only from the current hcloud response |
 
-## Principles
+## Execution Pace
 
-1. **Price only from the current response** — no fabrication, no analogy, no memory.
-2. **Params only from the current `--help`** — never guess parameter names.
-3. **Read-only** — every operation is a `List*`/`Show*`/read-only pricing POST; nothing mutates your account.
-4. **Route out-of-scope safely** — out-of-scope intent (bills/balance/reconciliation, purchase/provision,
-   unsubscribe/delete, credentials, non-Huawei pricing) is declined and pointed to the correct service; the
-   skill always keeps the right to refuse requests outside its read-only pricing scope.
-5. **Never default Duration** — `usage_factor` must come from `ListUsageTypes` for that `resource_type_code`.
-6. **Use slots ≠ size slots** — combine Measure Resolve rules in `references/commands.md`.
+Complete chains of at most three hcloud commands directly to the next safety gate. For longer
+chains, run only two or three commands per round, report progress and the next step, then ask
+whether to continue. A user may request uninterrupted execution, but clarification, unknown-cost
+approval, `--dryrun`, and write confirmation remain mandatory.
 
-## Workflow — 4-Step RFQ
+## Workflow
 
-| Phase | What the agent does | Reference File |
-| --- | --- | --- |
-| **1. Parse** | Extract quadruple `cloud_service_type / resource_type / region / resource_spec` plus period or usage; read `references/semantic/catalog.yml` to route period vs on-demand | `references/semantic/catalog.yml` |
-| **2. Clarify** | If region / quantity / period or usage / linear size is missing, ask in one round (2–4 candidates). Only safe-defaults (OS=linux, AZ=empty, `fee_installment_mode=NA`) may be disclosed and continued | `references/semantic/rfq-*.yml` |
-| **3. Query** | Run the strict dimension chain, then the quote. Multi-candidate → ask user. Specs having rows ≠ quotable | `references/commands.md` |
-| **4. Verify & Present** | Sum line items = total; align currency/period/quantity; format `[service] [spec] [region] [qty×period] = ¥<amount>`; append 加总 + 「非最终账单」; default official price, discount only if returned | this file (Response Requirements) |
+### Pricing — 4-Step RFQ
 
-### Dimension resolution chain (strict order)
+1. **Parse** `cloud_service_type / resource_type / region / resource_spec` plus period or usage;
+   route through `references/pricing/semantic/catalog.yml`.
+2. **Clarify** missing region, quantity, duration/usage, linear size, ambiguous categories, or
+   unresolved variants in one question with two to four candidates. Disclose and apply only safe
+   defaults: OS=linux, empty AZ, and `fee_installment_mode=NA`.
+3. **Query** using `references/pricing/commands.md`: `ListServiceResources` → `ListResourceSpecs` →
+   on-demand `ListUsageTypes(--resource_type_code)` → measure resolution → quotation. Ask on
+   multiple matches; a spec match may still fail. Never invent duration or mix capacity and usage
+   slots.
+4. **Verify and present** that line items sum to the total and currency, period, and quantity align.
+   Present `[service] [spec] [region] [quantity × period] = amount`, total, and “not a final bill.”
+   Show discounts only when returned.
 
-`ListServiceResources` → `ListResourceSpecs` → (on-demand) `ListUsageTypes(--resource_type_code)` → `ListMeasureUnits` + Measure Resolve → quote.
+### Lifecycle Create — 7 Gates
 
-Copy the first query from the matching `####` template in `references/commands.md`. No `--help`-based discovery during the flow; no self-constructed JSON; no full detail lists first.
+Read `references/lifecycle/concepts.md`, then perform every gate in order:
+
+1. **Allowlist** — Map intent to an operation in `references/lifecycle/commands.md`; refuse misses.
+2. **Help** — Run `hcloud <Service> <Operation> --help` for required and conditional fields. Stop on
+   `[APIE_ERROR]` or missing schema; never guess.
+3. **Resolve** — Run required read-only dependencies such as VPC, subnet, AZ, image, and flavor. Let
+   the user choose among multiple matches.
+4. **Cost** — Use Pricing when possible. Otherwise disclose “price unknown and may incur charges”
+   and obtain separate approval.
+5. **Dry** — Add global `--dryrun` to the complete command. Fix and rerun failures; never promote a
+   failed dry run.
+6. **Confirm** — Show resource, region, spec, quantity, billing, known or unknown price, and batch
+   order; wait for explicit confirmation.
+7. **Execute** — Remove only `--dryrun`. Run multiple commands in order, stop on failure, never
+   auto-rollback, and report succeeded, failed, and unexecuted items.
+
+Any parameter, region, quantity, or operation change invalidates the dry run and confirmation and
+returns to Help.
+
+### Unsubscribe Guidance
+
+Never run or generate unsubscribe CLI/API operations, and never use `--dryrun` as a substitute for
+console preview.
+
+- **Subscription resources:** direct the user to Huawei Cloud Console → Cost Center → Orders →
+  Unsubscriptions. Ask them to back up or migrate data and verify the account, resource, related
+  resources, refund, fees, and refund destination before submission.
+- **Pay-per-use resources:** unsubscribe does not apply. Direct the user to the service console to
+  delete the resource after backup; do not delete it for them.
+
+If automation is requested, preserve this boundary and provide the
+[official unsubscribe rules](https://support.huaweicloud.com/usermanual-billing/unsubscription_topic_2000010.html).
 
 ## Core Commands
 
-> All `hcloud BSS` commands use `--cli-region=cn-north-1`. Multi-line quotes are submitted in ONE
-> request via dot notation `--product_infos.N.*` (max 100 lines). Pricing APIs have no pagination.
+> All `hcloud BSS` commands use `--cli-region=cn-north-1`. Arrays use dot notation
+> (`--product_infos.N.*`); output with `--cli-output=json`. Full contracts and exact templates live
+> in `references/pricing/commands.md` and `references/lifecycle/commands.md`.
 
 ### Resolve project scope (IAM read-only)
 
 ```bash
 hcloud IAM KeystoneListAuthProjects --cli-region={region} --cli-output=json
+hcloud IAM KeystoneListProjects --domain_id={domain_id} --cli-region={region} --cli-output=json
 ```
 
-### List service / resource / spec dimensions (BSS read-only)
+### Pricing dimensions (BSS read-only)
 
 ```bash
-hcloud BSS ListServiceTypes --cli-region=cn-north-1 --cli-output=json --limit={limit} --offset={offset}
+hcloud BSS ListServiceTypes --cli-region=cn-north-1 --cli-output=json --limit=10 --offset=0
 hcloud BSS ListServiceResources --service_type_code={cloud_service_type} --cli-region=cn-north-1 --cli-output=json --limit=10 --offset=0
 hcloud BSS ListResourceSpecs --charge_mode=1 --cloud_service_type={cst} --resource_type={rt} --region_code={region} --filters.1.key=RESOURCE_SPEC --filters.1.value={spec_hint} --limit=100 --cli-region=cn-north-1 --cli-output=json
 hcloud BSS ListUsageTypes --resource_type_code={rt} --cli-region=cn-north-1 --cli-output=json --limit=100 --offset=0
@@ -115,23 +175,7 @@ hcloud BSS ListRateOnPeriodDetail \
 ```
 
 Linear products (volume / bandwidth / share_bandwidth) additionally require
-`--product_infos.1.resource_size={size} --product_infos.1.size_measure_id={17|15}`.
-
-| Parameter | Required | Description |
-|-----------|----------|-------------|
-| `--cli-region` | Yes (auto) | fixed `cn-north-1` for all BSS commands |
-| `--project_id` | Yes | resolved via `KeystoneListAuthProjects` |
-| `--product_infos.N.id` | Yes | unique id within the request; maps response rows back |
-| `--product_infos.N.cloud_service_type` | Yes | raw code from `ListServiceTypes` |
-| `--product_infos.N.resource_type` | Yes | raw code from `ListServiceResources` |
-| `--product_infos.N.resource_spec` | Yes | raw code from `ListResourceSpecs` (never fabricate; OS suffix already included) |
-| `--product_infos.N.region` | Yes | actual deploy region of the resource |
-| `--product_infos.N.period_type` | Yes | `0` day / `2` month / `3` year / `4` hour |
-| `--product_infos.N.period_num` | Yes | number of periods |
-| `--product_infos.N.subscription_num` | Yes | quantity, 1..10000 |
-| `--product_infos.N.resource_size` | Conditional | linear products only (volume/bandwidth/share_bandwidth) |
-| `--product_infos.N.size_measure_id` | Conditional | `17` GB (volume), `15` Mbps (bandwidth/share_bandwidth) |
-| `--product_infos.N.fee_installment_mode` | No | default `NA` (CloudPond only) |
+`--product_infos.N.resource_size={size} --product_infos.N.size_measure_id={17|15}`.
 
 ### On-demand quote (BSS/ListOnDemandResourceRatings, read-only POST)
 
@@ -148,88 +192,116 @@ hcloud BSS ListOnDemandResourceRatings \
   --cli-region=cn-north-1 --cli-output=json
 ```
 
-| Parameter | Required | Description |
-|-----------|----------|-------------|
-| `--product_infos.N.usage_factor` | Yes | raw `code` from `ListUsageTypes` — never default `Duration` |
-| `--product_infos.N.usage_value` | Yes | scalar per Measure Resolve rules (hours / GB×hour / GB / count) |
-| `--product_infos.N.usage_measure_id` | Yes | usage slot id from `ListMeasureUnits` — ≠ `size_measure_id` |
-| `--inquiry_precision` | No | `0` default 6 digits / `1` full 10 digits |
+### Lifecycle create (allowlisted write path)
+
+The 74 allowlisted operations (e.g. `ECS/CreateServers`, `DDS/CreateInstance`, `RDS/CreateInstance`)
+are enumerated in `references/lifecycle/commands.md`. Parameters always come from the current
+`--help`, never from memory. Minimal executable example (VPC is allowlisted, `VPC/CreateVpc` is a
+readily dry-runnable create):
+
+```bash
+hcloud VPC CreateVpc --help
+hcloud VPC CreateVpc --vpc.name={name} --vpc.cidr=172.16.0.0/16 --cli-region={region} --dryrun
+```
+
+Every other allowlisted operation follows the same shape: run `--help` first, then build the full
+command from the help output, add `--dryrun`, and only remove `--dryrun` after the dry-run gate and
+explicit confirmation. Pass the `--dryrun` gate and explicit confirmation before executing without
+`--dryrun`; one failure stops the batch, no auto-rollback.
+
+### Lifecycle dependency lookups (read-only)
+
+Run only the dependencies the help output marks required (`references/lifecycle/commands.md`):
+
+```bash
+hcloud EPS ListEnterpriseProject --cli-region=cn-north-4 --cli-output=json
+hcloud VPC ListVpcs --cli-region={region} --cli-output=json
+hcloud VPC ListSubnets --cli-region={region} --cli-output=json
+hcloud ECS NovaListAvailabilityZones --cli-region={region} --cli-output=json
+hcloud IMS ListImages --cli-region={region} --cli-output=json
+hcloud EVS CinderListVolumeTypes --cli-region={region} --cli-output=json
+hcloud ECS NovaListKeypairs --cli-region={region} --cli-output=json
+hcloud ECS NovaListFlavors --cli-region={region} --cli-output=json
+```
+
+> **EPS region note**: EPS does not support `cn-north-1`. Query enterprise projects with
+> `--cli-region=cn-north-4` (or another EPS-enabled region such as `ru-moscow-1` /
+> `my-kualalumpur-1`); the returned `enterprise_project_id` is region-independent for lifecycle
+> create parameters. The BSS fixed region `cn-north-1` applies to price inquiry only, never to EPS.
 
 ## Parameter Confirmation
 
-Parameter tables live with each command group above — `Period quote` section lists the
-`ListRateOnPeriodDetail` parameters (Required/Conditional/Optional), and `On-demand quote`
-section lists `ListOnDemandResourceRatings` parameters. Dimension/list commands use `--limit`
-/ `--offset` (optional, default 10), and `ListResourceSpecs` uses `--filters.[N].key=RESOURCE_SPEC`
-plus `--filters.[N].value` for spec filtering. Exact required/optional split for every command is
-verified against the runtime `--help` output of the concrete command (never guessed).
+| Parameter | Required | Description | Example |
+| --- | --- | --- | --- |
+| `--cli-region` | Yes (auto) | fixed `cn-north-1` for all BSS commands | `--cli-region=cn-north-1` |
+| `--project_id` | Yes | resolved via `KeystoneListAuthProjects` | `--project_id=xxx` |
+| `--product_infos.N.cloud_service_type` | Yes | raw code from `ListServiceTypes` | `hws.service.type.ec2` |
+| `--product_infos.N.resource_type` | Yes | raw code from `ListServiceResources` | `hws.resource.type.vm` |
+| `--product_infos.N.resource_spec` | Yes | raw code from `ListResourceSpecs` (never fabricate) | `c6.2xlarge.2.linux` |
+| `--product_infos.N.region` | Yes | actual deploy region of the resource | `cn-north-4` |
+| `--product_infos.N.subscription_num` | Yes | quantity, 1..10000 | `1` |
+| `--product_infos.N.period_type` | Conditional | period quote only: `0` day / `2` month / `3` year / `4` hour | `2` |
+| `--product_infos.N.period_num` | Conditional | period quote only: number of periods | `1` |
+| `--product_infos.N.usage_factor` | Conditional | on-demand only: raw `code` from `ListUsageTypes` | `Duration` |
+| `--product_infos.N.usage_value` | Conditional | on-demand only: scalar per Measure Resolve rules | `2` |
+| `--product_infos.N.usage_measure_id` | Conditional | on-demand only: usage slot from `ListMeasureUnits` (≠ `size_measure_id`) | `4` |
+| `--product_infos.N.resource_size` | Conditional | linear products only (volume / bandwidth / share_bandwidth) | `40` |
+| `--product_infos.N.size_measure_id` | Conditional | `17` GB (volume), `15` Mbps (bandwidth / share_bandwidth) | `17` |
+| `--dryrun` | Yes (lifecycle) | global dry-run gate before any create; never `--dry-run` | `--dryrun` |
 
-## Reading the Response
+Missing region, quantity, duration/usage, or linear size is clarified in one question with two to
+four candidates before any command runs.
 
-| API | Official price | Discounted (report only if present) |
-| --- | --- | --- |
-| `ListRateOnPeriodDetail` | `official_website_rating_result.official_website_amount` | `optional_discount_rating_results[]` where `best_offer==1` |
-| `ListOnDemandResourceRatings` | root / `product_rating_results[]` `official_website_amount` | `amount` when `discount_amount>0` |
+## Unsubscribe Console Path
 
-`measure_id=1` = CNY (人民币元); `currency=CNY`, empty means CNY. On-demand response already
-contains `usage_value` — do NOT multiply again.
+Never run or generate unsubscribe CLI/API operations; `--dryrun` previews request construction only
+and never replaces the console. Subscription resources go through Console → Cost Center → Orders →
+Unsubscriptions after data backup and account/resource/refund verification; pay-per-use resources
+are deleted by the user in the service console after backup.
 
-## Error Handling
+## Critical Rules
 
-| Code | Handling |
-| --- | --- |
-| `403` / `CBC.0151` | record operation + account scope; suggest the read-only Action from `references/iam-policies.md` |
-| `429` | wait 2s, retry once; still failing → stop |
-| `CBC.0100` | verify runtime `--help` vs parameter combination |
-| `CBC.99006006` | back to spec / region / billing-mode confirmation (verified: non-existent spec → this code) |
-| `CBC.99006055` | shrink quote batch or period |
-| `CBC.6006` / `CBC.6050` | change usage type/factor or same-abbreviation sibling once; no exhaustive enumeration |
+1. Prices come from the current response; parameters come from current help.
+2. No real create call without a successful `--dryrun` and explicit confirmation.
+3. Never automate or emit unsubscribe operations.
+4. Refuse AK, SK, and tokens in chat; point to `references/cli-installation-guide.md` for
+   self-configuration.
+5. Every BSS call uses `--cli-region=cn-north-1`; `product_infos.N.region` remains the deployment
+   region.
+6. Route out-of-scope work to Cost Center, the appropriate console, or read-only billing.
 
-## Response Requirements
-
-> Plain IM-friendly text; no GFM tables for user-facing messages. Use `·` bullets or numbering.
-
-- **Line format**: `[service] [spec] [region] [qty×period] = ¥<amount>`
-- **Sum** line items and verify sum = total; then label `<总价> 非最终账单`
-- **Default official price**; attach discounted price only when the response returns a discount
-- 口诀复核: restate the quadruple in plain words to confirm before quoting when ambiguous
-- **Never expose** internal parameter names to the user; never echo full command chains
+Use bullets or numbered items, not GFM tables, in user-facing responses. For command-level traps,
+read `references/pricing/commands.md`.
 
 ## KooCLI Command Format Standard
 
-Every command follows the generic KooCLI shape: `hcloud` + the service name (e.g. `BSS`, `IAM`,
-`ECS`) + a PascalCase operation name (e.g. `ListRateOnPeriodDetail`) + `--key=value` flags. The
-placeholder tokens above (e.g. `<service>`) are illustrative only — never run them literally.
+Every command follows the generic KooCLI shape:
+`hcloud <Service> <Operation> --cli-region=<region> [--key=value ...]`.
 
-- Service names: `BSS`, `IAM`, `ECS` (detected case from KooCLI metadata)
-- Operation names: PascalCase (e.g. `ListRateOnPeriodDetail`)
-- Indexed params: `--product_infos.1.id=1` dot notation (JSON arrays / `[...]` not accepted)
-- Region: BSS always `cn-north-1`; IAM uses the profile/current region; ECS AZ uses the resource region
+| Feature | Description | Example |
+| --- | --- | --- |
+| Service name | Exact KooCLI Service name beginning with uppercase/title case | `BSS`, `IAM`, `ECS`, `VPC`, `DDS` |
+| Operation name | PascalCase | `ListRateOnPeriodDetail`, `CreateServers` |
+| Region parameter | `--cli-region=<value>` | `--cli-region=cn-north-1` |
+| Simple parameter | `--key=value` | `--project_id=xxx` |
+| Indexed parameter | `--key.N=value` dot notation | `--product_infos.1.id=1` |
+| Global dry-run | `--dryrun` (not `--dry-run`) | `--dryrun` |
+
+Placeholder tokens above (e.g. `<Service>`) are illustrative only — never run them literally.
 
 ## Reference Documents
 
 | Document | Content |
 | --- | --- |
-| [references/commands.md](references/commands.md) | Command contracts, response fields, universal traps, Measure Resolve table |
-| [references/semantic/catalog.yml](references/semantic/catalog.yml) | Routing catalog: period / on-demand / dimension_lookup |
-| [references/semantic/rfq-shared-dimensions.yml](references/semantic/rfq-shared-dimensions.yml) | Shared conformed dimensions |
-| [references/semantic/rfq-period-model.yml](references/semantic/rfq-period-model.yml) | Period quote fact/line model (Kimball star) |
-| [references/semantic/rfq-ondemand-model.yml](references/semantic/rfq-ondemand-model.yml) | On-demand quote fact/line model |
-| [references/dataflow-diagram.md](references/dataflow-diagram.md) | Mermaid data flow |
+| [references/lifecycle/concepts.md](references/lifecycle/concepts.md) | Lifecycle execution concepts: allowlist, help, lookup, dry-run, fee status, batch invariants, unsubscribe console path |
+| [references/lifecycle/commands.md](references/lifecycle/commands.md) | The 74 allowlisted create operations and dependency lookup commands |
+| [references/pricing/commands.md](references/pricing/commands.md) | Pricing command contracts, response fields, universal traps, Measure Resolve table |
+| [references/pricing/semantic/catalog.yml](references/pricing/semantic/catalog.yml) | Routing catalog: period / on-demand / dimension_lookup |
+| [references/pricing/semantic/rfq-ondemand-model.yml](references/pricing/semantic/rfq-ondemand-model.yml) | On-demand quote fact/line model |
+| [references/pricing/semantic/rfq-period-model.yml](references/pricing/semantic/rfq-period-model.yml) | Period quote fact/line model |
+| [references/pricing/semantic/rfq-shared-dimensions.yml](references/pricing/semantic/rfq-shared-dimensions.yml) | Shared conformed dimensions |
 | [references/iam-policies.md](references/iam-policies.md) | Least-privilege IAM policies |
-| [references/verification-method.md](references/verification-method.md) | How to verify the skill |
-| [references/acceptance-criteria.md](references/acceptance-criteria.md) | Acceptance criteria |
-| [references/cli-installation-guide.md](references/cli-installation-guide.md) | KooCLI install/auth guide (only to relay to user) |
-| [scripts/cost_estimation.py](scripts/cost_estimation.py) | Helper runner (read-only) with quality reporting |
+| [references/cli-installation-guide.md](references/cli-installation-guide.md) | KooCLI install and auth guide (only to relay to user) |
 
-## Hard Constraints (Non-Negotiable)
-
-1. **Never guess prices or params** — price only from current response; params only from current `--help`.
-2. **Never run a write command** — purchase/provision/renew/delete/unsubscribe stay on the console.
-3. **Never accept credentials in chat** — AK/SK/token are refused and routed to the install guide.
-4. **BSS endpoint fixed** — `hcloud BSS` always `--cli-region=cn-north-1`; deploy region lives in
-   `product_infos.N.region`.
-5. **No history bills / balance / reconciliation here** — route to 费用中心 or BSS billing read-only
-   APIs.
-6. **No cross-service quote synthesis** — each quote line's quadruple must come from its own dimension
-   query.
+For 403 or permission failures, read `references/iam-policies.md`. If hcloud is unavailable, relay
+`references/cli-installation-guide.md`; never install it for the user.

@@ -12,9 +12,6 @@ entry_points:
     ontology_files:
       - rfq-shared-dimensions.yml
       - rfq-period-model.yml
-    required_context:
-      quadruple: [cloud_service_type, resource_type, region, resource_spec]
-      period: [period_type, period_num, subscription_num]
 
   rfq_ondemand_quote:
     pricing_mode: on_demand
@@ -22,9 +19,6 @@ entry_points:
     ontology_files:
       - rfq-shared-dimensions.yml
       - rfq-ondemand-model.yml
-    required_context:
-      quadruple: [cloud_service_type, resource_type, region, resource_spec]
-      usage: [usage_factor, usage_value, usage_measure_id, subscription_num]
 
   dimension_lookup:
     ontology_files:

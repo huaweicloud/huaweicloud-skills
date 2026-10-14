@@ -1,37 +1,38 @@
-# IAM 最小权限 (Least-Privilege IAM Policies)
+# IAM least privilege
 
-IAM Action 随账号类型、站点和服务版本变化，落地前以 API Explorer 与运行时
-具体命令的 `--help` 输出为准（形如 `hcloud BSS ListServiceTypes --help`）。权限不足时报告用户补授权：
-不得用写权限补救查询失败，不得自行提权重试。
+IAM actions vary by account type, site, and service version; before relying on them, confirm against API Explorer
+and runtime `hcloud <Service> <Operation> --help`. On insufficient permission, report back so the user can grant
+the missing permission: never work around a failed query with a write permission, and never retry with self-granted privileges.
 
-## 询价（只读）
+## Price inquiry (read-only)
 
-| 层级 | 操作 | 用途 |
+| Level | Operation | Purpose |
 | --- | --- | --- |
-| BSS 询价 | `ListRateOnPeriodDetail`, `ListOnDemandResourceRatings` | 取得包周期或按需报价 |
-| BSS 字典 | `ListServiceTypes`, `ListResourceTypes`, `ListServiceResources`, `ListResourceSpecs`, `ListMeasureUnits`, `ListConversions` | 解析服务、资源、规格和度量 |
-| 产品辅助 | `ECS/NovaListAvailabilityZones` | 用户指定 AZ 时（可选） |
-| 身份范围 | `IAM/KeystoneListAuthProjects`, `IAM/KeystoneListProjects`, `IAM/KeystoneListAuthDomains` | 解析可访问项目与账户 |
+| BSS price inquiry | `ListRateOnPeriodDetail`, `ListOnDemandResourceRatings` | Obtain a period or on-demand quote |
+| BSS dictionary | `ListServiceTypes`, `ListResourceTypes`, `ListServiceResources`, `ListResourceSpecs`, `ListMeasureUnits`, `ListConversions` | Resolve service, resource, spec, and measure |
+| Product helper | `ECS/NovaListAvailabilityZones` | When the user specifies an AZ |
+| Identity scope | `IAM/KeystoneListAuthProjects`, `IAM/KeystoneListProjects` | Resolve accessible projects |
 
-询价常用策略为 `bss:order:view` 加对应 BSS/IAM 只读 Action。
+The usual price-inquiry policy is `bss:order:view` plus the corresponding read-only BSS/IAM actions.
 
-## 拒绝的写权限
+## Provisioning (write)
 
-本 Skill 为纯只读，不申请任何写权限。若账号策略仅在写权限下才能通过，停止并报错，
-不给用户提供写路径变通。不要在列表中引入 Create/Delete/Update 操作。
+Write permission follows the service that owns the allowlisted operation (for example `ECS/CreateServers` needs an ECS
+write action), while dependency lookups need only the read-only actions of the corresponding service. This file does not enumerate
+write actions per service: take the action named in the current 403 error message and API Explorer as authoritative, and report back so an administrator can grant it.
 
-## 伙伴代客户询价
+## Partner price inquiry on behalf of a customer
 
-使用客户授权所得 Token 调 `KeystoneListAuthProjects` 解析目标 region 的客户
-`project_id`，再询价。授权失败时停止，不扩大范围。
+Use the token obtained from the customer's authorization to call `KeystoneListAuthProjects`, resolve the customer
+`project_id` for the target region, then run the price inquiry. Stop if authorization fails; do not widen the scope.
 
-## 权限与限流失败处理
+## Permission and throttling failure handling
 
-| 现象 | 处理 |
+| Symptom | Handling |
 | --- | --- |
-| `403 Forbidden` / `CBC.0151` | 记录操作与账号范围，建议补对应 Action（询价只补只读） |
-| `429` | 等 2 秒重试一次；仍失败则停止 |
+| `403 Forbidden` / `CBC.0151` | Record the operation and account scope, then recommend granting the corresponding action (for price inquiry, read-only only) |
+| `429` | Wait 2 seconds and retry once; stop if it still fails |
 
-参数类错误（`CBC.0100` / `CBC.99006006` / `CBC.99006055` 等）见
-`commands.md` 陷阱区。历史账单、余额和对账不属于本技能；
-使用费用中心或独立只读账单技能。
+Parameter errors (such as `CBC.0100` / `CBC.99006006` / `CBC.99006055`) are covered in the trap section of
+`pricing/commands.md`. Historical bills, balance, and reconciliation are out of scope for this skill; use
+Cost Center or a dedicated read-only billing skill.
