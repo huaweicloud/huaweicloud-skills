@@ -178,7 +178,7 @@ if (Test-Path $staging) { Remove-Item -Recurse -Force $staging }
 New-Item -ItemType Directory -Path "$staging\resources" -Force
 
 $env:OUT = "$env:TEMP\workDetail.zip"
-node <skill>/scripts/build-detail-zip.mjs --readme "$staging\README.md" --resources "$staging\resources" --out $env:OUT
+node $SKILL_DIR/scripts/build-detail-zip.mjs --readme "$staging\README.md" --resources "$staging\resources" --out $env:OUT
 ```
 
 **备选（仅当 build-detail-zip.mjs 不可用）：** ⚠️ 不能用 `Compress-Archive -Path "$staging\resources\*.png"` —— PS 5.1 会压平子目录，生成的 zip 只有 `README.md + arch.png`（丢失 `resources/` 前缀），导致平台 `GALLERY.PARAM.DETAIL_ZIP_INVALID`。必须用 .NET `ZipFile::CreateFromDirectory` 保留目录结构（README.md + resources/arch.png）：
@@ -189,7 +189,7 @@ Remove-Item "$env:TEMP\workDetail.zip" -ErrorAction SilentlyContinue
 [System.IO.Compression.ZipFile]::CreateFromDirectory("$staging", "$env:TEMP\workDetail.zip")
 ```
 
-备选打包后须运行 `node <skill>/scripts/validate-detail-zip.mjs <zip>` 校验（跨平台，见 `work-preparation.md`）。
+备选打包后须运行 `node $SKILL_DIR/scripts/validate-detail-zip.mjs <zip>` 校验（跨平台，见 `work-preparation.md`）。
 
 ---
 

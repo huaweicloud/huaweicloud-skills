@@ -132,8 +132,10 @@ def long_run_detect(mask, y0, y1, x0, x1, min_long=8):
     """墨段法豆腐块检测（适配小字号，弥补 hollow_ratio 的字号盲区）。
 
     豆腐块（空心方框）的左右边框在行向投影上是多段「长度≈字符高的长墨段」，
-    且**等距重复**（每字符两段）；真实 CJK 字符笔画零散，横向几乎无长墨段。
-    实测（单字符高窗口）各字号可分性：
+    且**等距重复**（每字符两段）+ **边框两侧为整字空白**；真实 CJK 字符笔画
+    虽然竖画可能够长，但笔画旁通常紧邻其他笔画/留白不足，间隙小。
+    故新增「前/后间隙 ≥ 半字符高」约束：只有两侧都有显著空白的孤立长墨段才
+    计作方框边框。实测（单字符高窗口）各字号可分性：
 
       | 字号 | tofu 长墨段 | normal 长墨段 |
       |------|------------|--------------|
@@ -161,10 +163,11 @@ def long_run_detect(mask, y0, y1, x0, x1, min_long=8):
     if use_h < 8:
         return None
     band_h = min(use_h, 70)  # 单行文字带高（≤70px 防多行粘连）
-    threshold = int(band_h * 0.6)
+    threshold = int(band_h * 0.55)   # 墨段必须达半行高以上才算「长」
+    gap_min = int(band_h * 0.28)     # 两侧须有显著空白（方框内腔/字间），真实中文竖笔旁空隙通常更小
     # 列向投影（该带内任一行的墨 → 该列算墨）
     col_ink = mask[y0 + lo:y0 + hi, x0:x1].any(axis=0).astype(int)
-    long_count = 0
+    segs = []  # (start, end)
     i = 0
     n = len(col_ink)
     while i < n:
@@ -172,11 +175,19 @@ def long_run_detect(mask, y0, y1, x0, x1, min_long=8):
             j = i
             while j < n and col_ink[j] == 1:
                 j += 1
-            if (j - i) >= threshold:
-                long_count += 1
+            segs.append((i, j))
             i = j
         else:
             i += 1
+    long_count = 0
+    for k, (s, e) in enumerate(segs):
+        if (e - s) < threshold:
+            continue
+        prev_gap = s - (segs[k - 1][1] if k > 0 else -1)
+        next_gap = (segs[k + 1][0] if k + 1 < len(segs) else n) - e
+        # 仅当两侧间隙都≥gap_min（含首/尾边界外视为满足）才近似「孤立方框边框」
+        if prev_gap >= gap_min and next_gap >= gap_min:
+            long_count += 1
     if long_count >= min_long:
         return True
     return False
@@ -218,6 +229,76 @@ def hollow_ratio(mask, y0, y1, x0, x1):
         return None
     cd = float(mask[cy0:cy1, cx0:cx1].mean())
     return cd / fd
+
+
+def blanket_infill_density(mask, y0, y1, x0, x1):
+    """「整块铺底」墨密度：统计窗口是否被大面积非背景色填满（截图/彩色背景）。
+
+    判定思路：误报封面（截图铺底）的窗口墨密度很高且均匀（>=0.3），
+    而真实文字窗口墨密度通常 <0.25（笔画稀疏、留白多）。
+    当 hollow 疑似豆腐块但本密度很高时，说明窗口包含了截图内容而非只有文字，
+    空心判定不可信 → 应交由 long_run（空心方框边框）做最终裁决。
+    返回 float（0~1）或 None（无法采样）。
+    """
+    hgt = y1 - y0
+    if hgt < 8 or (x1 - x0) < 8:
+        return None
+    win = mask[y0:y1, x0:x1]
+    return float(win.mean())
+
+
+def is_multiline_band(mask, y0, y1, x0, x1, min_gap=2):
+    """判断窗口内是否含「内部行间隙」（即多行文字被合并成一条带）。
+
+    判定依据（两种信号满足其一即多行）：
+      1. 存在空行两侧都被墨行夹住（不是边缘空白）且空行高度≥min_gap；
+      2. 带高显著高于「单行文字典型行高」——若带内有明显墨行分段且带高过大，
+         说明 find_bands 因截图/底噪把多行粘连成一条，hollow 中心会落行间→误报。
+    可用剪影：按行墨 > 微墨阈值统计「实墨行」数量；若实墨行被空当分隔成 ≥2 段
+    且总带高 ≥ 1.6× 各段高度和，视为多行。
+    """
+    hgt = y1 - y0
+    if hgt < 16:
+        return False
+    row_ink = mask[y0:y1, x0:x1].sum(axis=1)
+    rows_active = row_ink > 0
+
+    # 信号1：真正的空行间隙（前后都有墨行）
+    if rows_active.any():
+        gap_run = 0
+        for r in range(1, hgt - 1):
+            if not rows_active[r]:
+                gap_run += 1
+                if gap_run >= min_gap and rows_active[r - gap_run]:
+                    if r + 1 < hgt and rows_active[r + 1]:
+                        return True
+            else:
+                gap_run = 0
+
+    # 信号2：多行粘连（半高阈值因底噪启用）
+    # 用该窗口局部平均墨量做「微墨」筛选，把底噪行视为空，寻找分段点
+    frac = row_ink.max() * 0.15 if row_ink.max() > 0 else 0
+    solid = row_ink > frac
+    if solid.any():
+        # 去除前后边缘，找至少 2px 的「非实墨」段
+        segs = []
+        in_seg = False
+        for r in range(hgt):
+            if solid[r]:
+                if not in_seg:
+                    segs.append([r, r + 1])
+                    in_seg = True
+                else:
+                    segs[-1][1] = r + 1
+            else:
+                in_seg = False
+        segs = [s for s in segs if (s[1] - s[0]) >= 10]
+        if len(segs) >= 2:
+            sum_h = sum((e - s) for s, e in segs)
+            # 若各段合计高度明显小于带高（存在内部空隙），或段数≥2 且带高接近 2 行以上
+            if len(segs) >= 2 and (hgt - sum_h >= 8 or hgt >= (sum_h * 1.6)):
+                return True
+    return False
 
 
 def find_blank_control(mask, x0, x1, height, step=5):
@@ -360,27 +441,71 @@ def main_cli():
     if text_bbox is not None and args.y_target is None and args.y_control is None:
         bx0, by0, bx1, by1 = text_bbox
         bx0 = max(bx0, x0); bx1 = min(bx1, x1)
-        bb_h = min(max(10, by1 - by0), 60)  # 目标行窗口取 10~60px，避免整页文字带被当“一行”
-        # 目标行：bbox 内墨量最大的窗口（滑动扫描）
-        best_t, best_ink_t = None, 0
-        for yy in range(by0, max(by0 + 1, by1 - bb_h + 1), 5):
-            ink_t = ink(mask, yy, yy + bb_h, bx0, bx1)
-            if ink_t > best_ink_t:
-                best_ink_t, best_t = ink_t, yy
-        # 对照行：bbox 列范围内（不含右侧截图区）、与【目标窗口自身】无重叠的最小墨窗口
-        # （仅避让目标窗口而非整个 bbox：bbox 常覆盖整页文字带，全避让会无对照可找 → 回落自动定位触发重试）
+        # 目标行：bbox 内「单行文本带」（墨量最大的行带），避免固定高度滑动窗口
+        # 跨标题/tagline/desc 等散文行时把中心 1/3 落在行间空白 → 误判空心矩形。
+        # 用 find_bands 识别真实文本带（行间隙>pad 即分段）。
+        #
+        # 加固：不再只取「墨量最大」的一条带判定——若豆腐块带墨量偏小、另一真实文本带
+        # 墨量更大，只检最大带会漏检。改为对 bbox 内**全部候选文本带逐带做空心检测**，
+        # 任一命中豆腐块即失败；同时保留对照行 ratio 判定（用墨量最大的带，保下行采样）。
+        bands_in_bbox = find_bands(mask, bx0, bx1, pad=4, min_h=8, max_density=args.max_density)
+        bands_in_bbox = [b for b in bands_in_bbox if b[0] >= by0 and b[1] <= by1 + 1]
+        text_cands = [
+            b for b in bands_in_bbox
+            if b[2] >= 200 and b[3] < args.max_density and (b[1] - b[0]) >= 8
+        ]
+        best_band = None
+        if text_cands:
+            best_band = max(text_cands, key=lambda b: b[2])
+        # 逐带空心检测（灾难性必检）：任何一条**单行**文本带呈现空心矩形（豆腐块特征）即拒绝。
+        # 多行合并带（如 desc 两行文字被并成一条带）不做空心判定——其内部行间隙会让中心
+        # 1/3 落在空白误报；此类带仍由下方 best_band 的 ratio 判定兜底。
+        for band in text_cands:
+            by0_b, by1_b = band[0], band[1]
+            if is_multiline_band(mask, by0_b, by1_b, bx0, bx1):
+                qprint(f"（跳过多行带）[{by0_b},{by1_b}] 含行间隙，不做空心判定")
+                continue
+            holl = hollow_ratio(mask, by0_b, by1_b, bx0, bx1)
+            if holl is not None and holl < 0.8:
+                # 疑似豆腐块：以长墨段法（空心方框边框）终审。
+                # hollow_ratio 对纯 ASCII/数字字符会误报（笔画不贯穿中心，如 i/l/x/h 中心空白），
+                # 但真实豆腐块（缺字字形）会同时呈现等距重复的长墨段边框，long_run 能区分。
+                # 截图/彩色铺底（infill≥0.3）同样由 long_run 终审。
+                infill = blanket_infill_density(mask, by0_b, by1_b, bx0, bx1)
+                if long_run_detect(mask, by0_b, by1_b, bx0, bx1):
+                    print(f"❌ 疑似豆腐块：文字带 [{by0_b},{by1_b}] 呈空心矩形（中心墨密度/整体墨密度={holl:.2f}<0.8）且 long_run 命中方框边框。", file=sys.stderr)
+                    print("   请检查字体是否丢失/字形缺失——真实 CJK 笔画应贯穿字符中心。", file=sys.stderr)
+                    sys.exit(1)
+                qprint(f"（空心判定可信度低）带 [{by0_b},{by1_b}] hollow={holl:.2f} infill={None if infill is None else round(infill,2)} 但 long_run 未命中豆腐块边框，疑似 ASCII/细笔画/铺底 → 放行")
+                continue
+        if best_band is None:
+            # 兼容旧图/极端构图：回退墨量最大的 60px 滑动窗口
+            bb_h = min(max(10, by1 - by0), 60)
+            best_t, best_ink_t = None, 0
+            for yy in range(by0, max(by0 + 1, by1 - bb_h + 1), 5):
+                ink_t = ink(mask, yy, yy + bb_h, bx0, bx1)
+                if ink_t > best_ink_t:
+                    best_ink_t, best_t = ink_t, yy
+            best_band = (best_t, best_t + bb_h, best_ink_t, 0.0) if best_t is not None else None
+        # 对照行：bbox 列范围内（不含右侧截图区）、与【目标行文本带】无重叠的最小墨窗口
+        # （仅避让目标带而非整个 bbox：bbox 常覆盖整页文字带，全避让会无对照可找 → 回落自动定位触发重试）
         y_c = None
-        if best_t is not None:
-            y_c = find_blank_control_outside(mask, bx0, bx1, bb_h, best_t, best_t + bb_h)
-        if best_t is not None and y_c is not None and best_ink_t >= 200:
-            y_t, a, b = best_t, best_ink_t, ink(mask, y_c, y_c + bb_h, bx0, bx1)
+        if best_band is not None:
+            bb_h = best_band[1] - best_band[0]
+            y_c = find_blank_control_outside(mask, bx0, bx1, bb_h, best_band[0], best_band[1])
+        if best_band is not None and y_c is not None and best_band[2] >= 200:
+            y_t, a, b = best_band[0], best_band[2], ink(mask, y_c, y_c + bb_h, bx0, bx1)
             # 豆腐块检测：真实 CJK 笔画贯穿中心（比值≥0.8），豆腐块空心方框中心稀疏（<0.8）
             holl_ratio = hollow_ratio(mask, y_t, y_t + bb_h, bx0, bx1)
             if holl_ratio is not None and holl_ratio < 0.8:
-                print(f"❌ 疑似豆腐块：文字区域呈空心矩形（中心墨密度/整体墨密度={holl_ratio:.2f}<0.8）。", file=sys.stderr)
-                print("   请检查字体是否丢失/字形缺失——真实 CJK 笔画应贯穿字符中心。", file=sys.stderr)
-                sys.exit(1)
-            if holl_ratio is not None:
+                # hollow_ratio 对 ASCII/数字误报（笔画不贯穿中心）；统一用 long_run 终审。
+                infill = blanket_infill_density(mask, y_t, y_t + bb_h, bx0, bx1)
+                if long_run_detect(mask, y_t, y_t + bb_h, bx0, bx1):
+                    print(f"❌ 疑似豆腐块：文字区域呈空心矩形（中心墨密度/整体墨密度={holl_ratio:.2f}<0.8）且 long_run 命中方框边框。", file=sys.stderr)
+                    print("   请检查字体是否丢失/字形缺失——真实 CJK 笔画应贯穿字符中心。", file=sys.stderr)
+                    sys.exit(1)
+                qprint(f"（空心判定可信度低）目标带 [{y_t},{y_t + bb_h}] hollow={holl_ratio:.2f} infill={None if infill is None else round(infill,2)} 但 long_run 未命中豆腐块边框 → 放行")
+            elif holl_ratio is not None:
                 qprint(f"（豆腐块检测）中心/整体墨密度比={holl_ratio:.2f}")
             # 墨段法小字豆腐块检测：对整个 bbox 文字带扫（涵盖 tagline/desc 等小字号），
             # 空心方框的左右边框形成长墨段（≥8 段），真实汉字笔画零散无长段
@@ -432,6 +557,19 @@ def main_cli():
         ratio = 0.0
     qprint(f"目标={a} 对照={b} diff={diff} ratio={ratio:.2f}")
     if ratio < args.min_ratio:
+        # 截图/彩色铺底场景：全图无真正空白对照行（对照行墨量也较大），
+        # ratio 判据失真且 probe 重试也会失败 → 改用空心检测 + 长墨段终审。
+        blank_enough = b < max(8, a * 0.3)
+        if not blank_enough:
+            holl_f = hollow_ratio(mask, y_t, y_t + args.height, x0, x1)
+            infill = blanket_infill_density(mask, y_t, y_t + args.height, x0, x1)
+            ld = long_run_detect(mask, y_t, y_t + args.height, x0, x1)
+            hollow_ok = (holl_f is not None and holl_f >= 0.8) or \
+                        (infill is not None and infill >= 0.3)
+            if hollow_ok and not ld:
+                qprint(f"（对照行非空白，避开 ratio）目标墨量={a} 对照墨量={b}，hollow={None if holl_f is None else round(holl_f,2)} infill={None if infill is None else round(infill,2)} long_run={ld} → 放行")
+                print("✅ 像素级字形校验通过（截图/彩色铺底场景，空心+长墨段终审）")
+                sys.exit(0)
         if args.y_target is None:
             # 自动定位失败: 找空白对照行 → 跑 probe 找最佳坐标，自动重试
             print(f"⚠️ 自动定位 ratio={ratio:.2f}<{args.min_ratio}，扫描最佳坐标重试...", file=sys.stderr)

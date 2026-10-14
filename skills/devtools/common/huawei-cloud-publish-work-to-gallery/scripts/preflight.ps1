@@ -28,13 +28,37 @@ function Test-PyMods($cmd) {
 }
 $pipOpts = @("-q", "--index-url=https://pypi.tuna.tsinghua.edu.cn/simple")
 # PEP 668（uv/pyenv 等管理的 Python 拒绝 pip 写入系统 site-packages）时自动加 --break-system-packages 重试
+# 镜像源失败自动回退默认 PyPI（报告 §12#4：清华镜像偶发失败，官方源可达）
 function Pip-Install([string]$pymod, [string[]]$pkgs) {
     $eap = $ErrorActionPreference; $ErrorActionPreference = "Continue"
-    & $pymod -m pip install @pkgs @pipOpts 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { & $pymod -m pip install @pkgs @pipOpts --break-system-packages 2>&1 | Out-Null }
+    $out = (& $pymod -m pip install @pkgs @pipOpts 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        Log "清华镜像安装失败（exit $LASTEXITCODE），回退默认 PyPI 源重试 ..."
+        $out = (& $pymod -m pip install @pkgs 2>&1)
+        if ($LASTEXITCODE -ne 0) {
+            Log "pip 默认源也失败，重试 --break-system-packages ..."
+            $out = (& $pymod -m pip install @pkgs --break-system-packages 2>&1)
+        }
+    }
+    if ($LASTEXITCODE -ne 0) {
+        Log "⚠️ pip 安装失败（exit $LASTEXITCODE），最近输出:"
+        @($out) | Select-Object -Last 3 | ForEach-Object { Log "    $_" }
+    }
     $ErrorActionPreference = $eap
 }
-$py = @("python3","python") | Where-Object { Test-PyCmd $_ } | Select-Object -First 1
+$py = @("python3","python","py") | Where-Object { Test-PyCmd $_ } | Select-Object -First 1
+if (-not $py) {
+    # 兜底：PATH 内查找首个 python3*.exe（如自定义版本号命名）
+    # ⚠️ 必须用 Test-PyCmd 验证真实可用——WindowsApps 的 python3.exe 是 Store stub，
+    #    运行即打开商店且退出码非 0，选中它会导致后续依赖安装全部失败。
+    foreach ($_d in ($env:PATH -split ';')) {
+        if (-not $_d -or -not (Test-Path $_d)) { continue }
+        foreach ($_hit in (Get-ChildItem -Path $_d -Filter "python3*.exe" -ErrorAction SilentlyContinue)) {
+            if (Test-PyCmd $_hit.BaseName) { $py = $_hit.BaseName; break }
+        }
+        if ($py) { break }
+    }
+}
 if (-not $py) { Die "缺可用 python3（WindowsApps 下 python3 可能是 Store stub，用 python 替代）。请从华为云镜像下载安装 Python 3.x: https://mirrors.huaweicloud.com/python/ （选最新 3.12/3.11 的 Windows installer，安装时勾选 Add to PATH）" }
 if (-not (Test-PyMods $py)) { Log "安装 numpy/pillow..."; Pip-Install $py @("numpy","pillow") }
 if (-not (Test-PyMods $py)) { Die "numpy/pillow 不可用: pip install numpy pillow" }
@@ -52,21 +76,54 @@ function Resolve-PyRealPath([string]$cmd) {
 function Add-OtherPythonDeps([string]$primary) {
     $primaryPath = Resolve-PyRealPath $primary
     $seen = @{}
-    $cands = @("python","python3","python3.13","python3.12","python3.11","python3.10","python3.9","python3.8")
-    foreach ($cand in $cands) {
+    # 【B】版本对齐基准：主解释器 playwright 版本（锁同版本 → 共用 Chromium 缓存目录）
+    $script:pwVer = ""
+    $eapV = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+    try { $script:pwVer = (& $primary -c "import importlib.metadata as m; print(m.version('playwright'))" 2>$null) } catch { }
+    $ErrorActionPreference = $eapV
+    if ($script:pwVer) { Log "playwright 版本对齐基准: $($script:pwVer)（主解释器 $primary）" }
+    # 记录所有「就绪/将就绪」解释器（含主解释器），供标记回写 python_bins
+    $script:pyBinsAll = $primary
+    $cands = @("python","python3","python3.15","python3.14","python3.13","python3.12","python3.11","python3.10","python3.9","python3.8")
+    # 兜底扫描：PATH 内所有 python3* 可执行文件（不设版本上限，
+    # 未来 3.16/3.20 或自定义版本号只要以 python3 开头即被收编）
+    foreach ($_d in ($env:PATH -split ';')) {
+        if (-not $_d -or -not (Test-Path $_d)) { continue }
+        try {
+            $hits = @(Get-ChildItem -Path $_d -Filter "python3*.exe" -ErrorAction SilentlyContinue)
+            foreach ($_f in $hits) {
+                $_b = $_f.BaseName
+                if ($cands -notcontains $_b) { $cands += $_b }
+            }
+        } catch { }
+    }
+    foreach ($cand in ($cands | Sort-Object -Unique)) {
         if (-not (Test-PyCmd $cand)) { continue }
         $p = Resolve-PyRealPath $cand
         if (-not $p -or $seen[$p]) { continue }        # 同路径已处理
         $seen[$p] = $true
         if ($p -eq $primaryPath) { continue }          # 就是主解释器，跳过
-        if (Test-PyMods $cand) { continue }             # 依赖已齐，跳过
+        if (Test-PyMods $cand) {
+            if ($script:pyBinsAll -notmatch "\b$cand\b") { $script:pyBinsAll += " $cand" }
+            continue
+        }
         Log "为 $cand 补装 numpy/pillow/playwright（避免多解释器 site-packages 不互通）..."
         $eap2 = $ErrorActionPreference; $ErrorActionPreference = "Continue"
         $ok = $false
-        try { Pip-Install $cand @("numpy","pillow"); if ($LASTEXITCODE -eq 0) { Pip-Install $cand @("playwright"); if ($LASTEXITCODE -eq 0) { $ok = $true } } } catch { }
+        try {
+            Pip-Install $cand @("numpy","pillow")
+            if ($LASTEXITCODE -eq 0) {
+                # 【B】版本对齐：与主解释器相同 playwright 版本，确保共用同一 Chromium 缓存
+                if ($script:pwVer) { Pip-Install $cand @("playwright==$($script:pwVer)") }
+                else { Pip-Install $cand @("playwright") }
+                if ($LASTEXITCODE -eq 0) { $ok = $true }
+            }
+        } catch { }
         $ErrorActionPreference = $eap2
         if (-not $ok) {
             Log "⚠️ $cand 依赖补装失败——gate 不记录该解释器，后续用它调脚本可能 ModuleNotFoundError"
+        } elseif ($script:pyBinsAll -notmatch "\b$cand\b") {
+            $script:pyBinsAll += " $cand"
         }
     }
 }
@@ -128,8 +185,12 @@ exit(1)
     $eap2 = $ErrorActionPreference; $ErrorActionPreference = "Continue"
     try {
       $env:PLAYWRIGHT_DOWNLOAD_HOST = "https://cdn.npmmirror.com/binaries/playwright"
-      & $py -m playwright install chromium-headless-shell 2>&1 | Out-Null
-      if ($LASTEXITCODE) { & $py -m playwright install chromium 2>&1 | Out-Null }
+      $dlOut = (& $py -m playwright install chromium-headless-shell 2>&1)
+      if ($LASTEXITCODE) { $dlOut += (& $py -m playwright install chromium 2>&1) }
+      if ($LASTEXITCODE) {
+        Log "⚠️ Chromium 下载失败（exit $LASTEXITCODE，host=$env:PLAYWRIGHT_DOWNLOAD_HOST），最近输出:"
+        @($dlOut) | Select-Object -Last 4 | ForEach-Object { Log "    $_" }
+      }
       # 下载后必须再次真实启动校验，成功才写标记
       $r2 = ""
       try { $r2 = & $py $probeFile 2>&1 | Out-String } catch { }
@@ -144,6 +205,6 @@ if ($script:browserReady -ne "ok") {
   Die "playwright 不可用——截图/封面/图表均依赖它。请按 SKILL.md Step 5 / references/windows-setup.md 补齐后重跑本脚本"
 }
 Add-OtherPythonDeps $py
-Set-Content $Marker "ok=true`ngate=preflight`nplatform=windows`ncjk_match=Microsoft-YaHei(preinstalled)`nemoji=ok(preinstalled)`nfontconfig=n/a`ndeps=numpy,pillow,playwright`nts=$(Get-Date -Format o)`n" -Encoding UTF8 -NoNewline
+Set-Content $Marker "ok=true`ngate=preflight`nplatform=windows`ncjk_match=Microsoft-YaHei(preinstalled)`nemoji=ok(preinstalled)`nfontconfig=n/a`ndeps=numpy,pillow,playwright`npython_bin=$py`npython_bins=$script:pyBinsAll`nts=$(Get-Date -Format o)`n" -Encoding UTF8 -NoNewline
 Log "通过，已写入 $Marker（CJK+emoji 预装，Playwright: $script:browserReady）"
 exit 0

@@ -2,7 +2,11 @@
 """screenshot_guard.py — 截图前字形自检 + 兜底注入（核心防线，跨平台）
 
 行为:
-  - goto 用 domcontentloaded + 30s；等 fonts.ready 带 3s 竞速（防离线 @import 挂死）
+  - goto 用 domcontentloaded（保底）+ networkidle（优化，10s 超时）
+  - domcontentloaded 确保 HTML 解析完成，networkidle 等待 JS/API 加载
+  - 持续轮询/长连接场景 networkidle 超时则跳过，不影响功能
+  - 等 fonts.ready 带 3s 竞速（防离线 @import 挂死）
+  - wait_for_selector("body > *") 确保 Vue/React 挂载完成
   - 截图源 charset 门禁（fail-closed：非 UTF-8 即报错）
   - 字形自检（document.fonts.check/load）
   - emoji 像素级 tofu 检测（含 arm64 canvasTextBroken 回退）
@@ -98,7 +102,7 @@ def main():
     except ImportError as e:
         sys.exit(
             "❌ 缺少 Python 依赖 playwright（截图必需）。请先运行渲染前 preflight 自动补齐：\n"
-            "   bash <skill>/scripts/preflight.sh   （或 Windows: powershell preflight.ps1）\n"
+            "   bash $SKILL_DIR/scripts/preflight.sh   （或 Windows: powershell $SKILL_DIR/scripts/preflight.ps1）\n"
             "   或手动安装：python -m pip install playwright && python -m playwright install chromium\n"
             f"   原始错误: {e}"
         )
@@ -106,11 +110,24 @@ def main():
     with sync_playwright() as pw:
         browser = launch_browser(pw)
         page = browser.new_page(viewport={"width": 1280, "height": 720})
+        # SPA 兼容策略: domcontentloaded 保底 + networkidle 优化
+        # 1. domcontentloaded: 确保 HTML 解析完成（永不超时）
+        # 2. networkidle: 等待 JS/API 加载完成（10s 超时，有轮询则跳过）
         page.goto(args.appUrl, wait_until="domcontentloaded", timeout=30000)
+        try:
+            page.wait_for_load_state("networkidle", timeout=10000)
+        except Exception:
+            pass  # networkidle 超时（如持续轮询），继续执行
 
-        # 等 fonts.ready，带 3s 竞速
+        # 等 fonts.ready，带 3s 竞速（防离线 @import 挂死）
         try:
             page.evaluate("() => Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 3000))])")
+        except Exception:
+            pass
+
+        # SPA 额外等待: 确保 Vue/React 挂载完成（body 子元素 > 0）
+        try:
+            page.wait_for_selector("body > *", timeout=5000)
         except Exception:
             pass
 
@@ -137,13 +154,23 @@ def main():
             browser.close()
             sys.exit(f'❌ 截图源页面字符集为 "{page_charset}"（非 UTF-8）——页面缺 <meta charset> 或被按 Latin-1 判读，截图必 mojibake。先跑 ensure-utf8 归一，或给页面加 <meta charset="UTF-8"> 后重试。')
 
-        # 字形自检函数
-        def probe(fam, text):
-            return page.evaluate("""async ([fam, text]) => {
-                const fontStr = `16px "${fam}", sans-serif`;
-                try { await document.fonts.load(fontStr, text); } catch {}
-                return document.fonts.check(fontStr, text);
-            }""", [fam, text])
+        # 字形批量自检：单次 page.evaluate 探测所有字体族 × (CJK+Latin)，返回缺失族列表
+        # （合并原逐族 probe() 循环的 N 次 Playwright RPC 为 1 次，语义等价：每族先 load 后 check，
+        #  CJK 与 Latin 样例均不可用即判 missing；fonts.load 各族互不影响，无顺序依赖）
+        def probe_batch(families, cjk_text, latin_text):
+            if not families:
+                return []
+            return page.evaluate(r"""async ([families, cjkText, latinText]) => {
+                const missing = [];
+                for (const fam of families) {
+                    const fontStr = `16px "${fam}", sans-serif`;
+                    let cjkOk = false, latOk = false;
+                    try { await document.fonts.load(fontStr, cjkText); cjkOk = document.fonts.check(fontStr, cjkText); } catch {}
+                    try { await document.fonts.load(fontStr, latinText); latOk = document.fonts.check(fontStr, latinText); } catch {}
+                    if (!cjkOk && !latOk) missing.push(fam);
+                }
+                return missing;
+            }""", [families, cjk_text, latin_text])
 
         # emoji 像素级检测
         emoji_result = page.evaluate(r"""async () => {
@@ -212,10 +239,10 @@ def main():
                     print(f"⚠️ canvas 文字渲染整体不可用（arm64 headless Chromium 已知限制）。document.fonts.check 回退检测: 检出 emoji 字体族 [{found}]。截图应正常（Playwright 走浏览器渲染管线，非 canvas），emoji 校验已跳过。")
                 else:
                     tried = " ".join(f"{f['family']}:❌" for f in fc) if fc else "(未检测)"
-                    print(f"⚠️ canvas 文字渲染不可用且 document.fonts.check 未检出任何 emoji 字体族（{tried}）。建议安装 Noto Color Emoji: bash <skill>/scripts/download-noto-color-emoji.sh 后重启浏览器。Playwright 截图仍会尝试渲染，但 emoji 可能显示为方块。")
+                    print(f"⚠️ canvas 文字渲染不可用且 document.fonts.check 未检出任何 emoji 字体族（{tried}）。建议安装 Noto Color Emoji: bash $SKILL_DIR/scripts/download-noto-color-emoji.sh 后重启浏览器。Playwright 截图仍会尝试渲染，但 emoji 可能显示为方块。")
         elif len(emoji_result['coreFail']) > 0:
             browser.close()
-            sys.exit(f"❌ 系统缺核心 emoji 字形（{''.join(emoji_result['coreFail'])}）——先装 Noto Color Emoji: bash <skill>/scripts/download-noto-color-emoji.sh 后重启浏览器")
+            sys.exit(f"❌ 系统缺核心 emoji 字形（{''.join(emoji_result['coreFail'])}）——先装 Noto Color Emoji: bash $SKILL_DIR/scripts/download-noto-color-emoji.sh 后重启浏览器")
 
         if len(emoji_result['extFail']) > 0 and not quiet:
             print(f"⚠️ 扩展 emoji 测宽失败（{''.join(emoji_result['extFail'])}）——Chromium HarfBuzz 对 CBDT 彩色 emoji (Emoji 13.0+) 的 canvas measureText 不稳定，字体 cmap 实际有该码点。不影响截图渲染，仅作警告。")
@@ -223,10 +250,7 @@ def main():
             print(f"⚠️ 页面使用的部分 emoji 测宽异常（{''.join(emoji_result['pageFail'])}）——可能渲染为方块，建议检查截图效果。")
 
         # CJK 字形自检
-        missing = []
-        for fam in targets:
-            if not (probe(fam, SAMPLES_CJK) or probe(fam, SAMPLES_LATIN)):
-                missing.append(fam)
+        missing = probe_batch(targets, SAMPLES_CJK, SAMPLES_LATIN)
         if not quiet:
             print("缺失字体族:", ", ".join(missing) if missing else "无")
 
@@ -238,10 +262,7 @@ def main():
                 css_parts.append(f'@font-face {{ font-family: "{f}"; src: local("{fb}"); font-display: swap; }}')
             css = "\n".join(css_parts)
             page.add_style_tag(content=css)
-            still_missing = []
-            for fam in missing:
-                if not (probe(fam, SAMPLES_CJK) or probe(fam, SAMPLES_LATIN)):
-                    still_missing.append(fam)
+            still_missing = probe_batch(missing, SAMPLES_CJK, SAMPLES_LATIN)
             if still_missing:
                 browser.close()
                 sys.exit(f"❌ 兜底注入后仍缺字形: {', '.join(still_missing)}——请先完成兜底字体套件安装并重启浏览器")

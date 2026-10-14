@@ -149,7 +149,7 @@ AI DevSpace / CodeArts 沙箱等环境通常无 root 或禁止写系统目录，
 | 组件 | 优先（用户级） | 回退（系统级） |
 | ---- | -------------- | -------------- |
 | CJK 字体 | 用户字体目录 `~/.fonts` / `~/.local/share/fonts`（含下载安装的彩色 Emoji） | `sudo apt/yum`（如 `fonts-noto-cjk`、`google-noto-cjk-fonts`） |
-| 彩色 Emoji 字体 | `bash <skill>/scripts/download-noto-color-emoji.sh`（**默认装到 `~/.local/share/fonts/noto-color-emoji/`**，无需 sudo） | `sudo apt install -y fonts-noto-color-emoji` / yum 包 |
+| 彩色 Emoji 字体 | `bash $SKILL_DIR/scripts/download-noto-color-emoji.sh`（**默认装到 `~/.local/share/fonts/noto-color-emoji/`**，无需 sudo） | `sudo apt install -y fonts-noto-color-emoji` / yum 包 |
 | fontconfig 规则 | `~/.config/fontconfig/conf.d/`（XDG 用户目录，`preflight.sh` 自动选择） | `/etc/fonts/conf.d/` |
 | numpy/pillow/playwright（Python） | `pip install --user ...`（`preflight.sh` `pip_user_install` 自动优先 `--user`） | venv / 系统 `pip` |
 | Playwright Chromium 浏览器 | 默认缓存 `~/.cache/ms-playwright`（Playwright 自带，已在 $HOME） | 系统 Chrome（`channel: 'chrome'` 复用） |
@@ -165,7 +165,7 @@ CJK 与 emoji 的安装命令，按包管理器选用（**先预检已存在则�
 | 字体 | apt (Debian/Ubuntu) | yum (RHEL/CentOS/EulerOS) |
 | ---- | ------------------- | ------------------------- |
 | CJK 中文字体 | `sudo apt install -y fonts-noto-cjk fonts-wqy-zenhei` | `sudo yum install -y google-noto-cjk-fonts` |
-| Emoji 字体 | `sudo apt install -y fonts-noto-color-emoji` | `bash <skill>/scripts/download-noto-color-emoji.sh`（**推荐**，CDN 彩色版 v2.051/Unicode 14.0+）；回退: `sudo yum install -y google-noto-emoji-fonts` |
+| Emoji 字体 | `sudo apt install -y fonts-noto-color-emoji` | `bash $SKILL_DIR/scripts/download-noto-color-emoji.sh`（**推荐**，CDN 彩色版 v2.051/Unicode 14.0+）；回退: `sudo yum install -y google-noto-emoji-fonts` |
 
 > API `scripts/download-noto-color-emoji.sh` 从 jsDelivr CDN 下载 `NotoColorEmoji.ttf`（CBDT 彩色，Unicode 14.0+）。yum 版 `google-noto-emoji-fonts` 过旧（Unicode 10.0 单色，Chromium HarfBuzz 对 CBDT Emoji 13.0+ 渲染不稳定），仅作回退。**装完字体 → `fc-cache -f` → 再启动浏览器**（运行中进程不识别新字体）。
 
@@ -273,8 +273,25 @@ staging="/tmp/gallery-details-staging"
 rm -rf "$staging" && mkdir -p "$staging/resources"
 
 # 首选：打包+校验一步到位（跨平台零依赖）
-node <skill>/scripts/build-detail-zip.mjs --readme "$staging/README.md" --resources "$staging/resources" --out /tmp/workDetail.zip
+node $SKILL_DIR/scripts/build-detail-zip.mjs --readme "$staging/README.md" --resources "$staging/resources" --out /tmp/workDetail.zip
 ```
 
 备选（仅当 build-detail-zip.mjs 不可用时）：显式指定文件打包（不要 `zip -r .`，避免打入残留）：
-`cd "$staging" && zip /tmp/workDetail.zip README.md resources/*.png`，再运行 `node <skill>/scripts/validate-detail-zip.mjs <zip>` 校验。
+`cd "$staging" && zip /tmp/workDetail.zip README.md resources/*.png`，再运行 `node $SKILL_DIR/scripts/validate-detail-zip.mjs <zip>` 校验。
+
+---
+
+## preflight 后台化与轮询（Linux）
+
+preflight 以标记文件 `ok=true` 为完成判据（非命令返回码）。**轮询上限：Linux ≤900s**（首次需 yum 依赖 + pip + 下载 Chromium headless shell，慢网 5~10 分钟属正常）；Windows 前台 ≤180s。
+
+- **Linux 一律后台化启动**（前台会被 shell 超时 SIGPIPE 杀死，主进程死后不会写 gate 文件，轮询徒劳）。
+- 脚本对 yum/pip/下载各有硬超时（`PIP_INSTALL_TIMEOUT`/`YUM_TIMEOUT`/`CHROMIUM_DL_TIMEOUT`，超时自动 fail-fast 并写日志）。
+- Linux 首跑 preflight 时，yum 前会先对系统源做一次**测速**（curl Range 拉 `repodata/repomd.xml`，阈值 KB/s 可用 `YUM_SPEED_DEAD_KBPS`/`YUM_SPEED_SLOW_KBPS`/`YUM_SPEED_PROBE_MAX` 覆盖），**先测速、测速不通过才换源**：
+  - 速度足够（≥ `SLOW` 默认 100）→ 直接用系统源。
+  - 速度不足 → 把换源指引**打印到 stderr + `preflight.log`**：
+    - 若已设 `YUM_MIRROR_BASEURL`（镜像根，不版本特化，如 `https://mirrors.huaweicloud.com/openeuler`）→ 脚本自动按本机发行版把各 repo 路径后缀拼到镜像根，经 `--repofrompath` 让 yum 直接走镜像**继续**（不改任何系统配置文件）。
+    - 未设置且 < `DEAD`（默认 20）→ `die` 快速失败，提醒 `export YUM_MIRROR_BASEURL=...` 重跑（或按指引可逆改系统源）；未设置且偏慢 → 提示后继续尝试，由 `YUM_TIMEOUT` 兜底。
+  - 测速只做一次；无 curl / 解析失败 / 404 均视为不可测不拦截。
+- Chromium 下载内置**卡死自动换源**（默认 `CHROMIUM_STALL_TIMEOUT=60s` 无进度即杀进程树换备用源），且每 15s 向 `preflight.log` 写一行心跳。
+- **轮询时看日志最新行**：有「⏳ 心跳」= 龟速继续等，>300s 无新行才判卡死（卡死会由脚本自动切换源）。

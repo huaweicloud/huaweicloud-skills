@@ -2,7 +2,7 @@
 
 Detailed guidance for generating work metadata from the project directory.
 
-**平台分流（重要）：** 先运行 `node <skill>/scripts/detect-env.mjs` 确认环境指纹。Windows 环境的**平台专属命令**（Playwright 预检/字体/截图校验/zip 打包的 PowerShell 实现）见 [work-preparation-windows.md](work-preparation-windows.md)；Linux/EulerOS（HCE）的（bash 实现、yum 包名映射、fontconfig 配置）见 [work-preparation-linux.md](work-preparation-linux.md)。本文件只保留**跨平台统一流程与判定规则**，各平台偏离点以对应平台文件为准。
+**平台分流（重要）：** 先运行 `node $SKILL_DIR/scripts/detect-env.mjs` 确认环境指纹。Windows 环境的**平台专属命令**（Playwright 预检/字体/截图校验/zip 打包的 PowerShell 实现）见 [work-preparation-windows.md](work-preparation-windows.md)；Linux/EulerOS（HCE）的（bash 实现、yum 包名映射、fontconfig 配置）见 [work-preparation-linux.md](work-preparation-linux.md)。本文件只保留**跨平台统一流程与判定规则**，各平台偏离点以对应平台文件为准。
 
 ## Table of Contents
 
@@ -54,14 +54,14 @@ A project root directory is the top-level folder of a software project. The skil
 
 ### Git Info Auto-Detection
 
-After the user selects a work directory, automatically detect git information:
+After the user selects a work directory, detect git information with one script (repo self-check + origin/branch read + credential strip + remote branch verification):
 
 ```bash
-git -C <workDir> remote get-url origin
-git -C <workDir> branch --show-current
+node $SKILL_DIR/scripts/read-git-info.mjs <workDir>
+# stdout: #gitUrl=<https://… .git>  #gitBranch=<branch>
 ```
 
-If the directory is not a git repository, the agent must guide the user to create a repo (e.g. on GitCode) and push the work (Step 3), because `gitUrl` is a required publish field. The final `gitUrl` is the repository clone URL (must end with `.git`, e.g. `https://gitcode.com/user/repo.git`). The branch is passed separately as `gitBranch`. git credential 剥离走 SKILL.md Step 3 的 `strip-git-credential.mjs`（fail-stop）。
+If the directory is not a git repository (exit 1), the agent must guide the user to create a repo (e.g. on GitCode) and push the work (Step 3), because `gitUrl` is a required publish field. The final `gitUrl` is the repository clone URL (must end with `.git`, e.g. `https://gitcode.com/user/repo.git`). The branch is passed separately as `gitBranch`. On `#branchAbsent=1` (remote lacks the branch — local/remote branch-name divergence), relay the script's stderr remediation (SHA-identical remote branch → checkout; otherwise push first) and re-run.
 
 ---
 
@@ -111,7 +111,7 @@ Generate PPT-style cover
 生成封面与架构图前**先确定视觉基线**：封面、架构图、文章内截图均在此范围内生成，风格不得差距过大（如封面黑金暗调、架构图纯白亮调）。**基线主色调优先取自应用页面实际主导色**（封面内嵌真实截图，外壳配色贴近页面风格可显著提升一致性），全流程共用同一 scheme，其余维度同语言适度变化。
 
 **基线主色调判定优先级链：**
-1. **页面主导色**（首选）：读项目 CSS 主题配置/`:root` 变量（如 `--primary`、`--bg-color` 等 hex）或应用首页截图主色，取主导色 hex，映射到下方 8 个 scheme 中**视觉最接近**者（如 `#0f172a`→`blue`/`dark`、`#f97316`→`vibrant-orange`）。**近似匹配即可，无需精确相等。**
+1. **页面主导色**（首选）：读项目 CSS 主题配置/`:root` 变量（如 `--primary`、`--bg-color` 等 hex）或应用首页截图主色，取主导色 hex，映射到下方 12 个 scheme 中**视觉最接近**者（如 `#0f172a`→`blue`/`dark`、`#f97316`→`vibrant-orange`）。**近似匹配即可，无需精确相等。**
 2. **适用项目类别**：无明确页面色（如主题色分散/后端组件型）时，按下表「适用项目」列选择对应 scheme。
 3. **降级 auto**：两者均无法确认时，依赖 `--scheme auto` 按标题哈希选色（保证各作品封面不同色调）。
 
@@ -127,8 +127,14 @@ Generate PPT-style cover
 | `black-gold` | 黑金渐变 | `#1c1a14` / 强调 `#f0cf6d` | 金融、会员、高端展示 |
 | `vibrant-orange` | 亮橙渐变 | `#7a3410` / 强调 `#fdba74` | 游戏、电商、生活消费 |
 | `warm-yellow` | 温馨黄渐变 | `#573e0a` / 强调 `#fcd34d` | 教育、亲子、生活服务 |
+| `aurora` | 深蓝紫多彩渐变 | `#124a6b` / 强调 `#a5f3fc` | —（按主色就近匹配） |
+| `cyan-ink` | 青墨渐变 | `#14323b` / 强调 `#99f6e4` | —（按主色就近匹配） |
+| `rose-gold` | 玫瑰金渐变 | `#6b2437` / 强调 `#fecdd3` | —（按主色就近匹配） |
+| `mono` | 黑白灰渐变 | `#1f1f1f` / 强调 `#e5e5e5` | —（按主色就近匹配） |
 
-- **封面合成一律用脚本渲染**：`python <skill>/scripts/generate_cover.py --scheme <auto|purple|blue|green|dark|warm|black-gold|vibrant-orange|warm-yellow> …`（脚本内置每色完整背景/glow/网格/徽章 hex）。**Step 4 务必按上面优先级链显式传 `--scheme`（优先页面主导色映射），不要默认依赖 `auto`**；`auto` 仅作兜底（按标题哈希选色，避免不同作品封面清一色同一色调）。Step 4 与 Step 6 须用同一 scheme（取 `auto` 时由脚本确定后回读输出中的 `scheme=`），不得偏差太远。
+> 全部可用 scheme 以 `python $SKILL_DIR/scripts/generate_cover.py --help` 为准（共 12 个 + auto）。
+
+- **封面合成一律用脚本渲染**：`python $SKILL_DIR/scripts/generate_cover.py --scheme <auto 或 12 个预设 scheme，见上表>` …（脚本内置每色完整背景/glow/网格/徽章 hex）。**Step 4 务必按上面优先级链显式传 `--scheme`（优先页面主导色映射），不要默认依赖 `auto`**；`auto` 仅作兜底（按标题哈希选色，避免不同作品封面清一色同一色调）。Step 4 与 Step 6 须用同一 scheme（取 `auto` 时由脚本确定后回读输出中的 `scheme=`），不得偏差太远。
 - **图表跟随同一 scheme**：手写 HTML/CSS 图表用上表主色 hex 即可；matplotlib/Graphviz 需要背景/文字等精确色值时，用上表主色与强调色自行派生（`python generate_cover.py --help` 可看脚本支持的 scheme 列表，**不要打开脚本源码**）。Step 4 与 Step 6 共用同一 scheme，不得偏差太远；其余维度（背景样式/节点卡/渲染效果）可适度变化。
 
 ### Part A — Capture Work Screenshot
@@ -226,7 +232,7 @@ If the work has no frontend (pure backend, CLI, library, etc.):
 
 ```bash
 # 提取字体需求（跨平台）：输出每行一个字体族名，供 screenshot_guard 的 --required 使用
-node <skill>/scripts/extract-fonts.mjs <workDir>
+node $SKILL_DIR/scripts/extract-fonts.mjs <workDir>
 ```
 
 > **⚠️ 变量展开：** 提取结果中若出现 `var(--font-body)`、`var(--font-display)` 等 **CSS 自定义属性引用**，需回查 `:root` 中的变量定义，把变量**展开为字面字体列表**后再归类（如 `--font-body: "Inter", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif`）。**通用关键字（`sans-serif`、`serif`、`monospace`、`ui-monospace`、`system-ui`、`-apple-system`）不注入、只用于归类判断。**
@@ -272,7 +278,7 @@ fc-match --format='%file' 'sans-serif:lang=zh'   # 不得命中 DejaVuSans.ttf
 
 ```bash
 # 截图前字形自检 + 兜底注入（核心防线，跨平台）：--required 可用 extract-fonts 输出文件或逗号列表；--fallback 覆盖默认映射
-python <skill>/scripts/screenshot_guard.py <appUrl> [--required-file <font-list.txt>] [--required "Outfit,Inter"] [--out <png>]
+python $SKILL_DIR/scripts/screenshot_guard.py http://127.0.0.1:8080 --required-file /tmp/font-list.txt --required "Outfit,Inter" --out /tmp/shot.png
 ```
 
 > **说明：** 自检规则是"中文样例落在该族上才算可用"——因此即使某族已安装但缺 CJK 字形（如 DejaVu Sans），也会被重映射到 CJK 兜底字体。代价是拉丁文字形统一使用兜底字体（现代无衬线风格，视觉可接受），换来"绝不出现口口"的确定性。**emoji 属系统兜底、走独立自检，与字体族注入无关。**
@@ -289,10 +295,10 @@ python <skill>/scripts/screenshot_guard.py <appUrl> [--required-file <font-list.
   - **豆腐块空心检测**：缺字渲染成空心矩形边框（不是空白），边框像素同样算墨，单纯"目标 vs 空白对照"拦不住。脚本对目标文字行窗口做**中心墨密度 ÷ 整体墨密度**校验（中心 1/3×1/3），真实 CJK 笔画贯穿中心（比值≥0.8），豆腐块空心（比值<0.8）→ fail。已验证：44 张真实封面全≥0.8，豆腐块合成图 0.688。
 
 ```bash
-python3 <skill>/scripts/verify-glyphs.py <image/封面/图表.png>   # exit 0 通过；exit 1 疑似豆腐块（fail-closed）
+python3 $SKILL_DIR/scripts/verify-glyphs.py <image/封面/图表.png>   # exit 0 通过；exit 1 疑似豆腐块（fail-closed）
 # 脚本自动适配明暗背景：亮底数暗像素、暗底数亮像素。仅同一图片明暗混排或自动定位失败时再显式指定:
-python3 <skill>/scripts/verify-glyphs.py <image> --probe                    # 先探测各行比值
-python3 <skill>/scripts/verify-glyphs.py <image> --y-target 125 --y-control 5  # 按探测结果显式校验
+python3 $SKILL_DIR/scripts/verify-glyphs.py <image> --probe                    # 先探测各行比值
+python3 $SKILL_DIR/scripts/verify-glyphs.py <image> --y-target 125 --y-control 5  # 按探测结果显式校验
 # ⚠️ --y-control 必须指向真实空白区：顶部有标题/页眉时 y=5 会落在文字上导致误判。
 # 完整参数: --y-target/--y-control/--height/--x0/--x1/--min-ratio/--max-density/--probe，见脚本 --help
 # ⚠️ 校验对象是封面/图表自身渲染的文字（generator 用系统字体渲染并嵌入 bbox。
@@ -333,7 +339,7 @@ Compose the work screenshot into a presentation-style cover image. **优先使�
 
 #### Screenshot Layout Rules (硬性要求)
 
-0. **布局种类（`generate_cover.py`）：** 单图 `classic/split/hero/showcase/polaroid/blur/topbar`；多图 `collage-h`（1 大上+4 小下）/`collage-v`（1 大左+3 小右）/`collage-grid`（1 大+3 小）。多图布局仅在项目为**多页**（`.html` ≥2）时可选，由 `build-cover.mjs` 统一概率池自动抽样（多页多图概率 3/10），agent 无需感知。
+0. **布局种类（`generate_cover.py`）：** 单图 `classic/split/hero/showcase/polaroid/blur/topbar/spotlight/cinema/blueprint/diorama/glass`（共 12 个）；多图 `collage-h`（1 大上+4 小下）/`collage-v`（1 大左+3 小右）/`collage-grid`（1 大+3 小）。多图布局仅在项目为**多页**（`.html` ≥2）时可选，由 `build-cover.mjs` 统一概率池自动抽样（多页多图概率 3/15≈1/5），agent 无需感知。
 1. **禁止多张大截图导致画面拥挤。** 合理排布示例：
    - 1 大 + 下方 3–4 小 ✅
    - 1 大 + 右侧 3–4 小 ✅
@@ -379,7 +385,7 @@ Compose the work screenshot into a presentation-style cover image. **优先使�
 **计数方式（禁止用 grep `\x{4e00}`）：** EulerOS 等旧 PCRE 环境下 `grep -oP '[\x{4e00}-\x{9fff}]'` 报 "character code point value too large"，计数恒为 0。必须用统一脚本（Node 原生 Unicode 码点比较，跨平台）：
 
 ```bash
-node <skill>/scripts/count-cjk.mjs "$introduction"
+node $SKILL_DIR/scripts/count-cjk.mjs "$introduction"
 # exit 0 = 合格; exit 1 = 超出范围（fail-stop）
 # 支持自定义范围: --min 15 --max 50
 # Windows 必须用 --file <utf8.txt>（内联参数经系统代码页转码会丢字误计），见 SKILL.md Step 5
@@ -560,7 +566,7 @@ Write the article as a Markdown file with image references using relative paths:
    - `diagram-03.png` — optional diagram 3
 4. **打包 + 校验一步到位（首选，跨平台零依赖）**：`build-detail-zip.mjs` 内置正确目录结构（README.md@根 + `resources/` 前缀），打包后自动跑服务端同源校验，避免「打包→校验失败→重打」多轮往返：
    ```bash
-   node <skill>/scripts/build-detail-zip.mjs --readme <README.md> --resources <resources-dir> --out <workDetail.zip>
+   node $SKILL_DIR/scripts/build-detail-zip.mjs --readme <README.md> --resources <resources-dir> --out <workDetail.zip>
    ```
    > 备选（仅当 build-detail-zip.mjs 不可用时）：显式文件列表 `zip ... / zip -r .` 会打入残留；Windows 不能用 `Compress-Archive`（PS 5.1 压平子目录丢 `resources/` 前缀 → `GALLERY.PARAM.DETAIL_ZIP_INVALID`）。平台命令见步骤 1 的平台文件链接。
 

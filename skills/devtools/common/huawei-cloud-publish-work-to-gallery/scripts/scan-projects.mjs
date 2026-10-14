@@ -127,6 +127,19 @@ function walk(dir, depth) {
 // 1. 扫描主目录
 walk(searchDir, 0);
 
+// 1.1 主目录自身也可能是项目根（当前 workDir 即目标作品时）
+const rootPath = path.resolve(searchDir);
+const rootExcluded = EXCLUDE_PATHS.some((ep) => rootPath.startsWith(ep));
+if (!rootExcluded && rootPath !== path.parse(rootPath).root) {
+  const [rootType, rootIsRoot] = isProjectRoot(rootPath);
+  if (rootIsRoot) {
+    const hasReadme =
+      fs.existsSync(path.join(rootPath, "README.md")) ||
+      fs.existsSync(path.join(rootPath, "readme.md"));
+    candidates.push({ path: rootPath, type: rootType, hasReadme });
+  }
+}
+
 // 2. CodeArts 沙箱目录
 const sandboxBase = "/root/job-envs/sandboxes";
 if (fs.existsSync(sandboxBase)) {

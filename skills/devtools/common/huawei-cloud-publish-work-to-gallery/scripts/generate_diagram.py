@@ -4,6 +4,12 @@
 功能：接受 HTML 文件，用 Playwright 渲染并截图为 PNG。
       支持 fullPage 截图（高度自适应）和固定视口截图。
 
+依赖门禁（与 build-cover.mjs 同款）：
+  - 启动即检查渲染门禁标记 font-gate-ok（Step 4 preflight 产物，
+    标记包含便安全——preflight 先装完 playwright 才写标记）；
+  - 缺失 → 提示等待 preflight 完成/先运行 preflight，exit 1（fail-stop），
+    避免与 Step 4 preflight 并行时产生 ModuleNotFoundError（必现竞态）。
+
 用法:
   python generate_diagram.py --html <file> --out <path> [--width 1280] [--height 800] [--fullpage]
 
@@ -16,11 +22,13 @@
   --no-fullpage       仅截取视口范围
   -h, --help          显示帮助
 
-退出码: 0=成功; 1=运行时错误; 2=参数错误
+退出码: 0=成功; 1=运行时错误/门禁未过; 2=参数错误
 """
 
 import argparse
+import os
 import sys
+import tempfile
 from pathlib import Path
 
 if sys.platform == "win32":
@@ -29,6 +37,18 @@ if sys.platform == "win32":
         sys.stderr.reconfigure(encoding="utf-8")
     except Exception:
         pass
+
+
+def check_gate() -> None:
+    """渲染门禁：font-gate-ok 标记缺失则提示等待 preflight，fail-stop。"""
+    marker = os.path.join(tempfile.gettempdir(), "font-gate-ok")
+    if not os.path.exists(marker):
+        sys.exit(
+            "❌ 渲染门禁未通过：缺少 font-gate-ok 标记（Step 4 preflight 尚未完成，图表依赖 playwright）。\n"
+            f"   标记路径: {marker}\n"
+            "   请等待 preflight 完成（轮询 font-gate-ok 出现 ok=true）后重跑本脚本；\n"
+            "   或先独立运行 preflight: bash $SKILL_DIR/scripts/preflight.sh / Windows: powershell $SKILL_DIR/scripts/preflight.ps1"
+        )
 
 
 def main():
@@ -46,6 +66,8 @@ def main():
     fullpage_group.add_argument("--no-fullpage", action="store_false", dest="fullpage", help="仅截取视口范围")
     args = ap.parse_args()
 
+    check_gate()
+
     html_path = Path(args.html)
     if not html_path.exists():
         sys.exit(f"❌ HTML 文件不存在: {html_path}")
@@ -58,7 +80,7 @@ def main():
     except ImportError as e:
         sys.exit(
             "❌ 缺少 Python 依赖 playwright（图表生成必需）。请先运行渲染前 preflight 自动补齐：\n"
-            "   bash <skill>/scripts/preflight.sh   （或 Windows: powershell preflight.ps1）\n"
+            "   bash $SKILL_DIR/scripts/preflight.sh   （或 Windows: powershell $SKILL_DIR/scripts/preflight.ps1）\n"
             "   或手动安装：python -m pip install playwright && python -m playwright install chromium\n"
             f"   原始错误: {e}"
         )

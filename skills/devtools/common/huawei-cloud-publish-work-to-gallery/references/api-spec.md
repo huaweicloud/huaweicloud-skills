@@ -2,6 +2,18 @@
 
 Base URL: `https://gallery.developer.huaweicloud.com`（HTTPS，需 TLS 证书校验，见 `scripts/api.mjs` 的 `HOST`/`PORT`）
 
+## 环境切换（正式 / 测试域名）
+
+发布目标域名由 `scripts/api.mjs` 的 `HOST` 决定：`GALLERY_API_HOST` 环境变量 > 内置默认值（正式域名 `gallery.developer.huaweicloud.com`）。
+
+- **正式发布**：无需任何设置，默认即正式域名。
+- **切测试环境**（配合 `gallerytest.developer.huaweicloud.com`）：会话内设一次环境变量即可，全链路（`api.mjs`/`check-version.mjs`/`publish-work.mjs`）子进程自动继承，**不要**用 `sed` 批量替换 4 个文件——避免发布后忘还原污染本地技能。
+  ```bash
+  export GALLERY_API_HOST=gallerytest.developer.huaweicloud.com   # Git Bash
+  $env:GALLERY_API_HOST="gallerytest.developer.huaweicloud.com"   # PowerShell
+  ```
+- **发完还原**：取消环境变量即回到正式域名（`unset GALLERY_API_HOST` / `Remove-Item Env:GALLERY_API_HOST`）。若采用 env 方式则无需修改任何文件、无需还原。仅当环境变量确实不可用（如某子进程清环境）时才回退到「改 `api.mjs` HOST 默认值 + 发完改回」。
+
 All API paths are prefixed with `/open-api-public/v1/gallery/`（需 STS 凭证）或 `/open-api-guest/v1/gallery/`（无需凭证，见公告接口）。
 
 ## Authentication
@@ -60,29 +72,35 @@ None（无需任何鉴权头域）。
 
 ---
 
-## GET /open-api-guest/v1/gallery/skills/version
+## GET /open-api-guest/v1/gallery/skills/status
 
-Query the version of a published skill on the platform. Used together with the connectivity check to detect whether the local skill is outdated (a newer version exists server-side). No credentials required.
+Query the status of this skill on the platform. The skill calls it with its own `name` + `version`; the platform decides whether the local skill is up-to-date, outdated (must upgrade), or unchecked. No credentials required.
 
 ### Query Parameters
 
 | Parameter | Type   | Required | Description                                                            |
 | --------- | ------ | -------- | ---------------------------------------------------------------------- |
-| `name`    | string | yes      | Skill name (letters/digits/underscores/hyphens only, 1-32 chars). When querying the publish skill, use `publish-work-to-gallery`. |
+| `name`    | string | yes      | Skill name (letters/digits/underscores/hyphens only, 1-64 chars). Use the skill's own `name` field (SKILL.md frontmatter). |
+| `version` | string | yes      | Local skill version (`YYYY.MM.DD[.NNN]`). **Omitted**: registered skill → `outdated` (extremely old), unregistered → `400 PARAM.MISSING` (both params required). **Provided but empty/unparseable**: registered → `outdated`, unregistered → `skip`. |
 
-### Success Response (200)
+### Response (200)
 
 ```json
 {
   "success": true,
   "code": "GALLERY.SUCCESS",
   "message": "成功",
-  "data": { "version": "2026.09.09.001" }
+  "data": { "status": "pass", "version": "2026.09.09.001" }
 }
 ```
 
-- `data.version`：`YYYY.MM.DD[.NNN]`（`.NNN` 可省略）。技能未在平台登记时 `version` 为 `null`（此时不视为"有新版可升级"）。
-- 校验失败：`400 GALLERY.PARAM.MISSING`（缺 `name`）/ `400 GALLERY.PARAM.INVALID`（`name` 含非法字符或超长）。
+- `data.status`：`pass`（本地 ≥ 登记版本，不拦截）/ `outdated`（已登记且本地版本未传、缺失、无法解析或落后 → 须升级，响应附 `data.prompt` 平台渲染好的升级文案）/ `skip`（version 已传但技能未登记，平台不负责该技能 → 不拦截）。
+- `data.version`：平台登记版本（未登记时为 `null`）。
+- 校验失败：`400 GALLERY.PARAM.MISSING`（缺 `name`；或 `version` 未传且技能未登记）/ `400 GALLERY.PARAM.INVALID`（`name` 含非法字符或超长）。
+
+## GET /open-api-guest/v1/gallery/skills/version · 旧版接口（强制升级哨兵）
+
+旧版技能版本查询已被 `/v1/gallery/skills/status` 取代。**本接口仍返回 `200`**，但 `data.version` 恒为哨兵 `9999.99.99`：旧版技能脚本的比较逻辑必然判「本地 < 哨兵」→ `status=outdated` 并停止（强制升级，绕过旧脚本吞非 2xx 的缺陷）。响应含 `data.deprecated=true` 与 `data.prompt`（按调用方 `name` 渲染的 `skills|outdated` 升级文案，供直接调用者阅读）。`name` 缺失/非法仍返回 400。
 
 ## GET /open-api-guest/v1/gallery/prompt
 
@@ -103,7 +121,7 @@ Query a prompt template from server `PROMPTS` config by `type|target`. Used to f
   "success": true,
   "code": "GALLERY.SUCCESS",
   "message": "成功",
-  "data": { "prompt": "您使用的 publish-work-to-gallery 技能已过时，请更新技能后重试：npx skills add ..." }
+  "data": { "prompt": "您使用的本技能已过时，请更新技能后重试：npx skills add ..." }
 }
 ```
 
@@ -113,7 +131,7 @@ Query a prompt template from server `PROMPTS` config by `type|target`. Used to f
 
 ## GET /open-api-public/v1/gallery/camps
 
-Query the list of publicly visible activities (训练营/培训活动).
+Query the list of publicly visible activities (活动).
 
 ### Headers
 
@@ -167,7 +185,7 @@ Query the list of publicly visible activities (训练营/培训活动).
 }
 ```
 
-### TrainingCamp Object Fields
+### Activity Object Fields
 
 | Field                  | Type    | Description                                              |
 | ---------------------- | ------- | -------------------------------------------------------- |
@@ -177,26 +195,26 @@ Query the list of publicly visible activities (训练营/培训活动).
 | `school`               | string  | Host school name                                         |
 | `activityCategoryId`   | string  | Associated activity category ID                          |
 | `activityCategoryName` | string  | Associated activity category name (redundant for display) |
-| `isSchoolLinked`       | boolean | Whether the camp is linked to a school                  |
+| `isSchoolLinked`       | boolean | Whether the activity is linked to a school              |
 | `periodYear`           | integer | Year of the activity period                              |
 | `periodNumber`         | integer | Sequential period number within the year                 |
-| `description`          | string  | Camp description (nullable)                              |
+| `description`          | string  | Activity description (nullable)                         |
 | `startsAt`             | string  | Start date (YYYY-MM-DD)                                  |
 | `endsAt`               | string  | End date (YYYY-MM-DD)                                    |
-| `status`               | string  | Camp status: draft, published, hidden, archived, ended   |
+| `status`               | string  | Activity status: draft, published, hidden, archived, ended |
 
 ### Submission Status Determination
 
-Each camp's submission status is derived from `startsAt`, `endsAt`, `status`, and the current date (today):
+Each activity's submission status is derived from `startsAt`, `endsAt`, `status`, and the current date (today):
 
 | Condition                                                     | Status Label | Submittable | Description                                               |
 | ------------------------------------------------------------- | ------------ | ----------- | --------------------------------------------------------- |
-| today < `startsAt`                                            | 未开始       | No          | Camp has not started yet                                  |
-| `startsAt` <= today <= `endsAt` AND `status` == `"published"` | 可投稿       | Yes         | Camp is active and accepting submissions                  |
-| `startsAt` <= today <= `endsAt` AND `status` != `"published"` | 进行中       | No          | Camp is ongoing but not open for submission (e.g., draft) |
-| today > `endsAt`                                              | 已结束       | No          | Camp has ended                                            |
+| today < `startsAt`                                            | 未开始       | No          | Activity has not started yet                              |
+| `startsAt` <= today <= `endsAt` AND `status` == `"published"` | 可投稿       | Yes         | Activity is active and accepting submissions              |
+| `startsAt` <= today <= `endsAt` AND `status` != `"published"` | 进行中       | No          | Activity is ongoing but not open for submission (e.g., draft) |
+| today > `endsAt`                                              | 已结束       | No          | Activity has ended                                        |
 
-Only camps with status label "可投稿" are selectable for work submission. If a user attempts to submit to a camp that is "未开始", "进行中", or "已结束", the request is rejected with `GALLERY.CAMP.UNAVAILABLE`.
+Only activities with status label "可投稿" are selectable for work submission. If a user attempts to submit to an activity that is "未开始", "进行中", or "已结束", the request is rejected with `GALLERY.CAMP.UNAVAILABLE`.
 
 ### Error Response (400)
 

@@ -5,10 +5,10 @@
 //       agent 无需感知布局种类/截图数量/概率抽样——全部内部闭环，输出一行结果。
 //
 // 决策模型（统一概率池，一次抽样）:
-//   单页项目: 方案池 = [classic, split, hero, showcase, polaroid, blur, topbar]        (7 个单图)
-//   多页项目: 方案池 = [classic, split, hero, showcase, polaroid, blur, topbar,
-//                       collage-h, collage-v, collage-grid]                             (7 单图 + 3 多图)
-//   从池中等概率抽 1 个 → 决定布局/截图数量。多页时多图出现概率 = 3/10。
+//   单页项目: 方案池 = 12 个单图布局（classic/split/hero/showcase/polaroid/blur/topbar/
+//                       spotlight/cinema/blueprint/diorama/glass）
+//   多页项目: 方案池 = 12 单图 + 3 多图（collage-h/collage-v/collage-grid）
+//   从池中等概率抽 1 个 → 决定布局/截图数量。多页时多图出现概率 = 3/15（≈1/5）。
 //
 // 多页判定: 项目内 .html 文件数 ≥ 2。候选页 = 其余 html 文件（排除 index.html / 404 等）。
 //          SPA（单 html 但带 hash 路由）暂视为单页（不触发多图），后续可扩展。
@@ -25,7 +25,7 @@
 // 退出码: 0=成功; 1=失败; 2=参数错误
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
@@ -37,7 +37,8 @@ const PREFLIGHT_SH = path.join(thisDir, "preflight.sh");
 const GEN_COVER = path.join(thisDir, "generate_cover.py");
 const VERIFY = path.join(thisDir, "verify-glyphs.py");
 
-const SINGLE_LAYOUTS = ["classic", "split", "hero", "showcase", "polaroid", "blur", "topbar"];
+const SINGLE_LAYOUTS = ["classic", "split", "hero", "showcase", "polaroid", "blur", "topbar",
+  "spotlight", "cinema", "blueprint", "diorama", "glass"];
 const MULTI_LAYOUTS = ["collage-h", "collage-v", "collage-grid"];
 
 const HELP = `build-cover.mjs — 封面一键生成（单图/多图自动决策 + 概率抽样 + 截图 + 合成 + 校验）
@@ -93,15 +94,46 @@ const log = cli.quiet ? () => {} : (m) => console.error(`[build-cover] ${m}`);
 const isWindows = process.platform === "win32";
 
 // ---------------- 工具函数 ----------------
+// 读取 preflight 写入的 font-gate-ok 标记里的主解释器（python_bin 字段），
+// 确保与封面生成实际调用同一个解释器（避免多解释器 site-packages 不互通）。
+function pythonBinFromGate() {
+  try {
+    const marker = path.join(os.tmpdir(), "font-gate-ok");
+    if (!existsSync(marker)) return "";
+    const txt = readFileSync(marker, "utf8");
+    const m = txt.match(/^python_bin=(.+)$/m);
+    return m ? m[1].trim() : "";
+  } catch { return ""; }
+}
+
 function pyCmd() {
-  // Windows 优先 python；非 win 用 python3
-  if (isWindows) {
-    for (const c of ["python", "python3"]) {
-      try { const r = spawnSync(c, ["--version"], { stdio: "ignore" }); if (!r.error && r.status === 0) return c; } catch {}
-    }
-    return "python"; // 都不存在时回退，runPython 会给出明确报错
+  // 1) 优先用 preflight 记录的主解释器（版本已装依赖 + playwright 已就绪）
+  const fromGate = pythonBinFromGate();
+  if (fromGate) {
+    try { const r = spawnSync(fromGate, ["--version"], { stdio: "ignore" }); if (!r.error && r.status === 0) { return fromGate; } } catch {}
   }
-  return "python3";
+  // 2) 固定候选（Windows 优先 python；非 win 用 python3）
+  const cands = isWindows ? ["python", "python3"] : ["python3", "python"];
+  for (const c of cands) {
+    try { const r = spawnSync(c, ["--version"], { stdio: "ignore" }); if (!r.error && r.status === 0) return c; } catch {}
+  }
+  // 3) 兜底：PATH 扫描 python3* 可执行文件（不设版本上限，覆盖 3.14/3.15/自定义命名）
+  try {
+    const pathDirs = (process.env.PATH || "").split(isWindows ? ";" : ":").filter(Boolean);
+    const seen = new Set();
+    for (const d of pathDirs) {
+      if (!existsSync(d)) continue;
+      for (const f of readdirSync(d)) {
+        if (!/^python3.*(\.exe)?$/i.test(f)) continue;
+        const base = f.replace(/\.exe$/i, "");
+        if (seen.has(base)) continue;
+        seen.add(base);
+        try { const r = spawnSync(base, ["--version"], { stdio: "ignore" }); if (!r.error && r.status === 0) return base; } catch {}
+      }
+    }
+  } catch {}
+  // 都不存在时回退，runPython 会给出明确报错
+  return isWindows ? "python" : "python3";
 }
 
 function runPython(script, args) {
@@ -220,9 +252,12 @@ function main() {
   log(`页数=${pagesCount} 多页=${multipage} 布局=${layout} 多图=${isMulti}`);
 
   // 3) 截图（多图: 首页 + 其余候选页；单图: 仅首页）
-  const tmp = mkdtempSync(path.join(os.tmpdir(), "cover-build-"));
+  // 统一临时截图目录（以参数 json 输出名为 key，便于 409 改名时装参数重跑复用截图；
+  // 目录保留到整体流程结束由 SKILL 清理，build-cover 不删）。
+  const tmp = path.join(os.tmpdir(), "cover-build-" + path.basename(cli.out).replace(/[^a-zA-Z0-9_.-]/g, "_"));
+  mkdirSync(tmp, { recursive: true });
   const shots = {}; // rel -> abs path
-  try {
+  {
     let mainShot = "";
     if (cli.screenshot && existsSync(cli.screenshot)) {
       mainShot = cli.screenshot;
@@ -259,19 +294,11 @@ function main() {
       }
     }
 
-    // 4) 合成封面
-    const genArgs = [
-      "--screenshot", mainShot,
-      "--title", cli.title,
-      "--out", cli.out,
-      "--scheme", cli.scheme,
-      "--layout", layout,
-    ];
-    if (cli.tagline) { genArgs.push("--tagline", cli.tagline); }
-    if (cli.desc) { genArgs.push("--description", cli.desc); }
-    if (isMulti && smallShots.length > 0) {
-      genArgs.push("--screenshots", smallShots.join(","));
-    }
+    // 4) 合成封面（含布局重试机制）
+    // 当某个布局的封面字形校验失败时，自动换一个布局重试，
+    // 避免因单个布局的渲染问题（如背景特效干扰字形检测）导致整个封面生成失败。
+    // --force-layout 时不重试（用户明确指定了布局）。
+    //
     // 关键词徽章：显式 --keywords 优先；否则从项目探测；30% 概率不用关键词（保持封面简洁多样）
     const useKeywords = !(Math.random() < 0.3);
     let keywords = cli.keywords ? cli.keywords.split(",").map((s) => s.trim()).filter(Boolean) : [];
@@ -279,34 +306,94 @@ function main() {
       keywords = collectKeywords(cli.dir);
     }
     if (useKeywords && keywords.length >= 3 && keywords.length <= 5) {
-      genArgs.push("--keywords", keywords.join(","));
       log(`关键词徽章: ${keywords.join(", ")}`);
     } else {
       log(`本次无关键词徽章（30% 概率或候选不足）`);
     }
-    log(`合成封面 (${layout})...`);
-    const g = runPython(GEN_COVER, genArgs);
-    if (g.status !== 0) {
-      console.error("❌ 封面合成失败（generate_cover.py 非 0）：\n" + (g.stderr || g.stdout));
-      process.exitCode = 1;
-      return;
-    }
-    if (!existsSync(cli.out)) { console.error(`❌ 封面未生成: ${cli.out}`); process.exitCode = 1; return; }
 
-    // 5) 校验
-    const v = runPython(VERIFY, [cli.out, "--quiet"]);
-    if (v.status !== 0) {
-      console.error(`❌ 字形校验未通过（${cli.out}），禁止发布：\n${v.stderr || v.stdout}`);
+    // 构建布局尝试列表：首选初始抽样的布局，失败后依次尝试其余单页布局
+    const forced = !!cli.layout;
+    const triedLayouts = new Set([layout]);
+    const fallbackPool = SINGLE_LAYOUTS.filter((l) => !triedLayouts.has(l));
+    // Fisher-Yates shuffle
+    for (let i = fallbackPool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [fallbackPool[i], fallbackPool[j]] = [fallbackPool[j], fallbackPool[i]];
+    }
+    const layoutsToTry = [layout, ...fallbackPool];
+
+    let successLayout = null;
+    let successIsMulti = false;
+    let lastError = "";
+    const maxAttempts = forced ? 1 : layoutsToTry.length;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const tryLayout = layoutsToTry[attempt];
+      const tryIsMulti = MULTI_LAYOUTS.includes(tryLayout);
+
+      // 多图布局需要 smallShots，如果没有则跳过
+      if (tryIsMulti && smallShots.length === 0) continue;
+
+      if (attempt > 0) {
+        log(`⚠️ 上一布局未通过校验，尝试布局 ${tryLayout}（第 ${attempt + 1} 次尝试）...`);
+      }
+
+      const genArgs = [
+        "--screenshot", mainShot,
+        "--title", cli.title,
+        "--out", cli.out,
+        "--scheme", cli.scheme,
+        "--layout", tryLayout,
+      ];
+      if (cli.tagline) { genArgs.push("--tagline", cli.tagline); }
+      if (cli.desc) { genArgs.push("--description", cli.desc); }
+      if (tryIsMulti && smallShots.length > 0) {
+        genArgs.push("--screenshots", smallShots.join(","));
+      }
+      if (useKeywords && keywords.length >= 3 && keywords.length <= 5) {
+        genArgs.push("--keywords", keywords.join(","));
+      }
+
+      log(`合成封面 (${tryLayout})...`);
+      const g = runPython(GEN_COVER, genArgs);
+      if (g.status !== 0) {
+        lastError = `封面合成失败（generate_cover.py 非 0）：\n${g.stderr || g.stdout}`;
+        log(`❌ ${lastError}`);
+        continue;
+      }
+      if (!existsSync(cli.out)) {
+        lastError = `封面未生成: ${cli.out}`;
+        log(`❌ ${lastError}`);
+        continue;
+      }
+
+      // 5) 校验
+      const v = runPython(VERIFY, [cli.out, "--quiet"]);
+      if (v.status !== 0) {
+        lastError = `字形校验未通过（布局 ${tryLayout}）：${(v.stderr || v.stdout).trim()}`;
+        log(`❌ ${lastError}`);
+        continue;
+      }
+
+      log(`✅ 封面校验通过（布局 ${tryLayout}）`);
+      successLayout = tryLayout;
+      successIsMulti = tryIsMulti;
+      break;
+    }
+
+    if (!successLayout) {
+      console.error(`❌ 所有布局均未通过字形校验（尝试了 ${maxAttempts} 个布局），禁止发布。`);
+      console.error(`   最后错误: ${lastError}`);
+      console.error("   请检查字体是否丢失/字形缺失——真实 CJK 笔画应贯穿字符中心。");
       process.exitCode = 1;
       return;
     }
-    log(`✅ 封面校验通过`);
 
     // 6) 输出一行
     const schemeUsed = cli.scheme; // generate_cover --scheme auto 内部按标题哈希选，脚本不解析，用输入值
-    console.log(`#cover=${cli.out} layout=${layout} multi=${isMulti ? "yes" : "no"} pages=${pagesCount} scheme=${schemeUsed}`);
-  } finally {
-    try { rmSync(tmp, { recursive: true, force: true }); } catch {}
+    console.log(`#cover=${cli.out} layout=${successLayout} multi=${successIsMulti ? "yes" : "no"} pages=${pagesCount} scheme=${schemeUsed} tmp=${tmp}`);
+    // 注: 截图临时目录 tmp 保留到整体流程结束（SKILL Step 8 统一清理），供 409 改名时装参数重跑复用
+    //   （--screenshot <tmp>/shot-index.png）。不在此删除，避免删掉可复用的恢复源。
   }
 }
 

@@ -1,23 +1,20 @@
 #!/usr/bin/env node
-// ensure-gitcode-credential.mjs — GitCode 凭证排查 + gitcode-oauth skill 安装检测（一键）
+// ensure-gitcode-credential.mjs — GitCode 凭证排查（一键）
 //
 // 背景:
-//   SKILL.md Step 3 内联了 ~12 行 gitcode-oauth 安装/排查逻辑（凭证检测、skill 存在性、
-//   安装命令、Windows 兼容性），每次加载 SKILL.md 都付费。本脚本封装为单入口，
-//   agent 只跑一条命令，按 stdout 决策。
+//   SKILL.md Step 3 内联了 gitcode-oauth 登录前置逻辑，每次加载 SKILL.md 都付费。
+//   本脚本封装为单入口，agent 只跑一条命令，按 stdout 决策。
 //
 // 用法:
-//   node ensure-gitcode-credential.mjs [--work-dir <dir>]
+//   node ensure-gitcode-credential.mjs
 //
 // 行为:
 //   1. 检测本机已有 GitCode 凭证（git credential fill / ~/.git-credentials / $GITCODE_TOKEN / cmdkey）
 //   2. 有凭证 → exit 0，stdout "#credential=found source=<来源>"
-//   3. 无凭证 + Linux/macOS → exit 0，stdout "#credential=missing action=manual"（提示用 git credential fill 等）
-//   4. 无凭证 + Windows → 检测 gitcode-oauth skill 是否已装
-//      - 已装 → exit 0，stdout "#credential=missing skill=installed"（提示用该 skill 扫码登录）
-//      - 未装 → exit 1，stdout "#credential=missing skill=absent"，stderr 给安装命令 + Windows 兼容提示
+//   3. 无凭证 → exit 0，stdout "#credential=missing"，指引执行 gitcode-oauth.ensure.mjs
+//      （该脚本自带二进制自动安装：存在不下载，缺失自动装至用户级工具目录）
 //
-// 退出码: 0=有凭证或已有可行路径; 1=需要 agent 介入安装
+// 退出码: 0=有凭证或可走 OAuth 登录闭环
 
 import { execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -30,18 +27,15 @@ if (process.platform === "win32") {
 }
 
 const args = process.argv.slice(2);
-let workDir = ".";
 for (let i = 0; i < args.length; i++) {
-  if (args[i] === "--work-dir") workDir = args[++i];
-  else if (args[i] === "-h" || args[i] === "--help") {
-    console.log(`ensure-gitcode-credential.mjs — GitCode 凭证排查 + skill 安装检测
+  if (args[i] === "-h" || args[i] === "--help") {
+    console.log(`ensure-gitcode-credential.mjs — GitCode 凭证排查
 
 用法:
-  node ensure-gitcode-credential.mjs [--work-dir <dir>]
+  node ensure-gitcode-credential.mjs
 
 退出码:
-  0 = 有凭证 / 或已有可行路径（manual 或 skill 已装）
-  1 = Windows 无凭证且 gitcode-oauth skill 未装（stderr 含安装命令）`);
+  0 = 有凭证（#credential=found）或无凭证可走 OAuth（#credential=missing）`);
     process.exit(0);
   }
 }
@@ -84,43 +78,18 @@ if (credSource) {
   process.exit(0);
 }
 
-// ---- 2. 无凭证 ----
-const isWindows = process.platform === "win32";
-
-if (!isWindows) {
-  // Linux/macOS: 凭证助手通常健全，提示手动配置
-  console.log(`#credential=missing action=manual`);
-  console.error(`未检测到 GitCode 凭证。Linux/macOS 请用以下任一方式配置：
-  1. git credential fill（交互输入）
-  2. ~/.git-credentials 文件写入 https://<user>:<token>@gitcode.com
-  3. export GITCODE_TOKEN=<token>`);
-  process.exit(0);
-}
-
-// ---- 3. Windows: 检测 gitcode-oauth skill ----
-const skillDirs = [
-  path.join(homedir(), ".claude", "skills", "gitcode-oauth"),
-  path.join(homedir(), ".config", "opencode", "skills", "gitcode-oauth"),
-  path.join(process.cwd(), ".agents", "skills", "gitcode-oauth"),
-];
-const skillInstalled = skillDirs.some((d) => existsSync(d));
-
-if (skillInstalled) {
-  console.log(`#credential=missing skill=installed`);
-  console.error(`GitCode 凭证未检测到，但 gitcode-oauth skill 已安装。
-请用该 skill 扫码登录获取 token（用 Git Bash 执行其脚本）。`);
-  process.exit(0);
-}
-
-// ---- 4. Windows + 无凭证 + skill 未装 → 输出安装命令 ----
-console.log(`#credential=missing skill=absent`);
-console.error(`GitCode 凭证未检测到，且 gitcode-oauth skill 未安装。
-
-安装命令（项目级，--copy 避免 Windows 无管理员权限建链接失败）:
-  npx skills add https://gitcode.com/zhoucungen/gitcode-oauth.git --skill gitcode-oauth --copy -y
-
-装完按该 skill 的 SKILL.md 扫码登录拿 token。
-
-⚠️ Windows 兼容: gitcode-oauth 脚本是 bash（.sh），原生 PowerShell/cmd 不认，
-   登录/轮询必须用 Git Bash 执行（如 & "C:\\Program Files\\Git\\bin\\bash.exe" <script>.sh ...）。`);
-process.exit(1);
+// ---- 2. 无凭证 → 所有平台统一：仅 gitcode-oauth 扫码 / 点击链接授权登录 ----
+// gitcode-oauth.ensure.mjs 自带二进制自动安装（存在不下载），此处不再生成安装命令。
+// 登录闭环是两阶段（避免同步阻塞导致 agent 无法提示用户）：
+//   ① --start   起 serve + 拿链接/二维码，立即返回 → agent 把链接和二维码一并原样展示给用户
+//   ② --wait    用户授权完，轮询收尾写 token
+console.log(`#credential=missing`);
+console.error(`GitCode 凭证未检测到。执行两阶段 OAuth 登录：
+  ① 阶段1（起 serve + 拿链接，立即返回）:
+     node $SKILL_DIR/scripts/gitcode-oauth.ensure.mjs --start
+     # stdout: #oauth=started session_id=<id> login_url=<url>；二维码走 stderr。
+     # 把链接和二维码一并原样展示给用户，由用户在任意浏览器打开链接或扫码授权；禁止用 agent 内置浏览器代开。
+  ② 阶段2（用户授权完成后轮询收尾）:
+     node $SKILL_DIR/scripts/gitcode-oauth.ensure.mjs --wait <session_id>
+     # 成功后 token 存 ~/.gitcode/auth.toml（stdout #oauth=done）。`);
+process.exit(0);

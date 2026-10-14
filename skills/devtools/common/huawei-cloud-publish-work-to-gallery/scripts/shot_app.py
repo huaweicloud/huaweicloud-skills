@@ -22,7 +22,7 @@ try:
 except ImportError as e:
     sys.exit(
         "❌ 缺少 Python 依赖 playwright（截图必需）。请先运行渲染前 preflight 自动补齐：\n"
-        "   bash <skill>/scripts/preflight.sh   （或 Windows: powershell preflight.ps1）\n"
+        "   bash $SKILL_DIR/scripts/preflight.sh   （或 Windows: powershell $SKILL_DIR/scripts/preflight.ps1）\n"
         "   或手动安装：python -m pip install playwright && python -m playwright install chromium\n"
         f"   原始错误: {e}"
     )

@@ -10,11 +10,13 @@
       [--region cn-north-4] [--dur 900] [--session publish-<ts>] \\
       [--creds-out <json>] [--sh-out <sh>]
   AK/SK/TOKEN 由 hcloud 读取（HUAWEICLOUD_SDK_AK/SK[/SECURITY_TOKEN] 或 hcloud 已配置）。
+  hcloud 探测：--hcloud → HCLOUD_EXE → PATH（仅按 PATH，不扫固定目录，工具统一经 ensure-user-bindir.mjs 暴露）。
 """
 
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -44,20 +46,35 @@ def resolve_hcloud(explicit: str) -> str:
             return str(p)
         sys.exit(f"❌ --hcloud 指定路径不存在: {p}")
 
-    # shutil.which covers PATH-based discovery (e.g. /usr/local/bin/hcloud)
+    # 探测顺序: --hcloud → HCLOUD_EXE → PATH(shutil.which)。
+    # 仅按 PATH 查找，不扫描固定目录——工具统一经 ensure-user-bindir.mjs 目录暴露。
+    _exe_env = os.environ.get("HCLOUD_EXE", "").strip()
+    if _exe_env:
+        p = Path(_exe_env).expanduser().resolve()
+        if p.exists():
+            return str(p)
     _which = shutil.which("hcloud")
-    candidates = [
-        Path("/usr/local/bin/hcloud"),
-        Path.home() / ".local" / "bin" / "hcloud",
-        Path.cwd() / "hcloud-cli" / "hcloud.exe",
-        Path.cwd() / "hcloud" / "hcloud.exe",
-    ]
     if _which:
-        candidates.insert(0, Path(_which))
-    for c in candidates:
-        if c.exists():
-            return str(c)
-    sys.exit("❌ 未找到 hcloud（~/.local/bin/hcloud / hcloud-cli/hcloud.exe 均无）。请安装 KooCLI 或传 --hcloud <绝对路径>")
+        return str(_which)
+    sys.exit("❌ 未找到 hcloud（不在 PATH）。请安装 KooCLI 并确保其目录在 PATH（可经 ensure-user-bindir.mjs），或传 --hcloud <绝对路径>")
+
+
+def normalize_aksk_env():
+    """AK/SK/Token 环境变量归一化：hcloud 只认 HUAWEICLOUD_SDK_AK/SK/SECURITY_TOKEN，
+    按优先级回退别名，命中别名时注入 SDK 变量名，供 hcloud 子进程读取。
+    仅当 SDK 变量未设置且别名命中时才写，不覆盖用户显式设置的 SDK 变量。"""
+    chains = {
+        "HUAWEICLOUD_SDK_AK": ["HUAWEICLOUD_AK", "HW_ACCESS_KEY"],
+        "HUAWEICLOUD_SDK_SK": ["HUAWEICLOUD_SK", "HW_SECRET_KEY"],
+        "HUAWEICLOUD_SDK_SECURITY_TOKEN": ["HUAWEICLOUD_SECURITY_TOKEN", "HW_SECURITY_TOKEN"],
+    }
+    for sdk, aliases in chains.items():
+        if os.environ.get(sdk):
+            continue
+        for a in aliases:
+            if os.environ.get(a):
+                os.environ[sdk] = os.environ[a]
+                break
 
 
 def main():
@@ -75,6 +92,7 @@ def main():
     ap.add_argument("--sh-out", default="", help="凭证 sh 输出路径（默认 tmpdir/sts-creds.sh）")
     args = ap.parse_args()
 
+    normalize_aksk_env()
     hcloud_exe = resolve_hcloud(args.hcloud)
     agency_urn = f"iam::{args.account}:agency:SELF_VERIFY"
     creds_out = args.creds_out or str(Path(tempfile.gettempdir()) / "sts-creds.json")
@@ -90,18 +108,31 @@ def main():
     ]
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        out = result.stdout
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", check=True)
+        raw = result.stdout
     except subprocess.CalledProcessError as e:
         msg = (e.stderr or "").strip() or str(e)
-        sys.exit(f"❌ hcloud STS AssumeAgency 失败: {msg}\n请检查 AK/SK/账号 ID，或按 references/troubleshooting.md 排查。")
+        sys.exit(f"❌ hcloud STS AssumeAgency 失败: {msg}\n请检查 AK/SK/账号 ID（HUAWEICLOUD_SDK_AK/SK 或别名 HUAWEICLOUD_AK/SK、HW_ACCESS_KEY/HW_SECRET_KEY），或按 references/troubleshooting.md 排查。")
+
+    # hcloud (KooCLI) 输出含 ANSI 彩色码且可能夹带日志行，需剥离 ANSI 后提取 JSON。
+    out = re.sub(r'\x1b\[[0-9;]*m', '', raw).strip()
 
     try:
         c = json.loads(out)
         if "credentials" not in c:
             raise ValueError("响应缺 credentials 字段")
-    except (json.JSONDecodeError, ValueError) as e:
-        sys.exit(f"❌ 解析 hcloud 输出失败（{e}）。原始输出：{out[:300]}")
+    except (json.JSONDecodeError, ValueError):
+        # hcloud 可能输出非纯 JSON（含日志行），尝试提取首个 JSON 对象
+        json_match = re.search(r'\{[\s\S]*\}', out)
+        if json_match:
+            try:
+                c = json.loads(json_match.group(0))
+                if "credentials" not in c:
+                    raise ValueError("响应缺 credentials 字段")
+            except (json.JSONDecodeError, ValueError) as e:
+                sys.exit(f"❌ 解析 hcloud 输出失败（{e}）。原始输出：{raw[:300]}")
+        else:
+            sys.exit(f"❌ 解析 hcloud 输出失败（无 JSON 内容）。原始输出：{raw[:300]}")
 
     camel = {
         "accessKeyId": c["credentials"]["access_key_id"],

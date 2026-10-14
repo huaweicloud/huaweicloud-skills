@@ -23,7 +23,6 @@
 import http from "node:http";
 import https from "node:https";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 
@@ -32,12 +31,32 @@ if (process.platform === "win32") {
   process.stderr.setDefaultEncoding?.("utf8");
 }
 
+// AK/SK/Token 环境变量归一化：hcloud 只认 HUAWEICLOUD_SDK_AK/SK/SECURITY_TOKEN，
+// 这里按优先级回退别名，命中别名时注入 SDK 变量名，供本进程及 hcloud 子进程（401 刷新）使用。
+// 仅当 SDK 变量未设置且别名命中时才写，不覆盖用户显式设置的 SDK 变量。
+function normalizeAkskEnv() {
+  const chains = {
+    HUAWEICLOUD_SDK_AK: ["HUAWEICLOUD_AK", "HW_ACCESS_KEY"],
+    HUAWEICLOUD_SDK_SK: ["HUAWEICLOUD_SK", "HW_SECRET_KEY"],
+    HUAWEICLOUD_SDK_SECURITY_TOKEN: ["HUAWEICLOUD_SECURITY_TOKEN", "HW_SECURITY_TOKEN"],
+  };
+  for (const [sdk, aliases] of Object.entries(chains)) {
+    if (process.env[sdk]) continue;
+    for (const a of aliases) {
+      if (process.env[a]) { process.env[sdk] = process.env[a]; break; }
+    }
+  }
+}
+normalizeAkskEnv();
+
 // ===== 发布环境配置 =====
-// 优先使用环境变量 GALLERY_API_HOST；未设置时回退到测试平台默认域名。
-// 生产环境请通过环境变量覆盖。
+// 发布目标域名 = 环境变量 GALLERY_API_HOST；未设置时回退默认值（正式域名）。
+// 测试/验收环境：会话内设一次 GALLERY_API_HOST=gallerytest.developer.huaweicloud.com，
+// 所有调用链（api.mjs / check-version.mjs / publish-work.mjs）子进程自动继承，
+// 无需改文件、发完即还原默认，天然规避 sed 批量替换后的"忘还原"风险（见 SKILL.md）。
 const HOST = process.env.GALLERY_API_HOST || "gallery.developer.huaweicloud.com";
 const PROTOCOL = (process.env.GALLERY_API_PROTOCOL || "https").toLowerCase();
-const PORT = PROTOCOL === "https" ? 443 : 80;
+const PORT = Number(process.env.GALLERY_API_PORT) || (PROTOCOL === "https" ? 443 : 80);
 const transport = PROTOCOL === "https" ? https : http;
 // ========================================================
 
@@ -208,26 +227,21 @@ function readFileSafe(p) {
 // 定位 hcloud（KooCLI）可执行文件：
 // 优先级 ① _refresh.hcloudExe（Step 1 生成凭证时落盘的实际路径，401 自动刷新优先复用）
 //        ② HCLOUD_EXE 环境变量
-//        ③ PATH 上的 hcloud
-//        ④ Windows 常见安装目录（$PWD\hcloud-cli、$USERPROFILE 下等，与 SKILL.md Step 7a 指引一致）
+//        ③ PATH（where/which）——统一经 ensure-user-bindir.mjs 目录暴露，不再扫描固定目录
 // 找不到时返回 "hcloud"，由 execFileSync 自然报错，不阻断逻辑。
 function findHcloudBin(refresh) {
   if (refresh && refresh.hcloudExe) return refresh.hcloudExe;
   if (process.env.HCLOUD_EXE) return process.env.HCLOUD_EXE;
-  if (process.platform !== "win32") return "hcloud";
-  const candidates = [
-    path.join(process.cwd(), "hcloud-cli", "hcloud.exe"),
-    path.join(os.homedir(), "hcloud-cli", "hcloud.exe"),
-    path.join(os.homedir(), ".huawei", "hcloud.exe"),
-    path.join(os.homedir(), ".huawei", "bin", "hcloud.exe"),
-    path.join(os.homedir(), "hcloud", "hcloud.exe"),
-  ];
-  for (const c of candidates) {
+  if (process.platform === "win32") {
     try {
-      if (fs.existsSync(c)) return c;
-    } catch {
-      /* ignore */
-    }
+      const out = execFileSync("where", ["hcloud"], { encoding: "utf8", timeout: 5000, stdio: ["ignore", "pipe", "ignore"] }).trim();
+      if (out) return out.split(/\r?\n/)[0].trim();
+    } catch {}
+  } else {
+    try {
+      const out = execFileSync("which", ["hcloud"], { encoding: "utf8", timeout: 5000, stdio: ["ignore", "pipe", "ignore"] }).trim();
+      if (out) return out;
+    } catch {}
   }
   return "hcloud";
 }
@@ -274,12 +288,26 @@ function refreshStsCreds(credsFile) {
     return false;
   }
 
+  // hcloud (KooCLI) 输出含 ANSI 彩色码且可能夹带日志行，需剥离 ANSI 后提取 JSON。
+  const cleanStdout = stdout.replace(/\x1b\[[0-9;]*m/g, "").trim();
+
   let newCreds;
   try {
-    newCreds = JSON.parse(stdout).credentials;
+    newCreds = JSON.parse(cleanStdout).credentials;
   } catch {
-    console.error("⚠️ STS 凭证刷新失败（hcloud 返回非 JSON）");
-    return false;
+    // hcloud 可能输出非纯 JSON（含日志行），尝试提取首个 JSON 对象
+    const jsonMatch = cleanStdout.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        newCreds = JSON.parse(jsonMatch[0]).credentials;
+      } catch {
+        console.error("⚠️ STS 凭证刷新失败（hcloud 返回非 JSON）");
+        return false;
+      }
+    } else {
+      console.error("⚠️ STS 凭证刷新失败（hcloud 返回非 JSON）");
+      return false;
+    }
   }
 
   // 更新 creds 文件（保留 _refresh 元数据）
@@ -301,7 +329,7 @@ function refreshStsCreds(credsFile) {
 }
 
 function buildBody(o) {
-  if (o.files.length === 0) {
+  if (o.fields.length === 0 && o.files.length === 0) {
     return { headers: {}, body: null };
   }
   const boundary = "----FormBoundary" + Date.now();
@@ -379,6 +407,7 @@ async function main() {
     console.error('❌ 用法: node api.mjs <GET|POST> <path> [--query ".."] [--header "N: v"] [--form "f=v"] [--file "n=@/path"] [--idempotency-key "k"] [--creds-file <json>] [--auto-refresh]\n  运行 node api.mjs --help 查看完整用法。');
     process.exit(2);
   }
+
   resolveCreds(o);
 
   let result;

@@ -11,13 +11,14 @@
 //       可选 _refresh 元数据传入后，api.mjs 在 401 时自动刷新 STS 凭证并重试。
 // exit 0=成功; 1=简介不达标或发布失败; 2=参数错误
 import { readFileSync, existsSync, writeFileSync, unlinkSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { verifyGates } from "./check-gates.mjs";
 
-if (process.platform === "win32") {
+const isWin = process.platform === "win32";
+if (isWin) {
   process.stdout.setDefaultEncoding?.("utf8");
   process.stderr.setDefaultEncoding?.("utf8");
 }
@@ -26,18 +27,18 @@ const thisDir = path.dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
 const cli = { json: null, api: path.join(thisDir, "api.mjs"), maxAge: 0 };
 
-const PARAMS_SCHEMA_HELP = `发布参数 JSON（--params）仅识别以下 key（脚本直接解构，key 名写错会报「产物文件不存在: undefined」）：
+const PARAMS_SCHEMA_HELP = `发布参数 JSON（--params）仅识别以下 key（脚本对未知 key 直接拦截：报「参数 JSON 含未知 key: …」并给出正确写法，不会静默忽略）：
 
 {
   "idempotencyKey":  "<gallery-publish-<domainID>-<timestamp>> 幂等键，必填",
   "accessKeyId":     "<STS 临时凭证 AK，Step 1 落盘>             必填",
   "secretAccessKey": "<STS 临时凭证 SK>                          必填",
   "securityToken":   "<STS Security Token（不经 shell 传参）>    必填",
-  "trainingCampId":  "<已选训练营 ID>                            必填",
+  "trainingCampId":  "<已选活动 ID>                            必填",
   "workName":        "<作品名称>                                 必填",
-  "introduction":    "<作品简介，15~50 中文字符>                  必填",
-  "coverImage":      "<封面 PNG 绝对路径>（不是 imagePath）       必填",
-  "detailZip":       "<详情 zip 绝对路径>（不是 detailPath）      必填",
+  "introduction":    "<作品简介，总字符数 15~50（含英文/数字/标点）>        必填",
+  "coverImage":      "<封面 PNG 绝对路径>（不是 coverImagePath/imagePath）  必填",
+  "detailZip":       "<详情 zip 绝对路径>（不是 detailsZipPath/detailPath） 必填",
   "gitUrl":          "<git clone 地址，https:// 开头 .git 结尾>   必填",
   "gitBranch":       "<分支名>                                   必填",
   "envUrl":          "<隧道访问地址，可空串>                     可选（默认 ""）",
@@ -73,7 +74,7 @@ const { idempotencyKey, accessKeyId, secretAccessKey, securityToken, trainingCam
 
 const unknownKeys = Object.keys(p).filter((k) => !VALID_PARAM_KEYS.has(k));
 if (unknownKeys.length) {
-  console.error(`❌ 参数 JSON 含未知 key: ${unknownKeys.join(", ")}（若误用了 imagePath/detailPath，正确写法是 coverImage/detailZip）`);
+  console.error(`❌ 参数 JSON 含未知 key: ${unknownKeys.join(", ")}（合法 key 是 coverImage/detailZip；勿用 coverImagePath/detailsZipPath/imagePath/detailPath 等别名；domainId 不作为参数，仅拼进 Idempotency-Key）`);
   console.error(PARAMS_SCHEMA_HELP);
   process.exit(2);
 }
@@ -108,16 +109,48 @@ if (gateResult.warned > 0) {
 }
 console.log("✅ 发布门禁复核通过，开始准备发布请求。");
 
-// 简介长度校验（15~50 中文字符）
+// 简介长度校验（与服务端 validateIntroductionLength 同口径：总 Unicode 码点数 15~50，含英文/数字/标点/emoji）
+// 与 count-cjk.mjs（Step 5）一致——判定只看总字符数，中文字符数仅作信息输出，禁止只统计 CJK。
 let cjk = 0;
 for (const ch of introduction) {
   const cp = ch.codePointAt(0);
   if ((cp >= 0x4e00 && cp <= 0x9fff) || (cp >= 0x3400 && cp <= 0x4dbf) || (cp >= 0xf900 && cp <= 0xfaff)) cjk++;
 }
-if (cjk < 15 || cjk > 50) { console.error(`简介中文字符数 ${cjk} 超出 15~50`); process.exit(1); }
+const introLength = Array.from(introduction).length;
+if (introLength < 15 || introLength > 50) {
+  console.error(`简介总字符数 ${introLength}（中文字符数 ${cjk}）超出 15~50，与服务端校验同口径`);
+  process.exit(1);
+}
 
 for (const [label, f] of [["封面", coverImage], ["详情zip", detailZip]]) {
   if (!f || !existsSync(f)) { console.error(`${label}文件不存在: ${f}`); process.exit(2); }
+}
+
+// ---- envUrl 可达性健康检查（隧道转发到本地服务，本地挂了 = 503，避免浪费 API 调用）----
+// 超时给 10s：隧道首包可达实测需 ~10s，3s 会误判不可达。
+function checkEnvUrl(urlString) {
+  if (!urlString) return { ok: true, skipped: true };
+  const nullDev = isWin ? "NUL" : "/dev/null";
+  const r = spawnSync("curl", ["-sf", "--max-time", "10", "-o", nullDev, urlString],
+    { encoding: "utf8", timeout: 15000, stdio: ["ignore", "pipe", "pipe"] });
+  if (r.error) {
+    console.warn(`⚠️ curl 不可用，跳过隧道可达性检查`);
+    return { ok: true, skipped: true };
+  }
+  if (r.status === 0) return { ok: true };
+  const err = (r.stderr || "").trim();
+  return { ok: false, reason: err || `curl 退出码 ${r.status}` };
+}
+
+if (envUrl) {
+  console.log(`检查隧道可达性: ${envUrl} ...`);
+  const envCheck = checkEnvUrl(envUrl);
+  if (!envCheck.ok) {
+    console.error(`\n❌ 隧道 URL 不可达（${envCheck.reason}）。请检查本地服务是否运行、隧道进程是否存活。`);
+    console.error(`   排查: curl -sf --max-time 10 ${envUrl}`);
+    process.exit(1);
+  }
+  console.log("✅ 隧道可达性检查通过。");
 }
 
 // 凭证落盘 → api.mjs --creds-file 传递（不经 argv，彻底规避超长 security_token 截断）

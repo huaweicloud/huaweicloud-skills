@@ -13,7 +13,7 @@
 // 同时提供 verifyGates 导出供未来在 api.mjs 发布动作前内嵌调用（当前未接入）。
 // 用法、选项、退出码详见 node check-gates.mjs --help。
 
-import { readFileSync, statSync, existsSync } from "node:fs";
+import { readFileSync, statSync, existsSync, openSync, readSync, closeSync } from "node:fs";
 import { join } from "node:path";
 import os from "node:os";
 import { pathToFileURL } from "node:url";
@@ -163,6 +163,37 @@ function checkArtifact(label, path, minSize, quiet) {
   if (!quiet) console.log(`✔ [${label}] 产物存在（${stat.size} bytes）: ${path}`);
 }
 
+// 读 PNG 宽高（IHDR 偏移 16/20），非 PNG 或读取失败返回 null（跳过比例校验）。
+function readPngSize(filePath) {
+  let fd = null;
+  try {
+    fd = openSync(filePath, "r");
+    const buf = Buffer.alloc(24);
+    readSync(fd, buf, 0, 24, 0);
+    if (buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+      return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
+    }
+  } catch {}
+  finally {
+    if (fd !== null) { try { closeSync(fd); } catch {} }
+  }
+  return null;
+}
+
+function checkCoverRatio(path, quiet) {
+  // 封面比例门禁（fail-closed）：16:9（±0.02 容差）— 与 generate_cover.py 内嵌门禁一致。
+  // 仅校验 PNG（技能产物恒为 PNG，SKILL.md 契约 --cover <png>）；非 PNG 跳过以免误拦。
+  const dims = readPngSize(path);
+  if (!dims || dims.w <= 0 || dims.h <= 0) return;
+  const ratio = dims.w / dims.h;
+  if (Math.abs(ratio - 16 / 9) > 0.02) {
+    if (!quiet) console.error(`✖ [封面比例] 宽高比 ${dims.w}x${dims.h}（${ratio.toFixed(3)}）非 16:9（±0.02 容差）— 禁止发布`);
+    failed++;
+    return;
+  }
+  if (!quiet) console.log(`✔ [封面比例] 16:9（${dims.w}x${dims.h} = ${ratio.toFixed(3)}）`);
+}
+
 // ---- 核心校验（模块可复用；不 process.exit） ----
 export function verifyGates({ cover, detail, strict = false, quiet = false, maxAgeMs = 0 }) {
   failed = 0;
@@ -187,6 +218,8 @@ export function verifyGates({ cover, detail, strict = false, quiet = false, maxA
 
   // 封面图片 — 必须 ≥10KB（与 Step 5 截图有效性校验一致）
   checkArtifact("封面图片", cover, 10240, quiet);
+  // 封面比例 — 必须 16:9（fail-closed；非 PNG 跳过）
+  checkCoverRatio(cover, quiet);
 
   // 详情 zip — 必须 ≥1KB
   checkArtifact("详情包", detail, 1024, quiet);

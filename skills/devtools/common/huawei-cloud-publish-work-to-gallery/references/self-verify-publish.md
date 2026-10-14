@@ -39,9 +39,9 @@ AssumeAgency 时传入**最小权限允许策略**（Version 必须 `"5.0"`）�
 
 ```bash
 # Linux/macOS：hcloud 在默认路径可自检出
-python <skill>/scripts/gen_sts.py --account <账号ID>
+python $SKILL_DIR/scripts/gen_sts.py --account <账号ID>
 # Windows / hcloud 不在默认路径：显式指定
-python <skill>/scripts/gen_sts.py --account <账号ID> --hcloud <hcloud.exe绝对路径>
+python $SKILL_DIR/scripts/gen_sts.py --account <账号ID> --hcloud <hcloud.exe绝对路径>
 ```
 
 脚本自动完成：`hcloud STS AssumeAgency`（`agency_urn=iam::<账号ID>:agency:SELF_VERIFY`，900s，最小策略）→ 落盘 `sts-creds.json`（camelCase，`api.mjs --creds-file` 直接可用）与 `sts-creds.sh`（`STS_AK/STS_SK/STS_TOKEN`）→ 写入 `_refresh` 元数据 `{accountId, agencyUrn, region, hcloudExe}`（供 401 自动刷新）。AK/SK 由 hcloud 读取（`HUAWEICLOUD_SDK_AK/SK[/SECURITY_TOKEN]` 或 hcloud 已配置）。

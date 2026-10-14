@@ -17,6 +17,19 @@ Start-Process -FilePath "python" -ArgumentList "-m","http.server","8080","--bind
 
 启动后**必须验证进程真实监听端口并返回本项目内容**（见 SKILL.md Step 2 健康检查要求），不要假设已成功。
 
+## 0b. Git Bash 下运行脚本必须禁用 MSYS 路径转换
+
+**现象（实测 2026-09）：** 在 Git Bash 中直接执行 `node $SKILL_DIR/scripts/api.mjs GET /v1/gallery/announcements/current`，api.mjs 报
+`Request path contains unescaped characters`。根因是 Git Bash 的 MSYS 会把以 `/` 开头的参数当作 POSIX 路径自动转换成 Windows 路径（如 `/v1/...` → `C:/Program Files/Git/v1/...`），path 含空格/盘符前缀即触发 undici 校验失败。**症状与 api.mjs 无关，对任何以 `/` 开头的参数脚本（api.mjs/check-version.mjs）均适用。**
+
+**修复：** 调用前设置一次即可（本会话内全部生效，子进程自动继承）：
+
+```bash
+export MSYS_NO_PATHCONV=1
+```
+
+PowerShell 环境无此问题（仅 Git Bash 需要）。若不便改环境，也可临时写作 `MSYS_NO_PATHCONV=1 node $SKILL_DIR/scripts/api.mjs ...`（单条命令前缀式）。
+
 ## 1. 控制台编码（PowerShell 5.1）
 
 PowerShell 5.1 控制台默认按系统代码页（GBK/CP936）解码 stdout，导致 Node/Python 脚本输出的中文显示为乱码。脚本内部已加 `setDefaultEncoding("utf8")` / `sys.stdout.reconfigure(encoding="utf-8")`（win32 条件），但作为双保险，首次进入发布流程时执行一次：
@@ -44,7 +57,7 @@ chcp 65001 > $null
 ## 3. 渲染门禁脚本选择（preflight.ps1 vs preflight.sh）
 
 - `preflight.sh` 依赖 bash 执行。Windows 需安装 **Git Bash**（随 Git for Windows 附带）或 WSL 发行版。
-- 若 bash 不可用，改用 PowerShell 原生版：`powershell -ExecutionPolicy Bypass -File <skill>/scripts/preflight.ps1`（与 preflight.sh 的 Windows 分支逻辑对齐，优先复用系统 Edge/Chrome，无需 bash）。
+- 若 bash 不可用，改用 PowerShell 原生版：`powershell -ExecutionPolicy Bypass -File $SKILL_DIR/scripts/preflight.ps1`（与 preflight.sh 的 Windows 分支逻辑对齐，优先复用系统 Edge/Chrome，无需 bash）。
 
 ### bash 可用性判断（避免 WSL stub 误判）
 
@@ -63,7 +76,7 @@ if (-not $bashOk) { Write-Host "bash 不可用（WSL stub 无发行版），改�
 `preflight.ps1` 必须以 **UTF-8 with BOM** 保存方可被 PowerShell 5.1 正确解析（无 BOM 时按 GBK 解码中文 → 语法错误）。运行前自动检测并修正：
 
 ```powershell
-$f = "<skill>/scripts/preflight.ps1"
+$f = "$SKILL_DIR/scripts/preflight.ps1"
 $b = [System.IO.File]::ReadAllBytes($f)
 if (-not ($b.Length -ge 3 -and $b[0] -eq 0xEF -and $b[1] -eq 0xBB -and $b[2] -eq 0xBF)) {
   $c = [System.IO.File]::ReadAllText($f, [System.Text.Encoding]::UTF8)
@@ -75,7 +88,7 @@ if (-not ($b.Length -ge 3 -and $b[0] -eq 0xEF -and $b[1] -eq 0xBB -and $b[2] -eq
 
 Python Playwright 通过 `pip install playwright` 安装为 Python 包，模块解析走 `sys.path`（site-packages），无需 `node_modules` 目录：
 
-- 自写截图脚本可放在任意目录运行（Python 包全局可见），无需像 Node 那样放 `scripts/` 下。内置脚本（`screenshot_guard.py`）直接 `python <skill>/scripts/screenshot_guard.py` 即可运行。
+- 自写截图脚本可放在任意目录运行（Python 包全局可见），无需像 Node 那样放 `scripts/` 下。内置脚本（`screenshot_guard.py`）直接 `python $SKILL_DIR/scripts/screenshot_guard.py` 即可运行。
 - `python -c "import playwright"` 可在任意 CWD 测试可用性（Python 包解析不依赖 CWD）：
 
 ```powershell
@@ -90,7 +103,7 @@ python -c "import playwright"
 **首选：** `build-detail-zip.mjs` 内置正确目录结构（README.md@根 + `resources/` 前缀）并自动跑服务端同源校验，一步到位、无编码/平台坑：
 
 ```bash
-node <skill>/scripts/build-detail-zip.mjs --readme <README.md> --resources <resources-dir> --out <workDetail.zip>
+node $SKILL_DIR/scripts/build-detail-zip.mjs --readme <README.md> --resources <resources-dir> --out <workDetail.zip>
 ```
 
 **备选（仅当 build-detail-zip.mjs 不可用时）：** `Compress-Archive` 在 PowerShell 5.1 会压平子目录，生成的 zip 只有 `README.md + arch.png`（丢失 `resources/` 前缀），平台校验返回 `GALLERY.PARAM.DETAIL_ZIP_INVALID`。必须用 .NET `ZipFile::CreateFromDirectory` 保留目录结构：
@@ -101,14 +114,14 @@ Remove-Item "$env:TEMP\workDetail.zip" -ErrorAction SilentlyContinue
 [System.IO.Compression.ZipFile]::CreateFromDirectory("$staging", "$env:TEMP\workDetail.zip")
 ```
 
-打包后可本地验证结构：`node <skill>/scripts/validate-detail-zip.mjs <zip>`（复用服务端 `parseDetailZip` 规则）。
+打包后可本地验证结构：`node $SKILL_DIR/scripts/validate-detail-zip.mjs <zip>`（复用服务端 `parseDetailZip` 规则）。
 
 ## 6. 发布调用（Windows 用 publish-work.mjs）
 
 PowerShell 直接向 `api.mjs` 传中文（`workName`/`introduction`）会被按系统代码页转码 → 400 参数错误。正确做法：把发布参数写入 UTF-8 JSON 文件，再经 Node 进程内 UTF-8 调 api.mjs（`publish-work.mjs` 内部还内置了门禁强制校验）：
 
 ```bash
-node <skill>/scripts/publish-work.mjs --params <utf8-params.json> [--api <skill>/scripts/api.mjs] [--max-age <秒>]
+node $SKILL_DIR/scripts/publish-work.mjs $env:TEMP\publish-params.json --api $SKILL_DIR/scripts/api.mjs --max-age 3600
 ```
 
 ## 7. Python 解释器选择（`python3` Store stub 陷阱）
@@ -117,7 +130,7 @@ Windows 上 `python3` 常指向 `WindowsApps` 的 Store stub（`Get-Command pyth
 
 ```powershell
 python3 -c "print('py3 ok')" 2>$null   # 失败（Store stub）则改用 python
-python <skill>/scripts/verify-glyphs.py <image.png>
+python $SKILL_DIR/scripts/verify-glyphs.py <image.png>
 ```
 
 `preflight.ps1` 已内置该回退（`@("python3","python") | Where-Object { Test-PyCmd $_ }`），但 SKILL.md / work-preparation.md 中的命令示例默认写 `python3`——Windows 实际执行时按本节替换为 `python` 即可。
