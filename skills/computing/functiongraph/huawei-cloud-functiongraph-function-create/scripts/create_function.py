@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-FunctionGraph function creation tool
+FunctionGraph function creation and invocation tool
 
-Create FunctionGraph functions on Huawei Cloud based on user input
+Create and invoke FunctionGraph functions on Huawei Cloud based on user input.
+Supports VPC configuration, environment variables, and function invocation.
 """
 
 import os
@@ -20,7 +21,9 @@ try:
     from huaweicloudsdkfunctiongraph.v2.region.functiongraph_region import FunctionGraphRegion
     from huaweicloudsdkfunctiongraph.v2.model.create_function_request import CreateFunctionRequest
     from huaweicloudsdkfunctiongraph.v2.model.func_code import FuncCode
+    from huaweicloudsdkfunctiongraph.v2.model.func_vpc import FuncVpc
     from huaweicloudsdkfunctiongraph.v2.model.create_function_request_body import CreateFunctionRequestBody
+    from huaweicloudsdkfunctiongraph.v2.model.invoke_function_request import InvokeFunctionRequest
 except ImportError as e:
     print(f"Please install SDK first: pip install huaweicloudsdkfunctiongraph (Error: {e})")
     sys.exit(1)
@@ -30,8 +33,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 
-class FunctionCreator:
-    """FunctionGraph function creator"""
+class FunctionGraphManager:
+    """FunctionGraph function manager supporting create, invoke, and configuration"""
 
     SUPPORTED_RUNTIMES = [
         'Python3.9', 'Python3.10', 'Python3.11',
@@ -83,6 +86,7 @@ class FunctionCreator:
         return True, ""
 
     def create_function(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a FunctionGraph function with optional VPC and environment variable config."""
         is_valid, error_msg = self.validate_params(params)
         if not is_valid:
             return {'status': 'failed', 'error_code': 'InvalidParameter', 'message': error_msg}
@@ -90,6 +94,22 @@ class FunctionCreator:
         try:
             encoded_code = base64.b64encode(params['code_content'].encode('utf-8')).decode('utf-8')
             func_code = FuncCode(file=encoded_code)
+
+            # Build VPC configuration if provided
+            func_vpc = None
+            vpc_id = params.get('vpc_id')
+            subnet_id = params.get('subnet_id')
+            security_group_id = params.get('security_group_id')
+            if vpc_id and subnet_id and security_group_id:
+                func_vpc = FuncVpc(
+                    vpc_id=vpc_id,
+                    subnet_id=subnet_id,
+                    security_groups=[security_group_id],
+                )
+
+            # Build environment variables if provided
+            # user_data is a JSON string type in the FunctionGraph API (SDK declares str)
+            user_data = json.dumps(params.get('environment_variables')) if params.get('environment_variables') else None
 
             request_body = CreateFunctionRequestBody(
                 func_name=params['function_name'],
@@ -100,7 +120,9 @@ class FunctionCreator:
                 func_code=func_code,
                 memory_size=params.get('memory_size', 128),
                 timeout=params.get('timeout', 3),
-                description=params.get('description', '')
+                description=params.get('description', ''),
+                func_vpc=func_vpc,
+                user_data=user_data,
             )
 
             request = CreateFunctionRequest()
@@ -118,8 +140,13 @@ class FunctionCreator:
                 'memory_size': response.memory_size,
                 'timeout': response.timeout,
                 'code_size': response.code_size,
-                'message': 'Function created successfully'
+                'message': 'Function created successfully',
             }
+
+            # Include VPC info if configured
+            if response.func_vpc:
+                result['vpc_id'] = response.func_vpc.vpc_id
+                result['subnet_id'] = response.func_vpc.subnet_id
 
             logger.info(f"Function created successfully: {response.func_urn}")
             return result
@@ -134,44 +161,97 @@ class FunctionCreator:
             logger.error(f"Exception creating function: {str(e)}")
             return {'status': 'failed', 'error_code': 'InternalError', 'message': str(e)}
 
+    def invoke_function(self, function_urn: str, body: Dict[str, Any] = None,
+                        invocation_type: str = 'sync', log_type: str = None) -> Dict[str, Any]:
+        """
+        Invoke a FunctionGraph function.
+        
+        Args:
+            function_urn: The URN of the function to invoke
+            body: Event data to pass to the function (JSON dict)
+            invocation_type: 'sync' for synchronous, 'async' for asynchronous invocation
+            log_type: Optional log type header ('tail' to return last 4KB log)
+        """
+        try:
+            request = InvokeFunctionRequest(
+                function_urn=function_urn,
+                body=body or {},
+            )
+
+            # Set headers based on invocation type
+            if invocation_type == 'async':
+                request.x_cff_request_version = 'v1'
+                request.x_cff_log_type = log_type
+            else:
+                request.x_cff_log_type = log_type
+
+            logger.info(f"Invoking function: {function_urn} ({invocation_type})")
+
+            if invocation_type == 'async':
+                response = self.client.async_invoke_function(request)
+            else:
+                response = self.client.invoke_function(request)
+
+            result = {
+                'status': 'success',
+                'function_urn': function_urn,
+                'invocation_type': invocation_type,
+                'message': 'Function invoked successfully',
+            }
+
+            # The response body contains the invocation result
+            if hasattr(response, 'body') and response.body:
+                result['result'] = response.body
+
+            # For sync invocations, include request_id if available
+            if hasattr(response, 'request_id'):
+                result['request_id'] = response.request_id
+
+            logger.info(f"Function invoked successfully: {function_urn}")
+            return result
+
+        except ClientRequestException as e:
+            error_code = e.error_code if hasattr(e, 'error_code') else 'Unknown'
+            error_msg = e.error_msg if hasattr(e, 'error_msg') else str(e)
+            logger.error(f"Failed to invoke function: {error_code} - {error_msg}")
+            return {'status': 'failed', 'error_code': error_code, 'message': error_msg}
+
+        except Exception as e:
+            logger.error(f"Exception invoking function: {str(e)}")
+            return {'status': 'failed', 'error_code': 'InternalError', 'message': str(e)}
+
 
 def load_config() -> Dict[str, str]:
     config = {
         'ak': os.environ.get('HUAWEI_AK'),
         'sk': os.environ.get('HUAWEI_SK'),
         'region': os.environ.get('HUAWEI_REGION', 'cn-north-4'),
-        'project_id': os.environ.get('HUAWEI_PROJECT_ID')
+        'project_id': os.environ.get('HUAWEI_PROJECT_ID'),
     }
     if not config['ak'] or not config['sk']:
         raise ValueError("Please set environment variables HUAWEI_AK and HUAWEI_SK")
     return config
 
 
-def main():
-    import argparse
-
-    parser = argparse.ArgumentParser(description='Create FunctionGraph function')
-    parser.add_argument('--name', required=True, help='Function name')
-    parser.add_argument('--runtime', required=True, help='Runtime environment')
-    parser.add_argument('--handler', required=True, help='Function entry point')
-    parser.add_argument('--code', required=True, help='Code file path or code content')
-    parser.add_argument('--memory', type=int, default=128, help='Memory size (MB)')
-    parser.add_argument('--timeout', type=int, default=3, help='Timeout (seconds)')
-    parser.add_argument('--description', default='', help='Function description')
-
-    args = parser.parse_args()
-
-    try:
-        config = load_config()
-    except ValueError as e:
-        print(f"Config error: {e}")
-        sys.exit(1)
-
+def cmd_create(args) -> None:
+    """Handle the 'create' subcommand."""
     if os.path.isfile(args.code):
         with open(args.code, 'r', encoding='utf-8') as f:
             code_content = f.read()
     else:
         code_content = args.code
+
+    # Parse environment variables if provided
+    env_vars = None
+    if args.env_vars:
+        try:
+            env_vars = json.loads(args.env_vars)
+            if not isinstance(env_vars, dict):
+                print("Error: --env-vars must be a valid JSON object")
+                sys.exit(1)
+        except json.JSONDecodeError as e:
+            print(f"Error: --env-vars must be valid JSON: {e}")
+            sys.exit(1)
 
     params = {
         'function_name': args.name,
@@ -180,20 +260,116 @@ def main():
         'code_content': code_content,
         'memory_size': args.memory,
         'timeout': args.timeout,
-        'description': args.description
+        'description': args.description,
+        'vpc_id': args.vpc_id,
+        'subnet_id': args.subnet_id,
+        'security_group_id': args.security_group_id,
+        'environment_variables': env_vars,
     }
 
-    creator = FunctionCreator(
+    config = load_config()
+    manager = FunctionGraphManager(
         ak=config['ak'],
         sk=config['sk'],
         region=config['region'],
-        project_id=config['project_id']
+        project_id=config['project_id'],
     )
 
-    result = creator.create_function(params)
+    result = manager.create_function(params)
     print(json.dumps(result, indent=2, ensure_ascii=False))
 
     if result['status'] != 'success':
+        sys.exit(1)
+
+
+def cmd_invoke(args) -> None:
+    """Handle the 'invoke' subcommand."""
+    # Parse invoke body if provided
+    invoke_body = {}
+    if args.body:
+        try:
+            invoke_body = json.loads(args.body)
+            if not isinstance(invoke_body, dict):
+                print("Error: --body must be a valid JSON object")
+                sys.exit(1)
+        except json.JSONDecodeError as e:
+            print(f"Error: --body must be valid JSON: {e}")
+            sys.exit(1)
+
+    config = load_config()
+    manager = FunctionGraphManager(
+        ak=config['ak'],
+        sk=config['sk'],
+        region=config['region'],
+        project_id=config['project_id'],
+    )
+
+    result = manager.invoke_function(
+        function_urn=args.function_urn,
+        body=invoke_body,
+        invocation_type=args.invocation_type,
+        log_type=args.log_type,
+    )
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+
+    if result['status'] != 'success':
+        sys.exit(1)
+
+
+def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description='FunctionGraph function management tool')
+    subparsers = parser.add_subparsers(dest='action', help='Action to perform')
+
+    # --- Create subcommand ---
+    create_parser = subparsers.add_parser('create', help='Create a new function')
+    create_parser.add_argument('--name', required=True, help='Function name')
+    create_parser.add_argument('--runtime', required=True, help='Runtime environment')
+    create_parser.add_argument('--handler', required=True, help='Function entry point')
+    create_parser.add_argument('--code', required=True, help='Code file path or code content')
+    create_parser.add_argument('--memory', type=int, default=128, help='Memory size (MB)')
+    create_parser.add_argument('--timeout', type=int, default=3, help='Timeout (seconds)')
+    create_parser.add_argument('--description', default='', help='Function description')
+
+    # VPC configuration (optional)
+    create_parser.add_argument('--vpc-id', help='VPC ID for VPC configuration')
+    create_parser.add_argument('--subnet-id', help='Subnet ID for VPC configuration')
+    create_parser.add_argument('--security-group-id', help='Security group ID for VPC configuration')
+
+    # Environment variables (optional)
+    create_parser.add_argument(
+        '--env-vars',
+        help='Environment variables as JSON string, e.g. \'{"DB_HOST":"localhost","DB_PORT":"3306"}\'',
+    )
+
+    # --- Invoke subcommand ---
+    invoke_parser = subparsers.add_parser('invoke', help='Invoke an existing function')
+    invoke_parser.add_argument('--function-urn', required=True, help='Function URN to invoke')
+    invoke_parser.add_argument(
+        '--body', default='{}',
+        help='Event payload as JSON string, e.g. \'{"key1":"value1"}\'',
+    )
+    invoke_parser.add_argument(
+        '--invocation-type', choices=['sync', 'async'], default='sync',
+        help='Invocation type: sync (default) or async',
+    )
+    invoke_parser.add_argument(
+        '--log-type', choices=['tail', 'none'], default=None,
+        help='Log type: "tail" to return last 4KB of log',
+    )
+
+    args = parser.parse_args()
+
+    if args.action == 'create':
+        cmd_create(args)
+    elif args.action == 'invoke':
+        cmd_invoke(args)
+    else:
+        # Backward compatibility: if no subcommand given, assume "create"
+        # by re-parsing with original-style arguments
+        parser.print_help()
         sys.exit(1)
 
 

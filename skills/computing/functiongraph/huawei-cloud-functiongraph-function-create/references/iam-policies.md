@@ -175,22 +175,27 @@ FunctionGraph may require permissions for other services:
 ### Verify Current User Permissions
 
 ```bash
-# List attached policies
+# List attached policies (using CLI if available)
 hcloud IAM user list-policies --user_name=YOUR_USERNAME
 
-# Test FunctionGraph access
-hcloud FunctionGraph function list --cli-region=cn-north-4
+# Test FunctionGraph access via SDK (Python)
+python3 -c "
+import os
+from huaweicloudsdkcore.auth.credentials import BasicCredentials
+from huaweicloudsdkfunctiongraph.v2.functiongraph_client import FunctionGraphClient
+from huaweicloudsdkfunctiongraph.v2.region.functiongraph_region import FunctionGraphRegion
+from huaweicloudsdkfunctiongraph.v2.model import ListFunctionsRequest
 
-# Attempt to create test function (dry-run)
-hcloud FunctionGraph function create \
-  --cli-region=cn-north-4 \
-  --func_name=permission-test \
-  --package_type=Zip \
-  --runtime=Python3.9 \
-  --handler=index.handler \
-  --memory_size=128 \
-  --timeout=10
-```
+creds = BasicCredentials(ak=os.environ['HUAWEI_AK'], sk=os.environ['HUAWEI_SK'])
+client = FunctionGraphClient.new_builder() \\
+    .with_credentials(creds) \\
+    .with_region(FunctionGraphRegion.value_of('cn-north-4')) \\
+    .build()
+
+request = ListFunctionsRequest()
+response = client.list_functions(request)
+print(f'SDK access verified. Functions count: {len(response.functions)}')
+"```
 
 ## Permission Scopes
 
