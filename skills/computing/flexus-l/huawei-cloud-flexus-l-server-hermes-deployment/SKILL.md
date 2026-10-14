@@ -1,8 +1,7 @@
 ---
 name: huawei-cloud-flexus-l-server-hermes-deployment
-description: |
-  One-click deployment tool for Hermes on Huawei Cloud Flexus L instances. Supports one-click deployment, ModelArts large model configuration, and robot channel configuration. This skill provides a complete workflow for deploying and configuring Hermes AI Agent platform.
-  Trigger words: "Deploy Hermes", "Install Hermes", "Configure Model", "Configure Channel", "部署Hermes", "安装Hermes", "配置大模型", "配置机器人通道"
+description: |-
+  One-click deployment tool for Hermes on Huawei Cloud Flexus L instances. Supports one-click deployment, ModelArts large model configuration, and robot channel configuration. Use this skill when the user mentions "Deploy Hermes", "Install Hermes", "Configure Model", "Configure Channel" (Chinese trigger words: "部署Hermes", "安装Hermes", "配置大模型", "配置机器人通道"). This skill provides a complete workflow for deploying and configuring Hermes AI Agent platform.
 tags:
   - Hermes Deployment
   - Huawei Cloud Lightweight Server Deployment
@@ -198,14 +197,14 @@ python scripts/caller.py uniagent
 | Parameter | Description | Required | Default Value |
 |-----------|-------------|----------|---------------|
 | `--name` | Instance name | No | Auto-generated |
-| `--region` | Target region | No | cn-north-4 |
+| `--region` | Target region (also accepted as `--cli-region`) | No | cn-north-4 |
 
 ### MaaS Command Parameters
 
 | Parameter | Description | Required | Default Value |
 |-----------|-------------|----------|---------------|
 | `--resource-id` | L instance resource ID | Yes | - |
-| `--region-id` | COC service region | No | cn-north-4 |
+| `--region-id` | COC service region (also accepted as `--cli-region`) | No | cn-north-4 |
 | `--api-key` | ModelArts API Key | Yes | - |
 | `--model-name` | Model name | Yes | - |
 | `--api-base-url` | API base URL | No | https://api.modelarts-maas.com/v2 |
@@ -217,7 +216,7 @@ python scripts/caller.py uniagent
 | Parameter | Description | Required | Default Value |
 |-----------|-------------|----------|---------------|
 | `--resource-id` | L instance resource ID | Yes | - |
-| `--region-id` | COC service region | No | cn-north-4 |
+| `--region-id` | COC service region (also accepted as `--cli-region`) | No | cn-north-4 |
 | `--bot-platform` | Bot platform: feishu or wecom | Yes | - |
 | `--feishu-app-id` | Feishu App ID | Conditional | - |
 | `--feishu-app-secret` | Feishu App Secret | Conditional | - |
@@ -231,7 +230,7 @@ python scripts/caller.py uniagent
 | Parameter | Description | Required | Default Value |
 |-----------|-------------|----------|---------------|
 | `--resource-id` | L instance resource ID | Yes | - |
-| `--region-id` | COC service region | No | cn-north-4 |
+| `--region-id` | COC service region (also accepted as `--cli-region`) | No | cn-north-4 |
 | `--timeout` | Execution timeout (seconds) | No | 120 |
 | `--execute-user` | Execution user | No | root |
 

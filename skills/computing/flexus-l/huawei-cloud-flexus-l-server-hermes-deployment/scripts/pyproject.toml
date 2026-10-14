@@ -8,7 +8,7 @@ dependencies = [
 ]
 
 [tool.setuptools]
-py_modules = [
+py-modules = [
     "caller",
     "lib",
     "utils",

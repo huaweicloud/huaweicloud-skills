@@ -43,10 +43,9 @@ class TestHermesSmoke(unittest.TestCase):
 
     def test_default_config(self):
         """测试默认配置常量"""
-        from scripts.lib import DEFAULT_BASE_URL, DEFAULT_CONFIG_PATH, DEFAULT_ENV_PATH
+        from scripts.lib import DEFAULT_BASE_URL, DEFAULT_CONFIG_PATH
         self.assertEqual(DEFAULT_BASE_URL, "https://api.modelarts-maas.com/v2")
-        self.assertEqual(DEFAULT_CONFIG_PATH, "/home/hermes/.hermes/config.yaml")
-        self.assertEqual(DEFAULT_ENV_PATH, "/home/hermes/.hermes/.env")
+        self.assertTrue(DEFAULT_CONFIG_PATH.endswith("config.yaml"))
         print("✓ 默认配置常量验证成功")
 
     def test_valid_script_types(self):
@@ -76,8 +75,7 @@ class TestHermesSmoke(unittest.TestCase):
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         
         required_files = [
-            "_meta.json",
-            "requirements.txt",
+            "SKILL.md",
             "scripts/lib.py",
             "scripts/caller.py",
             "scripts/smoke_test.py"

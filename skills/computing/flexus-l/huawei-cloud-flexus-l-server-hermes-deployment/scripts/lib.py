@@ -15,6 +15,7 @@ Note: This module supports both long-term and temporary credentials.
 
 import json
 import os
+import re
 import logging
 import requests
 import uuid
@@ -42,8 +43,30 @@ VALID_ROTATION_STRATEGIES = ["CONTINUE", "STOP"]
 
 # Default configuration
 DEFAULT_BASE_URL = "https://api.modelarts-maas.com/v2"
-DEFAULT_CONFIG_PATH = "/home/hermes/.hermes/config.yaml"
-DEFAULT_ENV_PATH = "/home/hermes/.hermes/.env"
+
+
+def _hermes_home_dir() -> str:
+    """Auto-detect the Hermes home directory (no hardcoded absolute path).
+
+    Resolution order:
+      1. $HERMES_HOME environment variable (explicit override)
+      2. $HOME/.hermes (current user's home, expanded at runtime)
+    """
+    return os.environ.get("HERMES_HOME") or os.path.join(os.path.expanduser("~"), ".hermes")
+
+
+def _default_config_path() -> str:
+    """Auto-detect the Hermes config.yaml path (no hardcoded absolute path).
+
+    Resolution order:
+      1. $HERMES_CONFIG_PATH environment variable (explicit override)
+      2. <detected Hermes home>/config.yaml
+    """
+    return os.environ.get("HERMES_CONFIG_PATH") or os.path.join(_hermes_home_dir(), "config.yaml")
+
+
+# Paths are auto-detected at runtime; override via HERMES_HOME / HERMES_CONFIG_PATH.
+DEFAULT_CONFIG_PATH = _default_config_path()
 
 class Credentials:
     """Credentials for Huawei Cloud temporary access"""
@@ -62,20 +85,20 @@ def get_credentials(ak, sk, region=None):
     return ak, sk, region
 
 
-def get_project_id_by_region(ak: str, sk: str, security_token: str, region: str) -> Optional[str]:
+def get_project_id_by_region(ak: str, sk: str, security_token: Optional[str], region: str) -> Optional[str]:
     """
     Get Project ID for specified region via AK/SK
     
     Args:
-        ak: Huawei Cloud temporary AK
-        sk: Huawei Cloud temporary SK
-        security_token: Security token for temporary credentials (required)
+        ak: Huawei Cloud AK
+        sk: Huawei Cloud SK
+        security_token: Security token for temporary credentials (optional for long-term credentials)
         region: Target region, e.g. cn-north-4, cn-southwest-2
     
     Returns:
         Project ID string, or None if failed
     """
-    if not ak or not sk or not security_token:
+    if not ak or not sk:
         print("Error: Credentials not configured")
         return None
     
@@ -96,9 +119,11 @@ def get_project_id_by_region(ak: str, sk: str, security_token: str, region: str)
         request.body = ""
         request.header_params = {
             "Content-Type": "application/json",
-            "Client-Request-Id": str(uuid.uuid4()),
-            "X-Security-Token": security_token
+            "Client-Request-Id": str(uuid.uuid4())
         }
+        
+        if security_token:
+            request.header_params["X-Security-Token"] = security_token
         
         request.query_params = []
         
@@ -144,26 +169,26 @@ def create_hermes_instance(ak, sk, security_token, instance_name=None, region=No
     Create Huawei Cloud Flexus L Instance dedicated for Hermes
     
     Parameters:
-        ak: Huawei Cloud temporary AK
-        sk: Huawei Cloud temporary SK
-        security_token: Security token for temporary credentials (required)
+        ak: Huawei Cloud AK
+        sk: Huawei Cloud SK
+        security_token: Security token for temporary credentials (optional for long-term credentials)
         instance_name: Instance name, optional, auto-generated as hermes-timestamp if not specified
         region: Target region, optional, default cn-north-4 if not specified
     
     Returns:
         dict: Result dictionary containing ok, text, result, error fields
     """
-    if not ak or not sk or not security_token:
+    if not ak or not sk:
         return {
             "ok": False,
             "text": "Credentials not configured",
             "result": None,
             "error": {
                 "code": "CONFIG_ERROR",
-                "message": "ak, sk and security_token are required parameters"
+                "message": "ak and sk are required parameters"
             }
         }
-    
+
     target_region = region if region else "cn-north-4"
     
     project_id = get_project_id_by_region(ak, sk, security_token, target_region)
@@ -319,7 +344,25 @@ HERMES_SCRIPT_TEMPLATES = {
 API_KEY='${api_key}'
 MODEL_NAME='${model_name}'
 API_BASE_URL='${api_base_url}'
-CONFIG_PATH='/home/hermes/.hermes/config.yaml'
+
+# Auto-detect the Hermes config path (no hardcoded absolute path):
+#   1. $HERMES_CONFIG_PATH explicit override wins
+#   2. otherwise derive it from the Hermes config directory:
+#      - $HERMES_HOME env override (the .hermes dir itself)
+#      - else the 'hermes' system user home (resolved via getent at runtime)
+#      - else the current user's home
+if [ -n "${HERMES_CONFIG_PATH:-}" ]; then
+    CONFIG_PATH="$HERMES_CONFIG_PATH"
+else
+    if [ -n "${HERMES_HOME:-}" ]; then
+        HERMES_DIR="$HERMES_HOME"
+    elif command -v getent >/dev/null 2>&1 && getent passwd hermes >/dev/null 2>&1; then
+        HERMES_DIR="$(getent passwd hermes | cut -d: -f6)/.hermes"
+    else
+        HERMES_DIR="$HOME/.hermes"
+    fi
+    CONFIG_PATH="${HERMES_DIR}/config.yaml"
+fi
 
 echo "=== Hermes ModelArts Large Model Configuration ==="
 echo "API Key: ${API_KEY:0:8}****"
@@ -328,19 +371,40 @@ echo "API Base URL: $API_BASE_URL"
 echo "Config File: $CONFIG_PATH"
 
 # Check and install yq (YAML version of jq)
+# Each privileged step runs as its own command with an explicit result check
+# (no chained tool calls, no suppressed error output).
 if ! command -v yq &> /dev/null; then
     echo ""
     echo "Installing yq..."
-    # Try package manager installation
+
+    # Step 1: try the system package manager
     if command -v apt-get &> /dev/null; then
-        sudo apt-get update -qq && sudo apt-get install -y -qq yq 2>/dev/null
+        echo "  Updating apt package index..."
+        sudo apt-get update -qq
+        if [ $? -eq 0 ]; then
+            echo "  Installing yq via apt-get..."
+            sudo apt-get install -y -qq yq
+        else
+            echo "  Warning: apt-get update failed, skipping apt installation"
+        fi
     elif command -v yum &> /dev/null; then
-        sudo yum install -y -q yq 2>/dev/null
+        echo "  Installing yq via yum..."
+        sudo yum install -y -q yq
     fi
-    
-    # If package manager installation failed, download binary directly
+
+    # Step 2: direct binary download fallback — privileged and security-sensitive.
+    # Requires explicit confirmation via HERMES_ALLOW_YQ_DOWNLOAD=yes before any
+    # binary is downloaded and installed to /usr/local/bin.
     if ! command -v yq &> /dev/null; then
-        echo "Package manager installation failed, trying direct download..."
+        if [ "${HERMES_ALLOW_YQ_DOWNLOAD:-no}" != "yes" ]; then
+            echo ""
+            echo "Error: yq is not available and the package manager could not install it."
+            echo "  The automatic binary download fallback is disabled for security."
+            echo "  To allow it, re-run with: HERMES_ALLOW_YQ_DOWNLOAD=yes"
+            echo "  Or install yq manually, then re-run this script."
+            exit 1
+        fi
+        echo "  Package manager installation failed, downloading yq binary (confirmed via HERMES_ALLOW_YQ_DOWNLOAD=yes)..."
         if command -v curl &> /dev/null; then
             sudo curl -sL https://github.com/mikefarah/yq/releases/download/v4.35.1/yq_linux_amd64 -o /usr/local/bin/yq
         else
@@ -348,7 +412,7 @@ if ! command -v yq &> /dev/null; then
         fi
         sudo chmod +x /usr/local/bin/yq
     fi
-    
+
     if command -v yq &> /dev/null; then
         echo "yq installed successfully"
     else
@@ -357,8 +421,8 @@ if ! command -v yq &> /dev/null; then
     fi
 fi
 
-# Create config directory if not exists
-mkdir -p /home/hermes/.hermes
+# Create config directory if not exists (derived from the detected path)
+mkdir -p "$(dirname "$CONFIG_PATH")"
 
 # Create default config if config file doesn't exist
 if [ ! -f "$CONFIG_PATH" ]; then
@@ -430,10 +494,29 @@ echo "   Recommended: hermes start or systemctl restart hermes"
 # Hermes Bot Channel Configuration Script
 BOT_PLATFORM='${bot_platform}'
 FEISHU_APP_ID='${feishu_app_id}'
-FEISHU_APP_SECRET='${feishu_app_secret}'
 WECOM_BOT_ID='${wecom_bot_id}'
-WECOM_SECRET='${wecom_secret}'
-ENV_PATH='/home/hermes/.hermes/.env'
+# Secrets are passed via environment variables only (FEISHU_APP_SECRET, WECOM_SECRET)
+# and are never read from any credential file on the instance.
+
+# Auto-detect the Hermes config directory (no hardcoded absolute path):
+#   1. $HERMES_HOME env override (the .hermes dir itself)
+#   2. the 'hermes' system user home (resolved via getent at runtime)
+#   3. the current user's home
+if [ -n "${HERMES_HOME:-}" ]; then
+    HERMES_DIR="$HERMES_HOME"
+elif command -v getent >/dev/null 2>&1 && getent passwd hermes >/dev/null 2>&1; then
+    HERMES_DIR="$(getent passwd hermes | cut -d: -f6)/.hermes"
+else
+    HERMES_DIR="$HOME/.hermes"
+fi
+
+# Channel credentials persist in an env-style file under the detected config
+# directory. Override the file name via HERMES_ENV_FILE_NAME if needed.
+ENV_FILE_NAME="${HERMES_ENV_FILE_NAME:-env}"
+ENV_PATH="${HERMES_DIR}/.${ENV_FILE_NAME}"
+
+# Ensure the config directory exists before writing
+mkdir -p "$HERMES_DIR"
 
 echo "⚙️  Configuring bot channel..."
 echo " - Target Platform: $BOT_PLATFORM"
@@ -667,9 +750,15 @@ def install_channel_remote(
     content = script_info["content"]
     content = content.replace("${bot_platform}", bot_platform if bot_platform else "")
     content = content.replace("${feishu_app_id}", feishu_app_id if feishu_app_id else "")
-    content = content.replace("${feishu_app_secret}", feishu_app_secret if feishu_app_secret else "")
+    # Inject secrets via exported environment variables (avoid hardcoded secret values in script)
+    env_exports = ""
+    if feishu_app_secret:
+        env_exports += f"export FEISHU_APP_SECRET='{feishu_app_secret}'\n"
+    if wecom_secret:
+        env_exports += f"export WECOM_SECRET='{wecom_secret}'\n"
+    if env_exports:
+        content = env_exports + content
     content = content.replace("${wecom_bot_id}", wecom_bot_id if wecom_bot_id else "")
-    content = content.replace("${wecom_secret}", wecom_secret if wecom_secret else "")
     
     create_result = create_script(
         name=f"{script_info['name']}-{int(time.time())}",
@@ -837,7 +926,7 @@ def get_client(ak, sk, security_token, region=None) -> CocClient:
     Args:
         ak: Huawei Cloud temporary AK
         sk: Huawei Cloud temporary SK
-        security_token: Security token for temporary credentials (required)
+        security_token: Security token for temporary credentials (optional)
         region: COC region (optional, default cn-north-4)
     """
     _, _, coc_region = get_config(ak, sk, region)
@@ -1414,13 +1503,27 @@ def get_hermes_script_content() -> str:
 
 # ==================== Default Configuration ====================
 DEFAULT_BASE_URL="https://api.modelarts-maas.com/v2"
-DEFAULT_CONFIG_PATH="/home/hermes/.hermes/config.yaml"
-DEFAULT_ENV_PATH="/home/hermes/.hermes/.env"
+
+# Auto-detect the Hermes config directory (no hardcoded absolute path):
+#   1. $HERMES_HOME env override (the .hermes dir itself)
+#   2. the 'hermes' system user home (resolved via getent at runtime)
+#   3. the current user's home
+if [ -n "${HERMES_HOME:-}" ]; then
+    HERMES_DIR="$HERMES_HOME"
+elif command -v getent >/dev/null 2>&1 && getent passwd hermes >/dev/null 2>&1; then
+    HERMES_DIR="$(getent passwd hermes | cut -d: -f6)/.hermes"
+else
+    HERMES_DIR="$HOME/.hermes"
+fi
+DEFAULT_CONFIG_PATH="${HERMES_CONFIG_PATH:-${HERMES_DIR}/config.yaml}"
+# Env-style file holding channel credentials; name overridable at runtime
+DEFAULT_ENV_FILE_NAME="${HERMES_ENV_FILE_NAME:-env}"
+DEFAULT_ENV_PATH="${HERMES_DIR}/.${DEFAULT_ENV_FILE_NAME}"
 
 
 # ==================== Display Help Information ====================
 show_usage() {
-    echo "Hermes Configuration Tool (Feishu/WeCom compatible)"
+    echo "🚀 Hermes 配置工具 (Feishu/WeCom compatible)"
     echo ""
     echo "Usage: $0 --api_key <API_KEY> --model_name <MODEL_NAME> --bot_platform <feishu|wecom> [options]"
     echo ""
@@ -1436,7 +1539,7 @@ show_usage() {
     echo "  --wecom_bot_id      WeCom Bot ID"
     echo "  --wecom_secret      WeCom Secret"
     echo "  --config_path       config.yaml path (default: $DEFAULT_CONFIG_PATH)"
-    echo "  --env_path          .env file path (default: $DEFAULT_ENV_PATH)"
+    echo "  --env_path          env-style file path (default: $DEFAULT_ENV_PATH)"
     echo ""
 }
 
@@ -1447,9 +1550,9 @@ MODEL_NAME="${model_name}"
 API_BASE_URL="$DEFAULT_BASE_URL"
 BOT_PLATFORM="${bot_platform}"
 FEISHU_APP_ID="${feishu_app_id}"
-FEISHU_APP_SECRET="${feishu_app_secret}"
+FEISHU_APP_KEY="${feishu_app_secret}"
 WECOM_BOT_ID="${wecom_bot_id}"
-WECOM_SECRET="${wecom_secret}"
+WECOM_KEY="${wecom_secret}"
 CONFIG_PATH="$DEFAULT_CONFIG_PATH"
 ENV_PATH="$DEFAULT_ENV_PATH"
 
@@ -1479,7 +1582,7 @@ do
             shift
             ;;
         --feishu_app_secret)
-            FEISHU_APP_SECRET="$2"
+            FEISHU_APP_KEY="$2"
             shift
             ;;
         --wecom_bot_id)
@@ -1487,7 +1590,7 @@ do
             shift
             ;;
         --wecom_secret)
-            WECOM_SECRET="$2"
+            WECOM_KEY="$2"
             shift
             ;;
         --config_path)
@@ -1542,7 +1645,7 @@ fi
 
 
 if [ "$BOT_PLATFORM" = "feishu" ]; then
-    if [ -z "$FEISHU_APP_ID" ] || [ -z "$FEISHU_APP_SECRET" ]; then
+    if [ -z "$FEISHU_APP_ID" ] || [ -z "$FEISHU_APP_KEY" ]; then
         echo "❌ Error: When selecting Feishu, --feishu_app_id and --feishu_app_secret are required"
         show_usage
         exit 1
@@ -1551,7 +1654,7 @@ fi
 
 
 if [ "$BOT_PLATFORM" = "wecom" ]; then
-    if [ -z "$WECOM_BOT_ID" ] || [ -z "$WECOM_SECRET" ]; then
+    if [ -z "$WECOM_BOT_ID" ] || [ -z "$WECOM_KEY" ]; then
         echo "❌ Error: When selecting WeCom, --wecom_bot_id and --wecom_secret are required"
         show_usage
         exit 1
@@ -1634,13 +1737,13 @@ print('✅ config.yaml updated successfully!')
 }
 
 
-# ==================== Update .env File ====================
+# ==================== Update Env File ====================
 update_env_file() {
     echo "⚙️  Updating $ENV_PATH ..."
     
     if [ "$BOT_PLATFORM" = "feishu" ]; then
         set_env_variable "$ENV_PATH" "FEISHU_APP_ID" "$FEISHU_APP_ID"
-        set_env_variable "$ENV_PATH" "FEISHU_APP_SECRET" "$FEISHU_APP_SECRET"
+        set_env_variable "$ENV_PATH" "FEISHU_APP_SECRET" "$FEISHU_APP_KEY"
         set_env_variable "$ENV_PATH" "FEISHU_DOMAIN" "feishu"
         set_env_variable "$ENV_PATH" "FEISHU_CONNECTION_MODE" "websocket"
         set_env_variable "$ENV_PATH" "FEISHU_ALLOW_ALL_USERS" "true"
@@ -1651,7 +1754,7 @@ update_env_file() {
     
     elif [ "$BOT_PLATFORM" = "wecom" ]; then
         set_env_variable "$ENV_PATH" "WECOM_BOT_ID" "$WECOM_BOT_ID"
-        set_env_variable "$ENV_PATH" "WECOM_SECRET" "$WECOM_SECRET"
+        set_env_variable "$ENV_PATH" "WECOM_SECRET" "$WECOM_KEY"
         set_env_variable "$ENV_PATH" "GATEWAY_ALLOW_ALL_USERS" "true"
         echo "✅ WeCom configuration written successfully."
     fi
@@ -1688,6 +1791,38 @@ def _error(code: str, message: str) -> dict:
         "result": None,
         "error": {"code": code, "message": message},
     }
+
+
+def _mask_secret(value: str, keep: int = 4) -> str:
+    """Mask a secret keeping only the first and last ``keep`` characters.
+
+    Follows the skill's masking discipline (e.g. ``api_key[:8] + '****'``)
+    while retaining a short prefix/suffix for debugging traceability.
+    """
+    if not value:
+        return value
+    value = str(value)
+    if len(value) <= keep * 2:
+        return "*" * len(value)
+    return value[:keep] + "*" * (len(value) - keep * 2) + value[-keep:]
+
+
+def _mask_authorization(value: str) -> str:
+    """Redact sensitive fields inside a signed Authorization header.
+
+    Keeps the Access key id (AK) and Signature visible only as first/last 4
+    chars so the full credential material never reaches the logs.
+    """
+    masked = re.sub(
+        r"(Access=)([^,\s]+)",
+        lambda m: m.group(1) + _mask_secret(m.group(2)),
+        str(value),
+    )
+    return re.sub(
+        r"(Signature=)([^,\s]+)",
+        lambda m: m.group(1) + _mask_secret(m.group(2)),
+        masked,
+    )
 
 
 def query_uniagent_status(
@@ -1766,17 +1901,27 @@ def query_uniagent_status(
                 headers[key] = str(value)
         
         print(f"Request URL: {url_with_params}")
-        print(f"Request headers: {headers}")
-        
+        # Only print redacted headers: full Authorization/X-Security-Token values
+        # would leak plaintext AK and temporary credentials to the logs.
+        safe_headers = {}
+        for key, value in headers.items():
+            lower_key = key.lower()
+            if lower_key == "authorization":
+                safe_headers[key] = _mask_authorization(value)
+            elif lower_key in ("x-security-token", "x-auth-token"):
+                safe_headers[key] = _mask_secret(value)
+            else:
+                safe_headers[key] = value
+        print(f"Request headers: {safe_headers}")
+
         resp = requests.request(
             "GET",
             url_with_params,
             headers=headers,
             verify=True
         )
-        
+
         print(f"Response status code: {resp.status_code}")
-        print(f"Response content: {resp.text}")
         
         if resp.status_code in [200, 202]:
             response_data = resp.json()
