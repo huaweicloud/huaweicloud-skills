@@ -198,6 +198,7 @@ You can list the Huawei Cloud L instance official spec introduction page at http
 
 **Default Configuration**:
 - **Image**: FlexusAgent 1.7.1
+- **Product UUID**: `987b40c3-b800-437e-a449-62c1bf1b1d7d` (marketplace billing product spec)
 - **Billing**: Yearly/Monthly (prepaid)
 - **EVS Disk**: 50GB
 - **CBR Backup**: 50GB
@@ -205,6 +206,7 @@ You can list the Huawei Cloud L instance official spec introduction page at http
 - **Web UI**: `http://<public-ip>:80`
 
 > **Important**: Project ID is automatically obtained through IAM API.
+> **⚠️ Marketplace Listing Required**: The FlexusAgent marketplace image must be published and available for purchase in the target region's billing system. See error `CBC.6006` in the Error Handling table below.
 
 ---
 
@@ -362,7 +364,7 @@ Remind user to access FlexusAgent Web UI (http://<public-ip>:80/apps) to view ap
   
 ## Parameter Confirmation
 
-‌‌Before executing any command, the command's parameters must be confirmed.
+Before executing any command, the command's parameters must be confirmed.
 
 ---
 
@@ -376,6 +378,7 @@ Remind user to access FlexusAgent Web UI (http://<public-ip>:80/apps) to view ap
 | `APIGW.0301` | Signature verification failed | Check SK |
 | `COC.0001` | COC service unavailable | Check COC service region |
 | `400 Bad Request` | Invalid parameters | Check spec/image compatibility |
+| `CBC.6006` / `HCSS.14000003` | **FlexusAgent product not available** — the FlexusAgent marketplace image has not been onboarded to the billing system for this account/region | Contact the skill maintainer to list the FlexusAgent product on the Huawei Cloud marketplace. Use a different region or the Hermes deployment skill as a temporary workaround. |
 
 ---
 

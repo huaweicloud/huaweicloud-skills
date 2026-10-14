@@ -197,12 +197,16 @@ def create_flexusagent_instance(instance_name=None, region=None, ak=None, sk=Non
     else:
         plan_spec = "hf.xlarge.1.linux"
 
+    # Product UUID for FlexusAgent marketplace image (billing product spec ID)
+    FLEXUSAGENT_PRODUCT_UUID = "987b40c3-b800-437e-a449-62c1bf1b1d7d"
+
     request_body = {
         "instance_name": instance_name,
         "plan_spec": plan_spec,
         "image_ref": {
             "image_name": "FlexusAgent",
-            "image_version": "1.7.1"
+            "image_version": "1.7.1",
+            "product_id": FLEXUSAGENT_PRODUCT_UUID
         },
         "region": target_region,
         "charging_mode": "prePaid",
@@ -255,10 +259,6 @@ def create_flexusagent_instance(instance_name=None, region=None, ak=None, sk=Non
             else:
                 headers[key] = str(value)
 
-        print(f"Authorization: {headers.get('Authorization')}")
-        print(f"Request headers: {headers}")
-        print(f"Request body: {body_str}")
-
         resp = requests.request(
             "POST",
             endpoint,
@@ -268,7 +268,6 @@ def create_flexusagent_instance(instance_name=None, region=None, ak=None, sk=Non
         )
 
         print(f"Status code: {resp.status_code}")
-        print(f"Response: {resp.text}")
 
         if resp.status_code in [200, 201, 202]:
             response_data = resp.json()
@@ -288,13 +287,46 @@ def create_flexusagent_instance(instance_name=None, region=None, ak=None, sk=Non
                 "error": None
             }
         else:
+            # Try to extract HCSS error details from response body
+            error_code = str(resp.status_code)
+            error_message = resp.text
+            try:
+                err_data = resp.json()
+                hcss_code = err_data.get('error_code') or err_data.get('code', '')
+                hcss_msg = err_data.get('error_msg') or err_data.get('message', '')
+                if hcss_code or hcss_msg:
+                    error_code = hcss_code
+                    error_message = hcss_msg
+            except Exception:
+                pass
+
+            # Specific handling for CBC.6006 — FlexusAgent product not available
+            if 'CBC.6006' in error_message or 'Can not find product' in error_message:
+                return {
+                    "ok": False,
+                    "text": "Deployment failed — FlexusAgent product is not available in the billing system.",
+                    "result": None,
+                    "error": {
+                        "code": "CBC.6006",
+                        "message": (
+                            "FlexusAgent product (image: FlexusAgent 1.7.1) has not been "
+                            "listed on the Huawei Cloud marketplace, or the current account "
+                            "is not authorized to purchase it. "
+                            "Resolution: Contact the skill maintainer to onboard the FlexusAgent "
+                            "product to the target region's billing system. "
+                            "Alternatively, use a different region where the product is available, "
+                            "or deploy via the Hermes skill instead."
+                        )
+                    }
+                }
+
             return {
                 "ok": False,
-                "text": f"Instance creation failed: {resp.reason}",
+                "text": f"Instance creation failed: {error_code}",
                 "result": None,
                 "error": {
-                    "code": str(resp.status_code),
-                    "message": resp.text
+                    "code": error_code,
+                    "message": error_message
                 }
             }
 
@@ -937,9 +969,6 @@ def query_uniagent_status(
             else:
                 headers[key] = str(value)
 
-        print(f"Request URL: {url_with_params}")
-        print(f"Request headers: {headers}")
-
         resp = requests.request(
             "GET",
             url_with_params,
@@ -948,7 +977,6 @@ def query_uniagent_status(
         )
 
         print(f"Response status code: {resp.status_code}")
-        print(f"Response content: {resp.text}")
 
         if resp.status_code in [200, 202]:
             response_data = resp.json()
@@ -982,15 +1010,302 @@ SCRIPT_TEMPLATES = {
         "type": "SHELL",
         "description": "Change FlexusAgent admin user password",
         "risk_level": "LOW",
-        "content": '''#!/bin/bash
-curl -sSL https://documentation-samples.obs.cn-north-4.myhuaweicloud.com/solution-as-code-publicbucket/solution-as-code-moudle/agent/reset_admin_password.sh | bash -s "${adminPassword}"'''
+        "content": r'''
+#!/bin/bash
+NEW_DIFY_ADMIN_PASSWORD="${adminPassword}"
+
+# Dify docker compose env file
+ENV_FILE_SUFFIX="env"
+ENV_FILE="/dify/docker/.${ENV_FILE_SUFFIX}"
+
+# 安装expect
+apt install expect -y
+
+# 修改FILES_URL
+eip=""
+get_ip() {
+    local services=(
+        "ifconfig.me"
+        "ipinfo.io/ip"
+        "api.ipify.org"
+        "icanhazip.com"
+    )
+    
+    for service in "${services[@]}"; do
+        if ip=$(curl -s --max-time 3 "$service"); then
+            eip=$ip && return 0
+        fi
+    done
+    return 1
+}
+
+while true; do
+    files_url=$(grep "^FILES_URL=" "$ENV_FILE")
+    get_ip
+    if [ $? -eq 0 ]; then
+        if [[ "$files_url" == "FILES_URL=http://api:5001" ]]; then
+            sed -i "s|^FILES_URL=http://api:5001$|FILES_URL=http://${eip}|" "$ENV_FILE"
+            cd /dify/docker
+            docker compose down
+            docker compose up -d
+            echo "Update FILES_URL=http://${eip} succeeded!"
+        elif [[ "$files_url" == "FILES_URL=" ]]; then
+            sed -i "s|^FILES_URL=$|FILES_URL=http://${eip}|" "$ENV_FILE"
+            cd /dify/docker
+            docker compose down
+            docker compose up -d
+            echo "Update FILES_URL=http://${eip} succeeded!"
+        fi
+        break
+    else
+        sleep 10
+    fi
+done
+
+
+# 修改dify管理员密码
+docker_api=""
+docker_redis=""
+
+while true; do
+    container_list=$(docker ps --format '{{.Names}}' | tr '\n' ' ')
+
+    if [[ "$container_list" == *"docker-api-1"* ]]; then
+       docker_api="docker-api-1"
+       docker_redis="docker-redis-1"
+       break
+    elif [[ "$container_list" == *"docker_api_1"* ]]; then
+       docker_api="docker_api_1"
+       docker_redis="docker_redis_1"
+       break
+    else
+        sleep 10
+    fi
+done
+
+while true; do
+    /usr/bin/expect <<EOF
+    spawn docker exec -it $docker_api flask reset-password
+    expect "Email: "
+    send "super\@dify.com\r"
+    expect "New password: "
+    send "${NEW_DIFY_ADMIN_PASSWORD}\r"
+    expect "Password confirm: "
+    send "${NEW_DIFY_ADMIN_PASSWORD}\r"
+    expect "Password reset successfully."
+    expect eof
+EOF
+
+    if [ $? -eq 0 ]; then
+        break
+    else
+        sleep 10
+    fi
+done
+
+
+while true; do
+    /usr/bin/expect <<EOF
+    spawn docker exec -it $docker_redis redis-cli FLUSHALL
+    expect "OK\r"
+    expect eof
+EOF
+
+    if [ $? -eq 0 ]; then
+        break
+    else
+        sleep 10
+    fi
+done
+'''
     },
     "import_dify_app_workflow": {
         "name": "import_dify_app_workflow",
         "type": "SHELL",
         "description": "import dify app workflow on dify server instance",
         "risk_level": "MEDIUM",
-        "content": '''curl -sSL https://flexus-config-cn-north-4-product.obs.cn-north-4.myhuaweicloud.com/stable/dify/scripts/import_yml_to_dify.sh | bash -s ${base64String} ${dify_admin_password}'''
+        "content": r'''
+#!/bin/bash
+if set -o pipefail >/dev/null 2>&1; then
+  set -euo pipefail
+else
+  set -eu
+fi
+
+
+BASE64_PARAM="${base64String}"
+
+if ! command -v jq &>/dev/null; then
+    sudo apt-get update -qq
+    sudo apt-get install -y -qq jq 2>/dev/null ||
+        sudo yum install -y -q jq 2>/dev/null
+fi
+
+JSON_PARAM=$(echo "$BASE64_PARAM" | base64 -d 2>/dev/null) || {
+    echo "{\"errorCode\": 1, \"messageEn\":\"Invalid base64\", \"messageCh\":\"base64解码失败！\"}"
+    exit 1
+}
+
+if ! echo "$JSON_PARAM" | jq -e '.' >/dev/null 2>&1; then
+    echo "{\"errorCode\": 1, \"messageEn\":\"Invalid JSON\", \"messageCh\":\"传入参数json非法！\"}"
+    exit 1
+fi
+
+EXECUTE_TYPE=$(echo "$JSON_PARAM" | jq -r '.execute_type // empty')
+if [ -z "$EXECUTE_TYPE" ]; then
+    echo "{\"errorCode\": 1, \"messageEn\":\"Missing execute_type\", \"messageCh\":\"缺少execute_type参数！\"}"
+    exit 1
+fi
+
+get_local_ip() {
+    local ip
+    ip=$(ip -4 addr show eth0 2>&1 | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1)
+    if [ -z "$ip" ]; then
+        ip=$(hostname -I 2>&1 | awk '{print $1}')
+    fi
+    if [ -z "$ip" ]; then
+        return 1
+    fi
+    printf '%s' "$ip"
+}
+
+HOST=$(echo "$JSON_PARAM" | jq -r '.host // empty')
+if [ -z "$HOST" ] || [ "$HOST" = "auto" ]; then
+    HOST=$(get_local_ip)
+    if [ -z "$HOST" ]; then
+        HOST="127.0.0.1"
+    fi
+fi
+
+BASE_URL="http://${HOST}"
+
+EMAIL=$(echo "$JSON_PARAM" | jq -r '.email // empty')
+RAW_PASSWORD="${dify_admin_password}"
+if [[ "$RAW_PASSWORD" == b64:* ]]; then
+    B64_PART="${RAW_PASSWORD#b64:}"
+    if [[ ! "$B64_PART" =~ ^[A-Za-z0-9+/=]+$ ]]; then
+        echo "{\"errorCode\": 1, \"messageEn\":\"Invalid base64 password\", \"messageCh\":\"b64:前缀后的密码非合法base64编码！\"}"
+        exit 1
+    fi
+    PASSWORD="$B64_PART"
+else
+    PASSWORD=$(echo -n "$RAW_PASSWORD" | base64 -w0)
+fi
+
+if [ -z "$EMAIL" ] || [ -z "$PASSWORD" ]; then
+    echo "{\"errorCode\": 1, \"messageEn\":\"Missing email or password\", \"messageCh\":\"缺少email或password参数！\"}"
+    exit 1
+fi
+
+LANGUAGE=$(echo "$JSON_PARAM" | jq -r '.language // "zh-CN"')
+
+validate_app_params() {
+    MODE=$(echo "$JSON_PARAM" | jq -r '.mode // "yaml-content"')
+    YAML_CONTENT=$(echo "$JSON_PARAM" | jq -r '.yaml_content // empty')
+    if [ "$MODE" = "yaml-url" ]; then
+        # yaml-url 模式: URL 优先取 yaml_url 字段, 兼容写在 yaml_content 中的 URL
+        YAML_URL=$(echo "$JSON_PARAM" | jq -r '.yaml_url // .yaml_content // empty')
+        if [ -z "$YAML_URL" ]; then
+            echo "{\"errorCode\": 1, \"messageEn\":\"Missing yaml_url\", \"messageCh\":\"yaml-url模式缺少yaml_url参数！\"}"
+            exit 1
+        fi
+    elif [ -z "$YAML_CONTENT" ]; then
+        echo "{\"errorCode\": 1, \"messageEn\":\"Missing yaml_content\", \"messageCh\":\"缺少yaml_content参数！\"}"
+        exit 1
+    fi
+}
+
+COOKIES=""
+CSRF_TOKEN=""
+
+login() {
+    local response
+    response=$(curl -sSL \
+        -H 'Accept: */*' \
+        -H 'Accept-Language: zh-CN,zh;q=0.9' \
+        -H 'Proxy-Connection: keep-alive' \
+        -H 'User-Agent: AIAgentLinuxClient' \
+        -H 'content-type: application/json' \
+        -H 'x-csrf-token;' \
+        --data-raw $'{"email":"'"${EMAIL}"'","password":"'"${PASSWORD}"'","language":"'"${LANGUAGE}"'","remember_me":true}' \
+        -D - \
+        "${BASE_URL}/console/api/login" 2>&1) || true
+    local curl_exit=$?
+
+    if [ $curl_exit -ne 0 ] || [ -z "$response" ]; then
+        jq -n --arg details "$response" '{"errorCode": 1, "messageEn": "Login failed", "messageCh": "登录失败！", "details": $details}'
+        exit 1
+    fi
+
+    local headers body
+    headers=$(echo "$response" | sed -n '1,/^[ \t]*$/p')
+    body=$(echo "$response" | tail -n 1 | tr -d '\r')
+
+    if ! echo "$body" | jq -e '.result == "success"' >/dev/null 2>&1; then
+        jq -n --arg details "$body" '{"errorCode": 1, "messageEn": "Login failed", "messageCh": "登录失败！", "details": $details}' >&2
+        exit 1
+    fi
+
+    COOKIES=$(echo "$headers" | sed -n 's/^Set-Cookie: \([^;]*\);.*/\1/p' | tr '\n' ';' | sed 's/; $//')
+    CSRF_TOKEN=$(echo "$COOKIES" | sed -n 's/.*csrf_token=\([^;]*\).*/\1/p')
+}
+
+import_app() {
+    local csrf_token="$CSRF_TOKEN"
+
+    local data
+    if [ "$MODE" = "yaml-url" ]; then
+        # yaml-url 模式: 由 Dify 服务端自行拉取 URL, 避免脚本内容超长(平台限制102400字符)
+        data=$(jq -n --arg mode "$MODE" --arg yaml_url "$YAML_URL" '{"mode": $mode, "yaml_url": $yaml_url}')
+    else
+        data=$(jq -n --arg mode "$MODE" --arg yaml_content "$YAML_CONTENT" '{"mode": $mode, "yaml_content": $yaml_content}')
+    fi
+
+    local response headers body
+    response=$(curl -sSL \
+        -H 'Accept: */*' \
+        -H 'Accept-Language: zh-CN,zh;q=0.9' \
+        -H 'Proxy-Connection: keep-alive' \
+        -H 'User-Agent: AIAgentLinuxClient' \
+        -H 'content-type: application/json' \
+        -H "x-csrf-token: ${csrf_token}" \
+        -H "Cookie: ${COOKIES}" \
+        --data-raw "$data" \
+        -D - \
+        "${BASE_URL}/console/api/apps/imports" 2>&1) || true
+    local curl_exit=$?
+
+    if [ $curl_exit -ne 0 ] || [ -z "$response" ]; then
+        jq -n --arg details "$response" '{"errorCode": 1, "messageEn": "Import failed", "messageCh": "导入失败！", "details": $details}'
+        exit 1
+    fi
+
+    headers=$(echo "$response" | sed -n '1,/^[ \t]*$/p')
+    body=$(echo "$response" | tail -n 1 | tr -d '\r')
+
+    if ! echo "$body" | jq -e '.status == "completed" or .status == "completed-with-warnings"' >/dev/null 2>&1; then
+        jq -n --arg details "$body" '{"errorCode": 1, "messageEn": "Import failed", "messageCh": "导入失败！", "details": $details}'
+        exit 1
+    fi
+}
+
+case "$EXECUTE_TYPE" in
+    verify)
+        login
+        echo "{\"errorCode\": 0, \"messageEn\":\"Verify successful\", \"messageCh\":\"验密成功！\"}"
+        ;;
+    app)
+        validate_app_params
+        login
+        import_app
+        echo "{\"errorCode\": 0, \"messageEn\":\"Import successful\", \"messageCh\":\"导入成功！\"}"
+        ;;
+    *)
+        echo "{\"errorCode\": 1, \"messageEn\":\"Invalid execute_type, must be verify or app\", \"messageCh\":\"execute_type非法，必须为verify或app！\"}"
+        exit 1
+        ;;
+esac
+'''
     },
 }
 
