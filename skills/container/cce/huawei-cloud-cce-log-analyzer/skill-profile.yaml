@@ -1,0 +1,54 @@
+name: huawei-cloud-cce-log-analyzer
+level: L2
+domain: observability
+description: Query and analyze CCE Pod, application, audit, kube-apiserver, and kube-scheduler logs. Trigger when users ask about CCE logs, LTS logs, audit evidence, API-server latency, scheduler failures, or log collection rules.
+dependencies:
+  - type: cli
+    name: hcloud
+    version: ">= 7.2.2"
+    required: true
+    configuration: local hcloud profile configured with `hcloud configure`
+  - type: cli
+    name: kubectl
+    version: ">= 1.28"
+    required: false
+    configuration: Required for Pod logs and LogConfig tools
+  - type: plugin
+    name: kubectl-cce
+    version: ">= 0.2.1"
+    required: true
+    configuration: Required for cluster access through `kubectl` (Pod logs and LogConfig tools)
+  - type: sdk
+    name: huaweicloudsdklts
+    version: ">= 3.0.0"
+    required: false
+    configuration: Required only for K8S_CCE access config creation
+tools:
+  - huawei_get_pod_stdout_logs
+  - huawei_analyze_pod_stdout_realtime_logs
+  - huawei_list_lts_access_configs
+  - huawei_create_lts_access_config
+  - huawei_delete_lts_access_config
+  - huawei_get_cce_logconfigs
+  - huawei_create_cce_logconfig
+  - huawei_delete_cce_logconfig
+  - huawei_query_cce_audit_logs
+  - huawei_analyze_cce_audit_timeline
+  - huawei_query_kube_apiserver_logs
+  - huawei_analyze_kube_apiserver_logs
+  - huawei_query_kube_scheduler_logs
+  - huawei_analyze_kube_scheduler_logs
+  - huawei_query_application_logs
+  - huawei_analyze_application_logs
+references:
+  - references/workflow.md
+  - references/risk-rules.md
+  - references/output-schema.md
+  - references/tool-reference.md
+  - references/iam-policies.md
+  - references/cli-installation-guide.md
+  - references/kubectl-cce.md
+  - references/verification-method.md
+  - references/acceptance-criteria.md
+guardrails:
+  max_auto_risk: R3
