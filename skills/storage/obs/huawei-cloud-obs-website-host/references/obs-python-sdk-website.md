@@ -80,7 +80,7 @@ HTTPS constraints:
 4. If custom domain needed, call `client.setBucketCustomDomain(bucket_name, domain_name)`.
 5. If HTTPS on the custom domain is required, attach a certificate via the `certificateInfo` dict (PEM or CCM `certificateId`).
 6. Check the HTTP status code (`2xx` expected).
-7. Verify the website endpoint with an HTTP GET to the root path (add `--https` to also verify TLS).
+7. Verify the website endpoint with an HTTP GET to the root path (`verify_obs_website.py` always checks both HTTP and HTTPS, including TLS certificate validation).
 
 ## Common failures
 
