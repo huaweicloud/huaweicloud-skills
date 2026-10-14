@@ -32,6 +32,11 @@ plus log search for fault diagnosis and security event response.
 | **Delete** | Delete log groups, log streams, transfers, alarm rules (⚠️ requires confirmation) |
 | **Diagnose** | Search logs by keyword/time to locate faults; query log context; view log distribution histogram |
 
+> **Scope boundary**: This skill only supports Huawei Cloud LTS (Log Tank Service / 云日志服务)
+> log group / log stream / index / transfer / alarm / search management. It does **not** support
+> other cloud services (e.g. ECS, databases) — decline non-LTS requests and point users to the
+> appropriate skill or console.
+
 ## Prerequisites
 
 1. **hcloud CLI** installed and authenticated — see `references/cli-installation-guide.md`
@@ -132,8 +137,11 @@ hcloud LTS CreateLogGroup --cli-region={region} --project_id={project_id} \
   --log_group_name="my-log-group" --ttl_in_days=30
 
 # Create a log stream under a group
+# Note: log stream TTL must equal the TTL of the log group it belongs to
+# (e.g. `--ttl_in_days={log_group_ttl}` where {log_group_ttl} is the owning group's TTL),
+# otherwise the API returns a USE_ERROR.
 hcloud LTS CreateLogStream --cli-region={region} --project_id={project_id} \
-  --log_group_id={log_group_id} --log_stream_name="my-log-stream" --ttl_in_days=30
+  --log_group_id={log_group_id} --log_stream_name="my-log-stream" --ttl_in_days={log_group_ttl}
 ```
 
 ### Create — Index

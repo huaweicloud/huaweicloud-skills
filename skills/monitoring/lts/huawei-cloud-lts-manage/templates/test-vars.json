@@ -1,4 +1,23 @@
 {
+  "defaults": {
+    "region": "cn-north-4",
+    "project_id": "",
+    "log_group_name": "",
+    "log_group_id": "",
+    "log_stream_id": "",
+    "group_id": "",
+    "stream_id": "",
+    "stream_name": "",
+    "domain_id": "",
+    "start_time": "",
+    "end_time": "",
+    "timestamp": "",
+    "line_num": "",
+    "bucket_name": "",
+    "transfer_id": "",
+    "alarm_rule_id": "",
+    "log_group_ttl": "7"
+  },
   "test_cases": [
     {
       "id": "TC-01",

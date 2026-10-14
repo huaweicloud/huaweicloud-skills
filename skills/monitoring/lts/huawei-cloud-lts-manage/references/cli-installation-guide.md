@@ -17,8 +17,11 @@ hcloud configure
 # Follow prompts to enter AK/SK and region
 ```
 
-> **Note**: hcloud CLI does not support authentication via environment variables.
-> Credentials must be configured with `hcloud configure` (stored in `~/.hcloud/config.json`).
+> **Note**: hcloud CLI supports multiple authentication methods:
+> ① `hcloud configure` (stored in `~/.hcloud/config.json`); ② environment variables
+> (e.g. `HUAWEICLOUD_SDK_AK` / `HUAWEICLOUD_SDK_SK`); ③ command-line parameters
+> `--cli-access-key` / `--cli-secret-key`. `hcloud configure` is only one of them —
+> credentials can also be supplied via environment variables or per-command parameters.
 
 ### Verify Configuration
 
