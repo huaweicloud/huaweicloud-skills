@@ -1,0 +1,1 @@
+"""Data-source adapter package (coupon_api / growth_api)."""
