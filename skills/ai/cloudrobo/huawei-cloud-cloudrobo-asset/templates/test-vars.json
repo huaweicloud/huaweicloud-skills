@@ -419,11 +419,58 @@
       "requires": "ASSET_ID, LOCAL_PATH, CATALOG_ID",
       "requires_confirmation": true,
       "status": "pending"
+    },
+    {
+      "id": "TC-42",
+      "name": "import-asset-reject-image",
+      "executor": "cli",
+      "command": "cloudrobo asset import-asset --catalog-id ${CATALOG_ID} --type image --local-path ./tmp-image-dir",
+      "expected": "UsageError: image assets are not supported by import-asset. Use cloudrobo asset create-asset instead.",
+      "type": "mutating-error",
+      "requires": "CATALOG_ID",
+      "requires_confirmation": false,
+      "status": "pending"
+    },
+    {
+      "id": "TC-43",
+      "name": "import-asset-algorithm-dry-run",
+      "executor": "cli",
+      "command": "cloudrobo asset import-asset --catalog-id ${CATALOG_ID} --name my-algo --type algorithm --tags Train --ext-metadata '{\"engine\":{\"image_url\":\"swr.cn-southwest-2.myhuaweicloud.com/ns/repo:v1\",\"image_source\":\"custom\"},\"command\":\"python train.py\"}' --local-path ./algo-dir --dry-run",
+      "expected": "DRY-RUN output with type=algorithm, tags=Train, ext_metadata; no asset created",
+      "type": "mutating-dry-run",
+      "requires": "CATALOG_ID",
+      "requires_confirmation": false,
+      "status": "pending"
+    },
+    {
+      "id": "TC-44",
+      "name": "create-asset-algorithm-without-tags-error",
+      "executor": "cli",
+      "command": "cloudrobo asset create-asset --catalog-id ${CATALOG_ID} --name algo --type algorithm --ext-metadata '{\"engine\":{\"image_url\":\"swr.cn-southwest-2.myhuaweicloud.com/ns/repo:v1\",\"image_source\":\"custom\"},\"command\":\"python train.py\"}' --dry-run",
+      "expected": "ValidationError: tags is required for type 'algorithm'",
+      "type": "mutating-error",
+      "requires": "CATALOG_ID",
+      "requires_confirmation": false,
+      "status": "pending"
     }
   ],
   "environment_variables": {
-    "required": ["HUAWEI_CLOUD_AK", "HUAWEI_CLOUD_SK"],
-    "optional": ["REPOSITORY_ID", "CATALOG_ID", "ASSET_ID", "VERSION_ID", "ASSET_IDS", "LOCAL_PATH", "EXPORTED_PATH", "ALGO_ASSET_ID", "ALGO_VERSION_ID", "CLOUDROBO_DEBUG"]
+    "required": [
+      "HUAWEI_CLOUD_AK",
+      "HUAWEI_CLOUD_SK"
+    ],
+    "optional": [
+      "REPOSITORY_ID",
+      "CATALOG_ID",
+      "ASSET_ID",
+      "VERSION_ID",
+      "ASSET_IDS",
+      "LOCAL_PATH",
+      "EXPORTED_PATH",
+      "ALGO_ASSET_ID",
+      "ALGO_VERSION_ID",
+      "CLOUDROBO_DEBUG"
+    ]
   },
   "notes": [
     "Read-only tests (TC-01 to TC-08, TC-13, TC-14, TC-19 to TC-29, TC-32, TC-38, TC-39) run automatically.",

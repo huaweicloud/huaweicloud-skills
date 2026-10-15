@@ -89,7 +89,7 @@ Base URL: https://cloudrobo-gallery.{region}.myhuaweicloud.com
 | 1b. Create version (with asset_id) | POST | `/v1/assets/{asset_id}/versions` | `create_asset_version()` |
 | 1c. Verify asset+version (asset_id + version_id) | GET | `/v1/assets/{asset_id}` + `/v1/assets/{asset_id}/versions/{version_id}` | `show_asset()` + `show_asset_version()` |
 | 2. Get version detail | GET | `/v1/assets/{asset_id}/versions/{version_id}` | `show_asset_version()` |
-| 3. Upload to OBS | — | OBS SDK | `OBSClient.upload_folder(overwrite=...)` |
+| 3. Upload to OBS | — | OBS SDK | `OBSClient.upload_folder()` |
 | 4. Conditional status update | GET + PUT | `/v1/assets/{asset_id}/versions/{version_id}` | `show_asset_version()` → if status=CREATING → `update_asset_version({status: DRAFT})` |
 
 ### Export Asset 导出资产

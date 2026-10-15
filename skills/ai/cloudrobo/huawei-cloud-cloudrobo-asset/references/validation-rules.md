@@ -13,10 +13,10 @@
 | `catalog_id` | 是 | UUID 格式 |
 | `name` | 非 image 时必填 | 3-64 字符：中英文、数字、连字符、下划线、点、斜杠 |
 | `type` | 是 | 见类型映射表 |
-| `sub_type` | simulation 时必填 | 见类型映射表；model/dataset 无合法 sub_type，传了会报错 |
+| `sub_type` | simulation 时必填 | 见类型映射表；model/dataset 无合法 sub_type，传了会报错；algorithm/image 同样无合法 sub_type（后端已忽略），客户端主动丢弃、不报错 |
 | `description` | 否 | 最长 512 字符 |
 | `status` | 否 | `CREATING` `DRAFT` `ALPHA` `BETA` `RELEASE` `STABLE` `DEPRECATED` `ARCHIVE` |
-| `tags` | 否 | 最多 100 个，每项 1-32 字符：中英文、数字、点号、连字符、下划线、空格 |
+| `tags` | algorithm/image 时必填 | 最多 100 个，每项 1-32 字符：中英文、数字、点号、连字符、下划线、空格；algorithm/image 创建时必须至少 1 个任务场景标签；算法 tags ∈ {Data Processing, Train}；算法引用镜像时必须是镜像 tags 子集 |
 | `url` | 否 | `obs://bucket/path` 或 SWR 镜像格式，最长 1024；image 必须用 SWR 格式、algorithm 不应提供 url（后端校验，客户端不拦截） |
 | `ext_metadata` | 否 | 按 type 校验，见下方 ext_metadata 章节 |
 | `parent_asset_version_id` | 否 | UUID 格式；提供时必须同时提供 `generation_method` |
@@ -26,7 +26,7 @@
 
 - **`parent_asset_version_id` 依赖 `generation_method`**：提供前者时必须同时提供后者，否则报错
 - **`name` 依赖 `type`**：非 image 类型必填，image 类型可选
-- **`sub_type` 依赖 `type`**：type 有值时 sub_type 必须属于该 type 的合法子类型
+- **`sub_type` 依赖 `type`**：type 有值时 sub_type 必须属于该 type 的合法子类型；**algorithm/image 的 sub_type 被客户端主动丢弃，不参与校验（后端已忽略）**
 
 ---
 
@@ -39,7 +39,7 @@
 | `name` | 否 | 3-64 字符 |
 | `description` | 否 | 最长 512 字符 |
 | `status` | 否 | 同 create-asset 枚举 |
-| `tags` | 否 | 最多 100 个，每项 1-32 字符：中英文、数字、点号、连字符、下划线、空格 |
+| `tags` | 否 | 最多 100 个，每项 1-32 字符：中英文、数字、点号、连字符、下划线、空格；algorithm/image 类型更新时不能为空（后端约束） |
 | `ext_metadata` | 否 | 由后端根据资产 type 校验（客户端无法获知类型） |
 | `author` | 否 | 后端静默忽略，传值不报错但不生效 |
 | `catalog_id` | 不可修改 | CLI/SDK 不提供该参数，字段不可变 |
@@ -265,14 +265,46 @@
 | `asset_id` | N/A | **CLI 必填** |
 | `name` | frontmatter > CLI > **报错** | 不需要 |
 | `type` | frontmatter > CLI > **报错** | 不需要 |
-| `sub_type` | frontmatter > CLI > **报错**(simulation) | 不需要 |
-| `ext_metadata` | frontmatter > CLI > **报错**(有必填字段时) | frontmatter > CLI（可选） |
+| `sub_type` | frontmatter > CLI > **报错**(simulation)；algorithm/image 中 sub_type 被忽略 | 不需要 |
+| `ext_metadata` | frontmatter > CLI > **报错**(有必填字段时) | **必填**（后端要求，frontmatter > CLI > **报错**） |
 | `version` | frontmatter（可选） | frontmatter（可选） |
 | `description` | frontmatter（可选） | frontmatter（可选） |
 | `status` | frontmatter（可选） | frontmatter（可选） |
-| `tags` | frontmatter（可选） | 不需要 |
+| `tags` | frontmatter > CLI（algorithm/image 新建资产时必填） | 不需要 |
 | `parent_asset_version_id` | frontmatter（可选） | frontmatter（可选） |
 | `generation_method` | frontmatter（可选） | frontmatter（可选） |
+
+### 类型限制
+
+- **`image` 类型不支持 import-asset**：CLI 直接报 `UsageError`（"image assets are not supported by import-asset. Use cloudrobo asset create-asset instead."），镜像本质是 SWR 引用，无本地代码上传语义
+- **`algorithm` 类型支持导入**：导入算法 = 将本地代码上传到 OBS 的 code_dir 目录
+
+### 算法导入流程（type=algorithm）
+
+**Mode 1（新建资产，无需 --asset-id）：**
+1. 校验 `--tags` 必填（算法允许值 `Data Processing`/`Train`）
+2. 获取 catalog.url，创建算法资产时 `code_dir` 占位为 `{catalog.url}/pending`（preset 镜像后端必填 code_dir）
+3. 创建资产 → 得到 asset_id + version_id
+4. 上传本地代码到 `{catalog.url}/{asset_id}/{version_id}/`
+5. 更新 ext_metadata：`code_dir` 更新为实际上传路径（同时更新 asset 级别和 version 级别，消除占位 `pending`；移除用户提供的 boot_file）
+6. 版本状态 CREATING → DRAFT 自动修正
+
+**Mode 2（已有算法资产创建新版本，仅 --asset-id）：**
+1. 从资产详情取 catalog_id（**用户无需传 --catalog-id**）→ 获取 catalog.url；**需传基础 ext_metadata（engine/command）**
+2. **ext_metadata 必填**：不传 ext_metadata 时 SDK 直接抛 ValueError；传入后经客户端校验 engine/command 等必填字段，不合法则报 ValidationError
+3. 移除用户 code_dir/boot_file，占位 code_dir = `{catalog.url}/pending`
+4. 创建新版本 → 得到 version_id
+4. 上传本地代码到 `{catalog.url}/{asset_id}/{version_id}/`
+5. 更新 ext_metadata：`code_dir` 更新为实际上传路径（同时更新 asset 级别和 version 级别，消除占位 `pending`；移除用户提供的 boot_file）
+6. 版本状态 CREATING → DRAFT 自动修正
+
+**Mode 3（--asset-id + --version-id）:** 不支持算法资产和镜像资产：
+- 算法资产：直接报错 ValueError "Incremental upload (asset_id + version_id) is not supported for algorithm assets. Use --asset-id to create a new version, or import without asset-id to create a new asset."
+- 镜像资产：直接报错 ValueError "import_asset does not support image assets. Image assets are SWR references with no local code upload semantics. Use create_asset to manage image assets."
+
+**路径示例**: `catalog.url = obs://bucket/asset/repo1/cat1/` 时，
+- 占位 code_dir：`obs://bucket/asset/repo1/cat1/pending`
+- 实际上传路径：`obs://bucket/asset/repo1/cat1/{asset_id}/{version_id}/`
 
 ### 校验规则
 
@@ -281,7 +313,7 @@
 1. **非 `asset_id` 模式**（创建新资产 + 首版本）：字段校验同 `create-asset`（type/sub_type/name/catalog_id/ext_metadata 等），版本字段同 `create-version`
 2. **`asset_id` 模式**（为已有资产创建新版本）：版本字段校验同 `create-version`；若提供 ext_metadata，按已有资产的 type/sub_type 校验其合法性
 
-### 增量上传与状态流转
+### 上传与状态流转
 
 **三种模式：**
 
@@ -289,12 +321,11 @@
 |------|------|------|
 | Mode 1 | 无 `--asset-id` | 创建新资产+版本 → 上传 OBS → 若 status=CREATING 则更新为 DRAFT |
 | Mode 2 | 仅 `--asset-id` | 创建新版本 → 上传 OBS → 若 status=CREATING 则更新为 DRAFT |
-| Mode 3 | `--asset-id` + `--version-id` | 复用已有版本 → 增量上传 OBS → 若 status=CREATING 则更新为 DRAFT |
+| Mode 3 | `--asset-id` + `--version-id` | 复用已有版本 → 直接上传 OBS（同名对象幂等覆盖）→ 若 status=CREATING 则更新为 DRAFT；**算法资产不支持（报错）** |
 
-**增量上传（Mode 3 默认）：**
-- `overwrite=False`（默认）：对每个本地文件先 `head_object` 检查 OBS 是否已存在，存在则跳过
-- `--overwrite`：强制覆盖所有已存在的 OBS 对象
-- 适用于给已存在版本追加新文件、或重试部分失败的上传
+**上传机制（Mode 3）：**
+- 直接上传所有本地文件到 OBS，同名对象幂等覆盖（OBS PUT 语义）
+- 适用于给已存在版本追加新文件、或重试失败的上传
 
 **CREATING→DRAFT 状态流转：**
 - 用户未指定 `--status` 时，后端创建版本默认状态为 `CREATING`（表示正在上传）
@@ -340,6 +371,8 @@ cloudrobo asset create-asset --catalog-id <id> --name my-algo --type algorithm -
 `import-asset` 在创建资产时对 tags 进行额外校验：
 1. **格式校验**：每项 1-32 字符，匹配 `中英文/数字/点号/连字符/下划线/空格` 正则
 2. **合法性校验**：调用 `GET /v1/asset-tags` 接口获取服务端预定义标签列表，过滤不在列表中的标签；同时按资产 type/sub_type 校验标签是否属于该分类
+3. **必填校验**：`algorithm`/`image` 类型创建时必须至少 1 个任务场景标签；算法 tags ∈ {Data Processing, Train}
+4. **子集校验（算法引用镜像时）**：算法 `ext_metadata.engine.asset_id` 引用镜像资产时，SDK 调 `show_asset` 查询镜像 tags，校验算法 tags 是镜像 tags 的**子集**（`algo_tags ⊆ image_tags`），不满足抛 `ValidationError`
 
 `create-asset` 和 `add-tags` 对 tags 做格式校验 + 合法性校验（调用 `GET /v1/asset-tags` 获取预定义标签列表，过滤不在列表中的标签）。
 
@@ -383,10 +416,21 @@ cloudrobo asset create-asset --catalog-id <id> --name my-algo --type algorithm -
 
 ## export-asset
 
+### 类型限制
+
+| 类型 | 支持 | 说明 |
+|------|------|------|
+| `model` | 是 | 从 `url` 字段下载 |
+| `dataset` | 是 | 从 `url` 字段下载 |
+| `simulation` | 是 | 从 `url` 字段下载 |
+| `algorithm` | 是 | 从 `ext_metadata.code_dir` 下载代码（`url` 为 null） |
+| `image` | **否** | ValueError "does not support image assets"（SWR 引用，无可下载文件） |
+
 ### 参数交互
 
 - **`version_id` 可选**：不传时导出最新版本
 - **资产至少有一个版本**：否则抛出 RuntimeError
+- **algorithm 类型**：从版本详情的 `ext_metadata.code_dir` 获取 OBS URL（非 `url` 字段）
 
 ---
 
@@ -415,7 +459,7 @@ cloudrobo asset create-asset --catalog-id <id> --name my-algo --type algorithm -
 | `engine.image_url` | **是** | SWR 格式：`swr.{endpoint}/{namespace}/{repo}:{tag}` |
 | `engine.image_source` | **是** | 枚举：`preset`（广场预置镜像，此时 `code_dir` 必填）`custom`（空间自定义镜像） |
 | `command` | **是** | 字符串，最长 4096 |
-| `code_dir` | 条件必填 | `boot_file` 存在时或 `image_source=preset` 时必填 |
+| `code_dir` | 条件必填 | `boot_file` 存在时或 `image_source=preset` 时必填；**import-asset 导入算法时由工具自动填充**（创建时占位 `{catalog.url}/pending`，上传后更新为 `{catalog.url}/{asset_id}/{version_id}/`），用户不应提供 |
 | `boot_file` | 否 | 必须以 `obs://` 开头，以 `.py` 结尾，且位于 `code_dir` 目录下 |
 | `inputs` | 否 | 数组，≤10 项；每项需 `name`（1-64 字符：英文、数字、连字符、下划线）+ `access_method`（`env`或`parameter`），可选 `description`（0-512 字符）；name 不可重复 |
 | `outputs` | 否 | 数组，≤5 项；格式同 inputs |

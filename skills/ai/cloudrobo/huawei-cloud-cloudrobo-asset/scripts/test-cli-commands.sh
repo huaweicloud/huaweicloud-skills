@@ -3,7 +3,7 @@
 # Usage: bash scripts/test-cli-commands.sh -s {skill-path} [-e {cli|sdk}]
 # TC numbers correspond to test cases defined in templates/test-vars.json
 #
-# Coverage: 12/29 CLI commands tested (read-only + dry-run only)
+# Coverage: 14/32 CLI commands tested (read-only + dry-run + error-path only)
 # Implemented: list-repositories, list-catalogs, show-catalog, list-assets, show-asset,
 #   create-asset(--dry-run), list-versions, list-tags, search-assets,
 #   list-publication-assets, import-asset(--dry-run), export-asset(--dry-run)
@@ -260,6 +260,45 @@ test_import_asset_dry_run() {
     fi
 }
 
+# Test: import-asset rejects image type
+test_import_asset_reject_image() {
+    local catalog_id="${1:-}"
+    if [ -z "$catalog_id" ]; then
+        echo "=== TC-42: import-asset reject image (SKIPPED - no CATALOG_ID) ==="
+        return
+    fi
+    echo "=== TC-42: import-asset reject image ==="
+    if [ "$EXECUTOR" = "cli" ]; then
+        cloudrobo asset import-asset             --catalog-id "$catalog_id"             --type image             --local-path ./test-image             2>&1 | head -10
+    fi
+}
+
+# Test: import-asset algorithm dry-run
+test_import_asset_algorithm_dry_run() {
+    local catalog_id="${1:-}"
+    if [ -z "$catalog_id" ]; then
+        echo "=== TC-43: import-asset algorithm --dry-run (SKIPPED - no CATALOG_ID) ==="
+        return
+    fi
+    echo "=== TC-43: import-asset algorithm --dry-run ==="
+    if [ "$EXECUTOR" = "cli" ]; then
+        cloudrobo asset import-asset             --catalog-id "$catalog_id"             --name my-algo             --type algorithm                         --tags Train             --ext-metadata '{"engine":{"image_url":"swr.cn-southwest-2.myhuaweicloud.com/ns/repo:v1","image_source":"custom"},"command":"python train.py"}'             --local-path ./algo-dir             --dry-run 2>&1 | head -10
+    fi
+}
+
+# Test: create-asset algorithm without tags errors
+test_create_asset_algorithm_without_tags_error() {
+    local catalog_id="${1:-}"
+    if [ -z "$catalog_id" ]; then
+        echo "=== TC-44: create-asset algorithm no tags (SKIPPED - no CATALOG_ID) ==="
+        return
+    fi
+    echo "=== TC-44: create-asset algorithm no tags (expect ValidationError) ==="
+    if [ "$EXECUTOR" = "cli" ]; then
+        cloudrobo asset create-asset             --catalog-id "$catalog_id"             --name algo             --type algorithm                         --ext-metadata '{"engine":{"image_url":"swr.cn-southwest-2.myhuaweicloud.com/ns/repo:v1","image_source":"custom"},"command":"python train.py"}'             --dry-run 2>&1 | head -10
+    fi
+}
+
 # Test: Export asset dry-run
 test_export_asset_dry_run() {
     local asset_id="${1:-}"
@@ -297,6 +336,9 @@ if [ -n "${CATALOG_ID:-}" ]; then
     test_list_catalogs "${REPOSITORY_ID:-}"
     test_show_catalog "$CATALOG_ID"
     test_list_assets "$CATALOG_ID"
+    test_import_asset_reject_image "$CATALOG_ID"
+    test_import_asset_algorithm_dry_run "$CATALOG_ID"
+    test_create_asset_algorithm_without_tags_error "$CATALOG_ID"
 else
     echo ""
     echo "NOTE: Set CATALOG_ID environment variable to run catalog-specific tests:"

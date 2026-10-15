@@ -107,14 +107,33 @@ Import local files (models, datasets, etc.) into the CloudRobo asset repository.
      algorithm→engine+command, image→arch+device_type, simulation (sub_type=robot)→robot_type+robot_manufacturer)
    - Auto-creates asset + version + uploads to OBS
    - Existing asset new version: add `--asset-id <existing-asset-id>`
-   - Reuse existing version for upload retry: add `--asset-id <id> --version-id <vid>` (default: incremental upload — skips existing OBS objects; use `--overwrite` to force re-upload all files)
+   - Reuse existing version for upload retry: add `--asset-id <id> --version-id <vid>` (uploads files directly; same-name OBS objects are overwritten idempotently)
+
+**Type constraints:**
+- **`image` type is NOT supported by `import-asset`** — image is a SWR reference with no local code upload semantics; use `create-asset` instead (CLI raises `UsageError` otherwise)
+- **`algorithm` type IS supported** — importing an algorithm uploads local code to the OBS `code_dir`:
+  ```bash
+  # Mode 1: new asset
+  cloudrobo asset import-asset --catalog-id <id> --name <name> --type algorithm --tags "Train" --ext-metadata '{"engine":{"image_url":"swr...","image_source":"custom"},"command":"python train.py"}' --local-path ./algo-dir
+  # Mode 2: new version for existing algorithm asset (no --catalog-id needed)
+  cloudrobo asset import-asset --asset-id <existing-algo-asset-id> --type algorithm --tags "Train" --ext-metadata '{"engine":{"image_url":"swr...","image_source":"custom"},"command":"python train.py"}' --local-path ./algo-dir
+  ```
+  Algorithm import flow (automatic, Mode 1 & Mode 2):
+  1. Validates `--tags` is required (allowed: `Data Processing` / `Train`)
+  2. **Mode 2 requires `--ext-metadata`** (must include `engine` and `command`); not passing raises ValueError, passing invalid raises ValidationError
+  3. Gets catalog.url (Mode 2: from asset detail, no `--catalog-id` needed); creates asset/version with placeholder `code_dir = {catalog.url}/pending` (preset image backend requires code_dir)
+  4. Creates asset/version → gets asset_id + version_id
+  5. Uploads local code to `{catalog.url}/{asset_id}/{version_id}/`
+  6. Updates `code_dir` to the actual upload path on both asset-level and version-level ext_metadata (clears placeholder `pending`)
+  - **`--asset-id --version-id` (Mode 3) is NOT supported for algorithm** — raises ValueError (version reuse unsupported; use `--asset-id` for a new version)
+  - **Mode 3 also rejects image assets** at SDK layer (not just CLI) — raises ValueError "import_asset does not support image assets"
 3. Verify: `cloudrobo asset show-asset --asset-id <asset-id>`
 
 **Error recovery:** If import fails at OBS upload (asset and version created but files not
 uploaded, version stays in `CREATING` status), do NOT create a new version. Two recovery strategies:
 - **Reuse version (recommended):** `list-versions --asset-id <id>` to find the failed version,
-  re-run `import-asset --asset-id <id> --version-id <vid>` to upload directly (incremental by
-  default — only uploads missing files; the version transitions to `DRAFT` once upload succeeds)
+  re-run `import-asset --asset-id <id> --version-id <vid>` to upload directly (retries all files;
+  the version transitions to `DRAFT` once upload succeeds)
 - **Delete and retry:** `delete-version --asset-id <id> --version-id <vid>` then re-run
   `import-asset --asset-id <id>`
 
@@ -153,6 +172,12 @@ model, dataset, simulation, algorithm, image types require ext_metadata at creat
 1. (Only when catalog_id is missing) Execute "Prerequisite: Get catalog_id"
 2. Create: `cloudrobo asset create-asset --catalog-id <id> --name <name> --type model --ext-metadata '{"model_type":"planning"}'`
 3. Create version: `cloudrobo asset create-version --asset-id <id> --version 1.0.0 --ext-metadata '{"model_type":"planning"}'`
+
+**Task scenario tag constraints (`algorithm`/`image` types):**
+- `--tags` is **required** at creation (at least 1 task scenario tag)
+- algorithm tags allowed: `Data Processing`, `Train`
+- image tags allowed: `Data Processing`, `Notebook`, `Online Deployment`, `Train`
+- When an algorithm references an image (`ext_metadata.engine.asset_id`), the algorithm tags must be a **subset** of the image tags (SDK validates; raises `ValidationError` otherwise)
 
 ### Scenario 6: Tag Management 标签管理
 
@@ -194,6 +219,12 @@ cloudrobo asset create-asset --catalog-id <catalog-id> --type <type> [--name <na
 ```
 - **SDK:** `client.create_asset(req: dict)`
 - **API:** `POST /v1/assets`
+
+**Note:** `--tags` is **required** for `algorithm`/`image` types (task scenario tag).
+- algorithm tags: `Data Processing`, `Train`
+- image tags: `Data Processing`, `Notebook`, `Online Deployment`, `Train`
+- When algorithm references an image (`engine.asset_id`), algorithm tags must be a **subset** of image tags (SDK validates; raises `ValidationError` otherwise)
+- `--sub-type` applies to `simulation` only; for `algorithm`/`image` it is ignored (client drops it before the API call)
 
 #### List assets
 ```bash
@@ -277,6 +308,7 @@ cloudrobo asset update-version --asset-id <asset-id> --version-id <version-id> [
 cloudrobo asset create-action --asset-id <id> --version-id <vid> --action-info '{"action":"FFT","algorithm":{"asset_id":"...","version_id":"..."},"status":"ENABLE"}' [--dry-run]
 # SDK: client.create_asset_action(asset_id, version_id, req)
 # API: POST /v1/assets/{asset_id}/versions/{version_id}/actions
+# action-info supports single action object {"action":"FFT",...} or batch {"actions":[{...},{...}]}
 
 cloudrobo asset update-action --asset-id <id> --version-id <vid> --action <name> --action-info '{"status":"DISABLE"}' [--dry-run]
 # SDK: client.update_asset_action(asset_id, version_id, action, req)
@@ -306,8 +338,13 @@ Full parameter list: see references/api-paths.md → List Publication Assets
 
 #### Import asset
 ```bash
-cloudrobo asset import-asset --local-path <local-folder> [--catalog-id <id>] [--name <name>] [--type <type>] [--sub-type <sub-type>] [--ext-metadata '{"key":"value"}'] [--asset-id <id>] [--version-id <vid>] [--overwrite] [--dry-run]
+cloudrobo asset import-asset --local-path <local-folder> [--catalog-id <id>] [--name <name>] [--type <type>] [--sub-type <sub-type>] [--tags "tag1,tag2"] [--ext-metadata '{"key":"value"}'] [--asset-id <id>] [--version-id <vid>] [--dry-run]
 ```
+
+**Type constraints:**
+- **`image` type NOT supported** — CLI raises `UsageError`; use `create-asset`
+- **`algorithm` type supported (Mode 1 & Mode 2)** — imports local code to `{catalog.url}/{asset_id}/{version_id}/`, `code_dir` placeholder `{catalog.url}/pending` at creation then updated to actual path on both asset-level and version-level; user must NOT provide `code_dir`/`boot_file`; Mode 2 gets catalog_id from asset detail (no `--catalog-id` needed)
+- **Mode 3 (`--asset-id --version-id`) NOT supported for algorithm** — raises ValueError
 
 **Frontmatter support:**
 - Auto-reads `local-path/README.md` YAML frontmatter
@@ -315,12 +352,13 @@ cloudrobo asset import-asset --local-path <local-folder> [--catalog-id <id>] [--
   `parent_asset_version_id`, `generation_method`
 - Priority: frontmatter overrides CLI parameters (except catalog_id, CLI only); fields missing from both trigger errors
 - Required fields for new asset: `catalog_id` (CLI only), `name` (frontmatter or CLI), `type` (frontmatter or CLI)
+- Required for new version (`--asset-id`): `ext_metadata` (backend requires it for model/dataset/image/simulation; pass via `--ext-metadata` or frontmatter)
 - ext_metadata pre-validation: model/dataset/algorithm/image/simulation types validated before API call (robot is a sub_type of simulation)
 
 **Modes:**
 - No `--asset-id`: Create new asset + version + upload to OBS; after upload, if version status is `CREATING`, auto-update to `DRAFT`
-- `--asset-id` only: Create new version for existing asset + upload to OBS; after upload, if version status is `CREATING`, auto-update to `DRAFT`
-- `--asset-id` + `--version-id`: Reuse existing version, incremental upload to OBS only (skips existing OBS objects by default; use `--overwrite` to force re-upload all files); after upload, if version status is `CREATING`, auto-update to `DRAFT`
+- `--asset-id` only: Create new version for existing asset + upload to OBS; **`ext_metadata` is required** (backend validates for model/dataset/image/simulation; pass via `--ext-metadata` or frontmatter); after upload, if version status is `CREATING`, auto-update to `DRAFT`
+- `--asset-id` + `--version-id`: Reuse existing version, upload files directly to OBS (same-name objects are overwritten idempotently); after upload, if version status is `CREATING`, auto-update to `DRAFT`; **NOT supported for algorithm assets (raises ValueError)**
 
 **Status flow:** When no `--status` is specified, the backend creates the version with status `CREATING`. After a successful OBS upload, if the version status is still `CREATING`, the SDK automatically calls `update-version` to set it to `DRAFT`. If the user explicitly specifies a status (e.g., `RELEASE` via frontmatter), the upload succeeds but the status is not auto-modified.
 
@@ -328,6 +366,12 @@ cloudrobo asset import-asset --local-path <local-folder> [--catalog-id <id>] [--
 ```bash
 cloudrobo asset export-asset --asset-id <id> --local-path <local-folder> [--version-id <version-id>] [--dry-run]
 ```
+
+**Type constraints:**
+- **`image` type is NOT supported** — raises ValueError (SWR reference, no downloadable files); use `create-asset` instead
+- **`algorithm` type IS supported** — downloads code from `ext_metadata.code_dir` OBS path; if `code_dir` is missing, raises RuntimeError with recovery guidance
+
+**Path requirement:** `--local-path` must be an existing directory (raises `FileNotFoundError` if not found, `ValueError` if it's a file). The SDK creates a subdirectory `{local-path}/{asset_id}/` inside it for the downloaded files.
 
 **README.md generation:**
 - Creates `<local-path>/<asset-id>/README.md` with YAML frontmatter
@@ -345,7 +389,7 @@ cloudrobo asset export-asset --asset-id <id> --local-path <local-folder> [--vers
 | `--version-id` | Yes (version ops) | Version UUID | `d4e5f6a7-b8c9-...` |
 | `--type` | Conditional (import without frontmatter) | Asset type | `model`, `dataset`, `algorithm`, `image`, `simulation` |
 | `--name` | Conditional (import without frontmatter) | Asset name | `my-model` |
-| `--sub-type` | Conditional (algorithm/image/simulation) | Asset sub_type | algorithm: `inference`,`data_processing`,`training`,`data_evaluating`,`rl`; image: `inference`,`data_processing`,`training`,`notebook`,`rl`; simulation: `robot`,`environment`,`object`,`scene` |
+| `--sub-type` | Conditional (simulation only) | Asset sub_type; algorithm/image no longer accept sub_type (client drops it if provided) | simulation: `robot`,`environment`,`object`,`scene` |
 | `--local-path` | Yes (import/export) | Local folder path | `./my-model` |
 | `--ext-metadata` | Conditional (model/dataset/algorithm/image/simulation) | Extended metadata JSON | `{"model_type":"planning"}` |
 | `--language` | Yes (list-tags) | Tag language | `zh`, `en` |
@@ -353,7 +397,7 @@ cloudrobo asset export-asset --asset-id <id> --local-path <local-folder> [--vers
 | `--dry-run` | No | Preview without executing | flag |
 | `--description` | No | Asset/version description | `My model description` |
 | `--status` | No | Asset/version status | `CREATING`, `DRAFT`, `RELEASE`, etc. |
-| `--tags` | No | Tag list (comma-separated, full replacement on update) | `production,stable` |
+| `--tags` | Conditional (algorithm/image create) | Tag list (comma-separated); required for algorithm/image create; algorithm tags must be subset of referenced image tags; full replacement on update | `Data Processing,Train` |
 | `--url` | No | OBS or SWR path (create-asset/create-version only) | `obs://bucket/path` |
 | `--generation-method` | No | Asset generation method (create-asset/create-version only) | `manual` |
 | `--parent-asset-version-id` | No | Parent version UUID (create-asset/create-version only) | `d4e5f6a7-...` |

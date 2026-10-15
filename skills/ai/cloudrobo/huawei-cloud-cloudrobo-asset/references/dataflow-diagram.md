@@ -132,7 +132,7 @@ sequenceDiagram
 
     SDK->>API: GET /v1/assets/{asset_id}/versions/{version_id}
     API-->>SDK: version data (contains obs_url)
-    SDK->>OBS: upload_folder(local_path, obs_prefix, overwrite=...)
+    SDK->>OBS: upload_folder(local_path, obs_prefix)
     OBS-->>SDK: upload success
     SDK->>API: GET /v1/assets/{asset_id}/versions/{version_id} (check status)
     API-->>SDK: version data (status)
