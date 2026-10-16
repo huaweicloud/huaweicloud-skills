@@ -1,0 +1,772 @@
+[
+  {
+    "name": "建议CBR备份策略执行频率不低于最小频率",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "应确保CDN回源方式使用HTTPS",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "应确保配置安全的TLS版本",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "Workspace资源应开启备份存储库",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "Workspace应设置合理的备份周期",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "TaurusDB实例开启慢日志",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "TaurusDB实例应开启备份",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "TaurusDB实例开启审计日志",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保禁用ACL，并使用OBS存储桶策略实现更精细的访问控制。",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "RDS实例开启慢日志",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保ECS云服务器在指定周期内创建备份",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保ECS资源开启备份功能",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "应确保配置了自动轮转的CSMS凭据轮转成功",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "GaussDB实例应开启慢日志",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "GaussDB实例应开启错误日志",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "应避免根用户以外的IAM用户加入admin用户组，防止授权过大",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保对IAM服务的操作已记录审计日志",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保创建的IAM策略已正确附加到IAM用户、用户组或委托",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保IAM用户组已添加权限",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "GeminiDB实例开启慢查询日志",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "GeminiDB实例开启错误日志",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "GeminiDB实例开启备份",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "GaussDB应开启数据库审计日志功能",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "应确保DDoS原生基础防护开启LTS日志记录",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "应确保WAF防护策略配置防护规则",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "应确保WAF防护域名配置防护策略",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "CSS集群开启慢日志",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保CSS集群多AZ部署",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "CSS集群应启用HTTPS",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "CSS集群应启用快照",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "CSS集群至少包含3个数据节点",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保DWS集群启用自动快照",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保CBR存储库备份库有足够长的备份保留周期",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保开启存储库中的备份策略",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "建议CBR存储库开启多AZ备份",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "建议开启CBR存储库备份锁定功能",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保APIG专享版实例配置访问日志",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "应确保ER服务启用安全审计日志",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "应确保启用Web应用防火墙功能",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保已开启DWS数据库审计日志转储",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保开启DWS数据库审计日志",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "CES配置监控VPC变更的事件监控告警",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "配置监控OBS桶策略变更的事件监控告警",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "配置监控KMS禁用或计划删除密钥的事件监控告警",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "启用CES资源告警功能",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保弹性伸缩组使用弹性负载均衡健康检查",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保ELB实例多AZ部署",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保ELB监听器绑定的安全策略中使用安全的TLS版本和加密套件",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "应确保CSMS凭据在指定天数内轮转",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "应确保CSMS轮转凭据启用自动轮转",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保弹性伸缩组创建的ECS实例覆盖多AZ",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "TaurusDB实例不应绑定弹性公网IP",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保数据库实例不绑定公网IP地址",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保ECS实例开启主机安全防护",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保ECS实例关闭公网访问",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "安全组入站流量限制指定端口",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "安全组端口检查，避免安全组入方向设置为0.0.0.0/0或::/0",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "应确保GaussDB实例不使用数据库引擎的默认端口",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "应确保GaussDB数据库实例不具有弹性公网 IP（EIP）",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "GaussDB 数据库实例应配置为跨多个可用区（AZ）部署",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保IAM用户不直接附加策略或权限，而是通过“继承所选用户组的策略”的方式给IAM用户授权",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保IAM角色正确附加到IAM用户、用户组或委托",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "应配置华为云账号通过Orgaization进行纳管",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "不应使用GeminiDB开源Cassandra、Influx引擎的默认端口",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "DRS实时同步任务不使用公网网络",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "DRS实时迁移任务不使用公网网络",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "DRS实时灾备任务不使用公网网络",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "GeminiDB实例支持多可用区",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保安全组连接到弹性网络接口",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "RDS 数据库实例应建议默认不开启公共访问。",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "ACL要管理子网，未使用的网络访问控制列表应被移除",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "VPC 默认安全组不应允许入站或出站流量",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "CSS集群应关闭公网访问和kibana公网访问能力",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保APIG专享版实例不对公网开放",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保MRS集群节点未绑定公网IP",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保通过安全组和VPC限制公网访问",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "应配置DCS Redis实例端口检查",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "应配置DCS Redis实例不存在弹性公网IP",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "应关闭DMS RabbitMq实例公网访问",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "应关闭DMS RocketMQ实例公网访问",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "应关闭DMS Kafka队列公网访问",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保FunctionGraph函数不能访问公网",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "应确保使用在维护周期内的CCE集群版本",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保ELB负载均衡器根据业务需求配置公网或内网访问，对于仅需内网访问的场景，应避免配置弹性公网",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保弹性公网IP在指定天数内绑定到资源实例",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保不存在未绑定任何资源的弹性公网IP",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "应配置为将所有 HTTP 请求重定向到 HTTPS",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "带有SSL/HTTPS监听器的负载均衡器应使用由证书管理服务提供的证书",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "负载均衡必须配置HTTPS或TLS",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保负载均衡开启删除保护",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "负载均衡实例需要多AZ部署",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保负载均衡实例不绑定EIP",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保CFW实例绑定标签",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "启用FuctionGraph函数日志功能",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "FunctionGraph函数应该打标签进行分类",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "API配置SSL证书用于后端双向认证",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "API授权使用安全认证方式",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保SFS Turbo文件系统在备份存储库中",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保SFS Turbo文件系统最近一次备份距离现在不超过指定时间",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保CTS实例添加标签",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "应启用HSS的容器安全版",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "应启用企业主机安全HSS（基础版/专业版/企业版/旗舰版）",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "应启用勒索病毒防护（旗舰版/容器版/网页防篡改版）",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "应启用HSS网页防篡改功能",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保管理员账号已启用MFA",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保不创建非管理员权限的IAM用户",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保IAM密码策略要求最小长度为8或更大",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保IAM密码策略要求符合密码复杂度",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保IAM密码策略防止密码重复使用",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保设置密码最短使用时间",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "启用用户登录保护",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保任何单个IAM用户仅有一个可用的活动访问密钥",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保不创建允许“*:*”管理权限的IAM策略",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "配置登录验证策略",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "启用CTS",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "启用VPC流量日志功能",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "启用RDS数据库审计功能",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "启用ELB访问日志记录功能",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "启用OBS桶日志功能",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "使用密钥对安全登录ECS",
+    "match_key": "title",
+    "reason": "与OA冲突"
+  },
+  {
+    "name": "确保私有镜像开启了加密",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "使用密钥对安全登录BMS",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "禁止使用CCE已经EOS的K8S集群版本",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "启用HSS的容器安全版",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "集群节点不要暴露到公网",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "启用ELB监听器的访问控制",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "使用OBS的服务端加密存储对象",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "启用多版本控制功能",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "合规场景开启WORM功能",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "启用防盗链功能",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "启用跨区域复制功能",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保云硬盘是加密的",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "确保SFS Turbo文件系统是加密的",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "开启跨区域复制备份功能",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "MySQL开启加密通信",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "禁止使用默认端口",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "MySQL数据库版本更新到最新版本",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "避免绑定EIP直接通过互联网访问",
+    "match_key": "title",
+    "reason": "与OA冲突"
+  },
+  {
+    "name": "MySQL配置合理的安全组规则",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "MySQL开启数据库审计日志",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "DDS开启加密通信",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "PostgreSQL配置合理的安全组规则",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "PostgreSQL应开启备份功能设置合理的备份策略",
+    "match_key": "title",
+    "reason": "与OA冲突"
+  },
+  {
+    "name": "PostgreSQL开启数据库审计日志",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "GaussDB应开启备份功能设置合理的备份策略",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "开启Kerberos认证",
+    "match_key": "title",
+    "reason": "与OA冲突"
+  },
+  {
+    "name": "集群EIP安全组管控",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "开启集群数据加密功能",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "启用Web应用防火墙功能",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "配置WAF地理位置访问策略",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "启用WAF对Web基础防护的拦截模式",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "启用企业主机安全 HSS（基础版/专业版/企业版/旗舰版）",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "启用勒索病毒防护（旗舰版/容器版/网页防篡改版）",
+    "match_key": "title",
+    "reason": "与config冲突"
+  },
+  {
+    "name": "启用HSS网页防篡改功能",
+    "match_key": "title",
+    "reason": "与config冲突"
+  }
+]

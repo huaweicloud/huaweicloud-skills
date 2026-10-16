@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>华为云租户巡检分析报告</title>
+<script>__ECHARTS_BUNDLE__</script>
+<style>
+/* ========== 设计规范:MiniMax 风格 ========== */
+/* 白底主色、品牌蓝主色系、8px/20-24px 圆角、品牌紫阴影、近黑文本层级、暗色区块 */
+:root {
+  --brand-blue: #1456f0;
+  --brand-blue-light: #3b82f6;
+  --brand-blue-hover: #2563eb;
+  --brand-deep: #17437d;
+  --text-primary: #222222;
+  --text-secondary: #45515e;
+  --text-muted: #8e8e93;
+  --bg-white: #ffffff;
+  --bg-light: #f0f0f0;
+  --bg-dark: #181e25;
+  --border: #e5e7eb;
+  --border-light: #f2f3f5;
+  --success-bg: #e8ffea;
+  --warn-bg: #fffbe6;
+  --warn-border: #faad14;
+  --fail-bg: #fff1f0;
+  --fail-border: #c0392b;
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --shadow-card: rgba(0, 0, 0, 0.08) 0px 4px 6px;
+  --shadow-brand: rgba(44, 30, 116, 0.16) 0px 0px 15px;
+  --shadow-lifted: rgba(36, 36, 36, 0.08) 0px 12px 16px -4px;
+  --font-family: "Microsoft YaHei", "PingFang SC", -apple-system, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+body {
+  font-family: var(--font-family);
+  margin: 0;
+  padding: 0;
+  background: var(--bg-white);
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+/* 暗色页眉区块 */
+.header {
+  background: var(--bg-dark);
+  color: #ffffff;
+  padding: 32px 40px 28px;
+}
+.header h1 {
+  margin: 0 auto 8px;
+  width: 80%;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-align: center;
+}
+.header .meta {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+  margin: 4px auto;
+  width: 80%;
+  text-align: center;
+}
+.header .meta b { color: #ffffff; font-weight: 600; }
+/* 内容区卡片:宽度为浏览器页面宽度的 80%,居中;页眉/页脚内容与之对齐 */
+.container { width: 80%; margin: 0 auto; padding: 24px 0 40px; }
+.card {
+  background: var(--bg-white);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: 24px;
+  margin: 20px 0;
+}
+.card h2 {
+  margin: 0 0 16px;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-light);
+}
+.card h2 .accent { color: var(--brand-blue); }
+/* 概要大数字卡片 */
+.summary-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f5f8ff 100%);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-brand);
+  padding: 24px;
+  margin: 20px 0;
+  display: flex;
+  align-items: stretch;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.summary-item {
+  flex: 1;
+  min-width: 140px;
+  text-align: center;
+}
+.summary-item .label { font-size: 13px; color: var(--text-secondary); font-weight: 500; }
+.summary-item .value { font-size: 40px; font-weight: 700; color: var(--brand-blue); line-height: 1.2; }
+.summary-item .value.risk { color: var(--fail-border); }
+.summary-item .value.fail { color: #b8860b; }
+.summary-item .detail { font-size: 12px; color: var(--text-muted); line-height: 1.6; }
+/* 备注告警条 */
+.notes {
+  background: var(--warn-bg);
+  border-left: 4px solid var(--warn-border);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 12px 16px;
+  margin: 20px 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+/* 图表区:两行排布(第一行 3 图 30%/30%/40%, 第二行 2 图等宽) */
+.chart-grid {
+  display: block;
+  margin: 20px 0;
+}
+.chart-row {
+  display: grid;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+.chart-row:last-child { margin-bottom: 0; }
+.chart-row.row-3 { grid-template-columns: 30% 30% 40%; }
+.chart-row.row-2 { grid-template-columns: 40% 60%; }
+.chart-card {
+  background: var(--bg-white);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: 20px;
+}
+.chart-card h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.chart-card h3 .accent { color: var(--brand-blue); }
+.chart { width: 100%; height: 360px; }
+.chart-half { height: 170px; }
+.sub-chart-title { font-size: 13px; color: var(--text-muted); margin: 10px 0 4px; font-weight: 500; }
+/* 表格区 */
+.table-toolbar { display: flex; align-items: center; gap: 12px; margin: 12px 0 8px; flex-wrap: wrap; }
+.filter-input {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-family);
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-white);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.filter-input:focus { border-color: var(--brand-blue-light); }
+.filter-select {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-family);
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-white);
+  outline: none;
+}
+.filter-select:focus { border-color: var(--brand-blue-light); }
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
+  font-size: 13px;
+  background: var(--bg-white);
+}
+th, td {
+  border: 1px solid var(--border-light);
+  padding: 10px 12px;
+  text-align: left;
+}
+th {
+  background: var(--bg-light);
+  color: var(--text-secondary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+tr:nth-child(even) { background: #fafafa; }
+tr:hover { background: #f0f6ff; }
+td { color: var(--text-primary); }
+/* 状态标签 */
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 30px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.badge-risk { background: var(--fail-bg); color: #c0392b; }
+.badge-warn { background: var(--warn-bg); color: #b8860b; }
+.badge-ok { background: var(--success-bg); color: #237a3a; }
+.badge-muted { background: var(--bg-light); color: var(--text-muted); }
+.badge-fail { background: var(--warn-bg); color: #b8860b; }
+/* 来源徽标 */
+.badge-oa { background: #eaf2ff; color: var(--brand-deep); }
+.badge-config { background: #e8ffea; color: #237a3a; }
+.badge-secmaster { background: #f3e8ff; color: #7c3aed; }
+/* 分页控件 */
+.pagination { display: flex; align-items: center; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
+.pagination button {
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-white);
+  color: var(--text-secondary);
+  font-family: var(--font-family);
+  font-size: 13px;
+  cursor: pointer;
+}
+.pagination button:hover:not(:disabled) { border-color: var(--brand-blue-light); color: var(--brand-blue-hover); }
+.pagination button:disabled { opacity: 0.45; cursor: not-allowed; }
+.pagination .page-info { color: var(--text-muted); font-size: 13px; }
+.pagination select {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-family);
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: var(--bg-white);
+}
+/* 嵌套详情行 */
+tr.detail-row > td { padding: 0; background: #fafcff; }
+.detail-wrap { padding: 8px 12px 16px; }
+.detail-wrap .detail-title { font-size: 13px; color: var(--text-secondary); margin: 8px 0; font-weight: 600; }
+/* 巡检项名称可点击 */
+.item-name-link { color: var(--brand-blue); cursor: pointer; text-decoration: underline; }
+/* 空数据占位 */
+.empty-hint { color: var(--text-muted); padding: 32px 16px; text-align: center; font-size: 14px; }
+/* 图表不可用提示 */
+.chart-unavailable {
+  color: var(--text-muted);
+  padding: 40px;
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+}
+/* 暗色页脚:文本内容与内容区同宽居中 */
+.footer {
+  background: var(--bg-dark);
+  color: rgba(255, 255, 255, 0.7);
+  text-align: center;
+  padding: 16px 24px;
+  font-size: 12px;
+}
+.footer span {
+  display: inline-block;
+  width: 80%;
+}
+/* 响应式 */
+@media (max-width: 768px) {
+  .header { padding: 24px 20px 20px; }
+  .header h1 { font-size: 22px; width: 100%; }
+  .header .meta { width: 100%; }
+  .footer span { width: 100%; }
+  .container { width: 100%; padding: 16px 16px 24px; }
+  .card { padding: 16px; }
+  .summary-card { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .chart-row { grid-template-columns: 1fr; }
+  .chart { height: 300px; }
+  th, td { padding: 8px; }
+}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>华为云租户巡检分析报告</h1>
+  <div class="meta" id="meta"></div>
+</div>
+<div class="container">
+  <div class="summary-card" id="summary-card"></div>
+
+  <div class="notes" id="notes" style="display:none;"></div>
+
+  <!-- 统计图表区(两行: 第一行 3 图, 第二行 2 图) -->
+  <div class="chart-grid">
+    <div class="chart-row row-3">
+      <div class="chart-card">
+        <h3><span class="accent">风险状态</span> 分布</h3>
+        <div id="chart_status" class="chart"></div>
+      </div>
+      <div class="chart-card">
+        <h3><span class="accent">数据来源</span> 分布</h3>
+        <div id="chart_sources" class="chart"></div>
+      </div>
+      <div class="chart-card">
+        <h3><span class="accent">配置审计 Config</span> 每日合规趋势</h3>
+        <div class="sub-chart-title">资源侧(总数 / 不合规数 / 合规率)</div>
+        <div id="chart_trend1" class="chart chart-half"></div>
+        <div class="sub-chart-title">规则侧(总数 / 不合规数 / 合规率)</div>
+        <div id="chart_trend2" class="chart chart-half"></div>
+      </div>
+    </div>
+    <div class="chart-row row-2">
+      <div class="chart-card">
+        <h3><span class="accent">风险检查维度</span> 分布</h3>
+        <div id="chart_dimensions" class="chart"></div>
+      </div>
+      <div class="chart-card">
+        <h3><span class="accent">产品维度</span> 风险分布</h3>
+        <div id="chart_products" class="chart"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 巡检风险项区:主表 + 嵌套资源子表 -->
+  <div class="card">
+    <h2><span class="accent">巡检风险项</span> 明细</h2>
+    <div class="table-toolbar">
+      <input class="filter-input" id="filter_name" placeholder="巡检项名称..." oninput="onFilterChange()">
+      <select class="filter-select" id="filter_risk" onchange="onFilterChange()">
+        <option value="">全部风险等级</option>
+        <option value="high">高风险</option>
+        <option value="low">低风险</option>
+        <option value="__none__">不适用</option>
+      </select>
+      <select class="filter-select" id="filter_source" onchange="onFilterChange()">
+        <option value="">全部数据来源</option>
+      </select>
+      <select class="filter-select" id="filter_service" onchange="onFilterChange()">
+        <option value="">全部云服务</option>
+      </select>
+      <span class="sub-chart-title" style="margin:0;">点击巡检项名称展开资源明细</span>
+    </div>
+    <div id="table_items"></div>
+  </div>
+
+  <!-- 非风险项概览区(状态构成汇总表) -->
+  <div class="card">
+    <h2><span class="accent">非风险项</span> 概览</h2>
+    <div id="table_nonrisk"></div>
+  </div>
+
+  <!-- 提示项概览区 -->
+  <div class="card">
+    <h2><span class="accent">提示项</span> 明细</h2>
+    <div id="table_hints"></div>
+  </div>
+
+  <!-- 待处理项概览区 -->
+  <div class="card">
+    <h2><span class="accent">待处理项</span> 明细</h2>
+    <div id="table_uninspected"></div>
+  </div>
+
+  <!-- 安全项明细区 -->
+  <div class="card">
+    <h2><span class="accent">安全项</span> 明细</h2>
+    <div id="table_security"></div>
+  </div>
+
+  <!-- 不涉及明细区 -->
+  <div class="card">
+    <h2><span class="accent">不涉及</span> 明细</h2>
+    <div id="table_not_involved"></div>
+  </div>
+
+  <!-- 采集失败项区 -->
+  <div class="card">
+    <h2><span class="accent">采集失败项</span> 明细</h2>
+    <div id="table_failures"></div>
+  </div>
+</div>
+<div class="footer">华为云租户巡检分析 · 生成于 <span id="footer-time"></span></div>
+
+<script id="analysis-data" type="application/json">__DATA__</script>
+<script>
+var data = JSON.parse(document.getElementById('analysis-data').textContent);
+
+/* ================= 元数据 ================= */
+function formatGeneratedAt(value) {
+  if (!value) { return new Date().toLocaleString(); }
+  return String(value).replace('T', ' ');
+}
+(function() {
+  var meta = data.meta || {};
+  var items = data.items || [];
+  var itemCounts = { OA: 0, Config: 0, SecMaster: 0 };
+  items.forEach(function(it) {
+    var src = it.source;
+    if (src in itemCounts) { itemCounts[src] += 1; }
+  });
+  var html =
+    '<b>账号 ID:</b> ' + (meta.domain_id || (data.user ? (data.user.account || '-') : '-')) +
+    '&nbsp;&nbsp;|&nbsp;&nbsp;<b>区域:</b> ' + (meta.cli_region || '-') +
+    '&nbsp;&nbsp;|&nbsp;&nbsp;<b>风险巡检项:</b> OA ' + itemCounts.OA +
+    ' / Config ' + itemCounts.Config +
+    ' / SecMaster ' + itemCounts.SecMaster +
+    '&nbsp;&nbsp;|&nbsp;&nbsp;<b>生成:</b> ' + formatGeneratedAt(meta.generated_at);
+  document.getElementById('meta').innerHTML = html;
+  document.getElementById('footer-time').textContent = formatGeneratedAt(meta.generated_at);
+
+  // 概要数字卡片
+  var items = data.items || [];
+  var failures = data.failures || [];
+  var coverage = data.coverage || {};
+  var oa = coverage.oa_console || coverage.oa || {};
+  var config = coverage.config || {};
+  var secmaster = coverage.secmaster || {};
+  var failed = coverage.failed || {};
+  // 检查项级口径: OA 四类(风险/安全/不涉及/提示) + Config 合规规则 + SecMaster 合格基线
+  var nonRiskItems = (oa.not_involved || 0) + (oa.security || 0) +
+                     (config.compliant_rules || 0) + (secmaster.qualified || 0);
+  var totalResources = 0;
+  items.forEach(function(it) { totalResources += it.total_resources || 0; });
+  var card = document.getElementById('summary-card');
+  card.innerHTML =
+    '<div class="summary-item"><div class="label">风险巡检项</div><div class="value risk">' + items.length +
+      '</div><div class="detail">资源明细 ' + totalResources + ' 条</div></div>' +
+    '<div class="summary-item"><div class="label">提示项</div><div class="value">' + (oa.hint || 0) +
+      '</div><div class="detail">OA 配额告警等无风险资源项</div></div>' +
+    '<div class="summary-item"><div class="label">安全项</div><div class="value">' + (oa.security || 0) +
+      '</div><div class="detail">OA 检查项级</div></div>' +
+    '<div class="summary-item"><div class="label">非风险项</div><div class="value">' + nonRiskItems +
+      '</div><div class="detail">OA安全/不涉及 + Config合规 + SecMaster合格</div></div>' +
+    '<div class="summary-item"><div class="label">待处理项</div><div class="value">' + (secmaster.uninspected || 0) +
+      '</div><div class="detail">SecMaster 待处理基线(检查项级)</div></div>' +
+    '<div class="summary-item"><div class="label">采集失败项</div><div class="value fail">' + (failed.total || 0) +
+      '</div><div class="detail">检查项级去重, 采集接口异常</div></div>';
+
+  if (failures.length) {
+    document.getElementById('notes').style.display = 'block';
+    document.getElementById('notes').innerHTML =
+      '<b>备注:</b> 存在 ' + (failed.total || failures.length) + ' 条采集失败记录（如 OA 接口白名单异常），详见下方"采集失败项"区块。';
+  }
+})();
+
+/* ================= 工具函数 ================= */
+function esc(s) {
+  if (s === null || s === undefined) { return ''; }
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function sourceBadge(source) {
+  var cls = source === 'OA' ? 'badge-oa' : (source === 'Config' ? 'badge-config' : 'badge-secmaster');
+  return '<span class="badge ' + cls + '">' + esc(source) + '</span>';
+}
+
+/* ================= 风险项主表 + 嵌套子表 ================= */
+var itemsData = data.items || [];
+var itemsPageSize = 10;
+var itemsPage = 0;
+var itemsFilterName = '';
+var itemsFilterRisk = '';
+var itemsFilterSource = '';
+var itemsFilterService = '';
+var openItemIds = {};       // 展开状态:key -> true
+var detailState = {};       // 子表分页:key -> { page, pageSize }
+var failuresPageSize = 10;
+var failuresPage = 0;
+var hintsPageSize = 10;
+var hintsPage = 0;
+var uninspectedPageSize = 10;
+var uninspectedPage = 0;
+var securityPageSize = 10;
+var securityPage = 0;
+var notInvolvedPageSize = 10;
+var notInvolvedPage = 0;
+
+function fillServiceFilter() {
+  var sel = document.getElementById('filter_service');
+  var services = {};
+  itemsData.forEach(function(it) {
+    var svc = it.service_type_code || '未知';
+    services[svc] = true;
+  });
+  Object.keys(services).sort().forEach(function(svc) {
+    var opt = document.createElement('option');
+    opt.value = svc;
+    opt.textContent = svc;
+    sel.appendChild(opt);
+  });
+}
+
+function fillSourceFilter() {
+  var sel = document.getElementById('filter_source');
+  var labels = {};
+  itemsData.forEach(function(it) {
+    var label = it.display_source || it.source || '';
+    if (label) { labels[label] = true; }
+  });
+  Object.keys(labels).sort().forEach(function(label) {
+    var opt = document.createElement('option');
+    opt.value = label;
+    opt.textContent = label;
+    sel.appendChild(opt);
+  });
+}
+
+function getFilteredItems() {
+  var rows = itemsData.slice();
+  if (itemsFilterName) {
+    var q = itemsFilterName.toLowerCase();
+    rows = rows.filter(function(it) {
+      return (it.check_item_name || '').toLowerCase().indexOf(q) !== -1;
+    });
+  }
+  if (itemsFilterRisk) {
+    if (itemsFilterRisk === '__none__') {
+      rows = rows.filter(function(it) { return !it.risk_level; });
+    } else {
+      rows = rows.filter(function(it) { return (it.risk_level || '') === itemsFilterRisk; });
+    }
+  }
+  if (itemsFilterSource) {
+    rows = rows.filter(function(it) { return (it.display_source || it.source || '') === itemsFilterSource; });
+  }
+  if (itemsFilterService) {
+    rows = rows.filter(function(it) { return (it.service_type_code || '未知') === itemsFilterService; });
+  }
+  return rows;
+}
+
+function itemKey(it) { return (it.check_item_id || '') + '\u0000' + (it.source || ''); }
+
+function renderItemsTable() {
+  var container = document.getElementById('table_items');
+  if (!itemsData.length) {
+    container.innerHTML = '<div class="empty-hint">暂无风险数据</div>';
+    return;
+  }
+  var rows = getFilteredItems();
+  var totalPages = Math.max(1, Math.ceil(rows.length / itemsPageSize));
+  if (itemsPage >= totalPages) { itemsPage = totalPages - 1; }
+  var start = itemsPage * itemsPageSize;
+  var pageRows = rows.slice(start, start + itemsPageSize);
+
+  var html = '<table><thead><tr>';
+  html += '<th>巡检项名称</th><th>风险等级</th><th>来源</th><th>云服务</th><th>维度</th><th>风险资源数</th><th>资源总数</th></tr>';
+  html += '</thead><tbody>';
+  pageRows.forEach(function(it) {
+    var key = itemKey(it);
+    var levelClass = it.risk_level === 'high' ? 'badge-risk' : (it.risk_level === 'low' ? 'badge-warn' : 'badge-muted');
+    if (it.risk_level === 'high') { levelClass = 'badge-risk'; }
+    html += '<tr>';
+    html += '<td><span class="item-name-link" data-key="' + encodeURIComponent(key) + '">' + esc(it.check_item_name) + '</span></td>';
+    html += '<td><span class="badge ' + levelClass + '">' + esc(it.risk_level || '') + '</span></td>';
+    html += '<td>' + sourceBadge(it.display_source || it.source) + '</td>';
+    html += '<td>' + esc(it.service_type_code || '未知') + '</td>';
+    html += '<td>' + esc(it.dimension || '') + '</td>';
+    html += '<td>' + esc(it.resource_count) + '</td>';
+    html += '<td>' + esc(it.total_resources) + '</td>';
+    html += '</tr>';
+    if (openItemIds[key]) {
+      html += '<tr class="detail-row"><td colspan="7"><div class="detail-wrap">' + renderDetail(it, key) + '</div></td></tr>';
+    }
+  });
+  html += '</tbody></table>';
+  html += paginationHtml('items', rows.length, totalPages);
+  container.innerHTML = html;
+}
+
+function renderDetail(it, key) {
+  var resources = it.resources || [];
+  var st = detailState[key] || { page: 0, pageSize: 10 };
+  var totalPages = Math.max(1, Math.ceil(resources.length / st.pageSize));
+  if (st.page >= totalPages) { st.page = totalPages - 1; }
+  var start = st.page * st.pageSize;
+  var pageRows = resources.slice(start, start + st.pageSize);
+  var html = '<div class="detail-title">该巡检项风险资源明细(' + resources.length + ' 条)</div>';
+  if (!resources.length) {
+    html += '<div class="empty-hint">该巡检项无资源明细(配额类风险项等)</div>';
+    return html;
+  }
+  html += '<table><thead><tr><th>区域</th><th>资源ID</th><th>资源名称</th><th>状态</th><th>企业项目ID</th></tr></thead><tbody>';
+  pageRows.forEach(function(x) {
+    html += '<tr><td>' + esc(x.region_id || '') + '</td><td>' + esc(x.id || '') + '</td><td>' + esc(x.name || '') +
+            '</td><td>' + esc(x.status || '') + '</td><td>' + esc(x.enterprise_project_id || '') + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  html += paginationHtml('detail_' + key, resources.length, totalPages);
+  return html;
+}
+
+function paginationHtml(prefix, total, totalPages) {
+  var isDetail = prefix.indexOf('detail_') === 0;
+  var isFailures = prefix === 'failures';
+  var isSecurity = prefix === 'security';
+  var isNotInvolved = prefix === 'not_involved';
+  var isHints = prefix === 'hints';
+  var cur, size;
+  if (isDetail) {
+    cur = (detailState[prefix.slice(7)] || {}).page || 0;
+    size = (detailState[prefix.slice(7)] || {}).pageSize || 10;
+  } else if (isFailures) {
+    cur = failuresPage; size = failuresPageSize;
+  } else if (isSecurity) {
+    cur = securityPage; size = securityPageSize;
+  } else if (isNotInvolved) {
+    cur = notInvolvedPage; size = notInvolvedPageSize;
+  } else if (isHints) {
+    cur = hintsPage; size = hintsPageSize;
+  } else {
+    cur = itemsPage; size = itemsPageSize;
+  }
+  var html = '<div class="pagination">';
+  if (isDetail) {
+    // Detail pagination is handled via event delegation on table_items to
+    // avoid embedding NUL-containing keys into inline onclick attributes.
+    var enc = encodeURIComponent(prefix.slice(7));
+    html += '<button class="page-btn" data-detail-key="' + enc + '" data-page="' + (cur - 1) + '" ' + (cur <= 0 ? 'disabled' : '') + '>上一页</button>';
+    html += '<span class="page-info">' + (total ? (cur + 1) + ' / ' + totalPages : '0 / 0') + ' 页(共 ' + total + ' 条)</span>';
+    html += '<button class="page-btn" data-detail-key="' + enc + '" data-page="' + (cur + 1) + '" ' + (cur >= totalPages - 1 ? 'disabled' : '') + '>下一页</button>';
+    html += '<select class="page-size" data-detail-key="' + enc + '">';
+  } else {
+    html += '<button class="page-btn" data-prefix="' + prefix + '" data-page="' + (cur - 1) + '" ' + (cur <= 0 ? 'disabled' : '') + '>上一页</button>';
+    html += '<span class="page-info">' + (total ? (cur + 1) + ' / ' + totalPages : '0 / 0') + ' 页(共 ' + total + ' 条)</span>';
+    html += '<button class="page-btn" data-prefix="' + prefix + '" data-page="' + (cur + 1) + '" ' + (cur >= totalPages - 1 ? 'disabled' : '') + '>下一页</button>';
+    html += '<select class="page-size" data-prefix="' + prefix + '">';
+  }
+  [10, 20, 50].forEach(function(s) {
+    html += '<option value="' + s + '" ' + (size === s ? 'selected' : '') + '>' + s + ' 条/页</option>';
+  });
+  html += '</select></div>';
+  return html;
+}
+
+function pageNav(prefix, page) {
+  if (prefix === 'failures') {
+    failuresPage = page;
+  } else if (prefix === 'security') {
+    securityPage = page;
+  } else if (prefix === 'not_involved') {
+    notInvolvedPage = page;
+  } else if (prefix === 'hints') {
+    hintsPage = page;
+  } else if (prefix === 'uninspected') {
+    uninspectedPage = page;
+  } else {
+    itemsPage = page;
+  }
+  renderItemsTable();
+  renderFailures();
+  renderHints();
+  renderSecurityDetail();
+  renderNotInvolvedDetail();
+  renderUninspected();
+}
+
+function detailPageNav(encodedKey, page) {
+  var key = decodeURIComponent(encodedKey);
+  var st = detailState[key] || { page: 0, pageSize: 10 };
+  st.page = page;
+  detailState[key] = st;
+  renderItemsTable();
+}
+
+function changePageSize(prefix, val) {
+  val = Number(val);
+  if (prefix === 'failures') {
+    failuresPageSize = val;
+    failuresPage = 0;
+  } else if (prefix === 'security') {
+    securityPageSize = val;
+    securityPage = 0;
+  } else if (prefix === 'not_involved') {
+    notInvolvedPageSize = val;
+    notInvolvedPage = 0;
+  } else if (prefix === 'hints') {
+    hintsPageSize = val;
+    hintsPage = 0;
+  } else if (prefix === 'uninspected') {
+    uninspectedPageSize = val;
+    uninspectedPage = 0;
+  } else {
+    itemsPageSize = val;
+    itemsPage = 0;
+  }
+  renderItemsTable();
+  renderFailures();
+  renderHints();
+  renderSecurityDetail();
+  renderNotInvolvedDetail();
+  renderUninspected();
+}
+
+function detailPageSizeChange(encodedKey, val) {
+  var key = decodeURIComponent(encodedKey);
+  detailState[key] = { page: 0, pageSize: Number(val) };
+  renderItemsTable();
+}
+
+function toggleDetail(key) {
+  if (openItemIds[key]) {
+    delete openItemIds[key];
+    delete detailState[key];
+  } else {
+    openItemIds[key] = true;
+    detailState[key] = { page: 0, pageSize: 10 };
+  }
+  renderItemsTable();
+}
+
+function onFilterChange() {
+  itemsFilterName = document.getElementById('filter_name').value;
+  itemsFilterRisk = document.getElementById('filter_risk').value;
+  itemsFilterSource = document.getElementById('filter_source').value;
+  itemsFilterService = document.getElementById('filter_service').value;
+  itemsPage = 0;
+  renderItemsTable();
+}
+
+/* ================= 提示项明细 ================= */
+function renderHints() {
+  var container = document.getElementById('table_hints');
+  var oaCats = data.oa_categories || {};
+  var hints = (oaCats.hint || data.hints || []);
+  if (!hints.length) {
+    container.innerHTML = '<div class="empty-hint">无提示项记录</div>';
+    return;
+  }
+  var totalPages = Math.max(1, Math.ceil(hints.length / hintsPageSize));
+  if (hintsPage >= totalPages) { hintsPage = totalPages - 1; }
+  var start = hintsPage * hintsPageSize;
+  var pageRows = hints.slice(start, start + hintsPageSize);
+  var html = '<table><thead><tr><th>巡检项名称</th><th>风险检查维度</th><th>来源</th></tr></thead><tbody>';
+  pageRows.forEach(function(h) {
+    html += '<tr><td>' + esc(h.check_item_name || '') + '</td><td>' + esc(h.dimension_cn || h.dimension || '-') + '</td><td>' + sourceBadge(h.source) + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  html += paginationHtml('hints', hints.length, totalPages);
+  container.innerHTML = html;
+}
+
+/* ================= 非风险项概览 ================= */
+function renderNonRisk() {
+  var container = document.getElementById('table_nonrisk');
+  var coverage = data.coverage || {};
+  var oa = coverage.oa_console || coverage.oa || {};
+  var config = coverage.config || {};
+  var secmaster = coverage.secmaster || {};
+  var failed = coverage.failed || {};
+  var hasData = Object.keys(coverage).length > 0;
+  if (!hasData) {
+    container.innerHTML = '<div class="empty-hint">无非风险记录</div>';
+    return;
+  }
+  var html = '<table><thead><tr><th>数据来源</th><th>状态构成（检查项级）</th><th>小计</th></tr></thead><tbody>';
+  html += '<tr><td>' + sourceBadge('OA') + '</td><td>风险项 ' + (oa.risk || 0) +
+          ' · 安全项 ' + (oa.security || 0) + ' · 不涉及 ' + (oa.not_involved || 0) +
+          ' · 提示项 ' + (oa.hint || 0) +
+          ' · 采集失败 ' + (oa.failed || 0) + '</td><td>' + ((oa.risk || 0) + (oa.security || 0) + (oa.not_involved || 0) + (oa.hint || 0) + (oa.failed || 0)) + '</td></tr>';
+  html += '<tr><td>' + sourceBadge('Config') + '</td><td>合规规则 ' + (config.compliant_rules || 0) +
+          ' · 不合规规则 ' + (config.non_compliant_rules || 0) +
+          ' · 规则总数 ' + (config.total_rules || 0) + '</td><td>' + (config.total_rules || 0) + '</td></tr>';
+  html += '<tr><td>' + sourceBadge('SecMaster') + '</td><td>合格基线 ' + (secmaster.qualified || 0) +
+          ' · 不合格基线 ' + (secmaster.risk || 0) +
+          ' · 待处理 ' + (secmaster.uninspected || 0) + '</td><td>' + ((secmaster.qualified || 0) + (secmaster.risk || 0) + (secmaster.uninspected || 0)) + '</td></tr>';
+  html += '</tbody></table>';
+  html += '<div class="sub-chart-title">采集失败项总数（检查项级去重）: ' + (failed.total || 0) + '，详见下方"采集失败项明细"区块。</div>';
+  container.innerHTML = html;
+}
+
+/* ================= OA 分类明细(安全项 / 不涉及) ================= */
+function renderOaCategoryTable(containerId, records, page, pageSize, pageNavPrefix) {
+  var container = document.getElementById(containerId);
+  if (!records.length) {
+    container.innerHTML = '<div class="empty-hint">无明细记录</div>';
+    return;
+  }
+  var totalPages = Math.max(1, Math.ceil(records.length / pageSize));
+  if (page >= totalPages) { page = totalPages - 1; }
+  var start = page * pageSize;
+  var pageRows = records.slice(start, start + pageSize);
+  var html = '<table><thead><tr><th>巡检项名称</th><th>风险检查维度</th><th>来源</th></tr></thead><tbody>';
+  pageRows.forEach(function(r) {
+    html += '<tr><td>' + esc(r.check_item_name || '') + '</td><td>' + esc(r.dimension_cn || r.dimension || '') + '</td><td>' + sourceBadge(r.source || 'OA') + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  html += paginationHtml(pageNavPrefix, records.length, totalPages);
+  container.innerHTML = html;
+}
+
+function renderSecurityDetail() {
+  var records = (data.oa_categories || {}).security || [];
+  renderOaCategoryTable('table_security', records, securityPage, securityPageSize, 'security');
+}
+
+function renderNotInvolvedDetail() {
+  var records = (data.oa_categories || {}).not_involved || [];
+  renderOaCategoryTable('table_not_involved', records, notInvolvedPage, notInvolvedPageSize, 'not_involved');
+}
+
+/* ================= 待处理项明细 ================= */
+function renderUninspected() {
+  var container = document.getElementById('table_uninspected');
+  var uninspected = data.uninspected || [];
+  if (!uninspected.length) {
+    container.innerHTML = '<div class="empty-hint">无待处理项记录</div>';
+    return;
+  }
+  var totalPages = Math.max(1, Math.ceil(uninspected.length / uninspectedPageSize));
+  if (uninspectedPage >= totalPages) { uninspectedPage = totalPages - 1; }
+  var start = uninspectedPage * uninspectedPageSize;
+  var pageRows = uninspected.slice(start, start + uninspectedPageSize);
+  var html = '<table><thead><tr><th>巡检项名称</th><th>风险检查维度</th><th>来源</th></tr></thead><tbody>';
+  pageRows.forEach(function(r) {
+    html += '<tr><td>' + esc(r.check_item_name || '') + '</td><td>' + esc(r.dimension || '-') + '</td><td>' + sourceBadge(r.display_source || r.source) + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  html += paginationHtml('uninspected', uninspected.length, totalPages);
+  container.innerHTML = html;
+}
+
+/* ================= 采集失败项明细 ================= */
+function renderFailures() {
+  var container = document.getElementById('table_failures');
+  var failures = data.failures || [];
+  if (!failures.length) {
+    container.innerHTML = '<div class="empty-hint">无采集失败记录</div>';
+    return;
+  }
+  var totalPages = Math.max(1, Math.ceil(failures.length / failuresPageSize));
+  if (failuresPage >= totalPages) { failuresPage = totalPages - 1; }
+  var start = failuresPage * failuresPageSize;
+  var pageRows = failures.slice(start, start + failuresPageSize);
+  var html = '<table><thead><tr><th>巡检项名称</th><th>来源</th><th>错误信息</th></tr></thead><tbody>';
+  pageRows.forEach(function(r) {
+    var err = r.error || '';
+    var preview = err.length > 160 ? err.slice(0, 160) + '...' : err;
+    html += '<tr><td>' + esc(r.check_item_name || '') + '</td><td>' + sourceBadge(r.display_source || r.source) + '</td><td>' + esc(preview) + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  html += paginationHtml('failures', failures.length, totalPages);
+  container.innerHTML = html;
+}
+
+/* ================= ECharts 图表 ================= */
+function renderCharts() {
+  if (typeof echarts === 'undefined') {
+    document.querySelectorAll('.chart').forEach(function(c) {
+      c.innerHTML = '<div class="chart-unavailable">echarts.min.js 未加载,图表不可用</div>';
+    });
+    return;
+  }
+  var charts = data.charts || {};
+
+  // 风险状态饼图
+  if (charts.status && charts.status.length) {
+    var cs = echarts.init(document.getElementById('chart_status'));
+    cs.setOption({
+      tooltip: { trigger: 'item' },
+      legend: { orient: 'vertical', left: 'left', textStyle: { color: '#45515e', fontFamily: 'Microsoft YaHei' } },
+      color: ['#c0392b', '#e6a23c', '#237a3a', '#8e8e93', '#b8860b'],
+      series: [{ type: 'pie', radius: ['40%', '65%'], center: ['58%', '50%'],
+        itemStyle: { borderRadius: 4, borderColor: '#ffffff', borderWidth: 2 },
+        label: { color: '#45515e', fontFamily: 'Microsoft YaHei' },
+        data: charts.status }]
+    });
+  }
+  // 产品维度柱状(全部产品, 纵向: 横轴产品名/纵轴计数; 产品多时旋转标签)
+  if (charts.products && charts.products.length) {
+    var top = charts.products.slice(0);
+    var labelRotate = top.length > 12 ? 45 : 0;
+    var cp = echarts.init(document.getElementById('chart_products'));
+    cp.setOption({
+      tooltip: {},
+      color: ['#3b82f6'],
+      grid: { left: 48, right: 24, top: 24, bottom: 64 },
+      xAxis: { type: 'category', data: top.map(function(p) { return p.name; }),
+        axisLabel: { color: '#45515e', fontFamily: 'Microsoft YaHei', rotate: labelRotate, fontSize: 11 },
+        axisLine: { lineStyle: { color: '#e5e7eb' } } },
+      yAxis: { type: 'value', axisLabel: { color: '#8e8e93' }, splitLine: { lineStyle: { color: '#f2f3f5' } } },
+      series: [{ type: 'bar', data: top.map(function(p) { return p.value; }), itemStyle: { borderRadius: [4, 4, 0, 0] } }]
+    });
+  }
+  // 风险检查维度分布柱状图(纵向: 横轴维度名/纵轴计数)
+  if (charts.dimensions && charts.dimensions.length) {
+    var cd = echarts.init(document.getElementById('chart_dimensions'));
+    cd.setOption({
+      tooltip: {},
+      color: ['#7c3aed'],
+      grid: { left: 48, right: 24, top: 24, bottom: 64 },
+      xAxis: { type: 'category', data: charts.dimensions.map(function(d) { return d.name; }),
+        axisLabel: { color: '#45515e', fontFamily: 'Microsoft YaHei', rotate: 45, fontSize: 11 },
+        axisLine: { lineStyle: { color: '#e5e7eb' } } },
+      yAxis: { type: 'value', axisLabel: { color: '#8e8e93' }, splitLine: { lineStyle: { color: '#f2f3f5' } } },
+      series: [{ type: 'bar', data: charts.dimensions.map(function(d) { return d.value; }), itemStyle: { borderRadius: [4, 4, 0, 0] } }]
+    });
+  } else {
+    document.getElementById('chart_dimensions').innerHTML = '<div class="chart-unavailable">无风险维度分布数据</div>';
+  }
+  // 数据来源饼图
+  if (charts.sources && charts.sources.length) {
+    var cs2 = echarts.init(document.getElementById('chart_sources'));
+    cs2.setOption({
+      tooltip: { trigger: 'item' },
+      legend: { orient: 'vertical', left: 'left', textStyle: { color: '#45515e', fontFamily: 'Microsoft YaHei' } },
+      color: ['#1456f0', '#10b981', '#7c3aed'],
+      series: [{ type: 'pie', radius: ['40%', '65%'], center: ['58%', '50%'],
+        itemStyle: { borderRadius: 4, borderColor: '#ffffff', borderWidth: 2 },
+        label: { color: '#45515e', fontFamily: 'Microsoft YaHei' },
+        data: charts.sources }]
+    });
+  }
+  // Config 每日合规趋势(资源/规则两个子图)
+  var trend = charts.trend || [];
+  if (trend.length) {
+    var dates = trend.map(function(t) { return t.date; });
+    // 资源子图
+    var ct1 = echarts.init(document.getElementById('chart_trend1'));
+    ct1.setOption({
+      tooltip: { trigger: 'axis' },
+      legend: { data: ['资源总数', '不合规资源数', '资源合规率'], textStyle: { color: '#45515e', fontFamily: 'Microsoft YaHei' }, top: 0 },
+      color: ['#1456f0', '#ef4444', '#10b981'],
+      grid: { left: 48, right: 48, top: 28, bottom: 40 },
+      xAxis: { type: 'category', data: dates,
+        axisLabel: { color: '#45515e', fontFamily: 'Microsoft YaHei', rotate: 45, fontSize: 10 },
+        axisLine: { lineStyle: { color: '#e5e7eb' } } },
+      yAxis: [
+        { type: 'value', name: '资源数', nameTextStyle: { color: '#8e8e93', fontSize: 10 }, axisLabel: { color: '#8e8e93', fontSize: 10 }, splitLine: { lineStyle: { color: '#f2f3f5' } } },
+        { type: 'value', name: '合规率%', nameTextStyle: { color: '#8e8e93', fontSize: 10 }, axisLabel: { color: '#8e8e93', fontSize: 10 }, splitLine: { show: false }, min: 0, max: 100 }
+      ],
+      series: [
+        { name: '资源总数', type: 'line', smooth: true, data: trend.map(function(t) { return t.total_resource; }), lineStyle: { width: 2 } },
+        { name: '不合规资源数', type: 'line', smooth: true, data: trend.map(function(t) { return t.non_compliant_resource; }), lineStyle: { width: 2 } },
+        { name: '资源合规率', type: 'line', smooth: true, yAxisIndex: 1, data: trend.map(function(t) { return t.rate; }), lineStyle: { width: 2, type: 'dashed' } }
+      ]
+    });
+    // 规则子图
+    var ct2 = echarts.init(document.getElementById('chart_trend2'));
+    ct2.setOption({
+      tooltip: { trigger: 'axis' },
+      legend: { data: ['规则总数', '不合规规则数', '规则合规率'], textStyle: { color: '#45515e', fontFamily: 'Microsoft YaHei' }, top: 0 },
+      color: ['#3b82f6', '#f59e0b', '#10b981'],
+      grid: { left: 48, right: 48, top: 28, bottom: 40 },
+      xAxis: { type: 'category', data: dates,
+        axisLabel: { color: '#45515e', fontFamily: 'Microsoft YaHei', rotate: 45, fontSize: 10 },
+        axisLine: { lineStyle: { color: '#e5e7eb' } } },
+      yAxis: [
+        { type: 'value', name: '规则数', nameTextStyle: { color: '#8e8e93', fontSize: 10 }, axisLabel: { color: '#8e8e93', fontSize: 10 }, splitLine: { lineStyle: { color: '#f2f3f5' } } },
+        { type: 'value', name: '合规率%', nameTextStyle: { color: '#8e8e93', fontSize: 10 }, axisLabel: { color: '#8e8e93', fontSize: 10 }, splitLine: { show: false }, min: 0, max: 100 }
+      ],
+      series: [
+        { name: '规则总数', type: 'line', smooth: true, data: trend.map(function(t) { return t.total_policy; }), lineStyle: { width: 2 } },
+        { name: '不合规规则数', type: 'line', smooth: true, data: trend.map(function(t) { return t.non_compliant_policy; }), lineStyle: { width: 2 } },
+        { name: '规则合规率', type: 'line', smooth: true, yAxisIndex: 1,
+          data: trend.map(function(t) { return t.total_policy ? Math.round(100 * (t.total_policy - t.non_compliant_policy) / t.total_policy * 10) / 10 : null; }),
+          lineStyle: { width: 2, type: 'dashed' } }
+      ]
+    });
+  } else {
+    ['chart_trend1', 'chart_trend2'].forEach(function(id) {
+      document.getElementById(id).innerHTML = '<div class="chart-unavailable">无配置审计每日合规趋势数据</div>';
+    });
+  }
+}
+
+/* ================= 初始化 ================= */
+fillServiceFilter();
+fillSourceFilter();
+document.getElementById('table_items').addEventListener('click', function(event) {
+  var pageBtn = event.target.closest('.page-btn[data-detail-key]');
+  if (pageBtn) {
+    detailPageNav(pageBtn.getAttribute('data-detail-key'), Number(pageBtn.getAttribute('data-page')));
+    return;
+  }
+  var link = event.target.closest('.item-name-link');
+  if (!link) { return; }
+  var key = decodeURIComponent(link.getAttribute('data-key'));
+  toggleDetail(key);
+});
+document.getElementById('table_items').addEventListener('change', function(event) {
+  var sizeSel = event.target.closest('.page-size[data-detail-key]');
+  if (sizeSel) {
+    detailPageSizeChange(sizeSel.getAttribute('data-detail-key'), sizeSel.value);
+  }
+});
+document.addEventListener('click', function(event) {
+  var pageBtn = event.target.closest('.page-btn[data-prefix]');
+  if (pageBtn) { pageNav(pageBtn.getAttribute('data-prefix'), Number(pageBtn.getAttribute('data-page'))); }
+});
+document.addEventListener('change', function(event) {
+  var sizeSel = event.target.closest('.page-size[data-prefix]');
+  if (sizeSel) { changePageSize(sizeSel.getAttribute('data-prefix'), sizeSel.value); }
+});
+renderItemsTable();
+renderHints();
+renderNonRisk();
+renderSecurityDetail();
+renderNotInvolvedDetail();
+renderUninspected();
+renderFailures();
+renderCharts();
+</script>
+</body>
+</html>

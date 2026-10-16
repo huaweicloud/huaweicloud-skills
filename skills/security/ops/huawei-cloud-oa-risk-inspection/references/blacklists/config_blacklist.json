@@ -1,0 +1,52 @@
+[
+  {
+    "name": "MRS集群开启kerberos认证",
+    "match_key": "policy_assignment_name",
+    "reason": "与OA巡检项重复，以OA为准"
+  },
+  {
+    "name": "ECS实例配置密钥对",
+    "match_key": "policy_assignment_name",
+    "reason": "与OA巡检项重复，以OA为准"
+  },
+  {
+    "name": "DCS Redis实例高可用",
+    "match_key": "policy_assignment_name",
+    "reason": "与OA巡检项重复，以OA为准"
+  },
+  {
+    "name": "RDS实例开启备份",
+    "match_key": "policy_assignment_name",
+    "reason": "与OA巡检项重复，以OA为准"
+  },
+  {
+    "name": "RDS实例不具有弹性公网IP",
+    "match_key": "policy_assignment_name",
+    "reason": "与OA巡检项重复，以OA为准"
+  },
+  {
+    "name": "CSS集群启用安全模式",
+    "match_key": "policy_assignment_name",
+    "reason": "与OA巡检项重复，以OA为准"
+  },
+  {
+    "name": "CSS集群启用快照",
+    "match_key": "policy_assignment_name",
+    "reason": "与OA巡检项重复，以OA为准"
+  },
+  {
+    "name": "DMS Kafka队列打开公网SSL加密访问",
+    "match_key": "policy_assignment_name",
+    "reason": "与OA巡检项重复，以OA为准"
+  },
+  {
+    "name": "DMS实例集群部署",
+    "match_key": "policy_assignment_name",
+    "reason": "与OA巡检项重复，以OA为准"
+  },
+  {
+    "name": "BMS实例不能公网访问",
+    "match_key": "policy_assignment_name",
+    "reason": "与OA巡检项重复，以OA为准"
+  }
+]
