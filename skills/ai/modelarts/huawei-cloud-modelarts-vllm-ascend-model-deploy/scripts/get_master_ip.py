@@ -50,11 +50,9 @@ def get_rank_table(global_rank_table_path=None):
 def get_master_ip():
     """从 rank table 的第一个 server_group 的第一个 server 取 master IP。"""
     try:
-        wait_and_get_completed_global_rank_table()
-        global_rank_table_path = os.getenv(GLOBAL_RANK_TABLE_ENV)
-        with open(global_rank_table_path, "r") as file:
-            buf = file.read()
-        rank_table = json.loads(buf)
+        rank_table = wait_and_get_completed_global_rank_table()
+        if rank_table is None:
+            return None
         master = rank_table["server_group_list"][0]["server_list"][0]
         return master["server_ip"]
     except Exception as e:
@@ -69,15 +67,13 @@ def get_dp_start_rank():
     未匹配时回退为 0(master 节点)。
     """
     try:
-        wait_and_get_completed_global_rank_table()
-        global_rank_table_path = os.getenv(GLOBAL_RANK_TABLE_ENV)
+        rank_table = wait_and_get_completed_global_rank_table()
+        if rank_table is None:
+            return 0
         pod_ip = os.getenv("POD_IP")
         if not pod_ip:
             print("read env POD_IP failed", file=sys.stderr)
             return 0
-        with open(global_rank_table_path, "r") as file:
-            buf = file.read()
-        rank_table = json.loads(buf)
         rank = 0
         for group in rank_table.get("server_group_list", []):
             for server in group.get("server_list", []):
@@ -107,11 +103,9 @@ def get_dp_size():
     导致跨节点通信失败,因此由 rank table 动态推导。
     """
     try:
-        wait_and_get_completed_global_rank_table()
-        global_rank_table_path = os.getenv(GLOBAL_RANK_TABLE_ENV)
-        with open(global_rank_table_path, "r") as file:
-            buf = file.read()
-        rank_table = json.loads(buf)
+        rank_table = wait_and_get_completed_global_rank_table()
+        if rank_table is None:
+            return 1
         total = 0
         for group in rank_table.get("server_group_list", []):
             total += len(group.get("server_list", []))

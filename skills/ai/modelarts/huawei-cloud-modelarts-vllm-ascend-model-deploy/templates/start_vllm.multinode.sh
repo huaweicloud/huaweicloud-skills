@@ -117,6 +117,9 @@ export VLLM_ENGINE_READY_TIMEOUT_S="${VLLM_ENGINE_READY_TIMEOUT_S:-1200}"
 
 # ---------- 模型特有参数(bash 数组,JSON 用单引号包裹) ----------
 # 必须用数组: 字符串展开会丢失 JSON 引号导致 argparse 报错
+# ⚠️ 角色专属参数(仅 master 命令有、slave 命令没有,如 --api-server-count /
+#   --nnodes / --node-rank / --master-addr / --master-port)禁止加入此数组——
+#   所有节点共享此数组,slave 会与自动追加的 --headless 冲突导致 vllm 校验崩溃
 MODEL_ARGS=(
     # 在此追加模型文档要求的参数(见上方示例)
 )

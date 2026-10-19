@@ -3,7 +3,7 @@
 """校验 ModelArts 部署产物的可用性(硬性 FAIL)与性能(软性 WARN)。
 
 可用性: 文件齐全、LF 行尾、bash 语法、启动命令用 bash、权重自检、端口/探针一致、
-多节点/PD 适配、相对路径定位。
+多节点/PD 适配、相对路径定位、角色专属参数归属。
 性能: 对照 --doc-params 模型文档推荐参数与昇腾环境变量,提示缺失项。
 退出码: 0=全通过, 1=有 FAIL, 2=参数错误
 """
@@ -22,6 +22,10 @@ HARD_CHECKS = []
 # 性能检查(软性): (编号, 标题, 检查函数)
 SOFT_CHECKS = []
 
+# 自检结果计数(_fail/_warn 调用即计数,main() 每次运行前重置)
+FAIL_COUNT = 0
+WARN_COUNT = 0
+
 
 def _read(path):
     with open(path, "r", encoding="utf-8", errors="replace") as f:
@@ -29,10 +33,14 @@ def _read(path):
 
 
 def _fail(msg):
+    global FAIL_COUNT
+    FAIL_COUNT += 1
     print(f"  [FAIL] {msg}")
 
 
 def _warn(msg):
+    global WARN_COUNT
+    WARN_COUNT += 1
     print(f"  [WARN] {msg}")
 
 
@@ -267,6 +275,53 @@ def c12_tp_size_match(ctx):
     _pass(f"TP_SIZE 默认值={default_val}" + (f"(与文档推荐 TP={tp} 一致)" if tp else ""))
 
 
+def c13_role_specific_args(ctx):
+    """1.13 角色专属参数归属校验(仅 master 命令有、slave 命令没有的参数,
+    禁止放入所有节点共享的 MODEL_ARGS 数组)。
+
+    根因: 多节点/PD 共置场景下各节点运行同一脚本,slave 节点由模板自动追加
+    --headless;若共享的 MODEL_ARGS 数组混入 master 专属参数(如
+    --api-server-count 1),slave 同时获得两者,vllm 参数校验直接拒绝
+    (ValueError: --api-server-count=1 cannot be used with --headless),
+    slave 在参数解析阶段崩溃,部署失败。
+
+    黑名单: --api-server-count、--nnodes、--node-rank、--master-addr、
+    --master-port。--headless 由模板 SLAVE_OPTS 自动处理,不在检查范围。
+    """
+    deploy_form = ctx["deploy_form"]
+    if deploy_form not in ("multinode", "pd_colocate"):
+        _pass("非多节点/PD 共置形式,跳过角色专属参数归属校验")
+        return
+    start = os.path.join(ctx["artifact_dir"], "start_vllm.sh")
+    if not os.path.isfile(start):
+        _fail("start_vllm.sh 不存在,无法校验 MODEL_ARGS")
+        return
+    content = _read(start)
+    m = re.search(r'MODEL_ARGS=\((.*?)\)', content, re.S)
+    if not m:
+        _fail("start_vllm.sh 未找到 MODEL_ARGS=(...) 数组定义")
+        return
+    # 数组内容按行拆分,忽略注释行
+    body_lines = [ln.strip() for ln in m.group(1).splitlines()
+                  if ln.strip() and not ln.strip().startswith("#")]
+    body_text = " ".join(body_lines)
+    blacklist = ["--api-server-count", "--nnodes", "--node-rank",
+                 "--master-addr", "--master-port"]
+    found = [b for b in blacklist if re.search(rf'{re.escape(b)}(\s|=|$)', body_text)]
+    if found:
+        return _fail(
+            f"MODEL_ARGS 数组包含角色专属参数: {', '.join(found)}。"
+            f"角色专属参数(仅 master 命令有)禁止放入所有节点共享的 MODEL_ARGS "
+            f"数组——slave 节点会同时获得该参数与自动追加的 --headless,"
+            f"vllm 参数校验拒绝(如 --api-server-count=1 cannot be used with "
+            f"--headless),slave 在参数解析阶段崩溃,部署失败。"
+            f"多节点场景 master 默认即 API server(--api-server-count 默认 1),"
+            f"无需显式设置,请从 MODEL_ARGS 移除。"
+        )
+    _pass("MODEL_ARGS 未包含角色专属参数(--api-server-count/--nnodes/"
+          "--node-rank/--master-addr/--master-port)")
+
+
 # ---------- 性能最优检查(软性) ----------
 
 def s01_doc_params_soft(ctx):
@@ -354,6 +409,7 @@ def register():
         ("H10", "1.10 相对路径定位", c10_relative_path),
         ("H11", "1.11 模型文档必备参数", c11_doc_params_hard),
         ("H12", "1.12 TP_SIZE 固定值与文档一致", c12_tp_size_match),
+        ("H13", "1.13 角色专属参数归属校验", c13_role_specific_args),
     ]
     SOFT_CHECKS = [
         ("S01", "2.1 模型文档性能参数齐全度", s01_doc_params_soft),
@@ -401,32 +457,31 @@ def main():
     }
 
     register()
+    global FAIL_COUNT, WARN_COUNT
+    FAIL_COUNT = 0
+    WARN_COUNT = 0
     print(f"=== 部署产物自检: {args.artifact_dir} (部署形式: {args.deploy_form}) ===")
     print(f"--- 可用性检查(硬性,FAIL 不得上传) ---")
-    fail_count = 0
     for code, title, fn in HARD_CHECKS:
         print(f"{code} {title}")
         try:
             fn(ctx)
         except Exception as e:
             _fail(f"检查异常: {e}")
-            fail_count += 1
     print(f"--- 性能最优检查(软性,WARN 提示不阻断) ---")
-    warn_count = 0
     for code, title, fn in SOFT_CHECKS:
         print(f"{code} {title}")
         try:
             fn(ctx)
         except Exception as e:
             _warn(f"检查异常: {e}")
-            warn_count += 1
 
     print("=== 自检结果 ===")
-    if fail_count:
-        print(f"FAIL: {fail_count} 项硬性检查未通过,禁止上传 OBS(按 references/artifact-check.md 修复后重跑)")
+    if FAIL_COUNT:
+        print(f"FAIL: {FAIL_COUNT} 项硬性检查未通过,禁止上传 OBS(按 references/artifact-check.md 修复后重跑)")
         return 1
-    if warn_count:
-        print(f"WARN: {warn_count} 项软性检查提示(不阻断上传,按需优化)")
+    if WARN_COUNT:
+        print(f"WARN: {WARN_COUNT} 项软性检查提示(不阻断上传,按需优化)")
     print("PASS: 全部硬性检查通过,可上传 OBS")
     return 0
 

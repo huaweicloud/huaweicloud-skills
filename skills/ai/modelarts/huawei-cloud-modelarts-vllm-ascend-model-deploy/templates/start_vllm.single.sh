@@ -64,8 +64,7 @@ if [ -n "${EXTRA_ARGS:-}" ]; then
 fi
 
 # ---------- 启动 vllm-ascend OpenAI 兼容服务 ----------
-exec python -m vllm.entrypoints.openai.api_server \
-    --model "${MODEL_PATH}" \
+exec vllm serve "${MODEL_PATH}" \
     --served-model-name "${MODEL_NAME}" \
     --tensor-parallel-size "${TP_SIZE}" \
     --max-model-len "${MAX_MODEL_LEN}" \
