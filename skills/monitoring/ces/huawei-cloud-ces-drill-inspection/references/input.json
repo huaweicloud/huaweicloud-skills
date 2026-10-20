@@ -1,0 +1,56 @@
+{
+  "drill_name": "AZ-Power-Outage-Drill-Steady-State-Inspection",
+  "phases": [
+    {
+      "key": "baseline",
+      "name": "Pre-fault Baseline",
+      "start": "2026-10-14 09:30:00",
+      "end": "2026-10-14 10:00:00"
+    },
+    {
+      "key": "fault",
+      "name": "During AZ Power Outage",
+      "start": "2026-10-14 10:00:00",
+      "end": "2026-10-14 10:30:00"
+    },
+    {
+      "key": "recovery",
+      "name": "Post-Recovery Inspection",
+      "start": "2026-10-14 10:30:00",
+      "end": "2026-10-14 11:00:00"
+    }
+  ],
+  "inspect_phase": "recovery",
+  "targets": [
+    {
+      "service": "ecs",
+      "region": "your-region",
+      "instance_ids": [],
+      "metrics": [
+        "ECS CPU使用率",
+        "ECS入方向带宽",
+        "ECS出方向带宽"
+      ]
+    },
+    {
+      "service": "rds",
+      "region": "your-region",
+      "instance_ids": [],
+      "metrics": [
+        "RDS CPU使用率",
+        "RDS内存使用率"
+      ]
+    },
+    {
+      "service": "redis",
+      "region": "your-region",
+      "instance_ids": [],
+      "metrics": [
+        "DCS 最大CPU使用率",
+        "DCS 内存使用率",
+        "DCS 活跃的客户端数量",
+        "DCS 每秒并发操作数"
+      ]
+    }
+  ]
+}
