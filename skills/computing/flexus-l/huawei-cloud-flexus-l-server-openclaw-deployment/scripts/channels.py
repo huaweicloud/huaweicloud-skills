@@ -112,6 +112,25 @@ def do_install_channel(args):
         print("  - secret: Bot secret/APP secret/Client secret (required)")
         channel_list = prompt_for_input("Channel configuration JSON (optional, press Enter to skip)", required=False)
     
+    def _validate_channel_list(parsed):
+        """
+        Validate channel list against the expected schema (defense in depth)
+
+        Args:
+            parsed: Parsed JSON array
+
+        Raises:
+            SystemExit: If the structure or field types do not match expectations
+        """
+        if not isinstance(parsed, list):
+            raise SystemExit("Invalid channel list: must be a JSON array")
+        for index, channel in enumerate(parsed):
+            if not isinstance(channel, dict):
+                raise SystemExit(f"Invalid channel list: channel[{index}] must be a JSON object")
+            for key in ("channel", "id", "secret"):
+                if key in channel and not isinstance(channel[key], str):
+                    raise SystemExit(f"Invalid channel list: channel[{index}].'{key}' must be a string")
+
     def normalize_json_string(input_str):
         """
         Automatically convert non-standard JSON (no quotes/single quotes) to standard double-quoted JSON
@@ -134,6 +153,7 @@ def do_install_channel(args):
         try:
             # 如果已经是标准JSON，直接格式化返回
             parsed = json.loads(raw_str)
+            _validate_channel_list(parsed)
             return json.dumps(parsed, ensure_ascii=False)
         except json.JSONDecodeError:
             # 修复非标准JSON：自动添加双引号
@@ -143,6 +163,7 @@ def do_install_channel(args):
             # 验证修复后的结果
             try:
                 parsed = json.loads(processed)
+                _validate_channel_list(parsed)
                 return json.dumps(parsed, ensure_ascii=False)
             except json.JSONDecodeError as e:
                 print(f"\n[ERROR] Channel list JSON format invalid: {e}")

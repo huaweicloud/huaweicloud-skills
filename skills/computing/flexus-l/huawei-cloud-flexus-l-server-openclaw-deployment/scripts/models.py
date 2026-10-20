@@ -107,6 +107,26 @@ def do_install_maas(args):
         print('  {"provider":"huawei","api_key":"your_api_key","model_ids":["model1","model2"]}')
         model_params = prompt_for_input("Model parameters JSON (optional, press Enter to skip)", required=False)
     
+    def _validate_model_params(parsed):
+        """
+        Validate model parameters against the expected schema (defense in depth)
+
+        Args:
+            parsed: Parsed JSON object
+
+        Raises:
+            SystemExit: If the structure or field types do not match expectations
+        """
+        if not isinstance(parsed, dict):
+            raise SystemExit("Invalid model parameters: must be a JSON object")
+        for key in ("provider", "api_key"):
+            if key in parsed and not isinstance(parsed[key], str):
+                raise SystemExit(f"Invalid model parameters: '{key}' must be a string")
+        if "model_ids" in parsed:
+            model_ids = parsed["model_ids"]
+            if not isinstance(model_ids, list) or not all(isinstance(item, str) for item in model_ids):
+                raise SystemExit("Invalid model parameters: 'model_ids' must be an array of strings")
+
     def normalize_json_string(input_str):
         """
         Convert non-standard JSON string (no quotes/single quotes) to standard double-quoted JSON format
@@ -128,6 +148,7 @@ def do_install_maas(args):
         
         try:
             parsed = json.loads(raw_str)
+            _validate_model_params(parsed)
             return json.dumps(parsed, ensure_ascii=False)
         except json.JSONDecodeError:
             processed = re.sub(r'([{,])\s*([a-zA-Z0-9_]+)\s*:', r'\1"\2":', raw_str)
@@ -136,6 +157,7 @@ def do_install_maas(args):
             
             try:
                 parsed = json.loads(processed)
+                _validate_model_params(parsed)
                 return json.dumps(parsed, ensure_ascii=False)
             except json.JSONDecodeError as e:
                 print(f"\n[WARNING] Model parameters JSON format cannot be auto-fixed: {e}")

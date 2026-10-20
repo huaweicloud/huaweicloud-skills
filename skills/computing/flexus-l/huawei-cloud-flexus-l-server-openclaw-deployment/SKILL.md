@@ -299,6 +299,12 @@ scripts/
 ```
 
 
+## Reference Documents
+
+- [IAM Permission Policy](references/iam-policies.md): Huawei Cloud IAM permissions required for Flexus L instance creation and COC operations
+- [Verification Method](references/verification-method.md): Phased verification steps and troubleshooting for deployment, model and channel installation
+
+
 ## Parameter Confirmation
 
 ### Deployment Parameters

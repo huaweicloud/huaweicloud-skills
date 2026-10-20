@@ -10,6 +10,7 @@ Contains:
 4. Channel installation functionality
 """
 
+import base64
 import json
 import os
 import requests
@@ -845,6 +846,23 @@ def coc_query_execution(execute_uuid: str, ak: str = None, sk: str = None, secur
         return _error("UNKNOWN_ERROR", error_msg)
 
 
+def _b64_encode_param(value: str) -> str:
+    """
+    Base64-encode a parameter so it can be embedded into a shell context safely.
+
+    The base64 alphabet (A-Za-z0-9+/=) contains no shell metacharacters, so the
+    encoded value can never break out of the surrounding quoting. The script
+    decodes it at runtime and passes the original value to the target script.
+
+    Args:
+        value: Raw parameter string (e.g. model params JSON)
+
+    Returns:
+        str: Base64 (ASCII) representation of the value
+    """
+    return base64.b64encode((value or "").encode("utf-8")).decode("ascii")
+
+
 SCRIPT_TEMPLATES = {
     "install_maas": {
         "name": "OpenClaw-MaaS-Model-Installation",
@@ -852,7 +870,7 @@ SCRIPT_TEMPLATES = {
         "description": "Install MaaS models on OpenClaw instance",
         "risk_level": "MEDIUM",
         "content": '''#!/bin/bash
-curl -sSL https://documentation-samples.obs.cn-north-4.myhuaweicloud.com/solution-as-code-publicbucket/solution-as-code-moudle/deploying-clawdbot-agents/userdata/multi_model.sh | bash -s '${modelParams}'
+curl -sSL https://documentation-samples.obs.cn-north-4.myhuaweicloud.com/solution-as-code-publicbucket/solution-as-code-moudle/deploying-clawdbot-agents/userdata/multi_model.sh | bash -s "$(printf '%s' '${modelParamsB64}' | base64 -d)"
 
 if [ -d "/home/openclaw" ]; then
   export PNPM_HOME="/home/openclaw/.local/share/pnpm"
@@ -876,7 +894,7 @@ fi'''
         "description": "Install channels on OpenClaw instance (WeChat Work/Feishu/DingTalk/QQ)",
         "risk_level": "MEDIUM",
         "content": '''#!/bin/bash
-curl -sSL https://documentation-samples.obs.cn-north-4.myhuaweicloud.com/solution-as-code-publicbucket/solution-as-code-moudle/deploying-clawdbot-agents/userdata/multi_channel.sh | bash -s '${channelList}'
+curl -sSL https://documentation-samples.obs.cn-north-4.myhuaweicloud.com/solution-as-code-publicbucket/solution-as-code-moudle/deploying-clawdbot-agents/userdata/multi_channel.sh | bash -s "$(printf '%s' '${channelListB64}' | base64 -d)"
 
 if [ -d "/home/openclaw" ]; then
   export PNPM_HOME="/home/openclaw/.local/share/pnpm"
@@ -939,7 +957,7 @@ def install_maas_models_remote(
     import time
     script_info = SCRIPT_TEMPLATES["install_maas"]
     
-    content = script_info["content"].replace("${modelParams}", model_params)
+    content = script_info["content"].replace("${modelParamsB64}", _b64_encode_param(model_params))
     
     create_result = coc_create_script(
         name=f"{script_info['name']}-{int(time.time())}",
@@ -1040,7 +1058,7 @@ def install_channel_remote(
     
     script_info = SCRIPT_TEMPLATES["install_channel"]
     
-    content = script_info["content"].replace("${channelList}", channel_list)
+    content = script_info["content"].replace("${channelListB64}", _b64_encode_param(channel_list))
     
     create_result = coc_create_script(
         name=f"{script_info['name']}-{int(time.time())}",
@@ -1095,13 +1113,16 @@ def install_maas_models_local(model_params=""):
     try:
         print("Starting model installation...")
         
-        install_command = f"curl -sSL https://documentation-samples.obs.cn-north-4.myhuaweicloud.com/solution-as-code-publicbucket/solution-as-code-moudle/deploying-clawdbot-agents/userdata/multi_model.sh | bash -s {model_params}"
+        model_params_b64 = _b64_encode_param(model_params)
+        # Security: 下面这条命令的注入安全性完全依赖 _b64_encode_param 产出的 base64
+        # （字母表 A-Za-z0-9+/= 不含 shell 元字符）。请勿改回直接插入 model_params 原文。
+        install_command = f"curl -sSL https://documentation-samples.obs.cn-north-4.myhuaweicloud.com/solution-as-code-publicbucket/solution-as-code-moudle/deploying-clawdbot-agents/userdata/multi_model.sh | bash -s \"$(printf '%s' '{model_params_b64}' | base64 -d)\""
         
-        print(f"Executing command: {install_command}")
+        # install_command 内含可逆的 base64 载荷（含 api_key），禁止打印原文，仅打印脱敏提示
+        print("Executing model installation command (payload with credentials redacted)")
         
         result = subprocess.run(
-            install_command,
-            shell=True,
+            ["bash", "-c", install_command],
             capture_output=True,
             text=True
         )
@@ -1181,13 +1202,16 @@ def install_channel_local(channel_list=""):
     try:
         print("Starting channel installation...")
         
-        install_command = f"curl -sSL https://documentation-samples.obs.cn-north-4.myhuaweicloud.com/solution-as-code-publicbucket/solution-as-code-moudle/deploying-clawdbot-agents/userdata/multi_channel.sh | bash -s {channel_list}"
+        channel_list_b64 = _b64_encode_param(channel_list)
+        # Security: 下面这条命令的注入安全性完全依赖 _b64_encode_param 产出的 base64
+        # （字母表 A-Za-z0-9+/= 不含 shell 元字符）。请勿改回直接插入 channel_list 原文。
+        install_command = f"curl -sSL https://documentation-samples.obs.cn-north-4.myhuaweicloud.com/solution-as-code-publicbucket/solution-as-code-moudle/deploying-clawdbot-agents/userdata/multi_channel.sh | bash -s \"$(printf '%s' '{channel_list_b64}' | base64 -d)\""
         
-        print(f"Executing command: {install_command}")
+        # install_command 内含可逆的 base64 载荷（含 channel secret），禁止打印原文，仅打印脱敏提示
+        print("Executing channel installation command (payload with credentials redacted)")
         
         result = subprocess.run(
-            install_command,
-            shell=True,
+            ["bash", "-c", install_command],
             capture_output=True,
             text=True
         )
