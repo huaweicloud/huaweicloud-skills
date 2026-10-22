@@ -89,21 +89,27 @@ python create_function.py create \
 
 ## Functional Testing
 
+> **Note**: Replace `PROJECT_ID` in the URNs below with your actual project ID
+> (same value as `HUAWEI_PROJECT_ID`). The URN uses the real FunctionGraph
+> prefix `urn:fss:` and includes the `default` package and `latest` version,
+> matching the format returned by the `create` command.
+
 ### Test Method 1: Synchronous Invocation
 
 ```bash
 # Invoke function synchronously (default)
 cd scripts
 python create_function.py invoke \
-  --function-urn urn:fss:cn-north-4:PROJECT_ID:function:default:my-function \
+  --function-urn urn:fss:cn-north-4:PROJECT_ID:function:default:my-function:latest \
   --body '{"test": "data", "source": "verification"}'
 ```
 
 Expected output:
+
 ```json
 {
   "status": "success",
-  "function_urn": "urn:fss:cn-north-4:PROJECT_ID:function:default:my-function",
+  "function_urn": "urn:fss:cn-north-4:PROJECT_ID:function:default:my-function:latest",
   "invocation_type": "sync",
   "result": {
     "output": "..."
@@ -118,7 +124,7 @@ Expected output:
 ```bash
 # Invoke function asynchronously
 python create_function.py invoke \
-  --function-urn urn:fss:cn-north-4:PROJECT_ID:function:default:my-function \
+  --function-urn urn:fss:cn-north-4:PROJECT_ID:function:default:my-function:latest \
   --body '{"async": true}' \
   --invocation-type async
 ```
@@ -128,7 +134,7 @@ python create_function.py invoke \
 ```bash
 # Invoke and return last 4KB of log
 python create_function.py invoke \
-  --function-urn urn:fss:cn-north-4:PROJECT_ID:function:default:my-function \
+  --function-urn urn:fss:cn-north-4:PROJECT_ID:function:default:my-function:latest \
   --body '{"test": "logging"}' \
   --log-type tail
 ```

@@ -129,21 +129,28 @@ python create_function.py create \
 
 ### Invoke a Function
 
+> **Note**: The function URN uses the real FunctionGraph URN prefix `urn:fss:`.
+> Replace `PROJECT_ID` in the examples below with your actual project ID
+> (the same value as the `HUAWEI_PROJECT_ID` environment variable). The
+> function package is `default` and the version is `latest` (or a specific
+> version/alias). You can copy the URN returned by the `create` command and
+> append `:latest` for invocation.
+
 ```bash
 # Synchronous invocation (default)
 python create_function.py invoke \
-  --function-urn urn:fg:cn-north-4:PROJECT_ID:function:my_function:latest \
+  --function-urn urn:fss:cn-north-4:PROJECT_ID:function:default:my_function:latest \
   --body '{"key1":"value1","source":"test"}'
 
 # Asynchronous invocation
 python create_function.py invoke \
-  --function-urn urn:fg:cn-north-4:PROJECT_ID:function:my_function:latest \
+  --function-urn urn:fss:cn-north-4:PROJECT_ID:function:default:my_function:latest \
   --body '{"async":true}' \
   --invocation-type async
 
 # Invoke with log tail (returns last 4KB of log)
 python create_function.py invoke \
-  --function-urn urn:fg:cn-north-4:PROJECT_ID:function:my_function:latest \
+  --function-urn urn:fss:cn-north-4:PROJECT_ID:function:default:my_function:latest \
   --body '{"test":"data"}' \
   --log-type tail
 ```
@@ -161,9 +168,9 @@ python create_function.py invoke \
 | `--memory` | Optional | Memory size in MB | 128 |
 | `--timeout` | Optional | Timeout in seconds | 3 |
 | `--description` | Optional | Function description | - |
-| `--vpc-id` | Optional | VPC ID for VPC configuration | - |
-| `--subnet-id` | Optional | Subnet ID for VPC configuration | - |
-| `--security-group-id` | Optional | Security group ID for VPC configuration | - |
+| `--vpc-id` | Optional | VPC ID for VPC configuration (must be set together with `--subnet-id` and `--security-group-id`) | - |
+| `--subnet-id` | Optional | Subnet ID for VPC configuration (must be set together with `--vpc-id` and `--security-group-id`) | - |
+| `--security-group-id` | Optional | Security group ID for VPC configuration (must be set together with `--vpc-id` and `--subnet-id`) | - |
 | `--env-vars` | Optional | Environment variables as JSON string | - |
 
 ### Invoke Parameters

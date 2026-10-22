@@ -24,6 +24,7 @@ try:
     from huaweicloudsdkfunctiongraph.v2.model.func_vpc import FuncVpc
     from huaweicloudsdkfunctiongraph.v2.model.create_function_request_body import CreateFunctionRequestBody
     from huaweicloudsdkfunctiongraph.v2.model.invoke_function_request import InvokeFunctionRequest
+    from huaweicloudsdkfunctiongraph.v2.model.async_invoke_function_request import AsyncInvokeFunctionRequest
 except ImportError as e:
     print(f"Please install SDK first: pip install huaweicloudsdkfunctiongraph (Error: {e})")
     sys.exit(1)
@@ -82,6 +83,20 @@ class FunctionGraphManager:
         timeout = params.get('timeout', 3)
         if timeout < 1 or timeout > 900:
             return False, "Timeout must be between 1-900 seconds"
+
+        # VPC configuration: all three parameters must be provided together
+        vpc_params = [
+            ('vpc_id', params.get('vpc_id')),
+            ('subnet_id', params.get('subnet_id')),
+            ('security_group_id', params.get('security_group_id')),
+        ]
+        provided_vpc = [name for name, value in vpc_params if value]
+        if provided_vpc and len(provided_vpc) != len(vpc_params):
+            missing = [name for name, _ in vpc_params if name not in provided_vpc]
+            return False, (
+                "VPC configuration requires all three parameters: "
+                f"--vpc-id, --subnet-id, --security-group-id (missing: {', '.join(missing)})"
+            )
 
         return True, ""
 
@@ -165,7 +180,7 @@ class FunctionGraphManager:
                         invocation_type: str = 'sync', log_type: str = None) -> Dict[str, Any]:
         """
         Invoke a FunctionGraph function.
-        
+
         Args:
             function_urn: The URN of the function to invoke
             body: Event data to pass to the function (JSON dict)
@@ -173,39 +188,64 @@ class FunctionGraphManager:
             log_type: Optional log type header ('tail' to return last 4KB log)
         """
         try:
+            logger.info(f"Invoking function: {function_urn} ({invocation_type})")
+
+            if invocation_type == 'async':
+                # Async invocation requires AsyncInvokeFunctionRequest; the response only
+                # carries the request id (the function output is not returned).
+                request = AsyncInvokeFunctionRequest(
+                    function_urn=function_urn,
+                    body=body or {},
+                )
+                response = self.client.async_invoke_function(request)
+
+                result = {
+                    'status': 'success',
+                    'function_urn': function_urn,
+                    'invocation_type': invocation_type,
+                    'message': 'Function invoked successfully',
+                }
+                # AsyncInvokeFunctionResponse exposes request_id (from X-Cff-Request-Id
+                # response header / body) when returned by the service.
+                request_id = getattr(response, 'request_id', None) or getattr(response, 'x_cff_request_id', None)
+                if request_id:
+                    result['request_id'] = request_id
+
+                logger.info(f"Function invoked successfully: {function_urn}")
+                return result
+
+            # Sync invocation. X-CFF-Request-Version: v1 requests the structured body
+            # carrying request_id/result/log; X-Cff-Log-Type: tail appends the last 4KB log.
             request = InvokeFunctionRequest(
                 function_urn=function_urn,
                 body=body or {},
             )
-
-            # Set headers based on invocation type
-            if invocation_type == 'async':
-                request.x_cff_request_version = 'v1'
-                request.x_cff_log_type = log_type
-            else:
+            request.x_cff_request_version = 'v1'
+            if log_type:
                 request.x_cff_log_type = log_type
 
-            logger.info(f"Invoking function: {function_urn} ({invocation_type})")
+            response = self.client.invoke_function(request)
 
-            if invocation_type == 'async':
-                response = self.client.async_invoke_function(request)
-            else:
-                response = self.client.invoke_function(request)
-
-            result = {
+            result: Dict[str, Any] = {
                 'status': 'success',
                 'function_urn': function_urn,
                 'invocation_type': invocation_type,
                 'message': 'Function invoked successfully',
             }
 
-            # The response body contains the invocation result
-            if hasattr(response, 'body') and response.body:
-                result['result'] = response.body
+            # Structured response body: response.result holds the function output,
+            # response.request_id / x_cff_request_id hold the invocation request id.
+            output = getattr(response, 'result', None)
+            if output is not None:
+                result['result'] = {'output': output}
 
-            # For sync invocations, include request_id if available
-            if hasattr(response, 'request_id'):
-                result['request_id'] = response.request_id
+            exec_log = getattr(response, 'log', None)
+            if exec_log is not None:
+                result['log'] = exec_log
+
+            request_id = getattr(response, 'request_id', None) or getattr(response, 'x_cff_request_id', None)
+            if request_id:
+                result['request_id'] = request_id
 
             logger.info(f"Function invoked successfully: {function_urn}")
             return result

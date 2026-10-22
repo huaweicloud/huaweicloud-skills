@@ -181,18 +181,23 @@ python create_function.py create \
 
 - Function exists (created via TC-001 or equivalent)
 
+> **Note**: Replace `PROJECT_ID` in the URN below with your actual project ID
+> (same value as `HUAWEI_PROJECT_ID`). The URN uses the real FunctionGraph
+> prefix `urn:fss:` and includes the `default` package and `latest` version,
+> matching the format returned by the `create` command.
+
 **Test Steps:**
 
 ```bash
 # Synchronous invocation
 cd scripts
 python create_function.py invoke \
-  --function-urn urn:fg:cn-north-4:PROJECT_ID:function:test-function-001:latest \
+  --function-urn urn:fss:cn-north-4:PROJECT_ID:function:default:test-function-001:latest \
   --body '{"key1": "value1", "key2": 100, "source": "acceptance-test"}'
 
 # Asynchronous invocation
 python create_function.py invoke \
-  --function-urn urn:fg:cn-north-4:PROJECT_ID:function:test-function-001:latest \
+  --function-urn urn:fss:cn-north-4:PROJECT_ID:function:default:test-function-001:latest \
   --body '{"async": true}' \
   --invocation-type async
 ```
@@ -231,6 +236,7 @@ python create_function.py invoke \
 | Invalid handler | --handler=invalid | Handler not found |
 | Missing code | No --code | Error: argument --code is required |
 | Invalid env vars | --env-vars='not-json' | JSON decode error |
+| Partial VPC params | Only --vpc-id (no subnet/security group) | Error: VPC configuration requires all three parameters |
 | Invoke non-existent URN | Wrong --function-urn | Function not found |
 
 **Pass Criteria:**

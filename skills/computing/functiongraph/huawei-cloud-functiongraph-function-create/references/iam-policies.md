@@ -59,7 +59,7 @@ This document defines the required IAM (Identity and Access Management) policies
         "functiongraph:function:update"
       ],
       "Resource": [
-        "urn:fg:*:*:function:*"
+        "urn:fss:*:*:function:*"
       ]
     }
   ]
@@ -81,7 +81,7 @@ This document defines the required IAM (Identity and Access Management) policies
         "functiongraph:function:invoke"
       ],
       "Resource": [
-        "urn:fg:cn-north-4:*:function:my-function-*"
+        "urn:fss:cn-north-4:*:function:my-function-*"
       ],
       "Condition": {
         "StringEquals": {
