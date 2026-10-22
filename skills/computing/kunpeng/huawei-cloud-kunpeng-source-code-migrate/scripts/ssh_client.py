@@ -104,30 +104,52 @@ def _read_provision_env_file():
 def _resolve_env_var(name, default=None):
     """Resolve an env var from multiple sources.
 
-    Priority:
-      1. Current process environment (Linux/macOS export, Windows $env:)
-         — used in "existing server" workflow where user sets vars manually
-      2. Provision env file (/tmp/kunpeng_server_env.sh or %TEMP% equivalent)
-         — used in "new server" workflow where provision_kunpeng_server.sh
-           generated a random password and saved it to the env file
-      3. Windows user-level registry (winreg) — fallback for GUI-set vars
-      4. Default value
+    Priority depends on the workflow:
+    - **New server workflow** (provision_kunpeng_server.sh just ran):
+      The env file contains MIGRATE_SSH_PASS and is the authoritative source.
+      We prioritize the env file over stale process env vars that may point
+      to a previous server.
+    - **Existing server workflow** (user set env vars manually):
+      No env file with MIGRATE_SSH_PASS exists, so we use process env vars.
+
+    Resolution order:
+      1. If env file exists AND contains MIGRATE_SSH_PASS (new server workflow):
+         a. env file value
+         b. Windows registry
+         c. default
+      2. Otherwise (existing server workflow):
+         a. Current process env var
+         b. env file value (may have host/port without password)
+         c. Windows registry
+         d. default
     """
-    # 1. Current process environment
-    val = os.environ.get(name)
-    if val:
-        return val
-    # 2. Provision env file (new server workflow)
     provision_env = _read_provision_env_file()
-    val = provision_env.get(name)
-    if val:
-        return val
-    # 3. Windows user-level registry
-    val = _read_user_env_var(name)
-    if val:
-        return val
-    # 4. Default
-    return default
+    is_new_server_workflow = 'MIGRATE_SSH_PASS' in provision_env
+
+    if is_new_server_workflow:
+        # New server workflow — env file is authoritative
+        val = provision_env.get(name)
+        if val:
+            return val
+        # Fall back to Windows registry for non-sensitive vars (host/port/user)
+        val = _read_user_env_var(name)
+        if val:
+            return val
+        return default
+    else:
+        # Existing server workflow — process env vars take priority
+        val = os.environ.get(name)
+        if val:
+            return val
+        # Then env file (may have partial info)
+        val = provision_env.get(name)
+        if val:
+            return val
+        # Then Windows registry
+        val = _read_user_env_var(name)
+        if val:
+            return val
+        return default
 
 
 def _get_connection():
@@ -329,11 +351,21 @@ def _default_report_local_dir():
     """Return the default local report save path based on OS.
 
     Windows: C:\\devkit-report
-    Linux/macOS: /home/devkit-report
+    Linux/macOS: ~/devkit-report (resolved via os.path.expanduser)
+
+    Note: Previously this was hardcoded to /home/devkit-report, which failed
+    for non-root users (no permission to create /home/<dir>) and for systems
+    where HOME is not under /home (e.g. macOS /Users, or custom layouts).
+    Using the current user's home directory ensures the path is always
+    writable by the current process.
     """
     if sys.platform == 'win32':
         return r'C:\devkit-report'
-    return '/home/devkit-report'
+    home = os.path.expanduser('~')
+    # Fall back to /tmp if HOME is unset/empty (rare but possible).
+    if not home or home == '~':
+        home = '/tmp'
+    return os.path.join(home, 'devkit-report')
 
 
 # ============================================================================
@@ -371,17 +403,60 @@ def cmd_test():
 
 
 def cmd_exec(command, timeout=120):
-    """Execute command on remote server via paramiko."""
+    """Execute command on remote server via paramiko.
+
+    We set TERM=dumb in the remote environment so that tools which check
+    isatty()/TERM (like DevKit) run their full analysis, without requesting
+    a PTY (get_pty=True). Using get_pty=True causes the remote sshd to use
+    the user's login shell (which may be 'sh' on some OSes like EulerOS),
+    breaking bash-only features like 'set -euo pipefail'. By NOT using a
+    PTY but setting TERM=dumb, we get the best of both worlds:
+    - The command runs via the SSH exec channel (no shell wrapper issues)
+    - DevKit sees TERM=dumb and runs full analysis
+    - bash scripts with '#!/bin/bash' shebang work correctly
+
+    See ISSUE-003 in the evaluation report for the DevKit TTY issue.
+    """
     client, err = _paramiko_connect(timeout=30)
     if client is None:
         print(f"[ERROR] {err}", file=sys.stderr)
         sys.exit(3)
 
     try:
-        stdin, stdout, stderr = client.exec_command(command, timeout=timeout)
-        exit_status = stdout.channel.recv_exit_status()
-        out = stdout.read().decode('utf-8', errors='replace')
-        err_out = stderr.read().decode('utf-8', errors='replace')
+        # Set TERM=dumb so DevKit runs full analysis (avoids the
+        # "Do Not Need Migrated" false negative for x86 code).
+        # Do NOT use get_pty=True — it forces the remote login shell
+        # (sh on EulerOS), which breaks bash scripts.
+        transport = client.get_transport()
+        channel = transport.open_session()
+        channel.set_environment_variable('TERM', 'dumb')
+        channel.exec_command(command)
+        channel.settimeout(timeout)
+
+        # Read output
+        out_bytes = b''
+        while True:
+            try:
+                data = channel.recv(4096)
+                if not data:
+                    break
+                out_bytes += data
+            except Exception:
+                break
+
+        err_bytes = b''
+        while True:
+            try:
+                data = channel.recv_stderr(4096)
+                if not data:
+                    break
+                err_bytes += data
+            except Exception:
+                break
+
+        exit_status = channel.recv_exit_status()
+        out = out_bytes.decode('utf-8', errors='replace')
+        err_out = err_bytes.decode('utf-8', errors='replace')
     except Exception as e:
         print(f"[ERROR] Command execution failed: {e}", file=sys.stderr)
         sys.exit(-1)
@@ -396,8 +471,47 @@ def cmd_exec(command, timeout=120):
     sys.exit(exit_status)
 
 
+def _normalize_line_endings_for_upload(local_path):
+    """Read a file and return bytes with CRLF converted to LF.
+
+    This is critical for shell scripts (.sh) uploaded from Windows to Linux.
+    With CRLF, the shebang line becomes '#!/bin/bash\\r' which the OS cannot
+    find, causing 'cannot execute: required file not found' errors.
+
+    Only converts files that look like text (shell scripts, .py, .conf, etc.).
+    Binary files (tar.gz, .zip, etc.) are returned unchanged.
+
+    Returns:
+        bytes: The file content with LF line endings, or None if the file
+               should be uploaded as-is (binary).
+    """
+    # Only convert text-like files
+    text_extensions = ('.sh', '.py', '.pl', '.conf', '.cfg', '.txt', '.md',
+                       '.json', '.yaml', '.yml', '.xml', '.html', '.css',
+                       '.js', '.ts', '.c', '.h', '.cpp', '.hpp', '.java')
+    lower = local_path.lower()
+    if not lower.endswith(text_extensions):
+        return None  # Binary file, upload as-is
+
+    try:
+        with open(local_path, 'rb') as f:
+            content = f.read()
+        # Check if file has CRLF
+        if b'\r\n' in content:
+            content = content.replace(b'\r\n', b'\n')
+            print(f"[INFO] Converted CRLF -> LF for upload: {local_path}")
+        return content
+    except Exception:
+        return None  # On any error, fall back to normal put
+
+
 def cmd_put(local_path, remote_path):
-    """Upload a local file to remote server via paramiko SFTP."""
+    """Upload a local file to remote server via paramiko SFTP.
+
+    For text files (.sh, .py, etc.), CRLF line endings are automatically
+    converted to LF to avoid 'cannot execute: required file not found'
+    errors on Linux when the file is a shell script with a shebang.
+    """
     # Detect and attempt to recover MSYS2 path conversion
     remote_path = _check_remote_path(remote_path, 'put')
 
@@ -412,7 +526,15 @@ def cmd_put(local_path, remote_path):
 
     try:
         sftp = client.open_sftp()
-        sftp.put(local_path, remote_path)
+        # Try CRLF -> LF conversion for text files
+        normalized = _normalize_line_endings_for_upload(local_path)
+        if normalized is not None:
+            # Upload converted content via SFTP write
+            with sftp.file(remote_path, 'wb') as remote_file:
+                remote_file.write(normalized)
+        else:
+            # Binary file or conversion not needed — use standard put
+            sftp.put(local_path, remote_path)
         sftp.close()
         print(f"[OK] Uploaded: {local_path} -> {remote_path}")
         sys.exit(0)

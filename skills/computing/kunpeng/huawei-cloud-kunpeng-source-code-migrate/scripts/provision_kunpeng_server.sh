@@ -9,11 +9,13 @@ set -euo pipefail
 #           --cli-access-key=<AK> --cli-secret-key=<SK>)
 #
 # Usage:
-#   bash provision_kunpeng_server.sh [-c|--confirm] [-s <CIDR>|--ssh-source <CIDR>]
+#   bash provision_kunpeng_server.sh [-c|--confirm] [-s <CIDR>|--ssh-source <CIDR>] [-f <FLAVOR>|--flavor <FLAVOR>]
 #
 # Options (getopts-parsed, both short and long forms accepted):
 #   -c, --confirm           Skip confirmation prompt
 #   -s, --ssh-source <CIDR>  SSH source CIDR for security group rule
+#   -f, --flavor <FLAVOR>    ECS flavor (default: kc1.2xlarge.2). Override if the
+#                           default flavor is out of stock in the selected AZ.
 #   -h, --help              Show this help message
 #
 # Verified Working Configuration (tested 2026-08-18 on Windows Server 2019):
@@ -72,7 +74,10 @@ fi
 # ---- Configuration ----
 REGION="cn-southwest-2"
 AZ="cn-southwest-2a"
-FLAVOR="kc1.2xlarge.2"
+# FLAVOR can be overridden via --flavor option or FLAVOR env var.
+# Default is kc1.2xlarge.2 (Kunpeng ARM64 8C16G). Flavor inventory is dynamic —
+# if the default is out of stock, pass --flavor <other> (e.g. kc1.large.2).
+FLAVOR="${FLAVOR:-kc1.2xlarge.2}"
 IMAGE_NAME="Huawei Cloud EulerOS 2.0 Standard 64 bit for ARM"
 DISK_SIZE=40
 DISK_TYPE="GPSSD"
@@ -108,6 +113,8 @@ while [[ $# -gt 0 ]]; do
         --confirm)    _args+=("-c") ; shift ;;
         --ssh-source) _args+=("-s") ; shift ;;
         --ssh-source=*) _args+=("-s" "${1#*=}") ; shift ;;
+        --flavor)     _args+=("-f") ; shift ;;
+        --flavor=*)   _args+=("-f" "${1#*=}") ; shift ;;
         --help)       _args+=("-h") ; shift ;;
         --)           _args+=("--") ; shift ; while [[ $# -gt 0 ]]; do _args+=("$1"); shift; done ;;
         *)            _args+=("$1") ; shift ;;
@@ -117,10 +124,11 @@ set -- "${_args[@]}"
 
 OPTIND=1
 OPTARG=""
-while getopts ":cs:h" opt; do
+while getopts ":cs:f:h" opt; do
     case "$opt" in
         c)  CONFIRM=true ;;
         s)  SSH_SOURCE="$OPTARG" ;;
+        f)  FLAVOR="$OPTARG" ;;
         h)  _show_help ;;
         \?) echo "Unknown option: -$OPTARG" >&2; exit 1 ;;
         :)  echo "Option -$OPTARG requires an argument." >&2; exit 1 ;;
@@ -170,7 +178,67 @@ print(val if val is not None else '')
 " 2>/dev/null || echo ""
 }
 
-# ---- Pre-flight checks ----
+# ---- Cross-platform temp dir (must match ssh_client.py logic) ----
+# ssh_client.py uses: os.environ.get('TEMP') or os.environ.get('TMP') or '/tmp'
+# We must use the SAME logic so the env file path is consistent across the two
+# scripts. On Windows + MSYS2, /tmp maps to a session-specific subdir that
+# differs from %TEMP%, causing ssh_client.py to not find the env file.
+get_temp_dir() {
+    "${PY_CMD}" -c "
+import os, sys
+t = os.environ.get('TEMP') or os.environ.get('TMP') or '/tmp'
+# Normalize: on Windows MSYS2, /tmp may differ from %TEMP%. Prefer %TEMP%.
+if sys.platform == 'win32':
+    t = os.environ.get('TEMP') or os.environ.get('TMP') or t
+print(t)
+"
+}
+TMP_DIR_FOR_ENV="$(get_temp_dir)"
+
+# ---- Resource tracking for cleanup on failure ----
+# These vars track created resource IDs so we can roll back on error.
+CREATED_VPC_ID=""
+CREATED_SUBNET_ID=""
+CREATED_SECGROUP_ID=""
+CREATED_EIP_ID=""
+CREATED_EIP_ADDRESS=""
+CREATED_SERVER_ID=""
+
+# ---- Cleanup on failure (rollback partially created resources) ----
+cleanup_on_failure() {
+    local rc=$?
+    if [ $rc -ne 0 ]; then
+        echo ""
+        log_warn "Provisioning failed (exit code $rc). Cleaning up partially created resources..."
+        # Delete in reverse order: ECS → EIP → SG → Subnet → VPC
+        if [ -n "${CREATED_SERVER_ID}" ]; then
+            log_warn "  Deleting ECS: ${CREATED_SERVER_ID}"
+            hcloud ECS DeleteServers --cli-region="${REGION}" --server_ids="${CREATED_SERVER_ID}" >/dev/null 2>&1 || true
+            sleep 3
+        fi
+        if [ -n "${CREATED_EIP_ID}" ]; then
+            log_warn "  Deleting EIP: ${CREATED_EIP_ID}"
+            hcloud EIP DeletePublicip --cli-region="${REGION}" --publicip_id="${CREATED_EIP_ID}" >/dev/null 2>&1 || true
+            sleep 2
+        fi
+        if [ -n "${CREATED_SECGROUP_ID}" ]; then
+            log_warn "  Deleting Security Group: ${CREATED_SECGROUP_ID}"
+            hcloud VPC DeleteSecurityGroup --cli-region="${REGION}" --security_group_id="${CREATED_SECGROUP_ID}" >/dev/null 2>&1 || true
+            sleep 2
+        fi
+        if [ -n "${CREATED_SUBNET_ID}" ] && [ -n "${CREATED_VPC_ID}" ]; then
+            log_warn "  Deleting Subnet: ${CREATED_SUBNET_ID}"
+            hcloud VPC DeleteSubnet --cli-region="${REGION}" --vpc_id="${CREATED_VPC_ID}" --subnet_id="${CREATED_SUBNET_ID}" >/dev/null 2>&1 || true
+            sleep 2
+        fi
+        if [ -n "${CREATED_VPC_ID}" ]; then
+            log_warn "  Deleting VPC: ${CREATED_VPC_ID}"
+            hcloud VPC DeleteVpc --cli-region="${REGION}" --vpc_id="${CREATED_VPC_ID}" >/dev/null 2>&1 || true
+        fi
+        log_warn "Cleanup complete. You can safely re-run provisioning with a different --flavor."
+    fi
+    exit $rc
+}
 preflight_check() {
     log_info "Pre-flight checks..."
 
@@ -238,6 +306,7 @@ create_vpc() {
         exit 1
     fi
     log_ok "VPC: ${VPC_ID}"
+    CREATED_VPC_ID="${VPC_ID}"
 
     # Wait for VPC active
     local attempt=0
@@ -275,6 +344,7 @@ create_subnet() {
         exit 1
     fi
     log_ok "Subnet: ${SUBNET_ID}"
+    CREATED_SUBNET_ID="${SUBNET_ID}"
 
     # Wait for subnet active
     local attempt=0
@@ -306,6 +376,7 @@ create_security_group() {
         exit 1
     fi
     log_ok "Security Group: ${SECGROUP_ID}"
+    CREATED_SECGROUP_ID="${SECGROUP_ID}"
 
     # Add SSH inbound rule (try v3 API first, then v2)
     log_info "Adding SSH rule (TCP 22 from ${SSH_SOURCE})..."
@@ -407,6 +478,8 @@ create_eip() {
         exit 1
     fi
     log_ok "EIP: ${EIP_ADDRESS}"
+    CREATED_EIP_ID="${EIP_ID}"
+    CREATED_EIP_ADDRESS="${EIP_ADDRESS}"
 }
 
 # ---- Create ECS Instance ----
@@ -557,6 +630,16 @@ print(json.dumps(body))
     if [ $rc -ne 0 ]; then
         log_error "Failed to create ECS."
         echo "${ecs_result}" | tail -5
+        # Detect flavor out-of-stock and provide actionable guidance.
+        if echo "${ecs_result}" | grep -qi "flavor\|stock\|inventory\|售罄\|库存\|资源不足\|flavorRef"; then
+            echo ""
+            log_warn "This may be a flavor inventory issue. The current flavor is: ${FLAVOR}"
+            log_warn "Flavor inventory is dynamic. Try a different flavor, e.g.:"
+            log_warn "  bash provision_kunpeng_server.sh --confirm --flavor kc1.large.2"
+            log_warn "  bash provision_kunpeng_server.sh --confirm --flavor kc1.xlarge.2"
+            log_warn "Or list available flavors with:"
+            log_warn "  hcloud ECS ListFlavors --cli-region=${REGION} --availability_zone=${AZ}"
+        fi
         server_password=""
         exit 1
     fi
@@ -567,6 +650,12 @@ print(json.dumps(body))
     if [ -z "${JOB_ID}" ]; then
         log_error "Failed to create ECS."
         echo "${ecs_result}" | tail -5
+        # Detect flavor out-of-stock in the JSON body as well.
+        if echo "${ecs_result}" | grep -qi "flavor\|stock\|inventory\|售罄\|库存\|资源不足\|flavorRef"; then
+            echo ""
+            log_warn "This may be a flavor inventory issue. The current flavor is: ${FLAVOR}"
+            log_warn "Try a different flavor: bash provision_kunpeng_server.sh --confirm --flavor kc1.large.2"
+        fi
         server_password=""
         exit 1
     fi
@@ -574,8 +663,9 @@ print(json.dumps(body))
 
     # Save the password to a secure temp variable for save_connection_info.
     # The password is written to the env file (chmod 600) later.
-    echo "${server_password}" > "${TMP_DIR:-/tmp}/.migrate_ecs_pass"
-    chmod 600 "${TMP_DIR:-/tmp}/.migrate_ecs_pass" 2>/dev/null || true
+    # Use TMP_DIR_FOR_ENV (cross-platform, matches ssh_client.py) instead of /tmp.
+    echo "${server_password}" > "${TMP_DIR_FOR_ENV}/.migrate_ecs_pass"
+    chmod 600 "${TMP_DIR_FOR_ENV}/.migrate_ecs_pass" 2>/dev/null || true
     server_password=""
 }
 
@@ -594,6 +684,7 @@ wait_for_ecs() {
                 SERVER_ID=$(json_value "${job_result}" "entities.sub_jobs.0.entities.server_id")
             fi
             log_ok "ECS created. Server ID: ${SERVER_ID}"
+            CREATED_SERVER_ID="${SERVER_ID}"
             return 0
         elif [ "${job_status}" = "FAIL" ]; then
             log_error "ECS creation failed."
@@ -612,8 +703,11 @@ wait_for_ecs() {
 # (as MIGRATE_SSH_PASS) to /tmp/kunpeng_server_env.sh (chmod 600).
 # The password is used by ssh_client.py for paramiko-based SSH connection.
 save_connection_info() {
-    local env_file="/tmp/kunpeng_server_env.sh"
-    local pass_file="${TMP_DIR:-/tmp}/.migrate_ecs_pass"
+    # Use cross-platform temp dir that matches ssh_client.py's _read_provision_env_file().
+    # On Windows + MSYS2, /tmp maps to a session-specific subdir, but ssh_client.py
+    # uses %TEMP% (os.environ.get('TEMP')). Using TMP_DIR_FOR_ENV ensures consistency.
+    local env_file="${TMP_DIR_FOR_ENV}/kunpeng_server_env.sh"
+    local pass_file="${TMP_DIR_FOR_ENV}/.migrate_ecs_pass"
 
     # Save connection info AND the password (for ssh_client.py paramiko mode).
     # The env file is chmod 600 — only readable by the current user.
@@ -677,6 +771,10 @@ main() {
     echo ""
     log_info "Kunpeng ECS Provisioning (Region: ${REGION})"
 
+    # Register cleanup trap — if any step fails, roll back partially created resources.
+    # This prevents orphaned VPC/Subnet/SG/EIP when e.g. flavor is out of stock.
+    trap cleanup_on_failure EXIT
+
     if [ "${CONFIRM}" != "true" ]; then
         echo "This will create: 1x ECS (Kunpeng 2C4G), 1x VPC+Subnet, 1x EIP, 1x Security Group"
         read -rp "Proceed? (yes/no): " confirm
@@ -693,6 +791,9 @@ main() {
     create_ecs
     wait_for_ecs
     save_connection_info
+
+    # Success — disable the cleanup trap
+    trap - EXIT
 }
 
 main "$@"

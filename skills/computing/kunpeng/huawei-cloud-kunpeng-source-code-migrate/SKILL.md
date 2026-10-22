@@ -15,16 +15,13 @@ Analyze the migrability of C/C++/ASM/Fortran/Go/Java/Python/Scala source code to
 
 This skill assesses source code migrability to the Kunpeng (ARM64) platform using Huawei DevKit CLI. It connects to a source server via SSH (or installs locally), installs DevKit, scans source code, and generates a migration assessment report. If the user has no remote server, it can automatically provision a Kunpeng ECS instance on Huawei Cloud (Guiyang Region 1) via hcloud CLI.
 
-**Architecture:** Local detection + remote execution + SFTP transfer. All SSH operations use the unified `scripts/ssh_client.py` (paramiko + password env var), cross-platform consistent. See the Architecture section below for the full tree.
+> **⚠️ Analysis depth varies by language (DevKit limitation):** C/C++/ASM = deep analysis; Fortran = shallow; Go/Java/Python/Scala = file-level stats only (architecture-dependent code like JNI/CGo/ctypes/unsafe will NOT be detected — manual review required). See [Supported Languages](#supported-languages) for details.
 
-**Applicable scenarios:**
-- Assess source code portability/migrability to Kunpeng ARM platform
-- Scan C/C++/ASM/Fortran/Go/Java/Python/Scala code for migration issues
-- Generate a Kunpeng migration assessment report for a software project
-- Check source code compatibility with ARM64/Kunpeng architecture
-- Provision a Kunpeng server on Huawei Cloud for migration assessment
+**Architecture:** Local detection + remote execution + SFTP transfer. All SSH operations use the unified `scripts/ssh_client.py` (paramiko + password env var), cross-platform consistent.
 
-**Report save path (fixed unless user explicitly requests otherwise):** Windows → `C:\devkit-report\`, Linux/macOS → `/home/devkit-report/`.
+**Applicable scenarios:** Assess source code portability to Kunpeng ARM; scan C/C++/ASM/Fortran/Go/Java/Python/Scala code; generate a migration report; check ARM64 compatibility; provision a Kunpeng server on Huawei Cloud.
+
+**Report save path:** Windows → `C:\devkit-report\`, Linux/macOS → `~/devkit-report/` (resolved from current user's home, NOT hardcoded `/home/`).
 
 ## Prerequisites
 
@@ -38,6 +35,8 @@ This skill assesses source code migrability to the Kunpeng (ARM64) platform usin
 | DevKit CLI | auto-installed by `install_devkit.sh` | Source code migration scan |
 
 **Authentication:**
+- **Root access required (default install path):** `install_devkit.sh` installs to `/usr/local` and creates a `/usr/local/bin/devkit` symlink, which requires root. Non-root users MUST use the `--no-sudo` flag (installs to `$HOME/.local/devkit`) and add DevKit to PATH manually: `export PATH=$HOME/.local/devkit:$PATH`. If system dependencies (python3, pip3, curl) are missing and `--no-sudo` is set, the script will error out — install them first or run as root.
+- **SSH user:** The default SSH user is `root` (see `KUNPENG_SERVER_USER`). Non-root SSH users are supported, but the remote install path and report download path will be under that user's home directory (see `--no-sudo` above).
 - **SSH credentials (existing server, Step 3c):** User must set env vars `KUNPENG_SERVER_HOST`, `KUNPENG_SERVER_PORT` (default 22), `KUNPENG_SERVER_USER` (default root), `MIGRATE_SSH_PASS` in their own terminal. AI must NEVER ask for or echo these values.
 - **Huawei Cloud AK/SK (provisioning path, Step 3d):** User must run `hcloud configure set --cli-region=cn-southwest-2 --cli-access-key=<your-ak> --cli-secret-key=<your-sk>` in their own terminal. AI must NEVER ask for AK/SK.
 
@@ -131,7 +130,23 @@ AI must confirm the following parameters with the user before execution.
 | ❌ Delete any cloud resources without explicit user confirmation | Resource deletion is irreversible and HIGH-RISK |
 | ❌ Execute any `hcloud ... Delete*` command autonomously | All delete operations require explicit user confirmation |
 
+### 🚫 Not Supported (Capability Boundary)
+
+The following operations are outside this skill's scope. If a user requests any of them, refuse and suggest the alternative.
+
+| Not Supported Operation | Reason | Alternative |
+|------------------------|--------|-------------|
+| ❌ Binary migration assessment (`.so`/`.dll`/`.exe`/`.o`/`.a`) | DevKit CLI only analyzes source code, not compiled binaries | Use Huawei Kunpeng binary migration tools separately |
+| ❌ Database migration assessment | DevKit CLI does not analyze database schemas/SQL portability | Use Huawei Cloud DRS (Data Replication Service) or UGO (Database and Application Migration) |
+| ❌ Performance tuning / optimization recommendations | This skill focuses on migration assessment only; the report contains fix suggestions, not performance analysis | Use DevKit performance analysis tools (separate from src-mig) |
+| ❌ Languages outside C/C++/ASM/Fortran/Go/Java/Python/Scala (e.g. Rust, C#, Ruby, Node.js) | DevKit CLI does not support these languages | Use architecture-specific compilers and manual review for Rust etc. |
+| ❌ DevKit GUI / desktop version installation | This skill only installs and uses the DevKit CLI version | Download DevKit GUI separately from Huawei Kunpeng community |
+| ❌ Container/Docker image migration assessment | DevKit CLI analyzes source code, not container images | Rebuild container images on Kunpeng ARM64 base images |
+| ❌ OS-level migration assessment (kernel, drivers, system libraries) | DevKit CLI focuses on application source code | Use Huawei Cloud migration tools for OS-level assessment |
+
 If a user requests a prohibited operation, refuse and inform: "Per security constraints, this skill does not allow [specific operation]. Please perform this operation manually if needed."
+
+If a user requests a not-supported operation, refuse and inform: "This skill does not support [specific operation]. [Reason]. Please use [alternative] instead."
 
 ## Architecture
 
@@ -147,7 +162,7 @@ Kunpeng Source Code Migration Assessment
 ├── ConnectServer     (SSH connect via paramiko + MIGRATE_SSH_PASS env var)
 ├── InstallDevKit     (Detect OS and install DevKit CLI tool)
 └── ScanSourceCode    (Scan source code → generate report → save to fixed local path)
-    └── ReportSave    (Windows: C:\devkit-report\ | Linux/macOS: /home/devkit-report/)
+    └── ReportSave    (Windows: C:\devkit-report\ | Linux/macOS: ~/devkit-report/)
 ```
 
 > **⚠️ Task 0 (DetectLocalOS + PrepareServer) MUST be executed first** — it determines the entire workflow path.
@@ -155,6 +170,8 @@ Kunpeng Source Code Migration Assessment
 ## SSH Connection Strategy
 
 All SSH operations use the unified `scripts/ssh_client.py` (paramiko + password from env var). No `ssh`/`scp` commands, no ControlMaster, no key injection, no Huawei Cloud region dependency. Works identically on Windows, Linux, and macOS.
+
+> **⚠️ SSH remote execution limitation:** DevKit's `src-mig` scan may differ between interactive and non-interactive SSH sessions. `ssh_client.py exec` requests a PTY (`get_pty=True`) to mitigate this. If scan results look suspicious (0 issues for code with known x86 dependencies), re-run locally via interactive SSH and compare. For critical migrations, validate by compiling on Kunpeng.
 
 **Environment variables (set by user in their own terminal; AI never sees values):**
 
@@ -165,72 +182,28 @@ All SSH operations use the unified `scripts/ssh_client.py` (paramiko + password 
 | `KUNPENG_SERVER_USER` | SSH username | `root` |
 | `MIGRATE_SSH_PASS` | SSH password (read by paramiko, never in argv, wiped after each connection) | (required) |
 
-**Setting env vars (cross-platform):**
+Set env vars: Linux/macOS `export KUNPENG_SERVER_HOST='<ip>'` etc.; Windows PS `$env:KUNPENG_SERVER_HOST='<ip>'` etc. See [references/scripts-guide.md](references/scripts-guide.md) for full setup.
 
-```bash
-# Linux / macOS (current session):
-export KUNPENG_SERVER_HOST='<your-server-ip>'
-export KUNPENG_SERVER_PORT='22'
-export KUNPENG_SERVER_USER='root'
-export MIGRATE_SSH_PASS='<your-password>'
-
-# Windows PowerShell (current session):
-$env:KUNPENG_SERVER_HOST='<your-server-ip>'
-$env:KUNPENG_SERVER_PORT='22'
-$env:KUNPENG_SERVER_USER='root'
-$env:MIGRATE_SSH_PASS='<your-password>'
-
-# Windows (persistent, GUI): Settings > Environment Variables > User > New
-# (requires IDE/terminal restart)
-```
-
-**Credential resolution priority** (first match wins):
-1. Current process env vars (`export` / `$env:`)
-2. `/tmp/kunpeng_server_env.sh` (Linux/macOS) or `%TEMP%/kunpeng_server_env.sh` (Windows)
-3. Windows user-level registry (`winreg`) — fallback for GUI-set vars
-4. Default value
+**Credential resolution priority** (first match wins): (1) current process env vars → (2) `/tmp/kunpeng_server_env.sh` or `%TEMP%/kunpeng_server_env.sh` → (3) Windows user-level registry (`winreg`) → (4) default.
 
 **`ssh_client.py` subcommands:**
 
 | Subcommand | Description |
 |------------|-------------|
 | `test` | Verify SSH connection (`echo SSH_OK && uname -a`) |
-| `exec "<cmd>" [timeout]` | Execute a shell command on the remote server |
+| `exec "<cmd>" [timeout]` | Execute a shell command on the remote server (uses `get_pty=True`) |
 | `put <local> <remote>` | Upload a single file via SFTP |
 | `put-dir <local_dir> <remote_dir>` | Upload a directory recursively via SFTP |
 | `get <remote> <local>` | Download a single file via SFTP |
 | `get-dir <remote_dir> <local_dir>` | Download a directory recursively via SFTP |
-| `get-report [remote_dir] [local_dir]` | Download DevKit report (filtered by `Code_Porting_*.{html,json,csv,txt}`). Defaults: remote=`/tmp/devkit-report`, local=`C:\devkit-report` (Win) or `/home/devkit-report` (Linux) |
+| `get-report [remote_dir] [local_dir]` | Download DevKit report (filtered by `Code_Porting_*.{html,json,csv,txt}`). Defaults: remote=`/tmp/devkit-report`, local=`C:\devkit-report` (Win) or `~/devkit-report` (Linux) |
 | `save-env` | Save connection info (host/port/user) to a temp env file (no password) |
 
 ### 📦 SFTP-First File Transfer (Critical for Windows + MSYS2)
 
-> **⚠️ On Windows + MSYS2/Git Bash, the shell converts Unix paths in command arguments to Windows paths before Python sees them** (e.g., `/tmp/foo` → `C:/Users/.../Temp/2/foo`). This cannot be fixed from within Python's `sys.argv`.
+> **⚠️ On Windows + MSYS2/Git Bash, the shell converts Unix paths to Windows paths before Python sees them** (e.g., `/tmp/foo` → `C:/Users/.../Temp/2/foo`). For file transfer, use paramiko SFTP API directly from Python, not `ssh_client.py` CLI subcommands. See [references/scripts-guide.md#sftp-first-file-transfer](references/scripts-guide.md#sftp-first-file-transfer) for the code example and [references/troubleshooting.md#7-msys2-path-conversion-error-windows-only](references/troubleshooting.md#7-msys2-path-conversion-error-windows-only).
 
-**Rule: For file transfer, always use paramiko SFTP API directly from Python, not `ssh_client.py` CLI subcommands.**
-
-```python
-import os, paramiko
-host = os.environ.get('KUNPENG_SERVER_HOST')
-port = int(os.environ.get('KUNPENG_SERVER_PORT', '22'))
-user = os.environ.get('KUNPENG_SERVER_USER', 'root')
-password = os.environ.get('MIGRATE_SSH_PASS')
-client = paramiko.SSHClient()
-client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect(host, port=port, username=user, password=password, timeout=30)
-sftp = client.open_sftp()
-sftp.put(r'C:\local\install_devkit.sh', '/tmp/install_devkit.sh')
-sftp.chmod('/tmp/install_devkit.sh', 0o755)
-sftp.close()
-client.close()
-```
-
-**AI agent workflow:**
-1. **File transfer** → paramiko SFTP API directly (see above)
-2. **Command execution** → `ssh_client.py exec "<cmd>"` (short commands only)
-3. **Script execution** → upload via SFTP, then `exec "bash /tmp/script.sh"`
-
-When `ssh_client.py put`/`get` detects a mangled Windows path, it exits with an error directing you to use the paramiko SFTP API directly. See [references/scripts-guide.md#sftp-first-file-transfer](references/scripts-guide.md#sftp-first-file-transfer) and [references/troubleshooting.md#7-msys2-path-conversion-error-windows-only](references/troubleshooting.md#7-msys2-path-conversion-error-windows-only).
+**AI agent workflow:** (1) File transfer → paramiko SFTP API directly; (2) Command execution → `ssh_client.py exec "<cmd>"`; (3) Script execution → upload via SFTP, then `exec "bash /tmp/script.sh"`.
 
 ## Built-in Scripts
 
@@ -247,16 +220,18 @@ When `ssh_client.py put`/`get` detects a mangled Windows path, it exits with an 
 
 ## Supported Languages
 
-| Language | File Extensions | Migration Concerns |
-|----------|----------------|-------------------|
-| C | `.c`, `.h` | Inline assembly, platform-specific headers, byte order, pointer size |
-| C++ | `.cpp`, `.cc`, `.cxx`, `.hpp` | Same as C, plus name mangling, ABI compatibility |
-| Assembly (ASM) | `.s`, `.S`, `.asm` | Architecture-specific instructions, registers, calling conventions |
-| Fortran | `.f`, `.f90`, `.f95`, `.f03` | Compiler intrinsics, MPI library compatibility |
-| Go | `.go` | CGO calls, assembly files, architecture-specific build tags |
-| Java | `.java` | JNI native libraries, architecture-specific dependencies |
-| Python | `.py` | C extensions (Cython, CFFI), native bindings |
-| Scala | `.scala` | JNI calls, native library dependencies |
+| Language | File Extensions | Analysis Depth | Migration Concerns |
+|----------|----------------|----------------|-------------------|
+| C | `.c`, `.h` | **Deep** | Inline assembly, platform-specific headers, byte order, pointer size |
+| C++ | `.cpp`, `.cc`, `.cxx`, `.hpp` | **Deep** | Same as C, plus name mangling, ABI compatibility |
+| Assembly (ASM) | `.s`, `.S`, `.asm` | **Deep** | Architecture-specific instructions, registers, calling conventions |
+| Fortran | `.f`, `.f90`, `.f95`, `.f03` | **Shallow** | Compiler intrinsics, MPI library compatibility. Only partial detection. |
+| Go | `.go` | **File-level stats** | CGO calls, assembly files, architecture-specific build tags NOT detected. Manual review required. |
+| Java | `.java` | **File-level stats** | JNI native libraries, architecture-specific dependencies NOT detected. Manual review required. |
+| Python | `.py` | **File-level stats** | C extensions (Cython, CFFI), native bindings NOT detected. Manual review required. |
+| Scala | `.scala` | **File-level stats** | JNI calls, native library dependencies NOT detected. Manual review required. |
+
+> **⚠️ For Go/Java/Python/Scala projects:** DevKit only performs file-level statistics, not deep code analysis. A "Do Not Need Migrated" result does NOT mean the code is architecture-safe. If your project uses JNI, CGo, ctypes, `unsafe`, `sun.misc.Unsafe`, native C extensions, or architecture-specific build tags, you MUST manually review those code paths. For reliable migration assessment of such code, consider converting the native/FFI parts to C/C++ and scanning them separately with DevKit.
 
 ---
 
@@ -304,6 +279,9 @@ Outputs `os_type`, `os_name`, `os_version`, `arch`, `local_install_supported` as
 **Step 3a: Local Install**
 
 1. Install DevKit: `bash <skill_dir>/scripts/install_devkit.sh --yes`
+   - **Root user (default):** Installs to `/usr/local/devkit`, creates `/usr/local/bin/devkit` symlink.
+   - **Non-root user:** Use `bash <skill_dir>/scripts/install_devkit.sh --yes --no-sudo` → installs to `$HOME/.local/devkit`. Then add to PATH: `export PATH=$HOME/.local/devkit:$PATH`. Requires system deps (python3, pip3, curl) already present; if missing, install them first or use `--skip-deps` after manual install.
+   - **`--skip-deps`:** Skip dependency installation (use when python3/pip3/curl are already installed).
 2. Ask user for local source code path
 3. Run DevKit scan locally (no SSH needed)
 4. Skip Task 1 — proceed directly to Task 3 with local paths
@@ -330,11 +308,18 @@ After verification succeeds, proceed to Task 1.
 
 > **⛔ CRITICAL: AI MUST use `provision_kunpeng_server.sh` to create ALL cloud resources. NEVER manually call hcloud APIs individually.**
 
+**Default ECS spec:**
+- Flavor: `kc1.2xlarge.2` (Kunpeng ARM64 8C16G). Flavor inventory is dynamic — if the default is out of stock, override via `--flavor` (e.g., `--flavor kc1.large.2` for 2C4G, `--flavor kc1.xlarge.2` for 4C8G). The script will detect flavor-related errors and suggest this option.
+- Image: Huawei Cloud EulerOS 2.0 Standard 64 bit for ARM
+- Disk: 40GB GPSSD
+- Region: cn-southwest-2 (Guiyang 1)
+
 1. Check hcloud CLI installation and authentication
 2. Confirm provisioning with user (present spec and estimated cost)
 3. Execute: `bash <skill_dir>/scripts/provision_kunpeng_server.sh --confirm`
    - Creates VPC → Subnet → Security Group + SSH rule → EIP → ECS
    - Generates random root password, saves to `/tmp/kunpeng_server_env.sh` as `MIGRATE_SSH_PASS` (chmod 600)
+   - To override flavor: `bash <skill_dir>/scripts/provision_kunpeng_server.sh --confirm --flavor kc1.large.2`
 4. Load env: `source /tmp/kunpeng_server_env.sh`
 5. Verify SSH: `python <skill_dir>/scripts/ssh_client.py test`
 6. Proceed to Task 1
@@ -369,9 +354,9 @@ Install DevKit CLI on the target machine using `scripts/install_devkit.sh`. The 
 | Agent OS | Local Report Save Path |
 |----------|----------------------|
 | Windows | `C:\devkit-report` |
-| Linux / macOS | `/home/devkit-report` |
+| Linux / macOS | `~/devkit-report` (current user's home) |
 
-The skill MUST create the directory if it does not exist. Report files (HTML, JSON, CSV) MUST be saved directly under `<save_path>/` (no project_name subdirectory). This path is fixed unless user explicitly requests a different location.
+The skill MUST create the directory if it does not exist. Report files (HTML, JSON, CSV) MUST be saved directly under `<save_path>/` (no project_name subdirectory). This path is fixed unless user explicitly requests a different location. On Linux/macOS the path is resolved via `os.path.expanduser('~')` so it works for any user (root → `/root/devkit-report`, other users → `/home/<user>/devkit-report`).
 
 **Downloading the report:**
 
@@ -393,49 +378,15 @@ python <skill_dir>/scripts/ssh_client.py get-report /tmp/devkit-report /home/dev
 
 The primary tool is **Kunpeng DevKit CLI** (`devkit` command).
 
-**Source migration command:**
-
 ```bash
 devkit porting src-mig -i <source_path> -o <output_path> -s '<language_list>' [options]
 ```
 
-**Required parameters:**
+**Required:** `-i` (source dir), `-o` (output dir, must exist), `-s` (languages, comma-separated: `c, c++, asm, fortran, go, java, python, scala`).
 
-| Parameter | Description | Example |
-|-----------|-------------|---------|
-| `-i` | Source code directory path | `/home/user/project` |
-| `-o` | Output directory for report (must exist) | `/tmp/devkit-report` |
-| `-s` | Source language(s), comma-separated | `'c, c++, asm'` |
+**Optional:** `-c` (build cmd, e.g. `'make all'`), `-b` (build tool: `make/cmake/automake/go/bazel/blade`), `-p` (compiler, e.g. `gcc9.3.0`), `-f` (Fortran compiler), `-t` (target OS, auto-detect), `-r` (report format: `all/json/html/csv`, default `all`), `-l` (log level 0-3), `-np` (concurrency), `--ignore`/`--ignore-path` (exclude rules/paths), `--kp-compatibility` (cross-gen check).
 
-**Optional parameters:**
-
-| Parameter | Description | Default | Example |
-|-----------|-------------|---------|---------|
-| `-c` | Build/compiling command | None | `'make all'` |
-| `-b` | Build tool | None | `make`, `cmake`, `automake`, `go`, `bazel`, `blade` |
-| `-p` | Compiler version | None | `gcc9.3.0` |
-| `-f` | Fortran compiler version | None | `gfortran9` |
-| `-t` | Target OS | Auto-detect | `openEuler22.03` |
-| `-r` | Report format | `all` | `all`, `json`, `html`, `csv` |
-| `-l` | Log level | `1` (INFO) | `0`(DEBUG), `1`(INFO), `2`(WARN), `3`(ERROR) |
-| `-np` | Concurrent processes | `1` | `4` |
-| `--ignore` | Ignore rules config file | Built-in | `/path/to/ignore_rules.json` |
-| `--ignore-path` | Source paths to ignore | None | `/path/to/exclude` |
-| `--kp-compatibility` | Kunpeng cross-generation compatibility check | Off | (flag) |
-
-**Language values (`-s`):** `c`, `c++`, `asm`, `fortran`, `go`, `java`, `python`, `scala` (lowercase, comma-separated)
-
-**Compiler versions (`-p`):** `gcc4.8.5`, `gcc7.3.0`, `gcc9.3.0`, `gcc10.3.0`, `gcc12.3.0`, `bisheng compiler3.0.0`, `bisheng compiler4.0.0`, `gcc for openeuler3.0.3`, etc.
-
-**Scan examples:**
-
-```bash
-# C/C++ project with make build:
-devkit porting src-mig -i /home/project -s 'c, c++, asm' -b make -c 'make all' -p gcc9.3.0 -o /tmp/report -r all
-
-# Java/Python project (interpreted, no build command):
-devkit porting src-mig -i /home/project -s 'java, python' -o /tmp/report -r all
-```
+**Compiler versions (`-p`):** `gcc4.8.5`, `gcc7.3.0`, `gcc9.3.0`, `gcc10.3.0`, `gcc12.3.0`, `bisheng compiler3.0.0/4.0.0`, `gcc for openeuler3.0.3`, etc.
 
 > **⚠️ The `devkit` binary must be run from its installation directory** (e.g., `cd /usr/local/devkit && ./devkit`), or the directory must be in PATH. The output directory (`-o`) must already exist.
 
@@ -467,27 +418,6 @@ devkit porting src-mig -i /home/project -s 'java, python' -o /tmp/report -r all
 
 ## Resource Cleanup Reminder
 
-> **⚠️ After the scan completes and the report is presented, AI MUST remind the user to clean up provisioned resources** (applies to Step 3d provisioning path only). Present as TEXT ONLY — never execute delete commands.
+> **⚠️ After the scan completes and the report is presented, AI MUST remind the user to clean up provisioned resources** (Step 3d only). Present as TEXT ONLY — never execute delete commands. Include a table of created resources (ECS, VPC, Subnet, EIP, Security Group) with their IDs, and remind: "Deletion is IRREVERSIBLE. AI will NOT execute these commands. Please run them manually."
 
-```
-### 🧹 Resource Cleanup Reminder
-
-The following resources were created during this assessment and incur ongoing charges:
-
-| Resource Type | Resource ID | Details |
-|---------------|-------------|---------|
-| ECS Instance  | <id>        | <IP>, <flavor> |
-| VPC           | <id>        | <name> |
-| Subnet        | <id>        | <name> |
-| EIP           | <id>        | <IP> |
-| Security Group| <id>        | <name> |
-
-To delete these resources, execute the following commands manually:
-
-  [delete commands here]
-
-⚠️ WARNING: Deletion is IRREVERSIBLE. Verify resource IDs before executing.
-⚠️ AI will NOT execute these commands. Please run them manually.
-```
-
-**For Step 3c (existing server) and Step 3a (local install):** No cleanup reminder needed — user provided their own server or installed DevKit locally.
+**For Step 3c (existing server) and Step 3a (local install):** No cleanup reminder needed.

@@ -36,7 +36,11 @@ DEVKIT_MIRROR_BASE="https://mirrors.huaweicloud.com/kunpeng/archive/DevKit/Packa
 DEFAULT_VERSION="26.1.RC1"
 INSTALL_PREFIX="/usr/local"
 INSTALL_DIR="${INSTALL_PREFIX}/devkit"
-TMP_DIR="/tmp/devkit-install"
+# TMP_DIR defaults to a user-writable location. /tmp may be a tmpfs with limited
+# space on some OSes (e.g. Huawei Cloud EulerOS 2.0: ~1.8GB tmpfs, but DevKit
+# package is ~946MB + ~3GB extracted). Default to $HOME to avoid "No space left
+# on device". Override via environment variable TMP_DIR if needed.
+TMP_DIR="${TMP_DIR:-${HOME}/devkit-install}"
 SKIP_DEPS=false
 NO_SUDO=false
 OFFLINE_FILE=""
@@ -67,7 +71,11 @@ parse_args() {
                 ;;
             --no-sudo)
                 NO_SUDO=true
-                INSTALL_DIR="$HOME/devkit"
+                # Sync INSTALL_PREFIX to a user-writable location so that
+                # symlink creation and install dir creation do not fail with
+                # Permission denied on /usr/local for non-root users.
+                INSTALL_PREFIX="$HOME/.local"
+                INSTALL_DIR="${INSTALL_PREFIX}/devkit"
                 ;;
             --skip-deps)
                 SKIP_DEPS=true
@@ -170,6 +178,29 @@ install_deps() {
     fi
 
     log_info "Step 3/6: Installing dependencies..."
+
+    # Check if all required dependencies are already installed; if so, skip.
+    # This avoids requiring sudo when deps are already present (common on
+    # managed images), which fixes non-root install on such systems.
+    _deps_present=true
+    for _dep in python3 pip3 curl; do
+        if ! command -v "$_dep" >/dev/null 2>&1; then
+            _deps_present=false
+            break
+        fi
+    done
+    if [ "$_deps_present" = true ]; then
+        log_ok "Dependencies already present (python3, pip3, curl). Skipping install."
+        return 0
+    fi
+
+    # If not root and no sudo, we cannot install deps. Tell the user clearly.
+    if [ "$NO_SUDO" = true ] && [ "$(id -u)" -ne 0 ]; then
+        log_error "Dependencies are missing and --no-sudo is set (no root, no sudo)."
+        log_error "Please install manually: python3 python3-pip curl"
+        log_error "Then re-run with --skip-deps, or run as root / with sudo."
+        exit 2
+    fi
 
     SUDO=""
     if [ "$NO_SUDO" = false ] && [ "$(id -u)" -ne 0 ]; then
