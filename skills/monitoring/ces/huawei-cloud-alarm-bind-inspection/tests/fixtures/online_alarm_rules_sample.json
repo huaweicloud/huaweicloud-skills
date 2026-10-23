@@ -1,0 +1,118 @@
+{
+  "rules": [
+    {
+      "alarm_id": "alarm-rds-001",
+      "name": "RDS MySQL metric1 alarm",
+      "namespace": "SYS.RDS",
+      "type": "MULTICYCLE",
+      "enabled": true,
+      "region": "cn-east-2",
+      "policies": [
+        {
+          "metric_name": "rds_mysql_metric1",
+          "dimension_name": "rds_cluster_id",
+          "period": 300,
+          "filter": "average",
+          "comparison_operator": ">=",
+          "value": 80,
+          "unit": "%",
+          "level": 2
+        }
+      ],
+      "resources": [
+        {
+          "namespace": "SYS.RDS",
+          "dimensions": [
+            {"name": "rds_cluster_id", "value": "mysql-instance-001"}
+          ]
+        }
+      ],
+      "notification_enabled": true,
+      "alarm_notifications": [
+        {"notification_list": ["urn:smn:cn-east-2:project_id:topic-001"]}
+      ]
+    },
+    {
+      "alarm_id": "alarm-rds-002",
+      "name": "RDS MySQL metric1 alarm for instance 2",
+      "namespace": "SYS.RDS",
+      "type": "MULTICYCLE",
+      "enabled": true,
+      "region": "cn-east-2",
+      "policies": [
+        {
+          "metric_name": "rds_mysql_metric1",
+          "dimension_name": "rds_cluster_id",
+          "period": 300,
+          "filter": "average",
+          "comparison_operator": ">=",
+          "value": 80,
+          "unit": "%",
+          "level": 2
+        }
+      ],
+      "resources": [
+        {
+          "namespace": "SYS.RDS",
+          "dimensions": [
+            {"name": "rds_cluster_id", "value": "mysql-instance-002"}
+          ]
+        }
+      ],
+      "notification_enabled": true,
+      "alarm_notifications": [
+        {"notification_list": ["urn:smn:cn-east-2:project_id:topic-002"]}
+      ]
+    },
+    {
+      "alarm_id": "alarm-elb-wildcard",
+      "name": "ELB wildcard alarm",
+      "namespace": "SYS.ELB",
+      "type": "MULTICYCLE",
+      "enabled": true,
+      "region": "cn-east-2",
+      "policies": [
+        {
+          "metric_name": "elb_metric1",
+          "dimension_name": "lbaas_instance_id",
+          "period": 60,
+          "filter": "average",
+          "comparison_operator": ">=",
+          "value": 90,
+          "unit": "%",
+          "level": 2
+        }
+      ],
+      "resources": [],
+      "notification_enabled": true,
+      "alarm_notifications": [
+        {"notification_list": ["urn:smn:cn-east-2:project_id:topic-003"]}
+      ]
+    },
+    {
+      "alarm_id": "alarm-eip-wildcard",
+      "name": "EIP wildcard alarm",
+      "namespace": "SYS.VPC",
+      "type": "MULTICYCLE",
+      "enabled": true,
+      "region": "cn-east-2",
+      "policies": [
+        {
+          "metric_name": "eip_metric1",
+          "dimension_name": "publicip_id",
+          "period": 300,
+          "filter": "average",
+          "comparison_operator": ">=",
+          "value": 100,
+          "unit": "Mbit/s",
+          "level": 2
+        }
+      ],
+      "resources": [],
+      "notification_enabled": true,
+      "alarm_notifications": [
+        {"notification_list": ["urn:smn:cn-east-2:project_id:topic-004"]}
+      ]
+    }
+  ]
+}

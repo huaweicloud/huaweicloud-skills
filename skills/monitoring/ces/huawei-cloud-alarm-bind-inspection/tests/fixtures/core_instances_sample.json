@@ -1,0 +1,58 @@
+{
+  "instances": {
+    "RDS": [
+      {
+        "instance_id": "mysql-instance-001",
+        "raw_service": "RDS",
+        "region": "cn-east-2",
+        "metric_dimension": "rds_cluster_id"
+      },
+      {
+        "instance_id": "mysql-instance-002",
+        "raw_service": "RDS",
+        "region": "cn-east-2",
+        "metric_dimension": "rds_cluster_id"
+      },
+      {
+        "instance_id": "pg-instance-001",
+        "raw_service": "RDS",
+        "region": "cn-east-2"
+      },
+      {
+        "instance_id": "non-exist-instance-001",
+        "raw_service": "RDS",
+        "region": "cn-east-2",
+        "instance_non_exist": true
+      }
+    ],
+    "ELB": [
+      {
+        "instance_id": "elb-instance-001",
+        "raw_service": "ELB",
+        "region": "cn-east-2",
+        "metric_dimension": "lbaas_instance_id"
+      },
+      {
+        "instance_id": "elb-instance-002",
+        "raw_service": "ELB",
+        "region": "cn-north-1",
+        "metric_dimension": "lbaas_instance_id"
+      }
+    ],
+    "EIP": [
+      {
+        "instance_id": "eip-instance-001",
+        "raw_service": "EIP",
+        "region": "cn-east-2",
+        "metric_dimension": "publicip_id"
+      }
+    ],
+    "CFW": [
+      {
+        "instance_id": "cfw-instance-001",
+        "raw_service": "CFW",
+        "region": "cn-east-2"
+      }
+    ]
+  }
+}
