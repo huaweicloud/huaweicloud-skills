@@ -11,7 +11,7 @@
 - [ ] `--summary` 超过 500 字时报错
 - [ ] 缺少 AK/SK 时报错并提示环境变量
 - [ ] `--gallery-published` 正确记录状态
-- [ ] ECS 步骤缺少 `--project-id` 或 `--region` 时报错
+- [ ] 缺少 `--project-id` 或 `--region`（两步均需）时报错
 
 ## 安全验收
 

@@ -5,7 +5,7 @@
 //   POST {base}/submit-activity-work
 //   base = https://open-dataset.huaweicloud.com/api/v1/hdopenservice/agent   （生产环境，固定；本 skill 不切换环境）
 //   请求头（鉴权）：X-HW-AK（必）、X-HW-SK（必）、X-HW-Security-Token（可选）
-//   ECS 步骤（intermediate）额外请求头：X-HW-PROJECT-ID、X-HW-REGION（上传 ECS 的 Project ID 与 region）
+//   两步额外请求头：X-HW-PROJECT-ID、X-HW-REGION（上传 Project ID 与 region）
 //   请求体 / 响应与 /user/submit-activity-work 一致：
 //     { activity_code, milestone, work_link?, api_link?, summary? }
 //
@@ -16,7 +16,7 @@
 //   `--milestone` 同时接受 sandbox / ecs 别名（自动归一化为 beginner / intermediate）。
 //
 // 用法示例：
-//   node submit.mjs --milestone beginner --work-link https://xxxx-3000.devbridge-s2.hwtunnel.com --summary "..."
+//   node submit.mjs --milestone beginner --work-link https://xxxx-3000.devbridge-s2.hwtunnel.com --project-id <PROJECT_ID> --region cn-north-4 --summary "..."
 //   node submit.mjs --milestone intermediate --api-link http://<ECS_EIP>/hc-activity/index.html --project-id <PROJECT_ID> --region cn-north-4 --summary "..."
 //
 // 凭证（优先级：命令行参数 > 环境变量）：
@@ -26,8 +26,8 @@
 
 //
 // 其他：
-//   --project-id <id> ECS 步骤：Project ID（也支持 HW_PROJECT_ID / hcloud 配置）
-//   --region <region> ECS 步骤：region（也支持 HW_REGION / hcloud 配置）
+//   --project-id <id> 两步均需：Project ID（也支持 HW_PROJECT_ID / hcloud 配置）
+//   --region <region> 两步均需：region（也支持 HW_REGION / hcloud 配置）
 //   --dry-run         只打印将提交的请求头/请求体，不真正提交
 //   --gallery-published 记录“作品展览馆已发布”（供后续步骤判断是否还需询问）
 //   --help            显示帮助
@@ -45,7 +45,7 @@ const LABEL = {
   beginner: '沙箱部署',
   intermediate: 'ECS 持久化部署',
 }
-const POINTS = { beginner: 1000, intermediate: 2000 }
+const POINTS = { beginner: 100, intermediate: 400 }
 
 // 状态文件（记录“作品展览馆已发布”，供后续步骤判断是否还需询问）
 const STATE_DIR = path.join(os.homedir(), '.config', 'hw-activity')
@@ -110,10 +110,10 @@ function readHcloudProfile() {
   }
 }
 
-// ECS 步骤所需的 Project ID / region（优先级：命令行参数 > 环境变量 > hcloud 配置）
+// 两步所需的 Project ID / region（优先级：命令行参数 > 环境变量 > hcloud 配置）
 function loadProjectRegion(args) {
-  let projectId = args['project-id'] || envFirst(['HW_PROJECT_ID', 'HUAWEICLOUD_PROJECT_ID'])
-  let region = args.region || envFirst(['HW_REGION', 'HUAWEICLOUD_REGION'])
+  let projectId = args['project-id'] || envFirst(['HW_PROJECT_ID', 'HUAWEICLOUD_SDK_PROJECT_ID', 'HUAWEICLOUD_PROJECT_ID'])
+  let region = args.region || envFirst(['HW_REGION', 'HUAWEICLOUD_SDK_REGION', 'HUAWEICLOUD_REGION'])
   if (!projectId || !region) {
     const h = readHcloudProfile()
     projectId = projectId || h.projectId || ''
@@ -244,19 +244,15 @@ async function main() {
 
   if (ms === 'intermediate' && apiLink) apiLink = ensureIndexHtml(apiLink)
 
-  // ECS 步骤：附加 X-HW-PROJECT-ID / X-HW-REGION 请求头（上传 ECS 的 Project ID 与 region）
+  // 两步均附加 X-HW-PROJECT-ID / X-HW-REGION 请求头（上传 Project ID 与 region）
   const { projectId, region } = loadProjectRegion(args)
   const extraHeaders = {}
-  if (ms === 'intermediate') {
-    if (projectId) extraHeaders['X-HW-PROJECT-ID'] = projectId
-    if (region) extraHeaders['X-HW-REGION'] = region
-  }
+  if (projectId) extraHeaders['X-HW-PROJECT-ID'] = projectId
+  if (region) extraHeaders['X-HW-REGION'] = region
 
   const errs = validate(ms, workLink, apiLink)
-  if (ms === 'intermediate') {
-    if (!projectId) errs.push('缺少 ECS Project ID：请传 --project-id，或设 HW_PROJECT_ID，或确保 hcloud 配置了 projectId')
-    if (!region) errs.push('缺少 ECS region：请传 --region，或设 HW_REGION，或确保 hcloud 配置了 region')
-  }
+  if (!projectId) errs.push('缺少 Project ID：请传 --project-id，或设 HW_PROJECT_ID，或确保 hcloud 配置了 projectId')
+  if (!region) errs.push('缺少 region：请传 --region，或设 HW_REGION，或确保 hcloud 配置了 region')
   if (summary && summary.length > 500) errs.push('作品说明不能超过 500 字')
   if (errs.length) {
     fail('参数校验未通过：\n- ' + errs.join('\n- '))
@@ -297,13 +293,14 @@ async function main() {
         label: LABEL[ms],
         points: POINTS[ms],
         message: r.json.message || '',
-        allCompleted: ms === 'intermediate',
+        ecsSubmitted: ms === 'intermediate',
       },
       null,
       2,
     ),
   )
-  console.log(`\n提交成功，已获得${LABEL[ms]}对应积分 ${POINTS[ms]} 分。`)
+  console.log(`\n提交成功。预计可得${LABEL[ms]}对应积分 ${POINTS[ms]} 分。`)
+  console.log('注意：积分以华为云成长体系实际发放为准；同一活动积分仅可获得一次，重复提交不再加分。')
 
   // 记录展览馆发布状态（供后续步骤判断是否还需询问）
   const links = readLinks()
@@ -320,8 +317,8 @@ async function main() {
   if (ms === 'intermediate') {
     console.log(
       galleryDone
-        ? 'ECS 持久化部署已完成（allCompleted=true）。（作品展览馆此前已发布，不再询问。）'
-        : 'ECS 持久化部署已完成（allCompleted=true）。此前未发布到作品展览馆，请再询问用户是否发布（用户可选）；发布成功后运行 `node submit.mjs --gallery-published` 记录。',
+        ? 'ECS 持久化部署已完成。（作品展览馆此前已发布，不再询问。）'
+        : 'ECS 持久化部署已完成。此前未发布到作品展览馆，请再询问用户是否发布（用户可选）；发布成功后运行 `node submit.mjs --gallery-published` 记录。',
     )
     console.log('请提醒用户清理本次活动创建的按量付费资源（ECS / EIP / 带宽 / VPC / 安全组等）以免持续计费；清理前先与用户确认。')
   }
@@ -337,8 +334,8 @@ function printHelp() {
   --milestone <ms>       步骤：beginner（沙箱部署）/ intermediate（ECS 持久化部署）；也接受别名 sandbox / ecs
   --work-link <url>      beginner 必填，沙箱域名 URL（https://xxx.devbridge-s2.hwtunnel.com 形式）
   --api-link <url>       intermediate 必填，公网访问地址（http(s):// 开头且含 index.html，如 http://<EIP>/hc-activity/index.html）
-  --project-id <id>      intermediate 必填，ECS 的 Project ID（请求头 X-HW-PROJECT-ID；或 HW_PROJECT_ID / hcloud 配置）
-  --region <region>      intermediate 必填，ECS 的 region（请求头 X-HW-REGION；或 HW_REGION / hcloud 配置）
+  --project-id <id>      必填（两步），Project ID（请求头 X-HW-PROJECT-ID；或 HW_PROJECT_ID / hcloud 配置）
+  --region <region>      必填（两步），region（请求头 X-HW-REGION；或 HW_REGION / hcloud 配置）
   --summary <text>       作品说明，≤500 字（可选）
   --gallery-published    记录“作品展览馆已发布”，后续步骤不再重复询问（发布成功后运行一次）
   --dry-run              仅打印将提交的请求头与请求体

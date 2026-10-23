@@ -10,10 +10,11 @@
 ### 2. dry-run 验证（不真正提交）
 
 ```bash
-# 沙箱部署步骤
+# 沙箱部署步骤（两步均需 --project-id / --region）
 HW_ACCESS_KEY=test_ak HW_SECRET_KEY=test_sk node submit.mjs \
   --milestone beginner \
   --work-link https://abcd1234-3000.devbridge-s2.hwtunnel.com \
+  --project-id abc123 --region cn-north-4 \
   --summary "test" \
   --dry-run
 

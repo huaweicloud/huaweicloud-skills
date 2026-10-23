@@ -10,12 +10,12 @@
 - `X-HW-SK`（必填）：华为云 Secret Key
 - `X-HW-Security-Token`（可选）：STS 临时凭证时必填
 
-## ECS 步骤附加请求头
+## 附加请求头（两步均需）
 
-仅 `intermediate`（ECS 持久化部署）提交时携带：
+`beginner`（沙箱部署）与 `intermediate`（ECS 持久化部署）提交时均携带：
 
-- `X-HW-PROJECT-ID`：ECS 的 Project ID
-- `X-HW-REGION`：ECS 的 region（如 `cn-north-4`）
+- `X-HW-PROJECT-ID`：Project ID
+- `X-HW-REGION`：region（如 `cn-north-4`）
 
 ## 凭证来源
 
