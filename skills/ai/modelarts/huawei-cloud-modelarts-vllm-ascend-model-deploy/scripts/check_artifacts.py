@@ -245,8 +245,13 @@ def c12_tp_size_match(ctx):
 
     检查逻辑: 同时匹配两种变量名,若提供 --tp-size 则要求脚本默认值一致(FAIL);
     若脚本默认值是从 ASCEND_RT_VISIBLE_DEVICES 推导(非固定数字),则 FAIL 要求改为固定值。
+    若提供 --num-attention-heads(模型注意力头数),则要求 TP 能被头数整除(FAIL),
+    否则 vLLM 启动硬校验崩溃(实测: Qwen3.8-27B 头数 24 + TP=16 → 24%16≠0 →
+    ValueError: Total number of attention heads (24) must be divisible by tensor
+    parallel size,master/slave 全部崩溃)。
     """
     tp = ctx.get("tp_size")
+    heads = ctx.get("attention_heads")
     start = os.path.join(ctx["artifact_dir"], "start_vllm.sh")
     if not os.path.isfile(start):
         return
@@ -271,6 +276,17 @@ def c12_tp_size_match(ctx):
             f"TP_SIZE 默认值={default_val} != 文档推荐/期望 TP={tp}。"
             f"TP_SIZE 直接决定模型权重能否放进显存(权重/TP ≤ 单卡显存),"
             f"不一致会导致 OOM 或 KV cache 为负崩溃"
+        )
+    # 若提供了 --num-attention-heads,要求 TP 能被头数整除(模型架构硬约束)
+    # 头数 % TP == 0 才合法(TP 必须是头数的约数)
+    if heads is not None and heads % int(default_val) != 0:
+        return _fail(
+            f"TP_SIZE={default_val} 不能被模型注意力头数({heads})整除,"
+            f"vLLM 启动硬校验失败(实测 Qwen3.8-27B 头数 24 + TP=16 → "
+            f"ValueError: Total number of attention heads (24) must be divisible "
+            f"by tensor parallel size,master/slave 全部崩溃)。"
+            f"TP 必须取头数的约数(如头数 24 → TP ∈ 2/4/6/8/12/24),"
+            f"且不超过单节点卡数"
         )
     _pass(f"TP_SIZE 默认值={default_val}" + (f"(与文档推荐 TP={tp} 一致)" if tp else ""))
 
@@ -320,6 +336,51 @@ def c13_role_specific_args(ctx):
         )
     _pass("MODEL_ARGS 未包含角色专属参数(--api-server-count/--nnodes/"
           "--node-rank/--master-addr/--master-port)")
+
+
+def c14_headless_dp_lb_match(ctx):
+    """1.14 --headless 与 DP LB 模式匹配(vLLM 0.23.0 默认 vs external/hybrid)。
+
+    vLLM 0.23.0 **默认**非 external/hybrid DP LB 模式: slave **必须**追加 --headless,
+    否则报 RuntimeError: Remote engine N must use --headless unless in external or
+    hybrid dp lb mode(实测 vLLM 0.23.0 + multinode 2 节点 BF16 部署触发)。
+    vLLM ≥ v0.30.0rc1 启用 external/hybrid DP LB 模式时,slave 禁 --headless(报反向错误)。
+    DP LB 模式由环境变量 DP_LB_MODE=external|hybrid 显式声明,与 DATA_PARALLEL_SIZE_LOCAL 无关。
+    """
+    deploy_form = ctx["deploy_form"]
+    if deploy_form not in ("multinode", "pd_colocate"):
+        _pass("非多节点/PD 共置形式,跳过 --headless 与 DP LB 模式匹配校验")
+        return
+    start = os.path.join(ctx["artifact_dir"], "start_vllm.sh")
+    if not os.path.isfile(start):
+        _fail("start_vllm.sh 不存在,无法校验 --headless 与 DP LB 模式匹配")
+        return
+    content = _read(start)
+    # 必须有 DP_LB_MODE 条件判断分支(以模板 start_vllm.multinode.sh 为准)
+    has_dp_lb_mode_check = bool(re.search(r'DP_LB_MODE="\$\{DP_LB_MODE', content))
+    has_headless_in_default_branch = bool(
+        re.search(r'SLAVE_OPTS="--headless"', content)
+        and re.search(r'DP_LB_MODE="\$\{DP_LB_MODE', content))
+    has_http_server_placeholder = bool(re.search(r'python -m http\.server', content))
+    if not has_dp_lb_mode_check:
+        return _fail(
+            "slave 分支未按 DP_LB_MODE 条件判断(以模板 start_vllm.multinode.sh / "
+            "start_vllm.pd_colocate.sh 为准)。vLLM 0.23.0 默认 DP LB 模式 slave 必须"
+            "加 --headless,external/hybrid 模式禁 --headless,需通过 DP_LB_MODE "
+            "环境变量区分(与 DATA_PARALLEL_SIZE_LOCAL 无关)"
+        )
+    if not has_headless_in_default_branch:
+        return _fail(
+            "默认 DP LB 模式分支未追加 --headless。vLLM 0.23.0 默认非 external/hybrid "
+            "DP LB 模式: slave 必须加 --headless(实测报 RuntimeError: Remote engine N "
+            "must use --headless unless in external or hybrid dp lb mode)"
+        )
+    if not has_http_server_placeholder:
+        return _fail(
+            "slave 加 --headless 后不监听 API,需占位 http server 承接探针"
+            "(nohup python -m http.server 8080)"
+        )
+    _pass("--headless 按 DP_LB_MODE 条件判定(默认加,external/hybrid 不加)")
 
 
 # ---------- 性能最优检查(软性) ----------
@@ -389,7 +450,7 @@ def s04_deploy_config_advice(ctx):
     if deploy_form == "pd":
         advice.append("部署时同一部署单元内 2 个推理单元分别注入 VLLM_ROLE=prefill/decode + 不同 PORT")
     if advice:
-        _warn("部署配置建议: " + "; ".join(advice) + "(按 SKILL.md 4.5 核对)")
+        _warn("部署配置建议: " + "; ".join(advice) + "(按 SKILL.md 4.4 核对)")
 
 
 # ---------- 注册检查项 ----------
@@ -410,6 +471,7 @@ def register():
         ("H11", "1.11 模型文档必备参数", c11_doc_params_hard),
         ("H12", "1.12 TP_SIZE 固定值与文档一致", c12_tp_size_match),
         ("H13", "1.13 角色专属参数归属校验", c13_role_specific_args),
+        ("H14", "1.14 --headless 与 DP LB 模式匹配", c14_headless_dp_lb_match),
     ]
     SOFT_CHECKS = [
         ("S01", "2.1 模型文档性能参数齐全度", s01_doc_params_soft),
@@ -432,6 +494,11 @@ def parse_args():
     p.add_argument("--expect-port", type=int, default=8080, help="期望监听端口(默认 8080)")
     p.add_argument("--tp-size", type=int, default=None, help="期望 TP(卡数)")
     p.add_argument("--dp-size", type=int, default=None, help="期望 DP(节点数)")
+    p.add_argument("--num-attention-heads", type=int, default=None,
+                   help="模型注意力头数(从模型 config.json 的 num_attention_heads 获取)。"
+                        "提供后 H12 硬性校验 TP 必须能被头数整除(头数 24 + TP=16 → "
+                        "vLLM 启动硬校验崩溃 ValueError: attention heads must be "
+                        "divisible by tensor parallel size)")
     return p.parse_args()
 
 
@@ -454,6 +521,7 @@ def main():
         "expect_port": args.expect_port,
         "tp_size": args.tp_size,
         "dp_size": args.dp_size,
+        "attention_heads": args.num_attention_heads,
     }
 
     register()

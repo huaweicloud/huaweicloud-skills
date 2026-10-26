@@ -1,6 +1,6 @@
 # 部署验证方法(verification-method)
 
-本文件支撑 SKILL.md 步骤 4.4/5/6 的验证流程,覆盖方式 A(API)与方式 B(控制台)两种部署方式的验证步骤、OpenAI 兼容调用验证与验证失败定位。
+本文件支撑 SKILL.md 步骤 5/6 的验证流程,覆盖方式 A(API)与方式 B(控制台)两种部署方式的验证步骤、OpenAI 兼容调用验证与验证失败定位。
 
 ## 一、服务就绪验证
 
@@ -13,7 +13,7 @@
 
 ## 二、调用端点获取
 
-- 服务详情 `access_address`(公网调用 URL)即为调用端点;**dev 环境 `access_address: null`,改用 `predict_url[].urls[]` 中 `type=PUBLIC` 的地址**。
+- 服务详情 `access_address`(公网调用 URL)即为调用端点;**`access_address: null` 时改用 `predict_url[].urls[]` 中 `type=PUBLIC` 的地址**。
 - **调用 URL 格式**: `http://{PUBLIC_IP}/v2/infer/{service_id}/v1/chat/completions`(OpenAI 兼容)。
   - 协议必须是 **http**(用 https 报 `400 ModelArts.8910 Request protocol: HTTPS does not match...`);
   - 路径必须带 `/v2/infer/{service_id}` 前缀(裸 IP + `/v1/chat/completions` 报 `404 ModelArts.2836 Path not found`)。
@@ -52,6 +52,6 @@ print(resp.json()["choices"][0]["message"]["content"])
 | `404 ModelArts.2836 Path not found` | 路径缺 `/v2/infer/{service_id}` 前缀 |
 | 401/403 | 推理请求认证 token 错误/缺失;或 IAM token 失效 |
 | `choices` 为空/报模型错误 | ① `--model` 参数与 `served-model-name`(部署的 MODEL_NAME)一致;② 权重/镜像版本是否配套 |
-| 服务反复重启 | 健康检查 startup 延迟 600s + 失败次数 60 是否配置;探针路径/端口与启动脚本一致(详见 `references/troubleshooting.md` 首条) |
+| 服务反复重启 | 健康检查 startup 延迟 600s + 失败次数 300 是否配置;探针路径/端口与启动脚本一致(详见 `references/troubleshooting.md` 首条) |
 
 > 完整排查表见 `references/troubleshooting.md`。

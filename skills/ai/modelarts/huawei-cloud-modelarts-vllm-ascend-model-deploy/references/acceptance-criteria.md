@@ -9,7 +9,7 @@
 | 1 | 模型确认 | 最终模型 ID 为用户确认的模型(模糊名场景已列全候选并经 AskUserQuestion 确认;实验性模型已完成二次确认并记录) | ☐ |
 | 2 | 部署形式确认 | 部署形式(single/multinode/pd/pd_colocate)已与用户确认并记录为 `DEPLOY_FORM` + `NNODES` + `REPLICAS`;生成脚本为该形式专用版本,不含 `DEPLOY_FORM` 运行时分支 | ☐ |
 | 3 | 镜像就绪 | `SWR_IMAGE_ADDRESS` 已记录并向用户复述确认;tag 来源可追溯到模型文档页面 | ☐ |
-| 4 | 部署产物齐备 | `./<模型名>-<部署方式>/` 下含 `start_vllm.sh`、`health_check.sh`(多节点含 `get_master_ip.py`);`chmod +x`、LF 行尾;内容与模板/模型文档一致(确定性取值: 端口 8080、健康检查失败次数 60、启动延迟 600s 等) | ☐ |
+| 4 | 部署产物齐备 | `./<模型名>-<部署方式>/` 下含 `start_vllm.sh`、`health_check.sh`(多节点含 `get_master_ip.py`);`chmod +x`、LF 行尾;内容与模板/模型文档一致(确定性取值: 端口 8080、健康检查失败次数 300、启动延迟 600s 等) | ☐ |
 | 5 | 产物已上传 | 部署产物已上传到 `CODE_OBS_PATH`(code 目录),路径已记录 | ☐ |
 | 6 | 部署成功 | 服务状态 **`RUNNING`**(方式 A `show` / 方式 B 控制台),无反复重启 | ☐ |
 | 7 | 调用验证通过 | OpenAI 兼容调用 `/v1/chat/completions` 返回正常文本(`choices[0].message.content` 非空) | ☐ |
@@ -29,10 +29,9 @@
 |------|------|------|
 | 根目录 | `SKILL.md` | 主文档(≤500 行,含 frontmatter: name/description(Triggers include:)/tags/version) |
 | references/ | `deployment-form-decision.md` | 4 种部署形式决策矩阵 |
-| references/ | `modelarts-console-guide.md` | 控制台/API 部署详解(11 步 + 请求体 + 场景映射 + 平台适配清单) |
+| references/ | `modelarts-console-guide.md` | 控制台/API 部署详解(9 步 + 请求体 + 场景映射 + 平台适配清单) |
 | references/ | `vllm-ascend-model-doc-guide.md` | 模型文档查阅指南 |
 | references/ | `ascend-hardware-matrix.md` | 芯片型号速查 |
-| references/ | `mooncake-pd-deploy-guide.md` | Mooncake PD 分离部署指南(pd 分离专用) |
 | references/ | `iam-policies.md` | IAM 最小权限策略与 token 获取 |
 | references/ | `verification-method.md` | 部署验证方法 |
 | references/ | `acceptance-criteria.md` | 本文件(验收标准) |

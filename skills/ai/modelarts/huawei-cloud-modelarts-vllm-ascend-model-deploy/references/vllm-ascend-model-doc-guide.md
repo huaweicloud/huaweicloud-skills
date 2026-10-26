@@ -22,6 +22,11 @@
 
 进入模型页面后,重点阅读以下部分(不同模型章节名略有差异,以页面实际为准):
 
+> **⚠️ 索引页与单模型页解析方式不同(强制,违反=索引页返回空候选,误判"模型不在支持列表")**:
+> - **索引页(`tutorials/models/index.html`)的模型清单在侧栏导航 `<nav class="md-nav">` 的 `md-nav__link` 中,不在 `<article>` 正文**(实测正文仅 657 字符、0 个模型链接)。**提取候选必须解析导航栏**,链接为**相对路径**(如 `Qwen-VL-Dense.html`,无 `tutorials/models/` 前缀),禁止用 `tutorials/models/<name>.html` 前缀正则匹配(命中 0);正确正则: `<a[^>]+href="([^"]+\.html)"[^>]*class="md-nav__link"[^>]*>\s*<span class="md-ellipsis">(.*?)</span>`,再按系列名大小写不敏感过滤。**导航提取不到时回退全文 grep 索引页,不得静默返回空候选**。
+> - **单模型页(`tutorials/models/<Model>.html`)才按剥离导航栏/只取正文规则处理**: 页面 HTML 的**侧边导航栏包含全部模型标题**,混有**其他模型**的标注(如 `Qwen3.8-Flash-Next（实验性支持）`、`Hy4-preview (Experimental)`)。**全文 grep/正则扫描会命中导航栏**,把这些标注误归到当前页面的目标模型。**正确做法**: 用 Python `html.parser`/正则提取 `<article>` 正文区域(或剥离 `<nav>` 及导航结构)后,**只在正文中检索**;正文每个 `Experimental`/`实验性` 命中,必须**核对标注归属的模型名与芯片平台**(如"950DT Products 当前为实验性支持"仅限 950DT,A3/A2 为正式支持),归属其他模型或仅限其他芯片平台的标注**不得**算作目标模型的实验性。
+> - **页名与正文模型 ID 可能不一致**: 一个页面常覆盖同系列多个模型(如 `Qwen-VL-Dense.html` 标题为 `Qwen-VL-Dense(Qwen3-VL-8B/32B)`,正文启动命令直接用 `vllm serve Qwen/Qwen3-VL-8B-Instruct`)。**候选清单按导航标题列出,但核对"模型是否在官方支持列表"时,还需检索该页面正文启动命令中实际用到的模型 ID**(`vllm serve <repo-id>`),页名不含某模型不代表该页面不覆盖它,禁止仅凭导航标题断言"模型不在支持列表"。
+
 | 章节 | 提取内容 | 用途 |
 |------|----------|------|
 | 页面头部/简介 | 模型简介、适配的 vllm-ascend 版本、支持矩阵 | 步骤 2.0:定镜像版本/tag |
@@ -60,7 +65,7 @@
 |----------------|--------------|
 | 部署章节只给单机命令,示例 `--tensor-parallel-size` ≤ 单节点卡数 | 单节点 |
 | 部署章节出现多机/multi-node/DP+TP 示例,或示例 TP 卡数 > 单节点卡数(如双机 16 卡) | 多节点 |
-| 出现 PD / Prefill-Decode / disaggregated / PD 专用镜像 / PD 代理脚本 / Mooncake 等 | PD 分离 |
+| 出现 PD / Prefill-Decode / disaggregated / PD 专用镜像 / PD 代理脚本 等 | PD 分离 |
 | 页面标注"仅支持多节点/需跨节点" | 多节点 |
 
 > 判断结论还需结合模型规模与用户硬件(单节点总显存能否容纳权重+KV Cache)与性能需求(高并发/长上下文可考虑 PD)。详细决策矩阵见 `references/deployment-form-decision.md`。**文档未给出多节点/PD 示例时默认单节点,不要自行发明多机/PD 参数。**
@@ -81,7 +86,7 @@
 
 | 匹配维度 | 选取规则 |
 |----------|----------|
-| 部署形式 | 单节点选单机示例;多节点选多机/multi-node/DP+TP 示例(注意 HCCL/Gloo 环境变量与 `--data-parallel-*` 参数);PD 分离选 Prefill-Decode 示例(角色环境变量、KV 传输) |
+| 部署形式 | 单节点选单机示例;多节点选多机/multi-node/DP+TP 示例(注意 HCCL/Gloo 环境变量与 `--data-parallel-*` 参数);PD 分离选 Prefill-Decode 示例(角色环境变量、VLLM_ROLE) |
 | 芯片型号 | 优先选与目标资源池一致的小节(910B / 910C(A3) / 310P);页面未区分时,用通用示例并核对显存是否满足 |
 | 卡数 | 按目标卡数选;`--tensor-parallel-size` 一般等于卡数;多节点时等于**全部节点卡数总和**;MoE 大模型多卡时核对是否需 `--enable-expert-parallel` |
 | 量化 | 权重格式与启动参数一一对应(W8A8 权重对应 `--quantization w8a8` 等),不得混用 |

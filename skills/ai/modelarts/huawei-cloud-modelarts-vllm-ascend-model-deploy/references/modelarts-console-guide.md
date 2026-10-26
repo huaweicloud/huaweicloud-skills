@@ -8,7 +8,7 @@
 
 ## 一、控制台手动部署分步操作(方式 B)
 
-> 适用: 用户不便提供 IAM Token,或希望保留人工确认每个配置项。以下为通用分步指导,**各步骤取值按 SKILL.md 步骤 4.5 的 4 种部署形式映射表选用**。控制台路径以实际版本为准(公有云新版入口: 左侧菜单 **模型推理 > 在线推理**;部分版本为 **模型部署 > 在线服务**)。
+> 适用: 用户不便提供 IAM Token,或希望保留人工确认每个配置项。以下为通用分步指导,**各步骤取值按 SKILL.md 步骤 4.4 的 4 种部署形式映射表选用**。控制台路径以实际版本为准(公有云新版入口: 左侧菜单 **模型推理 > 在线推理**;部分版本为 **模型部署 > 在线服务**)。
 
 ### 第 1 步 — 进入部署页面
 
@@ -21,6 +21,7 @@
 |--------|------|--------|
 | 部署名称/服务名称 | 服务标识,1-64 字符,同地域唯一 | `qwen3-8b` 等(小写字母/数字/下划线) |
 | 描述 | 可选备注 | 按需 |
+| 请求超时时间（秒） | 请求发送后等待响应的超时时间 | 300 |
 
 填写后单击 **"下一步"** 进入部署配置。
 
@@ -32,64 +33,65 @@
 | 选择专属资源池 | 昇腾 NPU 专属资源池,芯片型号与步骤 3.0 确认一致 | 用户资源池 |
 | 部署副本数 | 1=单副本多实例(默认);>1=多副本单实例(可靠性,平台内置流量分发) | **1**(默认)或 M(步骤 1.1c 决策;PD 分离资源翻倍) |
 
-### 第 4 步 — 模型配置(关键)
+### 第 4 步 — 模型配置
 
 | 配置项 | 说明 | 推荐值 |
 |--------|------|--------|
-| 模型来源 | 大模型权重与镜像分离的标准做法 | **对象存储服务 OBS** |
-| 添加模型(权重) | 选择权重 OBS 位置 | `obs://<bucket>/<prefix>/model/<模型目录>`(SKILL.md 步骤 1.3 的 `MODEL_PATH`) |
+| 模型来源 | 选择模型来源 | 自定义模型 |
+| 存储类型 | 选择权重位置 | 对象存储 OBS - 对象桶 |
+| 存储地址(权重) | 选择权重 OBS 位置 | `obs://<bucket>/<prefix>/model/<模型目录>`(SKILL.md 步骤 1.2 的 `MODEL_PATH`) |
 | 权重挂载路径 | 权重在容器内的只读挂载路径 | **`/home/ma-user/model`**(与启动脚本 `MODEL_PATH` 默认值一致) |
-| **文件存储挂载(code 目录)** | **部署脚本目录,关键** | **存储地址 `CODE_OBS_PATH`(如 `obs://ws203train/models/code/`)→ 挂载路径 `/home/ma-user/code/`**;`start_vllm.sh`/`health_check.sh`/`get_master_ip.py` 均经此挂载访问,命令一律用容器内路径 `bash /home/ma-user/code/...` |
-| 镜像 | 推理镜像 | **容器镜像服务 SWR** 中的 `SWR_IMAGE_ADDRESS`(步骤 2;tag 以模型文档确认的版本为准,不要用 `latest`) |
+| 本地存储加速   | 开启本地存储加速后，文件会下载到节点上，如原始存储地址路径上的文件发生变化，将无法实时更新，若需更新请重启服务。 | 开启                                                         |
 
-### 第 5 步 — 单元配置(角色/推理单元)
+### 第 5 步 — 单元配置(角色/推理单元,含启动命令/健康检查/文件存储挂载)
+
+> **单元配置是部署核心**: 推理单元(角色)、镜像、环境变量、启动命令、三层探针、code 目录文件存储挂载全部在本步配置。各推理单元配置项逐一填写后,再按下方"启动命令/健康检查"子项为每个单元配置探针与启动命令。
+> **⚠️ 字段边界(强制,填写时逐项对照本表格字段清单)**: 本步**只包含下表列出的配置项**——单元名称/单元内实例数/单元实例规格/多机多卡部署/镜像类型/环境变量/文件存储挂载/启动命令,加上下方"健康检查"子项(启动/就绪/存活探针+探针参数)。**本步没有"容器端口"配置项**——容器端口属**第 6 步部署管理配置**,是**服务级对外端口,单一值 8080**。PD 分离的 prefill/decode 差异端口(如 8080/7101)属于本步**各单元的"环境变量"子项**(`PORT` 环境变量),**禁止**写入第 6 步容器端口。速查表(如 SKILL.md 4.2)中的关键值仅作提示,**字段归属以本表格为准**。
 
 | 配置项 | 说明 | 推荐值 |
 |--------|------|--------|
 | 单元名称 | 推理单元名(即 API 的 `unit_configs[].name`,只允许 0-16 字符,仅小写字母/数字/连字符,且以字母或数字开头结尾) | **单部署单元结构**: 单节点/多节点/PD 共置 `role-1`;**PD 分离配置 2 个单元: `prefill` 与 `decode`**(同一部署单元内,`大写 `Prefill`/`Decode` 会报 400**) |
 | 单元内实例数(资源实例数) | 单元内实例数(即 API 的 `unit_configs[].count`) | 单节点=1;**multinode/pd_colocate=N(副本内节点数)**;PD 分离=各角色节点数(资源翻倍) |
-| 单元实例规格 | 自定义规格,NPU 卡数 = 副本内卡数 | 按节点卡数选型(如 8 卡) |
+| 单元实例规格 | 预置规格 | 按节点卡数选型(如 8 规格) |
 | 多机多卡部署 | multinode/pd_colocate 在部署页面选择"多机多卡部署" | **单副本资源实例数 = N(副本内节点数)**,部署副本数=1(多节点实例数在资源实例层级,不在单元副本层级) |
+| 镜像类型 | 自定义镜像 | **容器镜像服务 SWR** 中的 `SWR_IMAGE_ADDRESS`(步骤 2;tag 以模型文档确认的版本为准,不要用 `latest`) |
+| 环境变量                 | **仅注入部署单元配置项,其余脚本自动推导/有默认值**(见 SKILL.md 4.4 分类速查表) | **无需填 `TP_SIZE`/`DATA_PARALLEL_SIZE`**(脚本按资源池实例规格/rank table 自动推导);pd(PD 分离)2 个推理单元分别注入 `VLLM_ROLE=prefill` 与 `VLLM_ROLE=decode` + 双角色不同 `PORT`。`MODEL_PATH`/`PORT`/昇腾环境变量等**不用填**(容器内固定/模板默认)。**部署形式已固定在生成的脚本中,无需也不应再传 `DEPLOY_FORM` 环境变量** |
+| 文件存储挂载(code 目录)  | 部署脚本目录,关键                                            | **存储地址 `CODE_OBS_PATH`(如 `obs://<bucket>/models/code/`)→ 挂载路径 `/home/ma-user/code/`→ 本地存储加速`开启`**;`start_vllm.sh`/`health_check.sh`/`get_master_ip.py` 均经此挂载访问,命令一律用容器内路径 `bash /home/ma-user/code/...` |
+| 启动命令 | 容器启动命令(code 目录已挂载到 `/home/ma-user/code/`) | `bash /home/ma-user/code/start_vllm.sh`(**必须用 bash**,禁用 `sh`,脚本使用 bash 数组) |
+
+**健康检查(每个推理单元均需配置,关键)**
+
+单击 **启动探针** / **就绪探针** / **存活探针**,均选择 **"执行命令检查"**,命令为(code 目录已通过文件存储挂载到 `/home/ma-user/code/`,用容器内路径):
+
+| 探针     | 命令                                                |
+| -------- | --------------------------------------------------- |
+| 启动探针 | `bash /home/ma-user/code/health_check.sh startup`   |
+| 就绪探针 | `bash /home/ma-user/code/health_check.sh readiness` |
+| 存活探针 | `bash /home/ma-user/code/health_check.sh liveness`  |
+
+> **启动延迟(initial delay)设置 600 秒及以上**(超时 60s、周期 60s),**失败次数(failureThreshold)设置为 300**(周期 60s ≈ 18000s/300 分钟容忍窗口)——vLLM V1 引擎首次启动需编译 IR + 捕获 CUDAGraph,耗时 5~10 分钟;探针过早探测超时 → 实例被杀 → 重启 → 重新编译 → 死循环。启动延迟 + 大失败阈值双保险,彻底规避重启循环。
 
 ### 第 6 步 — 部署管理配置
+
+> **⚠️ 本步是"容器端口"唯一归属处(强制)**: "容器端口"**只在本步配置**,第 5 步单元配置无此字段。值为**服务级对外端口,单一 8080**(与启动脚本 `PORT` 默认值一致)。**禁止**将 PD 分离的 prefill/decode 双角色差异端口(8080/7101)填入此处——那是第 5 步各单元"环境变量"子项的 `PORT` 值,与本步容器端口是两个不同层级。
 
 | 配置项 | 说明 | 推荐值 |
 |--------|------|--------|
 | 容器协议 | 镜像内服务协议 | HTTP(或 HTTPS,与镜像一致) |
-| 容器端口 | 镜像监听端口,与探针一致 | **8080**(与启动脚本 `PORT` 默认值一致) |
+| 容器端口 | 镜像监听端口,与探针一致 | **8080**(服务级对外端口,单一值;与启动脚本 `PORT` 默认值一致) |
+
+### 第 7 步 — 更多配置 > 部署超时时间 (分钟)
+
+| 配置项 | 说明 | 推荐值 |
+|--------|------|--------|
 | 部署超时时间 | 单次部署超时 | **300 分钟**(统一设置,多节点/大模型首启含模型加载 + CUDAGraph 编译,60 分钟不足会超时失败) |
 
-### 第 7 步 — 更多配置 > 故障恢复
-
-| 配置项 | 说明 | 推荐值 |
-|--------|------|--------|
-| 恢复策略 | 实例异常后的处理 | **"实例恢复"**(实例异常自动重建,服务不中断) |
-
-### 第 8 步 — 更多配置 > 健康检查(关键)
-
-单击 **启动探针** / **就绪探针** / **存活探针**,均选择 **"执行命令检查"**,命令为(code 目录已通过文件存储挂载到 `/home/ma-user/code/`,用容器内路径):
-
-| 探针 | 命令 |
-|------|------|
-| 启动探针 | `bash /home/ma-user/code/health_check.sh startup` |
-| 就绪探针 | `bash /home/ma-user/code/health_check.sh readiness` |
-| 存活探针 | `bash /home/ma-user/code/health_check.sh liveness` |
-
-> **启动延迟(initial delay)设置 600 秒及以上**(超时 60s、周期 30s),**失败次数(failureThreshold)自动设置为 60**(周期 30s ≈ 1800s/30 分钟容忍窗口)——vLLM V1 引擎首次启动需编译 IR + 捕获 CUDAGraph,耗时 5~10 分钟;探针过早探测超时 → 实例被杀 → 重启 → 重新编译 → 死循环。启动延迟 + 大失败阈值双保险,彻底规避重启循环。
-
-### 第 9 步 — 更多配置 > 运行环境配置
-
-| 配置项 | 说明 | 推荐值 |
-|--------|------|--------|
-| 启动命令 | 容器启动命令(code 目录已挂载到 `/home/ma-user/code/`) | `bash /home/ma-user/code/start_vllm.sh`(**必须用 bash**,禁用 `sh`,脚本使用 bash 数组) |
-| 环境变量 | **仅注入部署单元配置项,其余脚本自动推导/有默认值**(见 SKILL.md 4.5 分类速查表) | **无需填 `TP_SIZE`/`DATA_PARALLEL_SIZE`**(脚本按资源池实例规格/rank table 自动推导);pd(PD 分离)2 个推理单元分别注入 `VLLM_ROLE=prefill` 与 `VLLM_ROLE=decode` + 双角色不同 `PORT`;pd 且模型文档要求 Mooncake 时注入 `MOONCAKE_MASTER_ADDR`(社区方案)。`MODEL_PATH`/`PORT`/昇腾环境变量等**不用填**(容器内固定/模板默认)。**部署形式已固定在生成的脚本中,无需也不应再传 `DEPLOY_FORM` 环境变量** |
-
-### 第 10 步 — 更多配置 > 亲和调度(仅多机 multinode/pd_colocate)
+### 第 8 步 — 更多配置 > 亲和调度(仅多机 multinode/pd_colocate)
 
 1. 单击 **"亲和调度"**,亲和类型选 **"节点亲和"**,强度选 **"强亲和"**,添加节点选 **目标超节点**。
 2. 将所有单元(副本内多节点)的亲和调度指向**同一超节点**(等效"超节点亲和组实例数=N",否则跨超节点调度报业务错误)。
 
-### 第 11 步 — 确认部署
+### 第 9 步 — 确认部署
 
 1. 核对全部配置后,单击 **"确定部署"**(或 **"确认部署"**)。
 2. 部署一般耗时几分钟到几十分钟,在服务列表等待状态变为 **"运行中"**;若反复重启,优先检查健康检查启动延迟与失败次数配置(见常见排查)。
@@ -122,7 +124,7 @@
 
 ## 三、请求体结构(顶层平铺)
 
-> **⚠️ 注意**: 新版 CreateInferService 请求体是**顶层平铺结构**——**不是**旧文档的 `service.deployment.roles[]` 嵌套结构(旧结构报 400 `name/type/group_configs/runtime_config` 缺失)。正确结构: 顶层直接放 `name`/`type`/`deploy_type`/`task_type`/`workspace_id`/`group_configs[]`/`runtime_config`。**部署超时统一 300 分钟**: 顶层必须显式设置 **`deploy_timeout_minutes: 300`**(单位分钟),禁止使用平台默认(20~60 分钟,多节点/大模型首启超时会 FAILED)。
+> **⚠️ 注意**: 新版 CreateInferService 请求体是**顶层平铺结构**——**不是**旧文档的 `service.deployment.roles[]` 嵌套结构(旧结构报 400 `name/type/group_configs/runtime_config` 缺失)。正确结构: 顶层直接放 `name`/`type`/`deploy_type`/`task_type`/`workspace_id`/`group_configs[]`/`runtime_config`。**⚠️ 顶层 `workspace_id` 必填(强制,违反=报 8179)**: POST 创建请求的 `workspace_id` 放请求 body 顶层(与 `name`/`type` 同级)——**不是请求头 `X-Workspace-Id`、也不是 URL 查询参数**;实测缺失报 `400 ModelArts.8179 Resource pool does not exist or the x-infer service is disabled`(资源池实际存在且 X-Infer 已启用),body 顶层补 `workspace_id` 后创建成功。**部署超时统一 300 分钟**: 顶层必须显式设置 **`deploy_timeout_minutes: 300`**(单位分钟),禁止使用平台默认(20~60 分钟,多节点/大模型首启超时会 FAILED)。
 
 ```json
 {
@@ -143,7 +145,8 @@
         "mount_path": "/home/ma-user/model/",
         "source": "OBS",
         "type": "MODEL",
-        "read_only": true
+        "read_only": true,
+        "host_cache": true
       },
       "count": 1,
       "schedule_strategy": "HIGH_AVAILABILITY",
@@ -152,12 +155,12 @@
           "name": "prefill",
           "count": 2,
           "role": "COMMON",
-          "flavor": "modelarts.bm.arm.192u.1536g.npu.8d910b",
+          "flavor": "modelarts.vm.arm.16u.64g.npu.16snt9c",  # 从 ShowInferServiceCluster flavors[] 按 ascend.npu=16 取 id
           "cmd": "bash /home/ma-user/code/start_vllm.sh",
           "envs": {"VLLM_ROLE": "prefill", "PORT": "8080"},
           "image": {"source": "SWR", "swr_path": "swr.cn-north-4.myhuaweicloud.com/my-org/vllm-ascend:v0.23.0"},
           "files": [
-            {"address": "obs://my-bucket/llm/code", "mount_path": "/home/ma-user/code/", "source": "OBS", "type": "FILE", "read_only": true}
+            {"address": "obs://my-bucket/llm/code", "mount_path": "/home/ma-user/code/", "source": "OBS", "type": "FILE", "read_only": true, "host_cache": true}
           ],
           "liveness_health": {"check_method": "EXEC", "cmd": "bash /home/ma-user/code/health_check.sh liveness", "failure_threshold": 300, "initial_delay_seconds": 300, "period_seconds": 60, "protocol": "HTTP", "timeout_seconds": 60},
           "readiness_health": {"check_method": "EXEC", "cmd": "bash /home/ma-user/code/health_check.sh readiness", "failure_threshold": 300, "initial_delay_seconds": 300, "period_seconds": 60, "protocol": "HTTP", "timeout_seconds": 60},
@@ -168,12 +171,12 @@
           "name": "decode",
           "count": 2,
           "role": "COMMON",
-          "flavor": "modelarts.bm.arm.192u.1536g.npu.8d910b",
+          "flavor": "modelarts.vm.arm.16u.64g.npu.16snt9c",  # 从 ShowInferServiceCluster flavors[] 按 ascend.npu=16 取 id
           "cmd": "bash /home/ma-user/code/start_vllm.sh",
           "envs": {"VLLM_ROLE": "decode", "PORT": "7101"},
           "image": {"source": "SWR", "swr_path": "swr.cn-north-4.myhuaweicloud.com/my-org/vllm-ascend:v0.23.0"},
           "files": [
-            {"address": "obs://my-bucket/llm/code", "mount_path": "/home/ma-user/code/", "source": "OBS", "type": "FILE", "read_only": true}
+            {"address": "obs://my-bucket/llm/code", "mount_path": "/home/ma-user/code/", "source": "OBS", "type": "FILE", "read_only": true, "host_cache": true}
           ],
           "liveness_health": {"check_method": "EXEC", "cmd": "bash /home/ma-user/code/health_check.sh liveness", "failure_threshold": 300, "initial_delay_seconds": 300, "period_seconds": 60, "protocol": "HTTP", "timeout_seconds": 60},
           "readiness_health": {"check_method": "EXEC", "cmd": "bash /home/ma-user/code/health_check.sh readiness", "failure_threshold": 300, "initial_delay_seconds": 300, "period_seconds": 60, "protocol": "HTTP", "timeout_seconds": 60},
@@ -193,6 +196,35 @@
 
 > **多节点结构要点(与 PD 的差异)**: 多节点(multinode)与 PD 共置(pd_colocate,非 PD 分离)用 **1 个单元 + `unit_configs[].count=N`**(N=副本内节点数,如 2)承载多节点,`group_configs[].count=1`。**平台把 count 解释为单元内资源实例数**(单副本资源实例数为多,而非单元副本数/group 级实例数);平台不会自动注入 `NODE_RANK`/`MASTER_ADDR`/`VC_WORKER_HOSTS` 等组网变量——**start_vllm.sh/get_master_ip.py 需自带确定性主从判定**(get_master_ip.py 优先读 `MASTER_ADDR`,其次 `VC_WORKER_HOSTS` 取第一个 IP 为 master,多网卡按本机 IP 遍历比较,禁止退回 127.0.0.1 导致全部实例判为 worker)。上方 JSON 示例是 **PD 分离双单元结构**(单部署单元内 prefill + decode 两个推理单元);多节点/PD 共置时把 `unit_configs[]` 缩为 1 个 `role-1`,`count` 改为 N,`envs` 删掉 `VLLM_ROLE`。
 
+> **⚠️ A5(snt9e/950 系列)特殊字段(强制,与 A2/A3 差异)**: 上方 JSON 骨架与字段说明是在 **A2(910B)/A3(910C)资源池**上验证过的。本次 A5(950 系列 `ascend-snt9e`)控制台实际创建请求体相比 A2/A3 骨架,**多出以下字段**——部署到 A5 资源池时必须补充(推荐直接用 `create_infer_service.py create --chip-model a5`,脚本自动注入;或 `--raw-json` 手工构造时逐项核对)。**非 A5 场景(a2/a3)保持原骨架,不注入这些字段**。
+
+| 字段位置 | A5 取值 | 说明 |
+|---------|--------|------|
+| 顶层 `tags` | `[]` | A5 请求体实测必带空数组 |
+| 顶层 `schedule` | `[]` | A5 请求体实测必带空数组 |
+| 顶层 `log_configs` | `[{"status":"OFF","type":"STDOUT"},{"status":"OFF","type":"EVENT"},{"status":"OFF","type":"FILE","files":[]}]` | A5 请求体实测必带 |
+| `group_configs[].workload_type` | `"LWS"` | A5 轻量服务调度策略(LWS);A2/A3 骨架无此字段 |
+| `group_configs[].async_scheduling` | `true` | **资源不足时异步排队而非立即 8118 拒绝**;A2/A3 骨架无此字段(缺省同步调度) |
+| `group_configs[].priority` | `1` | 调度优先级 |
+| `group_configs[].framework` | `"COMMON"` | 框架类型 |
+| `group_configs[].system_log_dump_enable` | `false` | 系统日志转储开关 |
+| `group_configs[].deploy_type` | `"MULTI"` | group 级部署类型 |
+| `group_configs[].advanced_config` | 对象,含 `protocol`/`port`/`ports`/`network_isolation_enable`/`deploy_timeout_minutes`/`dynamic_routing_enable`/`mooncake_enable`/`custom_metrics_path`/`upgrade_config`/`service_secret` | **A5 的 `deploy_timeout_minutes: 300`、`port: 8080`、`protocol`、`upgrade_config`、`service_secret` 全在这个对象里**(非 A2/A3 骨架的顶层 `deploy_timeout_minutes`/`runtime_config.service_invoke.port`) |
+| `group_configs[].secret_type` | `"dew"` | A5 控制台实测用 `dew`(A2/A3 骨架用 `agency`;两者平台均接受,但 A5 以 `dew` 为准) |
+| `unit_configs[].group_count` | `replicas` | 单元所属 group 内实例数 |
+| `unit_configs[].termination_grace` | `{"termination_grace_period_seconds": 30}` | 终止宽限期 |
+| `unit_configs[].npu_reset_enable` | `false` | NPU 复位开关 |
+| `unit_configs[].cpu_affinity` | `false` | CPU 绑核开关 |
+| `unit_configs[].codes` | `[]` | A5 实测必带空数组 |
+| `unit_configs[].models` | `[]` | A5 实测必带空数组 |
+| `unit_configs[].dumps` | `[]` | A5 实测必带空数组 |
+| `unit_configs[].secret_type` | `"dew"` | unit 级也有 secret_type |
+| `unit_configs[].{liveness,readiness,startup}_health.name` | `"survival_probe"`/`"ready_probe"`/`"start_probe"` | A5 探针对象带 name;A2/A3 骨架无 |
+| `runtime_config.service_invoke.direct_channel_enable` | `false` | 直连通道开关 |
+| `runtime_config.service_invoke.intranet_approval_enable` | `true` | 内网审批开关 |
+| `runtime_config.service_limit.ip_white_list` | `[]` | IP 白名单 |
+| `runtime_config.service_limit.ip_black_list` | `[]` | IP 黑名单 |
+
 ### 字段说明(以 API 文档为准)
 
 | 字段 | 必选 | 类型 | 说明 |
@@ -201,23 +233,23 @@
 | `type` | 是 | String | 服务类型: `REAL_TIME`/`BATCH`/`EDGE`/`ASYNC_REAL_TIME`/`ASYNC_EDGE` |
 | `deploy_type` | 否 | String | 部署类型: `MULTI`(多单元/PD)等 |
 | `task_type` | 否 | String | 任务类型: `TEXT_GENERATION` |
-| `workspace_id` | 否 | String | dev/新版环境需要(对应请求头 `X-Workspace-Id`) |
+| `workspace_id` | **是** | String | **所有环境必填,放请求 body 顶层字段(与 `name`/`type` 同级)——POST 创建请求经 body 传递,不是请求头 `X-Workspace-Id`、也不是 URL 查询参数**。**实测缺失报 `400 ModelArts.8179 Resource pool does not exist or the x-infer service is disabled`**(资源池实际存在且 X-Infer 已启用,仅因 body 缺 `workspace_id`)。GET 查询接口则带头 `X-Workspace-Id` + URL 双查询参数 `?workspaceId={}&workspace_id={}`(除工作空间列表接口外) |
 | `deploy_timeout_minutes` | 否 | Integer | **部署超时时间(分钟),统一设置 300**。**禁止用平台默认(20~60 分钟)**——多节点/大模型(如 GLM-5.2 MoE)首次启动含模型加载 + CUDAGraph 编译,60 分钟不足会触发部署超时失败(`status: FAILED`)。请求体顶层字段,构造后复查未被覆盖丢失。控制台对应"部署超时时间"填 300 分钟 |
 | `group_configs[].name` | 是 | String | 部署组名称(如 group-0) |
 | `group_configs[].weight` | **是** | Integer | 流量权重,必填(如 100) |
 | `group_configs[].pool_id` | 是 | String | 专属资源池 ID |
 | `group_configs[].secret_type` | **是** | String | OBS 挂载认证: **`agency`**(委托,控制台默认);`dew`/`obspool`/`obs` 均报错 |
-| `group_configs[].model` | 是 | Object | 权重挂载: `address`=MODEL_PATH、`mount_path`=`/home/ma-user/model/`、`source`=OBS、`type`=MODEL、`read_only`=true、**`host_cache`=true(挂载加速)** |
+| `group_configs[].model` | 是 | Object | 权重挂载: `address`=MODEL_PATH、`mount_path`=`/home/ma-user/model/`、`source`=OBS、`type`=MODEL、`read_only`=true、**`host_cache`=true(本地加速,OBS 挂载缓存到主机本地,加速模型权重加载;所有芯片 A2/A3/A5 统一开启)** |
 | `group_configs[].count` | 是 | Integer | **副本数(部署单元级)**: 默认 1(单副本多实例);多副本单实例(可靠性)时 >1。多节点场景固定为 1(节点数 N 由 `unit_configs[].count` 承载);单节点 = 1 |
 | `group_configs[].schedule_strategy` | 否 | String | 调度策略: `HIGH_AVAILABILITY` |
 | `unit_configs[].name` | 是 | String | 单元名称(**单部署单元结构**: 单节点/多节点/PD 共置用 `role-1`;PD 分离用 2 个 `prefill`/`decode`)。**命名规范**: 只允许 0-16 字符,仅小写字母/数字/连字符 `-`,且以字母或数字开头结尾——**大写 `Prefill`/`Decode` 报 400** |
 | `unit_configs[].count` | 是 | Integer | **单元内资源实例数(单副本多实例场景承载跨节点数 N)**: 多节点(multinode)/PD 共置(pd_colocate) = N(副本内节点数,单副本资源实例数为多);PD 分离 = 各角色节点数;单节点 = 1 |
 | `unit_configs[].role` | 否 | String | 角色: `COMMON` |
-| `unit_configs[].flavor` | 是 | String | **推理实例规格**(非资源池节点规格)。格式 `modelarts.bm.arm.<cpu>u.<mem>g.npu.<n>d910b`(如 `modelarts.bm.arm.192u.1536g.npu.8d910b` = 192 vCPU/1536GB/8×910B)。**禁止填资源池节点规格**(如 `modelarts.bm.npu.arm.ssd`——这是 ECS 物理机 flavor,报 `400 ModelArts.6404 Flavor not found`);从节点 `status.resources` 的 CPU(`cpu`)/内存(`memory`)/卡数(`huawei.com/ascend-1980`)推导推理 flavor |
+| `unit_configs[].flavor` | 是 | String | **推理实例规格**,从**查询纳管资源池详情(ShowInferServiceCluster)** `GET /v2/{project_id}/services/clusters/{pool_id}` 获取(见 SKILL.md 步骤 0 第 ⑦ 条): 响应 `flavors[]` 中按 `ascend.npu`(实际使用卡数,一般 `card=npu`,A3 `card×2=npu`;**以 `npu` 为准**)选所需卡数条目,取其 `id`(如 `modelarts.vm.arm.16u.64g.npu.16snt9c`)。**禁止从节点规格推导**(前缀 `vm`/`bm` 与内存取整档无法从节点规格得出);**禁止填资源池节点规格**(如 `modelarts.bm.npu.arm.ssd`——这是 ECS 物理机 flavor,报 `400 ModelArts.6404 Flavor not found`) |
 | `unit_configs[].cmd` | 是 | String | 启动命令 `bash /home/ma-user/code/start_vllm.sh` |
 | `unit_configs[].envs` | 否 | Object | 环境变量(**pd PD 分离必填 `VLLM_ROLE=prefill\|decode` + 双角色不同 `PORT`**,2 个推理单元分别注入;multinode/pd_colocate 单引擎形态无需注入任何角色/端口变量,由 `get_master_ip.py` 自动判定) |
 | `unit_configs[].image` | **是** | Object | SWR 镜像: `source`=SWR、`swr_path`=SWR_IMAGE_ADDRESS |
-| `unit_configs[].files[]` | 是 | Array | code 目录挂载: `address`=CODE_OBS_PATH、`mount_path`=`/home/ma-user/code/`、`type`=FILE、`read_only`=true、**`host_cache`=true(挂载加速)** |
+| `unit_configs[].files[]` | 是 | Array | code 目录挂载: `address`=CODE_OBS_PATH、`mount_path`=`/home/ma-user/code/`、`type`=FILE、`read_only`=true、**`host_cache`=true(本地加速,OBS 挂载缓存到主机本地;所有芯片 A2/A3/A5 统一开启)** |
 | `unit_configs[].{startup,liveness,readiness}_health` | 是 | Object | 探针: `check_method`=EXEC、`cmd`、**`failure_threshold`=300、`initial_delay_seconds`=300、`period_seconds`=60**、`timeout_seconds`=60 |
 | `unit_configs[].recovery` | 否 | String | 恢复策略: `Instance` |
 | `runtime_config.service_invoke` | 是 | Object | `auth_type`=NONE/TOKEN/API_KEY、**`port`=8080(必须与启动脚本一致)**、`protocol`=HTTP |
@@ -251,7 +283,7 @@
 | 就绪探针 | `bash /code/health_check.sh readiness` | 服务就绪判定,失败移出流量端点 |
 | 存活探针 | `bash /code/health_check.sh liveness` | 运行期查进程,失败重启容器 |
 
-> **启动延迟(initial delay)设置 600 秒及以上,失败次数(failureThreshold)自动设置为 60**(超时 60s、周期 30s;失败次数 60 × 周期 30s ≈ 1800s/30 分钟容忍窗口)——vLLM V1 引擎首次启动需编译 IR + 捕获 CUDAGraph,耗时可达 5~10 分钟;探针过早探测超时 → 实例被杀 → 重启 → 重新编译 → 死循环(详见常见问题排查"服务反复重启")。启动延迟 + 大失败阈值双保险,彻底规避重启循环。
+> **启动延迟(initial delay)设置 600 秒及以上,失败次数(failureThreshold)自动设置为 300**(超时 60s、周期 60s;失败次数 300 × 周期 60s ≈ 18000s/300 分钟容忍窗口)——vLLM V1 引擎首次启动需编译 IR + 捕获 CUDAGraph,耗时可达 5~10 分钟;探针过早探测超时 → 实例被杀 → 重启 → 重新编译 → 死循环(详见常见问题排查"服务反复重启")。启动延迟 + 大失败阈值双保险,彻底规避重启循环。
 
 ## 六、4 种部署形式 → 请求体映射矩阵
 
@@ -296,7 +328,7 @@
 | 创建 API 返回 401/403 | IAM Token 失效(24h)或权限不足(缺 modelarts:service:create);重新获取 Token / 确认权限 |
 | 创建 API 返回 4xx(参数错误) | `roles[]` 请求体字段名与当前 API 版本不符;在 API Explorer 生成完整请求体,用 `--raw-json` 传入 |
 | 服务一直"部署中" | 查看实例日志,重点看模型加载是否完成、探针是否通过;`show` 轮询状态 |
-| 实例反复重启 | 探针 startup 延迟过短;确认启动延迟 600s 与失败次数 60 已配置 |
+| 实例反复重启 | 探针 startup 延迟过短;确认启动延迟 600s 与失败次数 300 已配置 |
 | 启动报 CANN/驱动错误 | 镜像 tag 与资源池昇腾版本不兼容,换用匹配的镜像版本 |
 | OOM | 调小 MAX_MODEL_LEN / GPU_MEM_UTIL,或增加卡数 |
 | 跨节点 TP(multinode/pd_colocate)报业务错误 | 超节点亲和组实例数未配置或不等于 N,改为 N(副本内节点数) |
@@ -319,8 +351,8 @@
 | 健康检查(PD 共置) | 无 | **三层探针**(startup/liveness 查 vllm 进程,readiness 调用 `get_master_ip.py` 取 master IP 探 `/health`) | 所有节点探 master /health 反映集群就绪,规避 PD 共置启动慢导致的重启循环 |
 | 新增文件 | 无 | `start_vllm.sh`、`health_check.sh`、`get_master_ip.py`(multinode/pd_colocate) | ModelArts 平台要求 |
 | 文件存储挂载 | 无 | OBS `model/` 与 `code/` 同级,挂载到容器内 | 权重与脚本分离 |
-| 探针配置 | 无 | 路径 /health、端口 8080、启动延迟 600s、超时 60s、周期 30s | 规避 vLLM V1 首启 5~10 分钟导致的重启循环 |
-| 环境变量 | 文档给定 | 同文档;健康检查失败次数自动设 60(首启容忍窗口) | 规避 ModelArts 探针误杀重启循环 |
+| 探针配置 | 无 | 路径 /health、端口 8080、启动延迟 600s、超时 60s、周期 60s、失败次数 300 | 规避 vLLM V1 首启 5~10 分钟导致的重启循环 |
+| 环境变量 | 文档给定 | 同文档;健康检查失败次数自动设 300(首启容忍窗口) | 规避 ModelArts 探针误杀重启循环 |
 | 启动命令执行 | 任意 shell | **`bash /home/ma-user/code/start_vllm.sh`**(code 目录挂载到容器后;禁用 `sh`) | bash 数组语法 `sh` 不识别 |
 | 脚本内文件引用 | 任意 | `$(dirname "$0")` 相对定位,禁硬编码 `/code/` | 挂载路径由用户配置决定 |
 | JSON 参数 | 字符串变量 | bash 数组,单引号包裹 | 避免引号丢失 |
@@ -328,4 +360,4 @@
 | 多副本(可靠性) | 无 | ModelArts `group_configs[].count` 承载,平台流量分发,模板无需修改 | 副本即独立 TP 域 |
 | 超节点亲和组(multinode/pd_colocate) | 无 | **=N**(副本内节点数),确保跨节点 TP 多机调度到同一超节点 | 跨超节点通信带宽低,直接报业务错误 |
 | PD 分离(pd) | 无 | **单部署单元内 2 个推理单元(prefill + decode)**,分别注入 `VLLM_ROLE`,双角色不同 PORT | PD 分离平台承载,单部署单元双 unit |
-| PD 共置(pd_colocate) | 无 | **单单元 N 节点**(`unit_configs[].count`=N),vLLM 引擎内部 PD 分工,无需 `VLLM_ROLE`/Mooncake | 对齐官方 glm_5_2.sh 单引擎 DP 形态 |
+| PD 共置(pd_colocate) | 无 | **单单元 N 节点**(`unit_configs[].count`=N),vLLM 引擎内部 PD 分工,无需 `VLLM_ROLE` | 对齐官方 glm_5_2.sh 单引擎 DP 形态 |
