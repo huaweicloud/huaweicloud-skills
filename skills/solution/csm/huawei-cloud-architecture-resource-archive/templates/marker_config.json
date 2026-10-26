@@ -1,0 +1,78 @@
+{
+  "output": {
+    "marker_table_filename": "关键资源标记表.xlsx",
+    "marker_table_sheet": "关键资源标记表",
+    "resource_store_filename": "_resource_store.json"
+  },
+  "headers": {
+    "core": "是否核心业务",
+    "customer": "客户名称",
+    "enterprise_project": "企业项目",
+    "business": "所属业务",
+    "resource_group": "资源分组",
+    "downstream_explicit": "下游服务",
+    "downstream_inferred": "下游服务(推断)",
+    "architecture_layer": "架构层",
+    "spec": "规格",
+    "inference_reason": "推断原因"
+  },
+  "spec_keys": [
+    {"label": "规格", "key": "flavor"},
+    {"label": "vCPU", "key": "vcpu"},
+    {"label": "内存", "key": "ram"},
+    {"label": "镜像", "key": "image"},
+    {"label": "磁盘(GB)", "key": "disk"},
+    {"label": "磁盘类型", "key": "disk_type"}
+  ],
+  "defaults": {
+    "core_business": "是",
+    "business": "默认业务"
+  },
+  "downstream_labels": {
+    "type_labels": {
+      "ecs": "ECS",
+      "elb": "ELB",
+      "nat": "NAT",
+      "eip": "EIP",
+      "vpn": "VPN",
+      "ha-vip": "HAVIP",
+      "gvpn": "GVPN",
+      "subnet": "子网",
+      "virsubnet": "子网",
+      "route_table": "路由表",
+      "routetable": "路由表",
+      "镜像": "镜像",
+      "cce_node": "CCE节点",
+      "cce集群": "CCE集群"
+    },
+    "subnet": "子网",
+    "route_table": "路由表",
+    "image": "镜像",
+    "cce_node": "CCE节点",
+    "inter_region_bandwidth": "域间带宽",
+    "ccaas_inter_region_bandwidth": "CCAAS_域间带宽",
+    "associated_instance": "关联实例",
+    "associated_resource": "关联资源",
+    "backend_server": "后端服务器"
+  },
+  "reasons": {
+    "koocli_supplement": "KooCLI query supplement",
+    "cce_cluster": "KooCLI ListClusters",
+    "vpc_list": "KooCLI ListVpcs",
+    "obs_buckets": "KooCLI OBS bucket list",
+    "obs_buckets_rms": "KooCLI OBS bucket list (RMS)",
+    "rms_summary": "KooCLI RMS CollectAllResourcesSummary",
+    "ecs_servers": "KooCLI ListServersDetails",
+    "cce_subresource": "KooCLI CCE sub-resource",
+    "simple_list": "KooCLI list",
+    "eip": "KooCLI ListPublicips",
+    "live_domains": "KooCLI Live ShowDomain",
+    "cdn_domains": "KooCLI CDN ListDomains",
+    "geip": "KooCLI ListGlobalEips",
+    "elb": "KooCLI ListLoadBalancers"
+  },
+  "hcloud_prompts": {
+    "config_ok": "设置配置成功",
+    "multi_version_hint": "Xxx有多个版本"
+  }
+}

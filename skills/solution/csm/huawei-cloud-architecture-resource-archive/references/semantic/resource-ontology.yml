@@ -1,0 +1,253 @@
+name: ResourceArchiveOntology
+type: semantic_ontology
+description: 资源事实、粒度、KooCLI 只读 source_operations；查证流与答复纪律见 SKILL.md。
+default_scope:
+  account: 当前 KooCLI profile
+  method: oneself
+  region_scope: auto (IAM KeystoneListProjects 发现全账号 region)
+protected_identifiers:
+  - resource_id
+  - enterprise_project_id
+  - cluster_id
+  - nat_gateway_id
+  - vpc_id
+  - subnet_id
+  - project_id
+marker_table_fields:
+  - customer_name
+  - region
+  - resource_name
+  - resource_id
+  - resource_type
+  - enterprise_project_id
+  - eps_project
+  - is_core_business
+  - business
+  - group
+  - downstream_explicit
+  - downstream_inferred
+  - architecture_layer
+  - spec
+  - inference_reason
+entities:
+  # ═══════════════ domain: compute ═══════════════
+  - name: ComputeResource
+    kind: fact
+    domain: compute
+    source_operations:
+      - ECS/ListServersDetails
+      - BMS/ListServersDetails
+      - CCI/ListInstances
+      - Workspace/ListDesktops
+    grain: 实例级×region
+    summary: ECS/BMS/CCI/Workspace 实例列表，含规格/镜像/VPC
+    dimensions: [region, resource_id, resource_name, flavor, vpc_id, enterprise_project_id]
+    evidence_boundary: 实例级事实；不含镜像层/安全组绑定
+
+  - name: CceClusterResource
+    kind: fact
+    domain: compute
+    source_operations:
+      - CCE/ListClusters
+      - CCE/ListNodes
+      - CCE/ListNodePools
+      - CCE/CreateKubernetesClusterCert
+    grain: 集群级×region → 节点级×cluster_id
+    summary: CCE 集群 + 节点 + K8s 子资源（需集群有可达 K8s API endpoint）
+    dimensions: [region, cluster_id, cluster_name, project_id, node_count, flavor]
+    evidence_boundary: 集群+节点级事实；K8s 子资源需可达 endpoint，不可达时仅 cluster+node
+
+  - name: CceK8sSubResource
+    kind: fact
+    domain: compute
+    source_operations:
+      - CCE/CreateKubernetesClusterCert
+      - kubectl get deploy/sts/ds/svc/cm/ing/netpol/po/ep/secret/pvc/hpa
+    grain: 命名空间级×cluster_id×namespace
+    summary: CCE K8s 子资源（Deployment/StatefulSet/Service/ConfigMap 等 15+ 类型）
+    required_context: [reachable_k8s_api_endpoint]
+    dimensions: [cluster_id, namespace, resource_name, resource_type]
+    evidence_boundary: 需集群有可达 K8s API endpoint；休眠集群/无公网 endpoint 集群不可查
+
+  # ═══════════════ domain: storage ═══════════════
+  - name: StorageResource
+    kind: fact
+    domain: storage
+    source_operations:
+      - RMS/ListAllResources --type=obs.buckets
+      - SFS/ListShares
+      - SFS/ListShares --type=sfs3
+      - SFS/ListShares --type=efs
+      - SFS/ListShares --type=sfs_turbo
+      - CSS/ListClusters
+      - MRS/ListClusters
+    grain: 实例级×region（OBS 为 global，经 RMS 查询）
+    summary: OBS/SFS/CSS/MRS 存储资源
+    dimensions: [region, resource_id, resource_name, resource_type, enterprise_project_id]
+    evidence_boundary: OBS 无原生 ListBuckets，经 RMS ListAllResources 间接查询；RMS 汇总行不可当实例事实
+
+  # ═══════════════ domain: network ═══════════════
+  - name: NetworkResource
+    kind: fact
+    domain: network
+    source_operations:
+      - VPC/ListVpcs
+      - VPC/ListSubnets
+      - VPC/ListRouteTables
+      - VPC/ListSecurityGroups/v3
+      - VPC/ListFirewallGroups/v3
+      - VPC/ListVpcPeerings
+      - EIP/ListPublicips
+      - GEIP/ListGlobalEips
+      - ELB/ListLoadBalancers
+      - ELB/ListPools
+      - ELB/ListMembers
+      - NAT/ListNatGateways
+      - NAT/ListSnatRules
+      - NAT/ListDnatRules
+      - DNS/ListPublicZones
+      - DNS/ListPrivateZones
+      - DNS/ListEndpoints
+      - DNS/ListResolverRules
+      - VPN/ListVpnGateways
+      - VPN/ListVpnConnections
+      - VPN/ListCustomerGateways
+      - VPN/ListP2cVpnGateways
+      - VPCEP/ListEndpoints
+      - ER/ListInstances
+      - ER/ListRouteTables
+      - ER/ListAttachments
+      - DCAAS/ListDirectConnects
+      - DCAAS/ListHostedDirectConnects
+      - DCAAS/ListVirtualGateways
+      - DCAAS/ListVirtualInterfaces
+      - DCAAS/ListGlobalDcGateways
+    grain: 实例级×region
+    summary: VPC/子网/路由表/安全组/网络ACL/对等连接/EIP/GEIP/ELB/NAT/DNS/VPN/VPCEP/ER/DCAAS
+    dimensions: [region, resource_id, resource_name, resource_type, vpc_id, enterprise_project_id]
+    evidence_boundary: 实例级事实；ELB backend 需 ListPools+ListMembers 逐级查询
+
+  - name: CcaasResource
+    kind: fact
+    domain: network
+    source_operations:
+      - CC/ListCloudConnections
+      - CC/ListInterRegionBandwidths
+      - CC/ListBandwidthPackages
+      - CC/ListNetworkInstances
+      - CC/ListCloudConnectionRoutes
+    grain: 全局级×account（global service，每账号查一次）
+    summary: CCAAS 云连接 + 域间带宽 + 带宽包 + 网络实例 + 路由
+    dimensions: [resource_id, resource_name, resource_type, cloud_connection_id]
+    evidence_boundary: 全局资源；CC2.0 同此模式（ListCloudConnections/ListInterRegionBandwidths/ListBandwidthPackages）
+
+  # ═══════════════ domain: database ═══════════════
+  - name: DatabaseResource
+    kind: fact
+    domain: database
+    source_operations:
+      - RDS/ListInstances
+      - DCS/ListInstances
+      - DDS/ListInstances
+      - DMS/ListInstances
+      - GaussDB/ListInstances
+      - GeminiDB/ListInstances
+      - TaurusDB/ListInstances
+      - DLI/ListQueues
+      - DLI/ListFlinkJobs
+      - DLI/ListDatabases
+      - DLI/ListDataSourceConnections
+      - CloudTable/ListClusters
+    grain: 实例级×region
+    summary: RDS/DCS/DDS/DMS/GaussDB/GeminiDB/TaurusDB/DLI/CloudTable 数据库实例
+    dimensions: [region, resource_id, resource_name, resource_type, engine, enterprise_project_id]
+    evidence_boundary: 实例级事实；不含数据库内部表/数据层
+
+  # ═══════════════ domain: security ═══════════════
+  - name: SecurityResource
+    kind: fact
+    domain: security
+    source_operations:
+      - WAF/ListHost
+      - WAF/ListInstance
+      - CFW/ListFirewalls
+      - CNAD/ListDomains
+      - CNAD/ShowDDosStatus
+    grain: 实例级×region（WAF 独享模式为实例级，共享模式为域名级）
+    summary: WAF/CFW/CNAD 安全资源
+    dimensions: [region, resource_id, resource_name, resource_type, domain]
+    evidence_boundary: WAF 共享模式=域名级、独享模式=实例级；不可跨模式外推
+
+  # ═══════════════ domain: cdn ═══════════════
+  - name: CdnResource
+    kind: fact
+    domain: cdn
+    source_operations:
+      - CDN/ListDomains
+      - Live/ShowDomain
+      - RMS/ListAllResources --type=live.domains
+    grain: 域名级×account（global service，仅 cn-north-1/ap-southeast-1）
+    summary: CDN 域名 + Live 直播域名
+    required_context: [cli-region=cn-north-1 or ap-southeast-1]
+    dimensions: [resource_id, domain_name, domain_type, cname, enterprise_project_id]
+    evidence_boundary: 全局资源，仅特定 region 可查；Live 经 RMS 或 Live/ShowDomain 双路径
+
+  # ═══════════════ domain: global ═══════════════
+  - name: GlobalResource
+    kind: fact
+    domain: global
+    source_operations:
+      - RMS/CollectAllResourcesSummary
+      - RMS/ListAllResources
+      - EPS/ListEnterpriseProject
+      - IAM/KeystoneListProjects
+      - IAM/KeystoneListUsers
+    grain: 汇总级×region（RMS Summary）/ 账号级×account（EPS/GEIP/CDN/CCAAS/CC2）
+    summary: RMS 资源汇总 + EPS 企业项目 + IAM 项目/用户
+    dimensions: [region, provider, type, count, enterprise_project_id]
+    evidence_boundary: RMS CollectAllResourcesSummary 为汇总行，不可当实例事实；仅用于 region 探测和覆盖度参考
+
+  # ═══════════════ domain: marker_table ═══════════════
+  - name: MarkerTableRow
+    kind: fact
+    domain: marker_table
+    source_operations:
+      - convert_to_tsc_json.py
+      - generate_marker_table.py
+    grain: 资源实例×15列
+    summary: 标记表一行，对应一个资源实例
+    dimensions: [customer_name, region, resource_name, resource_id, resource_type,
+                  enterprise_project_id, eps_project, is_core_business, business, group,
+                  downstream_explicit, downstream_inferred, architecture_layer, spec,
+                  inference_reason]
+    evidence_boundary: 标记表行=实例级事实；spec 为结构化规格（flavor/vCPU/ram/image/disk/disk_type）
+
+  - name: MarkerTableSpecColumn
+    kind: dimension_catalog
+    domain: marker_table
+    source_operations:
+      - convert_to_tsc_json.py (_build_spec)
+    grain: spec 子列×资源实例
+    summary: 标记表"规格"列的 6 个子键
+    dimensions: [规格, vCPU, 内存, 镜像, 磁盘(GB), 磁盘类型]
+    evidence_boundary: 规格子列从 KooCLI flavor/image 提取；缺失字段留空，不外推
+
+  - name: DownstreamInference
+    kind: fact
+    domain: marker_table
+    source_operations:
+      - infer_downstream.py
+    grain: 资源绑定关系×源资源
+    summary: 推断下游服务（GEIP→绑定实例/ECS→镜像/ELB→后端/CCE→节点/VPC→子网等 11 类）
+    dimensions: [from_type, from_id, to_type, to_label, to_id]
+    evidence_boundary: 推断关系需源数据中有 associate_instance_id 等绑定字段；无绑定字段时为空，不猜测
+
+  - name: ResourceGapRecord
+    kind: fact
+    domain: marker_table
+    source_operations:
+      - 多次 run_pipeline.py 产出对比
+    grain: 账号×资源类型×差异类型
+    summary: 跨账号资源差异记录
+    dimensions: [account_a, account_b, resource_type, gap_type, resource_id]
+    evidence_boundary: 差异基于两次快照对比；非实时一致性，仅快照时点差异

@@ -1,0 +1,56 @@
+name: HuaweiCloudResourceArchiveSemanticCatalog
+type: semantic_catalog
+description: 薄路由；account/region_scope/services → ontology_entities。provider_gate、workflow、拒答、触发词补全归 SKILL.md。
+coverage:
+  expected_resource_types: 83
+  expected_service_modules: 43
+  source_version: KooCLI 7.2.2
+entry_points:
+  inventory_full:
+    required_context:
+      account: [current_profile]
+      region_scope: [all_regions_auto, explicit_regions]
+      services: [all_services]
+      marker_columns: [15_column_standard]
+    triggers: [全量资源查询, 资源盘点, 全量查询, resource inventory, 查所有资源]
+    ontology_entities:
+      - ComputeResource
+      - StorageResource
+      - NetworkResource
+      - DatabaseResource
+      - SecurityResource
+      - GlobalResource
+      - CdnResource
+  single_service_query:
+    required_context:
+      account: [current_profile]
+      region_scope: [all_regions_auto, explicit_regions]
+      services: [single_or_subset]
+      marker_columns: [not_applicable]
+    triggers: [查ECS, 查VPC, 查RDS, 单服务查询, query ecs, inventory specific service]
+    ontology_entities:
+      - ComputeResource
+      - NetworkResource
+      - DatabaseResource
+      - SecurityResource
+  marker_table_generation:
+    required_context:
+      account: [current_profile]
+      region_scope: [all_regions_auto, explicit_regions]
+      services: [all_services_or_subset]
+      marker_columns: [15_column_standard]
+    triggers: [资源标记表, marker table, 生成标记表, 关键资源标记表, 导出Excel]
+    ontology_entities:
+      - MarkerTableRow
+      - MarkerTableSpecColumn
+      - DownstreamInference
+  cross_account_reconcile:
+    required_context:
+      account: [multiple_profiles]
+      region_scope: [all_regions_auto]
+      services: [all_services]
+      marker_columns: [15_column_standard]
+    triggers: [跨账号对账, 资源差异, cross-account reconcile, 账号间资源对比]
+    ontology_entities:
+      - MarkerTableRow
+      - ResourceGapRecord
