@@ -39,6 +39,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
@@ -877,7 +878,7 @@ def main():
     REGION = args.cli_region
     ENDPOINT = f"optverse.{REGION}.myhuaweicloud.com"
 
-    HCLOUD = _resolve_hcloud_path(args.hcloud_path)
+    HCLOUD = args.hcloud_path or shutil.which("hcloud")
     if not HCLOUD or not os.path.exists(HCLOUD):
         print("[ERROR] hcloud executable not found.")
         print("  Install the hcloud CLI and add it to PATH, or pass --hcloud-path.")
