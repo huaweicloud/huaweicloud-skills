@@ -18,7 +18,7 @@ description: |
 This skill enables users to efficiently search, discover, and install Huawei Cloud skills.
 
 **Dependency**: Python 3.6+ and network access to `gitcode.com` (API v5 for the skill
-index) and `github.com` / `raw.githubusercontent.com` (for skill details). Quality telemetry is collected automatically via
+index), `gitee.com` (backup index), and `github.com` / `raw.githubusercontent.com` (for skill details). Quality telemetry is collected automatically via
 `skill-quality-cli` (installed by `scripts/ensure_cli.sh` if absent) — no other CLI
 or credential is required.
 
@@ -44,7 +44,7 @@ This skill enables users to:
 - **View Skill Details**: Fetch full SKILL.md content from GitHub for specific skills
 - **Install Skills**: Guide users through skill installation via `npx skills add` (GitCode default), `npx skills add https://clawhub.ai/huaweicloudskill/skills/<skill-name>` (ClawHub), or fallback GitHub method
 
-**Architecture**: GitCode API v5 (`index.json` + `cn-en-map.json`) → HTTP GET (base64 decode) → In-memory search → GitHub raw fetch for details → Install
+**Architecture**: Dual-source fallback (local cache → GitCode API v5 → Gitee raw) → In-memory search → GitHub raw fetch for details → Install
 
 ### Use Cases
 
@@ -58,7 +58,7 @@ This skill enables users to:
 ## Prerequisites
 
 - **Python 3.6+** must be installed and available as `python` (or `python3`) in `PATH`
-- **Network access** to `gitcode.com` (API v5 for index) and `github.com` / `raw.githubusercontent.com` (for skill details)
+- **Network access** to `gitcode.com` (API v5 for index), `gitee.com` (backup index), and `github.com` / `raw.githubusercontent.com` (for skill details)
 - **`skill-quality-cli`** — **MANDATORY (Step 0.1)**: ensured by `bash scripts/ensure_cli.sh`
   (idempotent, skips if already present). **MUST be triggered on EVERY execution of this
   skill** before running any search/install command.
@@ -161,12 +161,28 @@ RAW_BASE=https://raw.githubusercontent.com/$SKILLS_REPO/$SKILLS_BRANCH
 
 ## Index Source
 
-The search script fetches the skill index from GitCode API v5 via HTTP GET (base64 auto-decoded):
+The search script uses a **dual-source fallback** for resilient data loading:
 
+```
+1. Local cache (~/.cache/huawei-cloud-find-skills/, TTL 1h)  — fastest, no network
+2. GitCode API v5 (primary)    — WAF rate-limited, no X-RateLimit headers
+3. Gitee raw (backup)          — independent IP/WAF, switched on 429
+```
+
+Primary source (GitCode API v5):
 ```
 SKILLS_INDEX_URL=https://gitcode.com/api/v5/repos/developer-skill/skills-group-contribution/contents/skills-index/index.json?ref=test-for-index
 SKILLS_CN_EN_MAP_URL=https://gitcode.com/api/v5/repos/developer-skill/skills-group-contribution/contents/skills-index/cn-en-map.json?ref=test-for-index
 ```
+
+Backup source (Gitee raw):
+```
+BACKUP_INDEX_URL=https://gitee.com/csimon666/skills-group-contribution/raw/test-for-index/skills-index/index.json
+BACKUP_MAP_URL=https://gitee.com/csimon666/skills-group-contribution/raw/test-for-index/skills-index/cn-en-map.json
+```
+
+On 429 (Too Many Requests), the script automatically retries with exponential backoff,
+then falls through to Gitee raw — a different IP/WAF unaffected by GitCode rate limits.
 
 
 ## Core Workflow and Core Commands
@@ -334,8 +350,8 @@ already present) and never blocks the business flow.
 ## Notes
 
 - This skill is **read-only** and does not create any cloud resources
-- **No cache management needed** — index is fetched fresh from GitCode API v5 each run
-- **Network required** — index data is hosted on GitCode, fetched via HTTP GET (base64 decoded)
+- **Dual-source with caching** — local cache (TTL 1h) → GitCode API v5 → Gitee raw (on 429)
+- **Cache location** — `~/.cache/huawei-cloud-find-skills/`, TTL configurable via `FIND_SKILLS_CACHE_TTL` env var (default 3600s)
 - **MUST use script to search** — do not read index.json directly
 - Index repo: `https://gitcode.com/developer-skill/skills-group-contribution` (branch: `test-for-index`)
 - Skills repo: `https://github.com/huaweicloud/huaweicloud-skills` (branch: `master`)
