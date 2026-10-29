@@ -1,0 +1,6 @@
+{
+  "PE3:.gitignore:2": "False positive: .gitignore entry that prevents .env from being committed — this is a security best practice, not credential access",
+  "PE3:scripts/config.py:21": "False positive: comment documenting that .env is gitignored; no credential access occurs",
+  "PE3:scripts/config.py:22": "False positive: load_dotenv() loads env vars from .env for local dev convenience; .env is gitignored, gitleaks verified no hardcoded secrets",
+  "PE3:scripts/config.py:78": "False positive: error message text mentioning .env as optional; actual credentials come from environment variables"
+}
