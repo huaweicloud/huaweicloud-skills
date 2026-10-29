@@ -1,0 +1,103 @@
+{
+  "business_requirements": {
+    "workload_types": ["offline_batch"],
+    "daily_increment_tb": 0.001,
+    "existing_data_tb": 1,
+    "retention_days": 180,
+    "compression_ratio": 0.5,
+    "window_hours": 8,
+    "concurrency": 0,
+    "throughput_mbps": 0,
+    "partitions": 0,
+    "qps_wan": 0,
+    "peak_buffer": false,
+    "region": "cn-north-4",
+    "storage_mode": "OBS"
+  },
+  "estimated_resources": {
+    "total_cores": 16,
+    "total_memory_gb": 64,
+    "storage_tb": 1.09,
+    "estimation_basis": "修正估算: 日处理量=增量0.001+热数据0.8=0.801TB; V=0.801×40÷8=4vCPU×1.5并发余量=6→向上取整16vCPU; 内存16×4=64GB; 估算值"
+  },
+  "elastic_task": {"enabled": false},
+  "plan_a": {
+    "name": "新建离线批处理MRS方案 — ac9.4xlarge.4 × 3 Core (生产HA)",
+    "core_flavor": "ac9.4xlarge.4 (16C/64G)",
+    "core_count": 3,
+    "core_total_vcpu": 48,
+    "core_total_mem_gb": 192,
+    "core_data_disk_count": 1,
+    "total_nodes": 6,
+    "nodes_detail": [
+      {
+        "group": "Master",
+        "flavor": "ac9.4xlarge.4 (16C/64G)",
+        "count": 3,
+        "reason": "Core总核数48<100→3节点(Compact); Core 3节点≤20→16核基线; OBS模式元数据少,6步算法22.6GB≤64GB→ac9.4xlarge.4满足MRS硬约束"
+      },
+      {
+        "group": "Core",
+        "flavor": "ac9.4xlarge.4 (16C/64G)",
+        "count": 3,
+        "reason": "目标16C/64G(R=4.0); 1:4配比aC9; N=1完美匹配Total_excess=0%; 用户选择3节点生产HA; OBS存算分离N=3标准HA+分布式Shuffle"
+      }
+    ]
+  },
+  "recommendation_reason": "ac9.4xlarge.4×3 Core: 修正估算考虑80%热数据参与计算,日处理0.801TB; V=16vCPU/M=64GB; ac9.4xlarge.4完美匹配Total_excess=0%; Core数据盘灵活计算640GB→1块640GB; OBS存算分离按实际所需容量1.1TB规划",
+  "obs_storage": {
+    "storage_tb": 1.09,
+    "savings_pct": 0
+  },
+  "decisions": [
+    {
+      "point": "资源推算(负载模型)",
+      "candidates": "简单ETL系数20 / 标准数仓系数40 / 复杂计算系数80",
+      "selected": "标准数仓40 vCPU·h/TB",
+      "reasoning": "用户选择标准数仓(多表Join/聚合); 修正: 日处理量=增量0.001+热数据0.8=0.801TB; V=0.801×40÷8=4vCPU×1.5并发余量=6→16vCPU; 内存16×4=64GB",
+      "rejected": "简单ETL系数低估Join开销; 复杂系数高估常规数仓负载; 仅算增量严重低估"
+    },
+    {
+      "point": "Core规格选择(最小冗余)",
+      "candidates": "ac9.4xlarge.4(16C/64G) Total_excess=0% / ac9.8xlarge.4(32C/128G) Total_excess=200%",
+      "selected": "ac9.4xlarge.4 (16C/64G)",
+      "reasoning": "N=max(ceil(16/16),ceil(64/64))=1; 16C(0%) 64G(0%) Total_excess=0%完美匹配; 1:4配比匹配R=4.0",
+      "rejected": "ac9.8xlarge.4: Total_excess=200%冗余过高"
+    },
+    {
+      "point": "Core节点数量(HA能力)",
+      "candidates": "N=1(无HA,仅测试) / N=2(OBS模式可接受) / N=3(标准HA生产推荐)",
+      "selected": "N=3 (标准HA生产配置)",
+      "reasoning": "算法N=1完美匹配但无HA单点故障; 用户确认为生产集群; OBS存算分离N=3提供标准HA+分布式Shuffle; 总规格48vCPU/192GB",
+      "rejected": "N=1: 无HA单点故障仅适合测试; N=2: 有HA但Shuffle边缘(虽OBS可接受)"
+    },
+    {
+      "point": "Master规格选择(6步算法)",
+      "candidates": "ac9.4xlarge.4(16C/64G) / ac9.8xlarge.4(32C/128G)",
+      "selected": "ac9.4xlarge.4 (16C/64G) × 3",
+      "reasoning": "Core 3节点≤20→16核基线; OBS模式TextFile元数据,NameNode堆0.38GB; 6步算法总内存22.6GB≤64GB→ac9.4xlarge.4满足MRS硬约束",
+      "rejected": "ac9.8xlarge.4: 算法22.6GB远小于128GB过度配置"
+    },
+    {
+      "point": "Core数据盘配置(灵活计算)",
+      "candidates": "1块640GB(640≤800) / 2块600GB(固定600/块)",
+      "selected": "1块640GB",
+      "reasoning": "Shuffle需求=16×40=640GB; 640≤800→1块盘,单盘640GB; 灵活计算减少盘数,总容量640GB无浪费",
+      "rejected": "2块600GB=1200GB: 浪费560GB"
+    },
+    {
+      "point": "存储模式选择",
+      "candidates": "OBS存算分离 / 本地HDFS三副本",
+      "selected": "OBS存算分离 (实际所需容量1.1TB)",
+      "reasoning": "用户选择OBS; 存算分离降低存储成本; 按实际所需容量1.1TB规划(不取套餐包); Core无需大数据盘; Guardian统一OBS访问控制",
+      "rejected": "本地HDFS: 1TB数据三副本需3TB物理盘,存储成本高"
+    },
+    {
+      "point": "MRS版本与集群类型",
+      "candidates": "MRS 3.1.0/3.2.0/3.3.0-LTS; Analysis/Streaming/Hybrid/Custom",
+      "selected": "MRS 3.3.0-LTS + Analysis集群",
+      "reasoning": "最新LTS版本组件支持最全; 纯离线批处理→Analysis集群; 组件:Hadoop+Spark2x+Hive+ZooKeeper+DBService",
+      "rejected": "3.1.0/3.2.0: 旧版本; Streaming/Hybrid: 用户无流处理需求"
+    }
+  ]
+}
