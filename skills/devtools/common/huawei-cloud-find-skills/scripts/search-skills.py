@@ -5,26 +5,58 @@ Only the top-3 (score-descending) search results are reported to the
 install-count API (exposure impression, fire-and-forget, non-blocking).
 Set SKILL_QUALITY_REPORT=0 to disable this reporting.
 This script has no other telemetry and no external CLI dependency.
+
+Index loading uses dual-source fallback: GitCode API v5 (primary) → Gitee raw
+(backup). On GitCode 429 (Too Many Requests) or network failure, the script
+automatically switches to the Gitee raw source, which has an independent IP
+and WAF, unaffected by GitCode rate limits. A local cache (TTL 1h) avoids
+repeated network calls within the same session.
 """
 
 import argparse
 import base64
 import binascii
+import hashlib
 import json
 import os
 import sys
 import threading
+import time
 from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
 
 
+# ---------------------------------------------------------------------------
+# Index source configuration — dual-source with automatic failover
+# ---------------------------------------------------------------------------
+
 # 索引分支可通过环境变量注入（默认指向当前生产使用的 test-for-index 分支，
 # 由索引仓库维护方发布正式数据后切换），避免把分支名硬编码散落在各处。
 INDEX_BRANCH = os.environ.get("FIND_SKILLS_INDEX_BRANCH", "test-for-index")
-DEFAULT_INDEX_URL = "https://gitcode.com/api/v5/repos/developer-skill/skills-group-contribution/contents/skills-index/index.json?ref={}".format(INDEX_BRANCH)
-DEFAULT_CN_EN_MAP_URL = "https://gitcode.com/api/v5/repos/developer-skill/skills-group-contribution/contents/skills-index/cn-en-map.json?ref={}".format(INDEX_BRANCH)
+
+# GitCode API v5 (primary) — returns base64-encoded JSON via contents API
+GITCODE_BASE = "https://gitcode.com/api/v5/repos/developer-skill/skills-group-contribution/contents/skills-index"
+
+# Gitee raw (backup) — independent IP/WAF, unaffected by GitCode rate limits
+GITEE_BASE = "https://gitee.com/csimon666/skills-group-contribution/raw/{}/skills-index".format(INDEX_BRANCH)
+
+SOURCES = [
+    {
+        "name": "gitcode",
+        "is_api": True,  # GitCode contents API returns base64-encoded content
+    },
+    {
+        "name": "gitee",
+        "is_api": False,  # Gitee raw returns plain JSON
+    },
+]
 
 HTTP_TIMEOUT = 15
+MAX_RETRIES = 3
+
+# Local cache — avoids repeated network calls within TTL window
+CACHE_DIR = os.path.expanduser("~/.cache/huawei-cloud-find-skills")
+CACHE_TTL = int(os.environ.get("FIND_SKILLS_CACHE_TTL", "3600"))  # default 1h
 
 # Install-count API (same endpoint as Step 3 install counting). Used to report
 # every search-result skill name as an exposure impression - fire-and-forget,
@@ -43,27 +75,134 @@ GENERIC_KEYWORDS = {
 }
 
 
-def load_json_from_url(url, label=""):
+# ---------------------------------------------------------------------------
+# Network fetch with 429 retry + exponential backoff
+# ---------------------------------------------------------------------------
+
+def _fetch_from_network(url, label, is_api):
+    """Fetch JSON from a single URL with 429 retry.
+
+    Returns (parsed_data, retry_after_remaining) or raises on non-429 errors.
+    On exhausted 429 retries, returns (None, 0) so caller can fall back.
+    """
+    for attempt in range(MAX_RETRIES):
+        try:
+            req = Request(url, headers={"User-Agent": "huawei-cloud-find-skills/1.0"})
+            with urlopen(req, timeout=HTTP_TIMEOUT) as resp:
+                raw = resp.read().decode("utf-8")
+            parsed = json.loads(raw)
+            if is_api and isinstance(parsed, dict) and parsed.get("encoding") == "base64" and "content" in parsed:
+                decoded = base64.b64decode(parsed["content"]).decode("utf-8")
+                return json.loads(decoded), 0
+            return parsed, 0
+        except HTTPError as e:
+            if e.code == 429:
+                # Respect Retry-After header if present
+                retry_after = e.headers.get("Retry-After")
+                if retry_after:
+                    try:
+                        wait = min(int(retry_after), 10)
+                    except ValueError:
+                        wait = 2 ** attempt
+                else:
+                    wait = 2 ** attempt
+                if attempt < MAX_RETRIES - 1:
+                    time.sleep(wait)
+                    continue
+                # Exhausted retries for this source — return None to trigger fallback
+                return None, 0
+            raise RuntimeError(f"N02: Failed to fetch {label}: {e}") from e
+        except (URLError, OSError, ValueError, UnicodeDecodeError, binascii.Error) as e:
+            raise RuntimeError(f"N02: Failed to fetch {label}: {e}") from e
+    return None, 0
+
+
+# ---------------------------------------------------------------------------
+# Local cache
+# ---------------------------------------------------------------------------
+
+def _cache_path(key):
+    h = hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+    return os.path.join(CACHE_DIR, f"{h}.json")
+
+
+def _cache_get(key):
+    path = _cache_path(key)
+    if not os.path.exists(path):
+        return None
+    age = time.time() - os.path.getmtime(path)
+    if age > CACHE_TTL:
+        return None
     try:
-        req = Request(url, headers={"User-Agent": "huawei-cloud-find-skills/1.0"})
-        with urlopen(req, timeout=HTTP_TIMEOUT) as resp:
-            data = resp.read().decode("utf-8")
-        parsed = json.loads(data)
-        if isinstance(parsed, dict) and parsed.get("encoding") == "base64" and "content" in parsed:
-            decoded = base64.b64decode(parsed["content"]).decode("utf-8")
-            return json.loads(decoded)
-        return parsed
-    except (URLError, HTTPError, OSError, ValueError, UnicodeDecodeError, binascii.Error) as e:
-        raise RuntimeError(f"N02: Failed to fetch {label}: {e}") from e
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def _cache_put(key, data):
+    try:
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        with open(_cache_path(key), "w", encoding="utf-8") as f:
+            json.dump(data, f)
+    except (OSError, ValueError):
+        pass  # cache write failure is non-fatal
+
+
+# ---------------------------------------------------------------------------
+# Dual-source loader: GitCode → GitHub → cache
+# ---------------------------------------------------------------------------
+
+def load_json_dual_source(filename, label):
+    """Load a JSON index file with dual-source fallback and local cache.
+
+    Tries each source in order (GitCode first, GitHub second). On 429 or
+    network error, falls back to the next source. Results are cached locally.
+    Returns (data, source_name) or raises if all sources fail.
+    """
+    cache_key = f"{INDEX_BRANCH}:{filename}"
+
+    # 1. Try cache
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached, "cache"
+
+    # 2. Try each network source
+    errors = []
+    for source in SOURCES:
+        sname = source["name"]
+        if sname == "gitcode":
+            url = f"{GITCODE_BASE}/{filename}?ref={INDEX_BRANCH}"
+        else:
+            url = f"{GITEE_BASE}/{filename}"
+
+        try:
+            data, _ = _fetch_from_network(url, f"{label} ({sname})", source["is_api"])
+            if data is not None:
+                _cache_put(cache_key, data)
+                return data, sname
+            # 429 exhausted — try next source
+            errors.append(f"{sname}: 429 after retries")
+        except RuntimeError as e:
+            errors.append(f"{sname}: {e}")
+            continue  # try next source
+
+    raise RuntimeError(f"N02: Failed to fetch {label} from all sources ({', '.join(errors)})")
 
 
 def load_index():
-    return load_json_from_url(DEFAULT_INDEX_URL, "index.json")
+    data, _ = load_json_dual_source("index.json", "index.json")
+    return data
 
 
 def load_cn_en_map():
-    return load_json_from_url(DEFAULT_CN_EN_MAP_URL, "cn-en-map.json")
+    data, _ = load_json_dual_source("cn-en-map.json", "cn-en-map.json")
+    return data
 
+
+# ---------------------------------------------------------------------------
+# Search logic (unchanged)
+# ---------------------------------------------------------------------------
 
 def is_generic(kw):
     k = kw.lower().strip()
@@ -172,6 +311,10 @@ def truncate(desc, limit=150):
     return desc
 
 
+# ---------------------------------------------------------------------------
+# Telemetry: install-count impression (unchanged from master)
+# ---------------------------------------------------------------------------
+
 def _post_impression(skill_id):
     """Single-instance POST to the install-count API (best-effort)."""
     body = json.dumps({"skill_id": skill_id}).encode("utf-8")
@@ -218,6 +361,10 @@ def report_search_results_impressions(results):
     return reported["n"]
 
 
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
 def main():
     parser = argparse.ArgumentParser(description="Search Huawei Cloud skills")
     parser.add_argument("-k", "--keyword", default="", help="Search keyword(s), space/comma/semicolon separated")
@@ -229,15 +376,16 @@ def main():
         print("ERROR: missing keyword and category (U02)", file=sys.stderr)
         return 1
 
-    idx = load_index()
+    idx, idx_source = load_json_dual_source("index.json", "index.json")
     raw_skills = idx.get("skills", [])
     skills = [extract_skill_fields(s) for s in raw_skills]
 
     if args.keyword:
-        cn_en_map = load_cn_en_map()
+        cn_en_map, map_source = load_json_dual_source("cn-en-map.json", "cn-en-map.json")
         specific_kws, generic_kws = expand_keywords(args.keyword, cn_en_map)
     else:
         specific_kws, generic_kws = [], []
+        map_source = "n/a"
     has_specific = bool(specific_kws)
 
     results = []
@@ -288,6 +436,7 @@ def main():
             print(f"    triggers: {', '.join(r['triggers'])}")
         print()
 
+    print(f"  [data source: index: {idx_source}, map: {map_source}]")
     return 0
 
 
