@@ -4,7 +4,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from config import load_credentials, build_http_config
+from config import load_credentials, build_http_config, get_project_id
 from huaweicloudsdkcore.auth.credentials import BasicCredentials
 from huaweicloudsdkbms.v1 import BmsClient
 from huaweicloudsdkbms.v1.model import ListBareMetalServersRequest
@@ -20,7 +20,7 @@ AK, SK, Region, SecurityToken = load_credentials()
 
 # 参数
 parser = argparse.ArgumentParser(description="查询裸金属服务器列表（OpenStack原生，含总数）")
-parser.add_argument("--project_id", type=str, required=True, help="项目 ID，可通过 ../iam/get_project_id.py 获取")
+parser.add_argument("--project_id", type=str, default=None, help="项目 ID，不传则通过 IAM API 根据 --region 自动获取")
 parser.add_argument("--region", type=str, help="区域，默认 cn-north-4")
 parser.add_argument("--flavor", type=str, help="裸金属服务器规格ID")
 parser.add_argument("--name", type=str, help="裸金属服务器名称")
@@ -36,6 +36,13 @@ args = parser.parse_args()
 
 if args.region is not None:
     Region = args.region
+
+# 未指定 project_id 则通过 IAM API 自动获取
+if not args.project_id:
+    args.project_id = get_project_id(Region, AK, SK, SecurityToken)
+    if not args.project_id:
+        print(f"无法获取项目 ID (region={Region})，请检查凭据或手动指定 --project_id")
+        exit(-1)
 
 # 参数校验
 if args.top is not None and args.sort_by is None:

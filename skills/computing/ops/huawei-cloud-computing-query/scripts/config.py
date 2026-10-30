@@ -1,12 +1,11 @@
 import os
-import urllib3
 from urllib.parse import urlparse
 
-from huaweicloudsdkcore.auth.credentials import BasicCredentials
-from huaweicloudsdkcore.http.http_config import HttpConfig
-
-# 抑制因 ignore_ssl_verification 产生的 InsecureRequestWarning
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+try:
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+except ImportError:
+    pass
 
 
 def load_credentials():
@@ -24,6 +23,19 @@ def load_credentials():
         print("未配置 AK/SK，请设置环境变量 HW_ACCESS_KEY 和 HW_SECRET_KEY")
         exit(-1)
 
+    return ak, sk, region, security_token
+
+
+def load_credentials_optional():
+    """从环境变量加载华为云凭据（可选模式）
+
+    用于公开接口（如 API 版本查询），不要求 AK/SK 必须存在。
+    如果 AK/SK 未配置，返回空字符串，由调用方决定如何处理。
+    """
+    ak = os.getenv("HW_ACCESS_KEY", "")
+    sk = os.getenv("HW_SECRET_KEY", "")
+    region = os.getenv("HW_REGION_NAME", "cn-north-4")
+    security_token = os.getenv("HW_SECURITY_TOKEN", "")
     return ak, sk, region, security_token
 
 
@@ -49,6 +61,8 @@ def build_http_config():
       - http://host:port
       - http://user:pass@host:port
     """
+    from huaweicloudsdkcore.http.http_config import HttpConfig
+
     http_config = HttpConfig.get_default_config()
     http_config.ignore_ssl_verification = True
     http_config.timeout = (30, 60)
@@ -77,6 +91,7 @@ def get_project_id(region, ak=None, sk=None, security_token=None):
     if security_token is None:
         security_token = os.getenv("HW_SECURITY_TOKEN", "")
 
+    from huaweicloudsdkcore.auth.credentials import BasicCredentials
     from huaweicloudsdkiam.v3 import IamClient
     from huaweicloudsdkiam.v3.model import KeystoneListProjectsRequest
     from huaweicloudsdkiam.v3.region.iam_region import IamRegion
