@@ -61,3 +61,16 @@ Verify context query results:
 | `Transfer already exists` | Duplicate transfer config | Use `ListTransfers` to check existing configs |
 | `Transfer not found` | Invalid `log_transfer_id` | Use `ListTransfers` to find valid transfer IDs |
 | `log_transfer_id wrong length` | ID format invalid | Transfer IDs are 36-character UUID format |
+
+### DeleteTransfer Error Handling
+
+`DeleteTransfer` removes an existing OBS transfer task, so its errors are almost always caused
+by an invalid or stale `log_transfer_id`:
+
+| Error Code | Cause | Resolution |
+|------------|-------|------------|
+| `LTS.0405` (400, `The log transfer does not exist`) | The transfer was already deleted, or the ID belongs to another project/region | **Do not report this as a failure.** Run `ListTransfers` to confirm whether the task still exists; if it does not, tell the user the transfer no longer exists (it may have been deleted already) and show the current transfer list. If it still exists under a different ID, re-run delete with the correct ID |
+| `LTS.0010` (500, `The system encountered an internal error`) | Transient server-side error | Retry once after a short wait; if it persists, report the error to the user without retrying repeatedly |
+
+Before deleting, always verify the transfer ID with `ListTransfers` and display the transfer
+details for user confirmation, so a stale or wrong ID fails fast instead of deleting the wrong task.
