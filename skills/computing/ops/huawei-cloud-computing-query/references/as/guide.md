@@ -180,9 +180,9 @@ Usage: python scripts/as/list_scaling_tag_infos_by_resource_id.py -h
 Purpose: Query tags for all resources under a tenant, returning tag key and value list.
 Usage: python scripts/as/list_scaling_tag_infos_by_tenant_id.py -h
 
-### list_resource_instances.py — Query Resource Instances by Tag
+### list_resource_instances.py — Query Resource Instances by Resource Type
 
-Purpose: Query resource instances filtered by tag, returning resource ID, name, details, and tags.
+Purpose: Query resource instances of a specified resource type (e.g., SCALING_GROUP_TAG), returning resource ID, name, details, and tags. Note: this script does not support tag-based filtering; it lists all instances of the given resource type. To query tags for a specific resource, use list_scaling_tag_infos_by_resource_id.py instead.
 Usage: python scripts/as/list_resource_instances.py -h
 
 ---

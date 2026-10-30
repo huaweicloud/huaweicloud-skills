@@ -4,7 +4,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from config import load_credentials, build_http_config
+from config import load_credentials, build_http_config, get_project_id
 from huaweicloudsdkcore.auth.credentials import BasicCredentials
 from huaweicloudsdkbms.v1 import BmsClient
 from huaweicloudsdkbms.v1.model import ListBaremetalFlavorDetailExtendsRequest
@@ -18,7 +18,7 @@ AK, SK, Region, SecurityToken = load_credentials()
 
 # 参数
 parser = argparse.ArgumentParser(description="查询裸金属服务器规格详情列表")
-parser.add_argument("--project_id", type=str, required=True, help="项目 ID，可通过 ../iam/get_project_id.py 获取")
+parser.add_argument("--project_id", type=str, default=None, help="项目 ID，不传则通过 IAM API 根据 --region 自动获取")
 parser.add_argument("--region", type=str, help="区域，默认 cn-north-4")
 parser.add_argument("--availability_zone", type=str, help="可用区名称，可通过 show_available_resource.py 获取")
 parser.add_argument("--sort_by", type=str, help="排序字段和方向（客户端排序），格式: 字段:方向。字段可选: vcpus, ram, disk, size；方向可选: asc(升序), desc(降序)。size 为综合规格大小(vCPU×内存GiB)，适合查找整体最小或最大的规格。例如 size:asc 表示按综合规格升序，vcpus:desc 表示按 vCPU 降序。与 --top 配合使用可快速查找最值")
@@ -28,6 +28,13 @@ args = parser.parse_args()
 
 if args.region is not None:
     Region = args.region
+
+# 未指定 project_id 则通过 IAM API 自动获取
+if not args.project_id:
+    args.project_id = get_project_id(Region, AK, SK, SecurityToken)
+    if not args.project_id:
+        print(f"无法获取项目 ID (region={Region})，请检查凭据或手动指定 --project_id")
+        exit(-1)
 
 # 参数校验
 if args.top is not None and args.sort_by is None:

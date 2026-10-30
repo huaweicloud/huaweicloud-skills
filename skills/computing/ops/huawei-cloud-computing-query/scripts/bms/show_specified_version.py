@@ -4,7 +4,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from config import load_credentials, build_http_config
+from config import load_credentials, build_http_config, get_project_id
 from huaweicloudsdkcore.auth.credentials import BasicCredentials
 from huaweicloudsdkbms.v1 import BmsClient
 from huaweicloudsdkbms.v1.model import ShowSpecifiedVersionRequest
@@ -15,13 +15,20 @@ AK, SK, Region, SecurityToken = load_credentials()
 
 # 参数
 parser = argparse.ArgumentParser(description="查询BMS API指定版本信息")
-parser.add_argument("--project_id", type=str, required=True, help="项目 ID，可通过 ../iam/get_project_id.py 获取")
+parser.add_argument("--project_id", type=str, default=None, help="项目 ID，不传则通过 IAM API 根据 --region 自动获取")
 parser.add_argument("--region", type=str, help="区域，默认 cn-north-4")
 parser.add_argument("--api_version", type=str, required=True, help="API版本号，如 v1")
 args = parser.parse_args()
 
 if args.region is not None:
     Region = args.region
+
+# 未指定 project_id 则通过 IAM API 自动获取
+if not args.project_id:
+    args.project_id = get_project_id(Region, AK, SK, SecurityToken)
+    if not args.project_id:
+        print(f"无法获取项目 ID (region={Region})，请检查凭据或手动指定 --project_id")
+        exit(-1)
 
 
 # 使用 sdk
