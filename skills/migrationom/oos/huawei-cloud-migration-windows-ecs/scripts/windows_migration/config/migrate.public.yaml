@@ -1,0 +1,232 @@
+# ============================================================
+# 统一主机迁移配置 — 占位符模板（不含真实凭据）
+#
+# ⚠️ 使用前请替换所有 <...> 占位符，并 cp 为 migrate.yaml（该文件已被 .gitignore 忽略）。
+# ⚠️ 真实 AK/SK / 密码只存在于本地 600 权限文件中，勿提交到 Git。
+#
+# 设计遵循工具架构：所有运行时参数仅出现在 YAML 配置层，
+# 核心代码零硬编码；本次只修改配置，未改动 core/phases/scenarios 任何模块。
+#
+# 场景: 公网直连（public）— 源端 Windows 直连华为云 OBS / SMS
+# ============================================================
+
+scenario: public            # public=公网直连
+
+# ---- 源端工作根目录（所有迁移文件的基础路径） ----
+source_base_dir: "C:\\auto_agent_opt"
+
+# ---- 源端 Windows 主机信息 ----
+source:
+  host: "<源端公网IP>"
+  username: "Administrator"
+  password: "<源端密码>"   # ⚠️ 真实源端密码，请勿提交 Git
+  winrm_port: 5985
+  winrm_transport: "ntlm"
+  winrm_use_ssl: false
+  cloud_provider: "none"    # 已有 WinRM 凭据，无需云厂商自动开启
+  os_arch: "x64"
+
+# ---- 批量迁移配置（单台验证用不到，保留默认） ----
+batch:
+  hosts_csv: "config/hosts.csv"
+  max_workers: 10
+  state_file: "batch_state.json"
+  signed_url_ttl: 3600
+
+# ---- WinRM 保活配置 ----
+winrm_keepalive:
+  enabled: true
+  interval: 30
+  max_failures: 3
+  reconnect: true
+
+# ---- OBS 配置（下载通道；与 SMS-Agent 安装包同一桶） ----
+obs:
+  endpoint: "obs.cn-north-1.myhuaweicloud.com"
+  ak: "<AK>"
+  sk: "<SK>"
+  bucket: "<OBS桶名>"
+  region: "cn-north-1"
+  obsutil_path: "obsutil"
+
+# ---- 下载通道配置 ----
+download:
+  packages:
+    sms_agent:                # Py3 安装包（真实对象键含空格，obsutil 列表式传参可正确处理）
+      obs_uri: "obs://<OBS桶名>/Host-Migration/agent/windows/SMS-Agent-Py3 (1).exe"
+      http_uri: ""
+      local_name: "SMS-Agent-Py3.exe"
+    # sms_agent_py2:  # Py2 专用，本环境使用 Py3，无需配置
+    # autoit:        # Py3 autoit 模式才需要；本环境 configure_mode=exe，无需配置
+  sandbox_download_dir: "downloads"
+  source_download_dir: "C:\\MigrationAgent"
+
+# ---- SMS-Agent 配置参数（目的端/目标账号） ----
+sms_agent:
+  ak: "<AK>"
+  sk: "<SK>"
+  domain_id: "sms.cn-north-4.myhuaweicloud.com"
+  domain_name: "sms.cn-north-4.myhuaweicloud.com"
+  enterprise_project: "default"
+  region: "cn-north-4"
+  install_dir: "C:\\SMS-Agent-Py3"
+  log_file: "C:\\SMS-Agent-Py3\\Logs\\SmsAgent_Info.log"
+  error_log_file: "C:\\SMS-Agent-Py3\\Logs\\SmsAgent_Error.log"
+  proxy_mode: false           # 公网直连，不走代理
+  silent_install_args: "/S"
+  agent_version: "py3"        # Win Server 2012+（若为 2008/Win7 需换 Py2）
+  configure_mode: "exe"       # 纯 exe 直用，不装 AutoIt
+  deploy_mode: "precompiled"
+  agent_exe_name: "SMS-Agent.exe"
+
+# ---- AutoIt 配置（本环境 configure_mode=exe，不启用；保留默认） ----
+autoit:
+  install_dir: "C:\\Program Files (x86)\\AutoIt3"
+  exe_path: "C:\\Program Files (x86)\\AutoIt3\\AutoIt3.exe"
+  silent_install_args: "/S"
+  aut2exe_path: "C:\\Program Files (x86)\\AutoIt3\\Aut2Exe\\Aut2exe_x64.exe"
+
+# ---- 代理服务器配置（私网专用，公网场景留空） ----
+proxy_server:
+  host: ""
+  ssh_port: 22
+  ssh_username: ""
+  ssh_password: ""
+  squid_port: 3128
+  gost_listen_port: 15985
+  http_server_port: 8080
+  http_server_token: ""
+
+# ---- proxyopt 配置（私网专用，公网场景留空） ----
+proxyopt:
+  base_dir: "proxyopt"
+  config_file: "proxyopt/config/config.yaml"
+  skip: true
+
+# ---- 日志配置 ----
+logging:
+  level: "INFO"
+  dir: "logs"
+  file: "migrate.log"
+  max_size_mb: 50
+  backup_count: 5
+
+# ---- 超时配置（秒） ----
+timeout:
+  winrm_connect: 30
+  winrm_command: 300
+  file_transfer: 600
+  autoit_run: 300
+  verify_poll_interval: 10
+  verify_max_wait: 600
+  install_wait: 120
+
+# ---- 重试策略（按阶段独立配置，默认值即可） ----
+retry_policy:
+  winrm:
+    max_retries: 3
+    backoff_sec: 5
+    retryable_errors:
+      - "timeout"
+      - "timed out"
+      - "connection"
+      - "connect"
+      - "reset"
+      - "refused"
+      - "unreachable"
+      - "503"
+      - "502"
+  download:
+    max_retries: 3
+    backoff_sec: 10
+    retryable_errors:
+      - "timeout"
+      - "timed out"
+      - "connection"
+      - "reset"
+      - "refused"
+      - "503"
+      - "502"
+      - "429"
+      - "transient"
+  install_autoit:
+    max_retries: 1
+    backoff_sec: 0
+    retryable_errors:
+      - "timeout"
+      - "timed out"
+  install_agent:
+    max_retries: 1
+    backoff_sec: 0
+    retryable_errors:
+      - "timeout"
+      - "timed out"
+  configure:
+    max_retries: 2
+    backoff_sec: 30
+    retryable_errors:
+      - "timeout"
+      - "timed out"
+      - "connection"
+      - "reset"
+  verify:
+    max_retries: 3
+    backoff_sec: 15
+    retryable_errors:
+      - "timeout"
+      - "timed out"
+      - "connection"
+      - "not found"
+      - "transient"
+# ============================================================
+# SMS 控制面迁移任务配置（步骤二~五；零硬编码，全部参数注入点）
+# ⚠️ 本文件含真实凭据，已 gitignore，勿提交
+# ============================================================
+sms_task:
+  region: "cn-north-4"              # 目的端/SMS 区域（与 sms_agent 域名区域一致）
+  os_type: "WINDOWS"                # WINDOWS | LINUX（本环境 Windows）
+  migration_type: "MIGRATE_BLOCK"   # Windows 默认块级迁移
+  task_name: "<任务名>" # 任务名称（实测 SMS.7711 名长校验严，用短规范名）
+  target_mode: "existing"           # SMS 任务层用已有服务器模式（目标 ECS 由 prepare-target 自动创建）
+  target_vm_id: ""                  # 目的端 ECS ID（prepare-target 自动填充到 config/target_state.json）
+  target_name: "<目标ECS固定名>"  # 目标ECS固定名称，幂等复用（来自上次中断的已建ECS）
+  migration_ip: ""                  # 目的端 EIP（prepare-target 自动填充）
+  use_public_ip: true               # 公网迁移
+  # [公网/私网兼容] 切换网络模式只需改两个参数：
+  #   use_public_ip: true  → migration_ip 自动取目的端 EIP（prepare-target 生成 eip_address）
+  #   use_public_ip: false → migration_ip 自动取目的端私有 IP（prepare-target 生成 private_ip）
+  # 私网时 prepare-target 自动跳过 EIP 创建。
+  # migration_ip: ""       # 留空自动推导；显式指定则优先
+  vm_template_id: ""                # new 模式预留（本环境用 prepare-target 直建 ECS，不用模板）
+  auto_start: false                 # create 后是否立即全量复制（推荐 false，人工确认后 start）
+  start_target_server: false        # 迁移完成后是否启动目的端
+  syncing: false                    # 关闭持续同步 → 完整 6 子任务工作流（全量完成后自动启动目的端）
+  need_migration_test: false        # 是否开启迁移演练（建议 true，将先跑演练再全量）
+  is_need_consistency_check: true   # 开启 → 多第 7 子任务 CHECK_CONSISTENCY
+  speed_limit: 0                    # 迁移限速 Mbps，0=不限流
+  enterprise_project: "default"     # 企业项目（经迁移项目归属）
+  source_server_id: "<源端source_server_id>"  # 源端 windows-demo（账号内多源端，显式指定）
+  poll_interval_s: 30               # wait 轮询间隔
+  wait_timeout_s: 14400             # wait 最长等待秒数
+  # ---- 目标端基础设施（prepare-target；零硬编码） ----
+  target_az: ""                     # 可用区，必填（无 cn-north-4a 兜底，缺失报 ConfigError）
+  target_flavor_id: ""              # 规格ID，空则按源端规格自动匹配
+  target_image_id: ""               # 镜像ID，空则自动选 Windows Server 2022 公共镜像
+  target_vpc_id: ""                 # VPC ID，空则按名称/CIDR 匹配或自动创建
+  target_vpc_cidr: "192.168.0.0/16"
+  target_vpc_name: ""
+  target_subnet_id: ""              # 子网 ID，空则按 CIDR 匹配或自动创建
+  target_subnet_cidr: "192.168.0.0/24"
+  target_subnet_name: ""
+  target_sg_id: ""                  # 安全组 ID，空则按名称匹配或自动创建
+  target_sg_name: "migrate-sg-demo"   # 固定名称，重跑幂等复用
+  sg_source_cidrs: ["<源端公网IP>/32"]   # 【红线】仅放行 22/8899/8900，禁止 0.0.0.0/0；公网=源端公网IP/32，私网=<源端内网IP>/32（如 192.168.1.252/32，否则 ATTACH_AGENT_IMAGE 失败）
+  sg_ports: [22, 8899, 8900]
+  target_root_volume_type: "SAS"
+  target_root_volume_size: 40
+  target_password: ""               # 目的端初始密码，空则自动生成并输出一次（保存于 target_state.json 之外，仅日志）
+  use_eip: true                     # 绑定 EIP（公网迁移需要）
+  eip_id: "<EIP_ID>"  # 用户指定复用: <目的端EIP>(空闲DOWN)
+  eip_bandwidth_size: 5
+  eip_type: "5_bgp"              # EIP 线路类型（默认 5_bgp）
+  eip_charge_mode: "traffic"

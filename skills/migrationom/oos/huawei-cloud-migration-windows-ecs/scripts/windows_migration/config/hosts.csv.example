@@ -1,0 +1,2 @@
+host,username,password,winrm_port
+<源端IP>,Administrator,<源端密码>,5985
