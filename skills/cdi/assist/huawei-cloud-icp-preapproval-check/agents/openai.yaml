@@ -1,0 +1,4 @@
+interface:
+  display_name: "ICP 前置审批检查"
+  short_description: "按华为云规则检查单位、经营范围及备案省份并提示前置材料"
+  default_prompt: "使用 $huawei-cloud-icp-preapproval-check 核对营业执照或单位名称、经营范围和备案省份；智能体支持图片 OCR 时优先使用智能体 OCR，不支持或识别失败时运行 scripts/ocr_license.py 作为 Python OCR 兜底，再运行随附的 Python 检查脚本；规则来自随包静态资料，不联网刷新，并完整原样返回脚本标准输出。"
