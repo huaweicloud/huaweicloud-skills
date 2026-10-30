@@ -1,0 +1,7 @@
+# Windows SMS迁移Skill依赖（根目录，单一来源；安装：pip install -r requirements.txt）
+pywinrm>=0.4.0
+paramiko>=2.7.0
+requests>=2.25.0
+PyYAML>=5.4
+requests-ntlm>=1.2.0
+pyspnego>=0.8.0

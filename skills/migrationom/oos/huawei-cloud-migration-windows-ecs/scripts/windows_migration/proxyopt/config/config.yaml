@@ -1,0 +1,77 @@
+#=============================================================
+# proxyopt 专有配置 — 仅包含 proxyopt 脚本特有参数。
+#
+# 架构（2026-09 调整）：私网文件服务器部署在代理主机。
+# 公共字段（OBS、代理服务器地址、源端 IP 等）已从 migrate.yaml 派生，
+# 由 deploy_jumpbox._proxyopt_config_path() 运行时注入，不在此重复配置。
+# precache_host 运行时注入为「源端经代理访问的文件服务地址」（migrate.yaml sandbox_host
+# 或 proxy_server.host），不再硬编码 127.0.0.1。
+# serve_dir 为沙箱侧 OBS 中转目录（供 preCache 列出待预热文件）。
+#=============================================================
+
+logging:
+  log_dir: "./logs"
+  level: "INFO"
+  file_enabled: true
+  console_enabled: true
+  max_bytes_mb: 10
+  backup_count: 5
+
+sandbox:
+  http_host: "0.0.0.0"
+  http_port: 8080
+  serve_dir: "./downloads"
+  precache_host: "<by-deploy: sandbox_host / proxy_server.host>"
+  precache_enabled: false   # 新架构文件服务器在代理主机，Squid 预热冗余，默认关闭；置 true 恢复
+
+  # OBS 路径前缀（proxyopt 专有）
+  obs_prefix: "Host-Migration/agent/"
+  download_dir: "./downloads"
+
+  max_retries: 3
+  retry_interval: 5
+
+  # 并发与安全
+  max_connections: 64
+
+squid:
+  cache_dir: "/var/spool/squid"
+  cache_size_mb: 4096
+  max_object_size: "512 MB"
+  refresh_pattern_hours: 24
+  allowed_src_cidr: ""   # 默认仅放行 RFC1918 内网；按需填 源端内网网段/32 与管理IP/32（禁 0.0.0.0/0）
+  # SMS 私网迁移：源端 Agent 经 Squid CONNECT 隧道操作目的端 ECS（控制/数据通道）
+  # 仅放行迁移所需端口（22/8899/8900 + 443），不开放任意端口代理
+  connect_ports: [22, 8899, 8900, 443]
+  collapsed_forwarding: true
+
+gost:
+  version: "3.2.6"
+
+  keepalive:
+    enabled: true
+    idle: "15s"
+    interval: "5s"
+    count: 3
+
+  autolink:
+    enabled: true
+    delay: "5s"
+
+  recovery:
+    restart_policy: "always"
+    restart_sec: 5
+    limit_nofile: 65535
+    tasks_max: "infinity"
+    healthcheck:
+      enabled: true
+      interval_sec: 30
+      max_failures: 3
+      timeout_sec: 5
+
+source:
+  concurrent: 10
+  retry_count: 3
+  retry_delay_sec: 5
+  timeout_sec: 300
+  verify_ssl: false
