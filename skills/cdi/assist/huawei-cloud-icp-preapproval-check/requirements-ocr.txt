@@ -1,0 +1,7 @@
+# Optional local OCR fallback; install separately from the base checker.
+rapidocr_onnxruntime>=1.4.0,<2
+
+# Pin onnxruntime to latest patched version (CVE-2026-14647 affects
+# the "onnx" package, NOT "onnxruntime"; pinning here prevents
+# accidental inclusion of the "onnx" package via transitive deps).
+onnxruntime>=1.19.0
