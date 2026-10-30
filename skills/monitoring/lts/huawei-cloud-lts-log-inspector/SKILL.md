@@ -52,10 +52,15 @@ User Trigger -> Skill Workflow -> hcloud CLI LTS Commands -> Structured Output
 
 ### Constraints
 
+- This Skill is **read-only for log group and log stream resources**: it only supports
+  **querying existing log groups, log streams, and logs**. It **does not support** creating or
+  deleting log groups/log streams (`CreateLogGroup`, `CreateLogStream`, `DeleteLogGroup`,
+  `DeleteLogStream` are **not** covered by this Skill). When a user asks to create or delete a
+  log group/log stream, explicitly refuse and suggest using the `hcloud` CLI or the LTS console
+  directly instead.
 - Creating an OBS transfer task **must output a traffic and storage cost risk warning** before execution.
 - **Bulk export of all logs is prohibited** - always specify a log group and stream scope.
 - This Skill **does not modify** log group/stream TTL, index configurations, or alarm rules.
-- This Skill **does not create or delete** log groups or log streams.
 - Context log queries return **concise fragments** (default 100 lines before/after, max 500)
   to avoid oversized text output.
 
