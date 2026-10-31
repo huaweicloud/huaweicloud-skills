@@ -35,5 +35,6 @@
 | Create/Delete host resources | ❌ Not supported |
 | Isolate host / kill process | ❌ Not supported |
 | Real-time blocking | ❌ Not supported |
+| Quota / billing management (配额/计费管理) | ❌ Not supported |
 | Query only (List/Show) | ✅ Supported |
 | Alert handling (Update) | ✅ Supported with confirmation |
