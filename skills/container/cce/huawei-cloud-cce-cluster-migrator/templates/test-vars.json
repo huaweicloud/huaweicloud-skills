@@ -77,6 +77,18 @@
       "name": "List EIPs Associated with ELB",
       "command": "hcloud EIP ListPublicips/v3 --cli-region={region} --associate_instance_type.1=ELB",
       "expected": "publicips"
+    },
+    {
+      "id": "TC-14",
+      "name": "List CCE Autopilot Clusters",
+      "command": "hcloud CCE ListAutopilotClusters --cli-region={region}",
+      "expected": "Cluster"
+    },
+    {
+      "id": "TC-15",
+      "name": "List CCE Autopilot Addon Templates",
+      "command": "hcloud CCE ListAutopilotAddonTemplates --cli-region={region}",
+      "expected": "Addon"
     }
   ]
 }

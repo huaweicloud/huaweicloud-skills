@@ -8,9 +8,9 @@ This document defines the functional verification procedures for the `huawei-clo
 
 |Phase|Phase Name|Verification Method / Command|Primary Success Criteria|
 |-|-|-|-|
-|**Phase 1**|Assessment & Sizing|`hcloud CCE GetClusterFlavorSpecs`<br>`hcloud CCE ListClusters`|Workloads cataloged; target CCE Turbo flavor selected with >= 2 vCPU / 4 GiB reserved for add-ons.|
+|**Phase 1**|Assessment & Sizing|`hcloud CCE GetClusterFlavorSpecs`<br>`hcloud CCE ListClusters`<br>`hcloud CCE ListAutopilotClusters`|Workloads cataloged; target CCE Turbo flavor selected with >= 2 vCPU / 4 GiB reserved for add-ons (or CCE Autopilot serverless selected).|
 |**Phase 2**|Plan Confirmation Gate|Review `implementation_plan.md`|Formal written plan materialized to disk; user provides explicit sign-off prior to mutating operations.|
-|**Phase 3**|Target CCE Readiness|`hcloud CCE update-kubeconfig`<br>`hcloud CCE ListAddonInstances`<br>`hcloud NAT ListNatGateways`|Cluster status `Available`; nodes `Ready`; Everest CSI active; egress SNAT rules verified.|
+|**Phase 3**|Target CCE Readiness|`hcloud CCE update-kubeconfig`<br>`hcloud CCE ListAddonInstances`<br>`hcloud CCE ListAutopilotAddonInstances`<br>`hcloud NAT ListNatGateways`|Cluster status `Available`; nodes `Ready` (or Autopilot nodeless); Everest CSI active; egress SNAT rules verified.|
 |**Phase 4**|Container Image Mirroring|`hcloud SWR CreateSecret`<br>`skopeo copy`<br>`skopeo list-tags`|All workload & Velero images mirrored to SWR; test pod pulls successfully without `ImagePullBackOff`.|
 |**Phase 5**|Multi-Type PV Migration|Apply PVC templates<br>`kubectl get pvc`<br>Deploy `storage-verifier` pod|EVS (min 10Gi), SFS Turbo (min 500Gi/1.2TB), and OBS PVCs `Bound`; test pod passes read/write checks.|
 |**Phase 6**|Workload & Secret Restore|`velero restore create --wait`<br>`kubectl get pods,deployments -A`|Restore finishes with 0 fatal errors; all deployments report desired replicas in `Running`/`Ready` state.|
@@ -32,7 +32,8 @@ Audit source Kubernetes cluster workloads, compute footprint, persistent storage
    ```
 2. Query target region clusters:
    ```bash
-   hcloud CCE ListClusters --cli-region=<region_id>
+   hcloud CCE ListClusters --cli-region=<region_id>            # Standard / Turbo
+   hcloud CCE ListAutopilotClusters --cli-region=<region_id>   # Autopilot Serverless
    ```
 3. Audit source workloads and resource requests:
    ```bash
@@ -96,7 +97,8 @@ Verify that the target CCE cluster, node pools, add-on components, and VPC netwo
 
 1. Verify target CCE cluster status:
    ```bash
-   hcloud CCE ShowCluster --cli-region=<region_id> --cluster_id={target_cluster_id} --detail=true
+   hcloud CCE ShowCluster --cli-region=<region_id> --cluster_id={target_cluster_id} --detail=true          # Standard / Turbo
+   hcloud CCE ShowAutopilotCluster --cli-region=<region_id> --cluster_id={target_cluster_id} --detail=true # Autopilot Serverless
    ```
 2. Download and verify CCE cluster kubeconfig:
    ```bash
@@ -105,7 +107,8 @@ Verify that the target CCE cluster, node pools, add-on components, and VPC netwo
    ```
 3. Verify required add-ons:
    ```bash
-   hcloud CCE ListAddonInstances --cli-region=<region_id> --cluster_id={target_cluster_id}
+   hcloud CCE ListAddonInstances --cli-region=<region_id> --cluster_id={target_cluster_id}            # Standard / Turbo
+   hcloud CCE ListAutopilotAddonInstances --cli-region=<region_id> --cluster_id={target_cluster_id}   # Autopilot Serverless
    ```
 4. Verify NAT Gateway and SNAT rules for workload egress:
    ```bash

@@ -13,12 +13,12 @@
 - **Target Mode**: `[NEW_PROVISION | EXISTING]`
 - **Target Region**: `<region_id>`
 - **Cluster Definition**:
-  - _If NEW_: Name: `<cluster_name>`, Architecture: `CCE Turbo`, Master Flavor: `<cce.s1.* | cce.s2.*>`, K8s Version: `v<1.xx>`
+  - _If NEW_: Name: `<cluster_name>`, Architecture: `[CCE Turbo | CCE Autopilot]`, Master Flavor: `<cce.s1.* | cce.s2.* | cce.autopilot.cluster>`, K8s Version: `v<1.xx>`
   - _If EXISTING_: Cluster ID: `<target_cce_cluster_id>`
 - **Network & VPC**:
   - _If NEW_: VPC CIDR: `<vpc_cidr>`, Node Subnet: `<node_cidr>`, Container/Pod Subnet: `<pod_cidr>`
   - _If EXISTING_: VPC ID: `<target_vpc_id>`, Subnet ID: `<target_subnet_id>`
-- **Worker Node Pool (If NEW)**: Flavor: `<node_flavor>`, Node Count: `<count>`, OS: `<os_image>`, Disk: `<disk_spec>`
+- **Worker Node Pool (If NEW & Turbo)**: Flavor: `<node_flavor>`, Node Count: `<count>`, OS: `<os_image>`, Disk: `<disk_spec>` (N/A for Autopilot)
 - **NAT Gateway Egress**: `[NEW: <spec> | EXISTING: <nat_gateway_id> (EIP: <nat_eip>) | NONE]`
 - **Kubeconfig Output**: `~/.kube/cce-config` _(written/verified during Phase 3)_
 
