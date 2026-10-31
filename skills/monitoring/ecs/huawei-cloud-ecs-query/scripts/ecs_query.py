@@ -12,6 +12,7 @@ import argparse
 import os
 import sys
 import json
+from urllib.parse import quote
 import requests
 import yaml
 
@@ -48,6 +49,25 @@ def load_config(config_path):
     return config
 
 
+def create_auth_or_exit(config):
+    """创建认证实例，配置缺失时给出友好提示并退出
+
+    Args:
+        config: 包含认证信息的字典
+
+    Returns:
+        HuaweiCloudAuth 子类实例
+    """
+    try:
+        return create_auth(config)
+    except ValueError as e:
+        print(f"错误: 配置错误: {e}")
+        if "project_id" in str(e):
+            print("提示: 多区域查询时，请在 config.yaml 的 regions 映射中配置目标区域对应的 project_id，")
+            print("      或使用 --project-id <目标区域项目ID> 参数指定。")
+        sys.exit(1)
+
+
 def build_query_string(params):
     """构建 URL 查询字符串
 
@@ -55,12 +75,14 @@ def build_query_string(params):
         params: 参数字典
 
     Returns:
-        查询字符串（不含前导 ?）
+        查询字符串（不含前导 ?），各 key/value 均已做 RFC3986 URL 编码
     """
     pairs = []
     for key, value in params.items():
         if value is not None:
-            pairs.append(f"{key}={value}")
+            # 参数值与参数名均需 URL 编码，否则特殊字符（&、=、空格、中文等）
+            # 会导致请求解析错误或与签名器编码不一致
+            pairs.append(f"{quote(key, safe='~')}={quote(str(value), safe='~')}")
     return "&".join(pairs)
 
 
@@ -83,12 +105,21 @@ def make_request(auth, method, uri, params=None):
 
     url = f"https://{auth.endpoint}{full_uri}"
 
-    # 获取认证头
-    headers = auth.get_headers(
-        method=method,
-        uri=uri,
-        query_string=query_string,
-    )
+    # 获取认证头（Token 认证会在此发起 IAM 鉴权请求，需纳入异常处理，
+    # 否则认证失败会抛出裸 traceback）
+    try:
+        headers = auth.get_headers(
+            method=method,
+            uri=uri,
+            query_string=query_string,
+        )
+    except requests.exceptions.HTTPError as e:
+        status_code = e.response.status_code if e.response is not None else "N/A"
+        print(f"错误: 认证失败 (HTTP {status_code})，请检查用户名/密码/域名配置是否正确。")
+        sys.exit(1)
+    except (ValueError, requests.exceptions.RequestException) as e:
+        print(f"错误: 认证失败，请检查用户名/密码/域名配置是否正确。（{e}）")
+        sys.exit(1)
 
     try:
         resp = requests.request(
@@ -122,7 +153,7 @@ def list_servers(args, config):
 
     API: GET /v1/{project_id}/cloudservers/detail
     """
-    auth = create_auth(config)
+    auth = create_auth_or_exit(config)
     uri = f"/v1/{auth.project_id}/cloudservers/detail"
 
     params = {
@@ -150,11 +181,11 @@ def show_server(args, config):
     """
     if not args.server_id:
         print("错误: 请通过 --server-id 指定服务器ID")
-        print("提示: 先用 list-servers 查询实例列表，从输出的 ID 列获取 server-id")
-        print("示例: python scripts/ecs_query.py list-servers --config config.yaml")
+        print("提示: 先用 list-servers --output json 查询实例列表，从输出的完整 ID 获取 server-id")
+        print("示例: python scripts/ecs_query.py list-servers --config config.yaml --output json")
         sys.exit(1)
 
-    auth = create_auth(config)
+    auth = create_auth_or_exit(config)
     uri = f"/v1/{auth.project_id}/cloudservers/{args.server_id}"
 
     data = make_request(auth, "GET", uri)
@@ -171,11 +202,11 @@ def server_status(args, config):
     """
     if not args.server_id:
         print("错误: 请通过 --server-id 指定服务器ID")
-        print("提示: 先用 list-servers 查询实例列表，从输出的 ID 列获取 server-id")
-        print("示例: python scripts/ecs_query.py list-servers --config config.yaml")
+        print("提示: 先用 list-servers --output json 查询实例列表，从输出的完整 ID 获取 server-id")
+        print("示例: python scripts/ecs_query.py list-servers --config config.yaml --output json")
         sys.exit(1)
 
-    auth = create_auth(config)
+    auth = create_auth_or_exit(config)
     uri = f"/v1/{auth.project_id}/cloudservers/{args.server_id}"
 
     data = make_request(auth, "GET", uri)
@@ -193,26 +224,10 @@ def server_status(args, config):
         "OS-EXT-STS:power_state": server.get("OS-EXT-STS:power_state", "N/A"),
     }
 
+    # 统一走 output_result 复用 formatter.format_status 格式化，
+    # 消除脚本内重复实现
     output_format = args.output or config.get("output_format", "table")
-    if output_format == "json":
-        print(format_json(status_data))
-    else:
-        from formatter import get_status_text
-        print("=" * 40)
-        print("  服务器状态查询结果")
-        print("=" * 40)
-        print("")
-        print(f"  服务器名称: {status_data['name']}")
-        print(f"  服务器ID: {status_data['id']}")
-        print(f"  状态: {status_data['status']} ({get_status_text(status_data['status'])})")
-        print(f"  VM状态: {status_data['OS-EXT-STS:vm_state']}")
-        if status_data.get("OS-EXT-STS:task_state"):
-            print(f"  任务状态: {status_data['OS-EXT-STS:task_state']}")
-        print(f"  电源状态: {status_data['OS-EXT-STS:power_state']}")
-        print(f"  可用区: {status_data['OS-EXT-AZ:availability_zone']}")
-        print(f"  更新时间: {status_data['updated']}")
-        print("")
-        print("=" * 40)
+    output_result(status_data, output_format)
 
 
 def main():
@@ -227,6 +242,10 @@ def main():
 
   # 查询云服务器列表（JSON 格式，指定区域）
   python ecs_query.py list-servers --region cn-east-3 --output json
+
+  # 多区域查询（需在 config.yaml regions 映射中配置目标区域 project_id，
+  # 或使用 --project-id 指定目标区域的项目ID）
+  python ecs_query.py list-servers --region cn-south-1 --project-id <cn-south-1项目ID>
 
   # 按状态过滤
   python ecs_query.py list-servers --status ACTIVE
@@ -261,6 +280,7 @@ def main():
     for sub_parser in [list_parser, show_parser, status_parser]:
         sub_parser.add_argument("--config", type=str, default=None, help="配置文件路径")
         sub_parser.add_argument("--region", type=str, default=None, help="区域（如 cn-north-4）")
+        sub_parser.add_argument("--project-id", type=str, default=None, help="目标区域对应的项目ID（多区域查询时与 --region 配套使用）")
         sub_parser.add_argument("--output", type=str, choices=["table", "json"], default=None, help="输出格式")
 
     args = parser.parse_args()
@@ -275,6 +295,17 @@ def main():
     # 命令行参数覆盖配置
     if args.region:
         config["region"] = args.region
+
+    # 多区域查询支持：--region 切换时同步匹配 regions 映射中的 project_id。
+    # 修复：仅覆盖 config["region"] 而不联动 project_id，会导致跨区域查询必现
+    # Common.0018（tenantId in token is not the same with in URL）。
+    if args.project_id:
+        config["project_id"] = args.project_id
+    else:
+        region_project_map = config.get("regions") or {}
+        mapped_project_id = region_project_map.get(config["region"])
+        if mapped_project_id:
+            config["project_id"] = mapped_project_id
 
     # 执行对应命令
     if args.command == "list-servers":

@@ -1,6 +1,6 @@
 ---
 name: huawei-cloud-ecs-query
-description: 查询华为云ECS弹性云服务器信息。仅用于查询，不包含创建/删除/规格变更等写操作。当用户需要查看华为云ECS实例列表、实例详情、实例状态时使用。支持AK/SK和Token两种认证方式，支持表格和JSON两种输出格式，支持多区域查询。触发场景：用户要求"查询云服务器列表"、"查看ECS实例详情"、"ECS运行状态"、"列出ECS"、"查看服务器状态"，或请求中带 update/修改/创建/删除 ECS 以外的只读查询意图时（如查 flavor、可用区、镜像等 ECS 属性）使用。写操作请求（创建、删除、规格变更、开机/关机）请使用其他技能。
+description: 查询华为云ECS弹性云服务器信息。仅用于查询，不包含创建/删除/规格变更等写操作。当用户需要查看华为云ECS实例列表、实例详情、实例状态时使用。支持AK/SK和Token两种认证方式，支持表格和JSON两种输出格式，支持多区域查询。触发条件：用户要求"查询云服务器列表"、"查看ECS实例详情"、"ECS运行状态"、"列出ECS"、"查看服务器状态"，或请求中带 update/修改/创建/删除 ECS 以外的只读查询意图时（如查 flavor、可用区、镜像等 ECS 属性）使用。写操作请求（创建、删除、规格变更、开机/关机）请使用其他技能。
 ---
 
 # 华为云 ECS 查询技能
@@ -55,6 +55,13 @@ project_id: "your-project-id"
 # 默认区域
 region: "cn-north-4"
 
+# 多区域查询（可选）：
+# 使用 --region 切换到其他区域时，需要同时提供目标区域对应的 project_id。
+# 推荐在此维护 区域 → 项目ID 映射；也可在命令行用 --project-id 临时指定。
+# regions:
+#   cn-north-4: "your-project-id-for-cn-north-4"
+#   cn-south-1: "your-project-id-for-cn-south-1"
+
 # 输出格式：table 或 json
 output_format: "table"
 ```
@@ -100,7 +107,8 @@ python scripts/ecs_query.py list-servers --config config.yaml
 ```
 
 可选参数：
-- `--region`：指定区域（如 cn-north-4, cn-east-3, ap-southeast-1）
+- `--region`：指定区域（如 cn-north-4, cn-east-3, ap-southeast-1）。**跨区域查询时**，该区域对应的 `project_id` 需在 config.yaml 的 `regions` 映射中配置，或使用 `--project-id` 参数指定，否则 `--region` 仅切换 API 域名、`project_id` 仍指向原区域，会报 `Common.0018` 错误
+- `--project-id`：指定目标区域的项目ID（多区域查询时与 `--region` 配套使用）
 - `--output`：输出格式（table 或 json）
 - `--limit`：返回数量限制（默认25）
 - `--offset`：页码偏移（默认1）
@@ -114,7 +122,7 @@ python scripts/ecs_query.py list-servers --config config.yaml
 python scripts/ecs_query.py show-server --server-id <server_id> --config config.yaml
 ```
 
-> **获取 server_id 指引**：若不知道实例 ID，先运行 `python scripts/ecs_query.py list-servers --config config.yaml`（或 `hcloud ECS ListServersDetails --cli-region=<region>`），从结果中复制目标实例的 ID 列。
+> **获取 server_id 指引**：表格输出中 ID 列会被截断（仅显示前 8 位），复制完整 ID 请使用 `python scripts/ecs_query.py list-servers --output json --config config.yaml`，从 JSON 输出的 `servers[].id` 字段获取完整 server_id（或 `hcloud ECS ListServersDetails --cli-region=<region>`）。
 
 #### 查询实例状态
 
@@ -122,7 +130,34 @@ python scripts/ecs_query.py show-server --server-id <server_id> --config config.
 python scripts/ecs_query.py server-status --server-id <server_id> --config config.yaml
 ```
 
-> **获取 server_id 指引**：同上，先用 `list-servers` 获取实例 ID。
+> **获取 server_id 指引**：同上，使用 `list-servers --output json` 获取完整 ID。
+
+## Parameter Confirmation
+
+| 参数 | 必需 | 说明 | 示例 |
+|------|------|------|------|
+| config | 否 | 配置文件路径（默认 `~/.huawei-ecs/config.yaml`） | `--config config.yaml` |
+| region | 否 | 目标区域（默认取配置文件 `region`） | `--region cn-south-1` |
+| project-id | 否 | 目标区域对应的项目ID（多区域查询时与 `--region` 配套） | `--project-id <cn-south-1项目ID>` |
+| output | 否 | 输出格式（table / json，默认 table） | `--output json` |
+| limit | 否 | list-servers 返回数量限制（默认25） | `--limit 50` |
+| offset | 否 | list-servers 页码偏移（默认1） | `--offset 2` |
+| status | 否 | list-servers 按状态过滤 | `--status ACTIVE` |
+| name | 否 | list-servers 按名称过滤 | `--name web-01` |
+| flavor | 否 | list-servers 按规格ID过滤 | `--flavor s3.small.1` |
+| server-id | 是（show-server/server-status） | 云服务器ID（先用 `list-servers --output json` 获取） | `--server-id <server_id>` |
+
+## KooCLI Command Format Standard
+
+当使用 hcloud CLI（KooCLI）等价命令时，遵循标准格式：
+
+```
+hcloud <Service> <Operation> --cli-region=<region> [--key=value ...]
+```
+
+- Service 名称使用大写开头（如 `ECS`），Operation 使用 PascalCase（如 `ListServersDetails`、`ShowServer`）
+- 所有命令必须携带 `--cli-region=<region>` 区域参数
+- hcloud CLI 底层使用 `--cli-region` 指定区域，与脚本的 `--region` 参数含义一致
 
 ## 输出说明
 
@@ -142,6 +177,12 @@ python scripts/ecs_query.py server-status --server-id <server_id> --config confi
 | Created | 创建时间 |
 | AZ | 可用区 |
 
+> **注意**：表格模式下 ID 列会截断显示（仅前 8 位），如需完整 ID（如用作 `--server-id`），请使用 `--output json` 输出。
+
+### 详情输出
+
+`show-server` 详情会展示实例的核心配置字段，若 API 返回挂载的云硬盘信息（`os-extended-volumes:volumes_attached`），会一并展示“挂载云硬盘”（设备名 + 云硬盘ID）。查看云硬盘的容量、类型等完整信息，请使用云硬盘（EVS）相关技能。
+
 ### 状态说明
 
 | 状态值 | 含义 |
@@ -160,10 +201,20 @@ python scripts/ecs_query.py server-status --server-id <server_id> --config confi
 
 详细API接口说明请参考 `references/api-reference.md`。
 
+## Reference Documents
+
+- `references/api-reference.md` — ECS API 接口与字段说明、认证流程
+- `references/cli-installation-guide.md` — Python 环境与 hcloud CLI 安装、认证配置
+- `references/iam-policies.md` — 所需 IAM 权限策略
+- `references/troubleshooting.md` — 常见错误与排障指引
+- `references/acceptance-criteria.md` — 验收标准
+- `references/verification-method.md` — 各查询操作验证方法
+
 ## 排障
 
 - **配置文件缺失**：按"前置条件"章节创建 `~/.huawei-ecs/config.yaml`
-- **认证失败**：检查 AK/SK 或 Token 配置是否正确，账号是否具备 ECS 只读权限
+- **认证失败**：`错误: 认证失败 (HTTP xxx)…`，检查 AK/SK 或 Token 配置是否正确，账号是否具备 ECS 只读权限
+- **跨区域查询失败（Common.0018）**：`--region` 切换区域时 `project_id` 也必须指向目标区域；请在 config.yaml 的 `regions` 映射中配置，或使用 `--project-id` 指定
 - **连接失败**：检查网络是否能访问 `ecs.{region}.myhuaweicloud.com`
 - 更多排障指引见 `references/troubleshooting.md`
 
@@ -180,3 +231,8 @@ python scripts/ecs_query.py server-status --server-id <server_id> --config confi
    - ap-southeast-1（中国-香港）
    - ap-southeast-2（亚太-新加坡）
 5. **AK/SK 签名**：使用 SDK-HMAC-SHA256 签名算法，与华为云官方签名规范一致
+6. **敏感凭据安全声明**：本技能仅支持 ECS 实例信息**只读**查询，**不支持查看/重置云服务器登录密码、密钥对等敏感凭据**，相关操作请在华为云控制台完成
+7. **费用/配额边界声明**：本技能仅支持 ECS 实例信息**只读**查询，**不支持账单/费用/配额等 BSS（费用中心）类查询**，相关查询请使用费用中心或 BSS 类技能
+8. **磁盘信息边界**：`show-server` 详情仅展示 API 返回的挂载云硬盘 ID/设备名，不支持查询云硬盘容量、类型、性能等扩展信息，完整磁盘信息请使用云硬盘（EVS）相关技能
+9. **写操作统一拒绝**：对于创建、删除、启停（开机/关机）、规格变更、迁移、重装系统等 ECS **写操作**请求，本技能**统一拒绝**，并使用统一话术引导用户：
+   > “抱歉，本技能仅支持 ECS 实例信息只读查询，不支持该写操作。请在华为云控制台完成，或使用对应的 ECS 管理类技能。”

@@ -27,6 +27,19 @@ project_id: "your-project-id"
 # 默认区域（常见区域见下方注释）
 region: "cn-north-4"
 
+# ==============================
+# 多区域查询配置（可选）
+# ==============================
+# 使用 --region 切换到其他区域时，需要同时提供目标区域对应的 project_id，
+# 否则 --region 仅切换 API 域名，project_id 仍指向原区域，跨区域查询会报
+# Common.0018（tenantId in token is not the same with in URL）。
+# 方式一：在此维护 区域 → 项目ID 映射（推荐）
+# regions:
+#   cn-north-4: "project-id-for-cn-north-4"
+#   cn-south-1: "project-id-for-cn-south-1"
+# 方式二：命令行指定
+#   python scripts/ecs_query.py list-servers --region cn-south-1 --project-id <cn-south-1项目ID>
+
 # 默认输出格式：table 或 json
 output_format: "table"
 
