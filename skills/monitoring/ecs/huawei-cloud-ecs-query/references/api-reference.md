@@ -128,6 +128,9 @@ GET /v1/{project_id}/cloudservers/{server_id}
 | OS-EXT-STS:power_state | Integer | 电源状态 |
 | OS-EXT-STS:task_state | String | 任务状态 |
 | enterprise_project_id | String | 企业项目ID |
+| os-extended-volumes:volumes_attached | Array | 挂载的云硬盘附件列表（id/device，由 API 返回时展示） |
+
+> **多区域查询**：`/v1/{project_id}/cloudservers/detail` 路径中的 `project_id` 必须与目标区域一致。使用 `--region` 切换区域时，需在 `config.yaml` 的 `regions` 映射中配置目标区域 `project_id`，或使用 `--project-id` 参数指定。
 
 ## 服务器状态值
 

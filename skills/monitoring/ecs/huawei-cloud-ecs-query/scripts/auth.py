@@ -64,13 +64,16 @@ class AKSKAuth(HuaweiCloudAuth):
         if not canonical_uri.endswith("/"):
             canonical_uri += "/"
 
-        # 3. CanonicalQueryString：按 key 排序，key/value 均 URL 编码
+        # 3. CanonicalQueryString：按 key 排序。
+        # 注意：query_string 已由 ecs_query.build_query_string 按 RFC3986 编码
+        # （quote(safe='~')），此处直接使用编码后的键值对排序，避免二次编码
+        # 导致签名与实际请求不一致。
         if query_string:
             pairs = []
             for item in query_string.split("&"):
                 if "=" in item:
                     k, v = item.split("=", 1)
-                    pairs.append(f"{self._url_encode(k)}={self._url_encode(v)}")
+                    pairs.append(f"{k}={v}")
             pairs.sort()
             canonical_query_string = "&".join(pairs)
         else:

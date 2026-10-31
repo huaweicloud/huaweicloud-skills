@@ -71,6 +71,17 @@ def extract_server_info(server):
     os_type = metadata.get("os_type", "N/A")
     charging_mode = metadata.get("charging_mode", "N/A")
 
+    # 提取挂载的云硬盘（API 扩展字段 os-extended-volumes:volumes_attached，存在时展示）
+    volumes_attached = server.get("os-extended-volumes:volumes_attached", [])
+    volumes = [
+        {
+            "id": vol.get("id", ""),
+            "device": vol.get("device", ""),
+        }
+        for vol in volumes_attached
+        if vol.get("id")
+    ]
+
     return {
         "id": server.get("id", "N/A"),
         "name": server.get("name", "N/A"),
@@ -93,6 +104,10 @@ def extract_server_info(server):
         "locked": server.get("locked", False),
         "description": server.get("description", ""),
         "tags": server.get("tags", []),
+        "volumes": volumes,
+        "vm_state": server.get("OS-EXT-STS:vm_state", "N/A"),
+        "task_state": server.get("OS-EXT-STS:task_state"),
+        "power_state": server.get("OS-EXT-STS:power_state", "N/A"),
     }
 
 
@@ -167,6 +182,8 @@ def format_table(servers_info, count=None):
     if count is not None:
         lines.append(f"共找到 {count} 台云服务器（当前显示 {len(servers_info)} 台）")
         lines.append("")
+    lines.append("提示: 表格中 ID 列已截断（仅显示前 8 位），复制完整 ID 请使用 --output json")
+    lines.append("")
 
     # 表头
     header_line = ""
@@ -224,6 +241,9 @@ def format_server_detail(server_info):
         ("用户ID", server_info["user_id"]),
         ("企业项目ID", server_info["enterprise_project_id"]),
         ("是否锁定", str(server_info["locked"])),
+        ("挂载云硬盘", "; ".join(
+            f"{vol['device']} ({vol['id']})" for vol in server_info.get("volumes", []) if vol.get("device") and vol.get("id")
+        ) or "N/A"),
         ("描述", server_info["description"] or "N/A"),
     ]
 
@@ -257,6 +277,10 @@ def format_status(server_info):
     lines.append(f"  服务器名称: {server_info['name']}")
     lines.append(f"  服务器ID: {server_info['id']}")
     lines.append(f"  状态: {server_info['status']} ({server_info['status_text']})")
+    lines.append(f"  VM状态: {server_info['vm_state']}")
+    if server_info.get("task_state"):
+        lines.append(f"  任务状态: {server_info['task_state']}")
+    lines.append(f"  电源状态: {server_info['power_state']}")
     lines.append(f"  可用区: {server_info['availability_zone']}")
     lines.append(f"  更新时间: {server_info['updated']}")
     lines.append("")
