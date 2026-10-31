@@ -29,6 +29,7 @@ plus updating alert handling status — all via hcloud CLI.
 - ❌ Does NOT create or delete host resources
 - ❌ Does NOT execute isolation, antivirus, or other high-risk actions
 - ❌ Does NOT perform real-time blocking or kill processes
+- ❌ Does NOT manage HSS quotas or billing (不涉及配额/计费管理)
 
 ## Prerequisites
 
@@ -122,6 +123,8 @@ hcloud HSS ShowCmsVulDetail --cli-region={region} --project_id={project_id} \
   --vul_id={vul_id} --limit=10 --offset=0
 ```
 
+> ⚠️ 漏洞详情接口（ShowLinuxVulDetail/ShowWindowsVulDetail/ShowCmsVulDetail）对不存在的 ID 返回空列表（`total_num=0`、`data_list=[]`）而非报错，应解读为无此数据，不得虚构详情。
+
 Show vulnerability statistics:
 
 ```bash
@@ -151,6 +154,7 @@ hcloud HSS ListHostCheckRules --cli-region={region} --project_id={project_id} \
 ```
 
 > ⚠️ `--standard` 为必填参数。
+> ⚠️ `--check_name` 为 URL 路径参数，hcloud CLI 对中文值存在签名问题（`APIGW.0301 verify ak sk signature failed`）。中文检查项名（如 `身份鉴别`、`访问控制`）建议通过 HSS API/SDK 调用，或使用英文标准名（如 `identity`）。
 
 Show security check report for a specific host:
 
@@ -160,6 +164,7 @@ hcloud HSS ShowSecurityCheckHostReport --cli-region={region} --project_id={proje
 ```
 
 > ⚠️ `--scan_time` 为必填参数（毫秒级时间戳）。
+> ⚠️ 该 API 依赖服务端基线扫描数据完整性，可能返回 `HSS.0004 Database operation failed`。若出现该错误：1) 确认 `scan_time` 为该主机最近的基线扫描时间；2) 稍后重试；3) 到 HSS 控制台确认该主机的基线扫描记录是否正常生成。
 
 Show risk configuration detail:
 
@@ -170,6 +175,7 @@ hcloud HSS ShowRiskConfigDetail --cli-region={region} --project_id={project_id} 
 ```
 
 > ⚠️ `--standard` 为必填参数（`cn_standard`=等保合规标准，`hw_standard`=云安全实践标准）。
+> ⚠️ `--check_name` 为 URL 路径参数，hcloud CLI 对中文值存在签名问题（`APIGW.0301 verify ak sk signature failed`）。中文检查项名（如 `身份鉴别`）建议通过 HSS API/SDK 调用，或使用英文标准名。
 
 ### 4. Intrusion Alerts — Trojan & Malware (木马/恶意软件告警)
 
@@ -217,7 +223,7 @@ hcloud HSS ListAntiVirusHost --cli-region={region} --project_id={project_id} \
 ```
 
 > ⚠️ **`--limit` / `--offset` / `--scan_type` / `--start_type` 为必填参数**。
-> `--scan_type` 枚举：`quick`（快速扫描）/ `full`（全盘扫描）；`--start_type` 枚举：`now`（立即启动）/ `period`（周期启动）。其他值（如 `all`/`manual`/`auto`）会被 API 静默忽略并返回空结果。
+> `--scan_type` 枚举：`quick`（快速扫描）/ `full`（全盘扫描）；`--start_type` 枚举：`now`（立即启动）/ `period`（周期启动）。⚠️ API 对未限定枚举值不校验，实测传入 `all` 等值会返回全量主机数据而非空结果，请严格使用 `quick`/`full`。
 
 ### 5. Intrusion Alerts — Brute Force (暴力破解告警)
 
@@ -270,6 +276,8 @@ hcloud HSS ListHostsRisk --cli-region={region} --project_id={project_id} \
   --host_id_list.1={host_id_1}
 ```
 
+> ⚠️ ListHostsRisk 对不存在/无效的 host_id 返回全 0 数据（`total_num=1`、各风险值均为 0）而非报错，建议先用 ListHostStatus 核验主机存在性后再判断风险，避免误报"主机健康"。
+
 ### 8. Update Alert Handling Status (告警处置) — ⚠️ Mutating, Requires Confirmation
 
 Handle alert events (mark as handled, ignored, etc.):
@@ -284,6 +292,8 @@ hcloud HSS ChangeEvent --cli-region={region} --project_id={project_id} \
 ```
 
 > ⚠️ `--operate_type` 是**顶层参数**（不属于 operate_event_list 数组内）；数组中 `event_class_id`/`event_id`/`event_type`/`occur_time` 均必填。
+> ⚠️ 实测 `ListEventHandleHistory` 返回的告警条目**不含独立 `event_id` 字段**（仅有 event_class_id/occur_time 等），请先核实 event_id 的正确取值来源（或按 event_class_id + occur_time 定位具体告警）再执行处置。
+> ⚠️ 执行 ChangeEvent 前需先明确具体的告警对象（event_class_id/event_id/发生时间），信息不完整时应先向用户确认"处置哪条告警"，不得臆造参数执行。
 
 **operate_type values for ChangeEvent:**
 - `mark_as_handled` — Mark as handled (标记已处理)
