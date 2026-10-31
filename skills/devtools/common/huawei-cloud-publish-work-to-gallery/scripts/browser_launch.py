@@ -10,6 +10,8 @@
   browser = launch_browser(playwright)
 """
 
+import glob
+import os
 import sys
 
 IS_WINDOWS = sys.platform == "win32"
@@ -31,6 +33,21 @@ def launch_browser(playwright):
         try:
             return playwright.chromium.launch(
                 headless=True, channel=channel, args=NO_SANDBOX_ARGS
+            )
+        except Exception:
+            pass
+    # 外网受限环境适配：headless_shell 下载失败/超时，但完整版 chromium 已在
+    # ~/.cache/ms-playwright 时，显式指定 executable_path 复用完整版可执行文件，
+    # 避免发布流程（截图/封面/图表）因 ~150MB headless_shell 下载被卡死。
+    for candidate in sorted(
+        glob.glob(
+            os.path.expanduser("~/.cache/ms-playwright/chromium-*/chrome-linux*/chrome")
+        ),
+        reverse=True,
+    ):
+        try:
+            return playwright.chromium.launch(
+                headless=True, executable_path=candidate, args=NO_SANDBOX_ARGS
             )
         except Exception:
             pass

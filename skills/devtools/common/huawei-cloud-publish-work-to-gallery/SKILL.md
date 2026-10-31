@@ -9,7 +9,7 @@ description: |
   Triggers include: "把作品发布上去", "投稿到陈列馆", "传作品到平台", "提交作品/项目", "报名发布作品", "publish to work gallery", "submit to an activity", "upload work to the platform"
 metadata:
   tags: huawei-cloud,publish,gallery,university operations platform
-version: 2026.10.13.001
+version: 2026.10.15.001
 ---
 
 # Publish Work to Gallery
@@ -51,7 +51,7 @@ Step 8 (publish)                             ← 依赖以上全部
 | 3 | `$SKILL_DIR/scripts/read-git-info.mjs /path/to/project` | R | `#gitUrl=<https://… .git>` `#gitBranch=<分支>`（已核对远端确有该分支） | exit 1=非 git 仓库 / url 校验失败 / `#branchAbsent=1`（远端不存在该分支——按 SHA 给唯一处置：checkout 或 push，转述 stderr 即可）；网络/凭证原因无法核对时 stderr 警告但不拦截（发布时服务端会校验分支存在性） |
 | 3 | `$SKILL_DIR/scripts/ensure-gitcode-credential.mjs` | R | `#credential=found`（有凭证）或 `#credential=missing`（无凭证，走 OAuth） | exit 0；无手动备选 |
 | 3 | `$SKILL_DIR/scripts/gitcode-oauth.ensure.mjs --start` | R | `#oauth=ready`（有 token）/ `#oauth=started session_id=123456 login_url=https://example.com`（stdout 立即返回，二维码走 stderr） | 缺失 `#oauth=absent` exit 1；失败 `#oauth=failed reason=timeout` exit 1 |
-| 3 | `$SKILL_DIR/scripts/gitcode-oauth.ensure.mjs --wait 123456 --timeout 300` | R | `#oauth=done`（token 已写 `~/.gitcode/auth.toml`） | `#oauth=failed reason=timeout\|finish\|…` exit 1 |
+| 3 | `$SKILL_DIR/scripts/gitcode-oauth.ensure.mjs --wait 123456 --timeout 300` | R | `#oauth=done`（token 已写 `~/.gitcode/auth.toml`） | `#oauth=failed reason=timeout\|finish\|…` exit 1。**⚠️ 需人工 OAuth 交互**：`--wait` 阻塞轮询等待用户在浏览器完成授权（`--start` 输出的链接/二维码），无人值守/沙箱/无浏览器环境会在 `--timeout` 后 `reason=timeout` 超时——属预期行为，须在真实用户环境由用户授权后执行 |
 | 3 | `$SKILL_DIR/scripts/extract-workname.mjs /path/to/project` | R | stdout `#name=MyWork source=frontmatter` | exit 1=workDir 不存在 |
 | 2 | `$SKILL_DIR/scripts/spawn-detached.mjs --out /tmp/spawn.out --pidfile /tmp/app.pid --cwd /path/to/project -- npm run dev` | R | `#spawn=ok pid=12345 out=/tmp/spawn.out` | exit 1=启动失败 |
 | 2 | 隧道：先跑 `$SKILL_DIR/scripts/detect-env.mjs` 看 `tunnel` 字段；`true`（Linux）→ 加载内置 skill `huawei-cloud-devbridge-tunnel` 开隧道；`false`（Windows/macOS）→ **禁止加载，`envUrl=""`** | R | 取得 `envUrl`；skill 不可用/失败 → `envUrl=""` 照常发布 | tunnel=false 时仍尝试开隧道 = 违反契约 |
@@ -66,7 +66,7 @@ Step 8 (publish)                             ← 依赖以上全部
 | 8 | `$SKILL_DIR/scripts/check-gates.mjs --cover /tmp/cover.png --detail /tmp/detail.zip --strict --max-age 3600 --quiet` | R | exit 0（stdout 仅 1 行省 token） | exit 1 → 回退重跑门禁 |
 | 8 | `$SKILL_DIR/scripts/publish-work.mjs /tmp/params.json --max-age 3600` | **W** | `#status=201`（仅输出 workId/workUrl/reward） | envUrl 不可达 → exit 1（提示检查本地服务）；409/其他 → 原样输出完整响应 |
 
-> 标记文件位置：Linux `/tmp/`；Windows `os.tmpdir()`（`%TEMP%`）。
+> 标记文件位置：Linux/macOS `${TMPDIR:-/tmp}/`（与 Node `os.tmpdir()` / Python `tempfile.gettempdir()` 同一临时目录，评测环境 TMPDIR 被重定向时自动跟随）；Windows `os.tmpdir()`（`%TEMP%`）。
 
 ## Parameter Confirmation（参数确认）
 
@@ -120,7 +120,7 @@ Step 8 (publish)                             ← 依赖以上全部
 
 1. **仓库根检测（fail-stop）**：`$SKILL_DIR/scripts/ensure-git-root.mjs /path/to/project`——硬检测 workDir 自身是否为 git 仓库根（`git -C /path/to/project rev-parse --git-dir` 必须返回 `.git`）。若不是（如 workDir 无 .git 但父目录有，git 会向上递归返回父仓库 remote），脚本 exit 1 并提示。此时 **禁止** 直接 `git -C /path/to/project remote get-url origin`（会拿到父仓库 URL）。处理方式：① 问用户手动提供 `gitUrl` + `gitBranch`；② 或在 workDir `git init` + 推到远端后再读。检测通过才继续。
 2. `$SKILL_DIR/scripts/read-git-info.mjs /path/to/project` 一步取 gitUrl/gitBranch（含仓库自检 + 凭证剥离 + **远端分支核对**，契约见上表）。`#branchAbsent=1` → **转述 stderr 的唯一处置**（脚本已按 SHA 判定：远端某分支与本地当前提交一致 → `git checkout <该分支>` 后重跑，无损且优于 push；否则 → `git push -u origin <branch>` 后重跑，切到远端旧分支会提交旧代码）。
-3. **凭证排查**：`$SKILL_DIR/scripts/ensure-gitcode-credential.mjs`——有凭证即 `#credential=found`。**无凭证时走 gitcode-oauth 两阶段授权**（契约见上方 `gitcode-oauth.ensure.mjs --start`/`--wait`）：① `--start` 拿登录链接/二维码**原样展示给用户**，请用户在任意浏览器打开授权（**禁止用 agent 内置浏览器代开**），脚本本地已起回调服务器；② `--wait <session_id>` 阻塞轮询到 token 落盘。
+3. **凭证排查**：`$SKILL_DIR/scripts/ensure-gitcode-credential.mjs`——有凭证即 `#credential=found`。**无凭证时走 gitcode-oauth 两阶段授权**（契约见上方 `gitcode-oauth.ensure.mjs --start`/`--wait`）：① `--start` 拿登录链接/二维码**原样展示给用户**，请用户在任意浏览器打开授权（**禁止用 agent 内置浏览器代开**），脚本本地已起回调服务器；② `--wait <session_id>` 阻塞轮询到 token 落盘——**需人工 OAuth 交互**（用户须在浏览器完成授权），无人值守/沙箱/无浏览器环境会在超时后 `reason=timeout` 退出，属预期行为；agent 在自动化/评测环境遇超时应如实汇报「需人工授权」，不得绕过或伪造 token。
 4. **命名**：`$SKILL_DIR/scripts/extract-workname.mjs /path/to/project`——按优先级 frontmatter → H1 → manifest → `index.html <title>` → 目录名提取。stdout `#name=<name> source=<来源>`。`source=dirname` 时 agent 可合成/修改（<30 字符）。
 
 **Output:** `gitUrl`、`gitBranch`、`workName`。

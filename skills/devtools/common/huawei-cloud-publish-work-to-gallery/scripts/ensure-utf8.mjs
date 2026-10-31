@@ -30,7 +30,7 @@ if (target === "-h" || target === "--help") {
   <dir>                要扫描的目录（递归处理 .html/.htm/.css）
 
 选项:
-  --marker=<path>      标记文件路径（默认 /tmp/utf8-gate-ok，Windows: os.tmpdir()/utf8-gate-ok）
+  --marker=<path>      标记文件路径（默认 os.tmpdir()/utf8-gate-ok，即 Linux/macOS \${TMPDIR:-/tmp}/utf8-gate-ok、Windows %TEMP%\\utf8-gate-ok）
   -h, --help           显示本帮助
 
 行为:

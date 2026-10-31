@@ -462,18 +462,19 @@ Screenshot shows boxes (□□□) instead of Chinese characters, or X/boxes ins
 ### 1a. preflight 脚本被后台化（Linux 首次运行常见）
 
 **Problem:**
-执行 `bash preflight.sh` 后，shell 工具将其**后台化**（执行 >30s 超时阈值），返回输出文件路径而非直接结果——`exit code` 为空、`stdout` 为空、`/tmp/font-gate-ok` 尚未生成。这**不是失败**，是脚本还在跑（首次需装 CJK/emoji 字体、配置 fontconfig、下载 Chromium）。
+执行 `bash preflight.sh` 后，shell 工具将其**后台化**（执行 >30s 超时阈值），返回输出文件路径而非直接结果——`exit code` 为空、`stdout` 为空、`${TMPDIR:-/tmp}/font-gate-ok` 尚未生成。这**不是失败**，是脚本还在跑（首次需装 CJK/emoji 字体、配置 fontconfig、下载 Chromium）。
 
 **Solution — 轮询等待标记文件，不要判断命令返回值：**
 
 ```bash
 # 以标记文件出现且内容 ok=true 为完成判据（Linux 首次最多等 900s，期间可并行做其他步骤）
+GATE_DIR="${TMPDIR:-/tmp}"
 for i in $(seq 1 180); do
-  if [ -f /tmp/font-gate-ok ] && grep -q '^ok=true' /tmp/font-gate-ok; then echo "preflight done"; break; fi
-  tail -n 2 /tmp/preflight.log 2>/dev/null   # 看最新一行：有「⏳ 心跳」= 龟速，继续等（下载卡死由脚本自动切换源）
+  if [ -f "$GATE_DIR/font-gate-ok" ] && grep -q '^ok=true' "$GATE_DIR/font-gate-ok"; then echo "preflight done"; break; fi
+  tail -n 2 "$GATE_DIR/preflight.log" 2>/dev/null   # 看最新一行：有「⏳ 心跳」= 龟速，继续等（下载卡死由脚本自动切换源）
   sleep 5
 done
-# 超时仍未出现标记 → 先查 /tmp/preflight.log 最新时间戳：>300s 无新行 = 卡死
+# 超时仍未出现标记 → 先查 "$GATE_DIR/preflight.log" 最新时间戳：>300s 无新行 = 卡死
 # （脚本对 yum/pip/下载各有硬超时 PIP_INSTALL_TIMEOUT/YUM_TIMEOUT/CHROMIUM_DL_TIMEOUT，会自行 fail-fast）；
 # 再用 pgrep -f preflight.sh 判断进程状态，确认是仍存活还是已失败
 ```
