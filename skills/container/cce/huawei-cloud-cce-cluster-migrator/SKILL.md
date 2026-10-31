@@ -23,16 +23,16 @@ The **Huawei Cloud CCE Cluster Migrator** skill automates and orchestrates the e
 2. **IAM Authorization**:
    - The operator or agency credentials must have `CCEFullPolicy` (or `CCEMigrationOperatorCustomPolicy`), `SWRFullAccessPolicy`, `EVSFullAccessPolicy`, `VPCFullAccessPolicy`, and `ELBFullAccessPolicy`. See `references/iam-policies.md`.
 3. **Network & Cluster Readiness**:
-   - Target CCE cluster (prefer CCE Turbo) provisioned and healthy.
+   - Target CCE cluster (prefer CCE Turbo or CCE Autopilot) provisioned and healthy.
    - VPC subnet routing, NAT Gateway SNAT rules (if public egress needed), and security group rules verified. See `references/pre-migration-checklist.md`.
 
 ## Workflow
 
 |Phase|Core Objectives & Gates|Key Actions & References|
 |-|-|-|
-|**Phase 1: Assessment & Sizing**|Workload inventory, egress audit, and sizing|Audit workloads, external APIs, and storage. Reserve min 2 vCPU / 4 GiB for CCE add-ons. Size nodes by compute and CCE Turbo sub-interface capacity (1 Pod = 1 auxiliary ENI). Ref: `references/pre-migration-checklist.md`.|
+|**Phase 1: Assessment & Sizing**|Workload inventory, egress audit, and sizing|Audit workloads, external APIs, and storage. Reserve min 2 vCPU / 4 GiB for add-ons. Size CCE Turbo nodes by compute & sub-ENIs (1 Pod = 1 ENI); for CCE Autopilot (serverless), size Pod requests & Pod subnet IPs directly. Ref: `references/pre-migration-checklist.md`.|
 |**Phase 2: Plan Confirmation Gate**|Formal written plan & customer sign-off|Consult referenced guides below and `templates/migration-plan-template.md` to materialize `implementation_plan.md` (specs, storage, NAT, DB consistency, ELB ingress, rollback). **Must obtain explicit user approval before proceeding.**|
-|**Phase 3: Target CCE Readiness**|Cluster, network & security group verification|Verify CCE Turbo status, Everest CSI, sync central `kubeconfig`, open NodePort `30000-32767` (if Standard), and verify NAT SNAT rules. Ref: `references/external-dependency-audit-guide.md`.|
+|**Phase 3: Target CCE Readiness**|Cluster, network & security group verification|Verify CCE Turbo (`ListClusters`) or Autopilot (`ListAutopilotClusters`) status, Everest CSI, sync central `kubeconfig`, open NodePort `30000-32767` (if Standard), and verify NAT SNAT rules. Ref: `references/external-dependency-audit-guide.md`.|
 |**Phase 4: Container Image Mirroring**|Replicate images to Huawei Cloud SWR|Bulk mirror images + Velero suite (`velero`, `aws-plugin`, `restore-helper`) via `skopeo` with `set -o pipefail` and `skopeo list-tags` validation. Ref: `references/swr-image-sync-guide.md`.|
 |**Phase 5: Multi-Type PV Migration**|Re-map & replicate storage|Classify volumes into EVS (min 10Gi, single-Pod exclusive RWO; StatefulSet for multi-replica, Recreate strategy for Deployment; `csi-disk-topology` for multi-AZ), SFS Turbo (pre-created instance; min 500Gi/1.2TB, multi-Pod RWX via static PV or dynamic subpath), or OBS. Apply Velero SC mapping ConfigMap. Enforce DB consistency hooks. Ref: `references/storage-pv-migration-guide.md`.|
 |**Phase 6: Workload & Secret Restore**|Restore configs, secrets & workloads|**Primary / Recommended**: **k8clone** (zero-cluster-overhead metadata cloning with automated StorageClass/ImageRepo rewrite via `restore.json`) paired with direct database logical dump/restore (`pg_dump`/`psql`).<br>**Secondary / Alternative**: **Velero** (full filesystem state with mandatory `--uploader-type=restic`, pre-provisioned 10Gi PVCs, and post-restore remediation). Exclude legacy `service-account-token` and `paas.elb`; preserve Headless Service `clusterIP: None`. Inject `default-secret` for SWR. Ref: `references/k8clone-migration-guide.md`, `references/velero-migration-guide.md`.|
@@ -64,12 +64,16 @@ When drafting the formal migration plan document in Phase 2, the agent must cons
 ### 1. Assessment & Sizing
 
 ```bash
-# Query CCE cluster flavors (x86 architecture)
+# Query CCE cluster flavors (x86 architecture, for Standard / Turbo)
 hcloud CCE GetClusterFlavorSpecs --cli-region=<region_id> --clusterType=VirtualMachine
 
-# List target clusters & inspect active add-ons
+# Discover target clusters (Standard / Turbo)
 hcloud CCE ListClusters --cli-region=<region_id>
 hcloud CCE ShowCluster --cli-region=<region_id> --cluster_id={target_cluster_id} --detail=true
+
+# Discover target clusters (CCE Autopilot Serverless)
+hcloud CCE ListAutopilotClusters --cli-region=<region_id>
+hcloud CCE ShowAutopilotCluster --cli-region=<region_id> --cluster_id={target_cluster_id} --detail=true
 ```
 
 ### 2. Kubeconfig & Target Readiness
@@ -78,8 +82,13 @@ hcloud CCE ShowCluster --cli-region=<region_id> --cluster_id={target_cluster_id}
 # Sync CCE kubeconfig on operator host (intranet or public EIP access)
 hcloud CCE update-kubeconfig --cluster-id={target_cluster_id} --region=cn-north-4 --output=~/.kube/cce-config
 
-# Verify Everest CSI add-on
-hcloud CCE ListAddonInstances --cli-region=<region_id> --cluster_id={target_cluster_id}
+# Verify Everest CSI add-on instances
+hcloud CCE ListAddonInstances --cli-region=<region_id> --cluster_id={target_cluster_id}            # Standard / Turbo
+hcloud CCE ListAutopilotAddonInstances --cli-region=<region_id> --cluster_id={target_cluster_id}   # Autopilot
+
+# Inspect cluster access endpoints (Private VIP and Public APIServer)
+hcloud CCE ShowClusterEndpoints --cli-region=<region_id> --cluster_id={target_cluster_id}          # Standard / Turbo
+hcloud CCE ShowAutopilotClusterEndpoints --cli-region=<region_id> --cluster_id={target_cluster_id} # Autopilot
 
 # Verify NAT Gateway and SNAT rules (for workload/image internet egress)
 hcloud NAT ListNatGateways --cli-region=<region_id>
@@ -133,6 +142,7 @@ Prior to executing any resource provisioning, data migration, or traffic switcho
 
 |Parameter|Description|Default / Example|Confirmation Scope|
 |-|-|-|-|
+|`target_cluster_architecture`|Target CCE architecture category|`CCE Turbo (Node-based)` or `CCE Autopilot (Serverless)`|Phase 1 / Phase 2|
 |`target_cluster_id`|Huawei Cloud CCE cluster ID|e.g. `cce-cluster-abc12345`|Phase 2 / Phase 3|
 |`target_region`|Huawei Cloud region identifier|`cn-north-4`|Phase 1 / Phase 2|
 |`migration_toolchain`|Workload restore toolchain|`k8clone + DB Dump (Primary)` or `Velero restic (Secondary)`|Phase 2 / Phase 6|

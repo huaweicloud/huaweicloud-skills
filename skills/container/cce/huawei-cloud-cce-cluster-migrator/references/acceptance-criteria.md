@@ -18,8 +18,8 @@ bash scripts/test-cli-commands.sh -s . -r cn-north-4 -j 4
 
 - **Execution Integrity**: The test runner `scripts/test-cli-commands.sh` executes with `set -euo pipefail` and exits with status code `0`.
 - **Test Case Discovery**: Embedded Python parser successfully loads all test cases defined in `templates/test-vars.json` without syntax or JSON errors.
-- **Suite Completion**: All 13 registered test cases (`TC-01` through `TC-13`) complete with status `PASS`.
-- **CLI Output Verification**: Test results and execution summary are directly returned in the CLI output, confirming `13/13 passed`, `0 failed`, and all expected test cases verified without persisting test-report files.
+- **Suite Completion**: All 15 registered test cases (`TC-01` through `TC-15`) complete with status `PASS`.
+- **CLI Output Verification**: Test results and execution summary are directly returned in the CLI output, confirming `15/15 passed`, `0 failed`, and all expected test cases verified without persisting test-report files.
 - **Output Token Matching**: Every test case output contains its expected token string (e.g., `Cluster`, `clusterFlavorSpecs`, `Addon`, `cce:cluster:list`, `5.0`, `nat_gateways`, `snat_rules`, `auths`, `namespaces`, `vpcs`, `loadbalancers`, `publicips`).
 
 ### Fail Criteria
@@ -39,9 +39,11 @@ Integration testing verifies end-to-end KooCLI command execution across target c
 ### Scope & Execution Flow
 
 1. **Target Cluster Assessment & Sizing**:
-   - `hcloud CCE ListClusters --cli-region=<region_id>`
+   - `hcloud CCE ListClusters --cli-region=<region_id>` (Standard / Turbo)
+   - `hcloud CCE ListAutopilotClusters --cli-region=<region_id>` (Autopilot Serverless)
    - `hcloud CCE GetClusterFlavorSpecs --cli-region=<region_id> --clusterType=VirtualMachine`
    - `hcloud CCE ListAddonTemplates --cli-region=<region_id>`
+   - `hcloud CCE ListAutopilotAddonTemplates --cli-region=<region_id>`
 2. **IAM Policy & Schema Verification**:
    - `hcloud IAM GetAuthorizationSchemaV5 --cli-region=<region_id> --service_code=cce`
    - `hcloud IAM GetPolicyVersionV5 --cli-region=<region_id> --policy_id=CCEFullPolicy --version_id=v1`
@@ -58,6 +60,7 @@ Integration testing verifies end-to-end KooCLI command execution across target c
 5. **Cluster Access & Add-ons**:
    - `hcloud CCE update-kubeconfig --cluster-id={target_cluster_id} --region=cn-north-4`
    - `hcloud CCE ListAddonInstances --cli-region=<region_id> --cluster_id={target_cluster_id}`
+   - `hcloud CCE ListAutopilotAddonInstances --cli-region=<region_id> --cluster_id={target_cluster_id}`
 
 ### Pass Criteria
 

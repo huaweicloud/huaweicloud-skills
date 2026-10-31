@@ -240,3 +240,16 @@ This guide provides diagnostic procedures and resolution playbooks for common fa
      kubectl delete svc <service-name> -n <namespace> --kubeconfig=~/.kube/cce-config
      kubectl apply -f <headless-svc-definition.yaml> --kubeconfig=~/.kube/cce-config
      ```
+
+### T-28: Target Cluster Operations Fail with API Mismatch on CCE Autopilot
+
+- **Symptoms**: `hcloud CCE ListClusters` returns empty or `ShowCluster` reports `CCE.0001 Cluster not found` for an existing target Autopilot cluster; `kubectl get nodes` returns empty or virtual nodes; attempting to list node pools returns empty or errors.
+- **Root Cause**: CCE Autopilot uses a dedicated Serverless Kubernetes OpenAPI schema. Autopilot clusters are nodeless (0 user-managed worker nodes) and do not appear in Standard CCE cluster/node queries.
+- **Resolution**:
+  1. Use dedicated Autopilot query operations:
+     ```bash
+     hcloud CCE ListAutopilotClusters --cli-region=<region>
+     hcloud CCE ShowAutopilotCluster --cli-region=<region> --cluster_id=<id> --detail=true
+     hcloud CCE ListAutopilotAddonInstances --cli-region=<region> --cluster_id=<id>
+     ```
+  2. Bypasses worker node and node pool sizing: Autopilot automatically provisions compute on a per-Pod request basis (`resources.requests.cpu`, `resources.requests.memory`). Ensure workload manifests define explicit resource requests.

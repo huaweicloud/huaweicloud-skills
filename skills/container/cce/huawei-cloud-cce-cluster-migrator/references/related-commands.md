@@ -15,6 +15,11 @@ This document provides a consolidated quick-reference table of verified Huawei C
 |**CCE**|`hcloud CCE ListAddonInstances`|`--cluster_id=<id>`|Verify Everest CSI & CoreDNS add-ons|
 |**CCE**|`hcloud CCE ListNodePools`|`--cluster_id=<id> --showDefaultNodePool=true`|List cluster node pools|
 |**CCE**|`hcloud CCE ListNodes`|`--cluster_id=<id> --limit=100`|List cluster worker nodes|
+|**CCE Autopilot**|`hcloud CCE ListAutopilotClusters`|`--cli-region=<region>`|Discover target CCE Autopilot serverless clusters|
+|**CCE Autopilot**|`hcloud CCE ShowAutopilotCluster`|`--cluster_id=<id> --detail=true`|Inspect Autopilot cluster status and installed add-ons|
+|**CCE Autopilot**|`hcloud CCE ListAutopilotAddonInstances`|`--cluster_id=<id>`|Verify Everest CSI & CoreDNS add-ons on Autopilot|
+|**CCE Autopilot**|`hcloud CCE ShowAutopilotClusterEndpoints`|`--cluster_id=<id>`|Query Autopilot internal VIP and public endpoints|
+|**CCE Autopilot**|`hcloud CCE CreateAutopilotKubernetesClusterCert`|`--cluster_id=<id> --duration=30`|Generate standalone client cert for Autopilot|
 |**SWR**|`hcloud SWR CreateSecret`|`--cli-region=<region>`|Generate temporary SWR Docker login auth|
 |**SWR**|`hcloud SWR ListNamespaces`|`--cli-region=<region>`|List SWR organizations/namespaces|
 |**SWR**|`hcloud SWR ListReposDetails`|`--namespace=<org>`|Inspect repositories in an organization|

@@ -88,6 +88,25 @@ $$\text{Target Node Count} = \max(\text{Nodes}_{\text{compute}}, \text{Nodes}_{\
 Ensure the dedicated Pod Subnet CIDR assigned to the CCE Turbo cluster has sufficient IP headroom:
 $$\text{Available Subnet IPs} \ge \text{Peak Pod Count} \times 1.3$$
 
+### Target CCE Autopilot Architecture & Sizing Model (Serverless)
+
+When migrating workloads to **CCE Autopilot** instead of CCE Turbo:
+
+1. **Nodeless Compute (Zero Node Sizing)**:
+   - Worker node calculation formulas ($\text{Nodes}_{\text{compute}}$, $\text{Nodes}_{\text{network}}$) do **not apply**.
+   - There are no ECS worker nodes or node pools to provision, size, or scale. Compute capacity is auto-provisioned per Pod by Huawei Cloud.
+2. **Pod Request Optimization & Invoicing**:
+   - Billing is calculated per second based on aggregate running Pod resource requests:
+     $$\text{Hourly Cost} = \sum \left( \text{Pod CPU Requests} \times \text{Unit Price}_{\text{CPU}} + \text{Pod Memory Requests} \times \text{Unit Price}_{\text{RAM}} \right)$$
+   - Workload manifests **must specify accurate `resources.requests`** (CPU and RAM) to prevent over-allocation charges or scheduling throttling.
+3. **Dedicated Autopilot API Discovery**:
+   - Autopilot clusters use separate OpenAPI operations. Verify target cluster and add-ons using:
+     ```bash
+     hcloud CCE ListAutopilotClusters --cli-region=<region_id>
+     hcloud CCE ShowAutopilotCluster --cli-region=<region_id> --cluster_id={target_cluster_id} --detail=true
+     hcloud CCE ListAutopilotAddonInstances --cli-region=<region_id> --cluster_id={target_cluster_id}
+     ```
+
 ---
 
 ## 4. Storage Type Pre-Migration Validation
