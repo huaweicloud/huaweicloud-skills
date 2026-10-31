@@ -9,7 +9,7 @@
 //
 // 标记文件校验逻辑:
 //   不只检查文件存在（test -f），而是读取内容并验证关键字段（ok=true + gate=<expected>）。
-//   这样 `touch /tmp/font-gate-ok` 伪造的空文件会被识破（无 ok=true 字段）。
+//   这样在临时目录伪造 `font-gate-ok` 空文件会被识破（无 ok=true 字段）。
 // 同时提供 verifyGates 导出供未来在 api.mjs 发布动作前内嵌调用（当前未接入）。
 // 用法、选项、退出码详见 node check-gates.mjs --help。
 

@@ -32,7 +32,9 @@ if [[ -n "${OS:-}" && "$OS" == "Windows_NT" ]] || uname -s 2>/dev/null | grep -q
   MARKER="$MARKER_DIR/font-gate-ok"
 else
   IS_WINDOWS=0
-  MARKER=/tmp/font-gate-ok
+  # Linux/macOS：与 Node os.tmpdir() / Python tempfile.gettempdir() 保持一致，尊重 $TMPDIR
+  # （评测环境 TMPDIR 被重定向时，若写死 /tmp 会导致 generate_diagram/check-gates/publish-work 读不到标记）
+  MARKER="${TMPDIR:-/tmp}/font-gate-ok"
 fi
 
 # 日志落盘：shell 工具超时关闭 stdout 管道后 log()/die() 输出丢失，失败排查变黑盒。

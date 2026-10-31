@@ -147,7 +147,7 @@ Generate PPT-style cover
 
 Use Playwright to capture a screenshot of the running app at its **local URL** (`http://127.0.0.1:<port>`，即 Step 2 记录的本地端口):
 
-> **字体/口口保障用 SKILL.md Step 4 的守卫脚本 `screenshot_guard.py`**（含 chromium.launch --no-sandbox、字形自检、`@font-face local()` 兜底注入、写 `/tmp/screenshot-gate-ok`），而非只做基础截图。
+> **字体/口口保障用 SKILL.md Step 4 的守卫脚本 `screenshot_guard.py`**（含 chromium.launch --no-sandbox、字形自检、`@font-face local()` 兜底注入、写 `screenshot-gate-ok` 标记，路径与 `font-gate-ok` 同一临时目录：Linux/macOS `${TMPDIR:-/tmp}`、Windows `%TEMP%`），而非只做基础截图。
 
 > **⚠️ 禁止用隧道 URL 截图：** DevBridge 隧道页面会先弹出**授权页面**，直接截图会截到授权页而非应用界面。**始终用本地地址 `http://127.0.0.1:<port>` 截图。** 隧道 URL 仅用于发布时的 `envUrl` 字段，不用于截图。
 
@@ -170,7 +170,7 @@ with sync_playwright() as p:
 
 **Chinese & emoji font handling：** Step 4（截图/封面合成）和 Step 6（图表生成）均需 CJK + emoji 字体。字体预装情况与安装命令按平台查：Windows → [work-preparation-windows.md#windows-字体预检powershell](work-preparation-windows.md#windows-字体预检powershell)；Linux → [work-preparation-linux.md#字体安装速查表aptyum-列](work-preparation-linux.md#字体安装速查表aptyum-列)。
 
-> **依赖预检一致性：** `preflight.sh`/`preflight.ps1`（SKILL.md Step 4 门禁脚本）已统一处理字体+fontconfig+图表依赖，通过写 `/tmp/font-gate-ok`。此处内联预检仅用于"判断是否可跳过安装"，门禁判定以 `preflight` 标记为准。
+> **依赖预检一致性：** `preflight.sh`/`preflight.ps1`（SKILL.md Step 4 门禁脚本）已统一处理字体+fontconfig+图表依赖，通过写 `font-gate-ok` 标记（Linux/macOS: `${TMPDIR:-/tmp}/font-gate-ok`，与 Node `os.tmpdir()`/Python `tempfile.gettempdir()` 同源；Windows: `%TEMP%\font-gate-ok`）。此处内联预检仅用于"判断是否可跳过安装"，门禁判定以 `preflight` 标记为准。
 
 #### Option 2: Local Playwright with Mock Data
 
@@ -270,7 +270,7 @@ node $SKILL_DIR/scripts/extract-fonts.mjs <workDir>
 fc-match --format='%file' 'sans-serif:lang=zh'   # 不得命中 DejaVuSans.ttf
 ```
 
-> **上游产物门禁：** 环境级一键门禁 = 运行 `preflight.sh`/`preflight.ps1`（跨平台，SKILL.md Step 4）→ 写 `/tmp/font-gate-ok`（`ok=true\ngate=preflight`）；页面级守卫 `screenshot_guard.py` 通过后写 `/tmp/screenshot-gate-ok`（`ok=true\ngate=screenshot-guard`）。发布前 `check-gates.mjs` 统一复核全部门禁标记 + 产物文件（SKILL.md Step 8）。
+> **上游产物门禁：** 环境级一键门禁 = 运行 `preflight.sh`/`preflight.ps1`（跨平台，SKILL.md Step 4）→ 写 `font-gate-ok`（`ok=true\ngate=preflight`；路径统一为临时目录：Linux/macOS `${TMPDIR:-/tmp}`，与 Node `os.tmpdir()`/Python `tempfile.gettempdir()` 一致）；页面级守卫 `screenshot_guard.py` 通过后写 `screenshot-gate-ok`（`ok=true\ngate=screenshot-guard`）。发布前 `check-gates.mjs` 统一复核全部门禁标记 + 产物文件（SKILL.md Step 8）。
 
 #### ③ Playwright 页面内字形自检 + `@font-face` 兜底注入（截图前必做）
 
