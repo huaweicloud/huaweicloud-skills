@@ -1,0 +1,4 @@
+huaweicloudsdkcore>=3.1.208
+huaweicloudsdkconfig>=3.1.208
+urllib3>=2.6.3
+
