@@ -1,0 +1,217 @@
+[
+  {
+    "name": "List all IAM users by created",
+    "description": "查询所有创建时间在2018-12-01T00:00和2019-02-28T00:00之间的IAM用户",
+    "expression": "SELECT * FROM resources WHERE provider = 'iam' AND type = 'users' AND date_diff('hour', date_parse( '2018-12-01T00:00:00Z', '%Y-%m-%dT%H:%i:%sZ'), created) > 0 AND date_diff('hour', created, date_parse( '2019-02-28T00:00:00Z', '%Y-%m-%dT%H:%i:%sZ')) > 0"
+  },
+  {
+    "name": "ECS Instance with EVS",
+    "description": "查询ECS资源及其关联的EVS资源",
+    "expression": "SELECT ECS_EVS.id AS ecs_id, EVS.id AS evs_id FROM ( SELECT id, evs_id FROM ( SELECT id, transform(properties.ExtVolumesAttached, x -> x.id) AS evs_list FROM resources WHERE provider = 'ecs' AND type = 'cloudservers' ) ECS CROSS JOIN UNNEST(evs_list) AS t (evs_id) ) ECS_EVS, ( SELECT id FROM resources WHERE provider = 'evs' AND type = 'volumes' ) EVS WHERE ECS_EVS.evs_id = EVS.id"
+  },
+  {
+    "name": "Resources Time",
+    "description": "查询资源的创建时间和更新时间",
+    "expression": "SELECT id, provider, type, name, created, updated, region_id FROM resources"
+  },
+  {
+    "name": "Count ECS by region_id",
+    "description": "查询每个区域内弹性云服务器的数量",
+    "expression": "SELECT region_id, count(*) AS num FROM resources WHERE type = 'cloudservers' AND provider = 'ecs' GROUP BY region_id"
+  },
+  {
+    "name": "Count resources more then 100 by region_id",
+    "description": "查询每个区域内数量大于100的资源类型",
+    "expression": "WITH counts AS ( SELECT region_id, provider, type, count(*) AS number FROM resources GROUP BY region_id, provider, type ) SELECT * FROM counts WHERE number > 100"
+  },
+  {
+    "name": "List OBS Bucket",
+    "description": "列举对象存储桶",
+    "expression": "SELECT id, name, region_id FROM resources WHERE provider = 'obs' AND type = 'buckets'"
+  },
+  {
+    "name": "Fuzzy Search resource",
+    "description": "对象存储桶模糊查询",
+    "expression": "SELECT * FROM resources WHERE provider = 'obs' AND type = 'buckets' AND name LIKE '%figure%'"
+  },
+  {
+    "name": "List resources by tags",
+    "description": "通过标签筛选资源",
+    "expression": "SELECT id, name, provider, type FROM resources WHERE any_match(tag, x -> (x.key = 'key'))"
+  },
+  {
+    "name": "List resources by ep_id",
+    "description": "通过企业项目筛选资源",
+    "expression": "SELECT * FROM resources WHERE ep_id = '0'"
+  },
+  {
+    "name": "Stopped ECS",
+    "description": "查询关机状态的弹性云服务器名称",
+    "expression": "SELECT id, name FROM resources WHERE provider = 'ecs' AND type = 'cloudservers' AND properties.status = 'SHUTOFF'"
+  },
+  {
+    "name": "Error ECS",
+    "description": "查询处于异常状态的弹性云服务器",
+    "expression": "SELECT * FROM resources WHERE provider = 'ecs' AND type = 'cloudservers' AND properties.status = 'ERROR'"
+  },
+  {
+    "name": "EVS by Size",
+    "description": "查询特定规格的云硬盘",
+    "expression": "SELECT * FROM resources WHERE provider = 'evs' AND type = 'volumes' AND properties.size = 100"
+  },
+  {
+    "name": "EVS in-use",
+    "description": "查询已绑定的云硬盘",
+    "expression": "SELECT * FROM resources WHERE provider = 'evs' AND type = 'volumes' AND properties.status = 'in-use'"
+  },
+  {
+    "name": "List VPC",
+    "description": "列举VPC资源",
+    "expression": "SELECT * FROM resources WHERE provider = 'vpc' AND type = 'vpcs'"
+  },
+  {
+    "name": "Unused Volume",
+    "description": "查询未挂载给任何云服务器的云硬盘",
+    "expression": "SELECT * FROM resources WHERE provider = 'evs' AND type = 'volumes' AND properties.status != 'in-use'"
+  },
+  {
+    "name": "List Unencrypted GeminiDB Instances",
+    "description": "查询所有未设置KMS加密的GeminiDB资源",
+    "expression": "SELECT * FROM resources WHERE provider = 'nosql' AND type = 'instances' AND (properties.kmsKey is NULL OR properties.kmsKey = '')"
+  },
+  {
+    "name": "RDS resources Publicly Accessible",
+    "description": "查询所有可以公网访问的RDS资源",
+    "expression": "SELECT * FROM resources WHERE provider = 'rds' AND type = 'instances' AND properties.eip is not null"
+  },
+  {
+    "name": "Non-compliant resources",
+    "description": "列举所有的Config合规审计中评估资源为不合规的合规规则",
+    "expression": "SELECT * FROM resources WHERE provider = 'config' AND type = 'policyAssignments' AND properties.non_compliant_resource_count > 0"
+  },
+  {
+    "name": "Count ELB Instances",
+    "description": "根据ELB资源类型查询ELB资源数量",
+    "expression": "SELECT type, count(*) AS num FROM resources WHERE provider = 'elb' GROUP BY type"
+  },
+  {
+    "name": "Count by Compliant",
+    "description": "根据Config合规状态查询合规规则数量",
+    "expression": "SELECT sum( if(properties.non_compliant_resource_count > 0, 1, 0)), sum( if(properties.non_compliant_resource_count > 0, 0, 1)) FROM resources WHERE provider = 'config' AND type = 'policyAssignments'"
+  },
+  {
+    "name": "Count Non-compliant",
+    "description": "查询评估资源为非合规的合规规则，并按不合规资源数量降序排列",
+    "expression": "SELECT id, name, properties.non_compliant_resource_count FROM resources WHERE type = 'policyAssignments' AND provider = 'config' AND properties.non_compliant_resource_count > 0 GROUP BY id, name, properties.non_compliant_resource_count ORDER BY properties.non_compliant_resource_count DESC"
+  },
+  {
+    "name": "ECS Instances by IP Address",
+    "description": "列举所有的包含特定网络接口的ECS资源",
+    "expression": "SELECT * FROM resources WHERE provider = 'ecs' AND type = 'cloudservers' AND any_match(properties.addresses,x -> x.addr= '21.108.3.93')"
+  },
+  {
+    "name": "ECS Instances by Security Group",
+    "description": "查询关联安全组id为'6c7c5a60-3878-4e68-b6ad-0fc55123549e'的ECS资源",
+    "expression": "SELECT * FROM resources WHERE provider = 'ecs' AND type = 'cloudservers' AND any_match(properties.securityGroup,x->x.id = '6c7c5a60-3878-4e68-b6ad-0fc55123549e')"
+  },
+  {
+    "name": "ECS Instances Attached to Volume",
+    "description": "根据磁盘查询ECS资源",
+    "expression": "SELECT * FROM resources WHERE provider = 'ecs' AND type = 'cloudservers' AND any_match(properties.ExtVolumesAttached,x -> contains(transform(properties.ExtVolumesAttached, x -> x.id),'c261154b-5ccc-494b-930c-685a633c1a3b'))"
+  },
+  {
+    "name": "ECS resources within a VPC",
+    "description": "根据VPC ID查询ECS资源",
+    "expression": "SELECT * FROM resources WHERE provider = 'ecs' AND type = 'cloudservers' AND properties.metadata.vpcId = '1e5a9b93-f0ca-4fb6-8b8e-8ab8e909d356'"
+  },
+  {
+    "name": "ECS resources by IMS",
+    "description": "查询镜像ID为'0e439277-7572-46e2-a9fe-729a61489b19'的ECS资源",
+    "expression": "SELECT * FROM resources WHERE provider = 'ecs' AND type = 'cloudservers' AND properties.metadata.meteringImageId='0e439277-7572-46e2-a9fe-729a61489b19'"
+  },
+  {
+    "name": "ELB resources by type",
+    "description": "根据资源类型查询ELB资源",
+    "expression": "SELECT * FROM resources WHERE provider = 'elb' AND type = 'loadbalancers'"
+  },
+  {
+    "name": "RDS Instances by Security Group",
+    "description": "列举所有包含在安全组63c4afc5-a8ab-4261-a4e1-0a5b4358b820中的RDS资源",
+    "expression": "SELECT * FROM resources WHERE provider = 'rds' AND type = 'instances' AND substr(properties.securityGroupId, 3, 36)='63c4afc5-a8ab-4261-a4e1-0a5b4358b820'"
+  },
+  {
+    "name": "RDS Instances by flavorCode",
+    "description": "列举所有flavorCode为'rds.mysql.n1.large.4.ha'的RDS资源",
+    "expression": "SELECT * FROM resources WHERE provider = 'rds' AND type = 'instances' AND properties.flavorCode='rds.mysql.n1.large.4.ha'"
+  },
+  {
+    "name": "RDS Instances by Database engine",
+    "description": "查询引擎为mysql的RDS资源",
+    "expression": "SELECT * FROM resources WHERE provider = 'rds' AND type = 'instances' AND properties.engineName='mysql'"
+  },
+  {
+    "name": "RDS Instances by Storage type",
+    "description": "列举所有存储类型为ULTRAHIGH的RDS资源",
+    "expression": "SELECT * FROM resources WHERE provider = 'rds' AND type = 'instances' AND properties.volumeType = 'ULTRAHIGH'"
+  },
+  {
+    "name": "Encrypted EVS Volumes",
+    "description": "查询加密的EVS磁盘",
+    "expression": "SELECT * FROM resources WHERE provider = 'evs' AND type = 'volumes' AND properties.encrypted"
+  },
+  {
+    "name": "Unencrypted EVS Volumes",
+    "description": "查询未加密的EVS磁盘",
+    "expression": "SELECT * FROM resources WHERE provider = 'evs' AND type = 'volumes' AND NOT properties.encrypted"
+  },
+  {
+    "name": "EVS Volumes by type",
+    "description": "查询所有的SATA类型的EVS磁盘",
+    "expression": "SELECT * FROM resources WHERE provider = 'evs' AND type = 'volumes' AND properties.volumeType = 'SATA'"
+  },
+  {
+    "name": "VPS Ports in-use",
+    "description": "列举所有在使用中的VPC网络接口",
+    "expression": "SELECT * FROM resources WHERE provider = 'vpc' AND type = 'ports' AND properties.status = 'ACTIVE'"
+  },
+  {
+    "name": "Security Group Supporting TCP Protocol",
+    "description": "列举所有可以支持tcp协议的安全组",
+    "expression": "SELECT * FROM resources WHERE provider = 'vpc' AND type = 'securityGroups' AND any_match(properties.security_group_rules,x -> x.protocol = 'tcp')"
+  },
+  {
+    "name": "IAM user by IAM policy",
+    "description": "列举所有关联IAM策略‘294f1ad84e3344bda00ca285db430635’的IAM用户",
+    "expression": "SELECT * FROM resources WHERE provider = 'iam' AND type = 'users' AND any_match(properties.policy_list,x -> contains(properties.policy_list,'294f1ad84e3344bda00ca285db430635'))"
+  },
+  {
+    "name": "IAM policy by IAM user",
+    "description": "列举所有关联某个IAM用户的IAM策略",
+    "expression": "SELECT * FROM resources WHERE provider = 'iam' AND type = 'policies' AND contains((SELECT properties.policy_list AS target FROM resources WHERE id = '0a84b3b88c80d4d91fd0c01761f99063'), id)"
+  },
+  {
+    "name": "VPC Public IPs by Ports",
+    "description": "列举所有的关联id为1e2c43c1-18b1-4fae-a774-33cd74fa2b70的ports的弹性公网。",
+    "expression": "SELECT * FROM resources WHERE provider = 'vpc' AND type = 'publicips' AND properties.vnic.portId = '1e2c43c1-18b1-4fae-a774-33cd74fa2b70'"
+  },
+  {
+    "name": "VPC Public IPs by IP Address",
+    "description": "根据IP地址查询VPC弹性IP",
+    "expression": "SELECT * FROM resources WHERE provider = 'vpc' AND type = 'publicips' AND properties.vnic.privateIpAddress = '10.66.164.236'"
+  },
+  {
+    "name": "VPC Public IPs by Pool",
+    "description": "列举所有在5_g-vm ip池中的VPC弹性IP",
+    "expression": "SELECT * FROM resources WHERE provider = 'vpc' AND type = 'publicips' AND properties.publicipPoolName = '5_g-vm'"
+  },
+  {
+    "name": "NAT Gateway with state available",
+    "description": "列举所有的可使用的NAT资源",
+    "expression": "SELECT * FROM resources WHERE provider = 'nat' AND type = 'natGateways' AND properties.status = 'ACTIVE'"
+  },
+  {
+    "name": "Resources without tags",
+    "description": "查询没有标签的资源",
+    "expression": "SELECT * FROM resources WHERE cardinality(tag) = 0"
+  }
+]
