@@ -124,6 +124,12 @@ Returns: `resources` (list of `ResourceVo` with resource_id, resource_name, reso
 resource_sub_type, nodes, config, status, description, usages, pool_type, create_at),
 `page_info`. Pass `resource_id` to `show-pool --pool-id`.
 
+> **Training task `cluster_id`**: `list-pools` is for pool/flavor discovery and does not reliably
+> determine the value to submit. ModelArts `config.cluster_id` may be `None`; do not assume
+> `resource_id` or `config.pool_id` is interchangeable with the task's `cluster_id`. For a training
+> task, copy `cluster_id` from a successful task in the same workspace. The observed SHARED format
+> is `pool-<resource_id>`; do not assume it applies to DEDICATED pools.
+
 #### Show resource pool detail
 
 ```bash
@@ -138,6 +144,22 @@ through unmodified (no prefix stripping needed).
 
 Returns: full `ResourceVo` including `nodes` (name, status, resources,
 available_resources, labels), `config`, `status` (AVAILABLE/UNAVAILABLE).
+
+## Parameter Confirmation 参数确认
+
+All resource commands are read-only queries. Confirm the following before running them:
+
+| Parameter | Used by | Values / Source | Notes |
+|---|---|---|---|
+| `--workspace-id` | `list-quotas` | active workspace (`cloudrobo workspace use --workspace-id <id>`) or explicit ID | omit to use the active workspace context |
+| `--resource-type` | `list-quotas`, `list-pools` | `CCE` \| `MODELARTS` | CCE quotas report `npu=0`; ModelArts quotas report `cpu/memory/gpu=0` |
+| `--resource-sub-type` | `list-quotas`, `list-pools` | `CPU` \| `GPU` \| `STANDARD` \| `LITE` | optional filter |
+| `--pool-type` | `list-quotas`, `list-pools` | `DEDICATED` \| `SHARED` | optional filter |
+| `--usages` | `list-pools` | comma list, e.g. `TRAINING,INFERENCE` | optional filter |
+| `--resource-id` | `list-quotas` | `resource_id` from `list-pools` | optional filter |
+| `--pool-id` | `show-pool` | `resource_id` exactly as returned by `list-pools` | required for `show-pool` |
+| `--limit` / `--offset` | `list-quotas`, `list-pools` | `--limit 1-50`, `--offset N` | pagination |
+| `--order` | `list-quotas`, `list-pools` | `ASC` \| `DESC` | optional sort order |
 
 ## Reference Documents 参考文档
 
