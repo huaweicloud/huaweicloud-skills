@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>CloudRobo · 数据管线监控</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./app.css">
+  <script defer src="./bootstrap.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" data-action="runs" aria-label="CloudRobo 运行列表">
+      <span class="brand-mark" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 7h6v6H4zM14 11h6v6h-6zM7 13v4h7M10 10h7v1"/></svg></span>
+      CloudRobo
+    </a>
+    <span class="separator">/</span><button class="text-button" data-action="runs">数据管线监控</button>
+    <span id="breadcrumb" class="breadcrumb"></span>
+    <span class="spacer"></span><span id="mode" class="tag" hidden>本地演示</span>
+    <span id="connection" class="connection" role="status">正在连接…</span>
+  </header>
+  <div id="global-error" class="banner critical" role="alert" hidden></div>
+  <main id="workspace" tabindex="-1"><div class="empty">正在读取本地运行…</div></main>
+  <aside id="drawer" class="drawer" aria-label="步骤详情" hidden></aside>
+  <dialog id="action-dialog" aria-labelledby="dialog-title"></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <noscript><p class="banner">此监控页面需要启用 JavaScript。终端中的 CloudRobo 监控仍可使用。</p></noscript>
+</body>
+</html>
