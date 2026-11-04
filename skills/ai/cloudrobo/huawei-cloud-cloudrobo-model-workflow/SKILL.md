@@ -311,7 +311,7 @@ Filter pools where `usages` includes `MODEL_DEPLOYMENT`, `pool_type` is `DEDICAT
 cloudrobo resource show-pool --pool-id <resource_id>
 ```
 
-> `show-pool`'s `--pool-id` uses `resource_id` (without `pool-` prefix). `infer create`'s `--pool-id` **must use `pool-<uuid>` format** (with `pool-` prefix).
+> `show-pool`'s `--pool-id` uses `resource_id` (without `pool-` prefix). `infer create`'s `--pool-id` is **optional** (backend no longer requires it) and, **when passed, must use `pool-<uuid>` format** (with `pool-` prefix). Omit for SHARED pools.
 
 #### Step 3.2: Construct model_ext_metadata (Required)
 
@@ -330,12 +330,13 @@ Key points:
 #### Step 3.3: Create Inference Service
 
 ```bash
-cloudrobo infer create --name "<infer-service-name>" --flavor "1 * SNT9B2 | 24 vCPUs | 192 GiB" --model-json '{"model_id":"<output_model_asset_id>","model_version_id":"<output_model_version_id>"}' --workspace-id <workspace_id> --pool-id "pool-<resource_id>" --pool-type DEDICATED --model-ext-metadata '<model_ext_metadata_json>' --skill-config-json '{"strict":true,"skills":[{"name":"<skill_name>","prompt":"<task_description>"}]}' --stop-schedule-json '{"duration":6,"time_unit":"HOURS"}' --deploy-timeout-minutes 30
+cloudrobo infer create --name "<infer-service-name>" --flavor "1 * SNT9B2 | 24 vCPUs | 192 GiB" --model-json '{"model_id":"<output_model_asset_id>","model_version_id":"<output_model_version_id>"}' --workspace-id <workspace_id> --pool-type DEDICATED --stop-schedule-json '{"duration":6,"time_unit":"HOURS"}' --model-ext-metadata '<model_ext_metadata_json>' --skill-config-json '{"strict":true,"skills":[{"name":"<skill_name>","prompt":"<task_description>"}]}' --deploy-timeout-minutes 30 [--pool-id "pool-<resource_id>"]
 ```
 
 > **flavor format**: `1 * SNT9B2 | 24 vCPUs | 192 GiB` (no `Ascend:` prefix).
-> **`--pool-id` (required)**: Must use `pool-<uuid>` format. Using `resource_id` without prefix causes immediate FAILED.
+> **`--pool-id` (optional since backend change)**: Must use `pool-<uuid>` format when passed. Using `resource_id` without prefix causes immediate FAILED. Omit for SHARED pools; pass only when the deployment targets a dedicated pool.
 > **`--pool-type` (required)**: Must use uppercase `DEDICATED` or `SHARED`.
+> **`--stop-schedule-json` (required by backend)**: Auto-stop schedule — without it creation fails.
 > **`--model-json` (required)**: The model to deploy — `{"model_id":"<output_model_asset_id>","model_version_id":"<output_model_version_id>"}` (fields from Stage 2 training output).
 > **`--model-ext-metadata` (required)**: Pass Step 3.2 constructed JSON. Do not include `model_type`.
 > **`--skill-config-json` (important)**: Services for real-robot evaluation **must define skills**, otherwise dispatch `create-task` returns 500. Format: `{"strict":true,"skills":[{"name":"<skill_name>","prompt":"<task_description>"}]}`. `prompt` must match Stage 4 `--task` parameter exactly.
@@ -487,8 +488,9 @@ See `references/pipeline-templates.md` for pipeline state tracking template.
 | `train_method` | Yes | From model actions | `FFT` or `LORA` |
 | `spec` | Yes | Resource spec string | `Ascend: 1 * SNT9B2 \| 24 vCPUs \| 192 GiB` |
 | `parameters` | Yes | Hyperparameter JSON array string | `[{"key":"batch_size","value":"32"}]` |
-| `pool_id` | Yes (Stage 3) | Resource pool ID with `pool-` prefix | `pool-d1cc6d45-...` |
+| `pool_id` | No (Stage 3; pass only for DEDICATED pool) | Resource pool ID with `pool-` prefix | `pool-d1cc6d45-...` |
 | `pool_type` | Yes (Stage 3) | Pool type uppercase | `DEDICATED` or `SHARED` |
+| `stop_schedule` | Yes (Stage 3) | Auto-stop schedule (backend-required) | `{"duration":6,"time_unit":"HOURS"}` |
 | `model_ext_metadata` | Yes (Stage 3) | Feature mapping JSON string | See `references/model-ext-metadata.md` |
 | `skill_config_json` | Yes (Stage 3) | Skill definition for dispatch | `{"strict":true,"skills":[...]}` |
 | `service_id` | Yes (Stage 4) | Inference service ID | From `infer create` response |
@@ -547,7 +549,7 @@ cloudrobo <Service> <Operation> [--params]
 - **Dataset processing**: Local dir uploaded, version RELEASE, training doesn't report "dataset not ready"
 - **Asset handoff**: Each stage output ID correctly passed to next stage
 - **Training**: CLI `create-task` returns `task_id`, status not `CREATE_FAILED`; eventually `FINISHED`
-- **Inference**: `infer show` status `RUNNING`; `pool_id` uses `pool-<uuid>` format, `pool_type` uppercase, pool supports `MODEL_DEPLOYMENT`; `model_ext_metadata` constructed from r2c template + dataset info, no `model_type` field, `chunk_size` matches `model.action-horizon`, gripper uses `end_effector_states.position`
+- **Inference**: `infer show` status `RUNNING`; `pool_id` (when passed) uses `pool-<uuid>` format — omit for SHARED pools, `pool_type` uppercase, pool supports `MODEL_DEPLOYMENT`; `stop_schedule` included (backend-required); `model_ext_metadata` constructed from r2c template + dataset info, no `model_type` field, `chunk_size` matches `model.action-horizon`, gripper uses `end_effector_states.position`
 - **Real-robot evaluation**: Step 4.0 used question tool to confirm robot selection (no silent auto-select); `dispatch show-task` status `COMPLETED`; `session_id` = `workspace_id`; `constraints-json` `model.exec_model_id` is service ID; inference service has `skill_config` with non-empty skills; predict_url includes `intranet` type
 - **Checkpoint recovery**: Pipeline state can resume after session interruption
 

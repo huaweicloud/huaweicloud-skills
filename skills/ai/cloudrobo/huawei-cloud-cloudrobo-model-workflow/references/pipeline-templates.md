@@ -101,7 +101,7 @@ cloudrobo infer list --workspace-id <workspace_id>
 # 5. Combine into JSON string, pass via --model-ext-metadata
 
 # Create inference service
-cloudrobo infer create --name "so101-pen-infer-<ts>" --flavor "1 * SNT9B2 | 24 vCPUs | 192 GiB" --model-json '{"model_id":"<id>","model_version_id":"<id>"}' --workspace-id <id> --pool-id "pool-<resource_id>" --pool-type DEDICATED --model-ext-metadata '<model_ext_metadata_json>' --skill-config-json '{"strict":true,"skills":[{"name":"<skill_name>","prompt":"<task_description>"}]}' --stop-schedule-json '{"duration":6,"time_unit":"HOURS"}' --deploy-timeout-minutes 30
+cloudrobo infer create --name "so101-pen-infer-<ts>" --flavor "1 * SNT9B2 | 24 vCPUs | 192 GiB" --model-json '{"model_id":"<id>","model_version_id":"<id>"}' --workspace-id <id> --pool-type DEDICATED --stop-schedule-json '{"duration":6,"time_unit":"HOURS"}' --model-ext-metadata '<model_ext_metadata_json>' --skill-config-json '{"strict":true,"skills":[{"name":"<skill_name>","prompt":"<task_description>"}]}' --deploy-timeout-minutes 30 [--pool-id "pool-<resource_id>"]
 
 # Poll status
 cloudrobo infer show --service-id <service_id>
