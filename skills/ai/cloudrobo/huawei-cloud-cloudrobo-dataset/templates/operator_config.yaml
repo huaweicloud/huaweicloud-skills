@@ -1,0 +1,66 @@
+# operator_config.yaml — Sample configuration for custom operator onboarding
+# Place this file at the root of your operator source directory.
+# The cloudrobo custom-operator skill reads this during Phase 1 (Code Adaptation)
+# and uses it to generate entrypoint.py, Dockerfile, and asset creation payloads.
+# ── Basic Info 基础信息 ──
+name: "<operator-name>"            # Required. Algorithm asset name (displayed in catalog).
+description: "<operator-description>"   # Optional. Algorithm description.
+
+# ── Image Configuration 镜像配置 ──
+image:
+  base: "<python-base-image>"      # Required. Base Docker image reachable from the build environment.
+  arch: "<arch>"                   # Required. Architecture: x86_64 | aarch64.
+  device_type:                     # Required. Compute device types supported.
+    - "<device-type>"              # Values: CPU | GPU | ASCEND (include GPU for CUDA deps).
+
+# ── Dependencies 依赖 ──
+dependencies:
+  requirements_file: "requirements.txt" # Required. Python deps file (relative to source dir root).
+  system_packages:                      # Optional. System (apt-get) packages for Dockerfile.
+    - "libgl1-mesa-glx"
+    - "libglib2.0-0"
+
+# ── Entry Point 入口配置 ──
+entry:
+  module: "<entry-module>"                # Required. Python module containing the process() function.
+  function: "process"                   # Required. Function name. Default: "process".
+  command: "python entrypoint.py"        # Required. Execution command for ext_metadata (≤4096 chars).
+
+# ── Inputs 输入定义 ──
+# Max 10 input entries.
+inputs:
+  - name: "dataset"                      # Required. Input port name.
+    input_type: "DATA"                   # Required. Type: "DATA" | "MODEL" (NOT "type").
+    access_method: "env"                 # Required. "env" | "parameter". How input is passed.
+    source_dataset_path_env: "SOURCE_DATASET_PATH"   # Required. Env var the platform uses to inject the dataset path.
+    description: "<input-description>"
+
+# ── Outputs 输出定义 ──
+# Max 5 output entries.
+outputs:
+  - name: "result"                      # Required. Output port name.
+    input_type: "DATA"                   # Required. Type: "DATA" | "MODEL" (NOT "type").
+    access_method: "parameter"           # Required. "env" | "parameter". How output is passed.
+    description: "<output-description>"
+
+# ── Environment Variables 环境变量 ──
+# Max 90 entries. SOURCE_DATASET_PATH MUST be declared (platform injects at runtime).
+environment_variables:
+  - name: "SOURCE_DATASET_PATH"        # Required. Platform injects JSON map of dataset paths.
+    default: "<fallback-path>"         # Required. 1-512 chars, CANNOT be empty string. Platform overrides at runtime.
+  - name: "BATCH_SIZE"
+    default: "32"
+    description: "Batch processing size for data iteration"
+
+# ── Hyperparameters 超参数 (Optional, max 90) ──
+hyperparams:
+  - name: "threshold"
+    type: "float"
+    default: "0.5"
+    description: "Confidence threshold for filtering"
+
+# ── Resource Limits 资源限制 (Optional) ──
+resources:
+  cpu: "2"                               # Optional. CPU cores requested.
+  memory: "4Gi"                          # Optional. Memory limit.
+  gpu: "0"                               # Optional. GPU count (0 = CPU-only).
