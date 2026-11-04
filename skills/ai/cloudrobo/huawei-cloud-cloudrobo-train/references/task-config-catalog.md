@@ -2,13 +2,14 @@
 
 ## TrainTaskDto (create training task request body)
 
-Required fields: `name`, `algorithm`, `spec`, `workspace_id`
+Required fields after SDK defaults: `name`, `algorithm`, `spec`, `workspace_id`,
+`checkpoint_max_keep`, `output_retention_days`
 
 | Field | Type | Required | Description | Example |
 | ------- | ------ | ---------- | ------------- | --------- |
 | `name` | string | Yes | Task name (1-64 chars, CN/EN/digit/-/_) | `my-finetune-v1` |
 | `algorithm` | Algorithm | Yes | Algorithm config object | see [Algorithm](#algorithm-field-mapping) |
-| `spec` | string | Yes | Resource spec (Ascend format) | `"Ascend: 1 * Ascend-910B \| 24 vCPUs \| 96 GiB"` |
+| `spec` | string | Yes | Resource spec (Ascend format; choose a flavor offered by the selected pool) | `"Ascend: 1 * SNT9B2 \| 24 vCPUs \| 192 GiB"` |
 | `workspace_id` | string (UUID) | Yes | Workspace ID | `w1b2c3d4-e5f6-7890-g1h2-i3j4k5l6m7n8` |
 | `train_mode` | string enum | No | MODEL_TUNING (finetune) / TRAIN_FROM_SCRATCH (pretrain) | `MODEL_TUNING` |
 | `train_method` | string enum | No | SFT / LORA / QLORA / DEEPSPEED | `LORA` |
@@ -25,6 +26,8 @@ Required fields: `name`, `algorithm`, `spec`, `workspace_id`
 | `inputs` | array[IOConfig] | No | Input config (max 10, for workspace models) | `[{"name":"input-model",...}]` |
 | `outputs` | array[IOConfig] | No | Output config (max 5, for workspace models) | `[{"name":"output-model",...}]` |
 | `log_path` | string | No | OBS path for training logs (optional, can be omitted) | `"obs://bucket/train-logs/<task-name>/"` |
+| `checkpoint_max_keep` | integer | Yes (SDK default: 10) | Maximum number of checkpoints to retain (max 50) | `10` |
+| `output_retention_days` | integer | Yes (SDK default: 14) | Number of days to retain intermediate outputs (max 9999) | `14` |
 | `enable_jupyter` | boolean | No | Enable JupyterLab access during training (optional, **DEDICATED pools only** — SHARED/public pools do not support JupyterLab) | `true` |
 
 ## IOConfig fields (for workspace model and custom algorithm scenarios)
@@ -130,10 +133,11 @@ Format: `Ascend: <count> * <model> | <vCPUs> vCPUs | <memory> GiB`
 Examples:
 
 ```text
-"Ascend: 1 * Ascend-910B | 24 vCPUs | 96 GiB"
-"Ascend: 2 * Ascend-910B | 48 vCPUs | 192 GiB"
-"Ascend: 8 * Ascend-910A | 192 vCPUs | 768 GiB"
+"Ascend: 1 * SNT9B2 | 24 vCPUs | 192 GiB"
 ```
+
+The example is illustrative; use a flavor actually returned for the selected pool. Do not reuse
+outdated `Ascend-910B`/`Ascend-910A` examples or assume every pool offers the same flavors.
 
 > **Important**: The legacy skill documented `spec` as `{"flavor":"gpu.1","epochs":10}` — this is **incorrect**. The API field is a string in the Ascend format above. The CLI `--spec` accepts JSON for convenience but the canonical API field is the string.
 
@@ -366,7 +370,9 @@ Event fields: `time` (ISO 8601 +08:00), `level`, `message`, `source`.
 ## Draft submit flow
 
 1. **Save draft**: `save-draft --config '<DraftTrainTaskDto json>'`
-   - DraftTrainTaskDto required: `name`, `workspace_id` (algorithm/spec NOT required for draft)
+   - SDK applies the same required-field checks as regular submission: training requires `name`,
+     `algorithm`, `spec`, `train_mode`, and `workspace_id`; SimRL requires `name`, `workspace_id`,
+     `config_mode`, `spec`, `input_models`, and `output_models`
    - Returns task_id, task status = `DRAFT`
    - SimRL: `save-draft --sim-rl --config '<json>'` → `create_sim_rl_task_draft`
 2. **Resubmit**: `restart-task --task-id <draft-id>`
@@ -465,7 +471,7 @@ SimRL (仿真强化学习) tasks use a **different request schema** from regular
 | `input_models` | array | Yes | Input model, see below. Supports both Gallery and Workspace models |
 | `output_models` | array | Yes | Output model spec, see below. Supports NEW_MODEL and NEW_VERSION |
 | `spec` | string | Yes | Resource spec, e.g. `ASCEND: 1 * SNT9B2 \| 24 vCPUs \| 192 GiB` (uppercase `ASCEND`) |
-| `cluster_id` | string | Yes | Resource pool ID with `pool-` prefix (from `cloudrobo resource list-pools`) |
+| `cluster_id` | string | Yes | Copy from a successful task in the same workspace; `list-pools` is for pool/flavor selection, not a reliable source for this value. SHARED format observed: `pool-<resource_id>`; do not assume it applies to DEDICATED pools |
 | `worker_num` | int | Yes | Number of workers (typically 1) |
 | `enable_jupyter` | boolean | No | Enable JupyterLab access. **DEDICATED pools only** — SHARED/public pools must set `false` |
 

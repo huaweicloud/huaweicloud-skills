@@ -79,8 +79,8 @@ cloudrobo train delete-tasks --task-id <task-id>
 Test the draft save & resubmit flow:
 
 ```bash
-# 1. Save draft (only name + workspace_id required)
-cloudrobo train save-draft --config '{"name":"verify-draft","workspace_id":"<ws-id>"}'
+# 1. Save draft with the same SDK-required fields as regular train submission
+cloudrobo train save-draft --config '{"name":"verify-draft","train_mode":"MODEL_TUNING","algorithm":{"algorithm_asset_id":"<algo-id>","algorithm_version_id":"<version-id>"},"spec":"Ascend: 1 * SNT9B2 | 24 vCPUs | 192 GiB","workspace_id":"<ws-id>"}'
 # → Returns task_id, status = DRAFT
 
 # 2. Verify DRAFT status
