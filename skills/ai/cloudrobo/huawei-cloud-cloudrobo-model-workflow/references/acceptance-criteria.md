@@ -20,8 +20,9 @@
 | 14 | Training status is FINISHED | Stage 2 | ⬜ |
 | 15 | Output model asset_id and version_id extracted | Stage 2 | ⬜ |
 | 16 | Resource pool supports MODEL_DEPLOYMENT | Stage 3 | ⬜ |
-| 17 | pool_id uses pool-<uuid> format with prefix | Stage 3 | ⬜ |
+| 17 | pool_id (when passed) uses pool-<uuid> format with prefix; omitted for SHARED pools | Stage 3 | ⬜ |
 | 18 | pool_type is uppercase DEDICATED/SHARED | Stage 3 | ⬜ |
+| 18a | stop_schedule included (backend-required) | Stage 3 | ⬜ |
 | 19 | model_ext_metadata constructed from r2c template + dataset info | Stage 3 | ⬜ |
 | 20 | model_ext_metadata does not contain model_type field | Stage 3 | ⬜ |
 | 21 | chunk_size matches training model.action-horizon | Stage 3 | ⬜ |

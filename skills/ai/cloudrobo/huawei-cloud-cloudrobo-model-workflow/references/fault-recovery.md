@@ -30,7 +30,8 @@ cloudrobo infer start --service-id <id>  # Retry FAILED service deployment (FAIL
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| `Invalid parameter: pool_id` | pool_id format error | `--pool-id` must use `pool-<uuid>` format (with `pool-` prefix) |
+| `Invalid parameter: pool_id` | pool_id format error | `--pool-id` must use `pool-<uuid>` format (with `pool-` prefix) when passed; omit for SHARED pools |
+| Missing `--stop-schedule-json` | Auto-stop schedule now required by backend | Pass `--stop-schedule-json '{"duration":6,"time_unit":"HOURS"}'` |
 | `Invalid parameter: pool_id` | pool_type case error | `--pool-type` must use uppercase `DEDICATED`/`SHARED` |
 | `Invalid parameter: pool_id` | Resource pool doesn't support MODEL_DEPLOYMENT | Use `resource list-pools` to find pools with `MODEL_DEPLOYMENT` in `usages` |
 | Service created but immediately FAILED (1-2s) | pool_id missing `pool-` prefix | Use `pool-<uuid>` format |

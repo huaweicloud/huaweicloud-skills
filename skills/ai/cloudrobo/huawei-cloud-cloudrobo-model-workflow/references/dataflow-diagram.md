@@ -180,7 +180,7 @@ flowchart TD
         IF0 --> IF1R{Running after retry?}
         IF1R -->|Yes| IFS[Deployment success]
         IF1R -->|No| IF2{Root cause?}
-        IF2 -->|pool_id format| IF3[Use pool-uuid format<br/>with pool- prefix]
+        IF2 -->|pool_id format| IF3[Use pool-uuid format<br/>with pool- prefix when passed<br/>(omit for SHARED pools)]
         IF2 -->|Missing model_ext_metadata| IF4[Select r2c template<br/>Read dataset meta/info.json<br/>Construct model_ext_metadata<br/>Pass via --model-ext-metadata]
         IF2 -->|skill_config 400| IF6[Use strict:false<br/>or provide skills]
         IF2 -->|Pool full| IF5[Wait for release<br/>or switch pool]

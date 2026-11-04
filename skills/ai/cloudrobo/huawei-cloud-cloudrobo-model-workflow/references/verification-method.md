@@ -82,8 +82,9 @@ cloudrobo dispatch show-task --session-id <workspace_id> --task-id <task_id>
 | OpenPI camera handling | 3 fixed camera keys, wrist_right copies wrist_left value |
 | Gripper mapping | Uses `end_effector_states.position` |
 | chunk_size consistency | Matches training `model.action-horizon` |
+| stop_schedule included | `--stop-schedule-json` passed (backend-required) |
 | No model_type field | ext_metadata does not contain model_type |
-| pool_id format | Uses `pool-<uuid>` format with prefix |
+| pool_id format | When passed, uses `pool-<uuid>` format with prefix; omitted for SHARED pools |
 | pool_type case | Uppercase `DEDICATED`/`SHARED` |
 | pool supports deployment | usages includes `MODEL_DEPLOYMENT` |
 | Evaluation completed | `dispatch show-task` status is `COMPLETED` |
