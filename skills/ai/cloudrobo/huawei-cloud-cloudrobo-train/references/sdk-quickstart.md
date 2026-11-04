@@ -31,7 +31,7 @@ import json
 
 # algorithm 来自模型版本详情的 actions（见 7.1 节 Step 1-2）
 # parameters 来自 algorithm 版本详情的 ext_metadata.hyperparams（见 7.1 节 Step 2）
-# cluster_id 从已有任务获取或询问用户（公共池 SHARED / 专属池 DEDICATED）
+# cluster_id 从同一 workspace 的成功任务详情中获取；没有可参考任务时询问用户，勿猜测
 
 # Step 1: 从 algorithm 版本详情获取 hyperparams（见 7.1 节）
 hyperparams = algo_ver["ext_metadata"]["hyperparams"]
@@ -76,7 +76,7 @@ req = {
     ],
     "spec": "Ascend: 1 * SNT9B2 | 24 vCPUs | 192 GiB",
     "worker_num": 1,
-    "cluster_id": "<pool-id>",                          # 资源池 ID，从已有任务获取或询问用户
+    "cluster_id": "<cluster-id-from-successful-task>",  # 同 workspace 成功任务中的 cluster_id
     "env": "[]",                                        # 环境变量 JSON 字符串，无自定义时传 "[]"
     "parameters": parameters,
     "output_models": [
@@ -105,7 +105,8 @@ task_id = result.get("id") or result.get("task_id")
 > **input_models.source_type**: `PUBLIC_MODEL_ASSET`（具身广场）/ `CUSTOM_MODEL_ASSET`（空间资产）
 > **output_models.save_mode**: `NEW_MODEL` / `NEW_VERSION` / `NOT_SAVE`（不是 `new: true`）
 > **parameters**: JSON 字符串，每项含 `key`+`desc`+`value`+`constraint`，传所有超参（见 7.1 节）
-> **cluster_id**: 资源池 ID，公共池 SHARED / 专属池 DEDICATED，从已有任务获取或询问用户
+> **cluster_id**: 从同 workspace 成功任务获取；SHARED 已观察到 `pool-<resource_id>` 格式，
+> 不要将该格式假定为 DEDICATED 池的有效格式。
 > **env**: 环境变量 JSON 字符串，无自定义时传 `"[]"`
 
 ## 3. 创建预训练任务 (TRAIN_FROM_SCRATCH)
@@ -132,7 +133,7 @@ req = {
     ],
     "spec": "Ascend: 2 * Ascend-910B | 48 vCPUs | 192 GiB",
     "worker_num": 1,
-    "cluster_id": "<pool-id>",
+    "cluster_id": "<cluster-id-from-successful-task>",
     "parameters": json.dumps([
         {"key": "epochs", "value": "10"},
         {"key": "learning_rate", "value": "0.0001"}
@@ -207,8 +208,14 @@ from cloudrobo_resource import ResourceClient
 resource = ResourceClient(http)
 pools = resource.list_pools(workspace_id=config.workspace_id)
 pool_list = pools.get("resources", [])
-cluster_id = f'pool-{pool_list[0]["resource_id"]}' if pool_list else None
 ```
+
+Use `list-pools` to select the pool and inspect its flavors only. Do not derive the task
+`cluster_id` from `config.cluster_id`, `resource_id`, or `config.pool_id`: ModelArts pool results
+may have `config.cluster_id = None`, and pool fields do not reliably establish the task value.
+Instead, query a successful task in the same workspace and copy its `cluster_id`. The observed
+SHARED format is `pool-<resource_id>`; do not assume it works for DEDICATED pools. If there is no
+successful task to reference, ask the user for a known-good value rather than guessing.
 
 ### Step 3: Build and submit SimRL task
 
