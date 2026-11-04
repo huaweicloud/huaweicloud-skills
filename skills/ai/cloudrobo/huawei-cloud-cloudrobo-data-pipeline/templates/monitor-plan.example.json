@@ -1,0 +1,17 @@
+{
+  "name": "sim-teleop-cleaning",
+  "workspace_id": "<workspace_id>",
+  "region": "<region>",
+  "inputs": [{"source_type": "obs", "obs_path": "obs://<bucket>/raw/", "data_source_type": "h5", "robot_type": "a2d"}],
+  "output": {"asset_name": "<generated_output_name>"},
+  "stages": [
+    {"id": "convert-lerobotv3", "name": "格式转换", "operator": "数据转换--H5转LeRobotV3", "kind": "proc", "fail_fast": true},
+    {"id": "cleaning", "name": "数据清洗", "operator": "数据清洗", "kind": "proc", "depends_on": ["convert-lerobotv3"], "fail_fast": true},
+    {"id": "evaluation", "name": "数据评测", "kind": "eval-group", "depends_on": ["cleaning"], "fail_fast": false,
+     "parallel_group": [
+       {"id": "quality-eval", "name": "质量评测", "operator": "数据集质量评测-LeRobot",
+        "params": {"inputs": [{"name": "ROBOT_CONFIG_PATH", "url_path": "obs://<bucket>/robot/"}]}},
+       {"id": "diversity-eval", "name": "多样性评测", "operator": "数据集多样性评测-LeRobot"}
+     ]}
+  ]
+}

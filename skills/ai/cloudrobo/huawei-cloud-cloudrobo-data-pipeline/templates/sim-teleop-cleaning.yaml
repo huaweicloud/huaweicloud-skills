@@ -1,0 +1,116 @@
+# Built-in Pipeline Template: sim-teleop-cleaning
+#
+# This is the built-in pipeline template for the CloudRobo data-pipeline skill.
+# Users trigger it verbally (e.g., "用遥操/仿真数据处理模板" — use the sim/teleop data
+# processing template) — no YAML needed.
+# Users can override fields on top of this template. The defaults below (obs source,
+# data_source_type h5, robot_type a2d, operator names, output name) are placeholders and
+# MUST be confirmed with the user in the execution plan before any asset or task is created.
+#
+# New execution: generate short unique output names before confirmation; never submit the placeholder.
+# Use: python scripts/custom_pipeline.py suggest-names --pipeline-name sim-teleop-cleaning --stage convert-lerobotv3 --stage cleaning
+# Full pipeline-stage-MMDDHHmmss name <=64; no random suffix; ask to shorten components if needed.
+# Resume/check/export preserves the confirmed names; explicit valid exact names stay unchanged.
+# Pipeline stages:
+#   1. Data upload/register raw data to OBS
+#   2. Format conversion: H5/ROS2/UMI → LeRobotV3
+#   3. Data cleaning: single operator with sub-checks (outlier/anomaly/consistency/FK/base-frame/blur)
+#   4. Data evaluation: quality eval + diversity eval (parallel, after cleaning)
+#   5. Output: cleaning + eval complete = TrainingReady data (no separate publish)
+#
+# Supported data types:
+#   - Simulation: StarSea R1 (ROS2)
+#   - Teleop: Guodi A2D H5 / A2D
+#
+# Schema notes:
+#   - All keys are snake_case.
+#   - Stage `id`s (convert-lerobotv3, cleaning, quality-eval, diversity-eval) are DAG labels
+#     only — they are NOT operator search keywords.
+#   - `operator` holds the exact Chinese marketplace operator name (or use
+#     `operator_id: <exact asset_id>`). If the operator is not found in the current
+#     region/marketplace, stop and tell the user — never substitute another operator.
+#   - `params` may contain only `envs` (env name → value; names must exist in the operator's
+#     ext_metadata.environment_variables) and `inputs` (declaration form
+#     `{name, url_path}`, expanded at submit time into the full ext_metadata.inputs element).
+#   - Task names: <pipeline_name>-<stage_id>-<MMDDHHmmss>
+#     (parallel_group members use the member id).
+
+pipeline:
+  name: sim-teleop-cleaning
+  # workspace_id: <workspace_id>   # Optional: defaults to current CLI workspace
+  inputs:
+    - source_type: obs             # local | asset | obs
+      obs_path: obs://<bucket>/raw/<episode-dir>/   # Required when source_type=obs
+      # local_path: <local_dir>                     # Required when source_type=local
+      # asset_id: <dataset_asset_id>                # Required when source_type=asset
+      # version_id: <dataset_version_id>            # Required when source_type=asset
+      data_source_type: h5         # Input format label (h5 | ros2 | umi); does NOT select the
+                                   # operator — set the conversion stage operator explicitly
+      robot_type: a2d              # Optional: map to the operator's `robot` env enum (if any) or ask
+  output:
+    asset_name: "<generated_output_name>" # Resolve with suggest-names; complete name ≤32 by default, hard limit 64
+
+  stages:
+    # Stage 2: Format Conversion
+    # Set operator explicitly to match data_source_type (guide only, no auto branch):
+    #   h5   → 数据转换--H5转LeRobotV3
+    #   ros2 → 数据转换--ros转LeRobotV3
+    #   umi  → 数据转换--UMI转LeRobotV3
+    # Or use operator_id: <exact asset_id> for precision.
+    - id: convert-lerobotv3
+      operator: 数据转换--H5转LeRobotV3   # ← set per actual data_source_type
+      operator_source: preset            # preset (default) | workspace | obs
+      fail_fast: true                    # default true: a failed conversion stops the pipeline
+      # params:
+      #   envs:                          # only names declared in the operator's environment_variables
+      #     robot: <enum value>          # e.g. ros conversion: auto|galaxea_r1|galaxea_a1z|jaka|moz1|azureloong|ur5e
+      #   inputs:                        # optional mount — omit for default behavior
+      #     - name: DATA_CONFIG_PATH     # custom manifest config dir (only if the operator declares it)
+      #       url_path: obs://<bucket>/config/convert-manifest/
+
+    # Stage 3: Data Cleaning
+    # Single "数据清洗" operator with multiple sub-checks (descriptive only — not pipeline.yaml keys):
+    #   - Outlier detection (极值检测)
+    #   - Anomaly detection (突变检测)
+    #   - State-Action consistency check (State-Action 一致性检测)
+    #   - FK correction (FK 校正)
+    #   - Base-frame alignment (基坐标对齐)
+    #   - Blur frame detection (视频模糊帧检测)
+    # Custom cleaning config is supplied via the operator's CURATION_CONFIG_PATH input
+    # when the operator exposes it.
+    - id: cleaning
+      operator: 数据清洗
+      depends_on: [convert-lerobotv3]
+      fail_fast: true
+      # params:
+      #   inputs:                        # optional mount — omit for default behavior
+      #     - name: CURATION_CONFIG_PATH # custom cleaning config dir
+      #       url_path: obs://<bucket>/config/cleaning-config/
+
+    # Stage 4: Data Evaluation
+    # Parallel group: quality eval + diversity eval, both after cleaning.
+    # Evaluation is advisory (fail_fast: false) — does not block TrainingReady output.
+    - id: evaluation
+      depends_on: [cleaning]
+      fail_fast: false                   # stage-level: eval failure does not block output
+      # Config files (e.g. robot description robots.yaml / URDF) are mounted per member via params.inputs;
+      # robot_config is removed. Omit params.inputs to use the operator's built-in/default config.
+      parallel_group:
+        - id: quality-eval
+          operator: 数据集质量评测-LeRobot
+          # params:
+          #   inputs:                    # optional mount (only if the operator declares it)
+          #     - name: ROBOT_CONFIG_PATH
+          #       url_path: obs://<bucket>/config/quality-robot/
+        - id: diversity-eval
+          operator: 数据集多样性评测-LeRobot
+          # params:
+          #   inputs:
+          #     - name: ROBOT_CONFIG_PATH
+          #       url_path: obs://<bucket>/config/diversity-robot/
+
+# Resource specification (align with references/task-config-catalog.md):
+# Conversion / Cleaning: worker_spec {cpu: 4, memory: 8, gpu: 0, npu: 0}, head_spec all 0, worker_num 1
+# Evaluation (per task): worker_spec {cpu: 4, memory: 8, gpu: 0, npu: 0}
+# Public pool: 4c8g may stall at POD_PENDING — fall back to 2c4g {cpu: 2, memory: 4, gpu: 0, npu: 0}
+# Parallel total: 2 × worker_spec for the evaluation stage
