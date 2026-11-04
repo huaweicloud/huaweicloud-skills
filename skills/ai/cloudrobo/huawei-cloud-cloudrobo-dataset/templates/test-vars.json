@@ -21,11 +21,21 @@
     },
     {
       "id": "TC-03",
-      "name": "list-tasks-filter-algo-type",
+      "name": "list-tasks-order-paginate",
       "executor": "cli",
-      "command": "cloudrobo dataset proc list-tasks --algo-type PRESET_ASSETS",
-      "expected": "JSON array of tasks with algo_type=PRESET_ASSETS",
+      "command": "cloudrobo dataset proc list-tasks --order-by create_at --order DESC --limit 10",
+      "expected": "JSON array of tasks sorted by create_at desc, at most 10 items",
       "type": "read",
+      "status": "pending"
+    },
+    {
+      "id": "TC-03a",
+      "name": "list-tasks-filter-algo-name",
+      "executor": "cli",
+      "command": "cloudrobo dataset proc list-tasks --algo-name \"${ALGO_NAME}\"",
+      "expected": "JSON array of tasks whose algorithm name matches ALGO_NAME",
+      "type": "read",
+      "requires": "ALGO_NAME",
       "status": "pending"
     },
     {
@@ -62,7 +72,7 @@
       "id": "TC-07",
       "name": "wait-task",
       "executor": "cli",
-      "command": "cloudrobo dataset proc wait-task --task-id ${TASK_ID} --timeout 60 --interval 5",
+      "command": "printf 'n\\n' | cloudrobo dataset proc wait-task --task-id ${TASK_ID} --timeout 60 --interval 5",
       "expected": "Status transitions printed, final status SUCCEEDED/FAILED/DELETED",
       "type": "read",
       "requires": "TASK_ID",
@@ -70,12 +80,12 @@
     },
     {
       "id": "TC-08",
-      "name": "restart-task",
+      "name": "copy-task",
       "executor": "cli",
-      "command": "cloudrobo dataset proc restart-task --task-id ${TASK_ID}",
-      "expected": "Task restarted, new status returned",
+      "command": "cloudrobo dataset proc copy-task --task-id ${TASK_ID} --name copy-task-${TIMESTAMP} --output-name copy-output-${TIMESTAMP} --wait --timeout 300",
+      "expected": "Task copied (new task_id, initial status PENDING), fields auto-filled from show-task",
       "type": "mutation",
-      "requires": "TASK_ID",
+      "requires": "TASK_ID,TIMESTAMP",
       "requires_confirmation": true,
       "status": "pending"
     },
@@ -131,18 +141,18 @@
     },
     {
       "id": "TC-14",
-      "name": "list-algorithms-data-processing",
+      "name": "list-publication-assets-data-processing",
       "executor": "cli",
-      "command": "cloudrobo asset list-publication-assets --type algorithm --sub-type data_processing --limit 5",
+      "command": "cloudrobo asset list-publication-assets --type algorithm --tags \"Data Processing\" --limit 5",
       "expected": "JSON array of algorithms with asset_id, name, ext_metadata",
       "type": "read",
       "status": "pending"
     },
     {
       "id": "TC-15",
-      "name": "list-algorithms-data-evaluating",
+      "name": "list-publication-assets-data-evaluating",
       "executor": "cli",
-      "command": "cloudrobo asset list-publication-assets --type algorithm --sub-type data_evaluating --limit 5",
+      "command": "cloudrobo asset list-publication-assets --type algorithm --tags \"Data Evaluation\" --limit 5",
       "expected": "JSON array of evaluation algorithms",
       "type": "read",
       "status": "pending"
@@ -171,12 +181,22 @@
     },
     {
       "id": "TC-19",
-      "name": "get-task-frames-sdk",
-      "executor": "sdk",
+      "name": "get-frames",
+      "executor": "cli",
       "command": "cloudrobo dataset proc get-frames --task-id ${TASK_ID} --prefix ${PREFIX}",
       "expected": "JSON frame information for the task",
       "type": "read",
-      "requires": "TASK_ID",
+      "requires": "TASK_ID,PREFIX",
+      "status": "pending"
+    },
+    {
+      "id": "TC-19a",
+      "name": "proc-get-events",
+      "executor": "cli",
+      "command": "cloudrobo dataset proc get-events --task-id ${TASK_ID} --job-name ${JOB_NAME}",
+      "expected": "JSON list of task events (NORMAL/WARNING) with first/last time and count",
+      "type": "read",
+      "requires": "TASK_ID,JOB_NAME",
       "status": "pending"
     },
     {
@@ -209,10 +229,31 @@
       "status": "pending"
     },
     {
+      "id": "TC-23a",
+      "name": "eval-copy-task",
+      "executor": "cli",
+      "command": "cloudrobo dataset eval copy-task --task-id ${EVAL_TASK_ID} --name copy-eval-${TIMESTAMP} --wait --timeout 300",
+      "expected": "Eval task copied (new task_id, initial status PENDING), fields auto-filled from eval show-task",
+      "type": "mutation",
+      "requires": "EVAL_TASK_ID,TIMESTAMP",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-23b",
+      "name": "eval-get-events",
+      "executor": "cli",
+      "command": "cloudrobo dataset eval get-events --task-id ${EVAL_TASK_ID} --job-name ${JOB_NAME}",
+      "expected": "JSON list of eval task events (NORMAL/WARNING) with first/last time and count",
+      "type": "read",
+      "requires": "EVAL_TASK_ID,JOB_NAME",
+      "status": "pending"
+    },
+    {
       "id": "TC-24",
       "name": "eval-create-task",
       "executor": "cli",
-      "command": "cloudrobo dataset eval create-task --name test-eval --task-config '{\"algo_id\":\"404969d0-14dc-4185-ae81-6dbeb173ddd1\",\"algo_name\":\"数据集多样性评测-LeRobot\",\"algo_entrance\":\"bash entrypoint.sh diversity_evaluation --operator diversity\",\"dataset_type\":\"BUILD_IN_ASSET\",\"dataset_id\":\"28df9fd8-8967-4460-897d-5b677b457525\",\"dataset_name\":\"jaka_place_block_into_tray_sim_50\",\"dataset_path\":\"obs://cloudrobo-test-203/workspace-test/dataset/jaka_place_block_into_tray_sim_50/\",\"image\":\"swr.cn-north-7.myhuaweicloud.com/cloudrobo/data-engineering-core-dataset-evaluation-image:26.7.0-26.7.0001\",\"robot_config\":\"obs://cloudrobo-test-203/workspace-test/dataset/jaka/\",\"worker_spec\":{\"cpu\":2,\"memory\":4},\"resource_pool_type\":\"PUBLIC_POOL\",\"description\":\"eval test\"}' --wait --timeout 600",
+      "command": "cloudrobo dataset eval create-task --name test-eval --task-config '{\"algo_id\":\"404969d0-14dc-4185-ae81-6dbeb173ddd1\",\"algo_name\":\"数据集多样性评测-LeRobot\",\"algo_entrance\":\"bash entrypoint.sh diversity_evaluation --operator diversity\",\"dataset_type\":\"BUILD_IN_ASSET\",\"dataset_id\":\"28df9fd8-8967-4460-897d-5b677b457525\",\"dataset_name\":\"jaka_place_block_into_tray_sim_50\",\"dataset_path\":\"obs://cloudrobo-test-203/workspace-test/dataset/jaka_place_block_into_tray_sim_50/\",\"image\":\"swr.cn-southwest-2.myhuaweicloud.com/cloudrobo/data-engineering-core-dataset-evaluation-image:26.7.0-26.7.0001\",\"worker_spec\":{\"cpu\":2,\"memory\":4},\"resource_pool_type\":\"PUBLIC_POOL\",\"description\":\"eval test\"}' --wait --timeout 600",
       "expected": "Eval task created, status transitions to SUCCEEDED",
       "type": "mutation",
       "requires": "",
@@ -284,26 +325,296 @@
       "id": "TC-31",
       "name": "pipeline-proc-to-eval",
       "executor": "cli",
-      "command": "cloudrobo dataset proc show-task --task-id ${TASK_ID} (extract target_path) → cloudrobo dataset eval create-task --task-config with dataset_configs containing obs_path=target_path",
-      "expected": "Pipeline: proc SUCCEEDED → eval created with target_path wrapped in dataset_configs",
+      "command": "cloudrobo dataset proc show-task --task-id ${TASK_ID} (extract target_path) → cloudrobo dataset eval create-task --task-config with dataset_path=target_path",
+      "expected": "Pipeline: proc SUCCEEDED → eval created with target_path set as top-level dataset_path",
       "type": "mutation",
       "requires": "TASK_ID, EVAL_TASK_CONFIG",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-32",
+      "name": "eval-wait-task",
+      "executor": "cli",
+      "command": "printf 'n\\n' | cloudrobo dataset eval wait-task --task-id ${EVAL_TASK_ID} --timeout 60 --interval 5",
+      "expected": "Status transitions printed, final status SUCCEEDED/FAILED/DELETED (or latest status on timeout)",
+      "type": "read",
+      "requires": "EVAL_TASK_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-33",
+      "name": "create-task-with-inputs",
+      "executor": "cli",
+      "command": "cloudrobo dataset proc create-task --name test-inputs --algo-type PRESET_ASSETS --task-config '${TASK_CONFIG_WITH_INPUTS}'",
+      "expected": "Task created with task_id; task_config inputs is a JSON array string whose elements are complete ext_metadata.inputs[] elements from the current operator query with url_path set to the user-selected obs:// path",
+      "type": "mutation",
+      "requires": "TASK_CONFIG_WITH_INPUTS",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-50",
+      "name": "workspace-current",
+      "executor": "cli",
+      "command": "cloudrobo workspace current",
+      "expected": "Returns workspace_id, asset_catalog_id, default_obs_path",
+      "type": "read",
+      "requires": "WORKSPACE_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-51",
+      "name": "asset-list-existing-assets",
+      "executor": "cli",
+      "command": "cloudrobo asset list-assets --catalog-id ${CATALOG_ID} --type image --tags \"Data Processing\" --exact-name ${OPERATOR_NAME} && cloudrobo asset list-assets --catalog-id ${CATALOG_ID} --type algorithm --tags \"Data Processing\" --exact-name ${OPERATOR_NAME}",
+      "expected": "Returns same-name image + algorithm assets filtered by the Data Processing tag. A NEW image is always built and registered on every run (no use-existing option); agent auto-generates docker login command from AK/SK (docker login -u ${REGION}@${SWR_AK} -p $(printf \"${SWR_AK}\" | openssl dgst -binary -sha256 -hmac \"${SWR_SK}\" | od -An -vtx1 | sed 's/[ \\n]//g') ${SWR_ENDPOINT}) and only asks the user when generation/login fails — on failure classify the cause (AK/SK invalid/expired, SWR not enabled / IAM permission missing, region mismatch, network) and walk the fix before retrying (see references/custom-operator/custom-operator-workflow.md §Step 2.0). Same-name algorithm non-empty → re-submission (create-version + update-asset); empty → first submission (two create-asset calls).",
+      "type": "read",
+      "requires": "CATALOG_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-52",
+      "name": "asset-create-image-dry-run",
+      "executor": "cli",
+      "command": "cloudrobo asset create-asset --catalog-id ${CATALOG_ID} --name ${OPERATOR_NAME} --type image --url ${SWR_IMAGE_URL} --tags \"Data Processing\" --ext-metadata '{\"arch\":\"${ARCH}\",\"device_type\":[\"${DEVICE_TYPE}\"]}' --dry-run",
+      "expected": "Dry-run preview of image asset creation payload; no API call",
+      "type": "read",
+      "requires": "CATALOG_ID,OPERATOR_NAME,SWR_IMAGE_URL,ARCH,DEVICE_TYPE",
+      "status": "pending"
+    },
+    {
+      "id": "TC-53",
+      "name": "asset-create-image",
+      "executor": "cli",
+      "command": "cloudrobo asset create-asset --catalog-id ${CATALOG_ID} --name ${OPERATOR_NAME} --type image --url ${SWR_IMAGE_URL} --tags \"Data Processing\" --ext-metadata '{\"arch\":\"${ARCH}\",\"device_type\":[\"${DEVICE_TYPE}\"]}'",
+      "expected": "Image asset created (FIRST submission), returns asset_id + latest_version_id. On re-submission, create-version is used instead (see TC-14).",
+      "type": "mutation",
+      "requires": "CATALOG_ID,OPERATOR_NAME,SWR_IMAGE_URL,ARCH,DEVICE_TYPE",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-54",
+      "name": "asset-create-algorithm",
+      "executor": "cli",
+      "command": "cloudrobo asset create-asset --catalog-id ${CATALOG_ID} --name ${OPERATOR_NAME} --type algorithm --status DRAFT --tags \"Data Processing\" --ext-metadata '${ALGO_EXT_METADATA}'",
+      "expected": "Algorithm asset created with engine.image_url referencing the SWR URL; no sub_type passed together with tags (avoid 400 Invalid parameter: tags)",
+      "type": "mutation",
+      "requires": "CATALOG_ID,OPERATOR_NAME,ALGO_EXT_METADATA",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-55",
+      "name": "asset-show",
+      "executor": "cli",
+      "command": "cloudrobo asset show-asset --asset-id ${ASSET_ID}",
+      "expected": "Returns asset status DRAFT or available; ext_metadata populated",
+      "type": "read",
+      "requires": "ASSET_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-56",
+      "name": "phase4-proc-create-task",
+      "executor": "cli",
+      "command": "cloudrobo dataset proc create-task --name ${TASK_NAME} --algo-type WORKSPACE_ASSETS --workspace-id ${WORKSPACE_ID} --task-config '${TASK_CONFIG_JSON}'",
+      "expected": "Task created WITHOUT --wait (create-then-poll); task_id returned in payload.id; then poll show-task until SUCCEEDED with a progress heartbeat (see references/custom-operator/custom-operator-workflow.md §Progress Feedback); user log shows 'Processed N items, success N, failed 0' (legacy Chinese '共处理 N 项，成功 N，失败 0' also OK). Input datasets follow the platform's TWO data-source categories: 空间资产-数据 (BUILD_IN_ASSET — ① create dataset asset: create-asset type=dataset + create-version + update-version RELEASE; ② reuse existing assets with full asset fields) and OBS存储 (③ UDF_OBS_ASSET — dataset_configs entry = {\"obs_path\":\"...\",\"dataset_type\":\"UDF_OBS_ASSET\"}, NO asset fields, NO dataset asset created or referenced; **obs_path bucket MUST equal the workspace-bound bucket = default_obs_path bucket from cloudrobo workspace current, other OBS buckets rejected & re-asked**). MULTIPLE data sources (≤10) MUST be merged into ONE task: N entries in the single dataset_configs array, exactly one create-task (never one task per dataset; batch per-dataset split only on explicit user request + confirmation); operator log shows 'Resolved N datasets'. CANCEL/RE-ISSUE after a task was created: MUST first confirm deletion of the old task (delete-task + show-task = DELETED) before creating a new one — never leave an orphaned running task (see §Phase Boundaries 4.11 / S12). Image asset --name must equal the dialogue-confirmed operator name (verify via show-asset). Re-run after a FAILED verification (Mode A rebuild): re-submission branch create-version+update-asset (never re-create-asset) + fresh output_name + verified asset linkage (HTTP 500 on re-run create-task = stale algorithm linkage → see §Failure Analysis Guide pattern 5d)",
+      "type": "mutation",
+      "requires": "TASK_NAME,TASK_CONFIG_JSON",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-57",
+      "name": "phase4-proc-show-task",
+      "executor": "cli",
+      "command": "cloudrobo dataset proc show-task --task-id ${TASK_ID}",
+      "expected": "Returns task detail with status SUCCEEDED, target_path, target_asset_name",
+      "type": "read",
+      "requires": "TASK_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-58",
+      "name": "phase4-proc-get-log",
+      "executor": "cli",
+      "command": "cloudrobo dataset proc get-log --task-id ${TASK_ID} --file-name job-std-output.log",
+      "expected": "Returns user log content showing 'Processed N items, success N, failed 0' (legacy Chinese '共处理 N 项，成功 N，失败 0' also OK); failure patterns (read-only fs / IsADirectoryError) matched against the Failure Analysis Guide (§Failure Analysis Guide in references/custom-operator/custom-operator-workflow.md)",
+      "type": "read",
+      "requires": "TASK_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-59",
+      "name": "phase4-proc-get-frames",
+      "executor": "cli",
+      "command": "cloudrobo dataset proc get-frames --task-id ${TASK_ID} --prefix ${OUTPUT_PATH_MINUS_BUCKET}",
+      "expected": "Returns non-empty output files list for the task's target path (--prefix is REQUIRED: output path minus obs://<bucket>/)",
+      "type": "read",
+      "requires": "TASK_ID,OUTPUT_PATH_MINUS_BUCKET",
+      "status": "pending"
+    },
+    {
+      "id": "TC-60",
+      "name": "docker-build-push",
+      "executor": "cli",
+      "command": "docker build -t ${OPERATOR_NAME}:${IMAGE_TAG} . && docker login -u ${REGION}@${SWR_AK} -p $(printf \"${SWR_AK}\" | openssl dgst -binary -sha256 -hmac \"${SWR_SK}\" | od -An -vtx1 | sed 's/[ \\n]//g') ${SWR_ENDPOINT} && docker tag ${OPERATOR_NAME}:${IMAGE_TAG} ${SWR_IMAGE_URL} && docker push ${SWR_IMAGE_URL}",
+      "expected": "Image built and pushed to SWR using the auto-generated docker login command (AK/SK → HMAC-SHA256 secret); on auto-login failure, fall back to the user-provided docker login command; docker logout after push",
+      "type": "mutation",
+      "requires": "OPERATOR_NAME,IMAGE_TAG,REGION,SWR_AK,SWR_SK,SWR_ENDPOINT,SWR_IMAGE_URL",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-61",
+      "name": "failure-readonly-fs",
+      "executor": "sdk",
+      "command": "python -c \"from cloudrobo_core.sdk import Config, HttpClient; from cloudrobo_dataset.client import DatasetClient; c=DatasetClient(HttpClient(Config())); r=c.get_task_log_tail('${TASK_ID}','job-std-output.log'); print(r['payload']['item']['content'])\"",
+      "expected": "Log shows OSError: [Errno 30] Read-only file system -> fix: write output to TARGET_DATASET_PATH or /output, rebuild image",
+      "type": "read",
+      "requires": "TASK_ID",
+      "status": "pending"
+    },
+    {
+      "id": "TC-62",
+      "name": "phase4-runtime-verification",
+      "executor": "cli",
+      "command": "cloudrobo dataset proc create-task --name ${TASK_NAME} --algo-type WORKSPACE_ASSETS --workspace-id ${WORKSPACE_ID} --task-config '${TASK_CONFIG_JSON}' && cloudrobo dataset proc show-task --task-id ${TASK_ID} && cloudrobo dataset proc get-log --task-id ${TASK_ID} --file-name job-std-output.log && cloudrobo dataset proc get-frames --task-id ${TASK_ID} --prefix ${OUTPUT_PATH_MINUS_BUCKET}",
+      "expected": "Task created WITHOUT --wait then polled to SUCCEEDED with progress heartbeat; user log shows 'Processed N items, success N, failed 0' (legacy Chinese '共处理 N 项，成功 N，失败 0' also OK); output frames non-empty; on FAILED, run failure analysis on job-std-output.log",
+      "type": "mutation",
+      "requires": "TASK_NAME,TASK_CONFIG_JSON,TASK_ID,OUTPUT_PATH_MINUS_BUCKET",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-63",
+      "name": "asset-create-image-version",
+      "executor": "cli",
+      "command": "cloudrobo asset create-version --asset-id ${IMAGE_ASSET_ID} --url ${NEW_SWR_IMAGE_URL} --ext-metadata '{\"arch\":\"${ARCH}\",\"device_type\":[\"${DEVICE_TYPE}\"]}'",
+      "expected": "New image asset version created (RE-submission of the same operator); returns new version_id; old tags/versions retained",
+      "type": "mutation",
+      "requires": "IMAGE_ASSET_ID,NEW_SWR_IMAGE_URL,ARCH,DEVICE_TYPE",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-64",
+      "name": "asset-update-algorithm-image",
+      "executor": "cli",
+      "command": "cloudrobo asset update-asset --asset-id ${ALGORITHM_ASSET_ID} --ext-metadata '${ALGO_EXT_METADATA}'",
+      "expected": "Algorithm asset updated: engine.image_url points at the NEW image (RE-submission); NO new algorithm version is created",
+      "type": "mutation",
+      "requires": "ALGORITHM_ASSET_ID,ALGO_EXT_METADATA",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-65",
+      "name": "obs-asset-register-preset-image-and-algorithm",
+      "executor": "cli",
+      "command": "cloudrobo asset create-asset --catalog-id ${CATALOG_ID} --name ${PRESET_IMAGE_NAME} --type image --url ${PRESET_IMAGE_URL} --tags \"Data Processing\" --ext-metadata '{\"arch\":\"${ARCH}\",\"device_type\":[\"${DEVICE_TYPE}\"]}' && cloudrobo asset create-asset --catalog-id ${CATALOG_ID} --name ${OPERATOR_NAME} --type algorithm --status DRAFT --tags \"Data Processing\" --ext-metadata '${ALGO_EXT_METADATA_OBS}'",
+      "expected": "Mode B (OBS-mounted) 空间资产-算法 only: FIRST register the preset image as an image asset (${PRESET_IMAGE_URL}), THEN create the algorithm asset with image_source=custom and code_dir=${OBS_CODE_DIR} (must start with workspace default_obs_path) AND engine.asset_id + engine.asset_version_id LINK the created image asset (空间资产-镜像); NO docker build/push performed; agent asked customer upload mode (customer-upload or skill-upload) and generated entrypoint.py + src + requirements.txt. Mode B OBS算法 (mount OBS code directly) SKIPS this case/Phase 3 — no assets registered",
+      "type": "mutation",
+      "requires": "CATALOG_ID,PRESET_IMAGE_NAME,PRESET_IMAGE_URL,ARCH,DEVICE_TYPE,OPERATOR_NAME,ALGO_EXT_METADATA_OBS,OBS_CODE_DIR",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-66",
+      "name": "obs-proc-create-task",
+      "executor": "cli",
+      "command": "cloudrobo dataset proc create-task --name ${TASK_NAME} --algo-type OBS_ASSETS --workspace-id ${WORKSPACE_ID} --task-config '${TASK_CONFIG_JSON_OBS}'",
+      "expected": "Mode B task created WITHOUT --wait (create-then-poll); task-creation way asked FIRST (空间资产-算法 use created algorithm / OBS算法 mount OBS code directly) — OBS算法 (this case): algo_type=OBS_ASSETS, algo_name (required), algo_path=${OBS_CODE_DIR}, job_local_path=${JOB_LOCAL_PATH}, NO algo_id; polled to SUCCEEDED with progress heartbeat; user log shows 'Processed N items, success N, failed 0' (legacy Chinese '共处理 N 项，成功 N，失败 0' also OK)",
+      "type": "mutation",
+      "requires": "TASK_NAME,TASK_CONFIG_JSON_OBS,OBS_CODE_DIR,JOB_LOCAL_PATH",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-66a",
+      "name": "proc-create-task-way2-workspace-assets",
+      "executor": "cli",
+      "command": "cloudrobo dataset proc create-task --name ${TASK_NAME} --algo-type WORKSPACE_ASSETS --workspace-id ${WORKSPACE_ID} --task-config '${TASK_CONFIG_JSON_WORKSPACE_WAY2}'",
+      "expected": "Mode B 空间资产-算法 (use the created algorithm): task created WITHOUT --wait with algo_type=WORKSPACE_ASSETS, algo_id=${ALGORITHM_ASSET_ID} (Phase 3 asset), algo_name (required), algo_path=${OBS_CODE_DIR} (= asset code_dir, required), job_local_path=${JOB_LOCAL_PATH} (required), absolute algo_entrance=python3 ${JOB_LOCAL_PATH}/entrypoint.py; polled to SUCCEEDED with progress heartbeat",
+      "type": "mutation",
+      "requires": "TASK_NAME,TASK_CONFIG_JSON_WORKSPACE_WAY2,ALGORITHM_ASSET_ID,OBS_CODE_DIR,JOB_LOCAL_PATH",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-67",
+      "name": "obs-update-algorithm-code-dir",
+      "executor": "cli",
+      "command": "cloudrobo asset update-asset --asset-id ${ALGORITHM_ASSET_ID} --ext-metadata '${ALGO_EXT_METADATA_OBS}'",
+      "expected": "Mode B 空间资产-算法 RE-submission: algorithm asset updated (code_dir/image_url); NO image version, NO new algorithm version. Mode B OBS算法: not applicable (no assets)",
+      "type": "mutation",
+      "requires": "ALGORITHM_ASSET_ID,ALGO_EXT_METADATA_OBS",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-68",
+      "name": "obs-code-delivery-upload",
+      "executor": "cli",
+      "command": "python3 -c \"from cloudrobo_core.sdk.obs_client import OBSClient; from cloudrobo_core.sdk import Config; cfg=Config(); cfg.endpoints['cloudrobo-obs']=os.environ.get('OBS_ENDPOINT','obs.cn-southwest-2.myhuaweicloud.com'); obs=OBSClient(cfg, bucket_name=${OBS_BUCKET}); obs.upload_folder(${WORKDIR}, ${OBS_PREFIX})\" && python3 -c \"...list_objects verify...\"",
+      "expected": "Mode B skill-upload path: generated entrypoint.py + src/ + requirements.txt uploaded to ${OBS_CODE_DIR} (under workspace default_obs_path) and verified via list_objects; upload confirmed with the customer first",
+      "type": "mutation",
+      "requires": "OBS_BUCKET,OBS_PREFIX,WORKDIR,OBS_ENDPOINT",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-69",
+      "name": "asset-create-dataset-dry-run",
+      "executor": "cli",
+      "command": "cloudrobo asset create-asset --catalog-id ${CATALOG_ID} --name ${DATASET_NAME} --type dataset --ext-metadata '{\"annotation_status\":true}' --dry-run",
+      "expected": "Dry-run preview of Phase 4 Source ① dataset asset creation (type=dataset requires annotation_status); no API call",
+      "type": "read",
+      "requires": "CATALOG_ID,DATASET_NAME",
+      "status": "pending"
+    },
+    {
+      "id": "TC-70",
+      "name": "asset-create-dataset-bind-and-release",
+      "executor": "cli",
+      "command": "cloudrobo asset create-asset --catalog-id ${CATALOG_ID} --name ${DATASET_NAME} --type dataset --ext-metadata '{\"annotation_status\":true}' && cloudrobo asset create-version --asset-id ${DATASET_ASSET_ID} --url ${OBS_DATA_PATH} && cloudrobo asset update-version --asset-id ${DATASET_ASSET_ID} --version-id ${DATASET_VERSION_ID} --status RELEASE",
+      "expected": "Phase 4 Source ①: dataset asset created (unique name, timestamp suffix avoids 400 The asset name is existed), version bound to the customer OBS data path ${OBS_DATA_PATH} and published RELEASE (non-RELEASE → task reports dataset not ready); used as task input via dataset_configs (obs_path=${OBS_DATA_PATH}, asset_id, asset_name, version_id); confirmed with the customer first",
+      "type": "mutation",
+      "requires": "CATALOG_ID,DATASET_NAME,OBS_DATA_PATH,DATASET_ASSET_ID,DATASET_VERSION_ID",
+      "requires_confirmation": true,
+      "status": "pending"
+    },
+    {
+      "id": "TC-71",
+      "name": "obs-large-dataset-concurrent-upload",
+      "executor": "cli",
+      "command": "du -sh ${DATA_DIR} && find ${DATA_DIR} -type f | wc -l && python3 -c \"from obs import ObsClient; import os; c=ObsClient(access_key_id=os.environ['HUAWEI_CLOUD_AK'], secret_access_key=os.environ['HUAWEI_CLOUD_SK'], server='https://obs.${REGION}.myhuaweicloud.com'); [c.putFile('${OBS_BUCKET}', f'${OBS_PREFIX}/{os.path.relpath(os.path.join(r,f),\"${DATA_DIR}\").replace(os.sep,\"/\")}', os.path.join(r,f)) for r,d,fs in os.walk('${DATA_DIR}') for f in fs if not f.endswith(('.upload_record','.upload_tmp'))]\"",
+      "expected": "Large dataset (> 50 files / > 50MB) uploaded with the concurrent sharded approach per references/custom-operator/custom-operator-workflow.md §OBS Upload Guide (never serial-walks): job sized first (du -sh + find | wc -l), ~25 req/s with 4 procs x 16 threads, progress heartbeat shown, then verified by object-count parity (listObjects total == local file count); upload confirmed with the customer first",
+      "type": "mutation",
+      "requires": "DATA_DIR,OBS_BUCKET,OBS_PREFIX,REGION",
       "requires_confirmation": true,
       "status": "pending"
     }
   ],
   "environment_variables": {
     "required": ["HUAWEI_CLOUD_AK", "HUAWEI_CLOUD_SK"],
-    "optional": ["TASK_ID", "TASK_CONFIG", "FILE_PATH", "EVAL_TASK_ID", "EVAL_TASK_CONFIG", "EVAL_FILE_PATH", "WORKSPACE_ID", "CLOUDROBO_DEBUG", "START_TS", "END_TS"]
+    "optional": ["ALGORITHM_ASSET_ID", "ALGO_EXT_METADATA", "ALGO_EXT_METADATA_OBS", "ALGO_NAME", "ARCH", "ASSET_ID", "CATALOG_ID", "CLOUDROBO_DEBUG", "DATASET_ASSET_ID", "DATASET_NAME", "DATASET_VERSION_ID", "DATA_DIR", "DEVICE_TYPE", "END_TS", "EVAL_FILE_PATH", "EVAL_TASK_CONFIG", "EVAL_TASK_ID", "FILE_PATH", "IMAGE_ASSET_ID", "IMAGE_TAG", "JOB_LOCAL_PATH", "JOB_NAME", "NEW_SWR_IMAGE_URL", "OBS_BUCKET", "OBS_CODE_DIR", "OBS_DATA_PATH", "OBS_ENDPOINT", "OBS_PREFIX", "OPERATOR_NAME", "OUTPUT_PATH_MINUS_BUCKET", "PREFIX", "PRESET_IMAGE_NAME", "PRESET_IMAGE_URL", "REGION", "START_TS", "SWR_AK", "SWR_ENDPOINT", "SWR_IMAGE_URL", "SWR_SK", "TASK_CONFIG", "TASK_CONFIG_JSON", "TASK_CONFIG_JSON_OBS", "TASK_CONFIG_JSON_WORKSPACE_WAY2", "TASK_CONFIG_WITH_INPUTS", "TASK_ID", "TIMESTAMP", "WORKDIR", "WORKSPACE_ID"]
   },
   "notes": [
-    "Read-only tests (TC-01 to TC-05, TC-07, TC-09 to TC-15, TC-19 to TC-23, TC-25 to TC-28a, TC-28b, TC-30) run automatically.",
-    "Mutation tests (TC-06, TC-08, TC-16, TC-17, TC-18, TC-24, TC-29, TC-31) require explicit user confirmation.",
-    "Set TASK_ID to run proc-task-specific tests (TC-04, TC-07 to TC-13, TC-16 to TC-21, TC-28b).",
-    "Set TASK_CONFIG to run TC-06 (create-task).",
-    "Set EVAL_TASK_ID to run eval-task-specific tests (TC-23 to TC-29).",
+    "Structure: test_cases[] contains proc/eval basics, operator inputs and pipeline checks, plus TC-50..TC-71 for custom-operator onboarding; each case is executed by scripts/test-cli-commands.sh.",
+    "Read-only cases (type=read) run automatically when their required environment variables are available.",
+    "Mutation cases (type=mutation) require explicit user confirmation (CONFIRM_MUTATIONS=1); they are skipped by default.",
+    "TC-03 checks ordering/pagination; TC-03a independently checks algorithm-name filtering when ALGO_NAME is set. Existing test IDs are kept stable.",
+    "Set TASK_ID to run proc-task-specific tests (TC-04, TC-07 to TC-13, TC-16 to TC-19a, TC-21, TC-28b); set PREFIX for TC-19 (get-frames) and JOB_NAME for TC-19a/TC-23b (get-events).",
+    "Set TASK_CONFIG to run TC-06 (create-task); set TIMESTAMP for the copy tests (TC-08, TC-23a).",
+    "Set TASK_CONFIG_WITH_INPUTS to run TC-33 (create-task with operator inputs; copy the complete ext_metadata.inputs[] element from the current operator query and set only url_path).",
+    "Set EVAL_TASK_ID to run eval-task-specific tests (TC-23, TC-23a, TC-23b, TC-25 to TC-29, TC-32).",
     "Set EVAL_TASK_CONFIG to run TC-24 (eval create-task).",
     "Set START_TS/END_TS to run TC-28b (resource-usage).",
-    "Pipeline test TC-31 requires a SUCCEEDED proc-task and its target_path."
+    "Pipeline test TC-31 requires a SUCCEEDED proc-task and its target_path (set as the eval task's top-level dataset_path).",
+    "Dataset tasks do NOT support restart; TC-08 validates copy-task instead.",
+    "Custom-operator onboarding tests (TC-50+) cover deploy-mode Phase 0 asset detection, Mode A build/push, Mode B 空间资产-算法 preset registration (OBS算法 skips Phase 3 — no assets), Phase 4 dataset source (create-dataset + RELEASE), runtime verification and failure analysis; mutation cases require explicit user confirmation."
   ]
 }
