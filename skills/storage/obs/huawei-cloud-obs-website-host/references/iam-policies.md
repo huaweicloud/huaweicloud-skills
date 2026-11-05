@@ -1,5 +1,7 @@
 # IAM Policy - Huawei Cloud OBS Website Host
 
+> **⚠️ Warning:** The permissions granted by the policy below include **write** actions (`obs:bucket:PutBucketWebsite`, `obs:bucket:PutBucketCustomDomainConfiguration`, `dns:recordset:create`) that register or update your custom domain, configure website hosting, and create public DNS records. These operations modify **production-facing infrastructure** and can directly affect live traffic and public access to the bucket. Only grant this policy to principals that legitimately manage the OBS website hosting for the specified bucket, and confirm with the user before applying any such change.
+
 ## Permission Usage
 
 | API Action | Permission | Purpose |

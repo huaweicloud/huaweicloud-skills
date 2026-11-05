@@ -2,6 +2,8 @@
 
 Use Huawei Cloud OBS Python SDK (`esdk-obs-python >= 3.x`) for static website hosting configuration.
 
+> **⚠️ Production infrastructure warning:** The methods below — `setBucketWebsite`, `setBucketCustomDomain` (including certificate binding) — are **write** operations that modify the remote bucket's website configuration and DNS-facing custom-domain registration. They can change what is publicly served from the bucket and affect live traffic. Execute them only after the user confirms the bucket name, custom domain, and any DNS target, and disclose that credentials are read from the caller's environment / local config.
+
 ## SDK package
 
 - Install: `pip install esdk-obs-python`
