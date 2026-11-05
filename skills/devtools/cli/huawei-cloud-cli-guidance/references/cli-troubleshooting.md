@@ -138,7 +138,7 @@ hcloud ECS ListServersDetails --cli-profile=prod --cli-region=cn-north-4
 
 ```bash
 # Query available images
-hcloud ECS ListImages/v2 --cli-region=cn-north-4 --cli-output=json
+hcloud IMS ListImages --cli-region=cn-north-4 --cli-output=json
 
 # Query available flavors
 hcloud ECS ListFlavors/v2 --cli-region=cn-north-4 --cli-output=json
@@ -147,7 +147,7 @@ hcloud ECS ListFlavors/v2 --cli-region=cn-north-4 --cli-output=json
 hcloud VPC ListVpcs/v3 --cli-region=cn-north-4 --cli-output=json
 
 # Query available subnets
-hcloud VPC ListSubnets/v3 --cli-region=cn-north-4 --cli-output=json
+hcloud VPC ListSubnets --cli-region=cn-north-4 --cli-output=json
 ```
 
 ### Q14: What is the CES monitoring timestamp format?
@@ -172,22 +172,22 @@ hcloud ECS ShowServerRemoteConsole \
 
 ### 1. View Detailed Logs
 ```bash
-hcloud ECS ListServersDetails --cli-region=cn-north-4 --cli-debug=true
+hcloud ECS ListServersDetails --cli-region=cn-north-4 --debug
 ```
 
 ### 2. View API Requests
 ```bash
-# Output raw HTTP request and response
-hcloud ECS ShowServer --server_id=<id> --cli-region=cn-north-4 --cli-output=raw
+# Print debug info including the raw HTTP request
+hcloud ECS ShowServer --server_id=<id> --cli-region=cn-north-4 --debug
 ```
 
 ### 3. JSON Output Processing
 ```bash
 # Process JSON output with jq
-hcloud ECS ListServersDetails --cli-region=cn-north-4 --cli-output json | jq '.servers[] | {id: .id, name: .name, status: .status}'
+hcloud ECS ListServersDetails --cli-region=cn-north-4 --cli-output=json | jq '.servers[] | {id: .id, name: .name, status: .status}'
 
 # Or process with Python
-hcloud ECS ListServersDetails --cli-region=cn-north-4 --cli-output json | python3 -c "
+hcloud ECS ListServersDetails --cli-region=cn-north-4 --cli-output=json | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
 for s in data.get('servers', []):
@@ -247,10 +247,10 @@ hcloud <SERVICE> <OPERATION> --help
 ### Step 3: Enable Debug Mode
 ```bash
 # Enable detailed logs
-hcloud <SERVICE> <OPERATION> --cli-debug=true --cli-region=cn-north-4
+hcloud <SERVICE> <OPERATION> --debug --cli-region=cn-north-4
 
 # View raw requests
-hcloud <SERVICE> <OPERATION> --cli-output=raw --cli-region=cn-north-4
+hcloud <SERVICE> <OPERATION> --debug --cli-region=cn-north-4
 ```
 
 ### Step 4: Check Permissions and Resources

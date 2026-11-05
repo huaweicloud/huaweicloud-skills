@@ -132,13 +132,13 @@ hcloud auto-complete on
 ### Multi-environment Configuration
 ```bash
 # Create development environment configuration
-hcloud configure init --cli-profile dev
+hcloud configure init --cli-profile=dev
 
 # Create test environment configuration
-hcloud configure init --cli-profile test
+hcloud configure init --cli-profile=test
 
 # Create production environment configuration
-hcloud configure init --cli-profile prod
+hcloud configure init --cli-profile=prod
 
 # View all configurations
 hcloud configure list

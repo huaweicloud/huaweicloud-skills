@@ -139,7 +139,7 @@ nc -zv <public-ip> 443
 
 ```bash
 # 1. Apply for EIP
-hcloud EIP CreatePublicip/v3 \
+hcloud EIP CreatePublicip \
   --publicip.type=EIP \
   --bandwidth.name=my-eip-bw \
   --bandwidth.size=5 \
@@ -168,7 +168,7 @@ hcloud EIP DisassociatePublicip/v3 \
   --cli-region=cn-north-4
 
 # 2. Release EIP
-hcloud EIP DeletePublicip/v3 \
+hcloud EIP DeletePublicip \
   --publicip_id=<eip-id> \
   --cli-region=cn-north-4
 ```

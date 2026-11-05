@@ -16,10 +16,11 @@ tags: [KooCLI, Huawei Cloud, cli, command line]
 
 Huawei Cloud KooCLI command-line tool guidance skill, providing comprehensive KooCLI usage guide. This skill covers core functionalities including KooCLI installation, authentication configuration, command construction, common error troubleshooting, helping users efficiently manage Huawei Cloud resources.
 
+**Capability boundaries**: This skill only covers **Huawei Cloud KooCLI (hcloud) usage guidance**. It does not cover other cloud providers' CLIs (e.g. AWS CLI), and it does not execute commands on the user's behalf: it never runs hcloud for the user, never queries live resource state or credential values, and never asks the user to paste AK/SK in the conversation. Requests outside these boundaries (e.g. "install AWS CLI", "run this hcloud command for me", "how many ECS instances do I have") must be declined or redirected to the correct entry point instead of being guessed at.
+
 ## Attention 
 1. Any issues encountered during the use of koocli must be addressed by prioritizing the guidance steps provided in this skill. [MUST][IMPORTANT]
 2. It is essential to read this document in its entirety and make full use of its guidance during the process.[MUST][IMPORTANT]
-
 
 ## Prerequisites
 
@@ -28,6 +29,8 @@ Huawei Cloud KooCLI command-line tool guidance skill, providing comprehensive Ko
 - **Authentication Credentials**: Access Key (AK) and Secret Key (SK) or IAM user credentials
 - **Network Connection**: Accessible Huawei Cloud service endpoints
 - **Operating System**: Linux, macOS, or Windows (WSL supported)
+
+**Getting Started (Prerequisite Guide) [MUST]**: first-time users must complete `./references/getting-started.md` first — environment preparation, KooCLI installation, first-time authentication (privacy policy acceptance and credential security rules) and the basic usage flow — and verify installation (`hcloud version`) and authentication (`hcloud configure list`) before constructing any `hcloud` command. [MUST][IMPORTANT]
 
 ## KooCLI Command Format Standard
 
@@ -39,13 +42,13 @@ hcloud <service> <operation> [parameters] [options]
 ### Command Structure
 - `hcloud`: Command-line tool name
 - `<service>`: Cloud service name (e.g., ECS, VPC, OBS, etc.)
-- `<operation>`: API operation name (e.g., ListInstances, CreateVpc, etc.)
+- `<operation>`: API operation name (e.g., ListServersDetails, CreateVpc, etc.)
 - `[parameters]`: Operation parameters (e.g., instance_id, vpc_name, etc.)
 - `[options]`: Global options (e.g., --cli-region, --cli-output, etc.)
 
 ### Parameter Format Rules
-1. **Required parameters**: Directly specified in the command, e.g., `--instance_id i-12345678`
-2. **Optional parameters**: Represented with square brackets, e.g., `[--description "instance description"]`
+1. **Required parameters**: Directly specified in the command, e.g., `--instance_id=i-12345678`
+2. **Optional parameters**: Represented with square brackets, e.g., `[--description="instance description"]`
 3. **Authentication parameters**: Use `--cli-` prefix, e.g., `--cli-profile`, `--cli-region`
 4. **Output parameters**: Use `--cli-output` to specify output format (json/table/tsv)
 5. **Query parameters**: Use `--cli-query` to perform JMESPath query filtering
@@ -55,6 +58,7 @@ hcloud <service> <operation> [parameters] [options]
 ### Installation Scenario
 1. User asks about KooCLI installation → Jump to "1. Install KooCLI"
 2. User needs to verify installation → Check version command `hcloud version`
+3. User is new to Huawei Cloud or KooCLI (first time, setup, quickstart) → Follow `./references/getting-started.md` first (environment preparation → installation → first-time authentication → basic usage flow) [Required]
 
 ### Authentication Scenario
 1. User needs to configure authentication → Jump to "2. Configure koocli"
@@ -113,11 +117,6 @@ Huawei Cloud Resource Operation Results
 
 #### Understand the logic and process of KooCLI managing Huawei Cloud resources. Every time Huawei Cloud service is called or problems are encountered during the process, you must refer to and understand the architecture again, clarifying current steps and subsequent steps. [Required]
 
-## Applicable Scenarios
-1. Install koocli
-2. Configure IAM, AK, SK, region, profile
-3. Manage Huawei Cloud resources
-
 ## 1. Install KooCLI
 
 1. Check local version
@@ -149,7 +148,7 @@ Important: No additional operations allowed!!! Any file content changes must obt
 
 #### 2. If the user chooses non-interactive method to add configuration items, execute hcloud configure init, guide the user to input each parameter value.
 
-When using koocli to manage Huawei Cloud resources requires other permissions, refer to '../references/iam-policies.md'
+When using koocli to manage Huawei Cloud resources requires other permissions, refer to '../references/iam-policies.md'. For credential handling, always follow the credential security best practices in '../references/credential-security.md' [MUST][IMPORTANT]: never paste AK/SK plaintext into conversations or commands, never let credentials enter shell history, prefer `hcloud` profiles or environment variables, and rotate credentials with least privilege.
 
 #### 3. ecsAgency 
 When the user has successfully established a delegation to Elastic Cloud Server (ECS), when using KooCLI within the ECS server, you can specify "--cli-mode=ecsAgency" in commands. KooCLI will automatically obtain temporary AK/SK and SecurityToken for authentication based on ECS delegation.
@@ -197,22 +196,22 @@ Use and only use one authentication method:
 
 | Mode | Applicable Scenario | Start Command | Cleanup |
 |------|----------|----------|------|
-| **Profile Mode** | Agent sessions, multiple calls | `hcloud configure init --cli-profile agent-profile` | Temporary profiles need cleanup |
+| **Profile Mode** | Agent sessions, multiple calls | `hcloud configure init --cli-profile=agent-profile` | Temporary profiles need cleanup |
 | **Explicit Parameter Mode** | One-time commands, CI/CD | Pass authentication parameters in each command | No local configuration |
-| **Existing Profile Mode** | User already configured | `--cli-profile <profile-name>` | Do not modify configuration |
+| **Existing Profile Mode** | User already configured | `--cli-profile=<profile-name>` | Do not modify configuration |
 
 ##### Profile Mode Configuration
 ```bash
 # Create dedicated profile
-hcloud configure init --cli-profile agent-profile
+hcloud configure init --cli-profile=agent-profile
 
 # View configuration
 hcloud configure list
 
 # Execute commands using profile
 hcloud <service> <operation> \
-  --cli-profile agent-profile \
-  --cli-region cn-north-4 \
+  --cli-profile=agent-profile \
+  --cli-region=cn-north-4 \
   --cli-output=json
 ```
 
@@ -220,16 +219,16 @@ hcloud <service> <operation> \
 ```bash
 # Using permanent AK/SK
 hcloud <service> <operation> \
-  --cli-access-key <AccessKeyId> \
-  --cli-secret-key <SecretAccessKey> \
-  --cli-region cn-north-4
+  --cli-access-key=<AccessKeyId> \
+  --cli-secret-key=<SecretAccessKey> \
+  --cli-region=cn-north-4
 
 # Using temporary credentials
 hcloud <service> <operation> \
-  --cli-access-key <AccessKeyId> \
-  --cli-secret-key <SecretAccessKey> \
-  --cli-security-token <SecurityToken> \
-  --cli-region cn-north-4
+  --cli-access-key=<AccessKeyId> \
+  --cli-secret-key=<SecretAccessKey> \
+  --cli-security-token=<SecurityToken> \
+  --cli-region=cn-north-4
 ```
 
 ##### Multi-Environment Management
@@ -241,8 +240,8 @@ Create independent profiles for different environments:
 Explicitly specify when calling:
 ```bash
 hcloud <service> <operation> \
-  --cli-profile dev \
-  --cli-region cn-north-4
+  --cli-profile=dev \
+  --cli-region=cn-north-4
 ```
 
 ## 3. Consult `--help` before constructing any command
@@ -276,6 +275,8 @@ hcloud obs help
 hcloud obs help <command>
 ```
 
+For the complete obsutil command reference (upload/download/sync, listing, and common parameters such as `-r`, `-f`, `-acl` — obsutil uses single-dash options, unlike the `--param=value` form of cloud service API commands), see `./references/obsutil-operations.md`.
+
 ## 6. Filter and format output
 
 KooCLI supports three output formats: json, table, tsv. Default output is in json format.  
@@ -291,21 +292,21 @@ You can use the "--cli-output" parameter to specify any of the aforementioned ou
 ```bash
 # JSON format (recommended for Agent)
 hcloud <service> <operation> \
-  --cli-profile agent-profile \
-  --cli-region cn-north-4 \
+  --cli-profile=agent-profile \
+  --cli-region=cn-north-4 \
   --cli-output=json
 
 # Table format (suitable for manual viewing)
 hcloud <service> <operation> \
-  --cli-profile agent-profile \
-  --cli-region cn-north-4 \
+  --cli-profile=agent-profile \
+  --cli-region=cn-north-4 \
   --cli-output=table
 
-# Text format
+# TSV format
 hcloud <service> <operation> \
-  --cli-profile agent-profile \
-  --cli-region cn-north-4 \
-  --cli-output=text
+  --cli-profile=agent-profile \
+  --cli-region=cn-north-4 \
+  --cli-output=tsv
 ```
 
 ### JMESPath Filtering
@@ -313,23 +314,23 @@ Use `--cli-query` to extract specific fields:
 ```bash
 # Extract specific fields
 hcloud <service> <list-operation> \
-  --cli-profile agent-profile \
-  --cli-region cn-north-4 \
+  --cli-profile=agent-profile \
+  --cli-region=cn-north-4 \
   --cli-output=json \
-  --cli-query "items[].{ID:id,Name:name,Status:status}"
+  --cli-query="items[].{ID:id,Name:name,Status:status}"
 
 # Filter specific status
 hcloud <service> <list-operation> \
-  --cli-profile agent-profile \
-  --cli-region cn-north-4 \
+  --cli-profile=agent-profile \
+  --cli-region=cn-north-4 \
   --cli-output=json \
-  --cli-query "items[?status=='ACTIVE'].{ID:id,Name:name,Status:status}"
+  --cli-query="items[?status=='ACTIVE'].{ID:id,Name:name,Status:status}"
 ```
 ***Note:*** JMESPath query fields must be written according to actual JSON return structure, cannot assume all list interfaces return items.
 
 ## 7. Debugging
 
-When troubleshooting KooCLI command failures, first add `--cli-debug=true` after the specific execution command to view underlying requests, responses, endpoints, parameter parsing, and authentication-related information.
+When troubleshooting KooCLI command failures, first add `--debug` after the specific execution command to view underlying requests, responses, endpoints, parameter parsing, and authentication-related information.
 
 ## 8. Common issues
 KooCLI divides errors encountered during command calls into five types, declaring their specific type at the beginning of error prompt messages. The positioning methods for various errors are as follows:
@@ -351,6 +352,8 @@ When encountering errors, query help based on error type and interact with users
 5. **Cloud environments recommend using IAM users rather than main accounts**
 6. **Enable MFA (Multi-Factor Authentication) for sensitive operations**
 
+See `./references/credential-security.md` for the complete credential security best practices (plaintext AK/SK prohibition, shell history hygiene, profile or environment-variable credential carriers, credential rotation and least privilege).
+
 ### Operation Security
 1. **Must obtain user confirmation before modification operations** (security group rules, restart, deletion, etc.)
 2. **Prefer read-only APIs**, avoid modifying resource status
@@ -369,11 +372,11 @@ When encountering errors, query help based on error type and interact with users
 ### Global Parameters
 | Parameter | Description | Example |
 |------|------|------|
-| `--cli-profile` | Configuration file name | `--cli-profile dev` |
-| `--cli-region` | Region | `--cli-region cn-north-4` |
+| `--cli-profile` | Configuration file name | `--cli-profile=dev` |
+| `--cli-region` | Region | `--cli-region=cn-north-4` |
 | `--cli-output` | Output format | `--cli-output=json` |
-| `--cli-query` | JMESPath query | `--cli-query "items[].{ID:id,Name:name}"` |
-| `--cli-debug` | Debug mode | `--cli-debug=true` |
+| `--cli-query` | JMESPath query | `--cli-query="items[].{ID:id,Name:name}"` |
+| `--debug` | Debug mode; `--dryrun` prints the request after validation without executing it (both are boolean flags, no value) | `--debug` |
 
 ### Authentication Parameters
 | Authentication Mode | Required Parameters | Optional Parameters |
@@ -393,25 +396,25 @@ KooCLI supports three output formats:
 
 ### JSON Format (Default)
 ```bash
-hcloud ECS ListInstances/v3 --cli-region=cn-north-4 --cli-output=json
+hcloud ECS ListServersDetails --cli-region=cn-north-4 --cli-output=json
 ```
 **Applicable Scenarios**: Automated scripts, API integration, data extraction
 
 ### Table Format
 ```bash
-hcloud ECS ListInstances/v3 --cli-region=cn-north-4 --cli-output=table
+hcloud ECS ListServersDetails --cli-region=cn-north-4 --cli-output=table
 ```
 **Applicable Scenarios**: Manual viewing, quick browsing
 
 ### TSV Format
 ```bash
-hcloud ECS ListInstances/v3 --cli-region=cn-north-4 --cli-output=tsv
+hcloud ECS ListServersDetails --cli-region=cn-north-4 --cli-output=tsv
 ```
 **Applicable Scenarios**: Import to spreadsheets, data processing
 
 ### JMESPath Query
 ```bash
-hcloud ECS ListInstances/v3 --cli-region=cn-north-4 --cli-output=json --cli-query "servers[?status=='ACTIVE'].{ID:id,Name:name,Status:status}"
+hcloud ECS ListServersDetails --cli-region=cn-north-4 --cli-output=json --cli-query="servers[?status=='ACTIVE'].{ID:id,Name:name,Status:status}"
 ```
 
 ## Verification Methods
@@ -422,11 +425,11 @@ hcloud ECS ListInstances/v3 --cli-region=cn-north-4 --cli-output=json --cli-quer
 
 ### Authentication Verification
 1. **Profile verification**: `hcloud configure list` displays configured profile
-2. **Permission verification**: `hcloud IAM ListUsers/v3 --cli-profile <profile>` tests IAM permissions
+2. **Permission verification**: `hcloud IAM KeystoneListUsers --cli-profile=<profile>` tests IAM permissions
 
 ### Command Verification
 1. **Help verification**: Execute `hcloud <service> --help` for each service to confirm available operations
-2. **Parameter verification**: Use `--cli-debug=true` to view parameter parsing results
+2. **Parameter verification**: Use `--debug` to view parameter parsing results
 3. **Response verification**: Check HTTP status codes and error messages returned by commands
 
 ### Environment Verification
@@ -443,7 +446,7 @@ hcloud ECS ListInstances/v3 --cli-region=cn-north-4 --cli-output=json --cli-quer
 
 ### Command Construction
 1. **First query help**: `hcloud <service> --help` → `hcloud <service> <operation> --help`
-2. **Use `--cli-debug=true`** for initial command debugging
+2. **Use `--debug`** for initial command debugging
 3. **Gradually add parameters**, avoid constructing complex commands at once
 4. **Use `--cli-query`** to filter and format output
 
@@ -474,7 +477,7 @@ hcloud ECS ListInstances/v3 --cli-region=cn-north-4 --cli-output=json --cli-quer
 4. **Output parsing**: Table format output may be truncated due to terminal width
 
 ### Troubleshooting
-1. **Enable debugging**: `--cli-debug=true` displays detailed request information
+1. **Enable debugging**: `--debug` displays detailed request information
 2. **Check logs**: View log files in `~/.hcloud/logs/`
 3. **Version check**: Ensure KooCLI version is up to date
 4. **Network diagnostics**: Use `curl` to test service endpoint reachability
@@ -489,4 +492,7 @@ hcloud ECS ListInstances/v3 --cli-region=cn-north-4 --cli-output=json --cli-quer
 - `./references/iam-policies.md` — IAM policies
 - `./references/acceptance-criteria.md` — Acceptance criteria
 - `./references/core-commands.md` — Core commands
+- `./references/getting-started.md` — First-time onboarding (environment, installation, first authentication, basic usage flow)
+- `./references/obsutil-operations.md` — obsutil common operations (upload, download, sync, listing)
+- `./references/credential-security.md` — Credential security best practices
 
