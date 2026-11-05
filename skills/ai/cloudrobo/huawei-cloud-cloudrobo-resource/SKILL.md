@@ -11,9 +11,19 @@ description: >
   资源配额查询, 资源池查询, 资源池列表, 资源池详情, 配额查询.
 tags:
   - huawei-cloud-cloudrobo
-  - resource
-  - quota
-  - resource-pool
+  - resource-quota-query
+  - resource-pool-query
+  - resource-pool-list
+  - resource-pool-detail
+  - quota-list
+  - domain-quota-aggregation
+  - cce-quota
+  - modelarts-quota
+  - 资源配额查询
+  - 资源池查询
+  - 资源池列表
+  - 资源池详情
+  - 配额查询
 ---
 
 > **Windows / PowerShell:** Examples use bash syntax. To run on Windows PowerShell:
