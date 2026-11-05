@@ -85,8 +85,8 @@ This skill diagnoses Huawei Cloud MRS (MapReduce Service) cluster alarms. Given 
 ### 1. Python Requirements
 
 - Python >= 3.7
-- Dependencies: `pyyaml` (YAML parsing), `cryptography` (Windows AES password encryption only)
-- Linux uses CryptoAPI for password encryption (no `cryptography` dependency)
+- Dependencies: `pyyaml` (YAML parsing), `cryptography` (Windows AES password encryption)
+- Linux uses CryptoAPI for password encryption by default, and automatically falls back to built-in AES-256-CBC when CryptoAPI is unavailable. See `crypto.engine` in the config YAML for the switchable backend (`auto`/`aes`/`cryptoapi`)
 - Verify installation: `python3 --version` (Linux) / `python --version` (Windows)
 
 > This skill does NOT require KooCLI (`hcloud`). It calls the LakeWatch API through `scripts/lakewatch_api_client.py` (lakewatch mode) or the MRS Manager REST API through `scripts/manager_api_client.py` (manager mode). For the client setup, see [CLI Installation Guide](references/cli-installation-guide.md).
@@ -468,3 +468,26 @@ See [Verification Method](references/verification-method.md) for the installatio
 - **Mode switching**: Run `check_api_mode.py` to determine the mode. In manager mode use `manager_api_client.py` and the `alarm_manager/` knowledge base; in lakewatch mode use `lakewatch_api_client.py` and the `alarms/` knowledge base. Do not mix clients across modes.
 - **Command failure**: When a command fails, skip the current check item and continue with the other checks; do not abort the whole diagnosis.
 - **Known limitations**: The `access_manager_get` proxy only supports GET requests (PUT is not yet available on the Agent side); `collect_alarm_log_data` requires `log_directory` to be under `/var/log/`; some `strategy_name` values require extra `env` parameters; in manager mode `browse_log` requires the full log file path and `start_log_search` `services` must follow `component:service:role`.
+
+## Prohibited Manager Write APIs (Read-Only Constraint)
+
+> **This skill is strictly read-only. The following MRS Manager **write** APIs MUST NOT be called under any circumstance**, even if a user explicitly asks for the operation (e.g. clearing/shielding an alarm, creating/deleting a user, aborting a command, or gathering a log package).
+
+Although `scripts/manager_api_apis/` contains definitions for the write APIs below, they are **NOT** allowed for this skill:
+
+| Manager API | Operation | Can this skill call it? |
+|-------------|-----------|-------------------------|
+| `clear_alarm` | Clear alarms | ❌ Prohibited |
+| `shield_alarms` | Shield alarms of a service/host | ❌ Prohibited |
+| `create_user` | Create a user | ❌ Prohibited |
+| `delete_user` | Delete a user | ❌ Prohibited |
+| `abort_command` | Abort a running task | ❌ Prohibited |
+| `gather_log` | Collect/gather a log package (tar) | ❌ Prohibited |
+
+**Mandatory behavior when a user requests any of these operations**:
+
+1. Politely refuse: explain that this skill only performs **read-only** alarm diagnosis and never executes Manager write operations.
+2. Provide the alternative handling entry: for clearing/shielding alarms or gathering logs, direct the user to the MRS console or the cluster administrator to execute the change manual; only surface the diagnostic evidence needed for the change.
+3. Continue to deliver the supported diagnostic (root cause + repair suggestions) if the alarm still needs analysis; never fall back to invoking the prohibited APIs.
+
+> The `get_alarms`, `get_host_*`, `start_log_search`, `browse_log` etc. **read** manager APIs are allowed; only the write APIs listed above are prohibited.

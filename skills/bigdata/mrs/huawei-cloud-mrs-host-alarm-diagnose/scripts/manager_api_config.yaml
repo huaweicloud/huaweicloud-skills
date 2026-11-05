@@ -38,7 +38,7 @@ session:
 
 # 加密组件配置
 # 加密引擎 engine: auto(默认) | aes | cryptoapi
-#   auto: Windows 自动使用 AES-256-CBC（开发环境，密钥存本地 .aes_key 文件），Linux 自动使用 CryptoAPI（生产环境，密钥由安全组件管理）
+#   auto: Windows 自动使用 AES-256-CBC（开发环境，密钥存本地 .aes_key 文件），Linux 自动使用 CryptoAPI（生产环境，密钥由安全组件管理）；Linux 上 CryptoAPI 缺失时自动回退内置 AES-256-CBC
 #   aes: 强制使用 Python AES-256-CBC（Windows/Linux 均可，密钥存本地 .aes_key 文件）
 #   cryptoapi: 强制使用 CryptoAPI
 crypto:

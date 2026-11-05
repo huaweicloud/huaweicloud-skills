@@ -188,14 +188,20 @@ Token acquisition is built into the script and handled automatically on API call
 
 ## Password Encryption
 
-The encryption method is auto-selected by `platform.system()` (no configuration needed):
+The encryption method is selected by the `crypto.engine` setting in `lakewatch_api_config.yaml` (`auto` default), with a built-in AES fallback:
 
-| Platform | Method | Note |
-|----------|--------|------|
-| Linux | CryptoAPI (SCC) | Production; key managed by the security component |
+| `crypto.engine` | Behavior |
+|----------|-----------|
+| `auto` (default) | Windows uses AES-256-CBC; Linux uses CryptoAPI (SCC), and falls back to built-in AES-256-CBC automatically when the CryptoAPI binary or SCC_CONF is unavailable |
+| `aes` | Always uses Python AES-256-CBC (Windows/Linux) |
+| `cryptoapi` | Always uses CryptoAPI; errors out if unavailable |
+
+| Platform | Typical Engine | Description |
+|----------|-----------|-------------|
+| Linux | CryptoAPI (SCC) | Production; key managed by the security component. Falls back to AES when CryptoAPI is missing |
 | Windows | AES-256-CBC | Dev; key stored in a local `.aes_key` file |
 
-> The two ciphertexts are NOT interchangeable; run `--encrypt-password` on the platform where the skill will run.
+> The two ciphertexts are NOT interchangeable; run `--encrypt-password` on the platform/engine where the skill will run.
 
 ### CryptoAPI (Linux)
 

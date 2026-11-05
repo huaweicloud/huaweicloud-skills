@@ -129,10 +129,17 @@ def _call_crypto_api(data: str, crypto_type: str, config: dict) -> str:
     return output
 
 
+def _crypto_api_available(config: dict) -> bool:
+    """检查 CryptoAPI 是否可用（bin 存在且 SCC_CONF 已配置）"""
+    scc_conf = config.get("crypto", {}).get("scc_conf") or os.getenv("SCC_CONF")
+    bin_path = config.get("crypto", {}).get("bin_path", "/usr/local/seccomponent/bin/CryptoAPI")
+    return bool(scc_conf) and os.path.isfile(bin_path)
+
+
 def _crypto_engine(config: dict) -> str:
     """选择加密引擎：auto | aes | cryptoapi
 
-    auto: Windows 用 Python AES，Linux 用 CryptoAPI
+    auto: Windows 用 Python AES，Linux 用 CryptoAPI（CryptoAPI 缺失时回退内置 AES）
     aes: 强制使用 Python AES-256-CBC（Windows/Linux 均可）
     cryptoapi: 强制使用 CryptoAPI
     """
@@ -141,6 +148,8 @@ def _crypto_engine(config: dict) -> str:
         engine = engine.strip().lower()
     if engine in ("aes", "cryptoapi"):
         return engine
+    if not IS_WINDOWS and not _crypto_api_available(config):
+        return "aes"
     return "aes" if IS_WINDOWS else "cryptoapi"
 
 
