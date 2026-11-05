@@ -255,11 +255,16 @@ Before executing the install command, call the install-count API. The `skill_id`
 skill-quality-cli run --skill-name huawei-cloud-find-skills -- curl -s -X POST "https://devdata2.huaweicloud.com/rest/developer/fwdo/rest/developer/servlet/hdskillservice/v1/obs/findcounts/increment" -H "Accept: application/json, text/plain, */*" -H "Content-Type: application/json" -H "Origin: https://skills.huaweicloud.com" -H "Referer: https://skills.huaweicloud.com/" -d "{\"skill_id\":\"skills/<category>/<service>/<skill-name>\"}"
 ```
 
+```powershell
+# PowerShell — Windows 原生（curl.exe，非 Invoke-WebRequest 别名）
+skill-quality-cli run --skill-name huawei-cloud-find-skills -- curl.exe -s -X POST "https://devdata2.huaweicloud.com/rest/developer/fwdo/rest/developer/servlet/hdskillservice/v1/obs/findcounts/increment" -H "Accept: application/json, text/plain, */*" -H "Content-Type: application/json" -H "Origin: https://skills.huaweicloud.com" -H "Referer: https://skills.huaweicloud.com/" -d '{"skill_id":"skills/<category>/<service>/<skill-name>"}'
+```
+
 > This is a fire-and-forget request. Do NOT block the install flow on its success or failure.
 
 #### Step 3.2: Execute Install Command
 
-> **⚠️ MANDATORY (质量上报)**: 安装命令必须用 `skill-quality-cli run --skill-name huawei-cloud-find-skills -- sh -c '...'` 包装, 保证每次安装都触发质量上报。`sh -c` 内的 `printf "\n"` 用于自动确认 `npx skills add` 的 scope 交互提示。
+> **⚠️ MANDATORY (质量上报)**: 安装命令必须用 `skill-quality-cli run --skill-name huawei-cloud-find-skills -- ` 包装, 保证每次安装都触发质量上报。Bash 环境下用 `sh -c 'printf "\n" | ...'` 自动确认 `npx skills add` 的 scope 交互提示；PowerShell 环境直接传参，`-y` 标志已自动确认。
 
 ```bash
 # Option A: npx skills add from GitCode (default)
@@ -271,6 +276,21 @@ skill-quality-cli run --skill-name huawei-cloud-find-skills -- sh -c 'printf "\n
 # Option C (fallback): npx skills add from GitHub
 skill-quality-cli run --skill-name huawei-cloud-find-skills -- sh -c 'printf "\n" | npx skills add huaweicloud/huaweicloud-skills --skill <skill-name> -y'
 ```
+
+```powershell
+# Option A: npx skills add from GitCode (default) — Windows 原生
+skill-quality-cli run --skill-name huawei-cloud-find-skills -- npx skills add https://gitcode.com/huaweicloud/huaweicloud-skills.git#master --skill <skill-name> -y
+
+# Option B: npx skills add from ClawHub
+skill-quality-cli run --skill-name huawei-cloud-find-skills -- npx skills add https://clawhub.ai/huaweicloudskill/skills/<skill-name> -y
+
+# Option C (fallback): npx skills add from GitHub
+skill-quality-cli run --skill-name huawei-cloud-find-skills -- npx skills add huaweicloud/huaweicloud-skills --skill <skill-name> -y
+```
+
+> **Windows 回退方案**（`npx skills add` 失败时，如 `spawn EPERM`）：
+> 1. **先 clone 再本地安装**：`git clone https://gitcode.com/huaweicloud/huaweicloud-skills.git` → `npx skills add ./huaweicloud-skills --skill <skill-name> -y`
+> 2. **手动安装**：将技能目录复制到 `.agents/skills/<skill-name>/`，并在 `.agents/skills-lock.json` 中添加对应条目
 
 > **⚠️ 安全**: `<skill-name>` 必须来自 Step 1 搜索结果的规范技能名（`name` 字段），禁止拼接未经校验的用户输入到 `sh -c '...'` 内；若技能名含 `'` 等 shell 元字符，须先转义（`'` → `'\''`）或改用 `npx skills add ... -y` 裸调用（此时质量上报改为安装完成后手动 `skill-quality-cli report --skill-name huawei-cloud-find-skills`）。
 
