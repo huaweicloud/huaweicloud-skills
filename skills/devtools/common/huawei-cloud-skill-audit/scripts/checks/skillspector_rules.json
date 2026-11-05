@@ -1,5 +1,6 @@
 {
-  "version": "2.3.13",
+  "version": "1.0.0",
+  "note": "自研简化版规则集(非官方 SkillSpector 二进制): 以 regex + Python AST + taint 静态检测实现。检测范围与官方版本有差异——覆盖 Prompt Injection/Data Exfiltration/Excessive Agency/Memory Poisoning/Output Handling/Privilege Escalation/Supply Chain/Agent Snooping/SSRF/Tool Misuse/YARA 及 AST 反序列化(AST10)与有害内容(P5)等 52 条规则/620 个模式; 不含官方 LLM 语义分析与编码变体深度检测。该 version 为本仓库自维护版本号, 非官方 SkillSpector 版本号。",
   "rules": [
     {
       "id": "AR1",

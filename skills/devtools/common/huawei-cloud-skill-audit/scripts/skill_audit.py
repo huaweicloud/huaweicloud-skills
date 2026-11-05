@@ -46,6 +46,9 @@ SEVERITY_FLOOR_MAP = {
     "high": {"critical", "error"},
 }
 
+# 审计工具自身版本(报告头展示, 便于追溯报告由哪个版本生成)
+AUDIT_TOOL_VERSION = "1.0.0"
+
 
 def _get_severity_floor(scan_level: str) -> set[str] | None:
     return SEVERITY_FLOOR_MAP.get(scan_level)
@@ -236,6 +239,7 @@ def build_report(target: Path, skills: list, results: dict, config):
 
     a("=" * 72)
     a("  Skill Gate Audit Report")
+    a(f"  Tool version: {AUDIT_TOOL_VERSION}")
     a(f"  Scan target: {target}")
     a(f"  Skills scanned: {len(skills)}")
     a(f"  Scan level: {config.scan_level}")
@@ -248,6 +252,27 @@ def build_report(target: Path, skills: list, results: dict, config):
     a()
     for s in skills:
         a(f"  ✔ {s.name}")
+    a()
+
+    # ── Section 2: Check Summary ──
+    # 每个检查独立小节: 扫描文件数/规则数/发现数/结论(ISSUE-004) —— 无问题场景
+    # 也能从文件数/规则数判断扫描确实执行, 而非"没扫到"。
+    a("── 2. Check Summary ──")
+    a()
+    checks_list = []
+    for name, result in results.items():
+        if result.raw_output == "SKIPPED (not available)":
+            verdict = "SKIP"
+        else:
+            verdict = "FAIL" if not result.passed else "OK"
+        checks_list.append((name, result, verdict))
+        a(f"  {name:<16} files={result.files_scanned:<6} rules={result.rules_count:<5} "
+          f"findings={result.findings_count:<5} verdict={verdict}")
+    pass_count = sum(1 for _, r, _ in checks_list if r.passed)
+    total = len(checks_list)
+    rate = pass_count / total * 100 if total else 0.0
+    if checks_list:
+        a(f"  Pass rate: {pass_count}/{total} checks passed ({rate:.1f}%)")
     a()
 
     # ── Collect all issues by severity ──
@@ -272,8 +297,8 @@ def build_report(target: Path, skills: list, results: dict, config):
             elif issue.severity == Severity.WARNING:
                 warning_issues.append(entry)
 
-    # ── Section 2: Issue Summary ──
-    a("── 2. Issue Summary ──")
+    # ── Section 3: Issue Summary ──
+    a("── 3. Issue Summary ──")
     a()
     if critical_issues:
         cats = {}
@@ -303,8 +328,8 @@ def build_report(target: Path, skills: list, results: dict, config):
         a("  (no issues found)")
     a()
 
-    # ── Section 3: Issue Details ──
-    a("── 3. Issue Details ──")
+    # ── Section 4: Issue Details ──
+    a("── 4. Issue Details ──")
     a()
 
     def detail_block(issues, label):
@@ -331,8 +356,8 @@ def build_report(target: Path, skills: list, results: dict, config):
     detail_block(error_issues, "ERROR")
     detail_block(warning_issues, "WARNING")
 
-    # ── Section 4: Fix Strategies ──
-    a("── 4. Fix Strategies ──")
+    # ── Section 5: Fix Strategies ──
+    a("── 5. Fix Strategies ──")
     a()
 
     seen_rules = set()
@@ -354,16 +379,12 @@ def build_report(target: Path, skills: list, results: dict, config):
 
     # ── Verdict ──
     a("=" * 72)
-    checks_list = []
-    for name, result in results.items():
-        checks_list.append((name, result.passed))
-    pass_count = sum(1 for _, v in checks_list if v)
-    total = len(checks_list)
-    if pass_count == total:
-        a(f"  Gate Verdict: PASS  |  {'  '.join(f'{n} OK' for n, _ in checks_list)}")
+    if all(r.passed for _, r, _ in checks_list):
+        a(f"  Gate Verdict: PASS  |  {'  '.join(f'{n} OK' for n, r, _ in checks_list)}")
     else:
-        parts = [f"{n} OK" if v else f"{n} FAIL" for n, v in checks_list]
+        parts = [f"{n} OK" if r.passed else f"{n} FAIL" for n, r, _ in checks_list]
         a(f"  Gate Verdict: FAIL  |  {'  '.join(parts)}")
+    a(f"  Pass rate: {pass_count}/{total} checks passed ({rate:.1f}%)")
 
     # SkillSpector risk metadata
     if "skillspector" in results and results["skillspector"].raw_output:
@@ -375,10 +396,20 @@ def build_report(target: Path, skills: list, results: dict, config):
 
 # ── Main ──
 
+REMOTE_URL_RE = re.compile(r"^(?:https?://|git@|ssh://|git://|file://)")
+
 def main():
     args = parse_args()
 
-    target = Path(args.target).resolve()
+    # ISSUE-001: 远程 git URL 不应被当作本地路径拼接解析(否则报错信息误导用户)。
+    # 命中 URL 前缀即明确提示 --target 仅支持本地目录路径, 请先本地克隆。
+    if REMOTE_URL_RE.match(args.target.strip()):
+        print("ERROR: --target 不支持远程 git URL，仅支持本地目录路径。"
+              "请先将远程仓库克隆到本地（git clone <url>），再审计该本地目录。",
+              file=sys.stderr)
+        return 1
+
+    target = Path(args.target.strip()).resolve()
     if not target.exists():
         print(f"ERROR: target not found: {target}", file=sys.stderr)
         return 1

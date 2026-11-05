@@ -59,4 +59,6 @@ class GitleaksCheck(Check):
             source="gitleaks",
             issues=issues,
             passed=len(issues) == 0,
+            rules_count=len({i.rule for i in issues}),
+            findings_count=len(issues),
         )
