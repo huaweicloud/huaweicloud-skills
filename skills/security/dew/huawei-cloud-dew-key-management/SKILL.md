@@ -68,6 +68,7 @@ It enables four capability groups through 10 `huawei_*` actions:
 - ✅ List/describe secrets and versions (metadata only — no secret values)
 - ✅ List KMS keys, analyze rotation status, audit KMS key usage via CTS
 - ✅ Create KMS keys, enable automatic rotation, manually rotate secret versions, delete KMS keys (with confirmation)
+- ❌ Do **NOT** create or delete CSMS secrets (`CreateSecret` / `DeleteSecret` are **out of scope**) — only manage metadata, rotation and versions of **existing** secrets
 - ❌ NEVER read or fetch secret values (`DownloadSecretBlob`, `ShowSecretVersion` value, `DecryptData` plaintext) into agent context
 - ❌ NEVER echo credentials (AK/SK, passwords, tokens) in the conversation
 
@@ -206,7 +207,7 @@ where; flag anomalies (failed `kms:Decrypt` attempts, operations on deleted/disa
 
 ```bash
 # [W] 写操作 (WRITE): creates a KMS customer master key — R2: preview + explicit confirmation required
-# Optional: --key_description={description} --key_spec=AES_256（其他可选: RSA_2048, RSA_3072, RSA_4096, EC_P256, EC_P384, SECP256K1）
+# Optional: --key_description={description} --key_spec=AES_256（其他可选: SM4, RSA_2048, RSA_3072, RSA_4096, EC_P256, EC_P384, SECP256K1, SM2）
 # Optional: --key_usage=ENCRYPT_DECRYPT（其他可选: SIGN_VERIFY）--project_id={project_id}
 hcloud KMS CreateKey --cli-region={region} --key_alias={alias}
 skill-quality-cli run --skill-name huawei-cloud-dew-key-management -- hcloud KMS CreateKey --cli-region={region} --key_alias={alias}
@@ -214,8 +215,15 @@ skill-quality-cli run --skill-name huawei-cloud-dew-key-management -- hcloud KMS
 
 **`huawei_enable_csms_secret_rotation`** — enable automatic rotation for a secret:
 
+> ⚠️ **前置 (prerequisite)**: 自动轮转仅对已配置轮转的凭据生效。支持轮转的凭据类型必须为
+> **RDS-FG / GaussDB-FG**，且创建时已指定 `rotation_func_urn` + `rotation_config`。
+> **COMMON 类型普通凭据无法开启自动轮转**（执行返回 `CSMS.0603 该凭据不能轮转`，即使带上
+> `rotation_func_urn` 也一样）。轮转函数模板 `ShowSecretFunctionTemplates` 的 `--secret_type`
+> 仅接受 `[RDS-FG|GaussDB-FG]`，COMMON 类型无轮转函数模板。
+
 ```bash
 # [W] 写操作 (WRITE): modifies the secret's rotation configuration — R2: preview + explicit confirmation required
+# 仅适用于 secret_type=RDS-FG/GaussDB-FG 且已配置轮转函数的凭据；COMMON 类型不可用（CSMS.0603）
 # Optional: --rotation_period={days} --rotation_func_urn={urn} --description={description}
 # Optional: --project_id={project_id}
 hcloud CSMS UpdateSecret --cli-region={region} --secret_name={secret_name} --auto_rotation=true
@@ -230,8 +238,14 @@ skill-quality-cli run --skill-name huawei-cloud-dew-key-management -- hcloud CSM
 
 **`huawei_update_csms_secret_version`** — manually rotate a secret version (immediate rotation):
 
+> ⚠️ **前置 (prerequisite)**: 手动轮转同样仅对已配置轮转的凭据生效（**RDS-FG / GaussDB-FG**
+> 类型 + 创建时指定 `rotation_func_urn`）。**COMMON 类型普通凭据无法轮转**（执行返回
+> `CSMS.0603 该凭据不能轮转`），且需真实数据库实例支撑（创建 RDS-FG 类型凭据无实例时返回
+> `CSMS.0023 访问 RDS 服务错误`）。
+
 ```bash
 # [W] 写操作 (WRITE): immediately rotates the secret (creates a new version) — R1: explicit confirmation required
+# 仅适用于 secret_type=RDS-FG/GaussDB-FG 且已配置轮转函数的凭据；COMMON 类型不可用（CSMS.0603）
 # Optional: --project_id={project_id}
 hcloud CSMS RotateSecret --cli-region={region} --secret_name={secret_name}
 skill-quality-cli run --skill-name huawei-cloud-dew-key-management -- hcloud CSMS RotateSecret --cli-region={region} --secret_name={secret_name}
@@ -356,12 +370,12 @@ All parameters below were verified against `hcloud <Service> <Operation> --help`
 
 | Operation | Parameter | Type | Required | Example |
 | --------- | --------- | ---- | -------- | ------- |
-| ListKeys | `--key_state` | string | No | `--key_state=2` (enabled) |
+| ListKeys | `--key_state` | string | No | `--key_state=2`（取值 1-5：1=待激活, 2=启用, 3=禁用, 4=计划删除, 5=等待导入） |
 | ListKeys | `--key_spec` | string | No | `--key_spec=AES_256` |
 | ListKeys | `--limit` | int | No | `--limit=50` |
 | CreateKey | `--key_alias` | string | **Yes** | `--key_alias=app-encryption-key` |
 | CreateKey | `--key_description` | string | No | `--key_description="Application data encryption"` |
-| CreateKey | `--key_spec` | string | No | `--key_spec=AES_256` (default) |
+| CreateKey | `--key_spec` | string | No | `--key_spec=AES_256` (default)（其他可选: SM4, RSA_2048, RSA_3072, RSA_4096, EC_P256, EC_P384, SECP256K1, SM2） |
 | CreateKey | `--key_usage` | string | No | `--key_usage=ENCRYPT_DECRYPT` (default) |
 | DeleteKey | `--key_id` | string | **Yes** | `--key_id={key_id}` |
 | DeleteKey | `--pending_days` | string | **Yes** | `--pending_days=7` (7-1096) |
@@ -375,7 +389,7 @@ All parameters below were verified against `hcloud <Service> <Operation> --help`
 | ListTraces | `--service_type` | string | No | `--service_type=KMS` |
 | ListTraces | `--trace_name` | string | No | `--trace_name=DeleteKey` |
 | ListTraces | `--resource_type` | string | No | `--resource_type=cmk` |
-| ListTraces | `--from` / `--to` | string | No | `--from=2026-08-01T00:00:00Z` |
+| ListTraces | `--from` / `--to` | integer | No | `--from=1786449459161`（13 位毫秒级 UTC timestamp，integer；**非 ISO 8601**） |
 | ListTraces | `--limit` | int | No | `--limit=50` |
 
 Common to all operations: `--cli-region` (required), `--project_id` (required by API but auto-filled
