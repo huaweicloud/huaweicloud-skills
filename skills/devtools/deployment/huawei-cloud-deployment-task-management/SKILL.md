@@ -155,9 +155,11 @@ is shown explicitly in examples; omit it only when your hcloud profile has a def
 Run each command as a **single line** (no `\` line continuations) so it stays directly copy-pasteable.
 Parameter names below were verified against `hcloud CodeArtsDeploy <Operation> --help` (KooCLI 7.2.12).
 Service name `CodeArtsDeploy`, every operation `ListAllApp` / `ListDeployTasks` /
-`ShowDeployTaskDetail` / `ListDeployTaskHistoryByDate` / `CheckIsDuplicateAppName` / `CreateApp` /
+`ShowAppDetailById` / `ListDeployTaskHistoryByDate` / `CheckIsDuplicateAppName` / `CreateApp` /
 `CreateDeployTaskByTemplate` / `StartDeployTask` / `DeleteDeployTask` — see the Parameter Confirmation
-tables below for the exact `--key` names and constraints.
+tables below for the exact `--key` names and constraints. `ShowAppDetailById` (queries application
+detail by `--app_id`) is the current interface; the deprecated `ShowDeployTaskDetail` (`--task_id`)
+is kept only as a fallback.
 
 > **⚠️ Mandatory: every `hcloud` command in this skill MUST be wrapped with
 > `skill-quality-cli run --skill-name huawei-cloud-deployment-task-management -- ` — bare `hcloud`
@@ -186,13 +188,18 @@ skill-quality-cli run --skill-name huawei-cloud-deployment-task-management -- hc
 hcloud CodeArtsDeploy ListDeployTasks --cli-region={region} --project_id={project_id} --page=1 --size=50
 skill-quality-cli run --skill-name huawei-cloud-deployment-task-management -- hcloud CodeArtsDeploy ListDeployTasks --cli-region={region} --project_id={project_id} --page=1 --size=50
 
-# Get deployment task details by task ID
-hcloud CodeArtsDeploy ShowDeployTaskDetail --cli-region={region} --task_id=00000000-0000-0000-0000-000000000000
+# Get deployment task/application details by application ID (primary interface)
+hcloud CodeArtsDeploy ShowAppDetailById --cli-region={region} --app_id=00000000-0000-0000-0000-000000000000
+skill-quality-cli run --skill-name huawei-cloud-deployment-task-management -- hcloud CodeArtsDeploy ShowAppDetailById --cli-region={region} --app_id={app_id}
+
+# Fallback: legacy interface by task ID (ShowDeployTaskDetail is deprecated after 2024-09-30)
 skill-quality-cli run --skill-name huawei-cloud-deployment-task-management -- hcloud CodeArtsDeploy ShowDeployTaskDetail --cli-region={region} --task_id={task_id}
 ```
 
-> `ShowDeployTaskDetail` is deprecated after 2024-09-30 (new equivalent `ShowAppDetailById`), but is
-> still maintained and is the operation confirmed for `huawei_get_clouddeploy_task`.
+> `ShowAppDetailById` is the current equivalent of the deprecated `ShowDeployTaskDetail`
+> (unmaintained after 2024-09-30). Use `ShowAppDetailById` with the application ID first; fall back to
+> `ShowDeployTaskDetail` with the task ID only when the app ID is unavailable. Both are the operations
+> behind `huawei_get_clouddeploy_task`.
 
 ### Analyze — Deployment Failure Root Cause (R3, auto)
 
@@ -216,8 +223,9 @@ Diagnose the latest failed record by checking, in order:
 ### Analyze — OBS Artifact Link Verification (R3, auto)
 
 ```bash
-# 1) Get the task detail and read the artifact configuration (bucket + object/package path)
-hcloud CodeArtsDeploy ShowDeployTaskDetail --cli-region={region} --task_id=00000000-0000-0000-0000-000000000000
+# 1) Get the task/app detail and read the artifact configuration (bucket + object/package path)
+skill-quality-cli run --skill-name huawei-cloud-deployment-task-management -- hcloud CodeArtsDeploy ShowAppDetailById --cli-region={region} --app_id={app_id}
+#    Fallback: legacy interface by task ID (ShowDeployTaskDetail is deprecated after 2024-09-30)
 skill-quality-cli run --skill-name huawei-cloud-deployment-task-management -- hcloud CodeArtsDeploy ShowDeployTaskDetail --cli-region={region} --task_id={task_id}
 
 # 2) One-time obsutil setup (before the first OBS check on each machine/region):
@@ -240,6 +248,16 @@ skill-quality-cli run --skill-name huawei-cloud-deployment-task-management -- hc
 > executor** (`hcloud ...` verbatim), and MUST NOT be routed to the OBS SDK (`huaweicloudsdkobs`) or
 > translated into a Python SDK snippet. This is what allows the artifact check to run on any machine
 > where `hcloud` + `obsutil` are installed, without an OBS SDK dependency.
+
+**前置依赖（Prerequisite）:** `huawei_analyze_clouddeploy_artifact` assumes the deployment
+task/application has **already been configured with an OBS artifact source**. This is a
+console-side prerequisite — this skill only **verifies** the artifact; it does **not** provide the
+capability to configure the artifact source (configuring the source must be done in the CodeArts
+Deploy console, in the deployment steps of the task/application).
+
+**任务未配置制品源场景:** If the task steps' `params` is **empty** (no OBS artifact source is
+configured), do NOT continue to `hcloud obs ls`. Instead, clearly tell the user:
+**「该任务未配置 OBS 制品源，无法验证对应制品；请在控制台配置制品源后再验证」**.
 
 Expected results: task shows an OBS artifact source; `ls` returns the object. If `hcloud obs` prints
 `Warn: Please set ak, sk and endpoint in the configuration file!`, obsutil has not been configured
@@ -267,11 +285,27 @@ skill-quality-cli run --skill-name huawei-cloud-deployment-task-management -- hc
 ```bash
 # Create a deployment task from a template (task must reference an existing application/project)
 skill-quality-cli run --skill-name huawei-cloud-deployment-task-management -- hcloud CodeArtsDeploy CreateDeployTaskByTemplate --cli-region={region} --project_id={project_id} --project_name={project_name} --task_name={task_name} --template_id={template_id} [--configs.1.name={param_name} --configs.1.value={param_value} ...]
+
+# encrypt-typed config MUST be paired with --configs.N.static_status=1 (otherwise Deploy.00011374)
+skill-quality-cli run --skill-name huawei-cloud-deployment-task-management -- hcloud CodeArtsDeploy CreateDeployTaskByTemplate --cli-region={region} --project_id={project_id} --project_name={project_name} --task_name={task_name} --template_id={template_id} --configs.1.name={db_password} --configs.1.value={secret_value} --configs.1.type=encrypt --configs.1.static_status=1
+
+# enum-typed config MUST enumerate the allowed values via --configs.N.limits.N.name (otherwise Deploy.00015002)
+skill-quality-cli run --skill-name huawei-cloud-deployment-task-management -- hcloud CodeArtsDeploy CreateDeployTaskByTemplate --cli-region={region} --project_id={project_id} --project_name={project_name} --task_name={task_name} --template_id={template_id} --configs.1.name={env_type} --configs.1.value=prod --configs.1.type=enum --configs.1.limits.1.name=dev --configs.1.limits.2.name=prod --configs.1.limits.3.name=stage
 ```
 
 > Preview before executing: show the exact command and the task to be created, then wait for user
 > confirmation (R2). The template determines the deployment steps; the application (project) must
 > already exist (create it first with `huawei_create_clouddeploy_app`).
+>
+> **encrypt/enum 配套参数（必填，见下方 CreateDeployTaskByTemplate 参数表）：**
+> - `type=encrypt` 时**必须**同时传 `--configs.N.static_status=1`，否则报 `Deploy.00011374`
+>   参数异常（加密参数必须固定，部署期间不允许变更）；
+> - `type=enum` 时**必须**通过 `--configs.N.limits.N.name` 逐一列出可选值，否则报
+>   `Deploy.00015002` 参数异常。
+>
+> **`--template_id` 来源注意：** 任务详情接口（`ShowAppDetailById` / `ShowDeployTaskDetail`）返回的
+> `template_id` **不可直接用于本接口**（cannot be reused directly），必须到 CodeArts Deploy 控制台
+> 「应用模板」tab 重新获取。
 
 ### Manage — Start Deployment (R2, preview + confirm)
 
@@ -328,7 +362,14 @@ All parameter names below were verified against `hcloud CodeArtsDeploy <Operatio
 | `--page` | Yes | integer | Page number, ≥ 1 |
 | `--size` | Yes | integer | Items per page, ≤ 100 |
 
-### ShowDeployTaskDetail
+### ShowAppDetailById
+
+| Parameter | Required | Type | Description |
+|-----------|----------|------|-------------|
+| `--cli-region` | Yes (auto) | string | Region where the API can be called |
+| `--app_id` | Yes | string | Application (deployment task) ID |
+
+### ShowDeployTaskDetail (fallback — deprecated after 2024-09-30)
 
 | Parameter | Required | Type | Description |
 |-----------|----------|------|-------------|
@@ -378,7 +419,7 @@ All parameter names below were verified against `hcloud CodeArtsDeploy <Operatio
 | `--project_id` | Yes | string | CodeArts project ID |
 | `--project_name` | Yes | string | Project name |
 | `--task_name` | Yes | string | Task (application) name |
-| `--template_id` | Yes | string | Deployment template ID — obtained from the **CodeArts Deploy console 模板库** when creating an app from a template (no CLI list operation exists for deploy templates; `ShowTemplate`/`ListTemplates` are not supported operations) |
+| `--template_id` | Yes | string | Deployment template ID — obtained from the **CodeArts Deploy console 模板库** when creating an app from a template (no CLI list operation exists for deploy templates; `ShowTemplate`/`ListTemplates` are not supported operations). This template ID is **project-scoped** (项目作用域): it is only valid within its own project and cannot be reused or shared across projects |
 | `--configs.[N].name` | No | string | Deployment parameter name |
 | `--configs.[N].value` | No | string | Deployment parameter value |
 | `--configs.[N].type` | No | string | `text`\|`host_group`\|`enum`\|`encrypt` (mandatory if `name` is set) |
