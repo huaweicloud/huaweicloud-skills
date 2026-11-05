@@ -22,6 +22,33 @@ sys.path.insert(0, _this_dir)
 from spark_sql_tokenizer import tokenize, TokenType
 from spark_sql_parser import parse_sql
 from keywords import is_keyword, is_reserved_keyword, KeywordCategory
+from grammar_rules import CLAUSE_ORDER_MAP
+
+# 其他方言常见但 Spark SQL 不支持的关键字（用于 SYN001 无效关键字检测）
+NON_SPARK_KEYWORDS = {
+    "AUTO_INCREMENT", "ENGINE", "CHARSET", "UNSIGNED", "ZEROFILL",
+    "DATETIME", "MEDIUMINT", "TINYTEXT", "LONGTEXT", "SEQUENCE",
+    "NEXTVAL", "ROWNUM", "SYSDATE", "IDENTITY", "SERIAL",
+    "VARCHAR2", "NUMBER", "CLOB", "NCLOB", "BLOB", "RAW",
+}
+
+# 各检查阶段实际实现的规则 ID 集合，用于动态统计 total_rules
+SYNTAX_RULE_IDS = frozenset([
+    "SYN-ERR", "SYN001", "SYN002", "SYN003", "SYN004", "SYN005", "SYN006",
+    "SYN007", "SYN008", "SYN009", "SYN010", "SYN011", "SYN012", "SYN013",
+    "SYN014", "SYN016", "SYN017", "SYN018", "SYN019", "SYN020",
+])
+SPEC_RULE_IDS = frozenset([
+    "SPEC001", "SPEC002", "SPEC003", "SPEC004", "SPEC005", "SPEC006",
+    "SPEC007", "SPEC008", "SPEC009", "SPEC010", "SPEC012", "SPEC013",
+    "SPEC014", "SPEC015", "SPEC016", "SPEC017", "SPEC018", "SPEC019",
+    "SPEC020", "SPEC021", "SPEC022", "SPEC023", "SPEC024", "SPEC025",
+    "SPEC026", "SPEC027", "SPEC028", "SPEC029",
+])
+INTERCEPT_RULE_IDS = frozenset([
+    "INTERCEPT001", "INTERCEPT002", "INTERCEPT003", "INTERCEPT004",
+    "INTERCEPT005", "INTERCEPT006", "INTERCEPT007",
+])
 
 
 class Violation:
@@ -146,6 +173,35 @@ class SparkSQLChecker:
                         fix_suggestion=f"使用 `{t.value}` 替代 {t.value}，或更换标识符名称",
                     ))
 
+        # SYN001: Invalid keyword (not supported by Spark SQL)
+        for t in tokens:
+            if t.type == TokenType.IDENT and t.value.upper() in NON_SPARK_KEYWORDS:
+                self.violations.append(Violation(
+                    rule_id="SYN001",
+                    rule_name="无效关键字使用",
+                    level="ERROR",
+                    category="语法检查",
+                    message=f"关键字 '{t.value}' 不是 Spark SQL 支持的关键字（可能来自 MySQL/Oracle/PostgreSQL 等其他方言）",
+                    line=t.line,
+                    column=t.column,
+                    sql_snippet=self._get_snippet(t.line, t.column),
+                    fix_suggestion="查阅 Spark SQL 参考手册确认支持的关键字，或移除该方言专属语法",
+                ))
+
+        # SYN004: Clause ordering error
+        self._check_clause_order(tokens)
+
+        # SYN011: Subquery syntax error (unbalanced parentheses in subquery)
+        if self._has_unbalanced_subquery_parens(tokens):
+            self.violations.append(Violation(
+                rule_id="SYN011",
+                rule_name="子查询语法错误",
+                level="ERROR",
+                category="语法检查",
+                message="子查询括号未闭合或存在多余括号",
+                fix_suggestion="检查子查询是否正确使用括号包裹且括号成对闭合",
+            ))
+
         # SYN003: Parse errors
         for err in self.parse_result.get("errors", []):
             self.violations.append(Violation(
@@ -260,6 +316,20 @@ class SparkSQLChecker:
                         category="语法检查",
                         message=f"无效的数据源 '{using}'",
                         fix_suggestion="使用 PARQUET/ORC/JSON/CSV/TEXT/JDBC/AVRO/DELTA/LIBSVM/BINARYFILE",
+                    ))
+
+        # SYN008: ROW FORMAT syntax check (Hive-compat)
+        if ast and ast.get("node_type") == "CreateStmt":
+            row_format = ast.get("row_format")
+            if row_format:
+                if not self._validate_row_format(row_format):
+                    self.violations.append(Violation(
+                        rule_id="SYN008",
+                        rule_name="ROW FORMAT 语法错误",
+                        level="ERROR",
+                        category="语法检查",
+                        message=f"ROW FORMAT 定义语法不合法: '{row_format}'",
+                        fix_suggestion="使用 ROW FORMAT SERDE '类名' 或 ROW FORMAT DELIMITED [FIELDS/LINES ...]",
                     ))
 
         # SYN009: INSERT OVERWRITE syntax check
@@ -382,7 +452,7 @@ class SparkSQLChecker:
 
         # SYN019: REFRESH syntax check
         if ast and ast.get("node_type") == "RefreshStmt":
-            if not ast.get("target"):
+            if not (ast.get("object_name") or ast.get("target")):
                 self.violations.append(Violation(
                     rule_id="SYN019",
                     rule_name="REFRESH 语法错误",
@@ -604,7 +674,7 @@ class SparkSQLChecker:
             self.violations.append(Violation(
                 rule_id="SPEC006",
                 rule_name="分区字段使用函数",
-                level="ERROR",
+                level="WARNING",
                 category="数据操作规范",
                 message="WHERE 条件中对分区字段使用函数，导致无法使用分区裁剪",
                 fix_suggestion="使用范围条件替代函数，如 WHERE dt >= '20240501' AND dt < '20240601'",
@@ -695,7 +765,7 @@ class SparkSQLChecker:
             self.violations.append(Violation(
                 rule_id="SPEC022",
                 rule_name="缺少分区裁剪",
-                level="INFO",
+                level="ERROR",
                 category="数据操作规范",
                 message="分区表查询未使用分区过滤条件，将导致全分区扫描",
                 fix_suggestion="添加分区过滤条件，如 WHERE dt='20240501'",
@@ -801,6 +871,17 @@ class SparkSQLChecker:
                 fix_suggestion="将多个 COUNT(DISTINCT) 拆分为多个子查询，利用 UNION ALL 合并结果",
             ))
 
+        # INTERCEPT002: NOT IN subquery
+        if self._has_not_in_subquery(tokens):
+            self.violations.append(Violation(
+                rule_id="INTERCEPT002",
+                rule_name="NOT IN 子查询检测",
+                level="WARNING",
+                category="大SQL拦截",
+                message="SQL 中使用了 NOT IN 子查询，性能差且 NULL 值会导致结果异常",
+                fix_suggestion="使用 NOT EXISTS 或 LEFT JOIN + IS NULL 替代",
+            ))
+
         # INTERCEPT003: JOIN count over limit
         join_count = self._count_joins(tokens)
         if join_count > 20:
@@ -849,9 +930,103 @@ class SparkSQLChecker:
                 fix_suggestion="将复杂 SQL 拆分为多个简单 SQL 或使用中间表",
             ))
 
+        # INTERCEPT007: Cartesian product
+        if self._has_cartesian_product(tokens) == "cartesian":
+            self.violations.append(Violation(
+                rule_id="INTERCEPT007",
+                rule_name="笛卡尔积检测",
+                level="ERROR",
+                category="大SQL拦截",
+                message="多表关联时存在笛卡尔积，会导致数据膨胀，大量占用集群资源",
+                fix_suggestion="添加 JOIN 关联条件",
+            ))
+
     # ============================================================
     # Pattern Detection Helpers
     # ============================================================
+
+    def _check_clause_order(self, tokens):
+        """SYN004: Verify top-level clause order against CLAUSE_ORDER_MAP.
+
+        Only applied to SELECT statements, whose clause order (WITH -> SELECT ->
+        FROM -> WHERE -> GROUP/HAVING -> ORDER -> LIMIT) is unambiguous.
+        """
+        stmt_type = self.parse_result.get("statement_type", "") if self.parse_result else ""
+        if stmt_type != "SELECT":
+            return
+        expected = CLAUSE_ORDER_MAP.get(stmt_type)
+        if not expected:
+            return
+
+        # Position of each expected clause keyword (first occurrence, top-level only)
+        first_occurrence = {}
+        depth = 0
+        for t in tokens:
+            if t.type == TokenType.SEMICOLON:
+                break
+            if t.type == TokenType.LPAREN:
+                depth += 1
+                continue
+            if t.type == TokenType.RPAREN:
+                depth = max(0, depth - 1)
+                continue
+            if depth > 0:
+                continue
+            if t.type == TokenType.KEYWORD:
+                upper = t.value.upper()
+                if upper in expected and upper not in first_occurrence:
+                    first_occurrence[upper] = len(first_occurrence)
+
+        # Verify occurrence order matches the expected sequence strict order
+        found_order = [(first_occurrence[kw], idx)
+                       for idx, kw in enumerate(expected) if kw in first_occurrence]
+        found_order.sort()
+        for i in range(1, len(found_order)):
+            if found_order[i][1] < found_order[i - 1][1]:
+                prev_kw = expected[found_order[i - 1][1]]
+                cur_kw = expected[found_order[i][1]]
+                self.violations.append(Violation(
+                    rule_id="SYN004",
+                    rule_name="子句顺序错误",
+                    level="ERROR",
+                    category="语法检查",
+                    message=f"子句顺序不符合语法规范: '{cur_kw}' 出现在 '{prev_kw}' 之前",
+                    fix_suggestion=f"按照正确顺序重排 SQL 子句: {' → '.join(expected)}",
+                ))
+                return
+
+    def _has_unbalanced_subquery_parens(self, tokens):
+        """Check for unbalanced parentheses indicating a malformed subquery."""
+        depth = 0
+        for t in tokens:
+            if t.type == TokenType.LPAREN:
+                depth += 1
+            elif t.type == TokenType.RPAREN:
+                depth -= 1
+                if depth < 0:
+                    return True
+        return depth != 0
+
+    def _validate_row_format(self, row_format):
+        """Validate a ROW FORMAT definition (Hive-compat).
+        Valid: ROW FORMAT SERDE 'class' [WITH SERDEPROPERTIES (...)]
+               ROW FORMAT DELIMITED [FIELDS|COLLECTION|MAP KEYS|LINES ...]
+        """
+        text = row_format.strip()
+        if not text:
+            return False
+        first_word = re.split(r'\s+', text, maxsplit=1)[0].upper()
+        if first_word not in ("SERDE", "DELIMITED"):
+            return False
+        # SERDE form requires a quoted class name; DELIMITED requires at least one sub-clause
+        if first_word == "SERDE":
+            m = re.search(r"['\"]([^'\"]+)['\"]", text)
+            if not m:
+                return False
+        else:
+            if not re.search(r'(FIELDS|COLLECTION|MAP\s+KEYS|LINES)', text, re.IGNORECASE):
+                return False
+        return True
 
     def _is_valid_naming(self, name):
         """Check if name follows naming convention (lowercase + underscore)"""
@@ -1256,6 +1431,33 @@ class SparkSQLChecker:
             i += 1
         return tables
 
+    def _has_not_in_subquery(self, tokens):
+        """Check for NOT IN (SELECT ...) subquery pattern"""
+        i = 0
+        while i < len(tokens):
+            if tokens[i].is_keyword("NOT") and i + 1 < len(tokens):
+                if tokens[i + 1].is_keyword("IN"):
+                    # Find opening paren
+                    j = i + 2
+                    while j < len(tokens) and tokens[j].type not in (TokenType.LPAREN, TokenType.SEMICOLON):
+                        j += 1
+                    if j < len(tokens) and tokens[j].type == TokenType.LPAREN:
+                        # Check if it contains a subquery (SELECT)
+                        depth = 0
+                        k = j
+                        while k < len(tokens):
+                            if tokens[k].type == TokenType.LPAREN:
+                                depth += 1
+                            elif tokens[k].type == TokenType.RPAREN:
+                                depth -= 1
+                                if depth == 0:
+                                    break
+                            elif depth == 1 and tokens[k].is_keyword("SELECT"):
+                                return True
+                            k += 1
+            i += 1
+        return False
+
     def _has_partition_table_without_filter(self, tokens):
         """Check for partitioned table query without partition filter."""
         if not self._partitioned_tables:
@@ -1546,7 +1748,12 @@ class SparkSQLChecker:
         warnings = [v for v in self.violations if v.level == "WARNING"]
         infos = [v for v in self.violations if v.level == "INFO"]
 
-        total_rules = 56  # 20 syntax + 29 spec + 7 interception (approx)
+        # 动态计算当前模式下已实现规则的规则总数
+        total_rules = 0
+        if self.check_mode in ("syntax", "all"):
+            total_rules += len(SYNTAX_RULE_IDS)
+        if self.check_mode in ("spec", "all"):
+            total_rules += len(SPEC_RULE_IDS) + len(INTERCEPT_RULE_IDS)
         passed = total_rules - len(self.violations)
         if passed < 0:
             passed = 0
