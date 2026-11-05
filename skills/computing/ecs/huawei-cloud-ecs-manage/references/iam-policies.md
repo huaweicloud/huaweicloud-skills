@@ -1,9 +1,9 @@
 # IAM Policies — Least Privilege for huawei-cloud-ecs-manage
 
 This skill requires IAM permissions on the ECS service (service prefix `ecs`) plus read-only
-permissions on IMS (images), VPC (subnets / security groups), EIP (public IPs) and EVS (volumes),
-which the diagnosis flow cross-checks. Grant the **minimum** permissions per capability group.
-All policies are region-scoped (ECS is a regional service; instances belong to a project).
+permissions on IMS (images), VPC (subnets / security groups), EIP (public IPs), KPS (keypairs) and
+EVS (volumes), which the diagnosis flow cross-checks. Grant the **minimum** permissions per capability
+group. All policies are region-scoped (ECS is a regional service; instances belong to a project).
 
 The action names below follow the Huawei Cloud 「权限及授权项」 naming (`service:resource_type:action`)
 and reuse only action names already verified in the official ECS/IMS/VPC/EVS permission catalogues
@@ -32,7 +32,8 @@ Covers: `huawei_list_ecs_instances`, `huawei_get_ecs_instance`, `huawei_list_ecs
         "vpc:subnets:list",
         "vpc:securityGroups:list",
         "vpc:publicIps:list",
-        "evs:volumes:list"
+        "evs:volumes:list",
+        "kps:keypairs:list"
       ],
       "Resource": ["*"]
     }
@@ -45,11 +46,11 @@ Covers: `huawei_list_ecs_instances`, `huawei_get_ecs_instance`, `huawei_list_ecs
 > - `ims:images:list` is required by `huawei_list_ecs_images` / diagnosis step 3 (image check).
 > - `vpc:subnets:list`, `vpc:securityGroups:list`, `vpc:publicIps:list` and `evs:volumes:list`
 >   are required by diagnosis steps 4/6 and by `huawei_analyze_ecs_health`.
-> - **Keypair check (diagnosis step 5)**: the keypair read permission name differs between the
->   ECS Nova keypair API and the KPS (Key Pair Service) API. If `hcloud KPS ListKeypairs` returns
->   a 403, ask the IAM admin to grant the documented keypair read permission from the ECS/KPS
->   「权限及授权项」 pages (do not guess the action name). The diagnosis flow degrades gracefully:
->   a 403 on step 5 is reported as "cannot verify keypair — check IAM permission", not as a failure.
+> - **Keypair check (diagnosis step 5)**: `hcloud KPS ListKeypairs` requires the KPS keypair
+>   read permission `kps:keypairs:list` (Key Pair Service 「权限及授权项」). It is declared in
+>   the policy JSON above; without it step 5 returns 403. The diagnosis flow degrades
+>   gracefully: a 403 on step 5 is reported as "cannot verify keypair — check IAM permission",
+>   not as a failure.
 
 ## 2. Manage (R2 — create / start / stop / restart)
 
@@ -101,7 +102,10 @@ Covers: `huawei_delete_ecs_instance`.
         "ecs:cloudServers:get",
         "ecs:cloudServers:list",
         "ecs:serverVolumes:list",
-        "evs:volumes:list"
+        "evs:volumes:list",
+        "evs:volumes:delete",
+        "vpc:publicIps:list",
+        "vpc:publicIps:delete"
       ],
       "Resource": ["*"]
     }
@@ -109,16 +113,32 @@ Covers: `huawei_delete_ecs_instance`.
 }
 ```
 
-> `huawei_delete_ecs_instance` uses `DeleteServers` path; `--delete_volume=true` additionally
-> requires EVS delete permission (`evs:volumes:delete`) — grant it only when the user explicitly
-> wants volume deletion together with the instance.
+> `huawei_delete_ecs_instance` uses `DeleteServers` path; the delete policy therefore declares:
+> - `evs:volumes:delete` — required when `--delete_volume=true` (release bound volumes together);
+>   skip this action if volume deletion is never used.
+> - `vpc:publicIps:delete` — required when `--delete_publicip=true` (release bound EIP together);
+>   `vpc:publicIps:list` covers the read side. Skip the delete action if EIP deletion is never used.
 
 ## 4. System policy alternative
 
 For a read-only operator that only needs query + diagnosis, the predefined system policy
 `ECS ReadOnlyAccess` (弹性云服务器只读权限) can be used instead of section 1 — it covers the ECS
 read actions; IMS/VPC/EVS reads may still need their own read policies (`IMS ReadOnlyAccess`,
-`VPC ReadOnlyAccess`, `EVS ReadOnlyAccess`) for the cross-service checks.
+`VPC ReadOnlyAccess`, `EVS ReadOnlyAccess`) for the cross-service checks. The KPS keypair read used
+by diagnosis step 5 (`kps:keypairs:list`) is likewise not part of `ECS ReadOnlyAccess`; grant that
+action explicitly when the keypair check must not degrade to a permission warning.
+
+## 5. Change operations (SKILL.md §5)
+
+The change operations added for issue #931 act on an existing instance and therefore reuse the
+read/action permissions above (`ecs:cloudServers:get` / `:list`, `ecs:cloudServers:action`, plus the
+`vpc:publicIps:*` and `evs:*` reads the preflight checks need). The per-API write action names for
+resize / reinstall / password reset / keypair / security group / NIC / volume attach-detach, and the
+EIP bind-unbind pair, must be copied from the official **ECS** and **EIP** 「权限及授权项」
+catalogues for the exact API before granting them: this document deliberately does not guess action
+names that were not verified against a catalogue. If a change operation returns 403 while the read
+actions work, that is the missing write action — look it up in the catalogue instead of widening the
+policy to `ECS FullAccess`.
 
 ## Security notes
 

@@ -7,6 +7,8 @@ flowchart TD
     C -->|query / diagnose| Q1[Read-only: build hcloud command]
     C -->|create / start / stop / restart| M2[Manage R2: preview + dry-run + confirm]
     C -->|delete| M1[Manage R1: verify instance + irreversible warning + confirm]
+    C -->|resize / reinstall / password / keypair / bind EIP / SG / add NIC / attach or detach volume| M3[Manage change op R2: preflight + preview + confirm]
+    C -->|unbind EIP / remove NIC / retire old keypair| M4[Manage change op R1: show attachments + impact + confirm]
 
     subgraph Query [R3 Query - auto execute]
         Q1 --> L1[hcloud ECS ListServersDetails]
@@ -21,7 +23,7 @@ flowchart TD
         D2 -->|ok| D3[Step 3 Image: IMS ListImages]
         D3 -->|ok| D4[Step 4 Network: VPC ListSubnets / ListSecurityGroups / EIP ListPublicips]
         D4 -->|ok| D5[Step 5 Keypair: KPS ListKeypairs]
-        D5 -->|ok| D6[Step 6 Disk: EVS ListVolumes]
+        D5 -->|ok| D6[Step 6 Disk: EVS ListVolumes + CinderListQuotas]
         D1 -.fail.-> R1[Root cause: quota]
         D2 -.fail.-> R2[Root cause: flavor]
         D3 -.fail.-> R3c[Root cause: image]
@@ -33,14 +35,29 @@ flowchart TD
         J -->|no| P[Report param-level API error + retry suggestion]
     end
 
-    subgraph Manage [Manage]
+    subgraph Manage [Manage - every write returns a job_id]
         M2 --> X[Execute create / start / stop / restart]
         M1 --> Y[Execute DeleteServers]
+        M3 --> W[Execute ResizeServer / ReinstallServerWithCloudInit / ResetServerPassword /<br/>NovaCreateKeypair / EIP AssociatePublicips / NovaAssociateSecurityGroup /<br/>BatchAddServerNics / AttachServerVolume / DetachServerVolume]
+        M4 --> V[Execute EIP DisassociatePublicips / BatchDeleteServerNics / NovaDeleteKeypair]
     end
 
-    Query --> Out[JSON summary + readable report]
+    X --> P1[Step 6 Poll async job: ECS ShowJob until SUCCESS / FAIL]
+    Y --> P1
+    W --> P1
+    V --> P1
+
+    P1 -->|SUCCESS| P2{Action was create?}
+    P1 -->|FAIL| PF[Report fail_reason + failed sub-job - stop, do not retry blindly]
+    P1 -.timeout.-> PT[Report still running: job_id=... - never claim success]
+    P2 -->|yes| P3[Poll ECS ShowServer until status=ACTIVE]
+    P2 -->|no| Out[JSON summary + readable report with the FINAL state]
+    P3 --> Out
+    PF --> Out
+    PT --> Out
+
+    Query --> Out
     Diag --> Out
-    Manage --> Out
     Out --> QCLI[skill-quality-cli run wraps every hcloud call - telemetry]
 ```
 
@@ -49,3 +66,9 @@ disk); stop at the first failing check and report that root cause with evidence 
 suggestion. If every check passes but the create request still failed, report the exact API
 error body from the request parameters (or the `ShowJob` result when a job id exists) and
 suggest a retry.
+
+Write flow rule: **no write action is complete until its job reaches a terminal state.** Every
+write (create / start / stop / restart / delete and all eight change-operation groups) returns a
+`job_id` immediately, so the flow always continues into "Step 6 Poll async job". A `create` needs
+the extra `ShowServer` poll until the instance is `ACTIVE`; every other write is confirmed by the
+job alone. Report the status observed *after* polling — never the intermediate one.

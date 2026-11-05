@@ -93,8 +93,8 @@
     {
       "id": "TC-12",
       "name": "诊断-密钥对检查: KPS 密钥对列表",
-      "command": "hcloud KPS ListKeypairs --cli-region=cn-north-4 --limit=5",
-      "expected": "返回 keypairs 数组，无 error_code；403 时记为权限受限并降级提示",
+      "command": "hcloud KPS ListKeypairs --cli-region=cn-north-4",
+      "expected": "返回 keypairs 数组，无 error_code；403 时记为权限受限并降级提示（需 kps:keypairs:list）",
       "type": "readonly",
       "executor": "cli"
     },
@@ -161,8 +161,96 @@
       "expected": "帮助信息正常输出，servers.N.id 与 delete_publicip/delete_volume 参数存在",
       "type": "syntax",
       "executor": "cli"
+    },
+    {
+      "id": "TC-21",
+      "name": "变更规格 huawei_resize_ecs_instance（写操作）",
+      "command": "hcloud ECS ResizeServer --cli-region=cn-north-4 --server_id={server_id} --resize.flavorRef={flavor_id}",
+      "expected": "写操作，绝不自动执行；需先展示 preview（当前规格 -> 目标规格）并人工确认；可加 --dry_run=true 预检；执行后轮询 ECS ShowJob 至 SUCCESS/FAIL",
+      "type": "write",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-22",
+      "name": "重装系统 huawei_reinstall_ecs_os（写操作）",
+      "command": "hcloud ECS ReinstallServerWithCloudInit --cli-region=cn-north-4 --server_id={server_id} --os-reinstall.keyname={keypair_name} --os-reinstall.userid={user_id}",
+      "expected": "写操作，绝不自动执行；不存在 hcloud ECS ReinstallServer，正确 operation 为 ReinstallServerWithCloudInit；传入 --os-reinstall.keyname 时 --os-reinstall.userid 为必选；系统盘被重建（数据盘保留），需人工确认",
+      "type": "write",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-23",
+      "name": "重置密码 huawei_reset_ecs_password（写操作）",
+      "command": "hcloud ECS ResetServerPassword --cli-region=cn-north-4 --server_id={server_id} --reset-password.new_password={new_password}",
+      "expected": "写操作，绝不自动执行；需人工确认；密码占位符禁止回显或写入日志；执行后需重启实例才生效",
+      "type": "write",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-24",
+      "name": "替换密钥对 huawei_replace_ecs_keypair（写操作）",
+      "command": "hcloud ECS NovaCreateKeypair --cli-region=cn-north-4 --keypair.name={keypair_name}",
+      "expected": "写操作，绝不自动执行；私钥仅返回一次，需人工确认并妥善保存；删除旧密钥对用 hcloud ECS NovaDeleteKeypair --keypair_name={old_keypair_name}（不可逆，R1）",
+      "type": "write",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-25",
+      "name": "绑定 EIP huawei_bind_ecs_eip（写操作）",
+      "command": "hcloud EIP AssociatePublicips --cli-region=cn-north-4 --publicip_id={publicip_id} --publicip.associate_instance_type=PORT --publicip.associate_instance_id={port_id}",
+      "expected": "写操作，绝不自动执行；EIP 绑定归属 EIP 服务（非 ECS/VPC）；需人工确认实例网卡 port_id 与公网 IP；无需 EIP 时不得创建新 EIP",
+      "type": "write",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-26",
+      "name": "解绑 EIP huawei_unbind_ecs_eip（写操作，不可逆）",
+      "command": "hcloud EIP DisassociatePublicips --cli-region=cn-north-4 --publicip_id={publicip_id}",
+      "expected": "写操作，绝不自动执行；解绑后实例立即失去公网访问，需人工确认；R1 不可逆",
+      "type": "write",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-27",
+      "name": "变更安全组 huawei_change_ecs_security_group（写操作）",
+      "command": "hcloud ECS NovaAssociateSecurityGroup --cli-region=cn-north-4 --server_id={server_id} --addSecurityGroup.name={security_group_name}",
+      "expected": "写操作，绝不自动执行；需人工确认；移除旧安全组用 hcloud ECS NovaDisassociateSecurityGroup --removeSecurityGroup.name={old_security_group_name}；只调整实例绑定的安全组，不修改安全组资源本身",
+      "type": "write",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-28",
+      "name": "添加网卡 huawei_add_ecs_nic（写操作）",
+      "command": "hcloud ECS NovaAttachInterface --cli-region=cn-north-4 --server_id={server_id} --interfaceAttachment.net_id={network_id}",
+      "expected": "写操作，绝不自动执行；需人工确认；net_id 为 Network ID（也可用 --interfaceAttachment.port_id）；批量添加用 hcloud ECS BatchAddServerNics --nics.1.subnet_id={subnet_id}",
+      "type": "write",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-29",
+      "name": "删除网卡 huawei_remove_ecs_nic（写操作，不可逆）",
+      "command": "hcloud ECS NovaDetachInterface --cli-region=cn-north-4 --server_id={server_id} --port_id={port_id}",
+      "expected": "写操作，绝不自动执行；需人工确认；主网卡返回 403；批量删除用 hcloud ECS BatchDeleteServerNics --nics.1.id={port_id}；R1 不可逆",
+      "type": "write",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-30",
+      "name": "挂载云硬盘 huawei_attach_ecs_volume（写操作）",
+      "command": "hcloud ECS AttachServerVolume --cli-region=cn-north-4 --server_id={server_id} --volumeAttachment.volumeId={volume_id} --volumeAttachment.device=/dev/vdb",
+      "expected": "写操作，绝不自动执行；可加 --dry_run=true 预检；需人工确认磁盘 ID 与挂载点，避免与已有挂载点冲突；本操作只挂载已有磁盘",
+      "type": "write",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-31",
+      "name": "卸载云硬盘 huawei_detach_ecs_volume（写操作）",
+      "command": "hcloud ECS DetachServerVolume --cli-region=cn-north-4 --server_id={server_id} --volume_id={volume_id}",
+      "expected": "写操作，绝不自动执行；R2：需人工确认，并提示先在 guest OS 内 umount；--delete_flag=1 会删除数据盘，默认 0 不删除",
+      "type": "write",
+      "executor": "cli"
     }
   ],
   "env_vars_required": ["HUAWEICLOUD_SDK_AK", "HUAWEICLOUD_SDK_SK"],
-  "notes": "TC-16/17/18/19/20 为写操作或写操作参数校验：仅 dry-run 或 --help 执行，禁止自动执行真实写操作；真实生命周期测试（create->start->stop->restart->delete）需测试人员确认并清理资源。{server_id}/{flavor_id}/{image_id}/{vpc_id} 需在运行时填充真实值。凭证 401(APIGW.0301) 时只读用例记为 blocked-env，不算技能缺陷。"
+  "notes": "TC-16/17/18/19/20 为写操作或写操作参数校验：仅 dry-run 或 --help 执行，禁止自动执行真实写操作；真实生命周期测试（create->start->stop->restart->delete）需测试人员确认并清理资源。TC-21 至 TC-31 为 issue #931 新增的 11 个变更操作（R2/R1），type=write：绝不自动执行，必须先展示 preview 并取得人工确认，执行后按 references/verification-method.md 第 3 节轮询 hcloud ECS ShowJob 至 SUCCESS/FAIL。{server_id}/{flavor_id}/{image_id}/{vpc_id}/{network_id}/{subnet_id}/{port_id}/{publicip_id}/{volume_id}/{keypair_name}/{old_keypair_name}/{user_id}/{security_group_name}/{old_security_group_name}/{new_password} 需在运行时填充真实值，密码类占位符禁止回显。凭证 401(APIGW.0301) 时只读用例记为 blocked-env，不算技能缺陷。"
 }
