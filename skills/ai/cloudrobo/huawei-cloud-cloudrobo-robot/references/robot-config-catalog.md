@@ -16,6 +16,20 @@ Required fields: `name`, `type`, `workspace_id`
 > `manufacturer` and `robot_model` are required in the current feature design. The `description`
 > field is optional.
 
+## robot_id format
+
+The `robot_id` returned by `create` and referenced by `show`/`update`/`delete`/`export-certificate`
+is a **32-character lowercase hex string without hyphens** — pattern `^[0-9a-f]{32}$`. Example:
+
+`a120e27ac92b4b8c8021a3e0d675e4a6`
+
+- The CLI validates `robot_id` against `^[0-9a-f]{32}$` (see `PATH_PARAM_RULES.robot_id` in the
+  generated schema) and rejects hyphenated UUIDs with a `BadParameter` error.
+- Do **not** confuse it with `workspace_id`, which is a **hyphenated UUID**
+  (e.g. `w1b2c3d4-e5f6-7890-g1h2-i3j4k5l6m7n8`).
+- When writing docs/examples, use 32hex-style values for `robot_id` and UUID-style values for
+  `workspace_id`.
+
 ## robot_type enum
 
 | Value | Description |

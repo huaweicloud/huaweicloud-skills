@@ -13,11 +13,23 @@ tags:
   - huawei-cloud-cloudrobo
   - robot
   - robot-management
+  - robot-registration
+  - robot-onboarding
+  - robot-type
+  - robot-certificate
+  - export-certificate
+  - robot-sdk
   - asset
   - certificate
   - sdk
-  - robot-registration
-  - robot-onboarding
+  - 机器人注册
+  - 机器人管理
+  - 机器人类型
+  - 机器人证书
+  - 导出证书
+  - 机器人SDK
+  - 机器人型号
+  - 制造商
 ---
 
 > **Windows / PowerShell:** Examples use bash syntax. To run on Windows PowerShell:
@@ -44,6 +56,17 @@ and latest robot-side SDK package retrieval (for software upgrade).
   (dispatch tasks need a `robot_id`) and by robots that run embodied services deployed via
   `cloudrobo-infer`.
 
+**Out of Scope:**
+
+- **Task scheduling / dispatch (调度)** — Running or managing tasks on a robot is **NOT** part of
+  this skill. This skill only registers/manages robots and produces a `robot_id`; to dispatch tasks
+  use the `cloudrobo-dispatch` skill (it accepts the `robot_id` produced here).
+- **Inference service deployment (推理服务部署)** — Deploying models as inference services is
+  **NOT** part of this skill. Resulting robots can run embodied services that were deployed via
+  `cloudrobo-infer`; to deploy such services use that skill.
+- Requests for scheduling or inference deployment should be rejected and redirected to the
+  corresponding skill (`cloudrobo-dispatch` / `cloudrobo-infer`).
+
 **Architecture:**
 
 ```text
@@ -62,6 +85,8 @@ All operations target the `cloudrobo-service` backend and require a valid `works
 asset-level operation (no compute billing); certificate export returns binary content protected
 by a user-provided password.
 
+**Dependency**: Quality telemetry is collected automatically via `skill-quality-cli` (installed by `scripts/ensure_cli.sh` if absent).
+
 ## Prerequisites
 
 - See `references/cli-installation-guide.md` for CLI installation, AK/SK authentication, and
@@ -72,6 +97,11 @@ by a user-provided password.
   **接入配置 (access-config zip / credential bundle)** used in robot-side onboarding. The **本体配置**
   (body config) is already built into `r2c_sdk` or distributed with the robot adapter, and is not
   what `export-certificate` downloads.
+- **`skill-quality-cli`** — ensured by `bash scripts/ensure_cli.sh` (idempotent, skips if present)
+  - Upgrade: run `skill-quality-cli upgrade` manually (no auto-upgrade)
+  - Disable telemetry report: set `SKILL_QUALITY_REPORT=0`
+
+> All `hcloud` commands in this skill are wrapped with `skill-quality-cli run` for telemetry. No manual action required.
 
 ## Workflow
 
@@ -202,7 +232,8 @@ cloudrobo robot <command> [OPTIONS]
 | --------- | ------------- | --------- |
 | Command group | `robot` (registered via entry point) | `cloudrobo robot` |
 | Subcommand | kebab-case | `create`, `export-certificate`, `show-sdk` |
-| Workspace | `--workspace-id <id>` (create/list/update) | `--workspace-id abc-123` |
+| Workspace | `--workspace-id <id>` (create/list/update) | `--workspace-id 6f8a1c2b-3d4e-5f6a-7b8c-9d0e1f2a3b4c` |
+| Robot ID | `--robot-id <id>` (show/update/delete/export-certificate) | `--robot-id a120e27ac92b4b8c8021a3e0d675e4a6` (32-char lowercase hex) |
 | Output format | JSON to stdout | `out(result)` |
 | JSON parameter | Passed as individual flags (e.g. `--name`, `--type`, `--manufacturer`, `--robot-model`) | `create --name r1 --type HUMANOID --manufacturer M --robot-model X` |
 | Dry-run | `--dry-run` (on create/update/delete/export-certificate) | Preview without executing |
@@ -346,6 +377,7 @@ confirmation before execution.
 
 | Scenario | Handling |
 | ---------- | ---------- |
+| Invalid `robot_id` format | `robot_id` must be **32 lowercase hex characters without hyphens** (`^[0-9a-f]{32}$`), e.g. `a120e27ac92b4b8c8021a3e0d675e4a6`. A hyphenated UUID is rejected by the CLI. `workspace_id` is a separate hyphenated UUID — do not mix formats. |
 | Missing `workspace_id` | create/list/update may fall back to default workspace; if none, error with suggestion |
 | Invalid `robot_type` | create rejects values outside HUMANOID/QUADRUPED/ARM/OPERATION/WHEELED/OTHER |
 | Robot not found | show/update/delete return `ResourceNotFoundError`; verify `robot_id` |
@@ -368,13 +400,13 @@ confirmation before execution.
 ### Specification Compliance Verification
 
 ```bash
-bash scripts/test-cli-commands.sh
+skill-quality-cli run --skill-name huawei-cloud-cloudrobo-robot -- bash scripts/test-cli-commands.sh
 ```
 
 ### Functional Testing
 
 ```bash
-bash scripts/test-cli-commands.sh
+skill-quality-cli run --skill-name huawei-cloud-cloudrobo-robot -- bash scripts/test-cli-commands.sh
 ```
 
 ### Test Cases
