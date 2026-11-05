@@ -214,6 +214,10 @@ class DorisSQLParser:
             return self._parse_create_view()
         if stmt_type == "CREATE_MTMV":
             return self._parse_create_mtmv()
+        if stmt_type == "CREATE_USER":
+            return self._parse_create_user()
+        if stmt_type == "ROUTINE_LOAD":
+            return self._parse_create_routine_load()
         if stmt_type == "CREATE_INDEX":
             return self._parse_create_index()
         if stmt_type == "ALTER_TABLE":
@@ -795,6 +799,176 @@ class DorisSQLParser:
             properties=properties,
         )
 
+    def _create_user_password(self):
+        """
+        Parse the password option of CREATE USER / ALTER USER.
+        Accepted forms (Doris):
+          IDENTIFIED BY 'plaintext'          (or a non-quoted literal like PASSWORD)
+          IDENTIFIED BY PASSWORD 'encrypted'
+          IDENTIFIED WITH plugin BY 'text'   (e.g. mysql_native_password)
+          IDENTIFIED BY 'text' WITH ...      (trailing password-option tokens are consumed)
+        Returns True if a password clause was parsed.
+        """
+        if not self._match_keyword("IDENTIFIED"):
+            return False
+        # IDENTIFIED WITH <plugin> BY ...
+        if self._match_keyword("WITH"):
+            # plugin name (identifier / keyword / backquoted)
+            if self._current().type in (TokenType.IDENTIFIER, TokenType.BACKQUOTED_IDENTIFIER) or \
+               (self._current().type == TokenType.KEYWORD and not is_reserved_keyword(self._current().value)):
+                self._next()
+            if self._match_keyword("BY"):
+                self._consume_password_value()
+            return True
+        # IDENTIFIED BY ...
+        if self._match_keyword("BY"):
+            self._consume_password_value()
+            return True
+        # IDENTIFIED without BY -- e.g. 'IDENTIFIED' alone is incomplete; tolerate
+        return True
+
+    def _consume_password_value(self):
+        """Consume the value after IDENTIFIED BY. Accepts 'literal', PASSWORD, or a bare token."""
+        if self._match_keyword("PASSWORD"):
+            # optionally followed by the actual literal
+            if self._current().type in (TokenType.STRING_LITERAL, TokenType.IDENTIFIER):
+                self._next()
+            return
+        if self._current().type == TokenType.STRING_LITERAL:
+            self._next()
+        elif self._current().type in (TokenType.IDENTIFIER, TokenType.BACKQUOTED_IDENTIFIER):
+            self._next()
+        elif self._current().type == TokenType.KEYWORD and not is_reserved_keyword(self._current().value):
+            self._next()
+        # keep any remaining password-option tokens until a clause keyword / end
+        self._consume_password_options()
+
+    def _consume_password_options(self):
+        """Consume trailing account/password-option tokens, e.g. ACCOUNT LOCK, DEFAULT ROLE ..."""
+        while self._current().type not in (TokenType.EOF, TokenType.SEMICOLON):
+            tok = self._current()
+            # stop at the next major clause keyword we do not treat as part of the option
+            if tok.is_keyword("COMMENT") and self._peek(1).type == TokenType.STRING_LITERAL:
+                break
+            self._next()
+
+    def _parse_create_user(self):
+        """
+        Parse CREATE USER.
+
+        Doris grammar (DorisParser.g4 #createUser):
+          CREATE USER (IF NOT EXISTS)? grantUserIdentify passwordOption* (COMMENT ...)?
+          grantUserIdentify: userIdentify | user='userLiteral' (ATSIGN userHost='userHost')?
+          passwordOption: IDENTIFIED BY 'text' | IDENTIFIED WITH plugin BY 'text'
+                        | IDENTIFIED BY PASSWORD 'text' | (PASSWORD_EXPIRE ...) | (ACCOUNT LOCK|UNLOCK)
+                        | DEFAULT ROLE ...
+        """
+        self._expect_keyword("CREATE")
+        self._expect_keyword("USER")
+        if_not_exists = False
+        if self._match_keyword("IF"):
+            self._expect_keyword("NOT")
+            self._expect_keyword("EXISTS")
+            if_not_exists = True
+
+        # user identity: 'user'@'host' | 'user' | name@host | bare name
+        user = None
+        user_missing = False
+        if not self._is_ident_start(self._current()):
+            user_missing = True
+        if self._current().type in (TokenType.STRING_LITERAL, TokenType.IDENTIFIER,
+                                    TokenType.BACKQUOTED_IDENTIFIER):
+            user = self._current().value
+            self._next()
+            if self._current().type == TokenType.ATSIGN:
+                self._next()
+                host = self._current()
+                if host.type in (TokenType.STRING_LITERAL, TokenType.IDENTIFIER,
+                                 TokenType.BACKQUOTED_IDENTIFIER):
+                    user = f"{user}@{host.value}"
+                    self._next()
+                else:
+                    self._next()  # tolerate % or bare host
+        elif self._current().type == TokenType.KEYWORD and not is_reserved_keyword(self._current().value):
+            user = self._current().value
+            self._next()
+
+        # password options
+        has_password = self._create_user_password()
+
+        # consume any remaining trailing options / COMMENT
+        while self._current().type not in (TokenType.EOF, TokenType.SEMICOLON):
+            if self._match_keyword("COMMENT"):
+                if self._current().type in (TokenType.STRING_LITERAL, TokenType.IDENTIFIER):
+                    self._next()
+                continue
+            # other trailing option tokens (DEFAULT ROLE, ACCOUNT LOCK, PASSWORD_EXPIRE, etc.)
+            self._next()
+
+        self._match_semicolon()
+
+        return ASTNode(
+            "CreateUserStmt",
+            user_name=user,
+            if_not_exists=if_not_exists,
+            has_password=has_password,
+            user_missing=user_missing,
+        )
+
+    def _is_ident_start(self, tok):
+        """Whether a token can begin an (optionally quoted) identifier context."""
+        if tok.type in (TokenType.IDENTIFIER, TokenType.BACKQUOTED_IDENTIFIER, TokenType.STRING_LITERAL):
+            return True
+        if tok.type == TokenType.KEYWORD and not is_reserved_keyword(tok.value):
+            return True
+        return False
+
+    def _parse_create_routine_load(self):
+        """
+        Parse CREATE ROUTINE LOAD.
+
+        Doris grammar (DorisParser.g4 #createRoutineLoadJob):
+          CREATE ROUTINE LOAD routineLoadName=name ON tableName=multipartIdentifier
+              (loadProperty (',' loadProperty)*)?
+              (FROM type=identifier LEFT_PAREN kafkaPropertyList RIGHT_PAREN)?
+              propertyClause? commentSpec?
+
+        A valid ROUTINE LOAD requires at least: a job name, the 'ON' keyword and a target table.
+        """
+        self._expect_keyword("CREATE")
+        self._expect_keyword("ROUTINE")
+        self._expect_keyword("LOAD")
+        if self._is_ident_start(self._current()):
+            # Job name may be qualified (e.g. db.job1); consume the full dotted chain
+            # so the parser advances past '.' and lands on 'ON'.
+            job_name = self._consume_qualified_name()
+        else:
+            self._error("Expected ROUTINE LOAD job name", self._current().line, self._current().column)
+            job_name = None
+
+        # ON <table> is mandatory
+        on_keyword = self._current().is_keyword("ON")
+        if self._match_keyword("ON"):
+            on_keyword = True
+            table = self._consume_qualified_name()
+            if not table:
+                self._error("Expected table name after ROUTINE LOAD ... ON",
+                            self._current().line, self._current().column)
+        else:
+            table = None
+
+        # Consume the remaining load properties / FROM clause / PROPERTIES / COMMENT
+        while self._current().type not in (TokenType.EOF, TokenType.SEMICOLON):
+            self._next()
+
+        self._match_semicolon()
+        return ASTNode(
+            "CreateRoutineLoadStmt",
+            job_name=job_name,
+            on_keyword=on_keyword,
+            table=table,
+        )
+
     def _parse_create_index(self):
         """Parse CREATE INDEX"""
         self._expect_keyword("CREATE")
@@ -928,26 +1102,135 @@ class DorisSQLParser:
                         to_path=path, properties=properties)
 
     def _parse_grant_revoke(self, stmt_type):
-        """Parse GRANT/REVOKE"""
+        """
+        Parse GRANT/REVOKE.
+
+        Doris grammar (DorisParser.g4):
+          GRANT privilegeList ON multipartIdentifierOrAsterisk TO (user | ROLE ...)
+          GRANT privilegeList ON (RESOURCE|CLUSTER|COMPUTE GROUP|STAGE|STORAGE VAULT|WORKLOAD GROUP) name TO ...
+          GRANT roles TO user
+          REVOKE privilegeList ON ... FROM (user | ROLE ...) | REVOKE roles FROM user
+
+        The privilege list may contain reserved keywords (ALL, SELECT, ...) and the
+        'PRIVILEGES' suffix (e.g. ALL PRIVILEGES). Grantee may be a quoted user literal,
+        an identifier, or a multi-token form like 'user'@'host' / username@'host'.
+        """
         self._expect_keyword(stmt_type)
         privileges = []
-        # Consume privilege list
-        privileges.append(self._consume_identifier())
-        while self._match_keyword(","):
-            privileges.append(self._consume_identifier())
-        self._expect_keyword("ON")
-        # Object
-        object_name = self._consume_qualified_name()
+        # Parse the privilege list until we reach the 'ON' keyword (or call a role-grant).
+        # Each privilege is a sequence of one or more identifiers/keywords joined logically.
+        while self._current().type not in (TokenType.EOF, TokenType.SEMICOLON):
+            tok = self._current()
+            # End of privilege list: ON (object grant) or a new clause
+            if tok.type == TokenType.KEYWORD and tok.value == "ON":
+                break
+            # Consume one privilege: identifier, non-reserved keyword, backquoted,
+            # a reserved keyword (privilege names like ALL/SELECT/INSERT are reserved),
+            # or a string literal.
+            if tok.type in (TokenType.IDENTIFIER, TokenType.BACKQUOTED_IDENTIFIER) or \
+               (tok.type == TokenType.KEYWORD and tok.value not in ("ON",)) or \
+               tok.type == TokenType.STRING_LITERAL:
+                priv = tok.value
+                self._next()
+                # Optional PRIVILEGES suffix, e.g. ALL PRIVILEGES
+                if self._current().is_keyword("PRIVILEGES"):
+                    priv = priv + " PRIVILEGES"
+                    self._next()
+                privileges.append(priv)
+                # comma-separated next privilege
+                if self._match_keyword(","):
+                    continue
+                # Otherwise, stop the privilege list: the next token is expected to be
+                # ON (object) or TO/FROM (grantee) for a role-grant form.
+                break
+            else:
+                break
+
+        # Object: ON <name> (optional for role-grant forms)
+        object_name = None
+        if self._match_keyword("ON"):
+            object_name = self._consume_object_name()
+
+        # Grantee: TO ... (GRANT) or FROM ... (REVOKE)
         if stmt_type == "GRANT":
-            self._expect_keyword("TO")
+            if self._match_keyword("TO"):
+                grantee = self._consume_grantee()
+            else:
+                tok = self._current()
+                grantee = None
+                if self._is_ident_start(tok) or tok.type == TokenType.STRING_LITERAL:
+                    grantee = self._consume_grantee()
         else:
-            self._expect_keyword("FROM")
-        grantee = self._consume_identifier()
+            if self._match_keyword("FROM"):
+                grantee = self._consume_grantee()
+            else:
+                tok = self._current()
+                grantee = None
+                if self._is_ident_start(tok) or tok.type == TokenType.STRING_LITERAL:
+                    grantee = self._consume_grantee()
+
+        # Optional trailing ROLE / WITH GRANT OPTION / etc.
         if self._match_keyword("ROLE"):
-            grantee = self._consume_identifier()
+            grantee = self._consume_grantee() if self._is_ident_start(self._current()) else grantee
+        while self._current().type not in (TokenType.EOF, TokenType.SEMICOLON):
+            self._next()
+
         self._match_semicolon()
         return ASTNode(stmt_type.title() + "Stmt", privileges=privileges,
-                        object=object_name, grantee=grantee)
+                       object=object_name, grantee=grantee)
+
+    def _consume_object_name(self):
+        """
+        Consume a grant object: catalog.db.table, db.table, table, or a * form
+        (db.*, *.*). Returns the joined name or None if absent.
+        """
+        parts = []
+        # Accept leading asterisks (e.g. *.*)
+        if self._current().type == TokenType.ASTERISK:
+            parts.append("*")
+            self._next()
+        else:
+            name = self._consume_qualified_name()
+            if name is None:
+                return None
+            last = name
+            # Handle catalog.db.* style by re-consuming a possible trailing .* chain
+            parts = name.split(".")
+        # Handle db.table.* or table.* (asterisk after qualifier parts)
+        if self._current().type == TokenType.DOT:
+            self._next()
+            if self._current().type == TokenType.ASTERISK:
+                self._next()
+                # rebase onto parts
+                base = parts[0] if parts else ""
+                parts = [base + ".*"] if base else ["*"]
+        return ".".join(parts) if parts else None
+
+    def _consume_grantee(self):
+        """
+        Consume a grantee: an identifier, a non-reserved keyword, a quoted user literal,
+        or a multi-token identity 'user'@'host' / user@'host' / user@host / 'user'@host.
+        Returns the full grantee string, or None if the next token is not an identity start.
+        """
+        tok = self._current()
+        if not (self._is_ident_start(tok) or tok.type == TokenType.STRING_LITERAL):
+            return None
+        user = tok.value
+        self._next()
+        # @ host part
+        if self._current().type == TokenType.ATSIGN:
+            self._next()
+            host = self._current()
+            if host.type in (TokenType.STRING_LITERAL, TokenType.IDENTIFIER,
+                             TokenType.BACKQUOTED_IDENTIFIER):
+                user = f"{user}@{host.value}"
+                self._next()
+            else:
+                # bare % or similar
+                user = user + "@*"
+                self._next() if host.type != TokenType.EOF else None
+        # Optional trailing role name word (only when NOT part of a list we must preserve)
+        return user
 
     def _parse_transaction(self, stmt_type):
         """Parse BEGIN/COMMIT/ROLLBACK"""
