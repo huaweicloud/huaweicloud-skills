@@ -11,6 +11,8 @@ description: |
 
 Deploy the "Building a Dify LLM Application Development Platform" SAC solution on Huawei Cloud end-to-end using Terraform.
 
+> **Scope boundary:** This skill supports deploying the **Dify LLM application development platform** only, via Huawei Cloud ECS + Terraform. It does **not** support deploying any other applications. Requests to deploy different apps are out of scope — reject them and tell the user to use another solution/skill.
+
 **Architecture:** VPC + Subnet + Security Group (ICMP/HTTP/HTTPS ingress), one ECS instance, and one EIP (1-300 Mbit/s). Cloud-init installs and starts Dify services on Ubuntu. The template supports both Dify community versions and `flexus-ai-agent` mode (controlled by `dify_version`).
 
 **Tool chain:** Playwright CLI (price/solution metadata extraction) + Python 3.8+ (helper scripts) + Terraform (infrastructure provisioning). No KooCLI; deployment and lifecycle operations are handled through Terraform only.
@@ -152,7 +154,7 @@ Remove-Item -Force <temp_dir>/dify-workdir/terraform.auto.tfvars.json
 | `secret_key` | Yes | `<NO_DEFAULT>` | From env `HW_SECRET_KEY` or local `<temp_dir>/dify-workdir/terraform.auto.tfvars.json`; never print in chat |
 | `solution_name` | No | `dify-ecs-demo` | 4-24 chars, lowercase letter/digit/hyphen, must start with lowercase letter |
 | `region_id` | Yes | `cn-north-4` | Primary region parameter. Allowed: `cn-north-4`,`cn-southwest-2`,`cn-north-12`,`ap-southeast-3`,`cn-east-3`,`cn-north-9`,`cn-south-2`,`cn-south-1`,`tr-west-1`,`cn-south-4`,`ap-southeast-1`,`cn-north-2`,`cn-north-1`,`cn-east-4`. Keep `normalize_tf_providers.py --region` consistent with this value |
-| `dify_version` | No | `1.11.4` | Allowed: `1.11.4`,`1.8.1`,`1.6.0`,`1.4.1`,`1.1.3`,`0.15.8`,`flexus-ai-agent` |
+| `dify_version` | No | `1.14.2` | Allowed: `1.14.2`,`1.11.4`,`1.8.1`,`1.6.0`,`1.4.1`,`1.1.3`,`0.15.8`,`flexus-ai-agent` |
 | `ecs_flavor` | No | `t6.xlarge.2` | ECS/Flexus flavor format must match template regex validation |
 | `ecs_password` | Yes | `""` | 8-26 chars, includes at least 3 of uppercase/lowercase/digit/special |
 | `dify_admin_password` | Conditional | `""` | Effective when `dify_version=flexus-ai-agent`; 8-26 chars and includes letters and digits |

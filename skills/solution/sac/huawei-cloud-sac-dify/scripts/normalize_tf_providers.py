@@ -21,6 +21,32 @@ PLACEHOLDER_AK = "PLEASE_SET_ACCESS_KEY"
 PLACEHOLDER_SK = "PLEASE_SET_SECRET_KEY"
 PLACEHOLDER_REGION = "PLEASE_SET_REGION"
 
+# Allowed Huawei Cloud regions. Kept in sync with the region validation used by the
+# Dify template's region_id variable and SKILL.md's region_id allowed list.
+ALLOWED_REGIONS = [
+    "cn-north-4",
+    "cn-southwest-2",
+    "cn-north-12",
+    "ap-southeast-3",
+    "cn-east-3",
+    "cn-north-9",
+    "cn-south-2",
+    "cn-south-1",
+    "tr-west-1",
+    "cn-south-4",
+    "ap-southeast-1",
+    "cn-north-2",
+    "cn-north-1",
+    "cn-east-4",
+]
+
+REGION_VALIDATION_HCL = (
+    "  validation {{\n"
+    "    condition     = contains({allowed}, var.{name})\n"
+    '    error_message = "Invalid input, please re-enter."\n'
+    "  }}\n"
+)
+
 
 def normalize_source_text(content: str) -> Tuple[str, bool]:
     updated = content
@@ -77,19 +103,59 @@ def patch_huaweicloud_provider_block(block_body: str) -> tuple[str, bool]:
     return updated, changed
 
 
+def region_variable_block_hcl(name: str = "region") -> str:
+    """HCL block for the region variable, including an allow-list validation.
+
+    Mirrors the validation already present on the template's region_id variable so
+    an invalid region cannot bypass region_id by passing the provider `region`
+    variable directly.
+    """
+    allowed = ", ".join(f'"{r}"' for r in ALLOWED_REGIONS)
+    return (
+        f'\nvariable "{name}" {{\n'
+        f"  type = string\n"
+        f"{REGION_VALIDATION_HCL.format(allowed='[' + allowed + ']', name=name)}"
+        f"}}\n"
+    )
+
+
 def ensure_hcl_variables(content: str) -> tuple[str, bool]:
     changed = False
     updated = content.rstrip() + "\n"
     required_vars = ["access_key", "secret_key", "region"]
 
     for name in required_vars:
-        if re.search(rf'(?m)\bvariable\s+"{re.escape(name)}"\s*\{{', updated):
+        # If a variable block already exists, ensure region carries the validation.
+        existing = re.search(rf'(?m)\bvariable\s+"{re.escape(name)}"\s*\{{', updated)
+        if existing:
+            if name == "region":
+                block_start = updated.find("{", existing.start(), existing.end())
+                block_end = find_block_end(updated, block_start)
+                if block_start >= 0 and block_end >= 0:
+                    body = updated[block_start + 1 : block_end]
+                    if not re.search(r"(?is)\bvalidation\s*\{", body):
+                        updated, did_change = add_hcl_validation(updated, name, existing)
+                        changed = changed or did_change
             continue
-        block = f'\nvariable "{name}" {{\n  type = string\n}}\n'
+        block = region_variable_block_hcl(name) if name == "region" else f'\nvariable "{name}" {{\n  type = string\n}}\n'
         updated += block
         changed = True
 
     return updated, changed
+
+
+def add_hcl_validation(content: str, name: str, match) -> tuple[str, bool]:
+    """Inject an allow-list validation into an existing HCL variable block."""
+    open_idx = content.find("{", match.start(), match.end())
+    if open_idx < 0:
+        return content, False
+    close_idx = find_block_end(content, open_idx)
+    if close_idx < 0:
+        return content, False
+    allowed = ", ".join(f'"{r}"' for r in ALLOWED_REGIONS)
+    validation = REGION_VALIDATION_HCL.format(allowed="[" + allowed + "]", name=name)
+    updated = content[: open_idx + 1] + "\n" + validation + content[open_idx + 1 :]
+    return updated, True
 
 
 def patch_hcl_provider_credentials(content: str) -> tuple[str, bool]:
@@ -225,6 +291,16 @@ def normalize_tf_json(content: str) -> Tuple[str, bool]:
             if name not in var_block:
                 var_block[name] = {"type": "string"}
                 changed = True
+        # Ensure the provider region variable carries the allow-list validation.
+        region_cfg = var_block.get("region")
+        if isinstance(region_cfg, dict) and not region_cfg.get("validation"):
+            region_cfg["validation"] = [
+                {
+                    "condition": "${contains([" + ", ".join(f'"{r}"' for r in ALLOWED_REGIONS) + "], var.region)}",
+                    "error_message": "Invalid input, please re-enter.",
+                }
+            ]
+            changed = True
 
     if isinstance(data, dict):
         normalize_provider_blocks(data)
