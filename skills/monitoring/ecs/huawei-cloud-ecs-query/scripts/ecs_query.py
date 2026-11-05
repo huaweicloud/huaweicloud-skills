@@ -49,17 +49,18 @@ def load_config(config_path):
     return config
 
 
-def create_auth_or_exit(config):
+def create_auth_or_exit(config, endpoint=None):
     """创建认证实例，配置缺失时给出友好提示并退出
 
     Args:
         config: 包含认证信息的字典
+        endpoint: 目标服务端点（如 evs.{region}.myhuaweicloud.com），默认使用 ECS 端点
 
     Returns:
         HuaweiCloudAuth 子类实例
     """
     try:
-        return create_auth(config)
+        return create_auth(config, endpoint=endpoint)
     except ValueError as e:
         print(f"错误: 配置错误: {e}")
         if "project_id" in str(e):
@@ -86,7 +87,7 @@ def build_query_string(params):
     return "&".join(pairs)
 
 
-def make_request(auth, method, uri, params=None):
+def make_request(auth, method, uri, params=None, fatal=True):
     """发送 API 请求
 
     Args:
@@ -94,9 +95,10 @@ def make_request(auth, method, uri, params=None):
         method: HTTP 方法
         uri: API 路径
         params: 查询参数字典
+        fatal: 请求失败时是否终止程序；False 时返回 None 供增强查询降级
 
     Returns:
-        响应 JSON 数据
+        响应 JSON 数据；fatal=False 且请求失败时返回 None
     """
     query_string = build_query_string(params) if params else ""
     full_uri = uri
@@ -115,9 +117,13 @@ def make_request(auth, method, uri, params=None):
         )
     except requests.exceptions.HTTPError as e:
         status_code = e.response.status_code if e.response is not None else "N/A"
+        if not fatal:
+            return None
         print(f"错误: 认证失败 (HTTP {status_code})，请检查用户名/密码/域名配置是否正确。")
         sys.exit(1)
     except (ValueError, requests.exceptions.RequestException) as e:
+        if not fatal:
+            return None
         print(f"错误: 认证失败，请检查用户名/密码/域名配置是否正确。（{e}）")
         sys.exit(1)
 
@@ -137,15 +143,119 @@ def make_request(auth, method, uri, params=None):
             error_msg += f": {json.dumps(error_body, ensure_ascii=False)}"
         except Exception:
             error_msg += f": {resp.text}"
+        if not fatal:
+            return None
         print(f"错误: {error_msg}")
         sys.exit(1)
     except requests.exceptions.ConnectionError as e:
+        if not fatal:
+            return None
         print(f"错误: 无法连接到华为云 API 端点: {auth.endpoint}")
         print(f"请检查网络连接和区域配置是否正确。")
         sys.exit(1)
     except requests.exceptions.Timeout:
+        if not fatal:
+            return None
         print(f"错误: 请求超时，请检查网络连接。")
         sys.exit(1)
+
+
+def fetch_extended_volume_details(auth, config):
+    """查询 EVS 云硬盘详细信息，用于补全系统盘/数据盘大小与类型
+
+    通过 EVS ListVolumes 一次性拉取项目下全部云硬盘，按磁盘ID建立索引。
+    仅用于 --detail/--full 增强展示；失败时返回空字典（降级为仅展示磁盘ID/挂载点）。
+
+    API: GET /v2/{project_id}/cloudvolumes/detail
+    """
+    endpoint = f"evs.{auth.region}.myhuaweicloud.com"
+    evs_auth = create_auth_or_exit(config, endpoint=endpoint)
+    uri = f"/v2/{auth.project_id}/cloudvolumes/detail"
+    volume_map = {}
+    offset = 0
+    limit = 1000
+    while True:
+        data = make_request(
+            evs_auth, "GET", uri, {"limit": limit, "offset": offset}, fatal=False
+        )
+        if not data or not isinstance(data, dict):
+            break
+        volumes = data.get("volumes", [])
+        for vol in volumes:
+            vol_id = vol.get("id")
+            if vol_id:
+                volume_map[vol_id] = vol
+        count = data.get("count")
+        if not volumes or (count is not None and offset + len(volumes) >= count):
+            break
+        if len(volumes) < limit:
+            break
+        offset += len(volumes)
+        if offset > 5000:
+            break
+    return volume_map
+
+
+def fetch_eip_bandwidth_map(auth, config):
+    """查询弹性公网 IP 的带宽信息，用于补全 EIP 带宽展示
+
+    通过 VPC/EIP ListPublicips/v3 拉取项目下全部弹性公网 IP，按 IP 地址建立索引。
+    仅用于 --detail/--full 增强展示；失败时返回空字典（降级为仅展示 EIP 地址）。
+
+    API: GET /v3/{project_id}/eip/publicips
+    """
+    endpoint = f"vpc.{auth.region}.myhuaweicloud.com"
+    eip_auth = create_auth_or_exit(config, endpoint=endpoint)
+    uri = f"/v3/{auth.project_id}/eip/publicips"
+    eip_map = {}
+    offset = 0
+    limit = 100
+    while True:
+        data = make_request(
+            eip_auth, "GET", uri, {"limit": limit, "offset": offset}, fatal=False
+        )
+        if not data or not isinstance(data, dict):
+            break
+        publicips = data.get("publicips", [])
+        for eip in publicips:
+            ip = eip.get("public_ip_address")
+            if ip:
+                bandwidth = eip.get("bandwidth") or {}
+                eip_map[ip] = {
+                    "bandwidth_size": bandwidth.get("size"),
+                    "share_type": bandwidth.get("share_type"),
+                }
+        if not publicips or len(publicips) < limit:
+            break
+        offset += len(publicips)
+        if offset > 2000:
+            break
+    return eip_map
+
+
+def build_detail_context(auth, config, detail):
+    """构建详情展示所需的增强上下文（EVS 磁盘信息 + EIP 带宽信息）
+
+    Args:
+        auth: 认证实例
+        config: 配置字典
+        detail: 是否启用 --detail/--full 增强
+
+    Returns:
+        增强上下文字典；未启用或获取失败时各字段为空字典
+    """
+    context = {"volumes": {}, "eips": {}}
+    if not detail:
+        return context
+    try:
+        context["volumes"] = fetch_extended_volume_details(auth, config)
+    except SystemExit:
+        pass
+    try:
+        context["eips"] = fetch_eip_bandwidth_map(auth, config)
+    except SystemExit:
+        pass
+    return context
 
 
 def list_servers(args, config):
@@ -170,8 +280,9 @@ def list_servers(args, config):
         params["flavor"] = args.flavor
 
     data = make_request(auth, "GET", uri, params)
+    detail_context = build_detail_context(auth, config, args.detail or args.full)
     output_format = args.output or config.get("output_format", "table")
-    output_result(data, output_format)
+    output_result(data, output_format, detail_context=detail_context, detail_level="full" if args.full else ("detail" if args.detail else ""))
 
 
 def show_server(args, config):
@@ -189,10 +300,11 @@ def show_server(args, config):
     uri = f"/v1/{auth.project_id}/cloudservers/{args.server_id}"
 
     data = make_request(auth, "GET", uri)
+    detail_context = build_detail_context(auth, config, args.detail or args.full)
     # API 返回的是服务器对象，包装为统一格式
     result = {"server": data.get("server", data)}
     output_format = args.output or config.get("output_format", "table")
-    output_result(result, output_format)
+    output_result(result, output_format, detail_context=detail_context, detail_level="full" if args.full else ("detail" if args.detail else ""))
 
 
 def server_status(args, config):
@@ -250,8 +362,14 @@ def main():
   # 按状态过滤
   python ecs_query.py list-servers --status ACTIVE
 
+  # 查询列表（展示完整运维字段：磁盘/SG/VPC/镜像/密钥/标签/EIP带宽/计费）
+  python ecs_query.py list-servers --detail
+
   # 查询服务器详情
   python ecs_query.py show-server --server-id abc123-def456
+
+  # 查询服务器详情（展示全部增强字段）
+  python ecs_query.py show-server --server-id abc123-def456 --full
 
   # 查询服务器状态
   python ecs_query.py server-status --server-id abc123-def456
@@ -267,10 +385,14 @@ def main():
     list_parser.add_argument("--status", type=str, help="按状态过滤（ACTIVE, SHUTOFF, BUILD, ERROR等）")
     list_parser.add_argument("--name", type=str, help="按名称过滤")
     list_parser.add_argument("--flavor", type=str, help="按规格ID过滤")
+    list_parser.add_argument("--detail", action="store_true", help="展示完整运维字段（含系统盘/数据盘大小类型、安全组、VPC/子网、镜像名称、密钥对、标签、EIP带宽、计费模式）")
+    list_parser.add_argument("--full", action="store_true", help="同 --detail，展示全部增强字段")
 
     # show-server 子命令
     show_parser = subparsers.add_parser("show-server", help="查询单个云服务器详情")
     show_parser.add_argument("--server-id", type=str, help="云服务器ID（先用 list-servers 获取）")
+    show_parser.add_argument("--detail", action="store_true", help="展示完整运维字段（含系统盘/数据盘大小类型、安全组、VPC/子网、镜像名称、密钥对、标签、EIP带宽、计费模式）")
+    show_parser.add_argument("--full", action="store_true", help="同 --detail，展示全部增强字段")
 
     # server-status 子命令
     status_parser = subparsers.add_parser("server-status", help="查询云服务器状态")

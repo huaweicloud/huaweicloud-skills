@@ -6,7 +6,12 @@
 
 - [ ] `python3 scripts/ecs_query.py list-servers --config config.yaml` 可列出 ECS 实例（表格与 `--output json` 两种格式）
 - [ ] `list-servers` 支持 `--status` / `--name` / `--flavor` 过滤参数
-- [ ] `python3 scripts/ecs_query.py show-server --server-id <id>` 返回实例详情
+- [ ] `list-servers --detail`（或 `--full`）表格追加 System Disk / Data Disks / Security Group / VPC/Subnet / Image / KeyPair / Tags / EIP(BW) / Billing 列
+- [ ] `list-servers --detail` 系统盘/数据盘列展示大小与类型，EIP(BW) 列展示带宽 Mbps，Billing 列展示计费模式
+- [ ] `python3 scripts/ecs_query.py show-server --server-id <id>` 返回实例详情，默认包含安全组/VPC/子网/镜像名称/密钥对/计费模式
+- [ ] `show-server --detail`（或 `--full`）额外展示系统盘/数据盘大小与类型、EIP 带宽
+- [ ] `--detail` 与 `--full` 行为一致（后者为别名）
+- [ ] 账号缺少 EVS/VPC 只读权限时，`--detail` 增强字段降级为挂载盘设备名/公网 IP，命令不报错退出
 - [ ] `python3 scripts/ecs_query.py server-status --server-id <id>` 返回状态及中文说明
 - [ ] `show-server` 输出包含挂载云硬盘字段（API 返回时）
 - [ ] `server-status` 状态输出与列表/详情复用统一格式化模块（无重复实现）

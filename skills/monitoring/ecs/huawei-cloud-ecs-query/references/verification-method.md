@@ -24,6 +24,18 @@ python3 scripts/ecs_query.py list-servers --config config.yaml
 | 表格输出 | 含 ID/Name/Status/Flavor/vCPU 等列 |
 | JSON 输出 | `--output json` 返回合法 JSON |
 
+```bash
+python3 scripts/ecs_query.py list-servers --detail --config config.yaml
+```
+
+| 检查项 | 预期结果 |
+|--------|----------|
+| 增强表格 | 含 System Disk / Data Disks / Security Group / VPC/Subnet / Image / KeyPair / Tags / EIP(BW) / Billing 列 |
+| 系统盘列 | 显示大小（GB）与类型（如 80G (GPSSD)） |
+| EIP(BW) 列 | 显示公网 IP 及带宽（Mbps） |
+| Billing 列 | 按需计费 / 包年包月 / 竞价计费 |
+| 降级场景 | 账号无 EVS/VPC 权限时，相关列显示挂载盘设备名/公网 IP，命令仍正常退出 |
+
 ### 2. 查询实例详情
 
 ```bash
@@ -34,6 +46,17 @@ python3 scripts/ecs_query.py show-server --server-id <server_id> --config config
 |--------|----------|
 | server-id 必填 | 缺失时提示"请通过 --server-id 指定服务器ID" |
 | 详情展示 | 含规格/镜像/IP/可用区等完整字段 |
+| 默认字段 | 含安全组/VPC ID/子网 ID/镜像名称/密钥对/计费模式 |
+
+```bash
+python3 scripts/ecs_query.py show-server --server-id <server_id> --full --config config.yaml
+```
+
+| 检查项 | 预期结果 |
+|--------|----------|
+| 系统盘行 | 显示大小/类型/挂载点（如 80G (GPSSD) @/dev/vda） |
+| 数据盘行 | 显示数据盘大小/类型列表（无数据盘时显示"无"） |
+| EIP带宽行 | 显示公网 IP 与带宽（如 1.2.3.4 (10Mbps)） |
 
 ### 3. 查询实例状态
 
