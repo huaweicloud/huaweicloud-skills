@@ -40,6 +40,21 @@ SQL queries for Ascend PyTorch Profiler and msprof databases.
 - `huawei-cloud-ascendc-operator-performance-optim` - Operator optimization
   workflow
 
+## Scope
+
+本 skill **仅支持查询 Ascend PyTorch Profiler / msprof 数据库**的表结构，其他类型数据库不支持。
+仅支持以下两类数据库文件：
+
+- **Ascend PyTorch Profiler 数据库**：文件名匹配 `ascend_pytorch_profiler*.db`
+- **msprof 数据库**：文件名匹配 `msprof_*.db`
+
+对上述两类之外的其他类型数据库，本 skill 不做任何表结构查询，且必须明确拒绝。
+
+（This skill supports table-structure queries of **Ascend PyTorch Profiler /
+msprof databases only** — files matching `ascend_pytorch_profiler*.db` or
+`msprof_*.db`. Querying the schema of any other type of database is **not
+supported** and must be rejected.）
+
 ## Architecture Components
 
 This skill involves the following cloud services and components:
@@ -140,6 +155,7 @@ prioritize triggering this skill:
 
 ## Mandatory Restrictions
 
+- **本 skill 为只读查询工具，仅支持 `SELECT` 查询，不支持 `INSERT` / `UPDATE` / `DELETE` 等写操作**（This skill is a **read-only query tool**: it supports `SELECT` queries only and does **not** support write operations such as `INSERT`, `UPDATE`, or `DELETE`）。任何写操作请求（如"往数据库里插入一条算子记录"）必须被明确拒绝。
 - Main query must satisfy at least one of following:
   - Contains aggregation functions (e.g., `SUM`, `AVG`, `COUNT`, etc.), OR
   - Explicitly includes `ORDER BY ... LIMIT 20` (or smaller LIMIT).
