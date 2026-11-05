@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -13,6 +14,19 @@ from pathlib import Path
 
 def resolve_command(command: str) -> str | None:
     return shutil.which(command)
+
+
+def resolve_chromium_executable() -> str | None:
+    """Return a user-specified chromium executable, or None to use playwright-cli default.
+
+    Consumes PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH so arm64 / Chrome-less environments
+    can point the toolchain at an installed chromium binary.
+    """
+    value = (
+        os.getenv("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH", "")
+        or os.getenv("PLAYWRIGHT_MCP_EXECUTABLE_PATH", "")
+    ).strip()
+    return value or None
 
 
 def build_pw_command() -> list[str]:
@@ -25,6 +39,21 @@ def build_pw_command() -> list[str]:
     raise RuntimeError(
         "playwright-cli is not installed. Install with: npm install -g @playwright/cli@latest"
     )
+
+
+def pw_run_env() -> dict:
+    """Build the child environment with chromium override if the user set one.
+
+    playwright-cli's daemon resolves its browser via the PLAYWRIGHT_MCP_*
+    config environment; mapping PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH onto those
+    makes chromium (arm64/headless) the launch target instead of Google Chrome.
+    """
+    env = dict(os.environ)
+    executable = resolve_chromium_executable()
+    if executable:
+        env["PLAYWRIGHT_MCP_BROWSER"] = "chromium"
+        env["PLAYWRIGHT_MCP_EXECUTABLE_PATH"] = executable
+    return env
 
 
 def run_pw(
@@ -41,6 +70,7 @@ def run_pw(
         encoding="utf-8",
         errors="replace",
         shell=False,
+        env=pw_run_env(),
     )
 
     if not allow_failure and proc.returncode != 0:

@@ -37,6 +37,36 @@ playwright-cli install-browser --with-deps
 playwright-cli install-browser
 ```
 
+### arm64 / no Google Chrome environments (Linux aarch64, Kunpeng, container)
+
+On arm64 (and other machines without Google Chrome), `playwright-cli install-browser`
+cannot install the `chrome` channel (`ERROR: not supported on Linux Arm64`) and
+the extract step would fail with `Chromium distribution 'chrome' is not found`. Use
+an equivalent **chromium** build instead:
+
+1. Install chromium (any of the following):
+
+   ```bash
+   # Option A: install via Playwright itself (chromium is supported on Linux arm64)
+   npx playwright install chromium
+   # Option B: system package
+   apt-get install -y chromium-browser   # or: yum install -y chromium
+   ```
+
+2. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to the installed binary so the skill
+   launches chromium instead of Google Chrome:
+
+   ```bash
+   # find the binary, e.g.:
+   which chromium chromium-browser 2>/dev/null
+   export PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH="$(which chromium || which chromium-browser)"
+   ```
+
+   The skill's `playwright_utils.py` reads this variable and hands the path to the
+   Playwright daemon (`PLAYWRIGHT_MCP_BROWSER=chromium` +
+   `PLAYWRIGHT_MCP_EXECUTABLE_PATH`), so everything downstream — `open`, `run-code`,
+   price/solution extraction — runs on chromium.
+
 ### Verify
 
 ```bash
