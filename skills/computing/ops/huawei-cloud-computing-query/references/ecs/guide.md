@@ -9,6 +9,24 @@
 Purpose: Query the list of ECS instances, including ID, name, status, flavor_id, vCPU, memory(GiB).
 Usage: python scripts/ecs/list_servers_details.py -h
 
+Key options:
+
+- `--tag key=value`：按标签过滤，可重复指定，多个标签之间为 AND 关系，最终拼成 ECS API 的 `tags` 查询参数（格式 `key1=value1,key2=value2`）。
+- `--not_tag key=value`：按标签排除，可重复指定，多个标签之间为 AND 关系，对应 API 的 `not_tags` 查询参数。
+- `--export csv|json`：把本次查询结果导出为文件；CSV 使用 UTF-8-SIG 编码，Excel 可直接打开。
+- `--export_path <file>`：导出文件路径；不传时默认写入当前目录 `<脚本名>_<时间戳>.<格式>`，例如 `list_servers_details_20261102_194203.csv`。
+- 导出内容包含表格展示字段（id/name/status/flavor_id/vcpus/memory(GiB)/availability_zone/created），并额外包含首个 IPv4 地址 `ip`；导出完成后打印 `已导出 N 条到 <文件> (格式: ...)`。
+
+示例：
+
+```bash
+python scripts/ecs/list_servers_details.py --region cn-north-4 --tag env=prod --tag group=web
+python scripts/ecs/list_servers_details.py --region cn-north-4 --not_tag env=test --export csv --export_path ./servers.csv
+python scripts/ecs/list_servers_details.py --region cn-north-4 --tag owner=alice --export json
+```
+
+注意：原有的 `--tags` / `--not_tags`（查询 tag 字段中包含 / 不包含该值的云服务器）语义不同，为保持兼容未做改动；`--tag` / `--not_tag` 不能与它们同时使用，同时指定会直接报错退出。查询结果为空时不生成导出文件。分页上限见文末「分页上限与翻页语义」。
+
 ---
 
 ### list_servers_details_by_id.py — Query ECS Details by Instance ID
@@ -22,6 +40,24 @@ Usage: python scripts/ecs/list_servers_details_by_id.py -h
 
 Purpose: Query the list of ECS cloud servers, including name, status, flavor_id, vCPU, ram(GiB), image ID.
 Usage: python scripts/ecs/list_cloud_servers.py -h
+
+Key options:
+
+- `--tag key=value`：按标签过滤，可重复指定，多个标签之间为 AND 关系，最终拼成 ECS API 的 `tags` 查询参数（格式 `key1=value1,key2=value2`）。
+- `--not_tag key=value`：按标签排除，可重复指定，多个标签之间为 AND 关系，对应 API 的 `not_tags` 查询参数。
+- `--export csv|json`：把本次查询结果导出为文件；CSV 使用 UTF-8-SIG 编码，Excel 可直接打开。
+- `--export_path <file>`：导出文件路径；不传时默认写入当前目录 `<脚本名>_<时间戳>.<格式>`，例如 `list_cloud_servers_20261102_194203.json`。
+- 导出内容包含表格展示字段（id/name/status/flavor_id/vcpus/ram(GiB)/availability_zone/created），并额外包含首个 IPv4 地址 `ip`；指定 `--expect_fields image` 时还会导出 `image_id`。导出完成后打印 `已导出 N 条到 <文件> (格式: ...)`。
+
+示例：
+
+```bash
+python scripts/ecs/list_cloud_servers.py --region cn-north-4 --tag env=prod --tag group=web
+python scripts/ecs/list_cloud_servers.py --region cn-north-4 --not_tag env=test --export csv --export_path ./servers.csv
+python scripts/ecs/list_cloud_servers.py --region cn-north-4 --tag env=prod --export json
+```
+
+注意：原有的 `--tags` / `--not_tags`（查询 tag 字段中包含 / 不包含该值的云服务器）语义不同，为保持兼容未做改动；`--tag` / `--not_tag` 不能与它们同时使用，同时指定会直接报错退出。查询结果为空时不生成导出文件。分页上限见文末「分页上限与翻页语义」。
 
 ---
 
@@ -262,3 +298,24 @@ Usage: python scripts/ecs/nova_show_flavor_extra_specs.py -h
 
 Purpose: Query ECS server specified NIC details, including port_id, net_id, mac_addr, port_state, fixed_ips.
 Usage: python scripts/ecs/nova_show_server_interface.py -h
+
+---
+
+## 分页上限与翻页语义（list_servers_details.py / list_cloud_servers.py）
+
+**分页上限**
+
+- 服务端单次 `limit` 上限为 `API_LIMIT = 1000`（`scripts/ecs/list_servers_details.py`、`scripts/ecs/list_cloud_servers.py` 中的常量）。
+- 默认每页展示 `PAGE_SIZE = 50` 条。
+- 常规查询（不使用 `--sort_by`）只发起 1 次请求，`limit = FETCH_SIZE = PAGE_SIZE + 1 = 51`，多查的 1 条仅用于判断「是否还有更多」，不会展示。
+
+**翻页语义（重要，避免遗漏数据）**
+
+- 不使用 `--sort_by` 时脚本**只查 1 页**（最多 51 条），不会自动翻页；若总数超过 50 条，输出末尾会给出 `next_marker`，必须用 `--marker=<next_marker>` 手动查询下一页，否则会漏掉后续数据。可用 `--tag` / `--not_tag` / `--name` / `--status` 等过滤条件缩小范围，减少翻页次数。
+- 使用 `--sort_by`（配合 `--top`）时，脚本按 `API_LIMIT = 1000` 逐页全量拉取后再在客户端排序、截取，此时无需手动传 `--marker`；数据量很大时请留意耗时。
+
+**导出的数据范围**
+
+- `--export` 导出的是本次查询实际取得的结果：常规查询为当前页展示的、最多 `PAGE_SIZE = 50` 条；`--sort_by` 全量拉取时为本次拉取到的全部数据（`--top` 截取之后）。
+- 需要导出全量数据时，请配合 `--sort_by`（自动全量拉取）或逐页 `--marker` 分别导出。
+- 查询结果为空时不会生成导出文件。
