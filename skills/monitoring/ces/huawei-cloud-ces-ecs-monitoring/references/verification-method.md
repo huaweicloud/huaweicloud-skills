@@ -36,7 +36,7 @@ export TEST_METRIC_NAME="cpu_util"  # Test metric (SYS.ECS)
 
 ```bash
 # Test 1: Verify Huawei Cloud CLI installation
-hcloud --version
+hcloud version
 # Expected: CLI version information displayed without errors
 
 # Test 2: Verify CLI configuration
@@ -44,7 +44,7 @@ hcloud configure list
 # Expected: Valid credentials and region configuration displayed
 
 # Test 3: Verify authentication
-hcloud IAM ShowUser
+hcloud IAM ShowUser --user_id=<user-id>
 # Expected: User information displayed without authentication errors
 ```
 

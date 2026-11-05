@@ -12,7 +12,7 @@ and user expectations before being considered complete and ready for use.
 
 **AC-001**: The skill must verify Huawei Cloud CLI installation before execution.
 
-- **Criteria**: Skill checks `hcloud --version` and provides installation instructions if CLI is not found
+- **Criteria**: Skill checks `hcloud version` and provides installation instructions if CLI is not found
 - **Validation**: Run skill without Huawei Cloud CLI installed, verify helpful error message
 - **Success Metric**: 100% of users receive clear installation guidance
 
@@ -52,7 +52,7 @@ and user expectations before being considered complete and ready for use.
 
 **AC-007**: The skill must support multiple aggregation methods.
 
-- **Criteria**: Support for average, max, min, sum, and sampleCount statistics
+- **Criteria**: Support for average, variance, min, max, and sum statistics
 - **Validation**: Verify each aggregation method produces correct results
 - **Success Metric**: All aggregation methods functional
 
@@ -210,9 +210,9 @@ and user expectations before being considered complete and ready for use.
 
 **AC-207**: The skill must support both interactive and scripted use.
 
-- **Criteria**: Human-readable output for interactive use, JSON for scripting
-- **Validation**: Test both `--output table` and `--output json` formats
-- **Success Metric**: Both formats produce valid, complete data
+- **Criteria**: Human-readable output for interactive use, JSON output (hcloud default) for scripting
+- **Validation**: Test the CLI default JSON output is parseable by jq/tools and results are understandable
+- **Success Metric**: Output is valid, complete, and usable in both interactive and scripted contexts
 
 **AC-208**: Common workflows must be streamlined.
 
@@ -230,11 +230,11 @@ and user expectations before being considered complete and ready for use.
 
 ### 1. CLI Integration
 
-**AC-301**: The skill must work with standard Huawei Cloud CLI output formats.
+**AC-301**: The skill must work with the Huawei Cloud CLI default JSON output.
 
-- **Criteria**: Support json, table, text, and yaml output formats
-- **Validation**: Test each output format with jq/grep validation
-- **Success Metric**: All output formats produce valid, parseable data
+- **Criteria**: Consume the JSON output that hcloud returns by default (hcloud does not provide an `--output` parameter)
+- **Validation**: Test the default JSON output with jq/grep validation
+- **Success Metric**: Default output is valid, parseable data
 
 **AC-302**: The skill must support command piping and redirection.
 
@@ -242,19 +242,21 @@ and user expectations before being considered complete and ready for use.
 - **Validation**: Test common pipe patterns
 - **Success Metric**: Seamless integration with shell pipelines
 
-**AC-303**: The skill must support environment variable configuration.
+**AC-303**: The skill must support hcloud CLI credential configuration.
 
-- **Criteria**: Use HUAWEICLOUD_ACCESS_KEY_ID, HUAWEICLOUD_SECRET_ACCESS_KEY, etc.
-- **Validation**: Test configuration via environment variables
+- **Criteria**: Use `hcloud configure init` or `hcloud configure set` to configure credentials
+- **Validation**: Test configuration via the hcloud interactive configuration commands
 - **Success Metric**: Flexible credential management
 
 ### 2. Monitoring System Integration
 
-**AC-304**: The skill must export data in monitoring-friendly formats.
+**AC-304**: The skill must export data in machine-readable formats.
 
-- **Criteria**: Support Prometheus, Graphite, or other monitoring formats
-- **Validation**: Verify format compatibility with common monitoring tools
-- **Success Metric**: Direct integration with monitoring systems
+- **Criteria**: Provide JSON output (hcloud CLI default) that can be consumed by downstream tools
+- **Validation**: Verify format compatibility with common processing tools (jq, Python, shell)
+- **Success Metric**: Direct integration with scripting and reporting tools
+
+> **Note**: Prometheus and Graphite export formats are planned for future versions and are not part of the current scope.
 
 **AC-305**: The skill must support alert threshold configuration.
 
@@ -266,11 +268,11 @@ and user expectations before being considered complete and ready for use.
 
 ### 1. Testing Coverage
 
-**AC-401**: Unit tests must cover 80% of core functionality.
+**AC-401**: Documentation must cover the complete feature scope.
 
-- **Criteria**: Code coverage report showing >= 80% line coverage
-- **Validation**: Run coverage tools, generate report
-- **Success Metric**: 80%+ test coverage
+- **Criteria**: All skill features, parameters, and example commands are documented and accurate
+- **Validation**: Documentation review against the skill's feature list
+- **Success Metric**: 100% documentation coverage of skill features
 
 **AC-402**: Integration tests must cover all Huawei Cloud API interactions.
 

@@ -259,10 +259,20 @@ proc_zombie_count
 ### 4. Instance Tagging for Cost Allocation
 
 ```bash
-# Tag instances by environment, team, project
-hcloud ECS TagServer <instance-uuid> \
-  --tags "Environment=Production,Team=Backend,Project=ECommerce" \
-  --cli-region <region-id>
+# View tags on an instance
+hcloud ECS ShowServerTags --server_id=<instance-uuid> --cli-region=<region-id>
+
+# Create/update instance tags
+hcloud ECS BatchCreateServerTags --server_id=<instance-uuid> \
+  --tags.1.key=Environment --tags.1.value=Production \
+  --tags.2.key=Team --tags.2.value=Backend \
+  --tags.3.key=Project --tags.3.value=ECommerce \
+  --cli-region=<region-id>
+
+# Delete instance tags
+hcloud ECS BatchDeleteServerTags --server_id=<instance-uuid> \
+  --tags.1.key=Environment --tags.1.value=Production \
+  --cli-region=<region-id>
 ```
 
 ## Performance Optimization
@@ -284,7 +294,7 @@ hcloud CES BatchListMetricData \
   --to=$(date +%s)000 \
   --period=300 \
   --filter=average \
-  --cli-region <region-id>
+  --cli-region=<region-id>
 
 # Instead of separate queries for each metric
 ```
@@ -362,8 +372,8 @@ CPU_USAGE=$(hcloud CES BatchListMetricData \
   --to=$(date +%s)000 \
   --period=300 \
   --filter=average \
-  --cli-region "$REGION" \
-  --output json | jq '.metrics[0].datapoints[-1].average')
+  --cli-region="$REGION" \
+  | jq '.metrics[0].datapoints[-1].average')
 
 if (( $(echo "$CPU_USAGE > 80" | bc -l) )); then
   echo "WARNING: High CPU usage: $CPU_USAGE%"
@@ -425,7 +435,7 @@ generate_daily_report() {
     --to="$END_TIME" \
     --period=3600 \
     --filter=average \
-    --cli-region "$REGION"
+    --cli-region="$REGION"
 }
 ```
 
@@ -459,7 +469,7 @@ analyze_weekly_trends() {
       --to="$END_TIME" \
       --period=3600 \
       --filter=average \
-      --cli-region "$REGION"
+      --cli-region="$REGION"
     echo ""
   done
 }

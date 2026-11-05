@@ -889,6 +889,20 @@ For metric selection guidelines, data retention policies, and cost optimization,
 6. **Batch query limit**: Max 500 metrics per BatchListMetricData request
 7. **Dimensions**: Max 4 dimensions per metric
 
+## Period Enumeration
+
+The `--period` parameter supports the following collection cycle values (in seconds):
+
+- `1` - Real-time monitoring data
+- `60` - 1-minute granularity (AGT.ECS only)
+- `300` - 5-minute granularity (SYS.ECS minimum)
+- `1200` - 20-minute granularity
+- `3600` - 1-hour granularity
+- `14400` - 4-hour granularity
+- `86400` - 1-day granularity
+
+> **Note**: period=60 (1-minute) is only available for AGT.ECS metrics. SYS.ECS metrics have a minimum period of 300 (5 minutes).
+
 ## References
 
 - [Huawei Cloud CES Documentation](https://support.huaweicloud.com/usermanual-ecs/ecs_03_1001.html)

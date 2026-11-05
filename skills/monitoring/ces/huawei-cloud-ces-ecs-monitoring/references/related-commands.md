@@ -171,7 +171,7 @@ hcloud CES ListAlarms --cli-region=<region-id>
 ### Get Alarm Details
 
 ```bash
-hcloud CES ShowAlarm <alarm-id> --cli-region=<region-id>
+hcloud CES ShowAlarm --alarm_id=<alarm-id> --cli-region=<region-id>
 
 ```
 
