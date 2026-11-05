@@ -93,7 +93,7 @@ hcloud version
 # Expected: >= 3.2.0
 
 # Test authentication
-hcloud DWS ListClusters --cli-region=<region> --project_id=<pid> --offset=0 --limit=1
+hcloud DWS ListClusters --cli-region=<region> --project_id=<pid>
 ```
 
 ---
@@ -105,7 +105,7 @@ This skill uses the following KooCLI commands to interact with DWS Autopilot API
 ### Query Cluster List
 
 ```bash
-hcloud DWS ListClusters --cli-region=<region> --project_id=<pid> --offset=0 --limit=200
+hcloud DWS ListClusters --cli-region=<region> --project_id=<pid>
 ```
 
 **Parameters**:
@@ -113,8 +113,6 @@ hcloud DWS ListClusters --cli-region=<region> --project_id=<pid> --offset=0 --li
 |-----------|----------|-------------|
 | --cli-region | Yes | Region ID (e.g., cn-north-7, cn-south-1) |
 | --project_id | Yes | Project ID |
-| --offset | Yes | Pagination offset, start from 0 |
-| --limit | Yes | Pagination limit, use 200 |
 
 **Response**: Returns cluster list including cluster_id, cluster_name, project_id, node_count, etc.
 
