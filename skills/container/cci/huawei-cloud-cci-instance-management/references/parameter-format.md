@@ -28,11 +28,11 @@ Maps are expressed as individual key=value entries using dot notation, NOT as JS
 --metadata.labels.app=my-app
 --metadata.labels.environment=production
 
-# Resource limits/requests
+# Resource limits/requests (requests MUST equal limits: same CPU, same memory)
 --spec.template.spec.containers.1.resources.limits.cpu=500m
 --spec.template.spec.containers.1.resources.limits.memory=1Gi
---spec.template.spec.containers.1.resources.requests.cpu=250m
---spec.template.spec.containers.1.resources.requests.memory=512Mi
+--spec.template.spec.containers.1.resources.requests.cpu=500m
+--spec.template.spec.containers.1.resources.requests.memory=1Gi
 
 # Selector matchLabels
 --spec.selector.matchLabels.app=my-deploy
@@ -52,6 +52,8 @@ Arrays use **1-based** indexing (NOT 0-based):
 --spec.template.spec.volumes.2.name=config-vol
 ```
 
+> JSON Patch bodies (`--io.k8s.apimachinery.pkg.apis.meta.v1.Patch`, used by the `patch...` operations) use standard **0-based** array indices instead — for example `/spec/template/spec/containers/0/image` is the first container. The 1-based rule above applies only to hcloud dot-notation parameters.
+
 ## 4. Resource Quantity Format
 
 | Type | Format | Examples |
@@ -61,6 +63,8 @@ Arrays use **1-based** indexing (NOT 0-based):
 
 CPU values: `100m` = 0.1 core, `500m` = 0.5 core, `1` = 1 core, `4` = 4 cores.
 Memory values: `256Mi`, `512Mi`, `1Gi`, `2Gi`, `4Gi`.
+
+> **Limits must equal requests**: CCI rejects a workload whose `resources.requests` differ from its `resources.limits` (`limit and request doesn't equal`), so give both maps identical CPU and memory values (for example `500m` / `1Gi`).
 
 ## 5. CCI Annotation Key Limitations
 
@@ -89,11 +93,22 @@ For Namespace, the annotation key `namespace.kubernetes.io/flavor` can be passed
 # hcloud CLI parameter (dots replaced with hyphens in the key):
 --metadata.annotations.namespace-kubernetes-io/flavor=general-computing
 
-# CCI service auto-adds the canonical dotted version:
+# For flavor value "general-computing", CCI normalizes this back to the canonical key:
 # namespace.kubernetes.io/flavor=general-computing
 ```
 
 This workaround works because the key only contains dots (no additional slashes beyond the single `/` separating domain from name), and CCI recognizes the hyphenated form.
+
+**Limitation — the hyphen form is NOT safe for every flavor value.** CCI normalizes the hyphenated key back to `namespace.kubernetes.io/flavor` only for `general-computing`. With `gpu-accelerated` the hyphen form is silently dropped and the namespace is created as `general-computing`, so the GPU capability is never enabled. The canonical dotted key is required in that case, but hcloud CLI cannot pass dotted annotation keys at all (section 5.1) — use the Python helper script instead:
+
+```bash
+python scripts/cci_network_helper.py create-namespace \
+  --name=<ns-name> \
+  --flavor=gpu-accelerated \
+  --region=<region>
+```
+
+Then confirm the flavor annotation the API returned before creating workloads. Hyphen replacement never works for Network annotations (section 5.3).
 
 ### 5.3 Network Annotation Cannot Use hcloud CLI
 
@@ -118,10 +133,10 @@ The `--cli-jsonInput` feature allows passing the entire request body as a JSON f
 
 | Resource | Annotation Key | hcloud CLI | Python Script |
 |---|---|---|---|
-| Namespace | `namespace.kubernetes.io/flavor` | Use hyphen workaround | Optional |
+| Namespace | `namespace.kubernetes.io/flavor` | Hyphen workaround only for `general-computing`; helper script required for `gpu-accelerated` | Required for `gpu-accelerated` |
 | Network | `network.alpha.kubernetes.io/default-security-group` | **Cannot use** | **Required** |
 | Pod / Deployment | Simple keys (no dots) | Works normally | Optional |
-| Pod / Deployment | Keys with dots | Cannot pass directly | Required |
+| Pod / Deployment | Keys with dots | Cannot pass the dotted key directly; the hyphenated form is transmitted verbatim but CCI does **not** rename it back to the dotted key | Required for a guaranteed binding |
 
 ### 5.6 Network Required Spec Fields
 
@@ -131,7 +146,7 @@ Network resources require ALL of the following spec fields:
 spec:
   attachedVPC: <vpc-id>          # VPC ID
   subnetID: <subnet-id>          # Subnet ID
-  networkType: <type>            # Network type (e.g., "underlay-neutron")
+  networkType: <type>            # Network type (e.g., "underlay_neutron"; note the underscore)
   networkID: <neutron-network-id> # Neutron network ID of the VPC subnet (REQUIRED)
 ```
 
@@ -266,5 +281,7 @@ hcloud CCI createAppsV1NamespacedDeployment \
   --spec.template.spec.containers.1.image=nginx:latest \
   --spec.template.spec.containers.1.resources.limits.cpu=500m \
   --spec.template.spec.containers.1.resources.limits.memory=1Gi \
+  --spec.template.spec.containers.1.resources.requests.cpu=500m \
+  --spec.template.spec.containers.1.resources.requests.memory=1Gi \
   --cli-region=cn-north-4
 ```

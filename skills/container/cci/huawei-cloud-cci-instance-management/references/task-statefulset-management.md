@@ -17,6 +17,8 @@ hcloud CCI createAppsV1NamespacedStatefulSet \
   --spec.template.spec.containers.1.image=<image> \
   --spec.template.spec.containers.1.resources.limits.cpu=500m \
   --spec.template.spec.containers.1.resources.limits.memory=1Gi \
+  --spec.template.spec.containers.1.resources.requests.cpu=500m \
+  --spec.template.spec.containers.1.resources.requests.memory=1Gi \
   --spec.serviceName=<sts-name> \
   --cli-region=<region> \
   --cli-output=json
@@ -25,7 +27,7 @@ hcloud CCI createAppsV1NamespacedStatefulSet \
 **Required fields:**
 - `spec.serviceName` — headless Service name for network identity (REQUIRED for StatefulSet)
 - `spec.selector.matchLabels` — must match `spec.template.metadata.labels`
-- Resources (`limits`) are MANDATORY on CCI
+- Resources are MANDATORY on CCI, and `resources.requests` **MUST equal** `resources.limits` (same CPU value and same memory value)
 
 **PVC volumeClaimTemplates example (persistent storage):**
 
@@ -40,6 +42,8 @@ hcloud CCI createAppsV1NamespacedStatefulSet \
   --spec.template.spec.containers.1.image=<image> \
   --spec.template.spec.containers.1.resources.limits.cpu=500m \
   --spec.template.spec.containers.1.resources.limits.memory=1Gi \
+  --spec.template.spec.containers.1.resources.requests.cpu=500m \
+  --spec.template.spec.containers.1.resources.requests.memory=1Gi \
   --spec.template.spec.containers.1.volumeMounts.1.name=data \
   --spec.template.spec.containers.1.volumeMounts.1.mountPath=/data \
   --spec.volumeClaimTemplates.1.metadata.name=data \
@@ -70,16 +74,32 @@ hcloud CCI readAppsV1NamespacedStatefulSetStatus --name=<sts-name> --namespace=<
 
 ## 3. Update StatefulSet (Patch)
 
+`patchAppsV1NamespacedStatefulSet` accepts only `--io.k8s.apimachinery.pkg.apis.meta.v1.Patch` as its body parameter — there is no `--spec.replicas` / `--spec.template...` parameter. Pass a JSON Patch body:
+
 ```bash
 hcloud CCI patchAppsV1NamespacedStatefulSet \
   --name=<sts-name> --namespace=<ns-name> \
-  --spec.template.spec.containers.1.image=<new-image> \
+  --io.k8s.apimachinery.pkg.apis.meta.v1.Patch='[{"op":"replace","path":"/spec/template/spec/containers/0/image","value":"<new-image>"}]' \
   --cli-region=<region>
 ```
 
-Common patch operations:
-- Image update: `--spec.template.spec.containers.1.image=<new-image>`
-- Replica scaling: `--spec.replicas=<new-count>`
+Common patch operations (multiple entries may be combined in the same JSON Patch array):
+
+| Change | JSON Patch path |
+|---|---|
+| Image update | `/spec/template/spec/containers/0/image` |
+| Replica scaling | `/spec/replicas` |
+
+> JSON Patch array indices are **0-based** (`containers/0` is the first container), while hcloud dot-notation parameters are 1-based (`--spec.template.spec.containers.1.image`). The fields that may be updated are limited to `metadata.labels`, `metadata.annotations`, `spec.replicas`, `spec.template`, `spec.restartPolicy`, `spec.revisionHistoryLimit` and `spec.progressDeadlineSeconds`.
+
+Combined example:
+
+```bash
+hcloud CCI patchAppsV1NamespacedStatefulSet \
+  --name=<sts-name> --namespace=<ns-name> \
+  --io.k8s.apimachinery.pkg.apis.meta.v1.Patch='[{"op":"replace","path":"/spec/replicas","value":2},{"op":"replace","path":"/spec/template/spec/containers/0/image","value":"nginx:1.27"}]' \
+  --cli-region=<region>
+```
 
 ---
 
@@ -89,7 +109,21 @@ Common patch operations:
 hcloud CCI deleteAppsV1NamespacedStatefulSet --name=<sts-name> --namespace=<ns-name> --cli-region=<region>
 ```
 
-**WARNING:** PVCs created by volumeClaimTemplates are NOT automatically deleted when the StatefulSet is deleted. Manual cleanup is required:
+**WARNING:** PVCs created by volumeClaimTemplates are NOT automatically deleted when the StatefulSet is deleted, and they keep billing. Clean them up as a **separate, confirmation-gated** operation — deleting a PVC is **irreversible** (the volume's data is lost).
+
+### Step 1: Preview — show what will remain and what will be deleted
+
+```bash
+# List the PVCs left behind in the namespace
+hcloud CCI listCoreV1NamespacedPersistentVolumeClaim --namespace=<ns-name> --cli-region=<region> --cli-output=json
+
+# Read one PVC before deleting it (also proves it exists)
+hcloud CCI readCoreV1NamespacedPersistentVolumeClaim --name=<pvc-name> --namespace=<ns-name> --cli-region=<region> --cli-output=json
+```
+
+If the read returns not-found, report "resource does not exist" and stop — do not attempt the delete.
+
+### Step 2: Confirm & Execute — only after explicit user confirmation, one PVC at a time
 
 ```bash
 hcloud CCI deleteCoreV1NamespacedPersistentVolumeClaim --name=<pvc-name> --namespace=<ns-name> --cli-region=<region>

@@ -5,7 +5,7 @@ Complete end-to-end workflow sequences with actual `hcloud` commands. Default re
 ## Critical Notes
 
 - **Network creation requires a Python helper script**: The annotation key `network.alpha.kubernetes.io/default-security-group` contains dots that `hcloud` CLI cannot pass as parameter names. Use `cci_network_helper.py` from the `scripts/` directory for Network creation.
-- **Namespace creation**: Use hyphens instead of dots in annotation keys, e.g. `--metadata.annotations.namespace-kubernetes-io/flavor=general-computing` (CCI auto-normalizes hyphenated keys back to canonical dotted form for Namespace resources).
+- **Namespace creation**: the flavor annotation key is `namespace.kubernetes.io/flavor`, and hcloud cannot pass dotted annotation keys. The hyphenated form `--metadata.annotations.namespace-kubernetes-io/flavor=general-computing` is transmitted verbatim and is only harmless because `general-computing` is the default flavor. For `gpu-accelerated` (or when the annotation must really be set), use `python scripts/cci_network_helper.py create-namespace --name=<ns-name> --flavor=<flavor> --region=<region>` — see `task-namespace-management.md`.
 - **Deployment/Pod/StatefulSet**: CCI requires **limits == requests** for container resources. If limits != requests, creation fails with "limit and request doesn't equal" error. Always set requests to the same values as limits.
 - **EIPPool creation**: Requires `--apiVersion=crd.yangtse.cni/v1` and `--kind=EIPPool` (mandatory). Also requires `--spec.eipAttributes.networkType` and all bandwidth fields (`shareType`, `size`, `chargeMode`, `name`).
 - **Annotation keys containing dots**: Keys like `yangtse.io/eippool` must use hyphen replacement (`yangtse-io/eippool`) when passed via hcloud CLI.
@@ -31,7 +31,6 @@ The Network spec requires these fields: `attachedVPC`, `subnetID`, `networkType`
 
 ```bash
 hcloud VPC ShowSubnet \
-  --vpc_id=vpc-def456 \
   --subnet_id=subnet-abc123 \
   --cli-region=cn-north-4 \
   --cli-output=json
@@ -131,7 +130,6 @@ hcloud CCI createCoreV1Namespace \
 
 ```bash
 hcloud VPC ShowSubnet \
-  --vpc_id=vpc-def456 \
   --subnet_id=subnet-abc123 \
   --cli-region=cn-north-4 \
   --cli-output=json
@@ -192,6 +190,8 @@ hcloud CCI createCoreV1NamespacedPod \
   --spec.containers.1.image=nginx:latest \
   --spec.containers.1.resources.limits.cpu=500m \
   --spec.containers.1.resources.limits.memory=1Gi \
+  --spec.containers.1.resources.requests.cpu=500m \
+  --spec.containers.1.resources.requests.memory=1Gi \
   --spec.containers.1.ports.1.containerPort=80 \
   --cli-region=cn-north-4
 ```
@@ -236,9 +236,13 @@ hcloud CCI readAppsV1NamespacedDeploymentScale \
 hcloud CCI patchAppsV1NamespacedDeploymentScale \
   --namespace=my-ns \
   --name=my-deploy \
-  --spec.replicas=5 \
+  --io.k8s.apimachinery.pkg.apis.meta.v1.Patch='[{"op":"replace","path":"/spec/replicas","value":5}]' \
   --cli-region=cn-north-4
 ```
+
+> `patchAppsV1NamespacedDeploymentScale` has **no** `--spec.replicas` parameter — it is rejected with
+> `[USE_ERROR]不正确的参数:spec.replicas`. The replica count must be sent as a JSON Patch body; hcloud
+> then issues `PATCH .../deployments/<name>/scale` with `Content-Type: application/json-patch+json`.
 
 ### Step 3: Verify New Replicas Are Ready
 
@@ -272,9 +276,14 @@ hcloud CCI readAppsV1NamespacedDeployment \
 hcloud CCI patchAppsV1NamespacedDeployment \
   --namespace=my-ns \
   --name=my-deploy \
-  --spec.template.spec.containers.1.image=nginx:1.25 \
+  --io.k8s.apimachinery.pkg.apis.meta.v1.Patch='[{"op":"replace","path":"/spec/template/spec/containers/0/image","value":"nginx:1.25"}]' \
   --cli-region=cn-north-4
 ```
+
+> The same JSON Patch rule applies: `--spec.template.spec.containers.1.image` is **not** a valid
+> hcloud parameter. Note the indexing difference — JSON Patch paths use **0-based** array indexes
+> (`containers/0`), while hcloud body parameters such as `--spec.template.spec.containers.1.name`
+> are **1-based**.
 
 ### Step 3: Monitor Rolling Update Status
 
@@ -294,6 +303,10 @@ Monitor until:
 ---
 
 ## Workflow 5: Full Cleanup (Delete All Resources)
+
+> **Existence pre-check (mandatory):** before each delete, confirm the target exists (read the
+> resource, or read the namespace). If it does not exist, report `Resource '<name>' does not exist`
+> and skip that delete instead of running it.
 
 ### Step 1: Delete All Deployments/StatefulSets/Pods
 
@@ -371,7 +384,6 @@ hcloud CCI createCoreV1Namespace \
 
 ```bash
 hcloud VPC ShowSubnet \
-  --vpc_id=vpc-def456 \
   --subnet_id=subnet-abc123 \
   --cli-region=cn-north-4 \
   --cli-output=json

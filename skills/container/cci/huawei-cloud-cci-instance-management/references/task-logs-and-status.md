@@ -4,6 +4,18 @@ Status reading and log viewing across all CCI resources.
 
 ---
 
+## Existence Pre-Check (Mandatory)
+
+Every command in this file is a read-only query, but each still requires the target resource to exist. Before querying status, logs, or metrics for a named resource:
+
+1. **Read the resource first** to confirm it exists — for example `hcloud CCI readCoreV1NamespacedPod`, `readAppsV1NamespacedDeployment`, `readNetworkingCciIoV1beta1NamespacedNetwork`, or `readCrdYangtseCniV1NamespacedEIPPool`.
+2. If the read reports that the resource does not exist (not found), tell the user `Resource '<name>' does not exist` and **STOP** — do not run the status/log query and do not propose a delete.
+3. Only if the read succeeds, continue with the status/log query for that resource.
+
+The containing namespace must also exist — see `task-namespace-management.md`.
+
+---
+
 ## 1. Pod Status
 
 ```bash
@@ -38,6 +50,8 @@ hcloud CCI readCoreV1NamespacedPodLog \
 - `--tailLines=100` — show last 100 lines
 
 **Multi-container pods:** `--container=<container-name>` is REQUIRED when the Pod has more than one container.
+
+**Existence pre-check:** confirm the Pod exists with `hcloud CCI readCoreV1NamespacedPod --name=<pod-name> --namespace=<ns-name> --cli-region=<region>` before requesting logs. If it does not exist, report `Pod '<pod-name>' does not exist` and stop.
 
 ---
 
@@ -140,23 +154,30 @@ hcloud CCI readCoreV1NamespacedServiceStatus \
 Poll Pod status until `phase=Running`:
 
 ```bash
-# Check status repeatedly until Running
-$phase = ""
-while ($phase -ne "Running") {
-  $result = hcloud CCI readCoreV1NamespacedPodStatus `
-    --name=<pod-name> --namespace=<ns-name> `
-    --cli-region=<region> --cli-output=json `
-    --cli-query="status.phase"
-  $phase = $result.Trim()
-  if ($phase -ne "Running") {
-    Start-Sleep -Seconds 5
-  }
-}
-Write-Output "Pod is Running"
+# Check status repeatedly until Running (60 x 5s = 5 minutes max)
+max=60
+i=0
+phase=""
+while [ "$phase" != "Running" ] && [ "$i" -lt "$max" ]; do
+  phase=$(hcloud CCI readCoreV1NamespacedPodStatus \
+    --name=<pod-name> --namespace=<ns-name> \
+    --cli-region=<region> --cli-output=json \
+    --cli-query="status.phase" | tr -d '"\r\n')
+  if [ "$phase" != "Running" ]; then
+    sleep 5
+    i=$((i + 1))
+  fi
+done
+
+if [ "$phase" = "Running" ]; then
+  echo "Pod is Running"
+else
+  echo "Timed out after ${max} attempts; last phase: ${phase}"
+fi
 ```
 
 **Alternative phases to wait for:**
 - `Succeeded` — for batch/job pods
 - `Failed` — indicates error; stop waiting and inspect events
 
-**Timeout pattern:** add a max iteration count to prevent infinite loops (e.g., 60 iterations × 5s = 5 minutes max).
+**Timeout pattern:** the loop above caps the wait with a max iteration count to prevent infinite loops (60 iterations × 5s = 5 minutes max); adjust `max` as needed.
