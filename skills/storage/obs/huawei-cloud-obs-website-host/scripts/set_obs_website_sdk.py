@@ -7,7 +7,17 @@ import sys
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        description="Set OBS static website hosting via Huawei OBS Python SDK"
+        description=(
+            "Set OBS static website hosting via Huawei OBS Python SDK. "
+            "NOTE: this is a WRITE operation. It reads cloud credentials from "
+            "(in priority order) CLI flags, HW_ACCESS_KEY/HW_SECRET_KEY/HW_SECURITY_TOKEN "
+            "environment variables, or the local ~/.obsutilconfig file, and then makes "
+            "remote network calls that modify the specified bucket's website "
+            "configuration (setBucketWebsite) and register the custom domain on that "
+            "bucket (setBucketCustomDomain). It never uploads/modifies objects and never "
+            "exports your credentials. Confirm the bucket name and custom domain before "
+            "running. Use --yes to skip the interactive confirmation."
+        )
     )
     p.add_argument("bucket_name", help="OBS bucket name")
     p.add_argument("endpoint", help="OBS endpoint, e.g. https://obs.<region>.myhuaweicloud.com")
@@ -57,6 +67,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--certificate-id",
         default="",
         help="CCM certificate ID (16 chars) from Cloud Certificate Manager, alternative to PEM direct upload.",
+    )
+    p.add_argument(
+        "--yes",
+        action="store_true",
+        help="Skip the interactive confirmation. Use with care: the script still performs a remote write.",
     )
     return p
 
@@ -170,6 +185,40 @@ def main() -> int:
             file=sys.stderr,
         )
         return 2
+
+    # Runtime disclosure before any write (security compliance):
+    # - declare where credentials were read from (without printing values)
+    # - declare the remote write this invocation is about to perform
+    cred_sources = []
+    if args.access_key or args.secret_key:
+        cred_sources.append("CLI flags (--access-key/--secret-key)")
+    if os.getenv("HW_ACCESS_KEY") or os.getenv("HW_SECRET_KEY"):
+        cred_sources.append("environment variables (HW_ACCESS_KEY/HW_SECRET_KEY)")
+    if not cred_sources:
+        cred_sources.append("local ~/.obsutilconfig")
+    print(
+        "disclosure: credentials read from: " + "; ".join(cred_sources),
+        file=sys.stderr,
+    )
+    print(
+        f"disclosure: about to WRITE remote OBS configuration for bucket '{args.bucket_name}': "
+        "setBucketWebsite (index document) and setBucketCustomDomain "
+        f"(register custom domain '{custom_domain}'). This changes production-facing "
+        "website/dns configuration; no object content is uploaded or modified.",
+        file=sys.stderr,
+    )
+    if not args.yes:
+        try:
+            answer = input(
+                f"Type 'yes' to confirm and apply the write to bucket '{args.bucket_name}' "
+                f"with custom domain '{custom_domain}': "
+            )
+        except EOFError:
+            print("confirmation cancelled (no input). Pass --yes to skip this prompt.", file=sys.stderr)
+            return 2
+        if answer.strip().lower() not in ("yes", "y"):
+            print("confirmation cancelled.", file=sys.stderr)
+            return 2
 
     try:
         from obs import ObsClient, WebsiteConfiguration, IndexDocument, ErrorDocument  # type: ignore  # noqa: E501

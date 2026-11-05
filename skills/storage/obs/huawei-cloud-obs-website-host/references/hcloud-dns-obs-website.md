@@ -2,6 +2,8 @@
 
 Use this reference when you need to configure DNS records for an OBS static website custom domain via Huawei Cloud DNS (hcloud CLI).
 
+> **⚠️ Production infrastructure warning:** Creating or updating DNS records with this reference is a **public, production-facing change**. It can re-route or interrupt live traffic for the affected hostname and de-register/re-point the custom domain. Confirm with the user the exact zone, hostname, and target value before executing `DNS CreateRecordSet`, and warn them that this modifies public DNS.
+
 ## Prerequisites
 
 - `hcloud` CLI installed and configured with AK/SK credentials (see `references/cli-installation-guide.md`)
