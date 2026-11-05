@@ -49,7 +49,9 @@ Deleting a tracker does not remove already-collected traces.
 
 1. Missing `--project_id` → error; confirm the parameter is required and correctly spelled.
 2. Wrong `--trace_type` value → error listing valid enum (`system`/`data`).
-3. `ListTraces` with only `--from` (no `--to`) → validation error; they must be used together.
+3. `ListTraces` with only `--from` (no `--to`) → **valid query** (window `from` → now); this is not
+   an error. `--from` alone may be used for an open-ended range. Use `--from`/`--to` together only
+   when a precise closed interval is needed.
 4. Create tracker with a nonexistent OBS bucket → creation fails; verify bucket first.
 5. `ListTraceResources` with `--project_id` instead of `--domain_id` → error; the operation
    uses the account ID.
