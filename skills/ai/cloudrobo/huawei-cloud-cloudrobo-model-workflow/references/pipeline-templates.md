@@ -53,6 +53,14 @@ cloudrobo asset update-version --asset-id <asset_id> --version-id <version_id> -
 
 Extract: `base_model_asset_id/version_id`, `algorithm_asset_id/version_id`, `train_method`, `dataset_asset_id/version_id`, `default_hyperparams`
 
+> **Get `cluster_id` before Stage 2 (required)**: The training config `cluster_id` is the resource
+> pool ID. Query pools ahead of training (Stage 1 or before building the config):
+> ```bash
+> cloudrobo resource list-pools   # filter pools whose usages include MODEL_TRAINING
+> ```
+> `cluster_id = "pool-<resource_id>"` — take the `resource_id` of the selected pool and prefix it
+> with `pool-`. This must be available before Stage 2 (train `create-task`), not deferred to Stage 3.
+
 ### Step 1.1c: Hyperparameter Confirmation
 
 Display default hyperparameters to user, ask whether to modify. After user selects default or custom, construct `parameters` field.
@@ -64,7 +72,7 @@ Write config JSON to file, use Python subprocess to call CLI:
 ```python
 import subprocess
 
-config = '{"name":"so101-pen-train-<ts>","train_mode":"MODEL_TUNING","train_method":"FFT","algorithm":{"algorithm_asset_id":"<id>","algorithm_version_id":"<id>"},"input_models":[{"model_asset_id":"<id>","version_id":"<id>","source_type":"PUBLIC_MODEL_ASSET"}],"datasets":[{"source_type":"DATASET","dataset_asset_id":"<id>","version_id":"<id>"}],"output_models":[{"model_name":"so101-pen-output-<ts>","model_type":"vla","save_mode":"NEW_MODEL","strict":false}],"spec":"Ascend: 1 * SNT9B2 | 24 vCPUs | 192 GiB","workspace_id":"<id>","parameters":"[{\"key\":\"batch_size\",\"value\":\"32\"},...]"}'
+config = '{"name":"so101-pen-train-<ts>","train_mode":"MODEL_TUNING","train_method":"FFT","algorithm":{"algorithm_asset_id":"<id>","algorithm_version_id":"<id>"},"input_models":[{"model_asset_id":"<id>","version_id":"<id>","source_type":"PUBLIC_MODEL_ASSET"}],"datasets":[{"source_type":"CUSTOM_DATASET_ASSET","dataset_asset_id":"<id>","version_id":"<id>","dataset_name":"<name>"}],"output_models":[{"model_name":"so101-pen-output-<ts>","model_type":"vla","save_mode":"NEW_MODEL","strict":false}],"spec":"Ascend: 1 * SNT9B2 | 24 vCPUs | 192 GiB","cluster_id":"pool-<resource_id>","workspace_id":"<id>","parameters":"[{\"key\":\"batch_size\",\"value\":\"32\"},...]"}'
 
 result = subprocess.run(
     ["cloudrobo", "train", "create-task", "--config", config, "-v"],
