@@ -1,0 +1,10 @@
+{
+  "generic-password-literal:scripts/mgc_migrate.py:853": "false positive: passes the runtime source_password variable into run_cmd_with_optional_password; no password literal is present",
+  "generic-password-literal:scripts/mgc_migrate.py:2519": "false positive: function parameter declaration named password; the value is supplied at runtime, no literal secret",
+  "generic-password-literal:scripts/mgc_migrate.py:2614": "false positive: forwards the runtime password parameter to run_cmd_with_optional_password; no literal secret",
+  "generic-password-literal:scripts/mgc_migrate.py:2667": "false positive: function parameter declaration named password; the value is supplied at runtime, no literal secret",
+  "generic-password-literal:scripts/mgc_migrate.py:2746": "false positive: passes the runtime source_password variable to run_rsync_transfer_step; no password literal is present",
+  "generic-password-literal:scripts/mgc_migrate.py:3015": "false positive: passes the runtime source_password variable to wait_for_target_port_via_source; no password literal is present",
+  "generic-password-literal:scripts/mgc_migrate.py:3144": "false positive: passes the runtime source_password variable to run_remote_ssh_command for cutover_stop_source; no password literal is present",
+  "generic-password-literal:scripts/mgc_migrate.py:3167": "false positive: passes the runtime source_password variable to run_remote_ssh_command for cutover_start_source; no password literal is present"
+}
