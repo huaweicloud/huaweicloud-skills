@@ -91,6 +91,12 @@ with `--cce-insecure-upstream-tls=true` immediately after `cce`.
 | Resource query and local prerequisite check | R3 | May run automatically. |
 | Local binary installation, source build, or plugin replacement | R1 | Preview first and require explicit confirmation before `--execute`. |
 
+## IAM Permissions
+
+The installer does not call any Huawei Cloud OpenAPI and needs no IAM permissions or Huawei Cloud credentials. Only local directory write permission and
+outbound network reachability to the public download sources are required. See [iam-policies.md](references/iam-policies.md) for the equivalent access
+controls.
+
 ## Output Format
 
 Return the cluster ID, region, resource kind, namespace when applicable, resource name, and requested status or fields. State clearly whether the resource is
@@ -119,4 +125,5 @@ When the requested resource cannot be scoped to a namespace or exact name, ask t
 | --- | --- |
 | [Plugin Usage](references/plugin-usage.md) | Credentials, command forms, and x509 retry. |
 | [Installation](references/installation.md) | Local prerequisites, installer parameters, Windows usage, source fallback, confirmation, and troubleshooting. |
+| [IAM Policies](references/iam-policies.md) | No IAM permissions required; equivalent local and network access controls. |
 | [Acceptance Criteria](references/acceptance-criteria.md) | Resource-query and installation acceptance checks. |

@@ -264,9 +264,23 @@ if [[ "$PLUGIN_PRESENT" == false || "$REINSTALL_PLUGIN" == true ]]; then
 fi
 
 echo "Installation complete."
+
+# Verify the installed binaries even when BIN_DIR is not in PATH.
+BIN_DIR_IN_PATH=true
+if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
+  BIN_DIR_IN_PATH=false
+  export PATH="${BIN_DIR}:${PATH}"
+  echo "Note: ${BIN_DIR} is not in PATH; added it temporarily for verification."
+fi
+
 kubectl version --client
 kubectl plugin list
 kubectl plugin list | grep -q 'kubectl-cce' || {
   echo "kubectl-cce was installed but is not discoverable by kubectl. Verify that ${BIN_DIR} is in PATH." >&2
   exit 1
 }
+
+if [[ "$BIN_DIR_IN_PATH" == false ]]; then
+  echo "Verification succeeded. Add ${BIN_DIR} to your PATH to use the installed commands, e.g.:"
+  echo "  export PATH=\"${BIN_DIR}:\${PATH}\""
+fi
