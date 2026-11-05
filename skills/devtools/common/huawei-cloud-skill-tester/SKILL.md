@@ -64,6 +64,15 @@ User Input (--skills or --all-installed)
 
 **Dependency**: Quality telemetry is collected automatically via `skill-quality-cli` (installed by `scripts/ensure_cli.sh` if absent).
 
+## Out of Scope
+
+This framework has explicit capability boundaries — the following are **not** covered:
+
+1. **Huawei Cloud AI Shell Skills only** — Only installable Huawei Cloud AI Shell Skills (targets under `$SKILL_INSTALL_DIR/` or a user-specified path) are tested. Non-AI-Shell assets — VS Code plugins, desktop/CLI tools, Terraform providers, or any software that is not an agent-installable Skill — are out of scope and will be rejected rather than tested.
+2. **Test only — no automatic repair** — Detected problems (defects, doc gaps, missing dependencies, orchestration conflicts) are recorded in the report. The framework does **not** fix, patch, or modify the skill under test.
+3. **No real-dialogue hallucination detection** — The framework performs static/file-assertion checks on skill metadata, docs, and commands only. It does **not** detect or verify LLM hallucinations in real conversations.
+4. **Skill-to-skill combination compatibility only** — Compatibility coverage is limited to orchestrating multiple skills together (Phase 5/6). Operating-system or hardware-platform compatibility (e.g., Windows/macOS/Linux availability, CPU/GPU architecture) is not tested or guaranteed.
+
 ## Prerequisites
 
 1. **hcloud CLI** installed and authenticated (for Tier 2 CLI mode testing) — Reference: https://support.huaweicloud.com/qs-hcli/hcli_02_003.html
