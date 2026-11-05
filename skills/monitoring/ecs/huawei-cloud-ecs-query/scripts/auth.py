@@ -16,10 +16,11 @@ _EMPTY_HASH = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 class HuaweiCloudAuth:
     """华为云认证基类"""
 
-    def __init__(self, region, project_id):
+    def __init__(self, region, project_id, endpoint=None):
         self.region = region
         self.project_id = project_id
-        self.endpoint = f"ecs.{region}.myhuaweicloud.com"
+        # 默认 ECS 端点；可通过 endpoint 覆盖以访问 EVS/VPC 等其他服务端点
+        self.endpoint = endpoint or f"ecs.{region}.myhuaweicloud.com"
 
     def get_headers(self):
         """获取认证请求头，子类实现"""
@@ -29,8 +30,8 @@ class HuaweiCloudAuth:
 class AKSKAuth(HuaweiCloudAuth):
     """AK/SK 签名认证"""
 
-    def __init__(self, ak, sk, region, project_id):
-        super().__init__(region, project_id)
+    def __init__(self, ak, sk, region, project_id, endpoint=None):
+        super().__init__(region, project_id, endpoint=endpoint)
         self.ak = ak
         self.sk = sk
 
@@ -142,8 +143,8 @@ class TokenAuth(HuaweiCloudAuth):
 
     IAM_ENDPOINT_TEMPLATE = "iam.{region}.myhuaweicloud.com"
 
-    def __init__(self, username, password, domain_id, region, project_id):
-        super().__init__(region, project_id)
+    def __init__(self, username, password, domain_id, region, project_id, endpoint=None):
+        super().__init__(region, project_id, endpoint=endpoint)
         self.username = username
         self.password = password
         self.domain_id = domain_id
@@ -204,11 +205,12 @@ class TokenAuth(HuaweiCloudAuth):
         }
 
 
-def create_auth(config):
+def create_auth(config, endpoint=None):
     """根据配置创建认证实例
 
     Args:
         config: 包含认证信息的字典
+        endpoint: 目标服务端点（如 evs.{region}.myhuaweicloud.com），默认使用 ECS 端点
 
     Returns:
         HuaweiCloudAuth 子类实例
@@ -224,7 +226,7 @@ def create_auth(config):
             raise ValueError("AK/SK 认证需要提供 ak 和 sk 配置")
         if not project_id:
             raise ValueError("需要提供 project_id 配置")
-        return AKSKAuth(ak, sk, region, project_id)
+        return AKSKAuth(ak, sk, region, project_id, endpoint=endpoint)
 
     elif auth_method == "token":
         username = config.get("username", "")
@@ -234,7 +236,7 @@ def create_auth(config):
             raise ValueError("Token 认证需要提供 username 和 password 配置")
         if not project_id:
             raise ValueError("需要提供 project_id 配置")
-        return TokenAuth(username, password, domain_id, region, project_id)
+        return TokenAuth(username, password, domain_id, region, project_id, endpoint=endpoint)
 
     else:
         raise ValueError(f"不支持的认证方式: {auth_method}，请使用 'aksk' 或 'token'")

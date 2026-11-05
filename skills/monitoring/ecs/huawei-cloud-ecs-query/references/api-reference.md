@@ -120,17 +120,61 @@ GET /v1/{project_id}/cloudservers/{server_id}
 | updated | String | 更新时间 |
 | tenant_id | String | 租户ID |
 | user_id | String | 用户ID |
-| metadata | Object | 元数据（os_type, charging_mode等） |
-| tags | Array | 标签列表 |
+| metadata | Object | 元数据（os_type, charging_mode, image_name, vpc_id等） |
+| security_groups | Array | 安全组列表（name / id） |
+| key_name | String | 密钥对名称 |
+| tags | Array | 实例标签列表 |
+| network_interfaces | Array | 网卡信息（含 subnet_id、association.public_ip_address） |
 | locked | Boolean | 是否锁定 |
 | OS-EXT-AZ:availability_zone | String | 可用区 |
 | OS-EXT-STS:vm_state | String | 虚拟机状态 |
 | OS-EXT-STS:power_state | Integer | 电源状态 |
 | OS-EXT-STS:task_state | String | 任务状态 |
 | enterprise_project_id | String | 企业项目ID |
-| os-extended-volumes:volumes_attached | Array | 挂载的云硬盘附件列表（id/device，由 API 返回时展示） |
+| os-extended-volumes:volumes_attached | Array | 挂载的云硬盘附件列表（id / device / bootIndex） |
 
-> **多区域查询**：`/v1/{project_id}/cloudservers/detail` 路径中的 `project_id` 必须与目标区域一致。使用 `--region` 切换区域时，需在 `config.yaml` 的 `regions` 映射中配置目标区域 `project_id`，或使用 `--project-id` 参数指定。
+**metadata 关键字段：**
+
+| metadata 字段 | 说明 |
+|------|------|
+| charging_mode | 计费模式："0"=按需计费、"1"=包年/包月、"2"=竞价计费 |
+| image_name | 操作系统镜像名称 |
+| os_type | 操作系统类型（Linux/Windows） |
+| vpc_id | 所属虚拟私有云 VPC ID |
+
+### 4. 增强查询接口（--detail/--full）
+
+`list-servers` / `show-server` 使用 `--detail` 或 `--full` 时，脚本会额外调用以下只读接口补全运维字段：
+
+**EVS 查询云硬盘详情列表**（补全系统盘/数据盘大小与类型）：
+
+```
+GET https://evs.{region}.myhuaweicloud.com/v2/{project_id}/cloudvolumes/detail?limit=1000&offset=...
+```
+
+| 响应字段 | 说明 |
+|------|------|
+| volumes[].id | 云硬盘ID |
+| volumes[].size | 云硬盘大小（GB） |
+| volumes[].volume_type | 云硬盘类型（GPSSD/SSD/SAS等） |
+
+**VPC/EIP 查询弹性公网IP列表（v3）**（补全 EIP 带宽）：
+
+```
+GET https://vpc.{region}.myhuaweicloud.com/v3/{project_id}/eip/publicips?limit=100&offset=...
+```
+
+| 响应字段 | 说明 |
+|------|------|
+| publicips[].public_ip_address | 弹性公网IP地址 |
+| publicips[].bandwidth.size | 带宽大小（Mbps） |
+| publicips[].bandwidth.share_type | 带宽类型（PER/WHOLE） |
+
+> **降级策略**：上述增强接口调用失败（如账号未授予 EVS/VPC 只读权限）时，脚本自动降级为仅展示 ECS 接口直返的挂载盘设备名与公网 IP 地址，不影响核心查询功能。
+
+### 5. 多区域查询
+
+`/v1/{project_id}/cloudservers/detail` 路径中的 `project_id` 必须与目标区域一致。使用 `--region` 切换区域时，需在 `config.yaml` 的 `regions` 映射中配置目标区域 `project_id`，或使用 `--project-id` 参数指定。
 
 ## 服务器状态值
 

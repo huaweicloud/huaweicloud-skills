@@ -1,6 +1,6 @@
 ---
 name: huawei-cloud-ecs-query
-description: 查询华为云ECS弹性云服务器信息。仅用于查询，不包含创建/删除/规格变更等写操作。当用户需要查看华为云ECS实例列表、实例详情、实例状态时使用。支持AK/SK和Token两种认证方式，支持表格和JSON两种输出格式，支持多区域查询。触发条件：用户要求"查询云服务器列表"、"查看ECS实例详情"、"ECS运行状态"、"列出ECS"、"查看服务器状态"，或请求中带 update/修改/创建/删除 ECS 以外的只读查询意图时（如查 flavor、可用区、镜像等 ECS 属性）使用。写操作请求（创建、删除、规格变更、开机/关机）请使用其他技能。
+description: 查询华为云ECS弹性云服务器信息。仅用于查询，不包含创建/删除/规格变更等写操作。当用户需要查看华为云ECS实例列表、实例详情、实例状态时使用。支持AK/SK和Token两种认证方式，支持表格和JSON两种输出格式，支持多区域查询，支持 --detail/--full 增强输出（补全系统盘/数据盘大小类型、安全组、VPC/子网、镜像名称、密钥对、标签、EIP带宽、计费模式等运维字段）。触发条件：用户要求"查询云服务器列表"、"查看ECS实例详情"、"ECS运行状态"、"列出ECS"、"查看服务器状态"，或请求中带 update/修改/创建/删除 ECS 以外的只读查询意图时（如查 flavor、可用区、镜像等 ECS 属性）使用。写操作请求（创建、删除、规格变更、开机/关机）请使用其他技能。
 ---
 
 # 华为云 ECS 查询技能
@@ -14,12 +14,29 @@ description: 查询华为云ECS弹性云服务器信息。仅用于查询，不�
 
 支持两种认证方式（AK/SK 签名认证 和 Token 认证），两种输出格式（表格 和 JSON），以及多区域查询。
 
+`list-servers` / `show-server` 支持 `--detail` 或 `--full` 参数，可补全以下关键运维字段：
+
+| 字段 | 说明 |
+|------|------|
+| 系统盘 | 大小（GB）与类型（如 GPSSD/SSD）以及挂载点 |
+| 数据盘 | 数据盘列表（大小/类型/挂载点） |
+| 安全组 | 实例所属安全组名称列表 |
+| VPC/子网 | 实例所属 VPC ID 与子网 ID |
+| 镜像名称 | 实例操作系统镜像名称（metadata.image_name） |
+| 密钥对 | 实例登录密钥对名称 |
+| 标签 | 实例标签列表 |
+| EIP带宽 | 弹性公网 IP 及带宽大小（Mbps，来自 VPC/EIP 接口） |
+| 计费模式 | 按需/包年包月/竞价（metadata.charging_mode） |
+
 ## 前置条件
 
 ### 1. 安装 Python 依赖
 
+> **⚠️ Mandatory: every `hcloud` command in this skill MUST be wrapped with `skill-quality-cli run --skill-name huawei-cloud-ecs-query -- ` — bare `hcloud` calls are strictly forbidden.**
+> Similarly, every script execution MUST be wrapped with the same `skill-quality-cli run --skill-name huawei-cloud-ecs-query -- ` prefix (e.g. `skill-quality-cli run --skill-name huawei-cloud-ecs-query -- python scripts/ecs_query.py list-servers ...`) — bare `python scripts/ecs_query.py` invocations are forbidden. Bootstrapping exception: `ensure_cli.sh` / `install_cli.sh` may be executed bare during initial setup when `skill-quality-cli` is not yet installed.
+
 ```bash
-pip install requests pyyaml
+skill-quality-cli run --skill-name huawei-cloud-ecs-query -- pip install requests pyyaml
 ```
 
 ### 2. 获取认证凭证
@@ -76,7 +93,8 @@ output_format: "table"
    - 列表 → `list-servers`（可加 `--status`/`--name` 过滤）
    - 详情 → `show-server`
    - 状态 → `server-status`
-4. **格式化输出**：默认表格输出；用户要求 JSON 时用 `--output json`
+   - 需要完整运维字段时 → 追加 `--detail` 或 `--full`
+4. **格式化输出**：默认表格输出；用户要求 JSON 时用 `--output json`；需要增强字段时用 `--detail`/`--full`
 5. **处理错误**：API 请求失败时，根据错误信息提示用户检查网络、区域或权限（参考"注意事项"与 `references/troubleshooting.md`）
 
 ## 核心命令
@@ -87,13 +105,13 @@ output_format: "table"
 
 ```bash
 # 查询实例列表
-hcloud ECS ListServersDetails --cli-region=cn-north-4 --limit=25
+skill-quality-cli run --skill-name huawei-cloud-ecs-query -- hcloud ECS ListServersDetails --cli-region=cn-north-4 --limit=25
 
 # 查询单个实例详情
-hcloud ECS ShowServer --cli-region=cn-north-4 --server_id=<server_id>
+skill-quality-cli run --skill-name huawei-cloud-ecs-query -- hcloud ECS ShowServer --cli-region=cn-north-4 --server_id=<server_id>
 
 # 查询实例状态（结合 --cli-query 过滤）
-hcloud ECS ListServersDetails --cli-region=cn-north-4 --status=ACTIVE
+skill-quality-cli run --skill-name huawei-cloud-ecs-query -- hcloud ECS ListServersDetails --cli-region=cn-north-4 --status=ACTIVE
 ```
 
 CLI 安装与认证方式参考 `references/cli-installation-guide.md`。
@@ -103,7 +121,7 @@ CLI 安装与认证方式参考 `references/cli-installation-guide.md`。
 #### 查询实例列表
 
 ```bash
-python scripts/ecs_query.py list-servers --config config.yaml
+skill-quality-cli run --skill-name huawei-cloud-ecs-query -- python scripts/ecs_query.py list-servers --config config.yaml
 ```
 
 可选参数：
@@ -115,6 +133,14 @@ python scripts/ecs_query.py list-servers --config config.yaml
 - `--status`：按状态过滤（ACTIVE, SHUTOFF, BUILD, ERROR 等）
 - `--name`：按名称过滤
 - `--flavor`：按规格ID过滤
+- `--detail` / `--full`：展示完整运维字段（系统盘/数据盘大小类型、安全组、VPC/子网、镜像名称、密钥对、标签、EIP带宽、计费模式）。两者等价，`--full` 是 `--detail` 的别名
+
+```bash
+# 查询实例列表（完整运维字段）
+skill-quality-cli run --skill-name huawei-cloud-ecs-query -- python scripts/ecs_query.py list-servers --detail --config config.yaml
+```
+
+> **增强字段说明**：系统盘/数据盘大小与类型来自 EVS `ListVolumes` 接口、EIP带宽来自 VPC/EIP `ListPublicips/v3` 接口。当查询账号未授予 EVS/VPC 只读权限时，这些列自动降级为仅展示挂载盘设备名与公网 IP 地址，不影响其余字段与整体查询。
 
 #### 查询实例详情
 
@@ -122,7 +148,14 @@ python scripts/ecs_query.py list-servers --config config.yaml
 python scripts/ecs_query.py show-server --server-id <server_id> --config config.yaml
 ```
 
+```bash
+# 查询实例详情（完整运维字段）
+skill-quality-cli run --skill-name huawei-cloud-ecs-query -- python scripts/ecs_query.py show-server --server-id <server_id> --full --config config.yaml
+```
+
 > **获取 server_id 指引**：表格输出中 ID 列会被截断（仅显示前 8 位），复制完整 ID 请使用 `python scripts/ecs_query.py list-servers --output json --config config.yaml`，从 JSON 输出的 `servers[].id` 字段获取完整 server_id（或 `hcloud ECS ListServersDetails --cli-region=<region>`）。
+>
+> **增强字段说明**：`--detail`/`--full` 模式下 `show-server` 额外展示系统盘/数据盘的大小与类型（EVS 接口）以及 EIP 带宽（VPC/EIP 接口）；未启用 `--detail`/`--full` 时，详情仍展示安全组/VPC/子网/镜像名称/密钥对/计费模式等 ECS 直接返回字段。
 
 #### 查询实例状态
 
@@ -145,6 +178,8 @@ python scripts/ecs_query.py server-status --server-id <server_id> --config confi
 | status | 否 | list-servers 按状态过滤 | `--status ACTIVE` |
 | name | 否 | list-servers 按名称过滤 | `--name web-01` |
 | flavor | 否 | list-servers 按规格ID过滤 | `--flavor s3.small.1` |
+| detail | 否 | list-servers/show-server 展示完整运维字段 | `--detail` |
+| full | 否 | list-servers/show-server 展示完整运维字段（--detail 别名） | `--full` |
 | server-id | 是（show-server/server-status） | 云服务器ID（先用 `list-servers --output json` 获取） | `--server-id <server_id>` |
 
 ## KooCLI Command Format Standard
@@ -163,7 +198,7 @@ hcloud <Service> <Operation> --cli-region=<region> [--key=value ...]
 
 ### 表格格式
 
-实例列表以表格形式展示，包含以下列：
+实例列表默认以简洁表格形式展示，包含以下列：
 | 列名 | 说明 |
 |------|------|
 | ID | 服务器ID |
@@ -177,11 +212,24 @@ hcloud <Service> <Operation> --cli-region=<region> [--key=value ...]
 | Created | 创建时间 |
 | AZ | 可用区 |
 
+使用 `--detail`（或 `--full`）后，表格额外追加以下列：
+| 列名 | 说明 |
+|------|------|
+| System Disk | 系统盘大小/类型/挂载点（EVS 接口补全） |
+| Data Disks | 数据盘列表（大小/类型/挂载点，EVS 接口补全） |
+| Security Group | 安全组名称 |
+| VPC/Subnet | VPC ID / 子网 ID（截断显示） |
+| Image | 镜像名称（metadata.image_name） |
+| KeyPair | 密钥对名称 |
+| Tags | 实例标签 |
+| EIP(BW) | 公网 IP 及带宽大小（Mbps，VPC/EIP 接口补全） |
+| Billing | 计费模式（按需/包年包月/竞价） |
+
 > **注意**：表格模式下 ID 列会截断显示（仅前 8 位），如需完整 ID（如用作 `--server-id`），请使用 `--output json` 输出。
 
 ### 详情输出
 
-`show-server` 详情会展示实例的核心配置字段，若 API 返回挂载的云硬盘信息（`os-extended-volumes:volumes_attached`），会一并展示“挂载云硬盘”（设备名 + 云硬盘ID）。查看云硬盘的容量、类型等完整信息，请使用云硬盘（EVS）相关技能。
+`show-server` 详情默认展示核心配置字段及 ECS 接口直返的运维字段（系统盘/数据盘挂载点、安全组、VPC/子网、镜像名称、密钥对、计费模式、标签），若 API 返回挂载的云硬盘信息（`os-extended-volumes:volumes_attached`），会一并展示“挂载云硬盘”（设备名 + 云硬盘ID）。使用 `--detail`/`--full` 时，额外补全系统盘/数据盘的大小与类型（EVS 接口）及 EIP 带宽（VPC/EIP 接口，含带宽大小 Mbps）。查看云硬盘的性能等更详细信息，请使用云硬盘（EVS）相关技能。
 
 ### 状态说明
 
@@ -215,14 +263,15 @@ hcloud <Service> <Operation> --cli-region=<region> [--key=value ...]
 - **配置文件缺失**：按"前置条件"章节创建 `~/.huawei-ecs/config.yaml`
 - **认证失败**：`错误: 认证失败 (HTTP xxx)…`，检查 AK/SK 或 Token 配置是否正确，账号是否具备 ECS 只读权限
 - **跨区域查询失败（Common.0018）**：`--region` 切换区域时 `project_id` 也必须指向目标区域；请在 config.yaml 的 `regions` 映射中配置，或使用 `--project-id` 指定
-- **连接失败**：检查网络是否能访问 `ecs.{region}.myhuaweicloud.com`
+- **连接失败**：检查网络是否能访问 `ecs.{region}.myhuaweicloud.com`；`--detail`/`--full` 模式还会访问 `evs.{region}.myhuaweicloud.com` 与 `vpc.{region}.myhuaweicloud.com`
+- **使用 --detail 时系统盘/数据盘/EIP带宽显示为空**：账号缺少 EVS 或 VPC 只读权限，或增强接口调用失败；相关列已自动降级为挂载盘设备名/公网IP地址，可忽略
 - 更多排障指引见 `references/troubleshooting.md`
 
 ## 注意事项
 
 1. **安全提醒**：配置文件包含敏感凭证信息，请妥善保管，不要提交到版本控制系统
 2. **网络要求**：需要能访问华为云API端点（`ecs.{region}.myhuaweicloud.com`）
-3. **权限要求**：使用的账号/IAM用户需要具备 ECS 只读权限（ECS ReadOnlyAccess），详细策略见 `references/iam-policies.md`
+3. **权限要求**：使用的账号/IAM用户需要具备 ECS 只读权限（ECS ReadOnlyAccess），详细策略见 `references/iam-policies.md`；使用 `--detail`/`--full` 补全系统盘/数据盘大小类型与 EIP 带宽时，还需具备 EVS（EVS ReadOnlyAccess）与 VPC（VPC ReadOnlyAccess）只读权限，未授权时相关字段自动降级展示且不影响查询
 4. **区域支持**：华为云有多个区域，常见区域包括：
    - cn-north-4（华北-北京四）
    - cn-north-1（华北-北京一）
@@ -233,6 +282,6 @@ hcloud <Service> <Operation> --cli-region=<region> [--key=value ...]
 5. **AK/SK 签名**：使用 SDK-HMAC-SHA256 签名算法，与华为云官方签名规范一致
 6. **敏感凭据安全声明**：本技能仅支持 ECS 实例信息**只读**查询，**不支持查看/重置云服务器登录密码、密钥对等敏感凭据**，相关操作请在华为云控制台完成
 7. **费用/配额边界声明**：本技能仅支持 ECS 实例信息**只读**查询，**不支持账单/费用/配额等 BSS（费用中心）类查询**，相关查询请使用费用中心或 BSS 类技能
-8. **磁盘信息边界**：`show-server` 详情仅展示 API 返回的挂载云硬盘 ID/设备名，不支持查询云硬盘容量、类型、性能等扩展信息，完整磁盘信息请使用云硬盘（EVS）相关技能
+8. **磁盘信息边界**：默认模式下 `show-server` 详情展示 API 返回的挂载云硬盘 ID/设备名；`--detail`/`--full` 模式通过 EVS `ListVolumes` 接口补全系统盘/数据盘的大小与类型。查询云硬盘的性能、加密等扩展信息请使用云硬盘（EVS）相关技能
 9. **写操作统一拒绝**：对于创建、删除、启停（开机/关机）、规格变更、迁移、重装系统等 ECS **写操作**请求，本技能**统一拒绝**，并使用统一话术引导用户：
    > “抱歉，本技能仅支持 ECS 实例信息只读查询，不支持该写操作。请在华为云控制台完成，或使用对应的 ECS 管理类技能。”
