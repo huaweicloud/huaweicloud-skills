@@ -1,4 +1,4 @@
-# Vod Collector - AtomGit-GO installation script (Windows)
+﻿# Vod Collector - AtomGit-GO installation script (Windows)
 # Usage: powershell .\vod_install.ps1 [-RepoDir <path>]
 # Prints open-source notice, checks if installed, and installs if needed.
 
@@ -19,8 +19,9 @@ function Verify-Checksum {
   param([string]$File)
   $checksumFile = "$File.sha256"
   if (-not (Test-Path $checksumFile)) {
-    Write-Host "[vod_install] WARNING: No checksum file found at $checksumFile, skipping verification" -ForegroundColor Yellow
-    return $true
+    # 与 vod_install.sh 保持一致: 缺少校验文件即拒绝安装 (fail-closed), 不静默跳过校验
+    Write-Error "[vod_install] ERROR: checksum file missing ($checksumFile); refuse to install unverified archive"
+    return $false
   }
   Write-Host "[vod_install] Verifying checksum..."
   $expected = (Get-Content $checksumFile | Select-Object -First 1).Split(" ")[0].Trim()

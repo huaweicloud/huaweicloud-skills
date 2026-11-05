@@ -11,6 +11,18 @@ set -euo pipefail
 #
 # 区域: 通过 HW_CLI_REGION 环境变量注入 KooCLI 全局参数 --cli-region
 #       (未设置 HW_CLI_REGION 或命令已含 --cli-region[=..] 时不追加)
+#
+# UTF-8（issue #929）: 官方 skill-quality-cli 的 cli_entry.py::cmd_run 用
+#   subprocess.run(command, env=env, capture_output=True, text=True) 且**未指定
+#   encoding**，中文 Windows 下 text 模式回退到 locale 编码(GBK)，子进程输出
+#   中文时会抛 UnicodeDecodeError、中文检索结果丢失。PYTHONUTF8=1 让 Python 进入
+#   UTF-8 模式(PEP 540)，其默认文本编码变为 UTF-8；PYTHONIOENCODING 兜底标准流。
+#   必须在调用 skill-quality-cli / hcloud 之前导出，且在本脚本内 export 以便
+#   调用方直接 `bash hcloud-run.sh` 时同样生效。
+
+export PYTHONUTF8=1
+export PYTHONIOENCODING=utf-8
+
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_NAME="${SKILL_QUALITY_SKILL_NAME:-huawei-cloud-vod-collector}"
