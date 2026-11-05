@@ -78,6 +78,11 @@ This skill is dedicated to DWS cluster I/O overload root cause diagnosis. When a
 - "Received an I/O alarm, cluster ID is xxx, help analyze the cause"
 - "DWS cluster disk util is maxed out, see what's causing it"
 
+**Skill Scope & Boundaries**:
+- **Service boundary**: This skill only supports Huawei Cloud DWS (GaussDB(DWS)) data warehouse service. It does NOT apply to non-DWS services such as ECS, RDS, CCE, or others.
+- **Problem-type boundary**: This skill only diagnoses DWS cluster I/O overload / I/O usage too high / disk I/O load anomaly (I/O overload, I/O anomaly, high await, high util, etc.). It does NOT handle CPU overload, memory high, or other non-I/O problems (refer to the dedicated CPU/memory diagnosis skills).
+- **Operation boundary**: This skill is read-only diagnosis. It does NOT execute any management or maintenance operations such as cluster restart, scale-out/in, node replacement, kill SQL, or parameter modification.
+
 **Important Rules**: All diagnosis conclusions must come from actual tool return results. Fabricating or assuming values is prohibited. Output only contains the diagnosis report; adding remediation suggestions, outputting SQL optimization statements, and using emoji are prohibited.
 
 **Background Knowledge**: RAID architecture, I/O key metric thresholds, three major I/O scenario indicator features, and important principles are documented in [I/O Background Knowledge](references/io-background.md). Must read before diagnosis.
@@ -118,7 +123,7 @@ This skill is dedicated to DWS cluster I/O overload root cause diagnosis. When a
 hcloud DWS ListMetricsData --cli-region=<region> --cluster_id=<id> --metric_name=<name> --project_id=<pid> --offset=0 --limit=200 --from=<from_ts> --to=<to_ts>
 
 # Query host information
-hcloud DWS ListHostOverview --cli-region=<region> --project_id=<pid> --offset=0 --limit=200
+hcloud DWS ListHostOverview --cli-region=<region> --project_id=<pid> --cluster_id=<cid> --offset=0 --limit=200
 ```
 
 ### Tool Selection Strategy
@@ -182,9 +187,10 @@ For query differences per step, see [Metric Reference](references/metric-referen
 **All tool calls (MCP and hcloud) must use paginated queries** to prevent single responses from being too large and exceeding token limits.
 
 **Pagination Rules**:
-- Use `limit=200` uniformly (do not use 800 or other large values)
-- First page `offset=0`; if returned data count = 200, then `offset+=200` and continue querying
-- Repeat until returned data count < 200, then merge all paginated data
+- Use `limit=200` uniformly (do not use values larger than 200, except the declared exception below)
+- **Explicit exception**: `cpu_io_diagnose_detail` uses `limit=800` pagination (due to its largest data volume, multi-node × multi-instance × multi-timepoint × multi-query); single page of 200 may not be enough
+- First page `offset=0`; if returned data count = limit, then `offset+=limit` and continue querying
+- Repeat until returned data count < limit, then merge all paginated data
 - When merging, concatenate all page data arrays into a complete dataset
 
 **MCP Call Example** (using IOStat):
@@ -209,6 +215,12 @@ Before diagnosis, create an execution plan based on Steps 0-7, then execute sequ
 
 ### Step 0: Environment Detection & Parameter Resolution
 
+**Required Parameter Validation**: Before proceeding, verify that at least one of `cluster_id` or `cluster_name` is provided (both may be provided, but at least one is mandatory). If both are missing, prompt the user to provide a valid `cluster_id` or `cluster_name` and terminate the diagnosis until it is provided.
+
+**Cluster Existence Validation**: Use the cluster list query (`hcloud DWS ListClusters` in hcloud mode, or `dws_autopilot_get_clusters` in MCP mode) to confirm the target cluster exists:
+- If the query returns the error codes `DWS.13026` or `DWS.13032` (cluster not found), or the returned cluster list does not contain the specified cluster_id/cluster_name → the cluster does not exist. Terminate the diagnosis and prompt: `The specified DWS cluster does not exist. Please check the cluster_id/cluster_name and retry`.
+- If the query succeeds and the cluster exists → continue with the following steps.
+
 **Parameter Resolution**: If `project_id` or `region_id` is not provided by the user, read from MCP Server config file `conf/dws_config.yaml`:
 - When `project_id` is missing: Execute `python -c "import yaml; c=yaml.safe_load(open('conf/dws_config.yaml')); print(c.get('project_id',''))"` to obtain it
 - When `region_id` is missing: Execute `python -c "import yaml; c=yaml.safe_load(open('conf/dws_config.yaml')); print(c.get('region_id',''))"` to obtain it
@@ -216,7 +228,7 @@ Before diagnosis, create an execution plan based on Steps 0-7, then execute sequ
 
 Execute `hcloud version`; version >= 3.2.0 → tool_mode=hcloud, otherwise tool_mode=mcp.
 
-**hcloud Network Availability Probe**: If tool_mode=hcloud, execute a lightweight API call (e.g., `hcloud DWS ListClusters --cli-region=<region> --project_id=<project_id> --offset=0 --limit=1`) to verify network connectivity:
+**hcloud Network Availability Probe**: If tool_mode=hcloud, execute a lightweight API call (e.g., `hcloud DWS ListClusters --cli-region=<region> --project_id=<project_id>`) to verify network connectivity:
 - Returns normal or business error (e.g., insufficient permissions, parameter error) → Network available, keep tool_mode=hcloud
 - Returns NETWORK_ERROR → Network unavailable, fall back to tool_mode=mcp
 - After fallback, if MCP is also unavailable → Terminate execution, prompt user to check KooCLI network configuration or MCP Server configuration
@@ -307,7 +319,7 @@ Call metric query with metric_name="business_concurrency". In MCP mode, use limi
 
 **5b: Query I/O Diagnosis Details for Top 2 Nodes**
 
-Call `dws_service_autopilot_metric_data`, parameters same as Step 3, `metric_name` changed to "cpu_io_diagnose_detail". **Note: metric_data does not support filtering by host_id; query returns full cluster data, then filter by the host_id of the top 2 IO nodes.**
+Call `dws_autopilot_get_metric`, parameters same as Step 3, `metric_name` changed to "cpu_io_diagnose_detail". **Note: metric_data does not support filtering by host_id; query returns full cluster data, then filter by the host_id of the top 2 IO nodes.**
 
 **Paginated Query**: This metric has the largest data volume (multi-node × multi-instance × multi-timepoint × multi-query), a single page of 800 may not be enough. First page offset=0, limit=800; if returned data count = 800, then offset+=800 and continue querying, until returned data < 800, then merge all paginated data.
 
@@ -446,7 +458,7 @@ In addition to the HTML report, output `{{diagnosis_json}}` data structure. **Mu
 
 ```bash
 # hcloud
-hcloud DWS ListClusters --cli-region=<region> --project_id=<pid> --offset=0 --limit=200
+hcloud DWS ListClusters --cli-region=<region> --project_id=<pid>
 # MCP
 dws_autopilot_get_clusters(project_id=<pid>)
 ```
@@ -455,7 +467,7 @@ dws_autopilot_get_clusters(project_id=<pid>)
 
 ```bash
 # hcloud
-hcloud DWS ListHostOverview --cli-region=<region> --project_id=<pid> --offset=0 --limit=200
+hcloud DWS ListHostOverview --cli-region=<region> --project_id=<pid> --cluster_id=<cid> --offset=0 --limit=200
 # MCP
 dws_autopilot_get_hosts(project_id=<pid>, cluster_id=<cid>, limit=200, offset=0)
 ```

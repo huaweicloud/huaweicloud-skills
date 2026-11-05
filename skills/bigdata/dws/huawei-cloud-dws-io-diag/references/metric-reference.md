@@ -19,7 +19,7 @@
 | Step 1 | IOStat | Yes (limit=200) | No | `hcloud DWS ListMetricsData --cli-region=<region> --cluster_id=<cid> --metric_name=IOStat --project_id=<pid> --from=<from_ts> --to=<to_ts> --offset=0 --limit=200` |
 | Step 3 | CpuStat | Yes (limit=200) | No | `hcloud DWS ListMetricsData --cli-region=<region> --cluster_id=<cid> --metric_name=CpuStat --project_id=<pid> --from=<from_ts> --to=<to_ts> --offset=0 --limit=200` |
 | Step 5a | business_concurrency | Yes (limit=200) | No | `hcloud DWS ListMetricsData --cli-region=<region> --cluster_id=<cid> --metric_name=business_concurrency --project_id=<pid> --from=<from_ts> --to=<to_ts> --offset=0 --limit=200` |
-| Step 5b | cpu_io_diagnose_detail | Yes (limit=200, pagination required) | Filter by max_io_hosts | `hcloud DWS ListMetricsData --cli-region=<region> --cluster_id=<cid> --metric_name=cpu_io_diagnose_detail --project_id=<pid> --from=<from_ts> --to=<to_ts> --offset=0 --limit=200` |
+| Step 5b | cpu_io_diagnose_detail | Yes (limit=800, explicit exception) | Filter by max_io_hosts | `hcloud DWS ListMetricsData --cli-region=<region> --cluster_id=<cid> --metric_name=cpu_io_diagnose_detail --project_id=<pid> --from=<from_ts> --to=<to_ts> --offset=0 --limit=800` |
 | Step 5c | business_thread_wait | Yes (limit=200) | No | `hcloud DWS ListMetricsData --cli-region=<region> --cluster_id=<cid> --metric_name=business_thread_wait --project_id=<pid> --from=<from_ts> --to=<to_ts> --offset=0 --limit=200` |
 | Step 5c | bussiness_conflict_lock | Yes (limit=200) | No | `hcloud DWS ListMetricsData --cli-region=<region> --cluster_id=<cid> --metric_name=bussiness_conflict_lock --project_id=<pid> --from=<from_ts> --to=<to_ts> --offset=0 --limit=200` |
 

@@ -13,7 +13,7 @@
 
 | Permission | hcloud Command |
 |------------|----------------|
-| dws:clusters:list | `hcloud DWS ListClusters --cli-region=<region> --project_id=<pid> --offset=0 --limit=200` |
+| dws:clusters:list | `hcloud DWS ListClusters --cli-region=<region> --project_id=<pid>` |
 | dws:metricData:get | `hcloud DWS ListMetricsData --cli-region=<region> --cluster_id=<id> --metric_name=<name> --project_id=<pid> --from=<ts> --to=<ts> --offset=0 --limit=200` |
 | dws:hostOverview:get | `hcloud DWS ListHostOverview --cli-region=<region> --project_id=<pid> --cluster_id=<cid> --offset=0 --limit=200` |
 

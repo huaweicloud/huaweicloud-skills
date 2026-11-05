@@ -25,11 +25,14 @@ Setting up the DWS Autopilot MCP Server allows users to leverage LLM capabilitie
 ### 2.1 Tools
 DWS Autopilot MCP Server provides the following tools:
 
-1. **dws_autopilot_get_hosts**
+1. **dws_autopilot_get_clusters**
+   Query DWS cluster list, used to confirm cluster existence and get cluster_id
+
+2. **dws_autopilot_get_hosts**
    Query DWS cluster host information with filtering by hostname/IP, pagination, and sorting support
 
-2. **dws_autopilot_get_metric**
-   Query DWS cluster metric data, supporting cpu_usage, mem_usage, disk_usage_avg, tcp_resend_rate, disk_io, net_io, etc.
+3. **dws_autopilot_get_metric**
+   Query DWS cluster metric data, supporting IOStat, CpuStat, cpu_io_diagnose_detail, business_concurrency, business_query_monitor, business_thread_wait, bussiness_conflict_lock, etc.
 
 ### 2.2 Authentication
 AK/SK authentication mode is supported. The MCP Server uses the configured AK/SK to sign API requests for authentication.
