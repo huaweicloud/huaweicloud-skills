@@ -179,8 +179,8 @@ Report format:
 
 | Metric | Value |
 |--------|-------|
-| Total Rules | 56 |
-| Passed | 51 |
+| Total Rules | 55 |
+| Passed | 50 |
 | Violations | 5 |
 | Errors (ERROR) | 2 |
 | Warnings (WARNING) | 2 |
@@ -254,3 +254,14 @@ Each violation entry includes: rule ID, rule name, level, position (line/column)
 2. Spark-specific syntax checking (USING, OPTIONS, CACHE TABLE, etc.) is based on Spark SQL grammar definitions
 3. The check engine includes a custom tokenizer and recursive descent parser, no external SQL parsing libraries required
 4. Spark SQL is derived from HiveQL; Hive-compatible syntax (STORED AS, CLUSTERED BY, ROW FORMAT) is also supported
+
+### Capability Boundaries
+
+> The following boundaries are explicit. Inputs falling outside them are either rejected or not checked; please do not expect the skill to cover these.
+
+1. **仅支持 Spark SQL 3.x 方言**：本 skill 只按 Spark SQL 3.x 方言（含 Hive 兼容子集）解析与检查，不支持 MySQL、Oracle、PostgreSQL 等其他 SQL 方言。输入语句中出现其他方言专属关键字（如 `ENGINE`、`AUTO_INCREMENT`、`VARCHAR2` 等）时，将被 SYN001（无效关键字）报告而不是按其他方言语义执行检查。
+2. **不做 SQL 注入安全检查**：skill 仅做静态语法/规范/性能风险检查，不包含 SQL 注入（SQL injection）检测能力，请勿将其用于注入安全评估。
+3. **不做数据权限/访问控制检查**：skill 不检查表/视图/库的权限授予、行级/列级访问控制、审计等数据权限相关内容。
+4. **不做执行计划分析**：skill 不生成、不解析物理执行计划（如 EXPLAIN 输出、Spark logical/physical plan），不会对已执行计划做成本估算或优化建议。
+5. **一次仅检查一条 SQL 语句**：当输入包含多条以分号分隔的语句时，仅对**第一条**语句执行检查，后续语句被忽略。若需检查多条语句，请逐条调用。
+6. **静态文本分析**：所有检查基于 SQL 文本的本地静态分析，不连接任何集群或数据库，SQL 文本不会外发。
