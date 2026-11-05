@@ -248,6 +248,8 @@ python3 scripts/huawei-cloud.py huawei_cleanup_cce_aom_alarm_rules \
 
 `huawei_configure_cce_aom_alarm_rules` requires explicit `bind_notification_rule_id`. If not provided, do not return or choose `available_notification_rules` from this tool; call `huawei_list_aom_action_rules` separately and present choices to the user.
 
+The batch configuration depends on the target cluster AOM Prometheus instance (`cie-collector` addon). Batch creation auto-resolves the instance from the cluster's `cie-collector` addon config; when the cluster does not have the `cie-collector` addon installed, auto-resolution fails and `prom_instance_id` becomes **required**. Query available instances with `hcloud AOM ListPromInstance --Enterprise-Project-Id=all_granted_eps` and pass `prom_instance_id=<instance-id>` explicitly.
+
 ### 6. Alarm Rule Mutation
 
 ```bash
@@ -274,6 +276,8 @@ python3 scripts/huawei-cloud.py huawei_disable_aom_alarm_rule \
 python3 scripts/huawei-cloud.py huawei_enable_aom_alarm_rule \
   region=cn-north-4 rule_id=<rule-id>
 ```
+
+`huawei_update_aom_alarm_rule` applies to both template-created promql rules and manually created `all_metric` rules; `threshold` updates work for both rule types. `huawei_delete_aom_alarm_rule` verifies the rule exists before deletion and reports an explicit "Alarm rule not found" error otherwise.
 
 ### 7. Action And Mute Rule Visibility
 
@@ -356,10 +360,10 @@ This skill includes read-only query tools and mutation tools. Mutation tools mus
 | `huawei_create_aom_alarm_rule` | `region` | Template mode: `cluster_id`, `alarm_item`; manual mode: metric fields. Confirmed execution requires `bind_notification_rule_id` |
 | `huawei_create_aom_event_alarm_rule` | `region`, `cluster_id`, `event_name` | R2; confirmed execution requires `bind_notification_rule_id`; optional `rule_name` overrides template naming |
 | `huawei_create_aom_notification_action_rule` | `region`, `rule_name`, `notification_topic_urn`, `notification_topic_name` | R2; user must provide the topic |
-| `huawei_configure_cce_aom_alarm_rules` | `region`, `cluster_id`, `bind_notification_rule_id` | R2; user must explicitly choose the notification rule |
+| `huawei_configure_cce_aom_alarm_rules` | `region`, `cluster_id`, `bind_notification_rule_id` | R2; user must explicitly choose the notification rule. `prom_instance_id` is conditionally required: auto-resolved from the cluster `cie-collector` addon, but required when the addon is missing |
 | `huawei_cleanup_cce_aom_alarm_rules` | `region`, `cluster_id` | R0; optional `delete_auto_notification_rule=true` |
-| `huawei_update_aom_alarm_rule` | `region`, `rule_name` | R1; update fields are tool-specific |
-| `huawei_delete_aom_alarm_rule` | `region`, `rule_name` | R0 |
+| `huawei_update_aom_alarm_rule` | `region`, `rule_name` | R1; update fields are tool-specific; applies to both promql template rules and `all_metric` rules; verifies the rule exists first |
+| `huawei_delete_aom_alarm_rule` | `region`, `rule_name` | R0; verifies the rule exists before deletion |
 | `huawei_disable_aom_alarm_rule` | `region`, `rule_id` | R1 |
 | `huawei_enable_aom_alarm_rule` | `region`, `rule_id` | R2 |
 
@@ -442,6 +446,7 @@ Mutation verification:
 | Batch configure fails without notification rule | `bind_notification_rule_id` is missing | List action rules or create one from an SMN topic, then retry |
 | Cluster alarm rule query returns too many rules | Missing `cluster_id` filter | Re-run with exact `cluster_id` |
 | Project ID errors | Profile/project resolution failed | Provide `project_id` explicitly or fix hcloud profile |
+| Update/delete fails with `AOM.02021500 internal server error` | Alarm rule may not exist, or the rule type does not match the update parameters (promql vs `all_metric`) | Run `huawei_list_aom_alarm_rules` to confirm the `rule_name` exists and its type; `huawei_update_aom_alarm_rule` reports an explicit "Alarm rule not found" when the rule does not exist |
 
 ## Limitations
 

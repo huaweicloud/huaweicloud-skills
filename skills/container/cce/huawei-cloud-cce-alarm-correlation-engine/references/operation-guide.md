@@ -35,7 +35,7 @@ This reference holds detailed operating notes for `huawei-cloud-cce-alarm-correl
 | `include_event_alarms` | No | Whether to include event alarm templates; default `true` |
 | `alarm_items` | No | Comma-separated allowlist of template names or event names to create or clean up |
 | `skip_existing` | No | Skip existing rules during confirmed batch configure; default `true` |
-| `prom_instance_id` | No | Optional override; batch configure auto-resolves the target cluster AOM Prometheus instance from the `cie-collector` addon |
+| `prom_instance_id` | Conditional | Optional override; batch configure auto-resolves the target cluster AOM Prometheus instance from the `cie-collector` addon. **Required when the target cluster does not have the `cie-collector` addon** (auto-resolution fails). Query available instances with `hcloud AOM ListPromInstance --Enterprise-Project-Id=all_granted_eps` |
 | `delete_auto_notification_rule` | No | Also delete `auto-cluster-{cluster_id}` during cleanup; default `false` |
 | `comparison_operator` | Yes for metric rule creation | Threshold comparison operator |
 | `threshold` | Yes for metric rule creation | Alarm threshold value |
