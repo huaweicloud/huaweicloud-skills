@@ -116,5 +116,5 @@ cloudrobo robot create --name x --type HUMANOID --manufacturer M --robot-model M
 | 401 Unauthorized | AK/SK missing or wrong | Set HUAWEI_CLOUD_AK/SK env vars |
 | type usage error | type not in enum | Use one of: HUMANOID/QUADRUPED/ARM/OPERATION/WHEELED/OTHER (case-insensitive) |
 | 403 Forbidden | wrong workspace_id / no access | Check workspace_id, account access |
-| Path traversal error | malicious `robot_id` | validate_safe_id rejects; use valid UUID |
+| Path traversal error | malicious `robot_id` | validate_safe_id rejects; use a valid 32hex robot_id (`^[0-9a-f]{32}$`) |
 | Certificate file empty | wrong robot_id or output path | Re-check robot_id, ensure --output writable |
