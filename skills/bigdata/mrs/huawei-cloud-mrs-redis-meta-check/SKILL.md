@@ -7,7 +7,6 @@ description: |
   Use it whenever the user asks about Redis startup failures or connection anomalies.
   Trigger: "Redis元数据检查", "Redis nodes检查", "Redis cluster配置检查", "检查Redis元数据", "Redis元数据校验", "Redis启动失败排查"
 tags: [mrs, redis, meta, nodes-conf]
-version: 1.0.0
 ---
 
 # MRS Redis Metadata Check Skill
@@ -17,6 +16,8 @@ You are an MRS Redis metadata file checking expert, responsible for checking the
 ## 1. Overview
 
 **Architecture**: This skill uses a three-stage pipeline: File Collection → Parsing & Analysis → Rule Engine (7 check points) → Report Generation.
+
+**Scope**: This skill only supports Redis cluster metadata files matching the `nodes-*.conf` naming pattern (e.g., `nodes-22400.conf`, `nodes-22401.conf`). Files with other names or non-Redis cluster metadata content are outside this skill's scope and will not be checked.
 
 **Applicable Scenarios**:
 
@@ -61,6 +62,8 @@ Users can also specify a specific file path for checking.
 ### 2.2 Security Rules
 
 - This skill performs static file analysis only, no Redis cluster connection required
+- **This skill does NOT execute any file modification/repair operations.** It never edits, rewrites, moves, renames, copies, deletes, or otherwise modifies any `nodes-*.conf` file, and it never runs repair commands on cluster hosts. Its output is limited to a static analysis check report plus repair guidance.
+- If the user asks the skill to directly modify/repair a file (e.g., "fix this file for me"), politely refuse and provide the repair guidance per [Section 6](#6-general-repair-method-with-example), which the user must execute manually on the cluster host with `omm` user permissions.
 - File content is processed locally, no data is sent externally
 - No credentials or authentication required for the checking process itself
 - File collection from cluster hosts requires appropriate access permissions
@@ -134,6 +137,13 @@ If the user has specified a file:
 2. If not found, recursively search in the specified directory and subdirectories
 3. If a single file is found, regardless of whether the filename conforms to naming conventions, read the content directly for analysis
 4. If the content conforms to Redis metadata format (contains node ID, role, slot info, etc.), execute the check
+5. If the content does NOT conform to Redis metadata format, do NOT run the check points; reply telling the user that the provided content is not recognized as a valid Redis cluster metadata file, list the expected format (see [Section 4.1](#41-parse-file-content) and the correct-format example in [Section 10.1](#101-correct-format-example)), and ask the user to re-supply the correct `nodes-*.conf` file content
+
+If reading or parsing the provided file fails on the skill side (e.g., the file content is empty, unreadable, text encoding is abnormal, or the user only supplied a directory path without a selectable file):
+
+- Do NOT guess or fabricate file content, and do NOT skip straight to report generation
+- Reply stating that the file could not be read/parsed, with the specific failure reason if known, and give the user the concrete next steps to resolve it (typically: confirm the file path on the host under `/srv/BigData/redis_meta/Redis_*/`, ensure it is readable with `omm` permissions, and re-supply the file content) — see also [Section 5](#5-common-issues--troubleshooting)
+- Only after the file content is successfully provided and parsed can the check points in Step 3/Step 4 be executed
 
 ### Step 3: Parse Files
 
@@ -146,6 +156,8 @@ Use the parse commands in [Section 4.1](#41-parse-file-content) to extract key i
 - Cluster-name line
 
 ### Step 4: Execute 7 Check Points
+
+If the user specifies a `check_points` parameter (e.g., `CHK001,CHK004,CHK007`), run ONLY the listed check points in that order and skip the rest. If the parameter is not provided or is empty, run all 7 check points in their default order (CHK001-CHK007) as described below. Unrecognized check point IDs in `check_points` should be reported back to the user as unknown and ignored, while the recognized ones are still executed.
 
 #### CHK001: Slot Completeness
 
@@ -291,6 +303,7 @@ Specific steps for constructing the myself marker example:
 ### 4.1 Parse File Content
 
 ```bash
+skill-quality-cli report --skill-name huawei-cloud-mrs-redis-meta-check --status pending
 # Extract all node lines (Connection module)
 grep -v "^vars\|^whitelist\|^cluster-" "$file"
 
@@ -345,12 +358,12 @@ All issues can be repaired using the following general method.
    rm -f /srv/BigData/redis_meta/Redis_1/nodes-22400.conf_bak
    ```
 
-## 7. Parameters
+## 7. Parameter Confirmation (Parameters)
 
 | Parameter | Required/Optional | Description | Default |
 |-----------|-------------------|-------------|---------|
 | `file_path` | Optional | Path to nodes-*.conf file or directory containing the file | `/srv/BigData/redis_meta/Redis_*/nodes-224*.conf` |
-| `check_points` | Optional | Specific check point IDs to run (CHK001-CHK007), comma-separated | All 7 check points |
+| `check_points` | Optional | Specific check point IDs to run (CHK001-CHK007), comma-separated; only the listed check points are executed, in the order given. See [Step 4](#step-4-execute-7-check-points) | All 7 check points |
 
 ## 8. Output Format
 
