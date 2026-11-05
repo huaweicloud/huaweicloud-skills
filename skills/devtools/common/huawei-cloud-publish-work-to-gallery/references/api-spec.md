@@ -255,7 +255,7 @@ Publish a work to the platform. The work is submitted for review and will appear
 | `introduction`   | string | yes      | One-sentence work introduction (15–50 chars)                                                                                                                                       |
 | `image`          | file   | yes      | Binary stream of the cover image (png/jpeg/webp/gif)                                                                                                                               |
 | `detail`         | file   | yes      | Detail zip (max 20 MiB). Must contain `README.md` at root and optional `resources/` directory with images. README image references must use `resources/<filename>` relative paths. |
-| `gitUrl`         | string | yes      | Git 仓库 clone URL（`https://` 开头、`.git` 结尾）。技能仅做前置宽松校验（https:// + .git），域名白名单由服务端校验并返回错误码。                                                   |
+| `gitUrl`         | string | yes      | Git 仓库 clone URL（`https://` 开头、`.git` 结尾）。技能仅做前置宽松校验（https:// + .git），域名白名单由服务端校验并返回错误码。**⚠️ 仓库必须为公开（所有人可见），否则发布被拒（`GALLERY.PARAM.INVALID`，reason=代码仓库不可公开访问）。** |
 | `gitBranch`      | string | yes      | Git 分支名，常规分支字符（字母/数字/`_`/`-`/`.`/`/`），长度 1–250，由服务端校验。                                                                                                  |
 | `envUrl`         | string | yes      | Work access URL. Field required; the API accepts an **empty string `""`** as placeholder when no tunnel was opened in Step 2.                                                      |
 

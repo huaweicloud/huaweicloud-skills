@@ -9,7 +9,7 @@ description: |
   Triggers include: "把作品发布上去", "投稿到陈列馆", "传作品到平台", "提交作品/项目", "报名发布作品", "publish to work gallery", "submit to an activity", "upload work to the platform"
 metadata:
   tags: huawei-cloud,publish,gallery,university operations platform
-version: 2026.10.15.001
+version: 2026.11.03.001
 ---
 
 # Publish Work to Gallery
@@ -33,7 +33,7 @@ Step 8 (publish)                             ← 依赖以上全部
 
 **变量贯穿**：`port`/`workName`/`envUrl` 在最早步骤确定后作为变量传递全流程，禁止硬编码（隧道 URL 含 port，换端口时 envUrl 随之变）。
 
-**执行模型**：① **脚本契约优先**——按 stdout 成功信号判定，**成功路径零源码读取**；失败才 `脚本提示 → troubleshooting 对应节 → grep 脚本源码` 逐级查 ② 禁止手工绕过门禁 ③ 网络超时统一 3s ④ `detect-env.mjs` 确定平台后只读对应平台 reference（按目录跳转，不全读）⑤ **合并无依赖的 bash 调用**：用 `;` 串联进一条命令，减少工具往返（每次 ~1-2s） ⑥ **需用户交互的命令一律把链接/二维码原样展示给用户，禁止用 agent 内置浏览器/工具（browser_use_open 等）代开**——脚本本地已起回调服务器，用户在任意浏览器授权后脚本自动拿到 token，agent 全程不需要浏览器。
+**执行模型**：① **脚本契约优先**——按 stdout 成功信号判定，**成功路径零源码读取**；失败才 `脚本提示 → troubleshooting 对应节 → grep 脚本源码` 逐级查 ② 禁止手工绕过门禁 ③ 网络超时口径：**agent 侧 `curl` 调用统一 `--max-time 3`；脚本内嵌超时以各自实现为准**（如 api.mjs 连接超时 3s、resolve-domain.mjs 15s、check-version.mjs 6s、gitcode-oauth --wait 默认 300s，均在各自 `--help`/源码标注） ④ `detect-env.mjs` 确定平台后只读对应平台 reference（按目录跳转，不全读）⑤ **合并无依赖的 bash 调用**：用 `;` 串联进一条命令，减少工具往返（每次 ~1-2s） ⑥ **需用户交互的命令一律把链接/二维码原样展示给用户，禁止用 agent 内置浏览器/工具（browser_use_open 等）代开**——脚本本地已起回调服务器，用户在任意浏览器授权后脚本自动拿到 token，agent 全程不需要浏览器。
 
 ## Core Commands（脚本契约速查）
 
@@ -64,7 +64,7 @@ Step 8 (publish)                             ← 依赖以上全部
 | 6 | `$SKILL_DIR/scripts/generate_diagram.py --html /tmp/diagram.html --out /tmp/diagram.png --width 1280` | R | 图表 PNG，再过 `verify-glyphs.py --quiet` | 同封面；缺 `font-gate-ok` → exit 1 提示等 preflight（隐性依赖，见并行说明） |
 | 6 | `$SKILL_DIR/scripts/build-detail-zip.mjs --readme README.md --resources /path/to/project/resources --out /tmp/detail.zip` | R | 打包+校验一步完成 | exit 1 → 按输出修复重打 |
 | 8 | `$SKILL_DIR/scripts/check-gates.mjs --cover /tmp/cover.png --detail /tmp/detail.zip --strict --max-age 3600 --quiet` | R | exit 0（stdout 仅 1 行省 token） | exit 1 → 回退重跑门禁 |
-| 8 | `$SKILL_DIR/scripts/publish-work.mjs /tmp/params.json --max-age 3600` | **W** | `#status=201`（仅输出 workId/workUrl/reward） | envUrl 不可达 → exit 1（提示检查本地服务）；409/其他 → 原样输出完整响应 |
+| 8 | `$SKILL_DIR/scripts/publish-work.mjs /tmp/params.json --max-age 3600` | **W** | `#status=201`（**任意 2xx 均视为成功**；201 常规，非 201 的 2xx 会附注「已成功但状态码非 201」；仅输出 workId/workName/workUrl/reward） | envUrl 不可达 → exit 1（提示检查本地服务）；409/其他 → 原样输出完整响应 |
 
 > 标记文件位置：Linux/macOS `${TMPDIR:-/tmp}/`（与 Node `os.tmpdir()` / Python `tempfile.gettempdir()` 同一临时目录，评测环境 TMPDIR 被重定向时自动跟随）；Windows `os.tmpdir()`（`%TEMP%`）。
 
@@ -90,6 +90,8 @@ Step 8 (publish)                             ← 依赖以上全部
 - **git**：Step 3。**zip** 仅 `build-detail-zip.mjs` 不可用时的备选（Linux `yum install zip`；Windows .NET `ZipFile`，见 [windows-setup.md](references/windows-setup.md)）。
 - **Git Bash 前置**：`source $SKILL_DIR/scripts/setup-env.sh`（防 MSYS 路径转换）。PowerShell/CMD 无需。
 - **OAuth 与本地环境依赖（自动化/沙箱限制）**：发布流程依赖用户 GitCode OAuth 授权（Step 3）与本地项目运行（Step 2 隧道 / Step 8 发布）。无人值守或沙箱环境（无用户浏览器授权）无法触达真实平台 API——此类用例需标注 `requires manual verification`，在真实用户环境复验。
+
+> **能力边界**：本 skill 仅支持**发布新作品**与**查询训练营（活动）列表**。**不支持**删除/撤回/下线已发布作品、就地修改已发布作品内容、查询作品浏览量/访问统计——这些操作无对应接口，若用户提出需明确拒绝并引导前往平台个人中心（作品管理）或联系管理员处理，不得猜测实现。
 
 ## Core Workflow
 
@@ -117,6 +119,8 @@ Step 8 (publish)                             ← 依赖以上全部
 ### Step 3: Git Repository Info & Work Name
 
 `gitUrl` 必填，`gitBranch` 必须显式读取。`workName` 从 README 解析/合成（<30 字符）。
+
+> ⚠️ **作品 gitUrl 所指仓库必须为公开仓库（所有人可见）**——平台服务端会在发布时校验仓库可公开访问性，私有仓库将被 `GALLERY.PARAM.INVALID`（reason: 代码仓库不可公开访问）拒绝。若仓库为私有，请先引导用户在 GitCode 仓库设置中改为公开（所有人可见）后再继续，避免发布失败一轮。
 
 1. **仓库根检测（fail-stop）**：`$SKILL_DIR/scripts/ensure-git-root.mjs /path/to/project`——硬检测 workDir 自身是否为 git 仓库根（`git -C /path/to/project rev-parse --git-dir` 必须返回 `.git`）。若不是（如 workDir 无 .git 但父目录有，git 会向上递归返回父仓库 remote），脚本 exit 1 并提示。此时 **禁止** 直接 `git -C /path/to/project remote get-url origin`（会拿到父仓库 URL）。处理方式：① 问用户手动提供 `gitUrl` + `gitBranch`；② 或在 workDir `git init` + 推到远端后再读。检测通过才继续。
 2. `$SKILL_DIR/scripts/read-git-info.mjs /path/to/project` 一步取 gitUrl/gitBranch（含仓库自检 + 凭证剥离 + **远端分支核对**，契约见上表）。`#branchAbsent=1` → **转述 stderr 的唯一处置**（脚本已按 SHA 判定：远端某分支与本地当前提交一致 → `git checkout <该分支>` 后重跑，无损且优于 push；否则 → `git push -u origin <branch>` 后重跑，切到远端旧分支会提交旧代码）。
@@ -202,7 +206,7 @@ $SKILL_DIR/scripts/count-cjk.mjs --file "$env:TEMP\intro.txt"   # Win 必须 --f
    $SKILL_DIR/scripts/publish-work.mjs /tmp/params.json --max-age 3600
    # 成功仅输出 workId/workName/workUrl/reward；失败原样输出完整响应
    ```
-4. **201** → 成功，取 `workId`/`workUrl`/`reward`，**清理临时文件（含 Step 4 的 `coverTmp` 截图目录）**。**积分提示**（无论是否成功都必须提示「每日仅限一次」）：
+4. **2xx** → 成功（**任意 2xx 均视为成功**，201 为常规；若为非 201 的 2xx，publish-work.mjs 会附注「已成功但状态码非 201」，同样按成功处理）。取 `workId`/`workUrl`/`reward`，**清理临时文件（含 Step 4 的 `coverTmp` 截图目录）**。**积分提示**（无论是否成功都必须提示「每日仅限一次」）：
    - `is_success===true`：`✅ 积分领取请求已提交。⚠️ 每日仅限一次。前往查看余额：https://developer.huaweicloud.com/grow`
    - `is_success===false`：`积分领取未成功：<error_msg>` + 每日限一次提示 + 成长中心地址 + 反馈入口 `https://gallery.developer.huaweicloud.com/gallery/profile?tab=feedback`。
 5. **409 DUPLICATE** → 停止当前发布。给选项：① 放弃 ② 改名重发。**若改名重发，必须联动：**

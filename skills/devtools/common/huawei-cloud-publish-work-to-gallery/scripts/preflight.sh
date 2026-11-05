@@ -103,20 +103,43 @@ die() { stop_heartbeat; echo "[preflight] ❌ $*" 2>/dev/null || true; exit 1; }
 #  - fontconfig 规则 → ~/.config/fontconfig/conf.d（fontconfig 原生读取 XDG 用户目录）
 _TS_SRC="https://pypi.tuna.tsinghua.edu.cn/simple"
 # 缺 timeout 命令时退回不加超时（老系统尽力而为）
+# PEP 668（externally-managed-environment）检测：Ubuntu 24.04+/Debian 12+ 系统 Python 默认受保护，
+# `pip install --user` / 无参 install 均会被拒（报 externally-managed-environment）。
+# 命中后提示解法，让调用方回退 --break-system-packages。
+pep668_hint() {
+  log "⚠️ 系统 Python 受 PEP 668（externally-managed-environment）保护，--user/普通 pip install 被拒。"
+  log "   preflight 将回退 pip install --break-system-packages 尝试（或建议改用 venv 安装依赖）。"
+}
+
+# ---- 用户优先安装原则（$HOME）：pip 加 --user，回退链: --user → --break-system-packages ----
+# 无 root 权限的 AI DevSpace / CodeArts 沙箱等环境优先写入 $HOME，避免写系统目录：
+#  - pip 依赖 → --user（~/.local/lib），venv 内 --user 不可用时回退系统级
+#  - fontconfig 规则 → ~/.config/fontconfig/conf.d（fontconfig 原生读取 XDG 用户目录）
 pip_user_install() {
   # $1 = python 解释器；其余 = 包名
-  # stderr 进 PREFLIGHT_LOG（不占 stdout）：补装失败原因保留在日志里供排查
+  # 输出进 PREFLIGHT_LOG（不占 stdout）：补装失败原因保留在日志里供排查
   # 每次安装由 timeout 限时（PIP_INSTALL_TIMEOUT），防止 pip 在慢源上无限挂起
   local py_bin="$1"; shift
-  if command -v timeout >/dev/null 2>&1; then
-    timeout "$PIP_INSTALL_TIMEOUT" "$py_bin" -m pip install -q --index-url="${_TS_SRC}" --user "$@" >>"$PREFLIGHT_LOG" 2>&1 \
-      && return 0
-    timeout "$PIP_INSTALL_TIMEOUT" "$py_bin" -m pip install -q --index-url="${_TS_SRC}" "$@" >>"$PREFLIGHT_LOG" 2>&1
-  else
-    "$py_bin" -m pip install -q --index-url="${_TS_SRC}" --user "$@" >>"$PREFLIGHT_LOG" 2>&1 \
-      && return 0
-    "$py_bin" -m pip install -q --index-url="${_TS_SRC}" "$@" >>"$PREFLIGHT_LOG" 2>&1
-  fi
+  local _last
+  _run_pip() {
+    if command -v timeout >/dev/null 2>&1; then
+      timeout "$PIP_INSTALL_TIMEOUT" "$py_bin" -m pip install -q --index-url="${_TS_SRC}" "$@" >>"$PREFLIGHT_LOG" 2>&1
+    else
+      "$py_bin" -m pip install -q --index-url="${_TS_SRC}" "$@" >>"$PREFLIGHT_LOG" 2>&1
+    fi
+  }
+  for _mode in "--user" "" "--break-system-packages"; do
+    _run_pip $_mode && return 0
+    # 截取本次新增日志用于 PEP668 判定与报错
+    _last="$(tail -c 800 "$PREFLIGHT_LOG" 2>/dev/null || true)"
+    if grep -qiE 'externally-managed|PEP ?668' <<<"$_last"; then
+      pep668_hint
+      continue
+    fi
+  done
+  log "❌ pip 安装失败（已依次尝试 --user / 普通 / --break-system-packages）。"
+  log "   详情见 $PREFLIGHT_LOG 尾部。可手动执行: $py_bin -m pip install --break-system-packages --index-url=${_TS_SRC} $*"
+  return 1
 }
 
 # 带超时的 yum（防网络挂起）：--setopt=timeout=30 防单包下载停滞，timeout 给整条命令兜底上限。
@@ -865,7 +888,7 @@ fi
 
 # 2) Emoji 字体（彩色 NotoColorEmoji.ttf，CBDT 表）
 # ⚠️ yum 包 google-noto-emoji-fonts 版本过旧（Unicode 10.0，单色/覆盖不全），
-#    screenshot-guard.mjs 的 emoji 采样集含 Emoji 13.0+ 码点（如 🫡 U+1FAE1），
+#    screenshot_guard.py 的 emoji 采样集含 Emoji 13.0+ 码点（如 🫡 U+1FAE1），
 #    旧字体 cmap 虽有码点但 Chromium HarfBuzz 对 CBDT/CBLC 渲染不稳定 → canvas 测宽返回 tofu 宽度。
 #    方案: 优先从 jsDelivr CDN 下载较新彩色版本（v2.051，1501 cmap 码位），yum 作为回退。
 #    详见 scripts/download-noto-color-emoji.sh 与 noto-color-emoji-download-summary.md。

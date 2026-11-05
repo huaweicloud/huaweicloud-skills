@@ -77,6 +77,33 @@ def normalize_aksk_env():
                 break
 
 
+def parse_hcloud_error(output: str):
+    """从 hcloud 输出（含 ANSI/日志混排）中探测错误对象。
+
+    KooCLI 出错时（如委托不存在、AK/SK 无效）会在 stdout/stderr 输出
+    `error_code` + `error_msg` 字段，命令可能以非 0 或 0 退出。此函数在
+    做目标结构解析之前先识别该错误对象，返回可读的 error_msg（带 error_code 前缀）；
+    未命中返回 None。"""
+    if not output or not output.strip():
+        return None
+    # 剥 ANSI 后逐行找含 error_code 的 JSON；也兼容 JSONP/日志包裹的提取
+    cleaned = re.sub(r"\x1b\[[0-9;]*m", "", output)
+    for m in re.finditer(r"\{[^{}]*\"error_code\"[^{}]*\}", cleaned, re.S):
+        try:
+            obj = json.loads(m.group(0))
+        except json.JSONDecodeError:
+            continue
+        code = obj.get("error_code") or obj.get("code") or ""
+        msg = obj.get("error_msg") or obj.get("message") or ""
+        if code or msg:
+            return f"[{code}] {msg}".strip()
+    # 兜底：整段包含 "error_code":"..." 的常见样式
+    m = re.search(r'"error_code"\s*:\s*"([^"]+)"\s*,\s*"error_msg"\s*:\s*"([^"]*)"', cleaned)
+    if m:
+        return f"[{m.group(1)}] {m.group(2)}"
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser(
         prog="gen_sts.py",
@@ -111,11 +138,22 @@ def main():
         result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", check=True)
         raw = result.stdout
     except subprocess.CalledProcessError as e:
+        raw = (e.stdout or "") + "\n" + (e.stderr or "")
+        # hcloud 失败也会把错误 JSON 写到 stdout/stderr（如 STS5.1106 委托不存在），先探测 error_code
+        err = parse_hcloud_error(raw)
+        if err:
+            sys.exit(f"❌ hcloud STS AssumeAgency 失败：{err}\n请检查 AK/SK/账号 ID，或按 references/self-verify-publish.md §二 创建 SELF_VERIFY 委托后重试。")
         msg = (e.stderr or "").strip() or str(e)
         sys.exit(f"❌ hcloud STS AssumeAgency 失败: {msg}\n请检查 AK/SK/账号 ID（HUAWEICLOUD_SDK_AK/SK 或别名 HUAWEICLOUD_AK/SK、HW_ACCESS_KEY/HW_SECRET_KEY），或按 references/troubleshooting.md 排查。")
 
     # hcloud (KooCLI) 输出含 ANSI 彩色码且可能夹带日志行，需剥离 ANSI 后提取 JSON。
     out = re.sub(r'\x1b\[[0-9;]*m', '', raw).strip()
+
+    # 解析前先探测 hcloud 错误对象（error_code/error_msg）——避免「委托不存在」这类
+    # 常见失败被包装成笼统的『解析 hcloud 输出失败』，用户无法定位。
+    err = parse_hcloud_error(out)
+    if err:
+        sys.exit(f"❌ hcloud STS AssumeAgency 失败：{err}\n请检查 AK/SK/账号 ID，或按 references/self-verify-publish.md §二 创建 SELF_VERIFY 委托后重试。")
 
     try:
         c = json.loads(out)

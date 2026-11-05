@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // extract-fonts.mjs — 扫描 workDir 提取字体需求（CSS font-family + @font-face + JS ctx.font 绘制的字体）
-// stdout 每行一个去重字体族名（供 screenshot-guard.mjs 的 --required 使用）。
+// stdout 每行一个去重字体族名（供 screenshot_guard.py 的 --required 使用）。
 // 用法详见 node extract-fonts.mjs --help。跨平台（Node），Linux/Windows 通用。
 
 import fs from "node:fs";
@@ -23,7 +23,7 @@ if (workDir === "-h" || workDir === "--help") {
   <workDir>      要扫描的项目目录（递归处理 .html/.css/.vue/.scss/.less/.js/.jsx/.ts/.tsx）
 
 输出:
-  stdout 每行一个去重字体族名（供 screenshot-guard.mjs 的 --required-file 使用）
+  stdout 每行一个去重字体族名（供 screenshot_guard.py 的 --required-file 使用）
 
 跳过: node_modules / .git / dist / build / .cache / __pycache__
 `);

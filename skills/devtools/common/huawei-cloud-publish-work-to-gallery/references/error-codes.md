@@ -9,7 +9,7 @@
 | Code | Message | Cause | Resolution |
 | --- | --- | --- | --- |
 | `GALLERY.PARAM.MISSING` | 参数缺失 | A required field was omitted | Check all required fields: trainingCampId, workName, image, detail, introduction, gitUrl, gitBranch |
-| `GALLERY.PARAM.INVALID` | 参数错误 | A field value is malformed | Validate field formats — ensure strings non-empty, files valid binary |
+| `GALLERY.PARAM.INVALID` | 参数错误 | A field value is malformed | Validate field formats — ensure strings non-empty, files valid binary。**若 reason 含「代码仓库不可公开访问」/「地址无法访问」（gitUrl 私有仓库）：引导用户将仓库设为公开（所有人可见）后重试** |
 | `GALLERY.PARAM.GIT_URL_INVALID` | gitUrl 必须以 https:// 开头、.git 结尾 | gitUrl not start with https:// or not end with .git | 引导用户修正 gitUrl 为 https:// 开头、.git 结尾的克隆地址 |
 | `GALLERY.PARAM.GIT_URL_DOMAIN_FORBIDDEN` | gitUrl 域名不在允许范围内 | hostname not in server allowlist | 引导用户托管到 gitcode/gitee/github 等支持平台 |
 | `GALLERY.PARAM.GIT_BRANCH_INVALID` | gitBranch 不支持字符或长度不合法 | violates conventional branch rules | 用常规分支名（字母数字 `_ - . /`，长度 1–250） |

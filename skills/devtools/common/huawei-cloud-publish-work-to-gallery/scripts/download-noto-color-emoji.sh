@@ -3,7 +3,7 @@
 #
 # 背景:
 #   系统 yum 包 google-noto-emoji-fonts 版本过旧（Unicode 10.0，单色），
-#   screenshot-guard.mjs 的 emoji 采样集含 Emoji 13.0+ 码点（如 🫡 U+1FAE1），
+#   screenshot_guard.py 的 emoji 采样集含 Emoji 13.0+ 码点（如 🫡 U+1FAE1），
 #   旧字体 cmap 虽有该码点但 Chromium HarfBuzz 对 CBDT/CBLC 渲染不稳定 → canvas 测宽返回 tofu 宽度。
 #   需手动下载较新彩色版本 NotoColorEmoji.ttf。
 #

@@ -76,9 +76,11 @@ def main():
     args = ap.parse_args()
 
     if not args.appUrl:
-        sys.exit("❌ 用法: python screenshot_guard.py <appUrl> [--required-file <fonts.txt>] [--required ...] [--out <png>]\n  运行 python screenshot_guard.py --help 查看完整用法。")
+        sys.stderr.write("❌ 用法: python screenshot_guard.py <appUrl> [--required-file <fonts.txt>] [--required ...] [--out <png>]\n  运行 python screenshot_guard.py --help 查看完整用法。\n")
+        sys.exit(2)
     if not re.match(r"^https?://", args.appUrl, re.I):
-        sys.exit(f"❌ 首个参数必须是 HTTP(S) URL，不能是文件系统路径。\n  收到: {args.appUrl}\n  若你要截图本地文件，请先启动 HTTP 服务再传入其 URL。")
+        sys.stderr.write(f"❌ 首个参数必须是 HTTP(S) URL，不能是文件系统路径。\n  收到: {args.appUrl}\n  若你要截图本地文件，请先启动 HTTP 服务再传入其 URL。\n")
+        sys.exit(2)
 
     # 解析字体需求
     required = None
