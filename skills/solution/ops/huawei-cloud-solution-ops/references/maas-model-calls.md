@@ -11,6 +11,8 @@ Use this reference when a task explicitly needs Huawei Cloud MaaS API calls for 
 - Image, video, and other potentially billable MaaS generation calls are external side effects. Before an online call, present the model, count or scope, intended use, and cost/risk boundary, then wait for the user's explicit confirmation. An initial request to create content is not itself execution authorization.
 - Token Plan endpoints are for supported AI tools and must not be treated as generic API-call quota.
 - Local model information comes from `references/maas-model-catalog.json`; for live availability use MaaS console or `scripts/maas_models.py --online --execute` after the user confirms a live API call.
+- **Local catalog empty is an explicit boundary, not a platform answer.** `references/maas-model-catalog.json` is a curated set of commonly used models, not a full MaaS inventory. A local query such as `scripts/maas_models.py --capability chat` can legitimately return `count:0` even though MaaS provides chat-class models: the local catalog simply has not curated that capability name (`chat`) and `count:0` never means the platform is unavailable or has no such models.
+- When a local `maas_models.py` query returns an empty list for a requested capability/model, do not claim "no model available". Instead tell the user the local catalog is a curated aid, and guide a real-time query: configure `MAAS_API_KEY` (or `MODELARTS_MAAS_API_KEY`) and run `python3 scripts/maas_models.py --capability <X> --online --execute`, or check the ModelArts Studio / MaaS console for the live model list. `--online --execute` fails fast with a clear error when the key is missing; that missing-key error is also a boundary, not evidence that MaaS has no models.
 
 ## Official Online Docs
 

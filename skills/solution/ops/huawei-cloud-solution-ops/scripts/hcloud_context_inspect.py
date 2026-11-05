@@ -237,16 +237,19 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     """Run the inspector and print JSON output."""
     args = parse_args()
-    summary = {
-        "success": True,
-        "mode": "inspect",
-        **build_summary(include_meta_files=args.include_meta_files),
-    }
+    try:
+        summary = {
+            "success": True,
+            "mode": "inspect",
+            **build_summary(include_meta_files=args.include_meta_files),
+        }
+    except Exception as exc:  # pragma: no cover - defensive exit-code contract.
+        summary = {"success": False, "mode": "inspect", "error": str(exc)}
     if args.pretty:
         hcloud_common.emit_json(summary, pretty=True)
     else:
         hcloud_common.emit_json(summary)
-    return 0
+    return 0 if summary["success"] else 1
 
 
 if __name__ == "__main__":

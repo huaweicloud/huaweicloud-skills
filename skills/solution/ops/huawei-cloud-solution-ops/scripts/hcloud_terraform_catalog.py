@@ -372,22 +372,25 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     """Build Terraform catalogs."""
     args = parse_args()
-    example_catalog = build_example_catalog(args.examples_dir)
-    reference_catalog = build_reference_catalog(args.references_dir)
-    result = {
-        "success": True,
-        "example_catalog": example_catalog,
-        "reference_catalog": reference_catalog,
-        "write": args.write,
-        "outputs": {
-            "examples": str(EXAMPLE_CATALOG_PATH),
-            "references": str(REFERENCE_CATALOG_PATH),
-        },
-    }
-    if args.write:
-        write_catalogs(example_catalog, reference_catalog)
+    try:
+        example_catalog = build_example_catalog(args.examples_dir)
+        reference_catalog = build_reference_catalog(args.references_dir)
+        result = {
+            "success": True,
+            "example_catalog": example_catalog,
+            "reference_catalog": reference_catalog,
+            "write": args.write,
+            "outputs": {
+                "examples": str(EXAMPLE_CATALOG_PATH),
+                "references": str(REFERENCE_CATALOG_PATH),
+            },
+        }
+        if args.write:
+            write_catalogs(example_catalog, reference_catalog)
+    except Exception as exc:  # pragma: no cover - defensive exit-code contract.
+        result = {"success": False, "error": str(exc), "write": args.write, "outputs": None}
     hcloud_common.emit_json(result, pretty=args.pretty)
-    return 0
+    return 0 if result["success"] else 1
 
 
 if __name__ == "__main__":

@@ -321,7 +321,7 @@ def main() -> int:
     args = parse_args()
     result = route(args.query, service=args.service, category=args.category, limit=args.limit)
     hcloud_common.emit_json(result, pretty=args.pretty)
-    return 0 if result.get("success") or result.get("recommended_runtime") == "hcloud" else 1
+    return 0 if result.get("success") else 1
 
 
 if __name__ == "__main__":

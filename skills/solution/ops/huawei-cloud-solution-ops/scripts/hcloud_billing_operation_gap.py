@@ -198,9 +198,9 @@ def build_reference_baseline(
         "upstream": {
             "repository": UPSTREAM_REPOSITORY,
             "source_files": [
-                "skills/bss/billing/huawei-cloud-billing-scout/references/related-commands.md",
-                "skills/bss/billing/huawei-cloud-business-tf-support/references/bss/guide.md",
-                "skills/bss/billing/huawei-cloud-business-tf-support/scripts/bss",
+                "official-bss-cli-reference.md",
+                "official-bss-business-guide.md",
+                "official-bss-script-dir",
             ],
         },
         "official_operations": [
@@ -411,17 +411,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--scout-related-commands",
         type=Path,
-        help="Explicit upstream billing-scout related-commands.md for maintenance refresh.",
+        help="Explicit upstream BSS CLI reference file for maintenance refresh.",
     )
     parser.add_argument(
         "--business-bss-guide",
         type=Path,
-        help="Explicit upstream business-support BSS guide for maintenance refresh.",
+        help="Explicit upstream BSS business guide for maintenance refresh.",
     )
     parser.add_argument(
         "--business-bss-script-dir",
         type=Path,
-        help="Explicit upstream business-support BSS script directory.",
+        help="Explicit upstream BSS script directory.",
     )
     parser.add_argument(
         "--write-baseline",

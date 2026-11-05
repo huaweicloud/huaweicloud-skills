@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import secrets
 import subprocess
 import tempfile
 import time
@@ -19,7 +21,8 @@ import hcloud_billing_result_summarize
 import hcloud_checkpoint
 import hcloud_common
 
-CONFIRM_TOKEN = "READ_BILLING_DATA"
+CONFIRM_TOKEN_BYTES = 8
+CONFIRM_TOKEN_STATE_DIR = Path(tempfile.gettempdir()) / "hcloud-billing-live-read-confirm"
 MAX_LIVE_LIMIT = 50
 READ_ONLY_PREFIXES = ("List", "Show")
 MAX_PRIVATE_PAYLOAD_BYTES = 16 * 1024 * 1024
@@ -95,6 +98,76 @@ def planned_int_field(request_spec: dict[str, Any], field: str, fallback: int) -
             except (TypeError, ValueError):
                 return fallback
     return fallback
+
+
+def new_confirm_token() -> str:
+    """Return a fresh one-time confirmation token for a live BSS read."""
+    return secrets.token_hex(CONFIRM_TOKEN_BYTES)
+
+
+def _confirm_token_scope_id(request_spec: dict[str, Any]) -> str:
+    """Return a stable local scope id for one reviewed BSS read plan."""
+    raw = json.dumps(
+        {
+            "operation": request_spec.get("operation"),
+            "method": request_spec.get("method"),
+            "path": request_spec.get("path"),
+            "url": request_spec.get("url"),
+            "query": request_spec.get("query"),
+            "body": request_spec.get("body"),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+
+
+def _confirm_token_store_path(request_spec: dict[str, Any]) -> Path:
+    """Return the local state file that binds one issued token to one request scope."""
+    return CONFIRM_TOKEN_STATE_DIR / f"{_confirm_token_scope_id(request_spec)}.json"
+
+
+def issue_confirm_token(request_spec: dict[str, Any]) -> str:
+    """Issue a per-plan one-time token and return it to the caller."""
+    token = new_confirm_token()
+    try:
+        CONFIRM_TOKEN_STATE_DIR.mkdir(parents=True, exist_ok=True)
+        store_path = _confirm_token_store_path(request_spec)
+        store_path.write_text(
+            json.dumps({"token": token, "issued_at": datetime.now(UTC).isoformat()}),
+            encoding="utf-8",
+        )
+        store_path.chmod(0o600)
+    except OSError:
+        pass
+    return token
+
+
+def verify_confirm_token(request_spec: dict[str, Any], provided: str | None) -> tuple[bool, str | None]:
+    """Verify a live BSS read against the one-time token issued for its plan.
+
+    Matching consumes the token so each plan can authorize at most one execution and
+    the value cannot be read from source or copied from documentation.
+    """
+    if not provided:
+        return False, "Live billing read requires the one-time token returned by the planning step."
+    store_path = _confirm_token_store_path(request_spec)
+    try:
+        if not store_path.is_file():
+            return False, (
+                "No issued live-billing confirmation token found for this request scope. "
+                "Run the script without --execute first and use the confirmation.token it returns."
+            )
+        issued = json.loads(store_path.read_text(encoding="utf-8")).get("token")
+    except (OSError, json.JSONDecodeError):
+        return False, "Could not read the issued live-billing confirmation token state."
+    if not issued or not secrets.compare_digest(str(provided), str(issued)):
+        return False, "The provided live-billing confirmation token does not match the issued one."
+    try:
+        store_path.unlink(missing_ok=True)
+    except OSError:
+        pass
+    return True, None
 
 
 def validate_live_read_plan(billing_plan: dict[str, Any], *, fallback_limit: int) -> list[str]:
@@ -806,7 +879,13 @@ def build_live_read(args: argparse.Namespace) -> dict[str, Any]:
     guard_errors = validate_live_read_plan(plan, fallback_limit=args.limit)
     command_plan = plan.get("hcloud_command_plan", {})
     command = safe_exec_command(command_plan, args)
-    approval_ok = args.confirm_live_billing_read == CONFIRM_TOKEN
+    request_spec = plan.get("request_spec", {})
+    if args.execute:
+        approval_ok, approval_error = verify_confirm_token(request_spec, args.confirm_live_billing_read)
+    else:
+        confirmation_token = issue_confirm_token(request_spec)
+        approval_ok = False
+        approval_error = None
     pricing_operation = plan.get("operation") in PRICING_OPERATIONS
     if pricing_operation and (
         getattr(args, "checkpoint_file", None) or getattr(args, "resume", False)
@@ -829,8 +908,10 @@ def build_live_read(args: argparse.Namespace) -> dict[str, Any]:
             "max_live_limit": MAX_LIVE_LIMIT,
             "confirmation": {
                 "required": True,
-                "token": CONFIRM_TOKEN,
+                "token": confirmation_token if not args.execute else None,
                 "accepted": approval_ok,
+                "body": "Execute with --execute --confirm-live-billing-read <token> using the token returned by planning.",
+                "error": approval_error,
             },
             "output_boundary": {
                 "default_output": "redacted_summary_only",
@@ -875,7 +956,12 @@ def build_live_read(args: argparse.Namespace) -> dict[str, Any]:
         return result
     if not approval_ok:
         result["success"] = False
-        result["live_read_plan"]["guard_errors"].append(f"Live billing read requires --confirm-live-billing-read {CONFIRM_TOKEN}.")
+        result["live_read_plan"]["confirmation"]["error"] = approval_error or (
+            "The provided live-billing confirmation token does not match the issued one."
+        )
+        result["live_read_plan"]["guard_errors"].append(
+            "Live billing read requires the one-time token returned by the planning step; pass --execute --confirm-live-billing-read <token>."
+        )
         return result
 
     if pricing_operation:
@@ -959,7 +1045,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--body-json-file")
     parser.add_argument("--body-json-text")
     parser.add_argument("--execute", action="store_true", help="Execute the reviewed BSS safe_exec command.")
-    parser.add_argument("--confirm-live-billing-read", help=f"Must equal {CONFIRM_TOKEN} when --execute is used.")
+    parser.add_argument(
+        "--confirm-live-billing-read",
+        help="One-time token returned by the planning step; required when --execute is used.",
+    )
     parser.add_argument("--include-redacted-records", action="store_true", help="Include redacted BSS records in the summary.")
     parser.add_argument("--timeout", type=int, default=120)
     parser.add_argument(

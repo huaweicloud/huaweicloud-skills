@@ -79,15 +79,18 @@ def main() -> int:
     """Append to or summarize a run journal."""
     args = parse_args()
     path = Path(args.journal)
-    if args.append_json:
-        result = {"success": True, "event": append_event(path, json.loads(args.append_json))}
-    elif args.append_json_file:
-        result = {"success": True, "event": append_event(path, read_json(Path(args.append_json_file)))}
-    else:
-        result = {"success": True, "summary": summarize_events(read_events(path))}
+    try:
+        if args.append_json:
+            result = {"success": True, "event": append_event(path, json.loads(args.append_json))}
+        elif args.append_json_file:
+            result = {"success": True, "event": append_event(path, read_json(Path(args.append_json_file)))}
+        else:
+            result = {"success": True, "summary": summarize_events(read_events(path))}
+    except (ValueError, json.JSONDecodeError, OSError) as exc:
+        result = {"success": False, "error": str(exc)}
 
     hcloud_common.emit_json(result, pretty=args.pretty)
-    return 0
+    return 0 if result["success"] else 1
 
 
 if __name__ == "__main__":
