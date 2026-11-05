@@ -11,7 +11,10 @@ tags: [huawei-cloud, dws, memory, diagnostics, autopilot]
 # Internal extension fields
 # ============================================================
 trigger:
-  keywords: ["DWS", "内存高", "内存告警", "内存不足", "内存使用率", "内存诊断", "OOM", "内存溢出", "内存使用率过高", "DWS集群节点动态内存使用率超阈值", "动态内存使用率超阈值", "动态内存使用率", "high memory", "memory alarm", "insufficient memory", "memory usage", "memory diagnosis", "OOM", "memory overflow", "high memory usage", "dynamic memory usage exceeds threshold"]
+  # Note: "DWS" is a service identifier, not a standalone trigger. This skill only
+  # activates when a memory-related keyword (below) is present; it must co-occur with
+  # the service context (DWS / 内存/ OOM). Non-memory DWS issues must be rejected.
+  keywords: ["内存高", "内存告警", "内存不足", "内存使用率", "内存诊断", "OOM", "内存溢出", "内存使用率过高", "DWS集群节点动态内存使用率超阈值", "动态内存使用率超阈值", "动态内存使用率", "high memory", "memory alarm", "insufficient memory", "memory usage", "memory diagnosis", "OOM", "memory overflow", "high memory usage", "dynamic memory usage exceeds threshold"]
   resource_types: ["DWS::instance_id"]
   hypotheses: ["memory_high", "memory_warning", "memory_oom"]
 
@@ -85,6 +88,14 @@ This skill is dedicated to DWS cluster memory high root cause diagnosis. When a 
 
 **Background Knowledge**: Memory usage formulas, CN/DN instance distinction, memory_pool analysis, memory thresholds, and important principles are documented in [Memory Background Knowledge](references/memory-background.md). Must read before diagnosis.
 
+## Out of Scope
+
+This skill only diagnoses **DWS cluster memory high** issues. The following cases are out of scope and must be rejected:
+
+- **Non-DWS services**: ECS, RDS, CSS, GaussDB, and any other Huawei Cloud service. If the resource does not belong to DWS, do not diagnose.
+- **Non-memory issues**: CPU usage, disk usage, network latency, IO bottleneck, etc. A bare "DWS" mention without a memory-related issue must not activate this skill.
+- **Remediation actions**: Do not kill SQL, modify parameters, restart instances, or perform any other write/remediation operations. Diagnosis and reporting only.
+
 ## Prerequisites
 
 ### 1. CLI Requirements
@@ -124,6 +135,8 @@ hcloud DWS ListMetricsData --cli-region=<region> --cluster_id=<id> --metric_name
 hcloud DWS ListHostOverview --cli-region=<region> --project_id=<pid> --offset=0 --limit=200
 ```
 
+**Note**: For `ListHostOverview`, `--offset` and `--limit` are **required** parameters — always include both in the command (e.g., `--offset=0 --limit=200`).
+
 ### Tool Selection Strategy
 
 Choose between KooCLI and MCP Server, preferring KooCLI. Step 0 checks hcloud availability:
@@ -135,8 +148,9 @@ Choose between KooCLI and MCP Server, preferring KooCLI. Step 0 checks hcloud av
 - If hcloud returns NETWORK_ERROR and MCP Server is also unavailable (not configured or returns authentication/connection error), terminate this skill and output: `KooCLI network unavailable and MCP Server connection failed. Please check KooCLI network configuration or DWS Autopilot MCP Server configuration and retry`
 - After selecting MCP Server, if the first call returns an authentication error (e.g., 401 Unauthorized), do not fall back to hcloud. Terminate this skill directly and output: `MCP Server authentication failed. Please check DWS Autopilot MCP Server authentication configuration and retry`
 - hcloud call failures that are not NETWORK_ERROR (e.g., parameter errors, insufficient permissions) do not trigger fallback; follow existing retry logic
+- **Cluster ID validity**: If any call returns error code `DWS.13026` (`越权操作，集群校验不通过`) or `DWS.13032` (`集群id参数非法，请检查输入`), the provided cluster_id is invalid or does not exist. Terminate immediately and output: `Cluster ID <cluster_id> is invalid or does not exist. Please verify the cluster ID in DWS console.` Do not retry, do not fall back, and do not generate a diagnosis report.
 
-Once a tool is selected, use it throughout without switching (except for NETWORK_ERROR fallback). If a call fails, retry once (maximum 2 attempts). If still failing, mark the metric as "unavailable" and continue to the next step. When all metric queries fail, generate the diagnosis report directly.
+Once a tool is selected, use it throughout without switching (except for NETWORK_ERROR fallback). If a call fails, retry once (maximum 2 attempts). If still failing, mark the metric as "unavailable" and continue to the next step. When all metric queries fail, generate the diagnosis report directly. (The only exceptions are the `DWS.13026`/`DWS.13032` cluster-ID-invalid termination rule above, which overrides retry and continuation.)
 
 ### Parameter Mapping
 
@@ -210,10 +224,12 @@ Before diagnosis, create an execution plan based on Steps 0-7, then execute sequ
 
 Execute `hcloud version`; version >= 3.2.0 → tool_mode=hcloud, otherwise tool_mode=mcp.
 
-**hcloud Network Availability Probe**: If tool_mode=hcloud, execute a lightweight API call (e.g., `hcloud DWS ListClusters --cli-region=<region> --project_id=<project_id> --offset=0 --limit=1`) to verify network connectivity:
+**hcloud Network Availability Probe**: If tool_mode=hcloud, execute a lightweight API call (e.g., `hcloud DWS ListClusters --cli-region=<region> --project_id=<project_id>`) to verify network connectivity:
 - Returns normal or business error (e.g., insufficient permissions, parameter error) → Network available, keep tool_mode=hcloud
 - Returns NETWORK_ERROR → Network unavailable, fall back to tool_mode=mcp
 - After fallback, if MCP is also unavailable → Terminate execution, prompt user to check KooCLI network configuration or MCP Server configuration
+
+**Cluster ID Validity Check**: After the first metric/host call (Step 1-2) or immediately when detected, if a call returns `DWS.13026` or `DWS.13032`, terminate the diagnostic flow right away and output: `Cluster ID <cluster_id> is invalid or does not exist. Please verify the cluster ID in DWS console.` Do not retry, do not fall back, and do not generate a diagnosis report.
 
 ### Step 1: Query MemStat
 
@@ -335,7 +351,7 @@ Generate an HTML report following the template in the "Output Format" section. *
 
 ```bash
 # hcloud
-hcloud DWS ListClusters --cli-region=<region> --project_id=<pid> --offset=0 --limit=200
+hcloud DWS ListClusters --cli-region=<region> --project_id=<pid>
 # MCP
 dws_autopilot_get_clusters(project_id=<pid>)
 ```
@@ -343,7 +359,7 @@ dws_autopilot_get_clusters(project_id=<pid>)
 ### Query Host Information
 
 ```bash
-# hcloud
+# hcloud (offset and limit are REQUIRED parameters for ListHostOverview)
 hcloud DWS ListHostOverview --cli-region=<region> --project_id=<pid> --offset=0 --limit=200
 # MCP
 dws_autopilot_get_hosts(project_id=<pid>, cluster_id=<cid>, limit=200, offset=0)

@@ -25,10 +25,13 @@ Setting up the DWS Autopilot MCP Server allows users to leverage LLM capabilitie
 ### 2.1 Tools
 DWS Autopilot MCP Server provides the following tools:
 
-1. **dws_autopilot_get_hosts**
+1. **dws_autopilot_get_clusters**
+   Query the DWS cluster list, supporting filtering by cluster_id (optional) and pagination (limit/offset)
+
+2. **dws_autopilot_get_hosts**
    Query DWS cluster host information with filtering by hostname/IP, pagination, and sorting support
 
-2. **dws_autopilot_get_metric**
+3. **dws_autopilot_get_metric**
    Query DWS cluster metric data, supporting cpu_usage, mem_usage, disk_usage_avg, tcp_resend_rate, disk_io, net_io, etc.
 
 ### 2.2 Authentication
