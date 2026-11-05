@@ -4,10 +4,10 @@ description: |
   Analyze candidate models before adapter implementation. Determine model
   implementation source (transformers or model-local), structural features,
   layer-by-layer loading requirements, and MoE fused weight risks. Use this
-  skill when the user wants to: (1) assess model adaptation feasibility before
-  creating msModelSlim adapters, (2) analyze model structure and type
-  classification, (3) evaluate MoE compatibility for quantization. Trigger:
-  user mentions "model analysis", "msModelSlim", "adapter", "transformers",
+  skill when the user wants to assess model adaptation feasibility before
+  creating msModelSlim adapters, analyze model structure and type
+  classification, or evaluate MoE compatibility for quantization.
+  Triggers include: "model analysis", "msModelSlim", "adapter", "transformers",
   "MoE", "layer-by-layer", "model assessment", "feasibility", "模型分析",
   "适配可行性", "模型评估", "MoE分析"
 compatibility:
@@ -286,55 +286,45 @@ following elements. Refer to template below:
 
 ## Enhanced Features
 
-### Automated Compatibility Checker
+### Automated Analysis Script
 
-This skill includes an automated model compatibility checker that scans model
-architectures before migration:
+This skill ships an automated analysis script
+(`scripts/analyze_model.py`) that runs the SKILL.md analysis flow against a
+local model directory and produces a Markdown report:
+
+```bash
+python3 scripts/analyze_model.py --model-path <model_dir> --cli-region <region> [--output report.md] [--verbose]
+```
 
 **Features:**
 
-- **Migration Blocker Detection**: Identifies unsupported operators, custom
-  layers, and framework-specific features
-- **Early Warning System**: Provides early warning for known issues with
-  suggested workarounds
-- **Compatibility Score**: Generates compatibility score with detailed breakdown
-- **Operator Coverage Analysis**: Reports operator coverage rate for Ascend NPU
-  support
+- **Implementation Source Detection**: reads `config.json` and reports whether
+  the model is `transformers`-supported, `model-local`, or `unsupported`
+- **Model Type Classification**: pure LLM / multimodal understanding /
+  multimodal generation
+- **Structural Feature Extraction**: `hidden_size`, number of layers,
+  attention / KV heads, and MoE indicators from config
+- **MoE Layout Assessment**: detects fused vs non-fused expert weight layouts
+  (via config fields and safetensors tensor names) and flags unpack needs
+- **Layer-by-Layer Loading Assessment**: heuristic recommendation based on
+  model structure and environment memory
+- **Quantization and MTP Risk Flags**: flags quantized models (missing
+  dequantization script) and MTP structures (missing implementation code)
 
-**Compatibility Check Categories:**
-
-| Category           | Check Items                                  |
-|--------------------|----------------------------------------------|
-| Operator Support   | Transformer layers, attention, normalization |
-| Framework Features | Custom ops, dynamic shapes, control flow     |
-| Weight Formats     | Safetensors, PyTorch, HF format compatibility|
-| Special Structures | MoE, MTP, hybrid architectures               |
-
-**Output Format:**
-
-```markdown
-## Compatibility Check Result
-- Overall Score: XX/100
-- Passed: X/XX checks
-- Warning: X items require attention
-- Blockers: X items preventing migration
-
-### Detailed Results
-| Check Item        | Status     | Details                           |
-|-------------------|------------|-----------------------------------|
-| Operator coverage | ✓ Pass     | 95% of operators supported         |
-| Custom layers     | ⚠️ Warning | 2 custom ops need AscendC impl    |
-| Weight format     | ✓ Pass     | Standard Hugging Face format      |
-```
+The report generated follows the analysis report template in the "Required
+Output" section above and must be interpreted together with the agent manual
+analysis steps (`analysis-checklist.md`). The script output is a structured
+starting point, not a replacement for code-level inspection of `modeling_*.py`.
 
 ## Reference Documents
 
-- [Analysis Checklist](references/analysis_checklist.md) - Analysis verification
+- [Analysis Checklist](references/analysis-checklist.md) - Analysis verification
   checklist
 - [Acceptance Criteria](references/acceptance-criteria.md) - Functional
   acceptance criteria
 - [Verification Method](references/verification-method.md) - Verification approach
 - [Troubleshooting](references/troubleshooting.md) - Common issues and solutions
+- [IAM Policies](references/iam-policies.md) - Permission requirements
 
 ## Prerequisites
 
@@ -353,10 +343,43 @@ The analysis workflow follows these steps:
 5. Generate structured analysis report
 6. Provide adaptation recommendations
 
-## Parameter Reference
+## Core Commands
 
-| Parameter  | Description                    | Required |
-|------------|--------------------------------|----------|
-| model      | Model name or path             | Yes      |
-| output     | Analysis report output path    | No       |
-| detailed   | Output detailed information    | No       |
+The skill does not call cloud APIs; model analysis is performed on local model
+files. Two equivalent execution paths are supported:
+
+### 1. Automated Analysis Script
+
+```bash
+python3 scripts/analyze_model.py --model-path <model_dir> --cli-region <region> [--output <report.md>] [--verbose]
+```
+
+Produces a Markdown report following the "Required Output" template.
+
+### 2. Manual Analysis Steps
+
+Follow the "Hard Requirement: Parse Implementation Source First" and "Minimum
+Workflow" sections above; use `references/analysis-checklist.md` to verify each
+step. Read `config.json`, `modeling_*.py`, and safetensors metadata from the
+local model directory.
+
+### Model Downloads (non-weight files, when missing locally)
+
+```bash
+modelscope download --model <org>/<model> --local_dir ./models/<name> --exclude '*.safetensors'
+```
+
+## Parameter Confirmation
+
+For the automated analysis script:
+
+| Parameter    | Description                         | Required |
+|--------------|-------------------------------------|----------|
+| `--model-path` | Local model directory containing `config.json` | Yes |
+| `--cli-region` | Region context for the downstream msModelSlim adapter workflow, e.g. `cn-north-4` (default `cn-north-4`) | No |
+| `--output`   | Analysis report output path         | No       |
+| `--verbose`  | Print extra progress information    | No       |
+
+For the manual workflow, the required input is the model path or repository
+identifier plus its `config.json` (and optionally `modeling_*.py` /
+`model.safetensors.index.json`).
