@@ -10,16 +10,58 @@
 # Exit codes:
 #   0 - Configuration successful
 #   1 - User declined or parameter error
+#
+# Output convention:
+#   stdout carries only the machine-readable result (`PERMISSION_CONFIGURED`
+#   followed by the absolute path of global.json); every log line goes to stderr.
+#
+# Portability notes:
+#   * bash 3.2 (macOS) compatible: no mapfile / no ${var,,} / no associative arrays.
+#   * global.json is written to a temp file in the same directory and then moved
+#     into place, so a crashed run can never leave a truncated JSON file.
+#   * Workspace paths (and any `"` or `\` inside them) are JSON-escaped.
 
 set -e
 
 PERMISSION_FILE="$HOME/.codeartsdoer/cli-data/storage/permission/global.json"
+TMP_FILE=""
 
+# ============================================
+# JSON helpers
+# ============================================
+json_escape() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\t'/\\t}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    printf '%s' "$s"
+}
+
+cleanup_tmp() {
+    if [ -n "$TMP_FILE" ] && [ -f "$TMP_FILE" ]; then
+        rm -f "$TMP_FILE" 2>/dev/null || true
+    fi
+}
+
+ENTRY_COUNT=0
+perm_entry() {
+    if [ "$ENTRY_COUNT" -gt 0 ]; then
+        printf ',\n'
+    fi
+    ENTRY_COUNT=$((ENTRY_COUNT + 1))
+    printf '  {"permission": "%s", "pattern": "%s", "action": "%s"}' \
+        "$(json_escape "$1")" "$(json_escape "$2")" "$(json_escape "$3")"
+}
+
+# ============================================
 # Parse arguments
+# ============================================
 AGREE_MODE=false
 WORKSPACE=""
 
-while [[ $# -gt 0 ]]; do
+while [ $# -gt 0 ]; do
     case "$1" in
         --agree)
             AGREE_MODE=true
@@ -56,13 +98,13 @@ if [ "$AGREE_MODE" = false ]; then
     echo "   - Recommend limiting to the workspace directory" >&2
     echo "" >&2
 
-    read -p "Authorize permission configuration? (y/N): " CONFIRM
+    read -r -p "Authorize permission configuration? (y/N): " CONFIRM
     if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
         echo "User declined authorization" >&2
         exit 1
     fi
 
-    read -p "Restrict to directory (leave blank for global): " WORKSPACE
+    read -r -p "Restrict to directory (leave blank for global): " WORKSPACE
 fi
 
 # Generate permission configuration
@@ -77,49 +119,52 @@ fi
 # Ensure directory exists
 mkdir -p "$(dirname "$PERMISSION_FILE")"
 
-# Write permission configuration
-if [ -z "$WORKSPACE" ]; then
-    # Global configuration
-    cat > "$PERMISSION_FILE" << 'EOF'
-[
-  {"permission": "browser", "pattern": "*", "action": "ask"},
-  {"permission": "edit", "pattern": "*", "action": "allow"},
-  {"permission": "write", "pattern": "*", "action": "allow"},
-  {"permission": "webfetch", "pattern": "*", "action": "ask"},
-  {"permission": "websearch", "pattern": "*", "action": "allow"},
-  {"permission": "external_directory_write", "pattern": "*", "action": "ask"},
-  {"permission": "external_directory_read", "pattern": "*", "action": "allow"},
-  {"permission": "dotfile", "pattern": "*", "action": "ask"},
-  {"permission": "sandbox_risk_command", "pattern": "ls *", "action": "allow"},
-  {"permission": "sandbox_risk_command", "pattern": "mkdir *", "action": "allow"},
-  {"permission": "sandbox_risk_command", "pattern": "cat *", "action": "allow"},
-  {"permission": "sandbox_risk_command", "pattern": "test *", "action": "allow"},
-  {"permission": "sandbox_risk_command", "pattern": "pwd", "action": "allow"},
-  {"permission": "sandbox_risk_command", "pattern": "which *", "action": "allow"}
-]
-EOF
-else
-    # Workspace-restricted configuration
-    cat > "$PERMISSION_FILE" << EOF
-[
-  {"permission": "browser", "pattern": "*", "action": "ask"},
-  {"permission": "edit", "pattern": "$PATTERN", "action": "allow"},
-  {"permission": "write", "pattern": "$PATTERN", "action": "allow"},
-  {"permission": "webfetch", "pattern": "*", "action": "ask"},
-  {"permission": "websearch", "pattern": "*", "action": "allow"},
-  {"permission": "external_directory_write", "pattern": "*", "action": "ask"},
-  {"permission": "external_directory_read", "pattern": "*", "action": "allow"},
-  {"permission": "dotfile", "pattern": "*", "action": "ask"},
-  {"permission": "sandbox_risk_command", "pattern": "ls $WORKSPACE/*", "action": "allow"},
-  {"permission": "sandbox_risk_command", "pattern": "mkdir $WORKSPACE/*", "action": "allow"},
-  {"permission": "sandbox_risk_command", "pattern": "mkdir -p $WORKSPACE/*", "action": "allow"},
-  {"permission": "sandbox_risk_command", "pattern": "cat $WORKSPACE/*", "action": "allow"},
-  {"permission": "sandbox_risk_command", "pattern": "test *", "action": "allow"},
-  {"permission": "sandbox_risk_command", "pattern": "pwd", "action": "allow"},
-  {"permission": "sandbox_risk_command", "pattern": "which *", "action": "allow"}
-]
-EOF
-fi
+# Write permission configuration atomically (temp file in the same directory,
+# then an atomic rename). Never truncate global.json in place.
+TMP_FILE=$(mktemp "${PERMISSION_FILE}.tmp.XXXXXX")
+trap 'cleanup_tmp' EXIT INT TERM HUP
+
+{
+    printf '[\n'
+    ENTRY_COUNT=0
+
+    if [ -z "$WORKSPACE" ]; then
+        perm_entry "browser" "*" "ask"
+        perm_entry "edit" "$PATTERN" "allow"
+        perm_entry "write" "$PATTERN" "allow"
+        perm_entry "webfetch" "*" "ask"
+        perm_entry "websearch" "*" "allow"
+        perm_entry "external_directory_write" "*" "ask"
+        perm_entry "external_directory_read" "*" "allow"
+        perm_entry "dotfile" "*" "ask"
+        perm_entry "sandbox_risk_command" "ls *" "allow"
+        perm_entry "sandbox_risk_command" "mkdir *" "allow"
+        perm_entry "sandbox_risk_command" "cat *" "allow"
+        perm_entry "sandbox_risk_command" "test *" "allow"
+        perm_entry "sandbox_risk_command" "pwd" "allow"
+        perm_entry "sandbox_risk_command" "which *" "allow"
+    else
+        perm_entry "browser" "*" "ask"
+        perm_entry "edit" "$PATTERN" "allow"
+        perm_entry "write" "$PATTERN" "allow"
+        perm_entry "webfetch" "*" "ask"
+        perm_entry "websearch" "*" "allow"
+        perm_entry "external_directory_write" "*" "ask"
+        perm_entry "external_directory_read" "*" "allow"
+        perm_entry "dotfile" "*" "ask"
+        perm_entry "sandbox_risk_command" "ls $WORKSPACE/*" "allow"
+        perm_entry "sandbox_risk_command" "mkdir $WORKSPACE/*" "allow"
+        perm_entry "sandbox_risk_command" "mkdir -p $WORKSPACE/*" "allow"
+        perm_entry "sandbox_risk_command" "cat $WORKSPACE/*" "allow"
+        perm_entry "sandbox_risk_command" "test *" "allow"
+        perm_entry "sandbox_risk_command" "pwd" "allow"
+        perm_entry "sandbox_risk_command" "which *" "allow"
+    fi
+
+    printf '\n]\n'
+} > "$TMP_FILE"
+
+mv "$TMP_FILE" "$PERMISSION_FILE"
 
 echo "" >&2
 echo "Permission configuration complete" >&2
