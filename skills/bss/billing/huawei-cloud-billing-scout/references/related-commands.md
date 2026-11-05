@@ -26,6 +26,11 @@ This document only retains operation contracts: purpose, required fields, templa
 - Default `limit<=10`, `offset=0`; find prerequisite IDs at most recent 3 billing periods, 3 pages per command, `limit<=50` per page.
 - Array and object parameters only use verified dot notation; if no template then stop, do not try JSON strings.
 - Account, customer, resource, order, transaction, coupon, card, partner IDs default desensitized.
+- **Credentials** — `hcloud` commands use the configured profile and inherit its credentials automatically. When an operation has no `hcloud` command and runs through the Python SDK (`huaweicloudsdkbss`) instead, the profile credentials are **not** inherited: `HW_ACCESS_KEY` / `HW_SECRET_KEY` (temporary credentials also `HW_SECURITY_TOKEN`) must be set in the environment. Check presence only — never print the values:
+  ```bash
+  python3 -c "import os; print('ok' if os.getenv('HW_ACCESS_KEY') and os.getenv('HW_SECRET_KEY') else 'missing')"
+  ```
+  If they are missing, report a gap for that operation; do not fall back to a guess or to another operation.
 
 ## customer_billing
 
@@ -143,13 +148,16 @@ Insufficient evidence no blame; do not use `ShowCustomerMonthlySum` to replace t
 
 ## discount_entitlement
 
+> **Partner-account prerequisite** — Coupon **quota** operations in this section (`ListQuotaCoupons`, `ListIssuedCouponQuotas`, `ListIssuedPartnerCoupons`, `ListPartnerCouponsRecord`) read partner / reseller coupon entitlements and require a **partner account**. Under a non-partner account they return an empty result (`ListQuotaCoupons` may return `403`). In that case state the prerequisite in one sentence and point the user to the console (**费用中心 → 优惠券 / 资源包**); do not retry other operations and do not report "no coupons" as a fact.
+> Personal (non-partner) coupons and resource packages are covered by `ListCustomerCouponChangeRecords` and `ListFreeResourceInfos` / `ListFreeResourceUsages` below, which work with a normal account.
+
 | Operation | Purpose | Required | Note |
 | --- | --- | --- | --- |
 | `ListFreeResourceInfos` | Resource package list | - | Array parameters only use `.1`, `.2` increment; see template below |
 | `ListFreeResourceUsages` | Resource package remaining quota | `free_resource_ids.1` | Usually no pagination; see template below |
 | `ListFreeResourcesUsageRecords` | Package deduction details | See template | Span ≤90 days |
 | `ListCustomerCouponChangeRecords` | Coupon transaction | `balance_type` | Coupon ID, transaction ID default desensitized |
-| `ListQuotaCoupons` | Partner coupon quota | - | Read-only quota; see template below |
+| `ListQuotaCoupons` | Partner coupon quota | - | **Requires partner account**; read-only quota, see template below |
 | `ListIssuedCouponQuotas` | Issued coupon quota | - | Master reseller scenario |
 | `ListCouponQuotasRecords` | Coupon quota operation records | - | Read-only records |
 | `ListIssuedPartnerCoupons` | Issued coupons | - | Coupon ID, customer ID default desensitized |
@@ -287,6 +295,18 @@ hcloud BSS ListCustomersBalancesDetail \
 | `ListProvinces` | Province dictionary | - | Partner sales platform geography |
 | `ListCities` | City dictionary | `province_code` | Partner sales platform geography |
 | `ListCounties` | District/county dictionary | `city_code` | Partner sales platform geography |
+
+### reference_dimensions Example Templates
+
+#### `ListServiceTypes`
+
+```bash
+hcloud BSS ListServiceTypes \
+  --cli-region=cn-north-1 \
+  --cli-output=json
+```
+
+**How to obtain a service code** — `ListServiceTypes` takes no required parameters and returns the full `service_type_code` dictionary; use it to translate (and to validate) the codes that appear in bills, costs and resource-package queries. `ListServiceResources` maps a service to its resource type. Do **not** infer or construct a code from naming patterns — an unverified code produces an empty result that is easily mistaken for "no charges".
 
 ## Out of Scope (Refuse Routing)
 
