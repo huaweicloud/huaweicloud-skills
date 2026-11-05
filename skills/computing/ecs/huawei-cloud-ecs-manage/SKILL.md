@@ -2,21 +2,31 @@
 name: huawei-cloud-ecs-manage
 description: |
   Use when managing Huawei Cloud ECS (Elastic Cloud Server / 弹性云服务器) instances —
-  lifecycle management (create / start / stop / restart / delete), instance querying,
-  quota/flavor/image inspection, and multi-step root-cause diagnosis of ECS instance
-  creation failures (quota → flavor → image → network → keypair → disk).
-  Provides 12 huawei_* actions: huawei_list_ecs_instances, huawei_get_ecs_instance,
+  lifecycle management (create / start / stop / restart / delete), day-to-day change
+  operations (resize / reinstall OS / reset password / replace keypair / bind & unbind EIP /
+  change security group / add & remove NIC / attach & detach volume), instance querying,
+  quota/flavor/image inspection, mandatory async-job polling after every write, and
+  multi-step root-cause diagnosis of ECS instance creation failures
+  (quota → flavor → image → network → keypair → disk).
+  Provides 23 huawei_* actions: huawei_list_ecs_instances, huawei_get_ecs_instance,
   huawei_list_ecs_flavors, huawei_list_ecs_images, huawei_list_ecs_quotas,
   huawei_diagnose_ecs_create_failure, huawei_analyze_ecs_health, huawei_create_ecs_instance,
   huawei_start_ecs_instance, huawei_stop_ecs_instance, huawei_restart_ecs_instance,
-  huawei_delete_ecs_instance.
+  huawei_delete_ecs_instance, huawei_resize_ecs_instance, huawei_reinstall_ecs_os,
+  huawei_reset_ecs_password, huawei_replace_ecs_keypair, huawei_bind_ecs_eip,
+  huawei_unbind_ecs_eip, huawei_change_ecs_security_group, huawei_add_ecs_nic,
+  huawei_remove_ecs_nic, huawei_attach_ecs_volume, huawei_detach_ecs_volume.
   Service keywords: ECS, elastic cloud server, instance, VM, server, flavor, image, quota,
-  keypair, security group, subnet, EIP, 云服务器, 弹性云服务器, 实例, 规格, 镜像, 配额,
-  密钥对, 安全组, 子网, 创建失败, 启动, 停止, 重启, 删除.
+  keypair, security group, subnet, EIP, job, resize, reinstall, 云服务器, 弹性云服务器, 实例,
+  规格, 镜像, 配额, 密钥对, 安全组, 子网, 创建失败, 启动, 停止, 重启, 删除, 变更规格, 重装系统,
+  重置密码, 绑定EIP, 解绑EIP, 网卡, 挂载磁盘, 卸载磁盘, 异步任务.
   Triggers include: "ECS 创建失败", "云服务器创建失败", "创建云主机失败", "ECS 创建不了",
   "create ECS failed", "instance creation failed", "创建云服务器", "启动云服务器",
   "停止云服务器", "重启云服务器", "删除云服务器", "ECS 规格", "ECS 配额", "ECS 镜像",
-  "list ECS instances", "diagnose ECS", "ECS health", "ecs create diagnose".
+  "list ECS instances", "diagnose ECS", "ECS health", "ecs create diagnose",
+  "ECS 变更规格", "云服务器升配", "ECS 重装系统", "重置云服务器密码", "更换密钥对",
+  "绑定弹性公网IP", "解绑EIP", "更换安全组", "添加网卡", "删除网卡", "挂载云硬盘",
+  "卸载云硬盘", "ECS resize", "reinstall ECS OS", "async job polling".
 tags: [huawei-cloud, ecs, compute, diagnose, management]
 ---
 
@@ -49,14 +59,20 @@ instance lifecycle management (create/start/stop/restart/delete), instance/ quot
 querying, and a **6-step create-failure root-cause diagnosis** that eliminates the most common causes
 of "ECS instance creation failed" in order: **quota → flavor → image → network → keypair → disk**.
 
-It exposes 12 `huawei_*` actions in four capability groups:
+It exposes 23 `huawei_*` actions in five capability groups:
 
 | Capability | Risk level | Actions |
 | ---------- | ---------- | ------- |
 | Query (read-only) | R3 — auto execute | `huawei_list_ecs_instances`, `huawei_get_ecs_instance`, `huawei_list_ecs_flavors`, `huawei_list_ecs_images`, `huawei_list_ecs_quotas` |
 | Diagnose (read-only) | R3 — auto execute | `huawei_diagnose_ecs_create_failure`, `huawei_analyze_ecs_health` |
-| Manage | R2 — preview + confirm | `huawei_create_ecs_instance`, `huawei_start_ecs_instance`, `huawei_stop_ecs_instance`, `huawei_restart_ecs_instance` |
-| Manage | R1 — preview + confirm | `huawei_delete_ecs_instance` |
+| Manage — lifecycle | R2 — preview + confirm | `huawei_create_ecs_instance`, `huawei_start_ecs_instance`, `huawei_stop_ecs_instance`, `huawei_restart_ecs_instance` |
+| Manage — lifecycle | R1 — preview + confirm | `huawei_delete_ecs_instance` |
+| Manage — change operations (§5) | R2 — preview + confirm | `huawei_resize_ecs_instance`, `huawei_reinstall_ecs_os`, `huawei_reset_ecs_password`, `huawei_replace_ecs_keypair`, `huawei_bind_ecs_eip`, `huawei_change_ecs_security_group`, `huawei_add_ecs_nic`, `huawei_attach_ecs_volume`, `huawei_detach_ecs_volume` |
+| Manage — change operations (§5) | R1 — preview + confirm | `huawei_unbind_ecs_eip`, `huawei_remove_ecs_nic` |
+
+Every write action is **asynchronous**: the API returns a `job_id` and the real work continues in
+the background. Polling that job is a **mandatory** post-step, not an optional extra — see
+[§6 Async job polling](#6-async-job-polling-r3--mandatory-after-every-write).
 
 **Scope boundaries:**
 
@@ -64,10 +80,20 @@ It exposes 12 `huawei_*` actions in four capability groups:
 - ✅ Diagnose ECS create failures (quota → flavor → image → network → keypair → disk) and
   analyze instance health (status / disk / network)
 - ✅ Create (post-paid), start, stop, restart, delete ECS instances (R2/R1: always preview + confirm)
-- ❌ NEVER change VPC/subnet/security group/disk resources themselves — diagnosis and create
-  parameters only read them (use dedicated VPC / EVS skills for mutation)
-- ❌ NEVER execute start/stop/restart/delete/create without explicit user confirmation
+- ✅ Change an **existing instance**: resize flavor, reinstall OS, reset password, replace keypair,
+  bind/unbind EIP, attach/detach an existing security group, add/remove a NIC, attach/detach a volume
+  (R2/R1: always preview + confirm)
+- ❌ NEVER create, delete or reconfigure the VPC / subnet / security-group **resource** or the
+  EVS **volume resource** itself. This skill only attaches or detaches existing resources to an
+  instance; use the dedicated VPC / EVS skills for resource-level mutation.
+- ❌ NEVER execute any write action without explicit user confirmation
+- ❌ NEVER report a write as "done" before its async job reaches `SUCCESS` and, for `create`,
+  before the instance reaches `ACTIVE`
 - ❌ NEVER echo credentials (AK/SK, passwords, tokens) in any output or report
+- ➡️ Out of scope: **RDS / database** queries. This skill manages compute only. When the user asks
+  about a database that an ECS instance depends on, hand the question **back to the user** with a
+  pointer to a dedicated RDS skill or the Huawei Cloud RDS console — this skill never invokes another
+  skill. See `references/related-skills.md` for the hand-off wording.
 
 **Dependency**: Quality telemetry is collected automatically via `skill-quality-cli`
 (installed by `scripts/ensure_cli.sh` if absent).
@@ -100,9 +126,13 @@ It exposes 12 `huawei_*` actions in four capability groups:
 3. **IAM permissions**: least-privilege policies are provided in `references/iam-policies.md`.
    - Query/diagnose: `ecs:cloudServers:list`, `ecs:cloudServers:get`, `ecs:cloudServerFlavors:list`,
      `ecs:cloudServerImages:list`, `ecs:jobs:get`, `ecs:serverVolumes:list`, `ims:images:list`,
-     `vpc:subnets:list`, `vpc:securityGroups:list`, `vpc:publicIps:list`, `evs:volumes:list`
-   - Manage: `ecs:cloudServers:create`, `ecs:cloudServers:action` (start/stop/restart),
-     `ecs:cloudServers:delete`
+     `vpc:subnets:list`, `vpc:securityGroups:list`, `vpc:publicIps:list`, `evs:volumes:list`,
+     `kps:keypairs:list` (diagnosis step 5, `hcloud KPS ListKeypairs`)
+   - Manage: `ecs:cloudServers:create`, `ecs:cloudServers:action` (start/stop/restart, resize,
+     reinstall, reset password, NIC and security-group changes), `ecs:cloudServers:delete`
+   - Change operations (§5) also need the write action of each resource they touch, e.g.
+     `evs:volumes:delete` with `--delete_volume=true`, `vpc:publicIps:delete` with
+     `--delete_publicip=true`; the exact list is in `references/iam-policies.md`.
 4. **`skill-quality-cli`** — ensured by `bash scripts/ensure_cli.sh` (idempotent, skips if present)
    - Upgrade: run `skill-quality-cli upgrade` manually (no auto-upgrade)
    - Disable telemetry report: set `SKILL_QUALITY_REPORT=0`
@@ -113,11 +143,20 @@ It exposes 12 `huawei_*` actions in four capability groups:
 1. Identify target → region, instance_id / flavor_id / image_id / vpc_id / subnet_id / key_name, intent keywords
 2. Classify intent →
      - Query/Diagnose (R3): list / show / analyze / diagnose — auto execute
-     - Manage (R2): create / start / stop / restart — ALWAYS show preview and ask for explicit confirmation
-     - Manage (R1): delete — ALWAYS show the instance details, irreversible warning, explicit confirmation
-3. Execute → build the hcloud command from the verified templates below
-4. Output → structured JSON summary + readable diagnosis report
-5. Report quality → automatic via skill-quality-cli run wrapping (see Step 0 / Prerequisites #4)
+     - Manage lifecycle (R2): create / start / stop / restart — ALWAYS show preview and ask for explicit confirmation
+     - Manage lifecycle (R1): delete — ALWAYS show the instance details, irreversible warning, explicit confirmation
+     - Manage change ops (R2): resize / reinstall / reset password / replace keypair / bind EIP /
+       change security group / add NIC / attach volume — ALWAYS preview + confirm
+     - Manage change ops (R1): unbind EIP / remove NIC / delete keypair — ALWAYS show the current
+       attachment, irreversible warning, explicit confirmation
+3. Preflight → for create and for every change op, run the relevant read-only checks first
+   (quota, flavor, image, network, keypair, disk) so the user confirms against real state
+4. Execute → build the hcloud command from the verified templates below
+5. Capture the job id → the write API returns a job_id immediately; the work is still running
+6. Poll async job → `hcloud ECS ShowJob` until `status=SUCCESS|FAIL`; for create ALSO poll
+   `hcloud ECS ShowServer` until `status=ACTIVE`; then report the FINAL state to the user
+7. Output → structured JSON summary + readable diagnosis report
+8. Report quality → automatic via skill-quality-cli run wrapping (see Step 0 / Prerequisites #4)
 ```
 
 **Confirmation gates (MUST NOT be skipped):**
@@ -128,9 +167,20 @@ It exposes 12 `huawei_*` actions in four capability groups:
 - **R1 action** (`huawei_delete_ecs_instance`): first run the read-only check
   (`ShowServer` to confirm the instance exists and record its status/flavor/volumes). Show the full
   command with the irreversible deletion warning, and require explicit confirmation before running.
+- **Change-operation actions** (R2: `huawei_resize_ecs_instance`, `huawei_reinstall_ecs_os`,
+  `huawei_reset_ecs_password`, `huawei_replace_ecs_keypair`, `huawei_bind_ecs_eip`,
+  `huawei_change_ecs_security_group`, `huawei_add_ecs_nic`, `huawei_attach_ecs_volume`):
+  show the **current** state (via `ShowServer` / `ListServerVolumeAttachments` / `ListServerInterfaces`),
+  the full command and the expected end state, then ask "confirm?".
+- **Change-operation actions** (R1: `huawei_unbind_ecs_eip`, `huawei_remove_ecs_nic`): show what will
+  be detached and the connectivity impact (an unbound EIP loses public access; a removed NIC loses
+  that network path and its private IP), require explicit confirmation, and never chain them with a
+  delete. For `huawei_detach_ecs_volume` (R2) warn that `--delete_flag=1` deletes the data disk.
 - **Create preflight**: before `huawei_create_ecs_instance`, ALWAYS run
   `huawei_diagnose_ecs_create_failure` (or at least the quota + flavor + image checks) so the user
   sees the environment is ready, then confirm.
+- **Async polling is mandatory**: never close out a write action before the job reaches a terminal
+  state. A `job_id` without polling is an **incomplete** action, not a success.
 
 Write operations are marked `[W]` / 写操作 in the command blocks below (检测关键字:
 create / start / stop / restart / delete — same verbs the test pipeline's write-operation detector keys on).
@@ -187,9 +237,9 @@ hcloud ECS ShowServerLimits --cli-region={region}
 skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud ECS ShowServerLimits --cli-region={region}
 ```
 
-`ShowServerLimits` returns absolute limits and usage (e.g. `maxTotalInstances`/`totalInstancesUsed`,
-`maxTotalCores`, `maxTotalRAMSize`, `maxTotalVolumes`, `maxTotalKeypairs`). For disk volume quotas,
-additionally use:
+`ShowServerLimits` returns absolute limits and usage (`maxTotalInstances`/`totalInstancesUsed`,
+`maxTotalCores`/`totalCoresUsed`, `maxTotalRAMSize`/`totalRamUsed`, `maxTotalKeypairs`). Note it has
+**no** volume field — for disk volume quotas, additionally use:
 
 ```bash
 # Required: --target_project_id={project_id} --usage=True
@@ -206,37 +256,15 @@ and stop at the first failing check:
 
 | # | Check | Command | Pass condition | Typical failure |
 |---|-------|---------|----------------|-----------------|
-| 1 | Quota | `hcloud ECS ShowServerLimits --cli-region={region}` | usage < limit for instances/cores/RAM/volumes | `Insufficient quota` → raise quota in console |
+| 1 | Quota | `hcloud ECS ShowServerLimits --cli-region={region}` | usage < limit for instances/cores/RAM | `Insufficient quota` → raise quota in console |
 | 2 | Flavor | `hcloud ECS ListFlavors --cli-region={region} --flavor_id={flavor_id}` | flavor returned; if an AZ was requested, re-check with `--availability_zone={az}` | `FlavorNotFound`/sold out → pick another flavor/AZ |
 | 3 | Image | `hcloud IMS ListImages --cli-region={region} --id={image_id} --status=active` | image exists and `active`; check `__os_type`/`architecture` matches flavor | image deleted/private mismatch → pick another image |
 | 4 | Network | `hcloud VPC ListSubnets --cli-region={region}`; `hcloud VPC ListSecurityGroups/v2 --cli-region={region}`; if EIP requested `hcloud EIP ListPublicips/v2 --cli-region={region}` | subnet exists with free IPs; security group exists; EIP quota available | subnet/SG missing or no free IPs → fix network params |
 | 5 | Keypair | `hcloud KPS ListKeypairs --cli-region={region}` | the `key_name` used in the request exists | `KeypairNotFound` → create keypair or drop `key_name` |
-| 6 | Disk | `hcloud EVS ListVolumes --cli-region={region}`; cross-check volume quota from step 1 | volume type available in the AZ, quota not exhausted | disk type unavailable → change volumetype/AZ |
+| 6 | Disk | `hcloud EVS ListVolumes --cli-region={region}`; volume quota via `hcloud EVS CinderListQuotas --cli-region={region} --target_project_id={project_id} --usage=True` (§1 has no volume field) | volume type available in the AZ, quota not exhausted | disk type unavailable → change volumetype/AZ |
 
-Dual-form examples:
-
-```bash
-# Step 1 — quota
-hcloud ECS ShowServerLimits --cli-region={region}
-skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud ECS ShowServerLimits --cli-region={region}
-# Step 2 — flavor
-hcloud ECS ListFlavors --cli-region={region} --flavor_id={flavor_id}
-skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud ECS ListFlavors --cli-region={region} --flavor_id={flavor_id}
-# Step 3 — image
-hcloud IMS ListImages --cli-region={region} --id={image_id} --status=active
-skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud IMS ListImages --cli-region={region} --id={image_id} --status=active
-# Step 4 — network
-hcloud VPC ListSubnets --cli-region={region}
-skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud VPC ListSubnets --cli-region={region}
-hcloud VPC ListSecurityGroups/v2 --cli-region={region}
-skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud VPC ListSecurityGroups/v2 --cli-region={region}
-# Step 5 — keypair
-hcloud KPS ListKeypairs --cli-region={region}
-skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud KPS ListKeypairs --cli-region={region}
-# Step 6 — disk
-hcloud EVS ListVolumes --cli-region={region}
-skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud EVS ListVolumes --cli-region={region}
-```
+The six commands in the table above run in wrapped form exactly like §1 — prefix each one with
+`skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- ` (illustrated in §1 and §5).
 
 If the failed create returned a job id (async path), check the job result:
 
@@ -261,9 +289,9 @@ skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud ECS ListSer
 # Step 3 — volume status/size
 hcloud EVS ListVolumes --cli-region={region} --server_id={server_id}
 skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud EVS ListVolumes --cli-region={region} --server_id={server_id}
-# Step 4 — bound security groups & EIPs
-hcloud EIP ListPublicips/v2 --cli-region={region} --port_id.{n}={port_id}
-skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud EIP ListPublicips/v2 --cli-region={region} --port_id.{n}={port_id}
+# Step 4 — bound EIPs (security groups belong to the §2 diagnose step 4)
+hcloud EIP ListPublicips/v2 --cli-region={region} --port_id.1={port_id}
+skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud EIP ListPublicips/v2 --cli-region={region} --port_id.1={port_id}
 ```
 
 Health verdict: `status=ACTIVE` + volumes `available`/`in-use` + at least one NIC/EIP → healthy;
@@ -281,21 +309,12 @@ skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud ECS CreateP
 ```
 
 Common optional parameters (all verified via `hcloud ECS CreatePostPaidServers --help --cli-region={region}`):
-
-```bash
---server.availability_zone={az}            # pin an AZ when the flavor/image require it
---server.nics.1.subnet_id={subnet_id}      # NIC subnet (defaults to VPC default subnet)
---server.security_groups.1.id={sg_id}      # security group (defaults to default SG)
---server.key_name={key_name}               # login keypair (mutually exclusive with adminPass)
---server.adminPass={password}              # or a login password (never echo it back)
---server.count={n}                         # number of instances (default 1)
---server.data_volumes.1.size={size_gb}     # extra data volume size
---server.data_volumes.1.volumetype={SATA|SAS|GPSSD}
---server.publicip.eip.bandwidth.size={mbps}      # bind a new EIP with bandwidth (Mbps)
---server.publicip.eip.bandwidth.sharetype={PER|WHOLE}
---server.user_data={base64}                # cloud-init user data (base64)
---dry_run=true                             # validate the request without creating
-```
+`--server.availability_zone={az}`, `--server.nics.1.subnet_id={subnet_id}`,
+`--server.security_groups.1.id={sg_id}`, `--server.key_name={key_name}` (mutually exclusive with
+`--server.adminPass={password}`, which is never echoed back), `--server.count={n}`,
+`--server.data_volumes.1.size={size_gb}`, `--server.data_volumes.1.volumetype={SATA|SAS|GPSSD}`,
+`--server.publicip.eip.bandwidth.size={mbps}` + `--server.publicip.eip.bandwidth.sharetype={PER|WHOLE}`,
+`--server.user_data={base64}`, and `--dry_run=true` (validates without creating).
 
 Always run `--dry_run=true` first to validate the payload, show the result to the user, then
 confirm before the real create.
@@ -341,6 +360,61 @@ Optional: `--delete_publicip=true` (release bound EIP together) and `--delete_vo
 (delete attached volumes together). Default is `false` for both — data on volumes is preserved.
 Warn the user explicitly when either flag is set.
 
+### 5. Manage — change operations (R2/R1 — preview + confirm)
+
+Every action below changes an **existing** instance, is preview + confirm, and is **asynchronous**
+(poll the returned `job_id` per §6). Append `--cli-region={region}` to every command.
+
+| Action | Command | Risk | Notes |
+| ------ | ------- | ---- | ----- |
+| `huawei_resize_ecs_instance` | `hcloud ECS ResizeServer --server_id={id} --resize.flavorRef={flavor_id}` | R2 | `--dry_run=true` first; `--resize.mode=withStopServer` allows resizing a running instance |
+| `huawei_reinstall_ecs_os` | `hcloud ECS ReinstallServerWithCloudInit --server_id={id}` | R2 | keeps the current image; `--os-reinstall.adminpass` xor `--os-reinstall.keyname` |
+| `huawei_reset_ecs_password` | `hcloud ECS ResetServerPassword --server_id={id} --reset-password.new_password={pwd}` | R2 | never echo the password back |
+| `huawei_replace_ecs_keypair` | `hcloud ECS NovaCreateKeypair --keypair.name={name}` / `hcloud ECS NovaDeleteKeypair --keypair_name={old}` | R2 / R1 | no ECS API rebinds a keypair to a running instance — create the new key, install its public key inside the guest, then retire the old one; importing an existing public key uses `--keypair.public_key` |
+| `huawei_bind_ecs_eip` | `hcloud EIP AssociatePublicips --publicip_id={eip_id} --publicip.associate_instance_type=PORT --publicip.associate_instance_id={port_id}` | R2 | service is **EIP**, not VPC |
+| `huawei_unbind_ecs_eip` | `hcloud EIP DisassociatePublicips --publicip_id={eip_id}` | R1 | the instance loses public access |
+| `huawei_change_ecs_security_group` | `hcloud ECS NovaAssociateSecurityGroup --server_id={id} --addSecurityGroup.name={sg_name}` / `hcloud ECS NovaDisassociateSecurityGroup --server_id={id} --removeSecurityGroup.name={sg_name}` | R2 | takes the security-group **name**, not its id; detaching may cut off management access |
+| `huawei_add_ecs_nic` | `hcloud ECS BatchAddServerNics --server_id={id} --nics.1.subnet_id={subnet_id}` | R2 | also `--nics.1.ip_address`, `--nics.1.security_groups.1.id`, `--nics.1.port_id` |
+| `huawei_remove_ecs_nic` | `hcloud ECS BatchDeleteServerNics --server_id={id} --nics.1.id={port_id}` | R1 | destroys the port and its private IP; a primary NIC is rejected (403) |
+| `huawei_attach_ecs_volume` | `hcloud ECS AttachServerVolume --server_id={id} --volumeAttachment.volumeId={volume_id}` | R2 | `--dry_run=true`, `--volumeAttachment.device=/dev/vdb` |
+| `huawei_detach_ecs_volume` | `hcloud ECS DetachServerVolume --server_id={id} --volume_id={volume_id}` | R2 | unmount inside the guest OS first; `--delete_flag=1` deletes the data disk |
+
+Worked example — `huawei_resize_ecs_instance` (preflight → confirm → execute → poll):
+
+```bash
+# Preflight (read-only): record the current flavor, then verify the target flavor exists
+hcloud ECS ShowServer --cli-region={region} --server_id={server_id}
+skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud ECS ShowServer --cli-region={region} --server_id={server_id}
+hcloud ECS ListFlavors --cli-region={region} --flavor_id={flavor_id}
+skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud ECS ListFlavors --cli-region={region} --flavor_id={flavor_id}
+# [W] 写操作 (WRITE): changes the instance flavor — R2: preview + `--dry_run=true` + explicit confirmation
+hcloud ECS ResizeServer --cli-region={region} --server_id={server_id} --resize.flavorRef={flavor_id} --dry_run=true
+skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud ECS ResizeServer --cli-region={region} --server_id={server_id} --resize.flavorRef={flavor_id} --dry_run=true
+```
+
+Full per-action parameter tables, failure handling and gate wording: `references/manage-operations.md`.
+
+### 6. Async job polling (R3 — mandatory after every write)
+
+Every write API returns a **`job_id`** immediately and keeps working in the background. Polling that
+job is part of the action:
+
+```bash
+# Step 1 — poll until status is SUCCESS or FAIL (repeat every 5-10s; give up after a bounded timeout)
+hcloud ECS ShowJob --cli-region={region} --job_id={job_id}
+skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud ECS ShowJob --cli-region={region} --job_id={job_id}
+# Step 2 — CREATE only: poll the instance until status is ACTIVE before reporting success
+hcloud ECS ShowServer --cli-region={region} --server_id={server_id}
+skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud ECS ShowServer --cli-region={region} --server_id={server_id}
+```
+
+- `SUCCESS` → report the **final** resource state; `FAIL` → report `fail_reason` + the failed
+  sub-job and stop — do not blindly retry or switch to a variant command.
+- A timeout means "still running" (`job_id={job_id}`), never "done".
+- Skipping this step yields four specific wrong answers: "created" while the instance is still
+  `BUILD`, "stopped" before the guest is powered off, "deleted" while it is still in the recycle bin,
+  and no progress feedback for a multi-minute create.
+
 ## KooCLI Command Format Standard
 
 `hcloud <Service> <Operation> --cli-region=<region> [--key=value ...]` — 底层语法格式。
@@ -379,6 +453,13 @@ All parameters below were verified against `hcloud <Service> <Operation> --help`
 | `huawei_restart_ecs_instance` | `hcloud ECS BatchRebootServers --cli-region={region} --reboot.servers.1.id={id} --reboot.type=SOFT` | R2 — preview + confirm |
 | `huawei_delete_ecs_instance` | `hcloud ECS DeleteServers --cli-region={region} --servers.1.id={id}` | R1 — verify + irreversible warning + confirm |
 
+### Change operations (write)
+
+All 11 change actions, with their required/optional parameters and risk level, are listed in
+[§5 Manage — change operations](#5-manage--change-operations-r2r1--preview--confirm).
+Every write action — lifecycle and change alike — is confirmed asynchronously:
+`hcloud ECS ShowJob --cli-region={region} --job_id={id}`, plus `hcloud ECS ShowServer` for `create` (see §6).
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Action |
@@ -391,6 +472,8 @@ All parameters below were verified against `hcloud <Service> <Operation> --help`
 | Disk errors (`volumeType not available`) | Volume type unavailable in AZ / quota exhausted | `hcloud EVS ListVolumes --cli-region={region}`; change volumetype/AZ |
 | Command fails with `--help`-verified params | Region/project mismatch or IAM scope | Check `--cli-region`, run `hcloud configure list`, review IAM policies |
 | Create request rejected despite checks passing | Transient / parameter-specific error | Show the API error body; retry; check `hcloud ECS ShowJob --cli-region={region} --job_id={id}` |
+| `ShowJob` returns `FAIL` | The write itself failed in the background | Report `fail_reason` + the failed sub-job as the root cause; do not retry blindly or switch to a variant command |
+| Resize rejected (`Flavor ... not supported`) | Target flavor is not in the allowed resize list, or the instance state forbids resizing | Cross-check `hcloud ECS ListFlavors --flavor_id={id}` and `ShowServer`; retry with `--resize.mode=withStopServer` |
 
 ## Security Considerations
 
@@ -404,6 +487,9 @@ All parameters below were verified against `hcloud <Service> <Operation> --help`
 ## Reference Documents
 
 - `references/iam-policies.md` — Least-privilege IAM policies
+- `references/manage-operations.md` — Per-action parameter tables, gates and failure handling for resize / reinstall / password / keypair / EIP / security group / NIC / volume changes, plus the async-job polling contract
+- `references/sdk-examples.md` — Python and Java SDK examples for create / start / stop / restart / delete, and a worked create-failure troubleshooting example
+- `references/related-skills.md` — Capability boundaries and how to hand an out-of-scope request (e.g. RDS) back to the user
 - `references/cli-installation-guide.md` — CLI installation and configuration
 - `references/verification-method.md` — Verification method details
 - `references/acceptance-criteria.md` — Acceptance criteria

@@ -8,17 +8,22 @@ Checklist that must pass before `huawei-cloud-ecs-manage` is accepted.
 - [ ] Frontmatter: valid YAML (`yaml.safe_load`), `name` == directory name, `description`
       contains feature summary + trigger words, `tags` ≤ 5, no `version` field
 - [ ] SKILL.md ≤ 500 lines; total files ≤ 30; every file extension in the allowlist;
-      no `__pycache__`, no `.pyc`, no `.markdownlint.json` inside the skill
+      no `__pycache__`, no `.pyc`, no `.markdownlint.json`, no `tests/` directory inside the skill
 - [ ] Required sections present: Overview, Prerequisites, Workflow, Core Commands,
       Parameter Confirmation, Reference Documents, KooCLI Command Format Standard
 - [ ] `references/iam-policies.md`, `references/cli-installation-guide.md`,
       `references/verification-method.md`, `references/dataflow-diagram.md`,
-      `references/acceptance-criteria.md` exist and use kebab-case filenames
-- [ ] No hardcoded credentials anywhere; no cross-skill direct calls
-- [ ] Every `hcloud` command includes `--cli-region`; service names title-case
-      (`ECS`, `IMS`, `VPC`, `EVS`, `EIP`, `KPS`); operation names PascalCase
+      `references/acceptance-criteria.md`, `references/manage-operations.md`,
+      `references/sdk-examples.md`, `references/related-skills.md` exist and use kebab-case filenames
+- [ ] No hardcoded credentials anywhere; no cross-skill direct calls (out-of-scope requests are
+      handed back to the user, never invoked by this skill)
+- [ ] Every executable `hcloud` command block includes `--cli-region` (inline prose/table mentions
+      rely on the "append `--cli-region` to every command" instruction instead); service names
+      title-case (`ECS`, `IMS`, `VPC`, `EVS`, `EIP`, `KPS`); operation names PascalCase
 
 ## B. Functional (per capability)
+
+### B1. Query & diagnose (R3, read-only)
 
 | Action | Required behavior | Pass |
 | ------ | ----------------- | ---- |
@@ -29,25 +34,69 @@ Checklist that must pass before `huawei-cloud-ecs-manage` is accepted.
 | `huawei_list_ecs_quotas` | returns `ShowServerLimits` absolute limits + usage |  |
 | `huawei_diagnose_ecs_create_failure` | runs the 6 ordered checks (quota→flavor→image→network→keypair→disk), stops at first failure, outputs root cause + fix |  |
 | `huawei_analyze_ecs_health` | reports status/disk/network verdict from ShowServer + volume + EIP checks |  |
+
+### B2. Lifecycle management (R2/R1)
+
+| Action | Required behavior | Pass |
+| ------ | ----------------- | ---- |
 | `huawei_create_ecs_instance` | R2: dry-run first, preview + confirm, then create; returns created server id |  |
 | `huawei_start_ecs_instance` | R2: preview + confirm; instance reaches `ACTIVE` |  |
 | `huawei_stop_ecs_instance` | R2: preview + confirm; instance reaches `SHUTOFF` |  |
 | `huawei_restart_ecs_instance` | R2: preview + confirm; instance reboots |  |
 | `huawei_delete_ecs_instance` | R1: verify + irreversible warning + confirm; instance deleted (or in recycle bin) |  |
 
+### B3. Change operations (R2/R1)
+
+| Action | Required behavior | Pass |
+| ------ | ----------------- | ---- |
+| `huawei_resize_ecs_instance` | R2: `ResizeServer` with `--dry_run=true` first; job polled to terminal state |  |
+| `huawei_reinstall_ecs_os` | R2: `ReinstallServerWithCloudInit`; keeps the current image; password xor keypair |  |
+| `huawei_reset_ecs_password` | R2: `ResetServerPassword`; new password never echoed back |  |
+| `huawei_replace_ecs_keypair` | R2 create (`NovaCreateKeypair`) / R1 retire (`NovaDeleteKeypair`) |  |
+| `huawei_bind_ecs_eip` | R2: `EIP AssociatePublicips` with `associate_instance_type=PORT` |  |
+| `huawei_unbind_ecs_eip` | R1: `EIP DisassociatePublicips`; public-access loss warned |  |
+| `huawei_change_ecs_security_group` | R2 attach and detach; addressed by security-group **name**; access loss warned |  |
+| `huawei_add_ecs_nic` | R2: `BatchAddServerNics` on an existing subnet |  |
+| `huawei_remove_ecs_nic` | R1: `BatchDeleteServerNics`; primary NIC rejected (403) surfaced clearly |  |
+| `huawei_attach_ecs_volume` | R2: `AttachServerVolume` with `--dry_run=true` first |  |
+| `huawei_detach_ecs_volume` | R2: `DetachServerVolume`; unmount in-guest first; `--delete_flag=1` impact warned |  |
+
+### B4. Async job contract (applies to every write action above)
+
+| Requirement | Pass |
+| ----------- | ---- |
+| The returned `job_id` is extracted and polled with `hcloud ECS ShowJob` until `SUCCESS`/`FAIL` |  |
+| `create` additionally polls `hcloud ECS ShowServer` until `status=ACTIVE` |  |
+| `SUCCESS` → final state reported; `FAIL` → `fail_reason` + failed sub-job reported, no blind retry |  |
+| A polling timeout is reported as "still running (job_id=…)", never as success |  |
+
 ## C. Confirmation gates
 
 - [ ] No write command ever auto-executes without user confirmation
 - [ ] `huawei_delete_ecs_instance` always warns about `--delete_volume` / `--delete_publicip` data loss
 - [ ] `huawei_create_ecs_instance` always offers `--dry_run=true` validation before the real create
+- [ ] Every change operation shows the current state before the preview; the two R1 actions
+      (`huawei_unbind_ecs_eip`, `huawei_remove_ecs_nic`) state the connectivity / private-IP impact
+      explicitly, and `huawei_detach_ecs_volume` (R2) warns about `--delete_flag=1`
 
-## D. Test evidence
+## D. Documentation completeness
 
-- [ ] All syntax cases (`--help`) pass against KooCLI 7.2.12
+- [ ] `references/manage-operations.md` documents all 11 change actions with verified parameters
+- [ ] `references/sdk-examples.md` provides Python **and** Java examples for create / start / stop /
+      restart / delete, and a worked create-failure troubleshooting example
+- [ ] `references/related-skills.md` states the capability boundary and the user-facing hand-off
+      wording for out-of-scope requests such as RDS
+
+## E. Test evidence
+
+- [ ] All syntax cases (`--help`) pass against KooCLI 7.2.12, including the 11 change operations
+      (`ReinstallServerWithCloudInit`, not `ReinstallServer`; `EIP` service for EIP bind/unbind)
 - [ ] All read-only cases return clean JSON (no `error_code`/`error_msg`) with valid credentials
 - [ ] Write cases verified via dry-run and, where a test instance exists, full lifecycle
       create → query → stop → start → restart → delete with resource release confirmed
+- [ ] `templates/test-vars.json` parses as JSON and marks every change-operation case `write`
+      (never auto-executed)
 
-## E. Quality telemetry
+## F. Quality telemetry
 
 - [ ] `scripts/ensure_cli.sh` present; `skill-quality-cli` runnable; `SKILL_QUALITY_REPORT=0` honored

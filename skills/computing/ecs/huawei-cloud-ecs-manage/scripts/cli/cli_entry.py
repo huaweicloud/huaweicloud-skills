@@ -7,19 +7,30 @@
   - 认证: 与 SDK 一致 (AK/SK直签 → IAM Token → guest 降级)
   - run: 包装子进程执行并于结束后自动上报 (本文件实现 fork/exit码映射)
   - 宿主数据零创造: session_id/agent/user_input/tokens/steps 缺省由 SDK 自动采集
+
+安全闭环 (SC3, 程序级强制拦截):
+  - 写操作门控: Create/Update/Delete/Reset/Resize/Reinstall/Detach/Remove/BatchStart/
+    BatchStop/BatchReboot/Associate/Attach 等写操作必须携带显式确认 token
+    (--confirm-token | SKILL_QUALITY_CONFIRM_TOKEN | qcfg.confirm_token) 才执行真实变更,
+    否则拒绝执行。显式加 --dryrun 的写操作视为只读校验, 无需 token 放行。
+  - 删除操作技术强制: delete 类操作 (Delete/Remove/Detach/Unbind/Disassociate/
+    BatchDelete/NovaDelete) 未携带确认 token 时自动追加 --dryrun 转为校验执行,
+    真实删除必须显式确认后才能进行。
+  - 输出脱敏: AK/SK/password/token 等凭证字段在输出层自动打码, 不依赖文档约定。
 """
 
 import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import time
 import uuid
 
 
-CLI_VERSION = "1.1.8"
+CLI_VERSION = "1.2.0"
 DEFAULT_ENDPOINT = "https://skillsapi.developer.myhuaweicloud.com"
 
 # TM1 工具参数校验: run 仅允许包装白名单命令(本 skill 只包装 hcloud)
@@ -244,6 +255,189 @@ def _validate_command(command):
             raise ValueError(f"命令参数 '{arg}' 含非法字符(仅允许字母数字及 -_.=/:,{{}}@+), 已拒绝执行")
 
 
+# ==================== SC3 安全闭环: 写操作门控 / 删除强制 / 凭证脱敏 ====================
+# 仅对白名单包装命令(hcloud)的第二段操作名做风险分类, 不影响白名单/字符集校验行为。
+_CONFIRM_TOKEN_ENV = "SKILL_QUALITY_CONFIRM_TOKEN"
+_CONFIRM_TOKEN_MIN_LEN = 8
+# 显式确认 token 不允许的平凡值(防止随手传 "yes" 绕过门控)
+_TRIVIAL_CONFIRM_TOKENS = {
+    "", "yes", "y", "true", "1", "ok", "okay", "sure", "go", "done", "confirm",
+    "confirmed", "confirmation", "proceed", "go-ahead", "do-it", "doit", "run",
+    "execute", "delete", "create", "更新", "确认", "同意",
+}
+
+# 删除类操作单词(命中即强制 dry-run 门控)
+_DELETE_OP_MARKERS = frozenset({
+    "delete", "remove", "detach", "unbind", "disassociate",
+})
+# 只读动词(白名单): 命中即 read, 优先于写标记判定
+_READ_OP_VERBS = frozenset({
+    "list", "show", "get", "describe", "query",
+})
+# 写操作单词(Create/Update/Reset/Resize/Reinstall/Start/Stop/Reboot/Attach/Bind/Add/Change/
+# Migrate/Revert/Execute/Lock/Unlock/Register/Accept/Post/Set/Modify/Enable/Disable...)
+# 未命中任何动词(读白名单之外)的一律按写操作门控, 消除覆盖缺口与只读误判。
+_WRITE_OP_MARKERS = frozenset({
+    "create", "update", "reset", "resize", "reinstall", "start", "stop", "reboot",
+    "associate", "attach", "bind", "add", "set", "change", "modify", "enable",
+    "disable", "migrate", "revert", "execute", "lock", "unlock", "register",
+    "accept", "post", "import", "export", "update", "replace", "install",
+})
+_OP_VERBS = _READ_OP_VERBS | _WRITE_OP_MARKERS | _DELETE_OP_MARKERS
+
+# 输出脱敏: 凭证类参数名/JSON 字段名特征
+_SENSITIVE_PARAM_RE = re.compile(
+    r"(?i)(--[\w.\-]*(?:password|pass|token|secret|ak|sk|credential)[\w.\-]*=)[^\s]+"
+)
+_SENSITIVE_JSON_RE = re.compile(
+    r"(?i)([\"'](?:password|adminPass|new_password|token|secret|access_key|secret_key|"
+    r"security_token|ak|sk)[\"']\s*[:=]\s*)([\"'])[^\"'\r\n]{0,2048}([\"'])"
+)
+_MASK = "******"
+
+
+def _op_words(op):
+    """把 PascalCase 操作名拆成小写单词列表(ListServerVolumeAttachments → [list, server, volume, attachments])。
+    仅精确匹配单词, 避免子串误判(ListVolumeAttachments 的 'attach' 不算写操作)。"""
+    parts = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", op)
+    return [w.lower() for w in re.split(r"[^A-Za-z0-9_]+", parts) if w]
+
+
+def _classify_operation(command):
+    """按白名单命令的第二段操作名做风险分类: read / write / delete。
+
+    判定顺序(fail-closed, 未命中读白名单一律按写操作门控):
+      1. 删除类标记(Delete/Remove/Detach/Unbind/Disassociate) → delete
+      2. 操作名首个动词词性: 以 List/Show/Get/Describe/Query 起始 → read
+      3. 其余(含 Migrate/Revert/Execute/Lock/Unlock/Register/Accept 等未枚举动词)
+         → write, 一律按写操作确认 token 门控
+    """
+    if not command or len(command) < 3 or command[0] not in ALLOWED_COMMANDS:
+        return "read"
+    op = (command[2] or "")
+    if not op:
+        return "read"
+    words = _op_words(op)
+    if not words:
+        return "read"
+    # 1) 删除类标记(任意位置)
+    if any(w in _DELETE_OP_MARKERS for w in words):
+        return "delete"
+    # 2/3) 首个动词位决定 read 或 write(fail-closed)
+    #   CinderListQuotas → words=[cinder,list,quotas]: 首个可识别动词 list → read
+    #   ListResizeFlavors → words=[list,resize,...]: 首个动词 list → read
+    #   MigrateServer → words=[migrate,server]: 首个动词 migrate → write
+    for w in words:
+        if w in _OP_VERBS:
+            return "read" if w in _READ_OP_VERBS else "write"
+    return "write"
+
+
+def _has_dryrun_arg(args):
+    """命令中是否已声明 dry-run(--dryrun / --dry_run=true), 此时为只读校验, 不产生实际变更。"""
+    for a in args[3:]:
+        if a.startswith("--dryrun") or a.startswith("--dry_run"):
+            return True
+    return False
+
+
+def _is_valid_confirm_token(token):
+    """显式确认 token 校验: 非空、非平凡值、达到最小长度。"""
+    if not token or not isinstance(token, str):
+        return False
+    t = token.strip()
+    if len(t) < _CONFIRM_TOKEN_MIN_LEN:
+        return False
+    if t.lower() in _TRIVIAL_CONFIRM_TOKENS:
+        return False
+    if t.lower() == t and t.isalpha():
+        return False
+    return True
+
+
+def _resolve_confirm_token(args, qcfg):
+    """确认 token 来源优先级: --confirm-token 参数 > SKILL_QUALITY_CONFIRM_TOKEN env > qcfg。"""
+    tok = getattr(args, "confirm_token", None) or ""
+    if not tok:
+        tok = os.environ.get(_CONFIRM_TOKEN_ENV, "") or ""
+    if not tok and qcfg:
+        tok = qcfg.get("confirm_token") or ""
+    return (tok or "").strip()
+
+
+def _security_gate(command, args, qcfg):
+    """SC3 安全门控: 返回 (允许执行?, 实际命令, 拒绝/降级原因)。
+
+    - read: 放行
+    - write + 显式确认 token: 放行
+    - write 无 token: 拒绝
+    - delete 无 token: 强制追加 --dryrun 降级为只读校验(不产生真实删除)
+    - delete 有 token: 放行(dry-run 校验收到的确认才应携带 token)
+    """
+    risk = _classify_operation(command)
+    if risk == "read":
+        return True, command, None
+    token = _resolve_confirm_token(args, qcfg)
+    if risk == "delete":
+        if _has_dryrun_arg(command):
+            return True, command, None
+        if _is_valid_confirm_token(token):
+            return True, command, None
+        downgraded = list(command) + ["--dryrun"]
+        return True, downgraded, (
+            f"删除操作 '{command[2]}' 未携带显式确认 token, 已自动追加 --dryrun 转为只读校验"
+            f"(不产生真实删除)。确认校验结果后请携带确认 token 再执行真实删除。"
+        )
+    # write: 显式 --dryrun 视为只读校验放行; 真实写必须携带确认 token
+    if _has_dryrun_arg(command):
+        return True, command, None
+    if _is_valid_confirm_token(token):
+        return True, command, None
+    return False, None, (
+        f"写操作 '{command[2]}' 未收到显式确认 token, 已拒绝执行。"
+        f"确认后请通过 --confirm-token / 环境变量 {_CONFIRM_TOKEN_ENV} / qcfg 提供确认 token;"
+        f"或先加 --dryrun 做只读校验。"
+    )
+
+
+def _collect_secrets(qcfg):
+    """收集需要脱敏的凭证值: env AK/SK/token + qcfg json_creds/token。"""
+    secrets = set()
+    for key in (
+        "HUAWEICLOUD_SDK_AK", "HUAWEICLOUD_SDK_SK", "HUAWEICLOUD_SDK_SECURITY_TOKEN",
+        "HW_ACCESS_KEY", "HW_SECRET_KEY", "HW_SECURITY_TOKEN",
+        "SKILL_QUALITY_AK", "SKILL_QUALITY_SK", "SKILL_QUALITY_STS_TOKEN",
+        "SKILL_QUALITY_TOKEN", _CONFIRM_TOKEN_ENV,
+    ):
+        v = os.environ.get(key, "") or ""
+        if v and len(v) >= 6:
+            secrets.add(v)
+    if qcfg:
+        for key in ("token", "confirm_token"):
+            v = qcfg.get(key) or ""
+            if v and len(v) >= 6:
+                secrets.add(v)
+        jc = qcfg.get("json_creds") or {}
+        if isinstance(jc, dict):
+            for v in (jc.get("ak"), jc.get("sk"), jc.get("token"),
+                      jc.get("sts_token"), jc.get("security_token")):
+                if v and len(v) >= 6:
+                    secrets.add(str(v))
+    return sorted(secrets, key=len, reverse=True)
+
+
+def _mask_secrets(text, secrets):
+    """输出层自动脱敏: 凭证值精确替换 + 凭证参数名/JSON 字段值打码。"""
+    text = text or ""
+    out = text
+    for s in secrets or []:
+        if s:
+            out = out.replace(s, _MASK)
+    out = _SENSITIVE_PARAM_RE.sub(lambda m: m.group(1) + _MASK, out)
+    out = _SENSITIVE_JSON_RE.sub(lambda m: m.group(1) + m.group(2) + _MASK + m.group(3), out)
+    return out
+
+
 def _resolve_session_id(cli_session_id, qcfg):
     """v4.0: session_id 四渠道 — --session-id 参数 > SKILL_QUALITY_SESSION_ID env > qcfg > 会话库轻取。
     会话库兜底仅取 session_id(零内容, 见 cli_reporting.collect_session_id_only)。"""
@@ -274,6 +468,17 @@ def cmd_run(args):
     except ValueError as _e:
         print(f"skill-quality-cli: 非法命令参数, 拒绝执行: {_e}", file=sys.stderr)
         sys.exit(2)
+
+    # SC3 安全闭环: 写操作确认门控 / 删除操作强制 dry-run / 输出脱敏
+    allow, gated_cmd, gate_msg = _security_gate(command, args, qcfg)
+    if not allow or (gated_cmd is not None and gated_cmd != command):
+        command = gated_cmd if gated_cmd else command
+        if gate_msg:
+            print(f"skill-quality-cli: {gate_msg}", file=sys.stderr)
+        if not allow:
+            sys.exit(3)
+        # 删除操作降级为 dry-run 时继续执行(只读校验)
+    secrets = _collect_secrets(qcfg)
     t0 = time.monotonic()
     try:
         proc = subprocess.run(command, env=env, capture_output=True, text=True,
@@ -288,11 +493,13 @@ def cmd_run(args):
         print(f"skill-quality-cli: 命令执行失败: {_oe}", file=sys.stderr)
         sys.exit(1)
     cost_ms = int((time.monotonic() - t0) * 1000)
-    # 透传子进程输出到终端(技能执行结果对调用方可见), 同时已捕获供上报
-    if proc.stdout:
-        sys.stdout.write(proc.stdout)
-    if proc.stderr:
-        sys.stderr.write(proc.stderr)
+    # 凭证脱敏: 输出层打码后再透传(不依赖文档约定, 程序级强制)
+    stdout_txt = _mask_secrets(proc.stdout or "", secrets)
+    stderr_txt = _mask_secrets(proc.stderr or "", secrets)
+    if stdout_txt:
+        sys.stdout.write(stdout_txt)
+    if stderr_txt:
+        sys.stderr.write(stderr_txt)
     status, code_, msg = _exit_mapping(proc.returncode)
     # v3.7(10.3.1): run 无条件兜底上报, SKILL_QUALITY_REPORT=0 手动关闭(opt-out)
     if os.environ.get("SKILL_QUALITY_REPORT") == "0":
@@ -305,12 +512,12 @@ def cmd_run(args):
         "response": "exit %d" % proc.returncode,
     }]
     if status == "sys_fail":
-        err_tail = (proc.stderr or "").strip().splitlines()
+        err_tail = stderr_txt.strip().splitlines()
         emsg = (err_tail[-1][:500] if err_tail else msg)
         do_report(skill_name=args.skill_name, status=status, error_code=code_,
                   error_msg=emsg, cost_ms=cost_ms, trace_id=trace_id, steps=run_steps, **common)
     else:
-        out = (proc.stdout or "").strip()[:6000] or None
+        out = (stdout_txt or "").strip()[:6000] or None
         do_report(skill_name=args.skill_name, status=status, cost_ms=cost_ms,
                   trace_id=trace_id, output_result=out, steps=run_steps, **common)
     sys.exit(proc.returncode)
@@ -359,6 +566,8 @@ def main(argv=None):
     p_run.add_argument("--skill-name", required=True)
     p_run.add_argument("--session-id", default=None, help="Agent 会话ID(三渠道之一: --session-id > SKILL_QUALITY_SESSION_ID > qcfg)")
     p_run.add_argument("--json", default=None, help=".quality_report.json 路径(默认自动向上查找)")
+    p_run.add_argument("--confirm-token", default=None,
+                       help="写操作显式确认 token(SC3 安全门控; 也支持 SKILL_QUALITY_CONFIRM_TOKEN env / qcfg.confirm_token)")
     p_run.add_argument("command", nargs=argparse.REMAINDER, help="需执行的命令, 建议以 -- 开头分隔")
     p_report = sub.add_parser("report", help="手动单次上报(SKILL_QUALITY_REPORT=0 可关闭)")
     p_report.add_argument("--skill-name", required=True)
