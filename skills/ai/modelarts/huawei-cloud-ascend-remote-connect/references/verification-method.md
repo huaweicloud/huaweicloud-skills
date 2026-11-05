@@ -69,12 +69,12 @@ Check CPU and memory
 ### Step 6: Sensitive Operation Confirmation Test
 
 ```
-Delete /tmp/test.txt
+Remove the test file
 ```
 
 **Expected Output:**
 ```
-⚠️⚠️ High-risk operation: Will delete /tmp/test.txt
+⚠️⚠️ High-risk operation: Will request confirmation before the deletion
 
 Please reply "Confirm" or "Cancel"
 ```

@@ -32,7 +32,7 @@ class CommandValidator:
         ]
 
         self.blocked_patterns: List[Tuple[str, str]] = [
-            (r'^:\(\)\s*\{.*\|\|.*\s*\};\s*:', 'fork bomb attack'),
+            (r'^:\(\)\s*\{.*\|.*\s*\};\s*:', 'fork bomb attack'),
             (r'^\s*mkfs\s+\S*/dev/sd\S+', 'direct disk format'),
             (r'^\s*dd\s+if=/dev/zero\s+of=/dev/\S+', 'zero write to disk'),
             (r'^\s*rm\s+-rf\s+/\s*$', 'delete root directory'),
