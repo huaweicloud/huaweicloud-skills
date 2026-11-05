@@ -128,6 +128,7 @@ If product API cannot find resource, it only indicates "current API did not find
 | Phenomenon | Handling |
 | --- | --- |
 | `403 Forbidden` | Record operation name, account scope, interface family; suggest supplementing minimum read-only permission |
+| `403 Forbidden` / `CBC.0151` | The AK/SK in use has no BSS billing permission. State the prerequisite in one sentence — the system policy `BSS ReadOnlyAccess` (or the minimum `bss:*:get` / `bss:*:list` set in "BSS Core Read-Only") is not attached to this user — and point to the console **统一身份认证 (IAM) → 用户 → 授权**. Do not retry with other operations, and do not present the empty result as "no bill / no coupon". |
 | Sub-account data empty | Check enterprise master/sub-account authorization relationship and `method` parameter |
 | Dictionary cannot find service name | Keep original code, prompt need to check official service type dictionary |
 | Product resource not found | Return to BSS bill evidence, do not infer bill error |
