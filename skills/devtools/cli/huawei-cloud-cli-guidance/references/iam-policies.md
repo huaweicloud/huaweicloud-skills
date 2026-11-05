@@ -26,7 +26,7 @@ hcloud IAM <operation> --skeleton
 
 # Debug mode
 hcloud IAM <operation> <parameters> --dryrun
-hcloud IAM <operation> <parameters> --cli-debug
+hcloud IAM <operation> <parameters> --debug
 ```
 Permission failure handling process (MUST):
 1. When any command fails due to permission error, read references/iam-policies-en.md

@@ -165,7 +165,7 @@ hcloud VPC DeleteSecurityGroupRule/v3 --security_group_rule_id=rule-12345678 --c
 hcloud EIP ListPublicips/v3 --cli-region=cn-north-4 --cli-output=json
 
 # Create EIP
-hcloud EIP CreatePublicip/v3 \
+hcloud EIP CreatePublicip \
   --publicip.type=EIP \
   --bandwidth.name=my-eip \
   --bandwidth.size=5 \
@@ -184,7 +184,7 @@ hcloud EIP AssociatePublicip/v3 \
 hcloud EIP DisassociatePublicip/v3 --publicip_id=eip-12345678 --cli-region=cn-north-4
 
 # Delete EIP
-hcloud EIP DeletePublicip/v3 --publicip_id=eip-12345678 --cli-region=cn-north-4
+hcloud EIP DeletePublicip --publicip_id=eip-12345678 --cli-region=cn-north-4
 ```
 
 ## Storage Services
@@ -271,7 +271,7 @@ hcloud IAM KeystoneListUsers --cli-region=cn-north-4 --cli-output=json
 hcloud IAM KeystoneShowUser --user_id=user-12345678 --cli-region=cn-north-4
 
 # List policies
-hcloud IAM ListPolicies --cli-region=cn-north-4 --cli-output=json
+hcloud IAM ListPoliciesV5 --cli-region=cn-north-4 --cli-output=json
 
 # Get policy details
 hcloud IAM ShowPolicy --policy_id=policy-12345678 --cli-region=cn-north-4
@@ -280,7 +280,7 @@ hcloud IAM ShowPolicy --policy_id=policy-12345678 --cli-region=cn-north-4
 hcloud IAM ListRoles --cli-region=cn-north-4 --cli-output=json
 
 # List groups
-hcloud IAM ListGroups --cli-region=cn-north-4 --cli-output=json
+hcloud IAM KeystoneListGroups --cli-region=cn-north-4 --cli-output=json
 ```
 
 ## Monitoring Services
@@ -349,7 +349,7 @@ hcloud ECS ListServersDetails \
 ### 4. Use Debug Mode for Troubleshooting
 ```bash
 # Enable debug mode to see request/response details
-hcloud ECS ListServersDetails --cli-region=cn-north-4 --cli-debug=true
+hcloud ECS ListServersDetails --cli-region=cn-north-4 --debug
 ```
 
 ### 5. Batch Operations
@@ -370,13 +370,13 @@ hcloud ECS NovaStopServers \
 
 ### 6. Parameter Validation
 ```bash
-# Use --dry-run to validate parameters without execution
+# Use --dryrun to validate parameters without execution
 hcloud ECS CreateServers \
   --server.name=test-instance \
   --server.imageRef=img-ubuntu-22-04 \
   --server.flavorRef=ac8.large.2 \
   --cli-region=cn-north-4 \
-  --dry-run
+  --dryrun
 ```
 
 ### 7. Script Examples
@@ -426,7 +426,7 @@ hcloud ECS ShowServer \
 
 ### Resource Creation Pattern
 1. **Check prerequisites** (VPC, subnet, security group)
-2. **Validate parameters** using `--help` and `--dry-run`
+2. **Validate parameters** using `--help` and `--dryrun`
 3. **Create resource** with detailed configuration
 4. **Verify creation** by querying resource status
 
@@ -438,7 +438,7 @@ hcloud ECS ShowServer \
 
 ### Resource Deletion Pattern
 1. **Check dependencies** (attached resources)
-2. **Confirm deletion** (use `--dry-run`)
+2. **Confirm deletion** (use `--dryrun`)
 3. **Execute deletion** with cleanup options
 4. **Verify deletion** and cleanup
 
@@ -446,8 +446,8 @@ hcloud ECS ShowServer \
 
 ### Handle API Errors
 ```bash
-# Use --cli-debug to see detailed error information
-hcloud ECS ListServersDetails --cli-region=invalid-region --cli-debug=true
+# Use --debug to see detailed error information
+hcloud ECS ListServersDetails --cli-region=invalid-region --debug
 ```
 
 ### Validate Before Execution

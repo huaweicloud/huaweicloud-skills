@@ -293,7 +293,7 @@ Some VPC service operations require `/v3` suffix, which distinguishes API versio
 hcloud <SERVICE> <OPERATION> --help
 
 # Test command (not actually executed)
-hcloud <SERVICE> <OPERATION> --dry-run --cli-region=cn-north-4
+hcloud <SERVICE> <OPERATION> --dryrun --cli-region=cn-north-4
 
 # View parameter list
 hcloud <SERVICE> <OPERATION> --list-parameters --cli-region=cn-north-4
@@ -345,11 +345,11 @@ hcloud ECS CreateServers \
 ```bash
 # Enable debug mode
 hcloud <SERVICE> <OPERATION> \
-  --cli-debug=true \
+  --debug \
   --cli-region=cn-north-4
 
 # View raw requests
 hcloud <SERVICE> <OPERATION> \
-  --cli-output=raw \
+  --debug \
   --cli-region=cn-north-4
 ```

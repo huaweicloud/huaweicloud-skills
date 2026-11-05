@@ -70,10 +70,10 @@ hcloud VPC DeleteSecurityGroupRule/v3 --security_group_rule_id=<rule-id> --cli-r
 ### EIP - Elastic IP
 ```bash
 hcloud EIP ListPublicips/v3 --cli-region=<r>
-hcloud EIP CreatePublicip/v3 --publicip.type=EIP --bandwidth.name=<n> --bandwidth.size=5 --bandwidth.share_type=PER --bandwidth.charge_mode=bandwidth --cli-region=<r>
+hcloud EIP CreatePublicip --publicip.type=EIP --bandwidth.name=<n> --bandwidth.size=5 --bandwidth.share_type=PER --bandwidth.charge_mode=bandwidth --cli-region=<r>
 hcloud EIP AssociatePublicip/v3 --publicip_id=<eip> --publicip_associate.instance_id=<ecs> --publicip_associate.instance_type=ECS --cli-region=<r>
 hcloud EIP DisassociatePublicip/v3 --publicip_id=<eip> --cli-region=<r>
-hcloud EIP DeletePublicip/v3 --publicip_id=<eip> --cli-region=<r>
+hcloud EIP DeletePublicip --publicip_id=<eip> --cli-region=<r>
 ```
 
 ### ELB - Elastic Load Balancer
@@ -100,19 +100,19 @@ hcloud DNS ListRecordSets --zone_id=<id> --cli-region=<r>
 
 ### VPN - Virtual Private Network
 ```bash
-hcloud VPN ListVpnGateways --cli-region=<r>
+hcloud VPN ListVgws --cli-region=<r>
 hcloud VPN ShowVpnGateway --vpn_gateway_id=<id> --cli-region=<r>
 ```
 
 ### ER - Enterprise Router
 ```bash
-hcloud ER ListInstances --cli-region=<r>
+hcloud ER ListEnterpriseRouters --cli-region=<r>
 hcloud ER ShowInstance --instance_id=<id> --cli-region=<r>
 ```
 
 ### CFW - Cloud Firewall
 ```bash
-hcloud CFW ListFirewalls --cli-region=<r>
+hcloud CFW ListFirewallList --cli-region=<r>
 ```
 
 ## 💾 Storage
@@ -129,7 +129,7 @@ hcloud EVS ExtendVolume --volume_id=<id> --volume.size=<new-gb> --cli-region=<r>
 
 ### CBR - Cloud Backup and Recovery
 ```bash
-hcloud CBR ListVaults --cli-region=<r>
+hcloud CBR ListVault --cli-region=<r>
 hcloud CBR ShowVault --vault_id=<id> --cli-region=<r>
 ```
 
@@ -151,7 +151,7 @@ hcloud RDS CreateInstance --cli-region=<r>
 
 ### GaussDB - Distributed Database
 ```bash
-hcloud GaussDB ListInstances --cli-region=<r>
+hcloud GaussDB ListGaussMySqlInstances --cli-region=<r>
 hcloud GaussDB ShowInstance --instance_id=<id> --cli-region=<r>
 ```
 
@@ -187,20 +187,20 @@ hcloud DRS ListJobs --cli-region=<r>
 ```bash
 hcloud IAM KeystoneListUsers --cli-region=<r>
 hcloud IAM KeystoneShowUser --user_id=<id> --cli-region=<r>
-hcloud IAM ListPolicies --cli-region=<r>
+hcloud IAM ListPoliciesV5 --cli-region=<r>
 hcloud IAM ShowPolicy --policy_id=<id> --cli-region=<r>
 hcloud IAM ListRoles --cli-region=<r>
-hcloud IAM ListGroups --cli-region=<r>
+hcloud IAM KeystoneListGroups --cli-region=<r>
 ```
 
 ### HSS - Host Security Service
 ```bash
-hcloud HSS ListHosts --cli-region=<r>
+hcloud HSS ListHostStatus --cli-region=<r>
 ```
 
 ### WAF - Web Application Firewall
 ```bash
-hcloud WAF ListInstances --cli-region=<r>
+hcloud WAF ListInstance --cli-region=<r>
 ```
 
 ### KMS - Key Management Service
@@ -266,7 +266,7 @@ hcloud Kafka ListInstances --cli-region=<r>
 
 ### RabbitMQ - Distributed Message RabbitMQ
 ```bash
-hcloud RabbitMQ ListInstances --cli-region=<r>
+hcloud RabbitMQ ListInstancesDetails --cli-region=<r>
 ```
 
 ### RocketMQ - Distributed Message RocketMQ
@@ -278,7 +278,7 @@ hcloud RocketMQ ListInstances --cli-region=<r>
 
 ### APIG - API Gateway
 ```bash
-hcloud APIG ListInstances --cli-region=<r>
+hcloud APIG ListInstancesV2 --cli-region=<r>
 hcloud APIG ListApis --instance_id=<id> --cli-region=<r>
 ```
 
@@ -289,8 +289,8 @@ hcloud CSE ListEngines --cli-region=<r>
 
 ### CodeArts Series
 ```bash
-hcloud CodeArtsRepo ListRepositories --cli-region=<r>
-hcloud CodeArtsBuild ListBuildRecords --cli-region=<r>
+hcloud CodeArtsRepo ListCurrentUserRepositories --cli-region=<r>
+hcloud CodeArtsBuild ListRecords --cli-region=<r>
 hcloud CodeArtsPipeline ListPipelines --cli-region=<r>
 hcloud CodeArtsDeploy ListDeployTasks --cli-region=<r>
 ```
@@ -327,7 +327,7 @@ hcloud DIS ListStreams --cli-region=<r>
 
 ### VOD - Video on Demand
 ```bash
-hcloud VOD ListAssets --cli-region=<r>
+hcloud VOD ListAssetList --cli-region=<r>
 ```
 
 ### Live - Live Streaming
@@ -337,14 +337,14 @@ hcloud Live ListDomains --cli-region=<r>
 
 ### MPC - Media Processing Center
 ```bash
-hcloud MPC ListTranscodingTasks --cli-region=<r>
+hcloud MPC ListTranscodingTask --cli-region=<r>
 ```
 
 ## 🏢 Enterprise and Management
 
 ### EPS - Enterprise Project
 ```bash
-hcloud EPS ListEnterpriseProjects --cli-region=<r>
+hcloud EPS ListEnterpriseProject --cli-region=<r>
 ```
 
 ### Organizations - Organization Management
@@ -410,5 +410,5 @@ All commands require the following parameters:
 1. Always use `--cli-region` parameter to specify region
 2. Use `--cli-output=json` for easier program parsing
 3. Use `--help` to view operation parameters
-4. Use `--cli-debug=true` to debug errors
+4. Use `--debug` to debug errors
 5. Use `--cli-query` to filter JSON output
