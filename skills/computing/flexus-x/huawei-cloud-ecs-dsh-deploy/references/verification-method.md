@@ -97,7 +97,7 @@ systemctl status dsh
 
 # Expected output:
 # ● dsh.service - DeepSeek Harness (dsh) Web UI
-#    Loaded: loaded (/etc/systemd/system/dsh.service; enabled; vendor preset: enabled)
+#    Loaded: loaded (dsh.service; enabled; vendor preset: enabled)
 #    Active: active (running) since Tue 2026-08-18 09:00:00 UTC; 5min ago
 ```
 
@@ -277,7 +277,7 @@ echo "=== Verification Complete ==="
 | Issue | Solution |
 |-------|----------|
 | Key rejected | Verify the key is valid on DeepSeek platform |
-| Pre-seeded key not picked up | Check drop-in: `cat /etc/systemd/system/dsh.service.d/10-credentials.conf` (mode 600), restart: `systemctl restart dsh` |
+| Pre-seeded key not picked up | Check drop-in: `cat $DSH_DROP_IN_FILE` (mode 600), restart: `systemctl restart dsh` |
 | Want to change key | Set it directly in Web UI: Settings → Models |
 
 ### Security Group Issues

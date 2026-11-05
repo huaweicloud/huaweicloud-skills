@@ -277,17 +277,78 @@ class HuaweiCloudECS:
         return default_flavor, description
 
     def test_connection(self):
-        print("📡 Testing AK/SK connection...")
+        print("📡 Testing AK/SK connection and deployment readiness...")
+        checks = []
+        issues = []
+
         url = f"https://ecs.{self.region}.myhuaweicloud.com/v2.1/{self.project_id}/servers?limit=1"
         resp = self._do_request("GET", url)
 
         if resp.status_code == 200:
-            print("✅ AK/SK verification successful!")
-            return True
+            checks.append(("ECS server list", "OK"))
         else:
+            checks.append(("ECS server list", f"HTTP {resp.status_code}"))
+            issues.append(f"ECS server list query failed (HTTP {resp.status_code})")
             print(f"❌ AK/SK verification failed: {resp.status_code}")
             print(f"Response: {resp.text[:200]}")
             return False
+
+        try:
+            flavors_url = f"https://ecs.{self.region}.myhuaweicloud.com/v2.1/{self.project_id}/flavors?limit=20"
+            fresp = self._do_request("GET", flavors_url, timeout=30)
+            if fresp.status_code == 200:
+                flavors = fresp.json().get("flavors", [])
+                checks.append((f"ECS flavors", f"OK ({len(flavors)} available)"))
+            else:
+                checks.append(("ECS flavors", f"HTTP {fresp.status_code}"))
+                issues.append(f"Flavor query failed (HTTP {fresp.status_code}) - may block instance creation")
+        except Exception as e:
+            checks.append(("ECS flavors", "ERROR"))
+            issues.append(f"Flavor query error: {e}")
+
+        try:
+            quota_url = f"https://vpc.{self.region}.myhuaweicloud.com/v1/{self.project_id}/quotas"
+            qresp = self._do_request("GET", quota_url, timeout=30)
+            if qresp.status_code == 200:
+                resources = qresp.json().get("quotas", {}).get("resources", [])
+                eip_quota = eip_used = None
+                for res in resources:
+                    if res.get("type") == "publicip":
+                        eip_quota = res.get("quota")
+                        eip_used = res.get("used")
+                        break
+                if eip_quota is not None and eip_used is not None:
+                    if eip_used >= eip_quota:
+                        checks.append(("EIP quota", f"used {eip_used}/{eip_quota} (EXHAUSTED)"))
+                        issues.append(
+                            f"EIP quota exhausted (used {eip_used}/{eip_quota}) - "
+                            f"creation with a public IP may fail (Ecs.0013)"
+                        )
+                    else:
+                        checks.append(("EIP quota", f"used {eip_used}/{eip_quota}"))
+                else:
+                    checks.append(("EIP quota", "N/A"))
+            else:
+                checks.append(("EIP quota", f"HTTP {qresp.status_code}"))
+        except Exception as e:
+            checks.append(("EIP quota", "ERROR"))
+            issues.append(f"EIP quota query error: {e}")
+
+        print("\n── Readiness checks ──")
+        for name, status in checks:
+            prefix = "✅" if str(status).startswith(("OK", "used")) else "⚠️"
+            print(f"  {prefix} {name}: {status}")
+
+        if issues:
+            print("\n⚠️ Deployability warnings:")
+            for it in issues:
+                print(f"  - {it}")
+            print("⚠️ AK/SK is valid but deployment may fail on the affected resources. "
+                  "Verify quotas/permissions before deploying.")
+        else:
+            print("\n✅ AK/SK verification successful! Deployment readiness: OK.")
+            print("   Server list, flavor list and EIP quota are all accessible.")
+        return True
 
     def get_ubuntu_image_id(self, os_version="22.04"):
         print(f"🔍 Querying Ubuntu {os_version} image (x86_64 architecture)...")

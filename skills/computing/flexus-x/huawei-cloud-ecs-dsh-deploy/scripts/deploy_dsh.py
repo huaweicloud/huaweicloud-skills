@@ -5,6 +5,7 @@ Supports Flexus X Instance, Elastic IP, Security Group Creation, COC-based Deplo
 """
 
 import json
+import re
 import requests
 import urllib3
 import subprocess
@@ -14,6 +15,14 @@ import sys
 import random
 import string
 from pathlib import Path
+
+UUID_RE = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.IGNORECASE)
+
+
+def is_uuid(value):
+    """Return True only when the value is a real UUID, so instance names
+    that merely contain hyphens are not mistaken for server IDs."""
+    return bool(value) and bool(UUID_RE.match(value))
 
 urllib3.disable_warnings()
 
@@ -65,7 +74,7 @@ def configure_security_group(client, sg_name, vpc_id):
                                    description="Allow all IPv6 traffic within security group")
 
     print(f"\n✅ Security group created: {sg_name}")
-    print(f"   🛡️  No inbound rules added - please manually add rules in console")
+    print(f"   🛡️  No inbound rules added from the outside - please manually add rules in console")
     return sg_id
 
 
@@ -253,7 +262,7 @@ def main():
         print("=" * 60)
 
         server_id = args.status
-        if '-' not in args.status:
+        if not is_uuid(args.status):
             servers = client.list_servers(name_filter=args.status)
             if not servers:
                 print(f"❌ Server not found: {args.status}")
@@ -306,8 +315,8 @@ def main():
         print("🗑️ Deleting server")
         print("=" * 60)
         success = client.delete_server(
-            server_id=args.delete if '-' in args.delete else None,
-            server_name=args.delete if '-' not in args.delete else None,
+            server_id=args.delete if is_uuid(args.delete) else None,
+            server_name=args.delete if not is_uuid(args.delete) else None,
             confirm=not args.force_delete
         )
         if success:
@@ -371,8 +380,8 @@ def main():
         if not args.no_eip:
             print(f"EIP bandwidth: {args.bandwidth}M")
 
-        print("\n🛡️  [SECURITY] Creating empty security group...")
-        print("   No inbound rules will be added automatically.")
+        print("\n🛡️  [SECURITY] Creating security group...")
+        print("   No external inbound rules will be added (only intra-group self-traffic).")
         print("   You need to manually add security group rules after deployment.\n")
 
         sg_id = configure_security_group(client, "sg-dsh", network.get("vpc_id"))
@@ -380,7 +389,7 @@ def main():
             print("❌ Security group creation failed, aborting deployment")
             return
 
-        print(f"   ✅ Security group ready: sg-dsh (no inbound rules)")
+        print(f"   ✅ Security group ready: sg-dsh (no external inbound rules)")
         print(f"   📝 After deployment, add rules manually in Huawei Cloud Console\n")
 
         print("\n" + "=" * 50)
@@ -656,7 +665,7 @@ def main():
                     f"🌐 SSH TUNNEL COMMAND (copy & paste to access Web UI):\n"
                     f"  ssh -L {dsh_port}:127.0.0.1:{dsh_port} root@{public_ip}\n"
                     f"  Then open browser: http://127.0.0.1:{dsh_port}\n"
-                    f"🖥️ Server info:\n"
+                    f"🖥️ Server info:{chr(10)}"
                     f"  Name: {detail.get('name')}\n"
                     f"  Public IP: {public_ip}\n"
                     f"{api_key_info}\n"
@@ -675,7 +684,7 @@ def main():
                     f"Deployment failed via COC.\n"
                     f"Server: {detail.get('name')}\n"
                     f"Error: {error_message}\n\n"
-                    f"Please try manual deployment:\n"
+                    f"Please try manual deployment:{chr(10)}"
                     f"SSH: ssh root@{public_ip}",
                     "error"
                 )
@@ -687,7 +696,7 @@ def main():
             print(f"Public IP: {public_ip}")
             print(f"SSH: ssh root@{public_ip}")
             print(f"Password: {admin_pass}")
-            print(f"\n🛡️  Security: Empty security group - NO inbound rules")
+            print(f"\n🛡️  Security: no external inbound rules (only intra-group self-traffic)")
             print(f"   Add security group rule MANUALLY in Huawei Cloud Console")
             print(f"   Security group: sg-dsh | Allow TCP 22 from your IP /32 (SSH tunnel)")
             print(f"\n{'='*50}")

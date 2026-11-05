@@ -131,7 +131,7 @@
    ```
 
 3. 部署成功后额外提示：
-   > 🔑 API Key 已通过 `/etc/systemd/system/dsh.service.d/10-credentials.conf`（mode 600）注入，仅 dsh 服务可读。
+   > 🔑 API Key 已通过 dsh 服务的 systemd drop-in 配置（mode 600）注入，仅 dsh 服务可读。
 
 ---
 
