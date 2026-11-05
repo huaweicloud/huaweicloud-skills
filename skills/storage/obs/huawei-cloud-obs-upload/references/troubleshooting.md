@@ -7,7 +7,6 @@
 - [CES Monitoring Data Issues](#ces-monitoring-data-issues)
 - [Scheduled Upload Issues](#scheduled-upload-issues)
 - [Bucket Capacity Query Issues](#bucket-capacity-query-issues)
-- [Month-over-Month Calculation Issues](#month-over-month-calculation-issues)
 
 ---
 
@@ -88,23 +87,22 @@ CES ShowMetricData dimensions parameter format is incorrect.
 
 **Correct format:**
 ```bash
---dimensions.0.name=bucket_name \
---dimensions.0.value=my-bucket
+--dim.0=bucket_name,my-bucket
 ```
 
 **Common errors:**
 ```bash
 # ❌ Incorrect: dimensions index starts from 1
---dimensions.1.name=bucket_name
+--dim.1=bucket_name,my-bucket
 
 # ❌ Incorrect: dimension name is incorrect
---dimensions.0.name=bucket
+--dim.0=bucket,my-bucket
 
 # ❌ Incorrect: missing index
---dimensions.name=bucket_name
+--dim=bucket_name,my-bucket
 ```
 
-> **hcloud CES parameter index starts from 0**, not from 1.
+> **hcloud CES parameter index starts from 0**, not from 1. Format is `--dim.N=key,value`.
 
 ### 3. hcloud credential configuration issues
 
@@ -241,10 +239,10 @@ CES ShowMetricData returns an empty datapoints array.
 **Possible causes and solutions:**
 
 1. **Incorrect bucket name**
-   - Confirm dimensions.0.value uses the correct bucket name
+   - Confirm `--dim.0=bucket_name,<BucketName>` uses the correct bucket name
 
 2. **No data in time range**
-   - Bucket has no corresponding operations in the time period (e.g., no download traffic, no requests)
+   - Bucket has no corresponding operations in the time period (e.g., no capacity sampling)
    - Try expanding the time range to verify
 
 3. **CES data collection delay**
@@ -253,7 +251,7 @@ CES ShowMetricData returns an empty datapoints array.
 
 4. **Incorrect namespace or metric name**
    - Confirm namespace is `SYS.OBS` (not `OBS` or `SYS.OBJECT_STORAGE`)
-   - Confirm metric_name is correct (e.g., `download_bytes` not `download_flow`)
+   - Confirm metric_name is correct (e.g., `capacity_total` for bucket capacity)
 
 5. **period parameter mismatch**
    - Data granularity must match period
@@ -267,10 +265,10 @@ CES ShowMetricData returns an empty datapoints array.
 | Parameter | Correct Value | Common Error |
 |-----------|--------------|-------------|
 | `--namespace` | `SYS.OBS` | `OBS`, `SYS.OBJECT_STORAGE` |
-| `--metric_name` | `download_bytes` | `downloadBytes`, `download_flow` |
-| `--dimensions.0.name` | `bucket_name` | `bucket`, `bucketName` |
+| `--metric_name` | `capacity_total` | `capacityTotal`, `capacity` |
+| `--dim.0` | `bucket_name,<BucketName>` | `bucket`, `bucketName` |
 | `--period` | `86400` | `86400000` (milliseconds instead of seconds) |
-| `--filter` | `sum` | `SUM`, `total` |
+| `--filter` | `average` (capacity) | `SUM`, `total` |
 | `--from`/`--to` | Millisecond timestamp (13 digits) | Second timestamp (10 digits) |
 
 ### 3. CES ShowMetricData does not support --User-Agent parameter
@@ -283,20 +281,6 @@ The CES module's ShowMetricData command **does not support** the `--User-Agent` 
 
 **Solution:**
 CES query commands **must not append** the `--User-Agent` parameter.
-
-### 4. Month-over-month with last month data being 0
-
-**Problem:**
-Last month traffic or request data is 0, making MoM calculation impossible.
-
-**Possible causes:**
-- Bucket was just created last month with no operation data
-- CES monitoring was not enabled or data collection did not cover last month
-- Time range calculation error
-
-**Handling:**
-- Last month=0 and current month>0: Display "New (last month was 0)"
-- Last month=0 and current month=0: Display "N/A"
 
 ---
 
@@ -319,7 +303,7 @@ Crontab is set but the upload script does not execute on schedule.
    # Linux
    systemctl status cron
    # macOS
-   sudo launchctl list | grep cron
+   launchctl list | grep cron
    ```
 
 3. **Check script execution permissions**
@@ -359,15 +343,14 @@ Crontab log shows execution but obsutil upload errors.
 obsutil cp <LocalDirPath> obs://<BucketName>/<Prefix> -r -config=/home/user/.obsutilconfig
 ```
 
-### 3. Delete scheduled task
+### 3. Delete scheduled task (run only after the user confirms removal)
 
 ```bash
-# Delete a specific OBS upload scheduled task
+# Delete a specific OBS upload scheduled task (only after user confirmation)
 crontab -l | grep -v "obs-scheduled-upload-<BucketName>" | crontab -
-
-# Clear all scheduled tasks (use with caution!)
-# crontab -r
 ```
+
+> **⚠️ `crontab -r` clears ALL scheduled tasks and is never used by this skill.**
 
 ---
 
@@ -393,45 +376,6 @@ Querying capacity for buckets with large numbers of objects (millions+) takes a 
 **Solution:**
 - Use CES monitoring metrics `standard_storage_bytes` / `standard_object_count` as an alternative (slightly less real-time but better performance)
 - Set query timeout and retry
-
----
-
-## Month-over-Month Calculation Issues
-
-### 1. Time range calculation errors
-
-**Correct calculation method:**
-
-```bash
-# Current month start time
-current_month_start = "$(date +%Y-%m-01)"  # e.g., 2026-05-01
-# Convert to millisecond timestamp
-from_timestamp = $(date -d "$current_month_start" +%s)000  # e.g., 1746057600000
-
-# Current month end time (current time)
-to_timestamp = $(date +%s)000
-
-# Last month start time
-last_month_start = "$(date -d "$(date +%Y-%m-01) -1 month" +%Y-%m-01)"
-
-# Last month end time (last day of previous month 23:59:59)
-last_month_end = "$(date -d "$(date +%Y-%m-01) -1 second" +%Y-%m-%dT23:59:59)"
-```
-
-### 2. Traffic unit conversion
-
-```
-Bytes → KB: / 1024
-Bytes → MB: / (1024 * 1024)
-Bytes → GB: / (1024 * 1024 * 1024)
-Bytes → TB: / (1024 * 1024 * 1024 * 1024)
-```
-
-**Recommendation:** Choose an appropriate display unit based on traffic size:
-- < 1 MB → Display KB
-- < 1 GB → Display MB
-- < 1 TB → Display GB
-- >= 1 TB → Display TB
 
 ---
 

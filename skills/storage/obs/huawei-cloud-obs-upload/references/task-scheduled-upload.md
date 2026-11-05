@@ -92,7 +92,19 @@ fi
 > - With `-flat`: `obsutil cp <LocalDirPath> obs://<BucketName>/<Prefix> -r -flat -f -u` (flattens files, directory structure lost)
 > - **Never default to either option**; always follow the customer's explicit answer from Step 1.
 
-**Step 3: Set crontab scheduled task**
+**Step 3: Get explicit user confirmation before setting the scheduled task**
+
+> **⚠️ Persistence & confirmation gate (mandatory)**
+>
+> - Installing a scheduled upload task creates a **persistent process on the host** that keeps uploading the local directory to the remote OBS bucket after the current session ends.
+> - **Before writing any crontab entry (or Task Scheduler task), you MUST:**
+>   1. Warn the user: "This will install a recurring task on your machine that periodically uploads `<LocalDirPath>` to `obs://<BucketName>/<Prefix>` in the cloud."
+>   2. Restate the local directory, bucket, target prefix, and schedule period.
+>   3. Obtain the user's explicit approval. If the user declines or is unsure, do not write the task.
+>
+> **Never silently append a crontab entry.**
+
+**Step 4: Set crontab scheduled task (after user confirmation)**
 
 ```bash
 # Run every hour
@@ -105,7 +117,7 @@ fi
 (crontab -l 2>/dev/null; echo "*/30 * * * * /bin/bash $HOME/obs-scheduled-upload-<BucketName>.sh") | crontab -
 ```
 
-**Step 4: Verify scheduled task is set**
+**Step 5: Verify scheduled task is set**
 
 ```bash
 crontab -l
@@ -113,19 +125,19 @@ crontab -l
 
 ## Implementation (Windows - Task Scheduler)
 
-> **⚠️ Same as Linux/macOS: ask the customer first (Step 1) whether to preserve the source directory structure, then pick the corresponding command.**
+> **⚠️ Same as Linux/macOS: ask the customer first (Step 1) whether to preserve the source directory structure, then pick the corresponding command, and obtain explicit user confirmation (Step 3) before creating the scheduled task.**
 
 **Option A — preserve directory structure (no `-flat`, customer answered "Yes"):**
 
 ```powershell
-# Create a scheduled task (run daily at 8:00)
+# Create a scheduled task (run daily at 8:00) — only after user confirmation
 schtasks /create /tn "OBS-ScheduledUpload-<BucketName>" /tr "obsutil cp <LocalDirPath> obs://<BucketName>/<Prefix> -r -u" /sc daily /st 08:00 /f
 ```
 
 **Option B — flatten files (with `-flat`, customer answered "No"):**
 
 ```powershell
-# Create a scheduled task (run daily at 8:00)
+# Create a scheduled task (run daily at 8:00) — only after user confirmation
 schtasks /create /tn "OBS-ScheduledUpload-<BucketName>" /tr "obsutil cp <LocalDirPath> obs://<BucketName>/<Prefix> -r -flat -u" /sc daily /st 08:00 /f
 ```
 
@@ -137,13 +149,24 @@ schtasks /create /tn "OBS-ScheduledUpload-<BucketName>" /tr "obsutil cp <LocalDi
 > 4. **Deletes are not synced**: Scheduled upload only syncs new/modified files; **objects deleted locally will not be deleted from the bucket** (user must clean up manually)
 > 5. **Crontab environment**: The crontab execution environment differs from an interactive shell; ensure obsutil is in PATH, and recommend using the full path to obsutil in the script
 > 6. **Directory structure**: Whether the local directory structure is preserved in OBS is decided by the customer's answer in Step 1 (without `-flat` → preserved; with `-flat` → flattened). Never default; always ask first.
+> 7. **Persistent task**: The scheduled task keeps running until removed. Give the user the removal command (below) and confirm they accept the recurring cloud upload before installing it.
 
 ## Managing Scheduled Tasks
+
+> **⚠️ Persistence risk**: A scheduled upload task persists on the host and continues to transmit data to the cloud after the session ends. Removal commands below must be run only with the user's confirmation.
 
 ```bash
 # List current user's scheduled tasks
 crontab -l
 
-# Remove a specific scheduled task
+# Remove a specific scheduled task (run only after the user confirms removal)
 crontab -l | grep -v "obs-scheduled-upload-<BucketName>" | crontab -
+
+# Windows: delete the scheduled task after user confirmation
+# schtasks /delete /tn "OBS-ScheduledUpload-<BucketName>" /f
+
+# Remove the upload script and log
+rm $HOME/obs-scheduled-upload-<BucketName>.sh $HOME/obs-scheduled-upload-<BucketName>.log
 ```
+
+> **⚠️ `crontab -r` clears ALL scheduled tasks and is never used by this skill.**

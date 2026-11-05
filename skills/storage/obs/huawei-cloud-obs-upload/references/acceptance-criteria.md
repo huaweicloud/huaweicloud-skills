@@ -9,7 +9,6 @@
 - [Correct SDK Code Patterns](#correct-sdk-code-patterns)
 - [Response Validation Criteria](#response-validation-criteria)
 - [Security Criteria](#security-criteria)
-- [Month-over-Month Calculation Criteria](#month-over-month-calculation-criteria)
 - [References](#references)
 
 ---
@@ -122,7 +121,6 @@ obsutil cp /home/user/data/ obs://my-bucket/ -r -flat  # Incorrect: using -flat 
 --namespace=OBS              # Incorrect: Should be SYS.OBS
 --namespace=SYS.OBJECT_STORAGE  # Incorrect: Should be SYS.OBS
 --metric_name=capacityTotal  # Incorrect: Should be capacity_total (snake_case)
---metric_name=download_bytes  # Incorrect: Not used in this skill; capacity_total is the actual metric
 --dim.0=bucketName,my-bucket  # Incorrect: Dimension key should be bucket_name
 --dim.0=bucket,my-bucket      # Incorrect: Dimension key should be bucket_name
 ```
@@ -238,40 +236,16 @@ obs_client = ObsClient(
 
 ### ⛔ Prohibited Operations (Security Constraints)
 
-> **The following delete operations are strictly forbidden, regardless of user requests:**
+> **The following operations are strictly forbidden, regardless of user requests. They are described semantically; the skill never provides executable destructive command examples.**
 
 #### ❌ Absolutely Prohibited
-```bash
-hcloud obs rm obs://my-bucket -r           # Prohibited: Recursively delete all objects in bucket
-hcloud obs rm obs://my-bucket              # Prohibited: Delete bucket
-```
+- Recursively deleting all objects in a bucket
+- Deleting a bucket
 
 #### ✅ Correct: Refuse delete request and direct to console
 ```
 "Per security constraints, this skill does not allow delete operations (delete bucket/object/batch delete/empty bucket). Please use the Huawei Cloud OBS console or obsutil manually."
 ```
-
----
-
-## Month-over-Month Calculation Criteria
-
-### ✅ Correct Calculation
-```
-MoM (%) = (Current Month Value - Last Month Value) / Last Month Value × 100%
-
-Example:
-Current month = 125.3 GB, Last month = 98.7 GB
-MoM = (125.3 - 98.7) / 98.7 × 100% = +26.95%
-```
-
-### Special Case Handling
-
-| Case | Correct Handling | Incorrect Handling |
-|------|-----------------|-------------------|
-| Last month=0, Current>0 | Display "New (last month was 0)" | ❌ Display +∞% |
-| Last month=0, Current=0 | Display "N/A" | ❌ Display 0% |
-| Last month>0, Current>0 | Calculate percentage, rounded to 2 decimal places | ❌ Integer truncation |
-| Current<Last month | Display negative (e.g., -15.30%) | ❌ Display 0% |
 
 ---
 

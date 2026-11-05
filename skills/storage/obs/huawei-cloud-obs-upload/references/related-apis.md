@@ -9,9 +9,6 @@ This document lists all CLI commands and APIs used in the OBS object storage man
   - [1. ListBucketsWithStats - List Buckets with Capacity and Object Count](#1-listbucketswithstats---list-buckets-with-capacity-and-object-count)
   - [2. UploadFile - Upload Local File or Directory to Target Bucket](#2-uploadfile---upload-local-file-or-directory-to-target-bucket)
   - [3. ScheduledUpload - Schedule Periodic Upload of Local Directory to Target Bucket](#3-scheduledupload---schedule-periodic-upload-of-local-directory-to-target-bucket)
-  - [4. GetMonthlyTraffic - Query Monthly External/Internal Download Traffic](#4-getmonthlytraffic---query-monthly-externalinternal-download-traffic)
-  - [5. GetMonthlyRequests - Query Monthly Total Request Count](#5-getmonthlyrequests---query-monthly-total-request-count)
-- [Month-over-Month Calculation](#month-over-month-calculation)
 - [Official Documentation](#official-documentation)
 
 ---
@@ -22,7 +19,7 @@ This document lists all CLI commands and APIs used in the OBS object storage man
 |---------|------------|---------------|-------------|
 | OBS | `hcloud obs ls` | obsutil ls | List all buckets (obsutil mode) |
 | OBS | `hcloud OBS GetBucketStorageInfo` | GetBucketStorageInfo | Get bucket storage info (capacity, object count; may not be supported by hcloud) |
-| CES | `hcloud CES ShowMetricData` | ShowMetricData | Query monitoring metric data (traffic, request count, capacity) |
+| CES | `hcloud CES ShowMetricData` | ShowMetricData | Query monitoring metric data (bucket capacity) |
 | OBS | `obsutil cp` | PutObject / UploadPart | Upload file/directory |
 
 ---
@@ -212,7 +209,13 @@ else
 fi
 ```
 
-**Step 2: Set crontab**
+**Step 2: Set crontab (only after the user has explicitly confirmed the scheduled upload)**
+
+> **⚠️ Confirmation & persistence warning**
+>
+> - Adding a crontab entry installs a **persistent scheduled task** on the host that continues to upload the local directory to the cloud after the current session ends.
+> - **Only write the crontab entry after the user has explicitly confirmed** the local directory, target bucket/prefix, and schedule period.
+> - Tell the user how to remove the task later (see "Managing scheduled tasks" below).
 
 | Period description | Crontab expression |
 |-------------------|-------------------|
@@ -223,7 +226,7 @@ fi
 | 1st of month at 0:00 | `0 0 1 * *` |
 
 ```bash
-# Add crontab task
+# Add crontab task (must be explicitly confirmed by the user before running)
 (crontab -l 2>/dev/null; echo "<CronExpr> /bin/bash $HOME/obs-scheduled-upload-<BucketName>.sh") | crontab -
 ```
 
@@ -245,198 +248,14 @@ crontab -l
 # List all scheduled tasks
 crontab -l
 
-# Remove a specific scheduled task
+# Remove a specific scheduled task (run only after the user confirms removal)
 crontab -l | grep -v "obs-scheduled-upload-<BucketName>" | crontab -
 
 # View upload log
 tail -f $HOME/obs-scheduled-upload-<BucketName>.log
 ```
 
----
-
-### 4. GetMonthlyTraffic - Query Monthly External/Internal Download Traffic
-
-> **⚠️ Key: Traffic data is obtained via CES, not directly from OBS API**
->
-> The OBS service itself does not provide traffic statistics APIs; traffic data is collected by CES (Cloud Eye Service).
-
-**Required parameters:**
-
-| Parameter | hcloud parameter | Description | Example |
-|-----------|-----------------|-------------|---------|
-| Region | `--region` | Bucket region | `cn-south-1` |
-| Bucket name | `--dim.0` | Dimension `bucket_name,<BucketName>` | `bucket_name,my-bucket` |
-
-**Time range calculation:**
-
-> **⚠️ Key: Time range must precisely match the user's expression**
->
-> | User expression | Time range | Description |
-> |----------------|-----------|-------------|
-> | "This month" | 1st of current month 00:00:00 ~ current time | Calendar month |
-> | "Last month" / "Last 30 days" | Current time - 30 days ~ current time | Rolling 30-day window |
-> | "Previous month" | 1st of previous month 00:00:00 ~ last day of previous month 23:59:59 | Previous calendar month |
-> | Specific date range | User-specified start and end times | e.g., "May 1 to May 19" |
->
-> **"This month" ≠ "Last month"**: "This month" starts from the 1st of the current month; "Last month" goes back 30 days from the current time.
-> Huawei Cloud OBS console defaults to "Last 30 days".
-
-**Month-over-month comparison period calculation:**
-
-| Query period | Comparison period |
-|-------------|------------------|
-| This month (calendar month) | Previous month (previous calendar month) |
-| Last 30 days | 30 days prior (days 31-60) |
-| Specific date range | Previous equal-length period |
-
-```
-# This month
-Start: 1st of current month 00:00:00 → Unix timestamp (ms)
-End: Current time → Unix timestamp (ms)
-
-# Last 30 days
-Start: Current time - 30 days → Unix timestamp (ms)
-End: Current time → Unix timestamp (ms)
-
-# Previous month (comparison period)
-Start: 1st of previous month 00:00:00 → Unix timestamp (ms)
-End: Last day of previous month 23:59:59 → Unix timestamp (ms)
-```
-
-**CLI commands:**
-
-> **⚠️ CES ShowMetricData does not support --User-Agent parameter; do not append it**
-
-```bash
-# Query this month's external download traffic
-hcloud CES ShowMetricData \
-  --region=<RegionId> \
-  --namespace=SYS.OBS \
-  --metric_name=download_traffic_extranet \
-  --dim.0=bucket_name,<BucketName> \
-  --period=86400 \
-  --filter=sum \
-  --from=<FromTimestamp> \
-  --to=<ToTimestamp>
-
-# Query this month's internal download traffic
-hcloud CES ShowMetricData \
-  --region=<RegionId> \
-  --namespace=SYS.OBS \
-  --metric_name=download_traffic_intranet \
-  --dim.0=bucket_name,<BucketName> \
-  --period=86400 \
-  --filter=sum \
-  --from=<FromTimestamp> \
-  --to=<ToTimestamp>
-```
-
-**CES ShowMetricData parameter description:**
-
-| Parameter | Required | Description |
-|-----------|----------|-------------|
-| `--namespace` | Yes | Fixed value `SYS.OBS` |
-| `--metric_name` | Yes | Metric name |
-| `--dim.0` | Yes | Dimension, format `bucket_name,<BucketName>` |
-| `--period` | Yes | Aggregation period, `86400` (1 day) |
-| `--filter` | Yes | Aggregation method, `sum` (sum) |
-| `--from` | Yes | Start time (millisecond timestamp) |
-| `--to` | Yes | End time (millisecond timestamp) |
-
-**Response key fields:**
-
-| Field | Description |
-|-------|-------------|
-| `datapoints[].average` | Average value within the aggregation period |
-| `datapoints[].sum` | Sum value within the aggregation period |
-| `datapoints[].timestamp` | Data point timestamp |
-
-> **⚠️ Key: Must use traffic metrics, not bandwidth metrics**
->
-> - ✅ `download_traffic_extranet`: External download traffic (unit: Bytes, cumulative)
-> - ✅ `download_traffic_intranet`: Internal download traffic (unit: Bytes, cumulative)
-> - ❌ `download_bytes`: Total download bandwidth (unit: Bytes/s, rate, not cumulative)
-> - ❌ `download_bytes_extranet`/`download_bytes_intranet`: Bandwidth metrics (rate values)
->
-> Use `filter=sum` to get total traffic within the time range; summing traffic metrics directly gives total bytes.
-> Results need to be converted to appropriate units: `GB = bytes / (1024^3)`, `MB = bytes / (1024^2)`, `KB = bytes / 1024`
-
----
-
-### 5. GetMonthlyRequests - Query Monthly Total Request Count
-
-> **⚠️ Key: Request data is obtained via CES, not directly from OBS API**
-
-**Required parameters:** Same as GetMonthlyTraffic
-
-**CLI commands:**
-
-```bash
-# Query this month's total request count
-hcloud CES ShowMetricData \
-  --region=<RegionId> \
-  --namespace=SYS.OBS \
-  --metric_name=request_count \
-  --dim.0=bucket_name,<BucketName> \
-  --period=86400 \
-  --filter=sum \
-  --from=<FromTimestamp> \
-  --to=<ToTimestamp>
-
-# Query this month's GET request count
-hcloud CES ShowMetricData \
-  --region=<RegionId> \
-  --namespace=SYS.OBS \
-  --metric_name=get_request_count \
-  --dim.0=bucket_name,<BucketName> \
-  --period=86400 \
-  --filter=sum \
-  --from=<FromTimestamp> \
-  --to=<ToTimestamp>
-
-# Query this month's PUT request count
-hcloud CES ShowMetricData \
-  --region=<RegionId> \
-  --namespace=SYS.OBS \
-  --metric_name=put_request_count \
-  --dim.0=bucket_name,<BucketName> \
-  --period=86400 \
-  --filter=sum \
-  --from=<FromTimestamp> \
-  --to=<ToTimestamp>
-```
-
-> **⚠️ Note: OBS request billing relevance**
->
-> - GET-type requests (GetObject, HeadObject, ListObjects, etc.)
-> - PUT-type requests (PutObject, CopyObject, CreateMultipartUpload, etc.)
-> - Different request types have different billing rates; see OBS pricing page for details
-
----
-
-## Month-over-Month Calculation
-
-**Formula:**
-
-```
-MoM (%) = (Current Month Value - Last Month Value) / Last Month Value × 100%
-```
-
-**Special cases:**
-
-| Case | Handling |
-|------|---------|
-| Last month value = 0, current month value > 0 | Display "New (last month was 0)" |
-| Last month value = 0, current month value = 0 | Display "N/A" |
-| Last month value > 0 | Calculate MoM percentage, rounded to 2 decimal places |
-
-**Example:**
-
-```
-Current month external download traffic = 125.3 GB
-Last month external download traffic = 98.7 GB
-MoM = (125.3 - 98.7) / 98.7 × 100% = +26.95%
-```
+> **⚠️ `crontab -r` clears ALL scheduled tasks and is never used by this skill.**
 
 ---
 
