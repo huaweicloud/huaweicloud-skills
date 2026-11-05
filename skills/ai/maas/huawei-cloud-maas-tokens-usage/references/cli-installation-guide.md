@@ -54,24 +54,35 @@ python3 -c 'import os,sys;ak=os.environ.get("HW_ACCESS_KEY","");sk=os.environ.ge
 
 ### Method 2: Credentials file
 
-Create a file supporting three formats:
+Create a file supporting three formats (`--credentials-file /path/to/aksk.txt`). All three support the temporary
+security token:
+
+| Format | Layout | Temporary credentials |
+|--------|--------|-----------------------|
+| One value per line | line 1 `<AK>`, line 2 `<SK>` | line 3 = `<HW_SECURITY_TOKEN>` |
+| Comma-separated (CSV) | `<AK>,<SK>` | third column = `<HW_SECURITY_TOKEN>` |
+| `KEY=VALUE` | `HW_ACCESS_KEY=<AK>`<br>`HW_SECRET_KEY=<SK>` | add `HW_SECURITY_TOKEN=<token>` |
 
 ```
-# One value per line
+# One value per line (temporary credentials: line 3 is the token; omit for permanent AK/SK)
 <AK>
 <SK>
+<HW_SECURITY_TOKEN>
 
-# Comma-separated
-<AK>,<SK>
+# Comma-separated (third column is the token; omit for permanent AK/SK)
+<AK>,<SK>,<HW_SECURITY_TOKEN>
 
 # KEY=VALUE format
 HW_ACCESS_KEY=<AK>
 HW_SECRET_KEY=<SK>
+HW_SECURITY_TOKEN=<HW_SECURITY_TOKEN>
 ```
 
-Usage: `--credentials-file /path/to/aksk.txt`
-
-For temporary credentials, add the security token on line 3 (one-per-line format) or as `HW_SECURITY_TOKEN=<token>` (KEY=VALUE format).
+If the file does not exist, the script reports `Error: Credentials file not found: <path>` on stderr and exits with
+code 1. The file must be a **readable UTF-8 text file**; if it exists but cannot be read (path is a directory,
+permission denied, non-UTF-8/UTF-16 bytes), the script reports
+`Error: Cannot read credentials file <path>: <msg>` and exits with code 1. Never commit a credentials file to version
+control. See [security-guide.md](security-guide.md) for the full security rules and file-format details.
 
 ### Windows GUI Setup
 
@@ -120,3 +131,4 @@ For temporary credentials, add the security token on line 3 (one-per-line format
 | [SKILL.md](../SKILL.md) | Skill overview and core workflows |
 | [task-query-tokens-usage.md](task-query-tokens-usage.md) | Task 1 detailed steps |
 | [security-design.md](security-design.md) | Security design: credential lifecycle |
+| [security-guide.md](security-guide.md) | Security rules, refusal template, credentials-file formats |

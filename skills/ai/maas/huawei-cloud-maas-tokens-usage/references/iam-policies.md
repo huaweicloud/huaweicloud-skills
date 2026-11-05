@@ -26,9 +26,10 @@ IAM permissions required for querying MaaS tokens usage statistics.
 
 | Action | API | Description |
 |--------|-----|-------------|
-| `iam:projects:get` | GET /v1/projects | Auto-resolve project_id from region |
+| `iam:projects:get` | GET /v3/projects | Auto-resolve project_id from region |
 
 > **Read-only scope**: All permissions are `get` only. The query workflow never modifies or deletes any MaaS resource.
+> This skill is declared `readonly`: it performs read-only queries only, with no write/mutation operations on any resource.
 
 ---
 
