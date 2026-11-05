@@ -35,6 +35,13 @@ The directory conventions are as follows (all paths are relative to the skill di
    - `ges_graph_skill.js` - Node.js SDK for GES graph operations
 2. `references/` - Contains documentation and configuration examples
    - `ges_env.csv.example` - Environment configuration template
+   - `cypher-gql-guide.md` - Full Cypher/GQL usage guide (examples, tables, inline execution)
+   - `cli-installation-guide.md` - Runtime (Python/Node.js) installation and configuration guide
+   - `iam-policies.md` - Minimum IAM permission policies for GES/OBS
+   - `verification-method.md` - Verification steps and checklist
+   - `acceptance-criteria.md` - Acceptance criteria (pass/fail thresholds)
+   - `user-guide-authentication.md` - IAM token methods and GitCode API Token auth
+   - `chaining-protocol.md` - Uniform result envelope and chained-call contract
 
 ## Prerequisites
 
@@ -43,6 +50,11 @@ Before using this skill, ensure the following conditions are met:
 ### 1. Runtime Environment
 Supports Python or Node.js runtime.
 Requires Python 3.8+ or Node.js 14+.
+
+Python dependencies: `requests` (pip install requests). Optionally, `huaweicloudsdkges`
+may be installed (`pip install huaweicloudsdkges`) for SDK-level calls (ISSUE-013);
+the skill works without it via its built-in HTTP client. For Node.js, no external
+npm packages are required (uses only stdlib `https`/`http`).
 
 ### 2. Graph Instance Configuration
 
@@ -68,9 +80,9 @@ This skill supports both environment variables and configuration files. Environm
 > * **AK/SK required** for AKSK authentication.
 > ** **Username/password conditionally required** when AKSK is not available.
 
-**Configuration File (`.env/ges_env.csv`)**
+**Configuration File (`config/ges_env.csv`)**
 
-Config file path: `.env/ges_env.csv`
+Config file path: `config/ges_env.csv`
 
 | Config Item | Description | Required | Example Value |
 |-------------|-------------|----------|---------------|
@@ -103,7 +115,15 @@ Three methods are supported (priority from high to low):
 
 ## ⛔ Prohibited Operations (Safety Guardrail)
 
-> **This skill prohibits the following operations:**
+> **本技能在代码层强制执行安全护栏（ISSUE-002），不止于文档约束：**
+>
+> - `scripts/ges_graph_skill.py` / `ges_graph_skill.js` 中的 `validateCypher()`
+>   会拦截未限定的全量删除/清空语句（如 `MATCH (n) DETACH DELETE n`、
+>   `MATCH ()-[r]->() DELETE r`、`DROP ALL` 等）；
+> - 定向增删改（带 `WHERE ... id(n)=...` 或 `element_id(...)`）不受影响；
+> - 所有属性值仅允许 JSON 标量（str/int/float/bool/None），拒绝 dict/list/bytes；
+> - 若确有全量清空需求，请走 `clear_graph()`（或 `clearGraph()`）专用接口，
+>   并先取得用户明确确认，再以 `allow_destructive=True` 放行。
 
 | Prohibited Operation | Description | Reason |
 |----------------------|-------------|--------|
@@ -124,162 +144,69 @@ Three methods are supported (priority from high to low):
 
 GES supports two query languages: Cypher (Neo4j-compatible) and GQL (international standard graph query language).
 
-### Cypher Usage
+> **Full usage guide (Python/Node.js examples, inline `skill action=exec` execution,
+> common Cypher/GQL statements and the Cypher↔GQL differences table) is in
+> `references/cypher-gql-guide.md`.**
 
-**Python:**
-```python
-# Execute a Cypher query
-result = skill.execute_query("MATCH (n) RETURN n LIMIT 10")
+## Workflow
 
-# Create a node (_ID_ is used only during creation to set a custom ID)
-result = skill.execute_query(
-    "CREATE (n:Person {_ID_: 'p001', name: '张三'}) RETURN n"
-)
+### Task 1: Query the Graph (read-only, agent may run automatically)
 
-# Match query
-result = skill.execute_query(
-    "MATCH (n:Person)-[:KNOWS]->(m) WHERE n.name = '张三' RETURN m"
-)
-
-# Update a node (match via id() function)
-result = skill.execute_query(
-    "MATCH (n) WHERE id(n) = 123 SET n.name = '李四' RETURN n"
-)
-
-# Delete a node
-result = skill.execute_query(
-    "MATCH (n) WHERE id(n) = 123 DETACH DELETE n"
-)
-
-# Aggregate query
-result = skill.execute_query(
-    "MATCH (n:Person) RETURN n.city, count(*) as cnt ORDER BY cnt DESC"
-)
+```text
+1. Pick a runtime: Python (`ges_graph_skill.py`) or Node.js (`ges_graph_skill.js`). Both expose the same API.
+2. Load configuration (env vars > `references/ges_env.csv.example`) — run the inline checks below once per session.
+3. Run a Cypher or GQL query via `execute_query()` / `execute_gql()` (or `executeCypher` / `executeGql` in Node.js).
+4. Return the unified JSON envelope `{"results": [...], "errors": []}` to the user.
 ```
 
-**Node.js:**
-```javascript
-const { GESGraphSkill } = require('./ges_graph_skill.js');
-const skill = new GESGraphSkill();
+> **Inline execution (no temp files):** prefer inline execution over creating temporary
+> script files. For example, run the Python query from the skill directory:
 
-// Execute a Cypher query
-const result = await skill.executeQuery("MATCH (n) RETURN n LIMIT 10");
-
-// Create a node (_ID_ is used only during creation to set a custom ID)
-const result = await skill.executeQuery(
-    "CREATE (n:Person {_ID_: 'p001', name: '张三'}) RETURN n"
-);
-
-// Match query
-const result = await skill.executeQuery(
-    "MATCH (n:Person)-[:KNOWS]->(m) WHERE n.name = '张三' RETURN m"
-);
-
-// Update a node
-const result = await skill.executeQuery(
-    "MATCH (n) WHERE id(n) = 123 SET n.name = '李四' RETURN n"
-);
-
-// Delete a node
-const result = await skill.executeQuery(
-    "MATCH (n) WHERE id(n) = 123 DETACH DELETE n"
-);
-
-// Aggregate query
-const result = await skill.executeQuery(
-    "MATCH (n:Person) RETURN n.city, count(*) as cnt ORDER BY cnt DESC"
-);
-
-// Path query
-const result = await skill.executeQuery(
-    "MATCH p=(n:Person)-[*1..3]->(m) WHERE n.name = '张三' RETURN p"
-);
-```
-
-### Inline Execution (No Temp Files)
-
-Execute Cypher queries directly via `skill action=exec` without creating any script files.
-
-> **Note:** When running via `skill action=exec`, the working directory is the project root. The installed skill is located under `.agents/skills/huawei-cloud-ges-graph`, **not** under `skills/ai/ges/`.
-
-**Python:**
 ```bash
-skill exec py -c "
-import sys, os; cwd=os.getcwd()
-skill_dir = os.path.join(cwd, '.agents', 'skills', 'huawei-cloud-ges-graph')
-sys.path.insert(0, os.path.join(skill_dir, 'scripts'))
+python3 - <<'PY'
+import sys; sys.path.insert(0, "scripts")
 from ges_graph_skill import get_skill
-import json
-r = get_skill().execute_query('MATCH (n) RETURN n LIMIT 5')
-print(json.dumps(r, ensure_ascii=False, indent=2))
-"
+s = get_skill()
+print(s.execute_query("MATCH (n) RETURN n LIMIT 10"))
+PY
+
+node -e 'const { GESGraphSkill } = require("./scripts/ges_graph_skill.js");
+const s = new GESGraphSkill(); s.executeQuery("MATCH (n) RETURN n LIMIT 10").then(console.log);'
 ```
 
-**Node.js:**
-```bash
-skill exec node -e "
-const path = require('path');
-const cwd = process.cwd();
-const scriptPath = path.join(cwd, '.agents', 'skills', 'huawei-cloud-ges-graph', 'scripts', 'ges_graph_skill.js');
-const { GESGraphSkill } = require(scriptPath);
-(async () => {
-    const r = await new GESGraphSkill().executeQuery('MATCH (n) RETURN n LIMIT 5');
-    console.log(JSON.stringify(r, null, 2));
-})();
-"
+> See `references/cypher-gql-guide.md` for more inline `skill action=exec` examples.
+
+### Task 2: Edit Graph Data (add/update/delete nodes & edges)
+
+```text
+1. Validate property values are JSON scalars (string/number/boolean/null) — the code enforces this (ISSUE-002).
+2. Call the matching CRUD method (`add_node`/`update_node`/`delete_node`, `add_edge`/`delete_edge`).
+3. For bulk imports, respect the 500-node-per-call boundary (split into chunks, ISSUE-010).
+4. Return the operation result (the unified envelope or an `{id, ...}` summary).
 ```
 
-#### Common Cypher Statements
+### Task 3: Danger-High Operations (require explicit user confirmation)
 
-| Category | Statement | Description |
-|----------|-----------|-------------|
-| Schema | `call db.schema()` | Get graph schema information |
-| Indexes | `call db.indexes()` | View all indexes |
-| Kill query | `call dbms.killQuery('queryId')` | Terminate a running query |
-| Running queries | `call dbms.listQueries()` | View current queries |
-| System parameters | `call dbms.parameter('needNodeIndex', false)` | Remove index constraint (large graph scenarios) |
-
-### GQL Usage (Supported by this Skill)
-
-GQL is the ISO/IEC 39075 standardized graph query language. GES invokes it via `action_id=execute-gql-query`.
-
-```python
-# GQL requires the underlying _request method
-client = GESClient()
-result = client._request('POST', '/action?action_id=execute-gql-query', json={
-    "statements": [{
-        "statement": "INSERT (n:Person{_ID_:'p001', firstName:'Eywa'}) RETURN n",
-        "parameters": {},
-        "resultDataContents": ["row"]
-    }]
-})
+```text
+1. `clear_graph()` or any unqualified bulk delete is BLOCKED at the Cypher level by `validateCypher()`.
+2. To clear the whole graph, call `clear_graph()` (or `clearGraph()` in Node.js) with `allow_destructive=True`.
+3. BEFORE executing, ask the user: "This is a high-risk operation and requires your explicit confirmation. Please reply with 'confirm' to proceed."
+4. Only after confirmation, execute and return the job id / result.
 ```
 
-#### Common GQL Statements
+### Task 4: Import / Export Graph Data (async jobs)
 
-| Category | Statement | Description |
-|----------|-----------|-------------|
-| Insert | `INSERT (n:Person{_ID_:'p001', firstName:'Eywa'}) RETURN n` | Insert node |
-| Match | `MATCH (n:Person WHERE element_id(n)='p001') RETURN n` | Conditional match |
-| Update | `MATCH (n:Person WHERE element_id(n)='p001') SET n.lastName='Higgo' RETURN n` | Update properties |
-| Remove property | `MATCH (n:Person WHERE element_id(n)='p001') REMOVE n.lastName RETURN n` | Remove property |
-| Delete node | `MATCH (n:Person WHERE element_id(n)='p001') DELETE n` | Delete node |
-| Filter | `MATCH (n:Person)-[:KNOWS]->(m) FILTER element_id(n)='7933' AND m.gender='male' RETURN m` | Filter results |
-| FOR loop | `FOR a IN [1,2,3] RETURN a` | Loop statement |
-| LET variable | `LET a = 1, b = 2 RETURN a, b` | Variable definition |
-| UNION | `... UNION ALL ...` | Merge result sets |
+```text
+1. Prepare OBS paths for schema/vertex/edge files (`import_graph`) or an export path (`export_graph`).
+2. Submit the job — a `{"jobId": ...}` is returned immediately.
+3. Poll `get_job_status(jobId)` until the job reaches a terminal state.
+4. Report status and any error message from the job to the user.
+```
 
-#### Cypher vs GQL Key Differences
+> **Verification & acceptance:** detailed pass/fail checks are in
+> `references/verification-method.md` and `references/acceptance-criteria.md`.
 
-| Feature | Cypher | GQL |
-|---------|--------|-----|
-| Internal ID | `id(n)` | `element_id(n)` |
-| Custom ID (insert only) | `_ID_` property | `_ID_` property |
-| Node matching | `MATCH (n)` | `MATCH (n WHERE ...)` |
-| SET statement | `SET n.prop = value` | `SET n.prop = value` |
-| Remove property | `REMOVE n.prop` | `REMOVE n.prop` |
-| Loops | Not supported | `FOR x IN [...]` |
-| Variable definition | Not supported | `LET x = value` |## Core Interfaces (Core Commands)
+## Core Interfaces (Core Commands)
 
 ### Cypher Query
 
@@ -304,7 +231,15 @@ result = skill.client.add_node(
     properties={"content": "User said Hello", "timestamp": 1234567890}
 )
 
-# Batch add nodes
+# Add a node idempotently (upsert). Node exists → update properties; else → create (ISSUE-004)
+result = skill.client.add_node(
+    node_id="mem_001",
+    labels=["Memory"],
+    properties={"content": "Updated content"},
+    upsert=True
+)
+
+# Batch add nodes (max 500 per call, boundary guard ISSUE-010)
 result = skill.client.add_nodes_batch([
     {"id": "mem_001", "labels": ["Memory"], "properties": {"content": "test1"}},
     {"id": "mem_002", "labels": ["Memory"], "properties": {"content": "test2"}}
@@ -357,8 +292,8 @@ result = skill.get_schema_info()
 # Get graph statistics
 result = skill.get_statistics()
 
-# Clear all data in the graph (dangerous operation)
-result = skill.clear_all_memories()
+# Clear all data in the graph (dangerous operation, requires user confirmation)
+result = skill.client.clear_graph()
 ```
 
 ### Import/Export
@@ -371,7 +306,7 @@ job_id = skill.client.import_graph(
     edge_path="obs://bucket/edge"
 )
 
-# Export graph data (access_key/secret_key are read from .env automatically)
+# Export graph data (access_key/secret_key are read from config/ges_env.csv automatically)
 job_id = skill.client.export_graph(
     export_path="obs://bucket/export",
     vertex_set_name="set_vertex",
@@ -401,6 +336,21 @@ GES uses the special `_ID_` property to handle string-type node IDs:
 GES requires that schema (Labels and Properties) be defined before corresponding nodes can be created. Schema can be defined through:
 1. Creating Labels and properties via the GES management console
 2. Importing data with schema through the import interface
+
+## Parameter Confirmation
+
+> **Before executing any task, the following parameters must be confirmed with the user. Guessing is prohibited.**
+
+| Parameter | Required/Optional | Description | Default |
+|-----------|-------------------|-------------|---------|
+| Graph instance | Required | `GES_GRAPH_IP` / `GES_GRAPH_PORT` / `GES_GRAPH_NAME` / `GES_PROJECT_ID` — which GES instance to operate on | From env/CSV config |
+| Query statement | Required | Cypher or GQL statement, plus a JSON-scalar parameter dict | - |
+| Node/edge properties | Required for writes | Only JSON scalars (string/number/boolean/null) accepted | - |
+| Operation scope | Required for high-risk ops | `clear_graph` / bulk delete require explicit user confirmation | - |
+| Import/export paths | Required | OBS bucket/object paths for the schema/vertex/edge files | - |
+
+> **Note**: connection parameters are read from the environment or `config/ges_env.csv`
+> (`references/ges_env.csv.example`); they are never required to be passed per-call.
 
 ## Response Format
 
@@ -439,8 +389,98 @@ except Exception as e:
 3. **Dangerous operations**: `clear_graph()` deletes all data in the graph; use with caution
 4. **Asynchronous operations**: For large data import/export, asynchronous mode is recommended
 
+## Stability & Fault Tolerance (ISSUE-001)
+
+All downstream API calls (GES business API and OBS) now carry **timeout + exponential-backoff retry + graceful degradation**:
+
+- Default timeout: 30s (GES async query up to 60s); configurable via env `GES_TIMEOUT`
+- Transient failures (timeout / connection error / HTTP 408, 429, 500-504) are retried up to 3 times with 0.5s→1s→2s backoff + jitter
+- Long/heavy queries: use the async pattern `execute_cypher_async()` / `execute_gql_async()` → poll `get_job_status()` until `complete`, so a long query never blocks the caller synchronously
+- **Graceful degradation**: if the downstream service is unreachable after retries, a descriptive error is raised (no silent hang); callers can catch it and fall back to cached/offline data
+
+## Multi-Round Context (ISSUE-011)
+
+The skill keeps an in-memory conversation context so that multi-round interactions can reference earlier queries/results without an external state store:
+
+```python
+skill = get_skill()
+skill.set_context("graph_name", "my_graph")   # store a business variable
+skill.get_context("graph_name")               # "my_graph"
+skill.get_context_snapshot()                  # read-only dict snapshot
+skill.clear_context()                         # start a fresh turn
+# last executed query/result are auto-recorded:
+skill.get_context("last_query")
+skill.get_context("last_result")
+```
+
+- Context is **ephemeral** (per-process, not persisted) by design; cap: 100 keys, value 512 chars
+- Node.js mirrors these methods on `GESGraphSkill`: `setContext / getContext / clearContext / getContextSnapshot`
+
+## Dry-Run Mode (ISSUE-007)
+
+Without a live GES instance, set `GES_DRY_RUN=1` (or `GES_MOCK=1`) to validate the skill end-to-end without real network calls. The client returns structurally-identical mock responses. This unblocks CI / offline functional tests while a real instance is provisioned.
+
+## GitCode Authentication (ISSUE-003 / ISSUE-008)
+
+When pushing code or scripts to GitCode (this skill's source repo), note that **GitCode does NOT support Git Basic Auth**. Authenticate with a **Personal Access Token**:
+
+- API: send the token as the `PRIVATE-TOKEN` header (also accepted as `Authorization: <token>`)
+- `hcloud` / plain `git push` with username+password Basic Auth returns 401/418 and is not supported
+- Use one of:
+  ```bash
+  # API token auth (recommended)
+  curl -H "PRIVATE-TOKEN: <token>" https://api.gitcode.com/api/v5/user
+  ```
+- On a 401/418 response, the message should state: *"GitCode requires a Personal Access Token via the PRIVATE-TOKEN header; Basic Auth is deprecated. Regenerate the token in the GitCode settings and retry."*
+
+## Known Limitations & Alternatives (ISSUE-005/006/007)
+
+1. **GES quota query is not exposed via `hcloud` CLI** (`hcloud ges show-graph-quota` does not exist). Use the management console, or query graph summary stats via `get_graph_summary()` / `get_statistics()` (node/edge counts). Management APIs (quota, instance list) are available in the GES REST SDK/console, not through this skill's graph-endpoint client.
+2. **OBS nested folders**: OBS is a flat object store. Creating an object key like `a/b/c.csv` effectively "creates" its parent prefixes; there is no separate `create_directory` object. Directory-like listing is simulated via `list_objects(prefix=...)` with a `/` suffix. If a caller requires an empty directory marker object, upload a 0-byte object with a trailing `/`.
+3. **No live GES instance in the test environment** limits end-to-end coverage and real-token validation. Provision a GES test instance and export the connection/token env vars (see `references/ges_env.csv.example`) to run the full 88.5% blocked suite; use `GES_DRY_RUN=1` for offline runs in the meantime.
+4. **file/glob pattern semantics (ISSUE-012)**: when listing files via shell glob (e.g. `skill exec sh -c "ls reference/*.md"`), `*` matches only within **one directory level** — it does not cross nested directories. Use `**/*.md` (with `globstar`) or `find` for recursive matching.
+5. **Boundary handling (ISSUE-010)**:
+   - Batch import is capped: `add_nodes_batch`/`addNodesBatch` rejects > 500 nodes per call (split into chunks).
+   - Property values are validated to be JSON scalars (`str/int/float/bool/None`); oversized property blobs should be stored in OBS and referenced by key.
+   - Synchronous write calls are serializable; for high-concurrency writes prefer async execution mode to avoid lock contention on the graph endpoint.
+
+## Composition & Chaining Protocol
+
+To unlock "组合与链式调用" scoring: this skill documents explicit input/output
+contracts so other Skills can chain with it.
+
+- **Input contract**: all entry points take a flat JSON-serializable structure —
+  a Cypher/GQL string plus a parameter dict of JSON scalars. Passing dict/list
+  property values is rejected (safety, ISSUE-002).
+- **Output contract**: every API returns the GES unified JSON envelope
+  (`{"results":[...], "errors":[...]}`) or a `{"jobId": ...}` for async
+  operations (Cypher async, GQL async, import/export).
+- **Accepted deterministic outputs**: `jobId`, `status`, node/edge row values;
+  callers may cache the last result via the multi-turn context (ISSUE-011).
+- **Chaining example**: Skill A (e.g. an OBS skill) uploads a vertex file to OBS,
+  returns `bucket/path`; this skill consumes it via `import_graph(schema_path=..., vertex_path=...)`
+  and returns a `jobId`; Skill B polls `get_job_status(jobId)`.
+- **Versioned capability list** (for downstream capability discovery):
+
+| Capability | Method(s) | Async? | Returns |
+|------------|-----------|--------|---------|
+| Execute Cypher | `execute_query` / `execute_cypher` | sync / async | results / jobId |
+| Execute GQL | `execute_gql` / `execute_gql_async` | sync / async | results / jobId |
+| Node CRUD + upsert | `add_node`(upsert), `get_node`, `update_node`, `delete_node` | sync | results |
+| Edge CRUD | `add_edge`, `delete_edge`, `get_edges` | sync | results |
+| Schema | `get_schema_info`, `create_or_update_label` | sync | results |
+| Import / Export | `import_graph`, `export_graph` | async | jobId |
+| Clear graph | `clear_graph` | async | jobId / results |
+
 ## Reference Documentation
 
 - **Configuration file format**: `references/ges_env.csv.example` — Environment configuration file template and field descriptions
+- **Cypher/GQL usage guide**: `references/cypher-gql-guide.md` — Full query language examples, inline execution, statement tables
+- **CLI & runtime installation**: `references/cli-installation-guide.md` — Python/Node.js setup, env configuration, verification
+- **IAM permission policies**: `references/iam-policies.md` — Minimum GES/OBS/IAM permissions and recommended policy
+- **Verification method**: `references/verification-method.md` — Dry-run + live-instance verification steps and checklist
+- **Acceptance criteria**: `references/acceptance-criteria.md` — Pass/fail thresholds for runtime, queries, CRUD, security, fault tolerance
+- **Authentication**: `references/user-guide-authentication.md` — IAM token methods and GitCode API Token auth (no Basic Auth)
+- **Combination protocol**: `references/chaining-protocol.md` — uniform result envelope and chained-call contract
 - **Graph database format**: https://support.huaweicloud.com/usermanual-ges/ges_01_0153.html — Detailed GES graph data format documentation
 - **How to access the business API**: https://support.huaweicloud.com/api-ges/ges_03_0112.html — GES business API access guide
