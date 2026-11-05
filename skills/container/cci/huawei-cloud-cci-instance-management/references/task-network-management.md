@@ -19,7 +19,7 @@ hcloud VPC ListSubnets --vpc_id=<vpc-id> --cli-region=<region> --cli-output=json
 ```
 
 Record the following from the output:
-- `vpc_id` → used as `--spec.attachedVPC` (or `--attached-vpc` in the helper script)
+- `vpc_id` → used as `--spec.attachedVPC` (or `--vpc-id` in the helper script)
 - `subnet_id` → used as `--spec.subnetID` (or `--subnet-id` in the helper script)
 - The subnet's neutron network ID → used as `--spec.networkID` (or `--network-id` in the helper script)
 
@@ -34,7 +34,7 @@ The Network spec requires **three mandatory fields**:
 | Spec Field | hcloud CLI Parameter | Helper Script Parameter | Source |
 |-----------|---------------------|------------------------|--------|
 | `networkID` | `--spec.networkID` | `--network-id` | Neutron network ID from subnet query |
-| `attachedVPC` | `--spec.attachedVPC` | `--attached-vpc` | VPC ID from `hcloud VPC ListVpcs` |
+| `attachedVPC` | `--spec.attachedVPC` | `--vpc-id` | VPC ID from `hcloud VPC ListVpcs` |
 | `subnetID` | `--spec.subnetID` | `--subnet-id` | Subnet ID from `hcloud VPC ListSubnets` |
 
 > Omitting `networkID` causes the error: `spec[networkID]: Required value`
@@ -48,7 +48,7 @@ metadata.annotations:
   network.alpha.kubernetes.io/default-security-group: <security-group-id>
 ```
 
-- CCI auto-normalizes this annotation key (the canonical dotted version is preserved alongside any hyphenated variants when applicable)
+The key must be the canonical dotted form. CCI does **not** rewrite or normalize hyphenated Network annotation keys: a hyphenated key such as `network-alpha-kubernetes-io/default-security-group` is sent (and stored) verbatim and is **not** recognized as the default security group. There is no hyphen-replacement workaround for this Network annotation — use the Python helper script below, which sends the dotted key.
 
 ### hcloud CLI Limitation
 
@@ -65,19 +65,21 @@ python scripts/cci_network_helper.py create \
   --namespace=<ns-name> \
   --name=<network-name> \
   --network-id=<neutron-network-id> \
-  --attached-vpc=<vpc-id> \
+  --vpc-id=<vpc-id> \
   --subnet-id=<subnet-id> \
-  --security-group=<security-group-id> \
-  --region=<region>
+  --security-group-id=<security-group-id> \
+  --region=<region> \
+  [--project-id=<project-id>]
 ```
 
 - `--namespace` = CCI namespace (must already exist)
 - `--name` = Network resource name
 - `--network-id` = neutron network ID (required)
-- `--attached-vpc` = VPC ID
+- `--vpc-id` = VPC ID
 - `--subnet-id` = subnet ID
-- `--security-group` = default security group ID (set via the `network.alpha.kubernetes.io/default-security-group` annotation)
-- `--region` = Huawei Cloud region
+- `--security-group-id` = default security group ID (set via the `network.alpha.kubernetes.io/default-security-group` annotation)
+- `--region` = Huawei Cloud region (must match `[a-z0-9-]+`, e.g. `cn-north-4`; any invalid value is rejected with `ERROR: invalid region`)
+- `--project-id` = optional; when the project ID is already known, pass it to skip the automatic `hcloud IAM KeystoneListProjects` detection (avoids the hcloud CLI dependency and IAM read permission requirement for project lookup)
 
 ### Fallback: hcloud CLI (Without Security Group Annotation)
 
@@ -161,4 +163,4 @@ hcloud CCI deleteNetworkingCciIoV1beta1NamespacedNetwork \
 | Annotation Key | Value | Purpose | hcloud CLI Support |
 |---------------|-------|---------|-------------------|
 | `network.alpha.kubernetes.io/default-security-group` | Security group ID (e.g., `sg-xxxx`) | Default security group for Network | **Cannot pass via hcloud CLI** — dots treated as nested delimiters; use Python helper script |
-| `namespace.kubernetes.io/flavor` | `general-computing` or `gpu-accelerated` | Namespace flavor type | Works via `--metadata.annotations.namespace-kubernetes-io/flavor` (hyphen workaround) |
+| `namespace.kubernetes.io/flavor` | `general-computing` or `gpu-accelerated` | Namespace flavor type (Namespace resource, not Network) | **Cannot pass via hcloud CLI** — the dotted parameter name is rejected (`[USE_ERROR]不正确的参数`), and the hyphenated form is transmitted verbatim and therefore not recognized. See `task-namespace-management.md` |

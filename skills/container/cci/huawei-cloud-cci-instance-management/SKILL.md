@@ -15,18 +15,36 @@ tags: [cci, container-instance, serverless, namespace, deployment]
 
 Manage Huawei Cloud CCI (Cloud Container Instance) full lifecycle using hcloud CLI (KooCLI). CCI is a serverless container service — no cluster management needed, just create a Namespace, define a Network, then deploy workloads directly.
 
-**Architecture**: hcloud CLI → CCI OpenAPI → Namespace / Network / Deployment / StatefulSet / Pod / EIPPool / Service / Ingress
+**Architecture**: hcloud CLI → CCI OpenAPI → Namespace / Network / Deployment / StatefulSet / Pod / EIPPool (plus a helper script for annotation keys that hcloud CLI cannot express)
 
 ## Constraints and Rules
 
 ### Security Rules
 
-- **Two-step confirmation**: All destructive operations (delete Namespace/Network/Deployment/StatefulSet/Pod/EIPPool) require explicit user confirmation — preview command, resource details, and risk warning first; execute only after user confirms.
+- **Two-step confirmation**: All destructive operations (delete Namespace/Network/Deployment/StatefulSet/Pod/EIPPool/PVC) **and all billable creation operations** require explicit user confirmation — preview command, resource details, and cost/risk warning first; execute only after user confirms. Creating an EIPPool auto-creates EIPs and bandwidth and therefore incurs recurring charges: state the cost implication before asking for confirmation, and never create it silently.
 - **Credential security**: Never expose AK/SK values in conversation, commands, or output. Only use `hcloud configure list` to check credential status (presence only). Prefer profile mode or environment variables over explicit AK/SK parameters.
+
+### Supported Scope
+
+This skill manages **only** these CCI resources and their lifecycle: **Namespace, Network, Deployment, StatefulSet, Pod, EIPPool**, plus read-only status/log/event/quota queries for them.
+
+**Explicitly out of scope** — decline these requests, say why, and point the user at the matching skill or the Huawei Cloud console. Do not attempt them and do not invoke another skill on the user's behalf:
+
+| Out-of-scope request | Where it belongs |
+|---|---|
+| CCE clusters, nodes, node pools | `huawei-cloud-cce-*` skills / CCE console |
+| ECS / BMS instances, disks | `huawei-cloud-ecs-*` skills / ECS console |
+| RDS, DDS, DCS databases | corresponding database skill / console |
+| ELB, SFS, OBS, DNS, CDN resources | networking/storage skills / console |
+| Creating VPC, subnet or security group themselves | `huawei-cloud-vpc-*` skills / VPC console |
+| Billing, invoices, cost breakdown | Billing Center in the console |
+| `kubectl` workflows | `huawei-cloud-kubectl-cce-installer` |
+
+This skill does **not** manage the lifecycle of other Kubernetes objects that CCI may also expose — Service, Ingress, ConfigMap, Secret, PVC, Job, Volcano Job, RoleBinding — and `kubectl` is out of scope. CCI does offer some write operations for those objects, but using them is not part of this skill, with one documented exception: the confirmation-gated cleanup of PVCs left behind after deleting a StatefulSet (see [references/task-statefulset-management.md](references/task-statefulset-management.md)). **Read-only** inspection of ConfigMap, Secret, Service, ResourceQuota, Event, Pod status and logs *is* in scope and is exactly what the diagnosis playbooks use — see [references/diagnosis-playbooks.md](references/diagnosis-playbooks.md).
 
 ### Resource Constraints
 
-- **Namespace flavor annotation is mandatory**: Every namespace must carry `namespace-kubernetes-io/flavor` annotation (value: `general-computing` or `gpu-accelerated`). Without it, creation fails.
+- **Namespace flavor annotation is mandatory**: Every namespace must carry the flavor annotation (value: `general-computing` or `gpu-accelerated`). Omitting it fails creation, and the hyphenated key form only takes effect for `general-computing` — see [hcloud CLI Constraints](#hcloud-cli-constraints).
 - **limits must equal requests**: CCI enforces `resources.limits == resources.requests`. Mismatch causes "limit and request doesn't equal" error. Set both to the same values (e.g., `500m/1Gi`).
 - **Network must precede workloads**: Pod/Deployment/StatefulSet creation fails or stays Pending if no Network exists in the namespace. Always create Network before deploying workloads.
 - **VPC CIDR restriction**: VPC subnet CIDR must NOT be `10.247.0.0/16` — CCI reserves this range for Service networking. Using it causes IP conflicts and workload creation failures.
@@ -35,7 +53,9 @@ Manage Huawei Cloud CCI (Cloud Container Instance) full lifecycle using hcloud C
 ### hcloud CLI Constraints
 
 - **Network creation must use Python helper script**: hcloud CLI cannot pass annotation keys containing dots (`network.alpha.kubernetes.io/default-security-group`). Neither dot notation nor `--cli-jsonInput` works. Use `scripts/cci_network_helper.py`.
-- **Namespace annotation uses hyphen replacement**: Keys like `namespace.kubernetes.io/flavor` can use hyphens (`namespace-kubernetes-io/flavor`) and CCI auto-normalizes. This workaround only works for Namespace, NOT for Network.
+- **Namespace flavor annotation — the hyphen workaround is NOT safe for every flavor**: The hyphen form (`--metadata.annotations.namespace-kubernetes-io/flavor=<value>`) is normalized by CCI back to `namespace.kubernetes.io/flavor` **only for `general-computing`**. For `gpu-accelerated` the hyphen form is silently dropped and the namespace ends up as `general-computing`, so the GPU capability is never enabled. The dotted key `namespace.kubernetes.io/flavor` is the required form, but hcloud CLI **cannot** pass dotted annotation keys (verified: the dotted, `{...}`-escaped and JSON-object forms are all rejected with `USE_ERROR`). Create GPU namespaces with the helper script's direct API call instead:
+  `python scripts/cci_network_helper.py create-namespace --name=<ns> --flavor=gpu-accelerated --region=<region>`
+  then confirm the canonical value with `hcloud CCI readCoreV1Namespace --name=<ns>`. Hyphen replacement never works for Network.
 - **Always verify parameters with `--help`**: CCI has hundreds of parameters. Run `hcloud CCI <Operation> --help` before constructing any command. The help output is the authoritative source.
 
 > Detailed breakdowns of these rules are in [Security Constraints](#security-constraints), [hcloud CLI Limitations](#hcloud-cli-limitations), and [Precautions](#precautions).
@@ -58,6 +78,7 @@ Manage Huawei Cloud CCI (Cloud Container Instance) full lifecycle using hcloud C
 - hcloud CLI installed (version >= 7.2.2)
 - Run `hcloud version` to verify installation
 - First-time usage: `printf "y\n" | hcloud version` to accept privacy statement
+- `hcloud` must be resolvable on `PATH`. If it is not (or you want to pin a specific build), set `HCLOUD_PATH` to the executable — `scripts/cci_network_helper.py` honours it. You can also bypass project-ID auto-detection entirely by passing `--project-id` to the helper.
 
 ### 2. Credential Configuration
 
@@ -93,11 +114,11 @@ hcloud configure list
 
 ### Dangerous Operation Confirmation Mechanism
 
-> **This skill strictly enforces a two-step confirmation mechanism for all destructive operations.**
+> **This skill strictly enforces a two-step confirmation mechanism for all destructive and billable creation operations.**
 
-All destructive operations require explicit user confirmation before execution. The process:
+All destructive operations **and all billable creation operations** require explicit user confirmation before execution. The process:
 
-**Step 1: Preview** — Show the command, resource details, and risk warning
+**Step 1: Preview** — Show the command, resource details, risk warning, and any cost implication
 
 **Step 2: Confirm & Execute** — Only after user explicitly confirms
 
@@ -105,12 +126,14 @@ All destructive operations require explicit user confirmation before execution. 
 
 | Operation | Risk Level | Description |
 |-----------|------------|-------------|
+| Create EIPPool | 💰 Billable | Auto-creates EIPs and bandwidth — recurring charges. Give the cost warning and get explicit confirmation before creating |
 | Delete Namespace | 🔴 Critical | Cascades — deletes ALL resources under this namespace (Network, Pods, Deployments, etc.) |
 | Delete Network | 🟠 High | Disconnects namespace from VPC; running pods lose network |
 | Delete Deployment | 🟠 High | Terminates all replicas of the workload |
 | Delete StatefulSet | 🟠 High | Terminates all replicas; PVC data may be lost |
 | Delete Pod | 🟠 High | Terminates the container instance |
 | Delete EIPPool | 🟡 Medium | Releases public IPs allocated to pods |
+| Delete PVC (StatefulSet cleanup) | 🟠 High | Destroys the claim and its volume; the data cannot be recovered. Preview with `listCoreV1NamespacedPersistentVolumeClaim` / `readCoreV1NamespacedPersistentVolumeClaim`, then delete one PVC at a time |
 
 ### Credential Security
 
@@ -158,6 +181,8 @@ See [references/parameter-format.md](references/parameter-format.md) for complet
 | Full workflow (create→run→cleanup) | [references/common-workflows.md](references/common-workflows.md) |
 | All CCI operations quick reference | [references/cci-operation-catalog.md](references/cci-operation-catalog.md) |
 | Troubleshooting | [references/troubleshooting.md](references/troubleshooting.md) |
+| Diagnosis playbooks (10 ticket categories) | [references/diagnosis-playbooks.md](references/diagnosis-playbooks.md) |
+| Flavors, quotas, output, debugging | [references/operational-notes.md](references/operational-notes.md) |
 | IAM permissions | [references/iam-policies.md](references/iam-policies.md) |
 | Verification steps | [references/verification-method.md](references/verification-method.md) |
 | Correct/error pattern comparison | [references/acceptance-criteria.md](references/acceptance-criteria.md) |
@@ -171,8 +196,16 @@ See [references/parameter-format.md](references/parameter-format.md) for complet
 hcloud CCI createCoreV1Namespace \
   --metadata.name=<ns-name> \
   --metadata.annotations.namespace-kubernetes-io/flavor=general-computing \
-  --cli-region=<region \
+  --cli-region=<region> \
   --cli-output=json
+
+# Create namespace (gpu-accelerated flavor)
+# The hyphen form above does NOT work for gpu-accelerated — hcloud CLI cannot pass the
+# dotted annotation key, so use the helper script's direct API call:
+python scripts/cci_network_helper.py create-namespace \
+  --name=<ns-name> \
+  --flavor=gpu-accelerated \
+  --region=<region>
 
 # List namespaces
 hcloud CCI listCoreV1Namespace --cli-region=<region> --cli-output=json
@@ -192,7 +225,7 @@ hcloud CCI deleteCoreV1Namespace --name=<ns-name> --cli-region=<region>
 
 ```bash
 # Step 1: Get VPC subnet details (including neutron_network_id)
-hcloud VPC ShowSubnet --vpc_id=<vpc-id> --subnet_id=<subnet-id> --cli-region=<region> --cli-output=json
+hcloud VPC ShowSubnet --subnet_id=<subnet-id> --cli-region=<region> --cli-output=json
 
 # Step 2: Create network via Python helper script
 python scripts/cci_network_helper.py create \
@@ -242,11 +275,21 @@ hcloud CCI createAppsV1NamespacedDeployment \
   --cli-output=json
 
 # Scale deployment
+# --spec.replicas is NOT a valid parameter; the PATCH body must be a JSON Patch array.
 hcloud CCI patchAppsV1NamespacedDeploymentScale \
   --name=<deploy-name> \
   --namespace=<ns-name> \
-  --spec.replicas=<new-replicas> \
-  --cli-region=<region>
+  --io.k8s.apimachinery.pkg.apis.meta.v1.Patch='[{"op":"replace","path":"/spec/replicas","value":<new-replicas>}]' \
+  --cli-region=<region> \
+  --cli-output=json
+
+# Update container image (same JSON Patch form; note the 0-based array index in "path")
+hcloud CCI patchAppsV1NamespacedDeployment \
+  --name=<deploy-name> \
+  --namespace=<ns-name> \
+  --io.k8s.apimachinery.pkg.apis.meta.v1.Patch='[{"op":"replace","path":"/spec/template/spec/containers/0/image","value":"<new-image>"}]' \
+  --cli-region=<region> \
+  --cli-output=json
 
 # Read deployment status
 hcloud CCI readAppsV1NamespacedDeploymentStatus \
@@ -270,6 +313,8 @@ hcloud CCI createAppsV1NamespacedStatefulSet \
   --spec.template.spec.containers.1.image=<image> \
   --spec.template.spec.containers.1.resources.limits.cpu=500m \
   --spec.template.spec.containers.1.resources.limits.memory=1Gi \
+  --spec.template.spec.containers.1.resources.requests.cpu=500m \
+  --spec.template.spec.containers.1.resources.requests.memory=1Gi \
   --cli-region=<region> \
   --cli-output=json
 
@@ -292,6 +337,8 @@ hcloud CCI createCoreV1NamespacedPod \
   --spec.containers.1.image=<image> \
   --spec.containers.1.resources.limits.cpu=500m \
   --spec.containers.1.resources.limits.memory=1Gi \
+  --spec.containers.1.resources.requests.cpu=500m \
+  --spec.containers.1.resources.requests.memory=1Gi \
   --cli-region=<region> \
   --cli-output=json
 
@@ -337,84 +384,29 @@ hcloud CCI readCrdYangtseCniV1NamespacedEIPPoolStatus \
   --cli-output=json
 ```
 
-**EIPPool required fields**: `--apiVersion=crd.yangtse.cni/v1` and `--kind=EIPPool` are mandatory. `spec.eipAttributes.networkType` is required (values: `5_bgp` for dynamic BGP, `5_gray` for dedicated load balancing). `spec.eipAttributes.bandwidth.chargeMode` and `name` are required when auto-creating EIPs.
+**EIPPool required fields**: `--apiVersion=crd.yangtse.cni/v1` and `--kind=EIPPool` are mandatory. `spec.eipAttributes.networkType` is required. The only real values are `5_telcom` (China Telecom), `5_union` (China Unicom), `5_bgp` (dynamic BGP), `5_sbgp` (static BGP) and `5_ipv6` — any other value, including the dedicated-load-balancing value shown in older revisions of this document, does not exist in any region and is rejected by the admission webhook. Which values a region accepts differs (for example `cn-north-4` supports only `5_bgp` and `5_sbgp`); always confirm the list for your region with `hcloud EIP CreatePublicip --help`, whose output enumerates the supported types per region. `spec.eipAttributes.bandwidth.chargeMode` and `name` are required when auto-creating EIPs.
 
-**Pod EIP binding**: To assign an EIPPool to a Pod, add annotation `yangtse.io/eippool=<eippool-name>` (use hyphen workaround: `--metadata.annotations.yangtse-io/eippool=<eippool-name>`).
+> **💰 Billable operation**: creating an EIPPool auto-creates EIPs and bandwidth, which are charged. Warn the user about the cost and obtain explicit confirmation before creating an EIPPool.
+
+**Pod EIP binding**: To assign an EIPPool to a Pod, add the annotation `yangtse.io/eippool=<eippool-name>`. hcloud CLI cannot pass dotted annotation keys, so the hyphenated form `--metadata.annotations.yangtse-io/eippool=<eippool-name>` is the only CLI-expressible option; CCI stores hyphenated keys verbatim, so **verify the binding after creation** with `hcloud CCI readCoreV1NamespacedPod --name=<pod> --namespace=<ns>`, and fall back to a direct API call or the console if the annotation was not recognised.
 
 ## VPC/Subnet Prerequisites
 
-CCI workloads run inside a Network that maps to an existing VPC subnet. Before creating a Network, query available VPCs and subnets, and obtain the neutron network ID (required for Network creation):
+A Network maps to an existing VPC subnet, so before creating one you must supply the VPC ID, the subnet ID and the **neutron network ID** (`networkID` is mandatory):
 
 ```bash
-# List VPCs
 hcloud VPC ListVpcs --cli-region=<region> --cli-output=json
-
-# List subnets
-hcloud VPC ListSubnets --cli-region=<region> --cli-output=json
-
-# Get subnet details (including neutron_network_id — REQUIRED for Network creation)
-hcloud VPC ShowSubnet --vpc_id=<vpc-id> --subnet_id=<subnet-id> --cli-region=<region> --cli-output=json
+hcloud VPC ListSubnets --vpc_id=<vpc-id> --cli-region=<region> --cli-output=json
+hcloud VPC ShowSubnet --subnet_id=<subnet-id> --cli-region=<region> --cli-output=json   # neutron_network_id comes from here
 ```
 
-> **⚠️ VPC subnet CIDR restriction**: The VPC and subnet CIDR must NOT be `10.247.0.0/16` — this range is reserved by CCI for Service networking. Using it causes IP conflicts and workload creation failures.
+> **⚠️** The VPC/subnet CIDR must NOT be `10.247.0.0/16` — CCI reserves that range for Service networking. Full details: [references/task-network-management.md](references/task-network-management.md).
 
-> **⚠️ neutron_network_id is required**: The `neutron_network_id` from `VPC ShowSubnet` output is the value for the `networkID` field in Network spec. This field is REQUIRED for Network creation.
+## Namespace Flavors, Quotas, Output and Debugging
 
-## Namespace Flavor Types
-
-| Flavor Value | Description | Use Case |
-|---|---|---|
-| `general-computing` | General computing type | Standard workloads, web services, microservices |
-| `gpu-accelerated` | GPU accelerated type | AI, ML, high-performance computing |
-
-## Resource Quota and Limits
-
-CCI enforces resource quotas per namespace. Common defaults:
-
-| Resource | Default Limit |
-|---|---|
-| Pods | varies by region |
-| CPU per Pod | 0.25 - 8 cores |
-| Memory per Pod | 0.5Gi - 32Gi |
-| PVCs | varies |
-
-Query current quotas:
-
-```bash
-hcloud CCI listCoreV1NamespacedResourceQuota --namespace=<ns-name> --cli-region=<region> --cli-output=json
-```
-
-## Output Format
-
-### JSON (recommended)
-```bash
-hcloud CCI <Operation> --cli-region=<region> --cli-output=json
-```
-
-### Table (for manual viewing)
-```bash
-hcloud CCI <Operation> --cli-region=<region> --cli-output=table
-```
-
-### JMESPath Filtering
-```bash
-# Filter deployment status
-hcloud CCI readAppsV1NamespacedDeploymentStatus --name=<deploy> --namespace=<ns> --cli-region=<region> --cli-output=json --cli-query="{replicas:status.replicas,ready:status.readyReplicas,available:status.availableReplicas}"
-
-# Filter pod phase
-hcloud CCI readCoreV1NamespacedPodStatus --name=<pod> --namespace=<ns> --cli-region=<region> --cli-output=json --cli-query="status.phase"
-```
-  --cli-region=<region> --cli-output=json \
-  --cli-query="status.phase"
-```
-
-## Debugging
-
-Add `--cli-debug=true` to any command for detailed request/response information:
-
-```bash
-hcloud CCI <Operation> --cli-debug=true --cli-region=<region>
-```
+Flavor values (`general-computing` / `gpu-accelerated`), per-namespace resource quotas, JSON/table
+output, JMESPath filtering, the global `hcloud --debug` switch and best practices live in
+[references/operational-notes.md](references/operational-notes.md).
 
 ## Parameter Confirmation
 
@@ -461,10 +453,11 @@ See [references/verification-method.md](references/verification-method.md) for c
 | Deployment | `hcloud CCI readAppsV1NamespacedDeploymentStatus --name=<deploy> --namespace=<ns>` | readyReplicas >= 1 |
 | Pod | `hcloud CCI readCoreV1NamespacedPodStatus --name=<pod> --namespace=<ns>` | status.phase=Running |
 
-## Best Practices
+## Implementation Notes
 
-1. **Namespace isolation**: Use different namespaces for different teams/projects to avoid resource conflicts
-2. **EIPPool on-demand**: Only create EIPPool when Pod public IP access is needed
+- **Namespace isolation**: use different namespaces for different teams/projects.
+- **EIPPool on-demand**: EIPs and bandwidth are billable — create an EIPPool only when Pod public IP access is needed, and confirm the cost with the user first.
+- **Best practices, flavors, quotas, output and debugging**: [references/operational-notes.md](references/operational-notes.md)
 
 ## hcloud CLI Limitations
 
@@ -473,11 +466,10 @@ See [references/verification-method.md](references/verification-method.md) for c
 | Limitation | Impact | Workaround |
 |---|---|---|
 | **Cannot pass annotation keys containing dots (.) via CLI parameters** | hcloud treats dots in parameter names as nested object levels, so `--metadata.annotations.network.alpha.kubernetes.io/default-security-group` creates a deeply nested structure instead of a single annotation key | Use Python helper script (`scripts/cci_network_helper.py`) for Network creation |
-| **`--cli-jsonInput` doesn't properly transmit annotations** | hcloud bug: annotations appear in `--dryrun` output but are not transmitted in actual API requests | Use Python helper script instead |
-| **`--cli-jsonInput` requires ASCII encoding** | UTF-8 BOM causes JSON parsing failure | Ensure JSON input files are saved as plain ASCII (no BOM) |
-| **Namespace annotation works with hyphen replacement** | Keys like `namespace.kubernetes.io/flavor` can use hyphens (`namespace-kubernetes-io/flavor`) and CCI auto-normalizes them back | This workaround only works for Namespace, NOT for Network |
+| **`--cli-jsonInput` is unreliable for annotations** | Annotations appear in `--dryrun` output but are not transmitted in real API requests; a UTF-8 BOM also breaks parsing | Use the Python helper script; if JSON input is unavoidable, save it as plain ASCII (no BOM) |
+| **Namespace flavor: hyphen replacement is only partial** | The hyphen form is normalized back by CCI only for `general-computing`; for `gpu-accelerated` it is silently dropped and the namespace falls back to `general-computing` | Use `scripts/cci_network_helper.py create-namespace` (dotted annotation). The workaround never applies to Network |
 
-**Why Network needs a Python helper**: The Network annotation key `network.alpha.kubernetes.io/default-security-group` cannot be passed via hcloud CLI (neither dot notation nor `--cli-jsonInput`). Unlike Namespace annotations, CCI does NOT normalize hyphen-replaced keys for Network resources. The Python helper script (`scripts/cci_network_helper.py`) constructs the correct API request body directly.
+**Why the Python helper is needed**: annotation keys such as `network.alpha.kubernetes.io/default-security-group` and `namespace.kubernetes.io/flavor` contain dots, which hcloud CLI interprets as nested object levels — so they cannot be passed as CLI parameters. `scripts/cci_network_helper.py` builds the correct API request body directly.
 
 ## References
 
@@ -496,6 +488,8 @@ See [references/verification-method.md](references/verification-method.md) for c
 | [credential-configuration.md](references/credential-configuration.md) | Credential setup (long-term AK/SK & temporary AK/SK+SecurityToken) |
 | [iam-policies.md](references/iam-policies.md) | IAM permission policies |
 | [troubleshooting.md](references/troubleshooting.md) | Error troubleshooting |
+| [diagnosis-playbooks.md](references/diagnosis-playbooks.md) | Read-only diagnosis playbooks for the 10 high-frequency ticket categories |
+| [operational-notes.md](references/operational-notes.md) | Namespace flavors, resource quotas, output format, debugging, best practices |
 | [verification-method.md](references/verification-method.md) | Verification steps |
 | [acceptance-criteria.md](references/acceptance-criteria.md) | Correct/error pattern comparison |
 | [scripts/cci_network_helper.py](scripts/cci_network_helper.py) | Python helper script for Network creation (bypasses hcloud CLI annotation limitations) |

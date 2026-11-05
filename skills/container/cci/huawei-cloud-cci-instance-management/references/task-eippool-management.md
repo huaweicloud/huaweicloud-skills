@@ -2,6 +2,11 @@
 
 EIPPool is a CCI-specific CRD (`crd.yangtse.cni/v1`) for allocating public IPs (EIPs) to Pods automatically.
 
+> **💰 Cost warning (requires confirmation):** creating an EIPPool with `--spec.amount` **auto-creates
+> EIPs and bandwidth, which are billable resources**. Before running any create command, tell the user
+> that charges will be incurred and obtain explicit confirmation. EIPs created by a pool are released
+> automatically when the EIPPool is deleted (see section 3).
+
 ---
 
 ## 1. Create EIPPool
@@ -46,7 +51,7 @@ hcloud CCI createCrdYangtseCniV1NamespacedEIPPool \
 | `--apiVersion` | `crd.yangtse.cni/v1` | API version (required) |
 | `--kind` | `EIPPool` | Resource kind (required) |
 | `--spec.amount` | integer | Number of EIPs to create |
-| `--spec.eipAttributes.networkType` | `5_bgp` or `5_gray` | EIP network type (required) |
+| `--spec.eipAttributes.networkType` | see note below | EIP network type (required); accepted values depend on the region |
 | `--spec.eipAttributes.bandwidth.shareType` | `PER` or `WHOLE` | Bandwidth share type |
 | `--spec.eipAttributes.bandwidth.size` | integer | Bandwidth size in Mbit/s |
 | `--spec.eipAttributes.bandwidth.chargeMode` | `bandwidth` or `traffic` | Bandwidth billing mode |
@@ -58,7 +63,10 @@ hcloud CCI createCrdYangtseCniV1NamespacedEIPPool \
 - `spec.eipAttributes.bandwidth.chargeMode` and `name` are required when auto-creating EIPs (missing causes 403 validation error)
 - EIPPool must be in the same namespace as the Pod that uses it
 - Array items are 1-based: `--spec.eips.1=<eip-id>` (not `0`)
-- `5_bgp` = Dynamic BGP EIP; `5_gray` = Dedicated load balancing (internal use)
+- `networkType` real values (authoritative: `hcloud EIP CreatePublicip --help`): `5_telcom` (China Telecom), `5_union` (China Unicom), `5_bgp` (dynamic BGP), `5_sbgp` (static BGP), `5_ipv6`. Any other value is not accepted by EIP — use only the values listed here.
+- `5_bgp` is the default for an IPv4 EIP when no type is supplied.
+- **Region support differs and the supported set is not the same everywhere.** `hcloud EIP CreatePublicip --help --cli-region=<region>` prints the accepted values for that region. Example: `cn-north-4` accepts `5_bgp` and `5_sbgp`; some regions list only `5_telcom`/`5_union`, and only a few additionally list `5_ipv6`. Never assume a value works in a region — check the per-region list first.
+- CCI requires container `resources.limits` to equal `resources.requests` (see `parameter-format.md`); always pass both with identical values.
 
 ---
 
@@ -110,6 +118,8 @@ hcloud CCI createCoreV1NamespacedPod \
   --spec.containers.1.image=<image> \
   --spec.containers.1.resources.limits.cpu=500m \
   --spec.containers.1.resources.limits.memory=1Gi \
+  --spec.containers.1.resources.requests.cpu=500m \
+  --spec.containers.1.resources.requests.memory=1Gi \
   --cli-region=<region> \
   --cli-output=json
 ```

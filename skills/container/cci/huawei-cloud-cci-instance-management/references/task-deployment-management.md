@@ -24,8 +24,8 @@ hcloud CCI createAppsV1NamespacedDeployment \
   --spec.template.spec.containers.1.image=<image> \
   --spec.template.spec.containers.1.resources.limits.cpu=500m \
   --spec.template.spec.containers.1.resources.limits.memory=1Gi \
-  --spec.template.spec.containers.1.resources.requests.cpu=250m \
-  --spec.template.spec.containers.1.resources.requests.memory=512Mi \
+  --spec.template.spec.containers.1.resources.requests.cpu=500m \
+  --spec.template.spec.containers.1.resources.requests.memory=1Gi \
   --cli-region=<region> \
   --cli-output=json
 ```
@@ -34,7 +34,8 @@ Key constraints:
 
 - `--spec.selector.matchLabels` **MUST match** `--spec.template.metadata.labels` — mismatched labels prevent the Deployment from managing its Pods
 - Resource limits and requests are **MANDATORY** for CCI — omitting them causes creation failure
-- Array indices are 1-based: `containers.1` is the first container, `containers.2` is the second
+- `resources.requests` **MUST equal** `resources.limits` for every container (same CPU value and same memory value) — CCI rejects mismatches with `limit and request doesn't equal`
+- Array indices are 1-based in hcloud dot notation: `containers.1` is the first container, `containers.2` is the second (JSON Patch paths in the scale/update sections below are 0-based instead)
 
 ### Multi-Container Example
 
@@ -49,14 +50,14 @@ hcloud CCI createAppsV1NamespacedDeployment \
   --spec.template.spec.containers.1.image=nginx \
   --spec.template.spec.containers.1.resources.limits.cpu=500m \
   --spec.template.spec.containers.1.resources.limits.memory=1Gi \
-  --spec.template.spec.containers.1.resources.requests.cpu=250m \
-  --spec.template.spec.containers.1.resources.requests.memory=512Mi \
+  --spec.template.spec.containers.1.resources.requests.cpu=500m \
+  --spec.template.spec.containers.1.resources.requests.memory=1Gi \
   --spec.template.spec.containers.2.name=sidecar \
   --spec.template.spec.containers.2.image=busybox \
   --spec.template.spec.containers.2.resources.limits.cpu=100m \
   --spec.template.spec.containers.2.resources.limits.memory=256Mi \
-  --spec.template.spec.containers.2.resources.requests.cpu=50m \
-  --spec.template.spec.containers.2.resources.requests.memory=128Mi \
+  --spec.template.spec.containers.2.resources.requests.cpu=100m \
+  --spec.template.spec.containers.2.resources.requests.memory=256Mi \
   --cli-region=<region> \
   --cli-output=json
 ```
@@ -75,8 +76,8 @@ hcloud CCI createAppsV1NamespacedDeployment \
   --spec.template.spec.containers.1.ports.1.containerPort=80 \
   --spec.template.spec.containers.1.resources.limits.cpu=500m \
   --spec.template.spec.containers.1.resources.limits.memory=1Gi \
-  --spec.template.spec.containers.1.resources.requests.cpu=250m \
-  --spec.template.spec.containers.1.resources.requests.memory=512Mi \
+  --spec.template.spec.containers.1.resources.requests.cpu=500m \
+  --spec.template.spec.containers.1.resources.requests.memory=1Gi \
   --cli-region=<region> \
   --cli-output=json
 ```
@@ -118,25 +119,44 @@ Check `readyReplicas` vs `replicas` to determine rollout progress.
 
 ## Scale Deployment
 
+`patchAppsV1NamespacedDeploymentScale` has **no** `--spec.replicas` parameter (its only body parameter is `--io.k8s.apimachinery.pkg.apis.meta.v1.Patch`). Scaling is done with a JSON Patch body:
+
 ```bash
 hcloud CCI patchAppsV1NamespacedDeploymentScale \
   --name=<deploy-name> --namespace=<ns-name> \
-  --spec.replicas=<new-count> \
+  --io.k8s.apimachinery.pkg.apis.meta.v1.Patch='[{"op":"replace","path":"/spec/replicas","value":<new-count>}]' \
   --cli-region=<region>
 ```
 
+> The old form `--spec.replicas=<new-count>` fails with `[USE_ERROR]不正确的参数:spec.replicas`.
+
 ## Update Deployment (Patch)
+
+`patchAppsV1NamespacedDeployment` accepts only `--io.k8s.apimachinery.pkg.apis.meta.v1.Patch` as its body parameter — there is no `--spec.template...` parameter. Pass a JSON Patch body instead.
 
 ### Update container image
 
 ```bash
 hcloud CCI patchAppsV1NamespacedDeployment \
   --name=<deploy-name> --namespace=<ns-name> \
-  --spec.template.spec.containers.1.image=<new-image> \
+  --io.k8s.apimachinery.pkg.apis.meta.v1.Patch='[{"op":"replace","path":"/spec/template/spec/containers/0/image","value":"<new-image>"}]' \
   --cli-region=<region>
 ```
 
+`containers/0` is the **first** container: JSON Patch array indices are 0-based, while hcloud dot-notation parameters are 1-based (`--spec.template.spec.containers.1.image`).
+
 This triggers a rolling update — Pods are replaced incrementally.
+
+### Other patchable fields
+
+`--io.k8s.apimachinery.pkg.apis.meta.v1.Patch` is a JSON Patch array, so several changes can be sent in one request, and paths other than `/spec/replicas` and container images are allowed as long as they are in the supported update list (`metadata.labels`, `metadata.annotations`, `spec.template`, `spec.replicas`, `spec.revisionHistoryLimit`, `spec.progressDeadlineSeconds`):
+
+```bash
+hcloud CCI patchAppsV1NamespacedDeployment \
+  --name=<deploy-name> --namespace=<ns-name> \
+  --io.k8s.apimachinery.pkg.apis.meta.v1.Patch='[{"op":"replace","path":"/spec/replicas","value":3},{"op":"replace","path":"/spec/template/spec/containers/0/image","value":"nginx:1.27"}]' \
+  --cli-region=<region>
+```
 
 ## Delete Deployment
 
