@@ -125,6 +125,29 @@ def _code_fence(content: str) -> str:
     return "`" * max_run
 
 
+# 多行字段(代码围栏)统一缩进宽度, 与 assets/VOD_FEEDBACKS.md 模板一致
+_BLOCK_INDENT = "  "
+
+
+def _content_lines(value: str) -> list[str]:
+    """把字段内容拆成行: CRLF / CR 统一为 LF, 避免 Windows 写文件时换行被叠加。"""
+    return re.split(r"\r\n|\r|\n", value)
+
+
+def _append_fenced_block(lines: list[str], value: str) -> None:
+    """按模板缩进写入多行字段的围栏块。
+
+    围栏长度自适应内容中的反引号; 行缩进固定为 _BLOCK_INDENT, 读取端按围栏行
+    实际缩进原样剥离, 因此 0/2/4 空格等不同缩进风格都能无损 round-trip(#116 问题1)。
+    """
+    body_lines = _content_lines(value)
+    fence = _code_fence("\n".join(body_lines))
+    lines.append(f"{_BLOCK_INDENT}{fence}")
+    for body_line in body_lines:
+        lines.append(f"{_BLOCK_INDENT}{body_line}")
+    lines.append(f"{_BLOCK_INDENT}{fence}")
+
+
 def write_feedback_md(feedback: FeedbackRecord, file_path: Path) -> None:
     file_path.parent.mkdir(parents=True, exist_ok=True)
     lines = [
@@ -153,11 +176,7 @@ def write_feedback_md(feedback: FeedbackRecord, file_path: Path) -> None:
         "- **error_stack**:",
     ])
     if error_stack_content:
-        fence = _code_fence(error_stack_content)
-        lines.append(f"  {fence}")
-        for stack_line in error_stack_content.split("\n"):
-            lines.append(f"  {stack_line}")
-        lines.append(f"  {fence}")
+        _append_fenced_block(lines, error_stack_content)
     else:
         lines.append("  (none)")
 
@@ -181,12 +200,8 @@ def write_feedback_md(feedback: FeedbackRecord, file_path: Path) -> None:
         f"- **user_intent**: {feedback.user_intent or ''}",
     ])
     if feedback.agent_action:
-        fence = _code_fence(feedback.agent_action)
         lines.append("- **agent_action**:")
-        lines.append(f"  {fence}")
-        for action_line in feedback.agent_action.split("\n"):
-            lines.append(f"  {action_line}")
-        lines.append(f"  {fence}")
+        _append_fenced_block(lines, feedback.agent_action)
     else:
         lines.append("- **agent_action**: ")
     lines.extend([
@@ -222,7 +237,9 @@ def write_feedback_md(feedback: FeedbackRecord, file_path: Path) -> None:
     if not feedback.annotations:
         lines.append("- (none)")
 
-    file_path.write_text("\n".join(lines), encoding="utf-8")
+    # newline="\n": 固定 LF 行尾(不随平台转成 CRLF), 保证跨平台 round-trip 与 diff 稳定
+    with open(file_path, "w", encoding="utf-8", newline="\n") as f:
+        f.write("\n".join(lines))
 
 
 def _normalize_section_header(header: str) -> str:
@@ -301,11 +318,25 @@ def _parse_metadata_section(text: str, section: str) -> dict[str, str]:
     return result
 
 
+def _strip_block_indent(line: str, indent: int) -> str:
+    """剥离围栏块内容行的缩进: 最多剥 indent 个前导空白字符。
+
+    内容自身的额外缩进(堆栈的 at/File 层级)会被保留, 只去掉围栏缩进本身。
+    """
+    if indent <= 0:
+        return line
+    i = 0
+    while i < indent and i < len(line) and line[i] in " \t":
+        i += 1
+    return line[i:]
+
+
 def _extract_code_block_value(text: str, section: str, field: str) -> str | None:
     in_section = False
     in_field = False
     in_code = False
     fence_run = 0
+    fence_indent = 0
     code_lines = []
     normalized = _normalize_section_header(section)
     for line in text.split("\n"):
@@ -315,15 +346,19 @@ def _extract_code_block_value(text: str, section: str, field: str) -> str | None
         if not in_code and _run >= 3:
             in_code = True
             fence_run = _run
+            fence_indent = len(line) - len(line.lstrip(" \t"))
             continue
         if in_code:
             # 关围栏: 需与开围栏等长或更长; 内容中较短的 ``` 不被误判为关闭
             if _run >= fence_run:
                 in_code = False
                 fence_run = 0
+                fence_indent = 0
                 continue
             if in_field:
-                code_lines.append(line[2:] if line.startswith("  ") else line)
+                # 按围栏行实际缩进剥离, 不再硬编码 2 空格(#116 问题1):
+                # 4 空格缩进的文件读回时会多出 2 空格, 0/1 空格则会丢缩进
+                code_lines.append(_strip_block_indent(line, fence_indent))
             continue
         if not in_code and stripped.startswith("## "):
             header = _normalize_section_header(stripped[3:])
@@ -372,6 +407,40 @@ def _extract_multiline_section(text: str, header: str) -> str | None:
             result_lines.append(line)
     content = "\n".join(result_lines).strip()
     return content if content else None
+
+
+def _join_section_lines(lines: list[str]) -> str | None:
+    """拼接复合 error_stack 的某一小节。
+
+    只丢弃小节末尾的空行(即 _build_error_stack 写出的 "\\n\\n" 分隔行),
+    保留首行前导缩进与行尾内容, 避免 round-trip 时缩进/尾随空格丢失(#116 问题1)。
+    """
+    while lines and not lines[-1].strip():
+        lines.pop()
+    if not lines:
+        return None
+    return "\n".join(lines)
+
+
+# _build_error_stack 复合体的小节标题(顺序即拼接顺序, 原始堆栈总在最后)
+_COMPOSITE_MARKERS = ("【问题描述】", "【复现场景】", "【预期行为】", "【错误堆栈】")
+
+
+def _is_composite_error_stack(value: str) -> bool:
+    """判断 error_stack 是否确为 _build_error_stack 写出的复合体。
+
+    复合体的形态固定: 小节标题独立成行, 且首行必为某个标题(_build_error_stack 按
+    问题描述/复现场景/预期行为/错误堆栈 顺序拼接, 原始堆栈总是最后一段)。因此只在
+    「首行即小节标题」或「存在【错误堆栈】小节标题行」时才按复合体解析。
+
+    否则正文里的【…】只是堆栈内容(旧文件/手改文件), 必须原样保留,
+    不能被复合分支吞掉(task-6 / F1: 静默丢数据回归)。
+    """
+    if not value:
+        return False
+    if value.split("\n", 1)[0].strip() in _COMPOSITE_MARKERS:
+        return True
+    return any(line.strip() == "【错误堆栈】" for line in value.split("\n"))
 
 
 def read_feedback_md(file_path: Path) -> FeedbackRecord:
@@ -450,7 +519,7 @@ def read_feedback_md(file_path: Path) -> FeedbackRecord:
     occurrence_scenario = user_report.get("scenario") or None
     expected_behavior = user_report.get("expected_behavior") or None
 
-    if error_stack and any(marker in error_stack for marker in ["【问题描述】", "【复现场景】", "【预期行为】", "【错误堆栈】"]):
+    if error_stack and _is_composite_error_stack(error_stack):
         sections = {"问题描述": None, "复现场景": None, "预期行为": None, "错误堆栈": None}
         current_key = None
         current_lines = []
@@ -458,22 +527,27 @@ def read_feedback_md(file_path: Path) -> FeedbackRecord:
             m = re.match(r"^【(.+?)】$", line.strip())
             if m and m.group(1) in sections:
                 if current_key is not None:
-                    sections[current_key] = "\n".join(current_lines).strip() or None
+                    sections[current_key] = _join_section_lines(current_lines)
                 current_key = m.group(1)
                 current_lines = []
                 continue
             if current_key is not None:
                 current_lines.append(line)
         if current_key is not None:
-            sections[current_key] = "\n".join(current_lines).strip() or None
+            sections[current_key] = _join_section_lines(current_lines)
         if sections["问题描述"]:
             problem_description = sections["问题描述"]
         if sections["复现场景"]:
             occurrence_scenario = sections["复现场景"]
         if sections["预期行为"]:
             expected_behavior = sections["预期行为"]
-        if sections["错误堆栈"]:
+        # 复合体: error_stack 以【错误堆栈】小节为准(避免重写时整段自我累积)。
+        # 若复合体本就没有堆栈小节(只有【问题描述】等), 则为 None;
+        # 但若只剩一个空的【错误堆栈】标题, 说明它其实不是复合体 → 保留原文。
+        if sections["错误堆栈"] is not None:
             error_stack = sections["错误堆栈"]
+        elif any(sections[key] for key in ("问题描述", "复现场景", "预期行为")):
+            error_stack = None
 
     more_details = None
     in_md = False
@@ -580,6 +654,19 @@ def _count_session_feedbacks(feedbacks_dir: Path, session_id: str) -> int:
     return count
 
 
+def _to_utc(ts: datetime) -> datetime:
+    """把时间戳统一为 UTC 感知时间: naive 值按**本地时区**解释, 不再当作 UTC。
+
+    naive 时间戳通常来自 `datetime.now()` / `date -Iseconds`(本地时间)。直接当成
+    UTC 会让东八区的时间戳"看起来在未来"(age ≈ -28800s), 去重窗口永不命中
+    (#114 问题1: 相同 session_id + error_type 连写两次生成两个文件 / #116 问题6)。
+    """
+    if ts.tzinfo is None:
+        # astimezone() 对 naive datetime 按本地时区解释并附上本地时区(DST 安全)
+        ts = ts.astimezone()
+    return ts.astimezone(timezone.utc)
+
+
 def _find_dedup_candidate(
     feedbacks_dir: Path,
     session_id: str,
@@ -600,20 +687,33 @@ def _find_dedup_candidate(
         if existing_key != new_key:
             continue
         if existing.timestamp:
-            existing_ts = existing.timestamp
-            if existing_ts.tzinfo is None:
-                existing_ts = existing_ts.replace(tzinfo=timezone.utc)
-            age = (now - existing_ts).total_seconds()
-            if 0 <= age <= dedup_window_sec:
+            age = (now - _to_utc(existing.timestamp)).total_seconds()
+            # 负向放宽到同样一个窗口: 容忍写入端时钟略快产生的未来时间戳;
+            # 超出 ±dedup_window_sec 的旧记录仍不命中
+            if -dedup_window_sec <= age <= dedup_window_sec:
                 return f
     return None
 
 
-_MINIMAL_CONTENT = {"test", "hello", "hi", "测试", "你好", "无", "none", "n/a", "na", "."}
+_MINIMAL_CONTENT = {"test", "hello", "hi", "测试", "你好", "无", "none", "n/a", "na", ".",
+                    "test123", "testing", "todo", "tbd", "xxx", "foo", "bar", "foobar", "asdf"}
+
+# token 边界上的装饰性标点: "test." / "（无）" 等价于 "test" / "无"
+_TOKEN_TRIM_CHARS = "。，、.,!！?？:：;；'\"`()（）[]【】<>《》-—_*#"
+
+
+def _placeholder_token(token: str) -> bool:
+    """判断单个 token 是否只是占位内容(忽略首尾标点与结尾数字)。"""
+    trimmed = token.strip(_TOKEN_TRIM_CHARS).strip().lower()
+    if not trimmed:
+        return True
+    if trimmed in _MINIMAL_CONTENT:
+        return True
+    return re.sub(r"\d+$", "", trimmed) in _MINIMAL_CONTENT
 
 
 def _validate_content(feedback: FeedbackRecord) -> str | None:
-    all_content = " ".join(filter(None, [
+    fields = [
         feedback.problem_description,
         feedback.error_message,
         feedback.error_stack,
@@ -621,11 +721,17 @@ def _validate_content(feedback: FeedbackRecord) -> str | None:
         feedback.agent_action,
         feedback.occurrence_scenario,
         feedback.expected_behavior,
-    ])).strip()
+    ]
+    all_content = " ".join(field.strip() for field in fields if field and field.strip())
     if not all_content:
         return "Empty feedback content - no meaningful fields provided"
-    lower = all_content.lower().strip()
+    # 空白折叠后比较: "test\n\ntest" 与 "test test" 视为同一最小内容
+    lower = re.sub(r"\s+", " ", all_content).strip().lower()
     if lower in _MINIMAL_CONTENT:
+        return f"Minimal content '{lower}' rejected - provide meaningful feedback"
+    # 最小内容可能被拆到多个字段: --problem-description test --error-message hello
+    tokens = lower.split(" ")
+    if tokens and all(_placeholder_token(token) for token in tokens):
         return f"Minimal content '{lower}' rejected - provide meaningful feedback"
     if len(lower) < 3:
         return f"Content too short ({len(lower)} chars) - provide meaningful feedback"
@@ -684,18 +790,13 @@ def main() -> None:
             print(f"错误: {e}", file=sys.stderr)
             sys.exit(1)
 
-        if args.feedback_id:
-            feedback_id = args.feedback_id
-        else:
-            feedback_id = generate_id("VOD", args.output if args.output.is_dir() else args.output.parent)
-
         # Resolve output path: if output is a directory, auto-generate filename
         output_path = args.output
-        if output_path.is_dir() or (not output_path.suffix and not output_path.exists()):
-            output_path = output_path / f"{feedback_id}.md"
+        dir_target = output_path.is_dir() or (not output_path.suffix and not output_path.exists())
+        feedbacks_dir = output_path if dir_target else output_path.parent
 
         feedback = FeedbackRecord(
-            feedback_id=feedback_id,
+            feedback_id=args.feedback_id,
             feedback_type=FeedbackType(args.feedback_type),
             timestamp=timestamp,
             session_id=args.session_id,
@@ -718,7 +819,7 @@ def main() -> None:
             annotations=args.annotations,
         )
 
-        # Content validation
+        # Content validation: 必须在生成/占位文件之前, 拒绝时不留任何文件(#116 问题10)
         validation_error = _validate_content(feedback)
         if validation_error:
             print(f"错误: {validation_error}", file=sys.stderr)
@@ -730,8 +831,6 @@ def main() -> None:
         capture_cfg = config.get("capture", {})
         max_per_session = storage_cfg.get("max_feedbacks_per_session", 5)
         dedup_window = capture_cfg.get("dedup_window_sec", 60)
-
-        feedbacks_dir = output_path.parent
 
         # In-session dedup check
         dedup_candidate = _find_dedup_candidate(
@@ -764,6 +863,13 @@ def main() -> None:
                 file=sys.stderr,
             )
             sys.exit(1)
+
+        # 落盘前才生成 ID: 与去重/超限/校验等提前返回路径无关, 不会留下占位文件。
+        # ID 在 feedbacks_dir 内生成(目录不存在时也会被创建), 序号只统计目标目录。
+        if not args.feedback_id:
+            feedback.feedback_id = generate_id("VOD", feedbacks_dir)
+        if dir_target:
+            output_path = feedbacks_dir / f"{feedback.feedback_id}.md"
 
         write_feedback_md(feedback, output_path)
         custom_patterns = config.get("sanitizer", {}).get("custom_patterns", [])

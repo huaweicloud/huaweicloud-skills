@@ -13,6 +13,8 @@ capture:
   detect_timeout: true
   timeout_threshold_ms: 30000
   dedup_window_sec: 60
+  # Cross-session dedup: `vod_deliver.py dedup-scan --lookback <N>` scans the N
+  # most recently modified feedbacks (default 10) before delivery.
 
 rejection:
   enabled: true
@@ -65,8 +67,11 @@ delivery:
       repo_url: "https://gitcode.com/developer-skill/vod-skill.git"
       labels:
         - "VoD"
-    # NOTE: notification channels (webhook/email) are not yet implemented.
-    # Do not enable until implementation is available.
+    # Notification channels are delivered by `vod_deliver.py notify`
+    # (--channel webhook|email|auto). Disabled by default.
+    #   webhook: HTTP POST of a JSON body to `webhook.url`, using `webhook.headers`.
+    #   email:   SMTP over TLS to `email.smtp_host`:`email.smtp_port` for `email.recipients`.
+    # `retry_policy` applies to both channels.
     notification:
       enabled: false
       type: "webhook"

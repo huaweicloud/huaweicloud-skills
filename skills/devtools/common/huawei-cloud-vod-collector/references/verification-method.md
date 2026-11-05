@@ -53,17 +53,51 @@ Expected:
   (the `delivered` state is written by `update-status --status delivered`,
   so it appears before any promotion/discard transition).
 
-## 5. Installers
+## 5. Cross-session dedup and notifications
+
+```bash
+skill-quality-cli run --skill-name huawei-cloud-vod-collector -- \
+  python <SKILL_DIR>/scripts/vod_deliver.py dedup-scan \
+  --feedbacks-dir .vod/feedbacks --feedback-id <id> --lookback 10 --json
+skill-quality-cli run --skill-name huawei-cloud-vod-collector -- \
+  python <SKILL_DIR>/scripts/vod_deliver.py notify \
+  --feedbacks-dir .vod/feedbacks --feedback-id <id> --channel auto --json
+```
+
+Expected:
+- `dedup-scan` reports `{"success": true, "scanned": N, "target": {...},
+  "candidates": [...], "should_deliver": ...}`; candidates come from a different
+  `session_id` with a matching command / error_type / normalized signature.
+- `deliver` without `--force` returns
+  `{"success": false, "error": "duplicate_suspected", "duplicate_of": "<ID>"}`
+  when a strong candidate exists; `--force` / `--skip-dedup` bypass the gate.
+- `notify` on a directory with no pending feedback returns
+  `{"success": true, "pending": 0, "sent": []}` and does **not** resolve the
+  AtomGit token or trigger login.
+- `notify` with pending feedback sends via `delivery.channels.notification`
+  (webhook HTTP POST JSON / email SMTP with TLS) and honors `retry_policy`.
+
+## 6. Installers
 
 - `ensure_cli.sh`: run twice — the second run must exit without re-downloading
   (idempotent even when `${HOME}/.local/bin` is not in `PATH`).
 - `ensure_cli.sh --help` / `install_cli.sh --help` print usage and exit 0.
 - `install_cli.sh` fails closed when the manifest lacks `sha256` or the checksum
   does not match (no silent bypass).
+- `ensure_cli.ps1` (Windows) / `install_cli.py` (#929): `install_cli.py --dry-run`
+  prints the install plan without writing; on a platform without a native package it
+  installs the `python-fallback` launchers and `skill-quality-cli version` succeeds;
+  a manifest without `sha256` or a mismatching checksum refuses to install.
+  Exit-code contract: `ensure_cli.sh` / `ensure_cli.ps1` degrade to a warning + exit 0
+  when installation is impossible (the skill keeps running); `install_cli.py` is the
+  low-level installer and always exits non-zero on failure, leaving no partial artifacts.
+- The UTF-8 requirement holds: after `ensure_cli.sh` / `ensure_cli.ps1` /
+  `hcloud-run.sh` set `PYTHONUTF8=1` and `PYTHONIOENCODING=utf-8`, wrapped commands
+  that print Chinese do not raise `UnicodeDecodeError` on a Chinese Windows host.
 - `vod_install.sh --repo-dir <unsafe-value>` rejects the argument; unsupported
   OS/arch is detected before any clone happens.
 
-## 6. Syntax gates
+## 7. Syntax gates
 
 ```bash
 bash -n <SKILL_DIR>/scripts/*.sh

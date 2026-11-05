@@ -58,7 +58,11 @@ def sanitize_file(file_path: Path, output_path: Path | None = None, custom_patte
     sanitized = sanitize(content, custom_patterns=custom_patterns)
     target = output_path or file_path
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(sanitized, encoding="utf-8")
+    # newline="\n": 与 md_io.write_feedback_md 一致, 固定 LF 行尾。
+    # 若用 write_text(), Windows 下会把整个文件转成 CRLF, 于是
+    # write-feedback(LF) → sanitize(CRLF) → update-status/notify 之间反复翻转。
+    with open(target, "w", encoding="utf-8", newline="\n") as f:
+        f.write(sanitized)
     return target
 
 
