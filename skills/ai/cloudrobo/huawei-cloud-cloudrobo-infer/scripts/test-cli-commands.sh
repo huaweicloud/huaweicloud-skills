@@ -40,8 +40,8 @@ if [ -n "$WORKSPACE_ID" ]; then
 else
     echo "    --workspace-id <workspace-id> \\"
 fi
-echo "    --pool-id <pool-id> --pool-type SHARED \\"
-echo "    --stop-schedule-json '{\"duration\": 60, \"time_unit\": \"MINUTES\"}' \\"
+echo "    --pool-type SHARED --stop-schedule-json '{\"duration\": 60, \"time_unit\": \"MINUTES\"}' \\"
+echo "    # optional: --pool-id <pool-id> only for DEDICATED pools \\"
 echo "    --dry-run"
 echo ""
 
@@ -58,8 +58,8 @@ if [ -n "$WORKSPACE_ID" ]; then
 else
     echo "    --workspace-id <workspace-id> \\"
 fi
-echo "    --pool-id <pool-id> --pool-type SHARED \\"
-echo "    --stop-schedule-json '{\"duration\": 60, \"time_unit\": \"MINUTES\"}'"
+echo "    --pool-type SHARED --stop-schedule-json '{\"duration\": 60, \"time_unit\": \"MINUTES\"}'"
+echo "    # optional: --pool-id <pool-id> only for DEDICATED pools"
 echo ""
 
 # Test 4: Service detail (if SERVICE_ID env var is set)

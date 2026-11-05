@@ -11,7 +11,7 @@
     {
       "id": "TC-02",
       "name": "create-service-dry-run",
-      "command": "cloudrobo infer create --name verify-infer --flavor {flavor} --model-json '{\"model_id\": \"{model_id}\", \"model_version_id\": \"{model_version_id}\"}' --workspace-id {workspace_id} --pool-id {pool_id} --pool-type SHARED --stop-schedule-json '{\"duration\": 60, \"time_unit\": \"MINUTES\"}' --dry-run",
+      "command": "cloudrobo infer create --name verify-infer --flavor {flavor} --model-json '{\"model_id\": \"{model_id}\", \"model_version_id\": \"{model_version_id}\"}' --workspace-id {workspace_id} --pool-type SHARED --stop-schedule-json '{\"duration\": 60, \"time_unit\": \"MINUTES\"}' --dry-run",
       "description": "Dry-run service create (no actual deployment)",
       "expected": "[DRY-RUN] message, no service created",
       "type": "read"
@@ -19,7 +19,7 @@
     {
       "id": "TC-03",
       "name": "create-service",
-      "command": "cloudrobo infer create --name verify-infer --flavor {flavor} --model-json '{\"model_id\": \"{model_id}\", \"model_version_id\": \"{model_version_id}\"}' --workspace-id {workspace_id} --pool-id {pool_id} --pool-type SHARED --stop-schedule-json '{\"duration\": 60, \"time_unit\": \"MINUTES\"}'",
+      "command": "cloudrobo infer create --name verify-infer --flavor {flavor} --model-json '{\"model_id\": \"{model_id}\", \"model_version_id\": \"{model_version_id}\"}' --workspace-id {workspace_id} --pool-type SHARED --stop-schedule-json '{\"duration\": 60, \"time_unit\": \"MINUTES\"}'",
       "description": "Create an inference service",
       "expected": "JSON with service_id returned",
       "type": "write"
@@ -91,7 +91,7 @@
     {
       "id": "TC-12",
       "name": "invalid-json-rejected",
-      "command": "cloudrobo infer create --name x --flavor f --model-json '{\"model_id\": \"m\", \"model_version_id\": \"mv\"}' --workspace-id {workspace_id} --pool-id p --pool-type SHARED --envs-json not-json",
+      "command": "cloudrobo infer create --name x --flavor f --model-json '{\"model_id\": \"m\", \"model_version_id\": \"mv\"}' --workspace-id {workspace_id} --pool-type SHARED --envs-json not-json",
       "description": "Verify malformed JSON is rejected",
       "expected": "Error: Invalid JSON (click.BadParameter)",
       "type": "read"
@@ -118,7 +118,7 @@
     "model_id": "Model asset ID to deploy",
     "model_version_id": "Model version ID to deploy",
     "flavor": "Compute flavor",
-    "pool_id": "Compute pool ID (prefix with 'pool-', e.g. pool-d1cc6d45-...)",
+    "pool_id": "Compute pool ID (optional; prefix with 'pool-', e.g. pool-d1cc6d45-...). Omit for SHARED pools — only pass for DEDICATED pools",
     "pool_type": "Pool type (SHARED / DEDICATED)",
     "service_id": "Inference service ID (for show/start/stop/update/delete/logs)",
     "start_ms": "Start timestamp in milliseconds (for list-logs)",

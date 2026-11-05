@@ -22,13 +22,13 @@
 | `model` | object | 是 | - | CreateInferenceServiceRequestBody.model |
 | `model_ext_metadata` | string | 否 | 0-20480 字符；JSON/YAML 字符串 | CreateInferenceServiceRequestBody.model_ext_metadata |
 | `name` | string | 是 | 3-64 字符；pattern | CreateInferenceServiceRequestBody.name |
-| `pool_id` | string | 是 | 0-64 字符 | CreateInferenceServiceRequestBody.pool_id |
+| `pool_id` | string | 否 | 0-64 字符 | CreateInferenceServiceRequestBody.pool_id |
 | `pool_type` | string | 是 | `DEDICATED` `SHARED`；0-16 字符 | CreateInferenceServiceRequestBody.pool_type |
 | `readiness_health` | object | 否 | - | CreateInferenceServiceRequestBody.readiness_health |
 | `service_invoke` | object | 否 | - | CreateInferenceServiceRequestBody.service_invoke |
 | `skill_config` | object | 否 | - | CreateInferenceServiceRequestBody.skill_config |
 | `startup_health` | object | 否 | - | CreateInferenceServiceRequestBody.startup_health |
-| `stop_schedule` | object | 否 | - | CreateInferenceServiceRequestBody.stop_schedule |
+| `stop_schedule` | object | 是 | - | CreateInferenceServiceRequestBody.stop_schedule |
 | `workspace_id` | string | 是 | 1-64 字符 | CreateInferenceServiceRequestBody.workspace_id |
 
 ### files[]

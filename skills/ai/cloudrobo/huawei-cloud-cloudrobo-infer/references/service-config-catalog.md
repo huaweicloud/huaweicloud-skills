@@ -2,7 +2,8 @@
 
 ## InferServiceDto (create inference service request body)
 
-Required fields: `name`, `flavor`, `model`, `workspace_id`, `pool_id`, `pool_type`
+Required fields: `name`, `flavor`, `model`, `workspace_id`, `pool_type`, `stop_schedule`
+(`pool_id` is now **optional** — omit for SHARED pools; the backend validates `pool_id` when a dedicated pool is involved)
 
 | Field | Type | Required | Description | Example |
 | ------- | ------ | ---------- | ------------- | --------- |
@@ -10,13 +11,13 @@ Required fields: `name`, `flavor`, `model`, `workspace_id`, `pool_id`, `pool_typ
 | `flavor` | string | Yes | Compute flavor | `Ascend-910B` |
 | `model` | object | Yes | Model ref: `{model_id, model_version_id, mount_path?}` | `{"model_id":"m1","model_version_id":"mv1","mount_path":"/mnt/model"}` |
 | `workspace_id` | string (UUID) | Yes | Workspace ID | `w1b2c3d4-...` |
-| `pool_id` | string | Yes | Compute pool ID | `pool-123` |
+| `pool_id` | string | No | Compute pool ID (optional; required only when a dedicated pool is involved) | `pool-123` |
 | `pool_type` | string | Yes | Pool type | `SHARED` / `DEDICATED` |
 | `description` | string | No | Service description | `VLA inference` |
 | `image_swr_url` | string | No | Custom image SWR URL | `swr.cn-.../repo/img:tag` |
 | `cmd` | string | No | Start command | `python serve.py` |
 | `envs` | array | No | Env vars | `[{"key":"K","value":"V"}]` |
-| `stop_schedule` | object | No | Auto-stop schedule | see below |
+| `stop_schedule` | object | **Yes** | Auto-stop schedule (required by backend) | see below |
 | `service_invoke` | object | No | Service invocation config | see below |
 | `skill_config` | object | No | Skill configuration | see below |
 | `files` | array | No | Attached files | see below |
@@ -182,7 +183,7 @@ SDK (9 methods) / CLI (9 commands) coverage:
 ### Create an Inference Service
 
 ```bash
-cloudrobo infer create --name <service-name> --flavor "<flavor>" --model-json '{"model_id": "<model-id>", "model_version_id": "<model-version-id>"}' --workspace-id <workspace-id> --pool-id pool-<resource-id> --pool-type <pool-type> [--description "desc"] [--envs-json '[...]'] [--stop-schedule-json '{"duration": 60, "time_unit": "MINUTES"}'] [--dry-run]
+cloudrobo infer create --name <service-name> --flavor "<flavor>" --model-json '{"model_id": "<model-id>", "model_version_id": "<model-version-id>"}' --workspace-id <workspace-id> --pool-type <pool-type> --stop-schedule-json '{"duration": 60, "time_unit": "MINUTES"}' [--pool-id pool-<resource-id>] [--description "desc"] [--envs-json '[...]'] [--dry-run]
 ```
 
 ```python
@@ -198,7 +199,6 @@ service = client.create_infer_service({
     "flavor": "<flavor>",
     "model": {"model_id": "<mid>", "model_version_id": "<mvid>"},
     "workspace_id": config.workspace_id,
-    "pool_id": "pool-<resource-id>",
     "pool_type": "<pool-type>",
     "stop_schedule": {"duration": 60, "time_unit": "MINUTES"},
     "description": "VLA inference service"
@@ -312,10 +312,10 @@ print(logs)
 | ----------- | -------- | ---------- | --------------------- |
 | `--workspace-id` | `cloudrobo workspace current` (or `list` + `use`) | Yes | Let user choose if no default |
 | `--model-json` | `list-publication-assets` / `list-assets --catalog-id` / `search-assets` → `asset_id` + `show-asset` → `latest_version_id` | Yes (create) | Let user choose model; assemble `{"model_id": "...", "model_version_id": "..."}`; verify `ONLINE_DEPLOYMENT` = `ENABLE` |
-| `--pool-id` | `cloudrobo resource list-pools --resource-type MODELARTS` → `pool-{resource_id}` (prefix `pool-`) | Yes (create) | Let user choose from available pools |
+| `--pool-id` | `cloudrobo resource list-pools --resource-type MODELARTS` → `pool-{resource_id}` (prefix `pool-`) | No (create; required only for dedicated pools) | Let user choose from available pools; may be omitted for SHARED |
 | `--pool-type` | `cloudrobo resource list-pools --resource-type MODELARTS` → `pool_type` | Yes (create) | Paired with pool selection |
 | `--flavor` | `cloudrobo resource list-pools --resource-type MODELARTS` → `config.flavor` (CPU/GPU/ASCEND) | Yes (create) | Let user choose from pool's flavor list |
-| `--stop-schedule-json` | Constructed: `{"duration": <N>, "time_unit": "MINUTES"}` | Yes (create, in practice) | Set duration with user consent |
+| `--stop-schedule-json` | Constructed: `{"duration": <N>, "time_unit": "MINUTES"}` | **Yes (create)** | Set duration with user consent |
 | `--service-id` | User or prior `create` output | Yes (show/start/stop/update/delete/logs/wait-deploy) | Verify before mutating |
 | `--start-time`/`--end-time` | User | Yes (list-logs) | **milliseconds** |
 | `--cmd` | Algorithm asset `ext_metadata.command` | No (create) | Show discovered value; user may modify |
@@ -349,9 +349,9 @@ for confirmation before execution, especially start because it consumes pool res
 | AK/SK not set | Operations fail at HTTP signing; set `HUAWEI_CLOUD_AK`/`HUAWEI_CLOUD_SK` |
 | 403 "Model asset permission deny" | Check `show-asset` — `ONLINE_DEPLOYMENT` action must be `ENABLE`; model status must be `RELEASE` (not `DRAFT`/`CREATING`); plaza models may need subscription first |
 | 500 "Internal error" on create | `--model-json`'s `model_version_id` must be `latest_version_id` from `show-asset`, NOT `actions[].algorithm.version_id` |
-| Missing `--stop-schedule-json` | Not CLI-required but **required by backend**; without it creation fails. Format: `{"duration": 60, "time_unit": "MINUTES"}` |
+| Missing `--stop-schedule-json` | **Required by backend**; without it creation fails. Format: `{"duration": 60, "time_unit": "MINUTES"}` |
 | `list-assets --repository-id` returns empty | Use `--catalog-id <asset_catalog_id>` (from `workspace current`) instead — `--repository-id` + `--type` filter is unreliable |
-| model_id/flavor/pool_id | Never hardcoded; resolved dynamically via query commands, then user selects |
+| model_id/flavor/pool_id | Never hardcoded; resolved dynamically via query commands, then user selects. `pool_id` is now optional — only pass it when the deployment targets a dedicated pool |
 | No algorithm association | Bare model; ask user whether to manually provide optional params (cmd/image/envs/etc.) |
 | download-url 404 | Config file not uploaded; skip that parameter silently |
 | skill_config.json extra fields | Filter to only `name`+`prompt`; drop `priority`/`description` |
