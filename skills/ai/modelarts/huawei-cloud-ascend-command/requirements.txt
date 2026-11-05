@@ -1,0 +1,2 @@
+# SSH remote mode dependency (local npu-smi mode needs no Python package).
+paramiko>=2.11,<4

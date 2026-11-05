@@ -1,6 +1,12 @@
 # Configuration Management Reference
 
-## Fan Speed Control
+## Fan Control
+
+> **Implementation alignment (ISSUE-001):** the implemented sub-commands are
+> `set -t pwm-mode -d <0|1>` for the **mode** and
+> `set -t pwm-duty-ratio -d <0-100>` for the **speed**. Earlier documentation
+> used the fictional `fan-mode` / `fan-speed` spellings; this section now
+> mirrors `scripts/npu_client.py` (`set_fan_mode()` / `set_fan_speed()`).
 
 ### Get Fan Mode
 
@@ -10,31 +16,50 @@
 
 **Output:** Current fan mode (auto/manual) and speed
 
-### Set Fan Mode to Manual
+### Set Fan Mode to Auto
 
-**Command:** `npu-smi set -t fan-mode -i <npu_id> -c <chip_id> -d 1`
+**Command:** `npu-smi set -t pwm-mode -d 1`
 
-**Natural Language:** `Set fan manual`
+**Natural Language:** `Set fan auto`, `Fan auto`, `Auto fan`, `Set fan mode auto`
+
+**Confirm gate:** `⚠️ Sensitive operation: Set fan to auto mode` → reply `confirm` / `cancel`
 
 **Sensitive:** Requires confirmation
 
-### Set Fan Mode to Auto
+### Set Fan Mode to Manual
 
-**Command:** `npu-smi set -t fan-mode -i <npu_id> -c <chip_id> -d 0`
+**Command:** `npu-smi set -t pwm-mode -d 0`
 
-**Natural Language:** `Set fan auto`
+**Natural Language:** `Set fan manual`, `Fan manual`, `Manual fan`, `Set fan mode manual`
+
+**Confirm gate:** `⚠️ Sensitive operation: Set fan to manual mode` → reply `confirm` / `cancel`
 
 **Sensitive:** Requires confirmation
 
 ### Set Fan Speed
 
-**Command:** `npu-smi set -t fan-speed -i <npu_id> -c <chip_id> -d <percentage>`
+**Command:** `npu-smi set -t pwm-duty-ratio -d <percentage>`
 
-**Natural Language:** `Set fan speed`
+**Natural Language:** `Set fan speed 70`, `Set fan speed 70%`, `Fan speed NPU0 70`
 
-**Parameters:** Speed percentage (0-100)
+**Parameters:** Duty ratio percentage (0-100); values outside the range are clamped
+
+**Confirm gate:** `⚠️ Sensitive operation: Set fan speed to <N>%` → reply `confirm` / `cancel`
 
 **Sensitive:** Requires confirmation
+
+### Ambiguous Fan Input (Clarification, Nothing Dispatched)
+
+| Input | Behavior |
+|-------|----------|
+| `set fan` (no `auto`/`manual`, no number) | Asks the user to specify `auto` / `manual` or a `0-100` speed. **No** confirmation gate is armed and **no** default such as 50% is assumed. |
+| `set fan speed` (no number) | Asks for a `0-100` value; no confirmation gate is armed. |
+
+**Routing rule:** the fan **mode** branch is evaluated first and covers
+`fan mode`, `auto fan`, `manual fan`, `fan auto`, `fan manual`,
+`set fan auto`, `set fan manual`. The **speed** branch is only reached when the
+input contains `fan speed` or an explicit number. Therefore `set fan auto` is
+always a mode change, never a 50% speed change.
 
 ## ECC Configuration
 
@@ -57,6 +82,17 @@
 **Sensitive:** Requires confirmation
 
 **Note:** Requires reboot to take effect
+
+### Ambiguous ECC Input (Clarification, Nothing Dispatched)
+
+**Natural Language:** `set ECC`, `ECC` (with no `enable`/`on` and no
+`disable`/`off`)
+
+**Behavior:** replies `Please specify direction: 'enable ECC' or 'disable ECC'`.
+No confirmation gate is armed and **disable is never assumed** — an unspecified
+direction must not silently disable ECC (ISSUE-004).
+
+**Sensitive:** Requires confirmation only after the direction is explicit
 
 ## Performance Mode
 

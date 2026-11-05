@@ -7,9 +7,43 @@ Self-contained, no dependency on other skills
 import subprocess
 import json
 import re
+import socket
 import time
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
+
+
+NPU_ERROR_CODES = {
+    "ssh_auth": "NPU-SSH-AUTH",
+    "ssh_unreachable": "NPU-SSH-UNREACHABLE",
+    "ssh_error": "NPU-SSH-ERROR",
+    "command_not_found": "NPU-CMD-NOT-FOUND",
+    "command_failed": "NPU-CMD-FAILED",
+    "timeout": "NPU-TIMEOUT",
+}
+
+
+class NpuCommandError(RuntimeError):
+    """npu-smi / ascend-dmi 命令无法执行时抛出。"""
+
+    def __init__(self, kind: str, message: str, suggestion: str = ""):
+        super().__init__(message)
+        self.kind = kind
+        self.message = message
+        self.suggestion = suggestion
+
+
+def format_npu_error(err: "NpuCommandError") -> str:
+    """返回 SKILL.md 约定的错误格式，executor 直接使用。
+
+    三行：``[ERROR] <CODE>`` / ``Message: <message>`` / ``Suggestion: <suggestion>``
+    """
+    kind = getattr(err, "kind", "") or ""
+    code = NPU_ERROR_CODES.get(kind, "NPU-UNEXPECTED")
+    message = getattr(err, "message", None) or str(err)
+    suggestion = getattr(err, "suggestion", "") or \
+        "请检查命令与环境后重试；本地模式需安装 npu-smi，SSH 模式需 --host/--user/--password"
+    return f"[ERROR] {code}\nMessage: {message}\nSuggestion: {suggestion}"
 
 
 @dataclass
@@ -38,11 +72,13 @@ class NpuClient:
     """
 
     def __init__(self, ssh_host: str = None, ssh_user: str = None,
-                 ssh_password: str = None, ssh_port: int = 22):
+                 ssh_password: str = None, ssh_port: int = 22,
+                 ssh_timeout: int = 10):
         self.ssh_host = ssh_host
         self.ssh_user = ssh_user
         self.ssh_password = ssh_password
         self.ssh_port = ssh_port
+        self.ssh_timeout = ssh_timeout
         self._ssh_client = None
 
     def _get_ssh_client(self):
@@ -56,11 +92,58 @@ class NpuClient:
                 port=self.ssh_port,
                 username=self.ssh_user,
                 password=self.ssh_password,
-                timeout=30,
+                timeout=self.ssh_timeout,
                 look_for_keys=False,
                 allow_agent=False
             )
         return self._ssh_client
+
+    def _reset_ssh_client(self):
+        """Drop the cached SSH connection so the next call reconnects."""
+        if self._ssh_client is not None:
+            try:
+                self._ssh_client.close()
+            except Exception:
+                pass
+        self._ssh_client = None
+
+    def _classify_ssh_error(self, exc: Exception) -> NpuCommandError:
+        """Map a raw SSH failure to a typed NpuCommandError (never a string)."""
+        auth_exc = ()
+        ssh_exc = ()
+        unreachable_exc = (socket.timeout, socket.error, ConnectionRefusedError)
+        try:
+            import paramiko
+            auth_exc = (paramiko.AuthenticationException,)
+            ssh_exc = (paramiko.SSHException,)
+            no_valid_conn = getattr(getattr(paramiko, "ssh_exception", None),
+                                    "NoValidConnectionsError", None)
+            if no_valid_conn is not None:
+                unreachable_exc = unreachable_exc + (no_valid_conn,)
+        except ImportError:
+            pass
+
+        if auth_exc and isinstance(exc, auth_exc):
+            return NpuCommandError(
+                "ssh_auth",
+                f"SSH authentication failed: {exc}",
+                "请确认 --user/--password 正确，且目标机允许密码登录"
+                "（检查 sshd_config 的 PasswordAuthentication，以及账号是否被锁定）")
+        if isinstance(exc, unreachable_exc):
+            return NpuCommandError(
+                "ssh_unreachable",
+                f"Cannot reach SSH host {self.ssh_host}:{self.ssh_port}: {exc}",
+                "请确认 --host/--port 正确、网络可达、安全组放行该端口，"
+                "且目标机 sshd 正在运行")
+        if ssh_exc and isinstance(exc, ssh_exc):
+            return NpuCommandError(
+                "ssh_error",
+                f"SSH error: {exc}",
+                "请检查目标机 SSH 服务与 paramiko 环境后重试")
+        return NpuCommandError(
+            "ssh_error",
+            f"SSH error: {exc}",
+            "请检查目标机 SSH 服务与 paramiko 环境后重试")
 
     def _run_npu_smi(self, args: str) -> str:
         """Execute npu-smi command"""
@@ -68,52 +151,64 @@ class NpuClient:
         return self._execute(cmd)
 
     def _execute(self, command: str) -> str:
-        """Execute command (SSH remote or local direct)"""
+        """Execute command (SSH remote or local direct).
+
+        Raises:
+            NpuCommandError: with a ``kind`` from NPU_ERROR_CODES when the
+                command cannot be executed. Failures are never returned as
+                plain strings such as ``"SSH Error: ..."``.
+        """
         if self.ssh_host:
             # SSH remote mode: using paramiko directly
-            try:
-                client = self._get_ssh_client()
-                stdin, stdout, stderr = client.exec_command(command, timeout=60)
-                output = stdout.read().decode('utf-8')
-                err = stderr.read().decode('utf-8')
-                if not output and err:
-                    return f"Error: {err.strip()}"
-                return output
-            except Exception as e:
-                # Reconnect on connection error
-                if self._ssh_client:
-                    try:
-                        self._ssh_client.close()
-                    except:
-                        pass
-                    self._ssh_client = None
-                # Retry once
+            last_err = None
+            for attempt in range(2):  # one retry, total <= ~2 x ssh_timeout
                 try:
                     client = self._get_ssh_client()
                     stdin, stdout, stderr = client.exec_command(command, timeout=60)
                     output = stdout.read().decode('utf-8')
+                    err = stderr.read().decode('utf-8')
+                    if not output and err:
+                        raise NpuCommandError(
+                            "command_failed", err.strip(),
+                            "请检查命令参数与目标机权限；可先执行 npu-smi info 验证环境")
                     return output
-                except Exception as e2:
-                    return f"SSH Error: {str(e2)}"
-        else:
-            # Local direct mode: execute npu-smi directly
-            import shlex
+                except NpuCommandError:
+                    raise
+                except Exception as exc:
+                    last_err = exc
+                    self._reset_ssh_client()
+            raise self._classify_ssh_error(last_err)
+
+        # Local direct mode: execute npu-smi directly
+        import shlex
+        try:
             result = subprocess.run(
                 shlex.split(command), shell=False,
                 capture_output=True, text=True, timeout=60
             )
-            if result.returncode != 0 and result.stderr:
-                return f"Error (exit {result.returncode}): {result.stderr.strip()}"
-            return result.stdout
+        except FileNotFoundError:
+            raise NpuCommandError(
+                "command_not_found",
+                "npu-smi 未安装或不在 PATH 中",
+                "请在目标机安装 CANN/npu-smi，或使用 --host 走 SSH 远程模式")
+        except subprocess.TimeoutExpired:
+            raise NpuCommandError(
+                "timeout",
+                f"Command timed out after 60s: {command}",
+                "请确认命令可在目标机正常执行；设备繁忙或网络异常时可稍后重试")
+
+        if result.returncode != 0:
+            summary = (result.stderr or "").strip() or (result.stdout or "").strip()
+            summary = summary[:500]
+            raise NpuCommandError(
+                "command_failed",
+                f"Command failed (exit {result.returncode}): {summary}",
+                "请检查命令参数与目标机权限；可先执行 npu-smi info 验证环境")
+        return result.stdout
 
     def close(self):
         """Close SSH connection"""
-        if self._ssh_client:
-            try:
-                self._ssh_client.close()
-            except:
-                pass
-            self._ssh_client = None
+        self._reset_ssh_client()
     # ===== Device Queries =====
 
     def list_devices(self) -> Dict[str, Any]:
@@ -290,6 +385,10 @@ class NpuClient:
         """Activate firmware"""
         return self._run_npu_smi(f"upgrade -a {component} -i {npu_id}")
 
+    def rollback_firmware(self, npu_id: int) -> str:
+        """Roll back firmware to the previous version"""
+        return self._run_npu_smi(f"upgrade -a rollback -i {npu_id}")
+
     # ===== Virtualization =====
 
     def get_vnpu_info(self, npu_id: int, chip_id: int) -> str:
@@ -310,7 +409,7 @@ class NpuClient:
     def create_vnpu(self, npu_id: int, chip_id: int, template: str,
                     vnpu_id: int = None, vgroup_id: int = None) -> str:
         """Create vNPU"""
-        cmd = f"set -t create-vnru -i {npu_id} -c {chip_id} -f {template}"
+        cmd = f"set -t create-vnpu -i {npu_id} -c {chip_id} -f {template}"
         if vnpu_id is not None:
             cmd += f" -v {vnpu_id}"
         if vgroup_id is not None:
@@ -319,7 +418,7 @@ class NpuClient:
 
     def destroy_vnpu(self, npu_id: int, chip_id: int, vnpu_id: int) -> str:
         """Destroy vNPU"""
-        return self._run_npu_smi(f"set -t destroy-vnru -i {npu_id} -c {chip_id} -v {vnpu_id}")
+        return self._run_npu_smi(f"set -t destroy-vnpu -i {npu_id} -c {chip_id} -v {vnpu_id}")
 
     # ===== Certificate Management =====
 

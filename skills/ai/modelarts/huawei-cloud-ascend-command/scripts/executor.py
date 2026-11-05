@@ -10,9 +10,59 @@ import json
 from typing import Dict, Any, Optional, List
 
 try:
-    from .npu_client import NpuClient
+    from .npu_client import NpuClient, NpuCommandError, format_npu_error
 except ImportError:
-    from npu_client import NpuClient
+    from npu_client import NpuClient, NpuCommandError, format_npu_error
+
+
+# Chinese trigger words -> English keywords (I178-3). Longest source words are
+# applied first so a multi-character term wins over any shorter overlapping term.
+_ZH_ALIAS_PAIRS = (
+    ('昇腾状态', 'NPU status'),
+    ('昇腾卡', 'NPU list'),
+    ('虚拟化', 'virtualization'),
+    ('昇腾', 'NPU'),
+    ('温度', 'temperature'),
+    ('功耗', 'power'),
+    ('功率', 'power'),
+    ('电源', 'power'),
+    ('显存', 'memory'),
+    ('内存', 'memory'),
+    ('算力', 'FLOPS'),
+    ('固件', 'firmware'),
+    ('风扇', 'fan'),
+    ('自动', 'auto'),
+    ('手动', 'manual'),
+    ('启用', 'enable'),
+    ('开启', 'enable'),
+    ('禁用', 'disable'),
+    ('关闭', 'disable'),
+    ('设置', 'set'),
+    ('设定', 'set'),
+    ('查看', 'get'),
+    ('查询', 'get'),
+    ('获取', 'get'),
+    ('列表', 'list'),
+    ('清单', 'list'),
+    ('健康', 'health'),
+    ('状态', 'status'),
+    ('证书', 'certificate'),
+    ('过期', 'expiration'),
+    ('升级', 'upgrade'),
+    ('回滚', 'rollback'),
+    ('激活', 'activate'),
+    ('模板', 'template'),
+    ('创建', 'create'),
+    ('销毁', 'destroy'),
+    ('删除', 'delete'),
+    ('设备', 'device'),
+    ('进程', 'processes'),
+    ('错误', 'errors'),
+    ('拓扑', 'topology'),
+    ('产品', 'product'),
+    ('批量', 'batch'),
+)
+_ZH_ALIASES = tuple(sorted(_ZH_ALIAS_PAIRS, key=lambda pair: len(pair[0]), reverse=True))
 
 
 class NpuExecutor:
@@ -28,136 +78,210 @@ class NpuExecutor:
         )
         self.pending_confirmation = None
 
-    def handle_command(self, text: str) -> str:
-        """Handle user command"""
-        text = text.strip()
+    def handle_command(self, text) -> str:
+        """Handle user command (all failures become message text, never a traceback)"""
+        # Input defense: None / non-string / blank input must not crash (B115-4)
+        if not isinstance(text, str) or not text.strip():
+            return self._help_json("Unknown command. Please enter NPU-related commands.")
 
-        # Confirm/Cancel
-        if text in ('cancel', 'abort'):
+        try:
+            raw = text.strip()
+            lowered = raw.lower()
+
+            # Confirm/Cancel (English keywords plus Chinese aliases)
+            if lowered in ('cancel', 'abort') or raw in ('取消', '取消操作'):
+                self.pending_confirmation = None
+                return 'Operation cancelled'
+            if (lowered in ('confirm', 'ok') or raw in ('确认', '确定')) and self.pending_confirmation:
+                cmd = self.pending_confirmation
+                self.pending_confirmation = None
+                return self._execute_confirmed(cmd)
+
+            # Any new command invalidates a stale confirmation gate: a later
+            # 'confirm' must never execute an operation the user moved on from
+            # (e.g. 'disable ECC' -> 'set ECC' -> 'confirm', I178-4).
             self.pending_confirmation = None
-            return 'Operation cancelled'
-        if text in ('confirm', 'ok') and self.pending_confirmation:
-            cmd = self.pending_confirmation
-            self.pending_confirmation = None
-            return self._execute_confirmed(cmd)
 
-        # Natural language routing
-        r = self._route_nl(text)
-        if r:
-            return r
+            # Direct npu-smi pass-through must win over NL keywords (B115-2)
+            if lowered.startswith('npu-smi'):
+                return self.client._run_npu_smi(raw[7:].strip())
 
-        # Direct npu-smi command
-        if text.startswith('npu-smi'):
-            return self.client._run_npu_smi(text[7:].strip())
+            # Chinese trigger words are normalized to English before routing (I178-3)
+            zh = self._normalize_zh(raw)
 
+            # Natural language routing
+            r = self._route_nl(zh)
+            if r:
+                return r
+
+            return self._help_json("Unknown command. Please enter NPU-related commands.")
+        except NpuCommandError as e:
+            return format_npu_error(e)
+        except Exception as e:
+            return ("[ERROR] NPU-UNEXPECTED\n"
+                    f"Message: {e}\n"
+                    "Suggestion: 请检查命令与环境后重试；本地模式需安装 npu-smi，"
+                    "SSH 模式需 --host/--user/--password")
+
+    def _help_json(self, message: str) -> str:
+        """Build the help JSON response"""
         return json.dumps({
             "status": "help",
-            "message": "Unknown command. Please enter NPU-related commands.",
+            "message": message,
             "supported_commands": self._get_help_list()
         }, ensure_ascii=False)
 
-    def _route_nl(self, text: str) -> Optional[str]:
-        """Natural language routing"""
+    def _match(self, text: str, keywords) -> bool:
+        """Case-insensitive keyword matching"""
+        lowered = text.lower()
+        return any(kw.lower() in lowered for kw in keywords)
 
-        # ===== Batch operations =====
-        if any(kw in text for kw in ('all NPU', 'all NPUs', 'all cards', 'each card')):
-            return self._handle_batch(text)
+    def _match_word(self, text: str, keywords) -> bool:
+        """Whole-word, case-insensitive keyword matching.
+
+        Like _match but each keyword must appear as a standalone word (bounded
+        by word boundaries), so a short trigger such as 'temp' never matches
+        inside a longer unrelated word such as 'template' (B852-1).
+        """
+        lowered = text.lower()
+        pattern = r'\b(?:' + '|'.join(re.escape(kw.lower()) for kw in keywords) + r')\b'
+        return re.search(pattern, lowered) is not None
+
+    def _normalize_zh(self, text: str) -> str:
+        """Translate Chinese trigger words into English keywords (I178-3).
+
+        Each alias becomes a space-padded English word so the space-separated
+        English keyword lists keep matching after translation, e.g.
+        ``查看NPU温度`` -> ``get NPU temperature``.
+        """
+        for zh, en in _ZH_ALIASES:
+            if zh in text:
+                text = text.replace(zh, f' {en} ')
+        return re.sub(r'\s{2,}', ' ', text).strip()
+
+    def _route_nl(self, text: str) -> Optional[str]:
+        """Natural language routing (case-insensitive, Chinese pre-normalized)"""
 
         # ===== FLOPS test =====
-        if any(kw in text for kw in ('compute', 'TFLOPS', 'FLOPS', 'tflops')):
+        # Matched before the batch branch: 'all NPU FLOPS' / 'all cards FLOPS' /
+        # 'all devices FLOPS' are multi-card FLOPS requests and must not be
+        # swallowed by the batch query (F-1).
+        if self._match(text, ('compute', 'TFLOPS', 'FLOPS', 'tflops')):
             return self._handle_flops(text)
 
+        # ===== Batch operations =====
+        if self._match(text, ('all NPU', 'all NPUs', 'all cards', 'each card')):
+            return self._handle_batch(text)
+
         # ===== Configuration commands (sensitive) =====
-        if any(kw in text for kw in ('set ECC', 'enable ECC', 'disable ECC', 'ECC enable', 'ECC disable')):
+        if self._match(text, ('set ECC', 'enable ECC', 'disable ECC', 'ECC enable', 'ECC disable')):
             return self._handle_set_ecc(text)
 
-        if any(kw in text for kw in ('fan mode', 'auto fan', 'manual fan')):
+        # Fan mode is matched before fan speed, otherwise 'set fan auto' falls
+        # into the speed branch and silently turns into 50% (I178-1).
+        if self._match(text, ('fan mode', 'auto fan', 'manual fan', 'fan auto',
+                              'fan manual', 'set fan auto', 'set fan manual')):
             return self._handle_set_fan_mode(text)
 
-        if any(kw in text for kw in ('fan speed', 'set fan')):
+        if self._match(text, ('fan speed',)) or (self._match(text, ('set fan',)) and re.search(r'\d', text)):
             return self._handle_set_fan_speed(text)
 
-        if any(kw in text for kw in ('clear ECC', 'reset ECC')):
+        if self._match(text, ('set fan',)):
+            return ("Please specify fan mode or speed: reply 'set fan auto', "
+                    "'set fan manual', or 'set fan speed <0-100>'")
+
+        if self._match(text, ('clear ECC', 'reset ECC')):
             return self._handle_clear_ecc(text)
 
         # ===== Firmware upgrade commands =====
-        if any(kw in text for kw in ('firmware version', 'query firmware')):
+        if self._match(text, ('firmware version', 'query firmware')):
             return self._handle_upgrade_query(text)
 
-        if any(kw in text for kw in ('upload firmware', 'upgrade firmware')):
+        if self._match(text, ('upload firmware', 'upgrade firmware')):
             return self._handle_upgrade_upload(text)
 
-        if any(kw in text for kw in ('upgrade status', 'upgrade check')):
+        if self._match(text, ('upgrade status', 'upgrade check')):
             return self._handle_upgrade_check(text)
 
-        if any(kw in text for kw in ('activate firmware',)):
+        if self._match(text, ('rollback firmware', 'rollback', 'roll back')):
+            return self._handle_upgrade_rollback(text)
+
+        if self._match(text, ('activate firmware', 'activate upgrade', 'firmware activate')):
             return self._handle_upgrade_activate(text)
 
+        # Generic fallback: a bare 'firmware' request (e.g. 查看NPU固件) is a
+        # version query. It stays after the specific branches above so
+        # 'upgrade firmware' / 'rollback firmware' keep their own handlers (F-2).
+        if self._match(text, ('firmware',)):
+            return self._handle_upgrade_query(text)
+
         # ===== Virtualization commands =====
-        if any(kw in text for kw in ('vNPU info', 'virtual NPU', 'vnpu info')):
+        if self._match(text, ('vNPU info', 'virtual NPU', 'vnpu info')):
             return self._handle_vnpu_info(text)
 
-        if any(kw in text for kw in ('vNPU mode', 'virtualization mode', 'AVI mode')):
+        if self._match(text, ('vNPU mode', 'virtualization mode', 'AVI mode', 'virtualization')):
             return self._handle_vnpu_mode(text)
 
-        if any(kw in text for kw in ('template info', 'vNPU template', 'template')):
-            return self._handle_template_info(text)
-
-        if any(kw in text for kw in ('create vNPU', 'new vNPU')):
+        # create/destroy are matched before the template branch: the input
+        # 'create vNPU NPU0 Chip0 template vir04' contains 'template' (B115-3).
+        if self._match(text, ('create vNPU', 'new vNPU')):
             return self._handle_create_vnpu(text)
 
-        if any(kw in text for kw in ('destroy vNPU', 'delete vNPU', 'destroy')):
+        if self._match(text, ('destroy vNPU', 'delete vNPU', 'destroy')):
             return self._handle_destroy_vnpu(text)
 
+        if self._match_word(text, ('template', 'templates')) or self._match(text, ('template info', 'vNPU template', 'template-info')):
+            return self._handle_template_info(text)
+
         # ===== Certificate commands =====
-        if any(kw in text for kw in ('certificate info', 'TLS cert', 'view cert')):
+        if self._match(text, ('certificate info', 'TLS cert', 'view cert')):
             return self._handle_cert_info(text)
 
-        if any(kw in text for kw in ('cert expiration', 'expiration threshold', 'cert threshold')):
+        if self._match(text, ('cert expiration', 'expiration threshold', 'cert threshold')):
             return self._handle_cert_period(text)
 
         # ===== Query commands =====
-        if any(kw in text for kw in ('NPU list', 'list NPU', 'NPU devices', 'NPU cards')):
+        if self._match(text, ('NPU list', 'list NPU', 'NPU devices', 'NPU cards')):
             return self._handle_list_devices()
 
-        if any(kw in text for kw in ('NPU info', 'NPU full', 'NPU details', 'npu-smi info', 'NPU overview')):
+        if self._match(text, ('NPU info', 'NPU full', 'NPU details', 'npu-smi info', 'NPU overview')):
             return self._format_output('NPU Full Information', self.client.get_full_info())
 
-        if any(kw in text for kw in ('NPU health', 'health check', 'NPU status', 'check NPU', 'health status')):
+        if self._match(text, ('NPU health', 'health check', 'NPU status', 'check NPU', 'health status')):
             return self._handle_health_check()
 
-        if any(kw in text for kw in ('chip mapping', 'chip list', 'NPU mapping')):
+        if self._match(text, ('chip mapping', 'chip list', 'NPU mapping')):
             chips = self.client.get_chip_mapping()
             return self._format_output('Chip Mapping', chips)
 
-        if any(kw in text for kw in ('temperature', 'NPU temp', 'temp')):
+        if self._match_word(text, ('temperature', 'temp')):
             return self._handle_temperature(text)
 
-        if any(kw in text for kw in ('power', 'NPU power')):
+        if self._match(text, ('power', 'NPU power')):
             return self._handle_power(text)
 
-        if any(kw in text for kw in ('HBM', 'hbm', 'NPU memory', 'NPU HBM')):
+        if self._match(text, ('HBM', 'hbm', 'memory', 'NPU memory', 'NPU HBM')):
             return self._handle_hbm(text)
 
-        if any(kw in text for kw in ('usage', 'NPU usage', 'utilization')):
+        if self._match(text, ('usage', 'NPU usage', 'utilization')):
             return self._handle_usage(text)
 
-        if any(kw in text for kw in ('ECC', 'ecc', 'ECC errors')):
+        if self._match(text, ('ECC', 'ecc', 'ECC errors')):
             return self._handle_ecc(text)
 
-        if any(kw in text for kw in ('NPU processes', 'process list', 'proc-mem')):
+        if self._match(text, ('NPU processes', 'process list', 'proc-mem')):
             return self._handle_processes(text)
 
-        if any(kw in text for kw in ('PCIe', 'pcie', 'PCIe errors')):
+        if self._match(text, ('PCIe', 'pcie', 'PCIe errors')):
             return self._handle_pcie(text)
 
-        if any(kw in text for kw in ('topology', 'NPU topology', 'topo')):
+        if self._match(text, ('topology', 'NPU topology', 'topo')):
             return self._handle_topology(text)
 
-        if any(kw in text for kw in ('product info', 'NPU product', 'product')):
+        if self._match(text, ('product info', 'NPU product', 'product')):
             return self._handle_product(text)
 
-        if any(kw in text for kw in ('board info', 'NPU board', 'board')):
+        if self._match(text, ('board info', 'NPU board', 'board')):
             return self._handle_board(text)
 
         return None
@@ -301,20 +425,32 @@ class NpuExecutor:
 
     def _handle_set_ecc(self, text: str) -> str:
         npu_id, chip_id = self._parse_ids(text)
-        enable = any(kw in text for kw in ('enable', 'on'))
-        action = "enable" if enable else "disable"
+        enable = self._match(text, ('enable', 'on'))
+        disable = self._match(text, ('disable', 'off'))
+        if enable == disable:
+            # No direction (or both) given: ask instead of silently disabling (I178-4)
+            return "Please specify direction: 'enable ECC' or 'disable ECC'"
         self.pending_confirmation = ('set_ecc', npu_id, chip_id, enable)
-        return f"⚠️ Sensitive operation: {action} ECC for NPU {npu_id} Chip {chip_id}\n\nPlease reply 'confirm' or 'cancel'"
+        return f"⚠️ Sensitive operation: {'enable' if enable else 'disable'} ECC for NPU {npu_id} Chip {chip_id}\n\nPlease reply 'confirm' or 'cancel'"
 
     def _handle_set_fan_mode(self, text: str) -> str:
-        auto = any(kw in text for kw in ('auto', 'automatic'))
+        auto = self._match(text, ('auto', 'automatic'))
         mode = "auto" if auto else "manual"
         self.pending_confirmation = ('set_fan_mode', auto)
         return f"⚠️ Sensitive operation: Set fan to {mode} mode\n\nPlease reply 'confirm' or 'cancel'"
 
     def _handle_set_fan_speed(self, text: str) -> str:
-        match = re.search(r'(\d+)%?', text)
-        percent = int(match.group(1)) if match else 50
+        match = re.search(r'(\d+)\s*%', text)
+        if match:
+            percent = int(match.group(1))
+        else:
+            # Drop device ids so 'NPU0 Chip0 set fan speed 80' still reads 80
+            stripped = re.sub(r'(?:NPU|npu|Chip|chip)\s*\d+', ' ', text)
+            numbers = re.findall(r'\d+', stripped)
+            if not numbers:
+                return ("Please specify fan speed (0-100): reply 'set fan speed 80' "
+                        "or use 'set fan auto' / 'set fan manual'")
+            percent = int(numbers[-1])
         self.pending_confirmation = ('set_fan_speed', percent)
         return f"⚠️ Sensitive operation: Set fan speed to {percent}%\n\nPlease reply 'confirm' or 'cancel'"
 
@@ -350,6 +486,13 @@ class NpuExecutor:
         npu_id = self._parse_ids(text)[0]
         self.pending_confirmation = ('upgrade_activate', component, npu_id)
         return f"⚠️ Sensitive operation: Activate {component} firmware on NPU {npu_id} (requires reboot)\n\nPlease reply 'confirm' or 'cancel'"
+
+    def _handle_upgrade_rollback(self, text: str) -> str:
+        npu_id = self._parse_ids(text)[0]
+        self.pending_confirmation = ('upgrade_rollback', npu_id)
+        return (f"⚠️ Sensitive operation: Rollback firmware on NPU {npu_id} "
+                "(rollback may not be supported on all devices)\n\n"
+                "Please reply 'confirm' or 'cancel'")
 
     # ===== Virtualization handling =====
 
@@ -423,6 +566,10 @@ class NpuExecutor:
                 _, component, npu_id = cmd
                 result = self.client.upgrade_activate(component, npu_id)
                 return f"✅ {component} firmware activated (requires reboot)\n{result}"
+            elif op == 'upgrade_rollback':
+                _, npu_id = cmd
+                result = self.client.rollback_firmware(npu_id)
+                return f"✅ Firmware rollback initiated\n{result}"
             elif op == 'create_vnpu':
                 _, npu_id, chip_id, template = cmd
                 result = self.client.create_vnpu(npu_id, chip_id, template)
@@ -433,6 +580,8 @@ class NpuExecutor:
                 return f"✅ vNPU {vnpu_id} destroyed\n{result}"
             else:
                 return "❌ Unknown operation"
+        except NpuCommandError as e:
+            return format_npu_error(e)
         except Exception as e:
             return f"❌ Execution failed: {e}"
 
@@ -448,15 +597,15 @@ class NpuExecutor:
         if not devices:
             return "No NPU devices found"
 
-        if any(kw in text for kw in ('temperature', 'temp')):
+        if self._match_word(text, ('temperature', 'temp')):
             return self._format_batch(devices, 'temperature', '°C', '🌡️ All NPU Temperature')
-        elif any(kw in text for kw in ('power', 'power consumption')):
+        elif self._match(text, ('power', 'power consumption')):
             return self._format_batch(devices, 'power', 'W', '⚡ All NPU Power')
-        elif any(kw in text for kw in ('HBM', 'hbm', 'memory')):
+        elif self._match(text, ('HBM', 'hbm', 'memory')):
             return self._format_batch_hbm(devices)
-        elif any(kw in text for kw in ('usage', 'utilization')):
+        elif self._match(text, ('usage', 'utilization')):
             return self._format_batch(devices, 'ai_core_usage', '%', '📊 All NPU Usage')
-        elif any(kw in text for kw in ('health', 'status')):
+        elif self._match(text, ('health', 'status')):
             return self._format_batch_health(devices)
         else:
             return self._format_batch_overview(devices)
@@ -535,9 +684,10 @@ class NpuExecutor:
                 precision = p
                 break
 
-        multi_card = any(kw in text for kw in ('all NPU', 'all NPUs', 'all cards', 'multi-card', '8 cards'))
+        multi_card = self._match(text, ('all NPU', 'all NPUs', 'all cards', 'all devices',
+                                        'all device', 'multi-card', '8 cards'))
 
-        npu_match = re.search(r'(?:NPU|npu)\s*(\d+)', text)
+        npu_match = re.search(r'(?<![A-Za-z])(?:NPU|npu)\s*(\d+)', text)
         npu_id = int(npu_match.group(1)) if npu_match else None
 
         if not multi_card and npu_id is None:
@@ -551,14 +701,22 @@ class NpuExecutor:
     def _test_single_flops(self, npu_id: int, precision: str) -> str:
         """Single card FLOPS test"""
         import subprocess
-        import sys
 
         cmd = f"ascend-dmi -f -d {npu_id} -t {precision} -q"
 
         if self.client.ssh_host:
             output = self.client._execute(cmd)
         else:
-            result = subprocess.run(shlex.split(cmd), shell=False, capture_output=True, text=True, timeout=120)
+            try:
+                result = subprocess.run(shlex.split(cmd), shell=False, capture_output=True, text=True, timeout=120)
+            except FileNotFoundError:
+                return ("❌ ascend-dmi not found: install CANN/ascend-dmi on the target host, "
+                        "or run with --host for SSH remote mode (B115-5)")
+            except subprocess.TimeoutExpired:
+                return "❌ FLOPS test timed out (120s)"
+            if result.returncode != 0:
+                summary = (result.stderr or result.stdout or "").strip()[:200]
+                return f"❌ ascend-dmi failed (exit {result.returncode}): {summary}"
             output = result.stdout
 
         return self._parse_flops_output(output, npu_id, precision)
@@ -591,7 +749,6 @@ class NpuExecutor:
     def _test_multi_flops_async(self, precision: str) -> str:
         """Multi-card FLOPS test (async concurrent)"""
         import subprocess
-        import sys
         import threading
 
         try:
@@ -609,7 +766,18 @@ class NpuExecutor:
                 if self.client.ssh_host:
                     output = self.client._execute(cmd)
                 else:
-                    result = subprocess.run(shlex.split(cmd), shell=False, capture_output=True, text=True, timeout=120)
+                    try:
+                        result = subprocess.run(shlex.split(cmd), shell=False, capture_output=True, text=True, timeout=120)
+                    except FileNotFoundError:
+                        results[npu_id] = {'error': 'ascend-dmi not found: install CANN/ascend-dmi or use --host'}
+                        return
+                    except subprocess.TimeoutExpired:
+                        results[npu_id] = {'error': 'FLOPS test timed out (120s)'}
+                        return
+                    if result.returncode != 0:
+                        summary = (result.stderr or result.stdout or "").strip()[:200]
+                        results[npu_id] = {'error': f'ascend-dmi failed (exit {result.returncode}): {summary}'}
+                        return
                     output = result.stdout
 
                 for line in output.split('\n'):
@@ -654,7 +822,22 @@ class NpuExecutor:
         if success_count > 0:
             lines.append(f"Total: {total_tflops:.2f} TFLOPS@{precision.upper()}, Power: {total_power:.1f}W")
         else:
-            lines.append("❌ All tests failed")
+            errors = []
+            for i in range(npu_count):
+                err = results.get(i, {}).get('error')
+                if err and err not in errors:
+                    errors.append(err)
+            if npu_count == 0:
+                lines.append("❌ No NPU devices found to test")
+            elif len(errors) == 1:
+                # Every card failed for the same reason (e.g. ascend-dmi is not
+                # installed): report that reason instead of a bare "All tests
+                # failed" (F-1, same wording as the single-card path B115-5).
+                lines.append(f"❌ {errors[0]}")
+            else:
+                lines.append("❌ All tests failed")
+                for err in errors[:3]:
+                    lines.append(f"  ❌ {err}")
 
         return "\n".join(lines)
 
@@ -662,7 +845,9 @@ class NpuExecutor:
 
     def _parse_ids(self, text: str) -> tuple:
         """Parse NPU ID and Chip ID from text"""
-        npu_match = re.search(r'(?:NPU|npu)\s*(\d+)', text)
+        # The lookbehind keeps 'vNPU 3' from being read as NPU 3: 'destroy vNPU 3'
+        # targets NPU 0 and vNPU 3, not NPU 3.
+        npu_match = re.search(r'(?<![A-Za-z])(?:NPU|npu)\s*(\d+)', text)
         chip_match = re.search(r'(?:Chip|chip)\s*(\d+)', text)
         npu_id = int(npu_match.group(1)) if npu_match else 0
         chip_id = int(chip_match.group(1)) if chip_match else 0
@@ -697,7 +882,7 @@ class NpuExecutor:
         return [
             "📦 Query: NPU list | NPU info | NPU health | temperature | power | HBM | usage | ECC | NPU processes | PCIe errors | topology | product info | board info",
             "⚙️ Configuration: set ECC | fan mode | fan speed | clear ECC",
-            "🔄 Firmware: firmware version | upgrade firmware | upgrade status | activate firmware",
+            "🔄 Firmware: firmware version | upgrade firmware | upgrade status | rollback firmware | activate firmware",
             "🔲 Virtualization: vNPU info | vNPU mode | template info | create vNPU | destroy vNPU",
             "🔐 Certificate: certificate info | cert expiration",
             "💡 Specify device: add 'NPU0 Chip0' after command",

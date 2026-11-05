@@ -18,34 +18,72 @@ import argparse
 # Ensure module import from same directory
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from executor import NpuExecutor
+from executor import NpuExecutor, NpuCommandError, format_npu_error
+
+
+def _force_utf8_stdio():
+    """Keep emoji/Chinese output from raising UnicodeEncodeError (I88-4).
+
+    On Windows the console or pipe codec is often GBK, where the emoji used by
+    this skill would abort the command with a traceback instead of printing.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding='utf-8', errors='replace')
+        except (AttributeError, ValueError, OSError):
+            pass
+
+
+def _unexpected_error(err: Exception) -> str:
+    """Three-line error contract for unexpected failures (I88-4, no traceback)."""
+    return ("[ERROR] NPU-UNEXPECTED\n"
+            f"Message: {err}\n"
+            "Suggestion: 请检查命令与环境后重试；本地模式需安装 npu-smi，"
+            "SSH 模式需 --host/--user/--password")
 
 
 def run_one_shot(command: str, host: str = None, user: str = None,
                  password: str = None, port: int = 22):
-    """One-shot mode: execute single command and exit"""
-    executor = NpuExecutor(
-        ssh_host=host, ssh_user=user,
-        ssh_password=password, ssh_port=port
-    )
-    result = executor.handle_command(command)
+    """One-shot mode: execute single command and exit (never dumps a traceback)"""
+    _force_utf8_stdio()
+    try:
+        executor = NpuExecutor(
+            ssh_host=host, ssh_user=user,
+            ssh_password=password, ssh_port=port
+        )
+        result = executor.handle_command(command)
+    except NpuCommandError as e:
+        print(format_npu_error(e))
+        sys.exit(1)
+    except Exception as e:
+        print(_unexpected_error(e))
+        sys.exit(1)
     print(result)
 
 
 def run_npu_smi_direct(args: str, host: str = None, user: str = None,
                        password: str = None, port: int = 22):
-    """Execute npu-smi command directly"""
-    executor = NpuExecutor(
-        ssh_host=host, ssh_user=user,
-        ssh_password=password, ssh_port=port
-    )
-    result = executor.client._run_npu_smi(args)
+    """Execute npu-smi command directly (never dumps a traceback)"""
+    _force_utf8_stdio()
+    try:
+        executor = NpuExecutor(
+            ssh_host=host, ssh_user=user,
+            ssh_password=password, ssh_port=port
+        )
+        result = executor.client._run_npu_smi(args)
+    except NpuCommandError as e:
+        print(format_npu_error(e))
+        sys.exit(1)
+    except Exception as e:
+        print(_unexpected_error(e))
+        sys.exit(1)
     print(result)
 
 
 def run_interactive(host: str = None, user: str = None,
                     password: str = None, port: int = 22):
     """Interactive mode"""
+    _force_utf8_stdio()
     executor = NpuExecutor(
         ssh_host=host, ssh_user=user,
         ssh_password=password, ssh_port=port
@@ -60,7 +98,7 @@ def run_interactive(host: str = None, user: str = None,
     print("📦 Query: NPU list | NPU info | NPU health | temperature | power | HBM | usage")
     print("🔍 Advanced: ECC | NPU processes | PCIe errors | topology | product info | board info")
     print("⚙️ Configuration: set ECC | fan mode | fan speed | clear ECC")
-    print("🔄 Firmware: firmware version | upgrade firmware | upgrade status | activate firmware")
+    print("🔄 Firmware: firmware version | upgrade firmware | upgrade status | rollback firmware | activate firmware")
     print("🔲 Virtualization: vNPU info | vNPU mode | template info | create vNPU | destroy vNPU")
     print("🔐 Certificate: certificate info | cert expiration")
     print("💡 Specify device: append NPU0 Chip0 to command")
