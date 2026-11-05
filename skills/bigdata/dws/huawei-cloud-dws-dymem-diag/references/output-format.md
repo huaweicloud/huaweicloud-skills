@@ -140,13 +140,6 @@
 
 **Multi-root-cause Handling**: When diagnosis results contain multiple independent root causes, each root cause occupies one item in the diagnosis_summary, with independent conclusion-item divs.
 
-**addition.advice Fill Rules**:
-- **Customer-side causes** (single SQL / multi-user concurrent / data skew): Suggest analyzing business SQL execution plans; if single SQL memory proportion too high, consider aborting the business SQL or executing during off-peak hours
-- **System-side causes** (system SQL / memory leak / configuration unreasonable): Suggest contacting Huawei technical support
-- **Mixed causes**: Include both types of suggestions above
-- Do not provide overly detailed operation steps (e.g., specific kill commands, parameter modification values), do not provide dangerous operation suggestions
-- advice content should be concise, 1-2 sentences
-
 ## Problem Node Memory Overview Table Fill Rules
 
 - Only list nodes with memory exceeding threshold (i.e., diagnosed problematic nodes), do not list normal nodes
