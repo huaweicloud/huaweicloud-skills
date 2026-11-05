@@ -129,7 +129,7 @@ cloudrobo r2c client --bundle <encrypted_bundle.zip> --robot-config config/robot
 | TC-07: encrypted key prompt | `r2c client --bundle <encrypted.zip> --duration 1` | Password prompt |
 | TC-08: no-prompt-password | `r2c client --bundle <encrypted.zip> --duration 1 --no-prompt-password` | Error, exit 1 |
 | TC-09: env var password | `r2c client --bundle <encrypted.zip> --private-key-password-env VAR --duration 1` | Connects without prompt |
-| TC-10: missing bundle | `r2c client --robot-config <config> --duration 1` (no bundle, no project-id) | Error "project_id is required" |
+| TC-10: missing bundle | `r2c client --robot-config <config> --duration 1` (no bundle, no project-id/device-id, no client-config) | Hangs: `--client-config` falls back to SDK built-in `config/client_config.yaml` (endpoints `tcp/127.0.0.1:7447`), connection silently fails then retries indefinitely in background; `--duration` is not honored. Provide `--bundle`, `--client-config`, or explicit `--project-id`/`--device-id`/reachable `--endpoints` |
 | TC-11: custom hardware class | `r2c client --bundle <zip> --hardware-class <pkg.adapter> --duration 10` | Custom adapter loaded, client starts |
 
 > These cases match `templates/test-vars.json`, which contains the authoritative machine-readable

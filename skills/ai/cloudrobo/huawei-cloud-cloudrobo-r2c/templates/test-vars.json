@@ -76,8 +76,8 @@
       "id": "TC-10",
       "name": "client-missing-bundle",
       "command": "cloudrobo r2c client --robot-config {robot_config} --duration 1",
-      "description": "Missing bundle and project-id should fail",
-      "expected": "Error: project_id is required when --bundle is not provided",
+      "description": "Missing bundle, project-id/device-id and client-config should not start cleanly",
+      "expected": "No clean error: --client-config falls back to SDK built-in config/client_config.yaml (endpoints tcp/127.0.0.1:7447), connection silently fails and retries indefinitely in background (--duration not honored). Provide --bundle, --client-config, or explicit --project-id/--device-id/reachable --endpoints",
       "type": "read"
     },
     {

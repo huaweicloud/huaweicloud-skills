@@ -269,8 +269,8 @@ See `references/custom-adapter-guide.md` for details.
 |-----------|--------|----------|---------------------|
 | `--bundle` | User (from robot skill export-certificate) | Yes (recommended) | Verify file exists and is readable |
 | `--robot-config` | User | Yes | Ensure YAML is valid before starting |
-| `--client-config` | User | No (fallback to bundle) | — |
-| `--project-id` / `--device-id` | User | Yes (if no bundle) | Verify against platform registration |
+| `--client-config` | User | No (fallback to bundle) | If omitted and no bundle, falls back to SDK built-in `config/client_config.yaml` (endpoints `tcp/127.0.0.1:7447`); provide one, a bundle, or explicit parameters |
+| `--project-id` / `--device-id` | User | Yes (if no bundle) | Required to connect via client-config instead of a bundle |
 | `--endpoints` | User or bundle | No (from bundle) | Verify Zenoh router is reachable |
 | `--hardware-class` | User | No | Verify class implements IRobotHardwareAdapter |
 | `--duration` | User | No | 0 = run forever; set a value for timed tests |
@@ -295,7 +295,7 @@ Confirm the credential bundle, robot config, and endpoint reachability before la
 
 | Scenario | Handling |
 |----------|----------|
-| Missing credential bundle | Client fails with error; use `cloudrobo robot export-certificate` to produce one |
+| Missing credential bundle | With no bundle and no client-config, client silently falls back to SDK built-in `config/client_config.yaml` (endpoints `tcp/127.0.0.1:7447`); the connection fails and retries indefinitely in background (`--duration` is not honored). Provide `--bundle`, a `--client-config`, or explicit `--project-id`/`--device-id`/reachable `--endpoints` |
 | Encrypted private key | Prompt for password (default), or use `--private-key-password` / `--private-key-password-env`; `--no-prompt-password` fails if password required |
 | Invalid robot config | Client startup fails with `ValidationError` details listing all schema errors |
 | Unknown hardware adapter type | Use `custom` type with `--hardware-class` for unlisted robots; see built-in adapters list above |

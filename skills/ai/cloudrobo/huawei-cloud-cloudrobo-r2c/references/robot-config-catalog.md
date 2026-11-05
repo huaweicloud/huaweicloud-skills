@@ -3,8 +3,9 @@
 ## Robot Config YAML (schema_version v2.1)
 
 The robot config YAML defines the hardware adapter, translator, device-to-R2C field mappings,
-and runtime behavior. It is validated by `cloudrobo r2c validate-config` against the
-`RobotConfig` pydantic schema.
+and runtime behavior. It is validated automatically at `r2c client` startup against the
+`RobotConfig` pydantic schema (an invalid config prints "Invalid robot config in <path>:"
+followed by all schema errors and exits 1).
 
 ```yaml
 schema_version: "v2.1"
@@ -139,7 +140,7 @@ r2c_to_device:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | string | Yes | Adapter type name (from `r2c list-adapters`) or `"custom"` |
+| `type` | string | Yes | Adapter type name (from SKILL.md → Built-in Hardware Adapters) or `"custom"` |
 | `class_path` | string | No (required for `custom`) | Dotted import path for custom adapter class |
 | `config` | dict | No | Adapter-specific configuration (joint names, image specs, etc.) |
 
