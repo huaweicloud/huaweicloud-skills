@@ -35,6 +35,10 @@ Usage: python scripts/sfs/list_perm_rules.py -h
 Purpose: List file system types.
 Usage: python scripts/sfs/list_share_types.py -h
 
+> **Note:** Duplicate entries returned by the API (e.g. `standard`/`performance`
+> appearing multiple times) are deduplicated by `share_type`. Pass `--format json`
+> for machine-readable JSON output.
+
 ---
 
 ### list_shared_tags.py — List Tags Supported by SFS Turbo File Systems

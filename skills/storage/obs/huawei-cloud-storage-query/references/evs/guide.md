@@ -49,6 +49,9 @@ Usage: python scripts/evs/list_snapshots.py -h
 Purpose: List EVS API version information.
 Usage: python scripts/evs/list_versions.py -h
 
+> **Note:** The output includes the raw version ID (e.g. `v3.0`) and a normalized
+> usable version (e.g. `v3`). Pass the normalized version as-is to `show_version.py`.
+
 ---
 
 ### list_volume_tags.py — List Tags for All Volumes
@@ -70,6 +73,10 @@ Usage: python scripts/evs/list_volumes.py -h
 Purpose: List volumes in the recycle bin.
 Usage: python scripts/evs/list_volumes_in_recycle.py -h
 
+> **Note:** The recycle bin feature may return `403 "Can not use the recycle bin"`.
+> This is an account feature restriction, not a script defect. Enable the
+> **recycle bin** in the EVS console first (帐号管理 → 回收站), then re-run the script.
+
 ---
 
 ### show_recycle_policy.py — Show Recycle Bin Policy
@@ -89,7 +96,10 @@ Usage: python scripts/evs/show_snapshot.py -h
 ### show_version.py — Show Specified EVS API Version Information
 
 Purpose: Show specified EVS API version information.
-Usage: python scripts/evs/show_version.py -h
+Usage: python scripts/evs/show_version.py -h --version v3
+
+> **Note:** `--version` accepts both `v3` and `v3.0` formats; trailing `.0` is
+> normalized automatically, so the output of `list_versions.py` can be used directly.
 
 ---
 
@@ -104,6 +114,9 @@ Usage: python scripts/evs/show_volume.py -h
 
 Purpose: Show volume details in the recycle bin.
 Usage: python scripts/evs/show_volume_in_recycle.py -h
+
+> **Note:** Same as `list_volumes_in_recycle.py`, a `403` here means the recycle bin
+> feature is not enabled on the account. Enable it in the EVS console before use.
 
 ---
 

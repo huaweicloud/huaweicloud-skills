@@ -1,6 +1,8 @@
 import argparse
+import json
 import sys
 import os
+import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
@@ -13,10 +15,13 @@ from huaweicloudsdkcbr.v1.region.cbr_region import CbrRegion
 AK, SK, Region, SecurityToken = load_credentials()
 Offset = 0
 
+# protectable_type 白名单：无效类型在发送请求前直接拦截，返回参数错误而非服务端 500
+VALID_PROTECTABLE_TYPES = ("server", "disk", "turbo", "workspace", "workspace_v2")
+
 parser = argparse.ArgumentParser(description="查询 CBR 可保护资源列表")
 parser.add_argument("--project_id", type=str, required=True, help="项目 ID")
 parser.add_argument("--region", type=str, help="区域，默认 cn-north-4")
-parser.add_argument("--protectable_type", type=str, required=True, help="可保护资源类型，取值: server(云服务器类型), disk(云硬盘类型), turbo(turbo类型), workspace(workspace类型),workspace_v2(workspace_v2类型)")
+parser.add_argument("--protectable_type", type=str, required=True, help=f"可保护资源类型，取值: {', '.join(VALID_PROTECTABLE_TYPES)}")
 parser.add_argument("--limit", type=int, default=1000, help="返回结果个数限制，默认1000")
 parser.add_argument("--marker", type=str, help="分页标记")
 parser.add_argument("--name", type=str, help="资源名称")
@@ -24,10 +29,17 @@ parser.add_argument("--offset", type=int, help="本地渲染分页偏移量，�
 parser.add_argument("--status", type=str, help="状态")
 parser.add_argument("--id", type=str, help="根据资源id过滤")
 parser.add_argument("--server_id", type=str, help="云服务器ID")
+parser.add_argument("--retries", type=int, default=3, help="服务端 500 时自动重试次数，默认 3")
+parser.add_argument("--format", type=str, choices=["text", "json"], default="text", help="输出格式，默认 text")
 args = parser.parse_args()
 
 if args.region is not None:
     Region = args.region
+
+# 参数预校验：无效 protectable_type 立即报错（400 级参数错误），不进入 API 调用
+if args.protectable_type not in VALID_PROTECTABLE_TYPES:
+    print(f"参数错误: 无效的 protectable_type '{args.protectable_type}'，合法取值: {', '.join(VALID_PROTECTABLE_TYPES)}")
+    exit(2)
 
 if args.offset is not None:
     Offset = args.offset
@@ -40,6 +52,20 @@ def render(instances):
     total = len(instances)
     if Offset >= total:
         print(f"查询结果为空\n\n可保护资源列表共 {total} 个, 序号从 0 开始, offset必须 < {total}")
+        exit(0)
+
+    if args.format == "json":
+        items = []
+        for i in range(Offset, min(total, Offset + 50)):
+            inst = instances[i]
+            items.append({
+                "id": getattr(inst, 'id', ''),
+                "name": getattr(inst, 'name', ''),
+                "type": getattr(inst, 'type', ''),
+                "size": getattr(inst, 'size', ''),
+                "status": getattr(inst, 'status', '')
+            })
+        print(json.dumps({"total": total, "offset": Offset, "items": items}, ensure_ascii=False))
         exit(0)
 
     output = f"id\tname\ttype\tsize(GB)\tstatus\n"
@@ -82,7 +108,22 @@ try:
     if args.server_id:
         request.server_id = args.server_id
 
-    response = client.list_protectable(request)
+    # 服务端 500(The system is busy) 时自动重试
+    response = None
+    last_error = None
+    for attempt in range(max(1, args.retries + 1)):
+        try:
+            response = client.list_protectable(request)
+            last_error = None
+            break
+        except Exception as retry_e:
+            last_error = retry_e
+            if attempt < args.retries:
+                time.sleep(2 * (attempt + 1))
+
+    if last_error is not None:
+        raise last_error
+
     instances = getattr(response, 'instances', []) or []
 
     if not instances:
