@@ -356,13 +356,19 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
 def main() -> int:
     """Run the metadata lookup and print JSON output."""
     args = parse_args()
+    built = build_result(args)
+    success = bool(built.get("meta_repo_exists"))
+    if success and args.service:
+        success = bool(built.get("service_found"))
+    if success and args.operation:
+        success = bool(built.get("operation_found_in_cache_index"))
     result = {
-        "success": True,
+        "success": success,
         "mode": "metadata_lookup",
-        **build_result(args),
+        **built,
     }
     hcloud_common.emit_json(result, pretty=args.pretty)
-    return 0
+    return 0 if success else 1
 
 
 if __name__ == "__main__":

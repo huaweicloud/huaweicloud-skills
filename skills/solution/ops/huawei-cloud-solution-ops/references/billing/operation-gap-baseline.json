@@ -3,10 +3,11 @@
   "description": "Portable normalized BSS operation baseline for local gap analysis.",
   "upstream": {
     "repository": "https://github.com/huaweicloud/huaweicloud-skills",
+    "note": "Bundled normalized snapshot maintained locally by this skill. Refreshing it is optional and requires explicit external BSS reference inputs; the default audit never reads other skills.",
     "source_files": [
-      "skills/bss/billing/huawei-cloud-billing-scout/references/related-commands.md",
-      "skills/bss/billing/huawei-cloud-business-tf-support/references/bss/guide.md",
-      "skills/bss/billing/huawei-cloud-business-tf-support/scripts/bss"
+      "official-bss-cli-reference.md",
+      "official-bss-business-guide.md",
+      "official-bss-script-dir"
     ]
   },
   "official_operations": [

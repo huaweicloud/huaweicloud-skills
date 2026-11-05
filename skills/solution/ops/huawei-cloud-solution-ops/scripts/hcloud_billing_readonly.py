@@ -12,7 +12,7 @@ from urllib.parse import urlencode
 
 import hcloud_common
 
-DEFAULT_ENDPOINT_BASE = "https://bss-intl.myhuaweicloud.com"
+DEFAULT_ENDPOINT_BASE = "https://bss.myhuaweicloud.com"
 BILL_CYCLE_RE = re.compile(r"^\d{4}-\d{2}$")
 SEMANTIC_CATALOG_PATH = hcloud_common.REFERENCES_DIR / "billing" / "semantic-catalog.json"
 BSS_CLI_REGION = "cn-north-1"
@@ -1430,6 +1430,14 @@ def build_request_spec(args: argparse.Namespace) -> dict[str, Any]:
         "BSS hcloud templates must use --cli-region=cn-north-1. Add --X-Language only when operation_capabilities.x_language_header is true; --cli-lang is profile-only and is never an operation argument.",
         "Do not claim full-account totals from one page unless pagination has been completed and checked.",
     ]
+    endpoint_matches_region = args.endpoint_base.rstrip("/") in (
+        "https://bss.myhuaweicloud.com",
+        "https://bss-intl.myhuaweicloud.com",
+    )
+    if not endpoint_matches_region:
+        warnings.append(
+            "Custom --endpoint-base does not match the tested China/International BSS defaults; confirm the endpoint site is consistent with the cli-region (cn-north-1 China vs International)."
+        )
     if semantic_route and semantic_route.get("found") and operation not in semantic_route.get("supported_planner_operations", []):
         warnings.append(
             "The selected operation is not the first-fit planner operation for the semantic entry point; review semantic_route.supported_planner_operations."
@@ -1445,6 +1453,12 @@ def build_request_spec(args: argparse.Namespace) -> dict[str, Any]:
         "billing_semantic_discipline": billing_semantic_discipline(metadata, semantic_route, query, body),
         "bss_cli_defaults": defaults,
         "request_spec": request_spec,
+        "endpoint_region_alignment": {
+            "endpoint_base": args.endpoint_base.rstrip("/"),
+            "cli_region": defaults.get("cli_region", BSS_CLI_REGION),
+            "default_site": "china" if args.endpoint_base.rstrip("/") == "https://bss.myhuaweicloud.com" else "international" if args.endpoint_base.rstrip("/") == "https://bss-intl.myhuaweicloud.com" else "custom",
+            "note": "Default endpoint targets the China (cn-north-1) BSS service. International accounts must pass --endpoint-base https://bss-intl.myhuaweicloud.com explicitly.",
+        },
         "hcloud_command_plan": command_plan,
         "pagination_scope": pagination_scope(query, body),
         "validation": {

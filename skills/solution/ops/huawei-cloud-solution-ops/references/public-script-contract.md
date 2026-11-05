@@ -83,11 +83,23 @@ artifact 扩展，而不是记忆每个脚本的私有结果协议。
 
 ## 退出语义
 
+统一退出码约定：`0` 表示成功，非 `0` 表示失败。所有公共脚本的 `main()` 都根据最终结果的
+`success` 字段返回退出码，禁止无条件 `return 0`：
+
 - `success=true` 返回退出码 `0`；
 - `success=false` 返回非零；
+- `success` 必须反映实际结果：如元数据查找按 `meta_repo_exists`/`service_found`/
+  `operation_found_in_cache_index` 计算，run journal 按追加/汇总是否成功计算，change plan 按
+  `build_plan` 的校验结果计算，Terraform router 路由失败不再回落为 `0`，食谱/目录构建遇到 IO 或
+  解析异常返回失败。
 - 非零退出不表示没有结果文件，调用方仍应检查 stdout 回执或已知 `--output-file`；
 - provider/API 的业务错误不能仅凭子进程退出码判断，脚本需要解析其结构化返回；
 - `partially_succeeded`、`outcome_unknown` 由具体脚本在确有证据时声明，公共 emitter 原样保留。
+
+已按统一退出约定落地的脚本：`hcloud_meta_lookup.py`、`hcloud_run_journal.py`、
+`hcloud_change_plan.py`、`hcloud_terraform_router.py`、`hcloud_context_inspect.py`、
+`hcloud_billing_cost_probe.py`、`hcloud_cce_assessment_plan.py`、`hcloud_cci_workload_plan.py`、
+`hcloud_terraform_catalog.py`、`build_hcloud_catalog.py`。
 
 ## 已迁移入口
 

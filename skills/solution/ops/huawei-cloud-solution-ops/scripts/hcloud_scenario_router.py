@@ -122,6 +122,14 @@ COMMERCE_AMBIGUITY_TERMS = (
     "商城",
 )
 
+EXTERNAL_CLOUD_WORDS = {"aws", "azure", "ec2", "kubectl", "gcp"}
+EXTERNAL_CLOUD_BOUNDARY = (
+    "This router only serves Huawei Cloud goals. The detected term {hits} belongs to a non-Huawei "
+    "cloud (AWS/Azure/GCP) or a generic Kubernetes control surface; no Huawei Cloud scenario, planner, "
+    "or acceptance closure is synthesized for it. Confirm the actual cloud provider before continuing "
+    "and do not route this intent to Huawei Cloud playbooks."
+)
+
 
 def normalize_token(value: str) -> str:
     """Return a lowercase alphanumeric/CJK-friendly token."""
@@ -363,6 +371,26 @@ def score_scenario(
 
 def route(query: str, category: str | None = None, service: str | None = None, limit: int = 5, router_path: Path = ROUTER_PATH) -> dict[str, Any]:
     """Route a user goal to local scenario entries."""
+    query_lower = query.lower()
+    query_token = normalize_token(query)
+    external_hits = sorted(
+        term
+        for term in EXTERNAL_CLOUD_WORDS
+        if term in query_lower or normalize_token(term) in query_token
+    )
+    if external_hits:
+        return {
+            "success": False,
+            "external_cloud_request": True,
+            "query": query,
+            "category": category,
+            "service": service,
+            "match_count": 0,
+            "matches": [],
+            "external_cloud_hits": external_hits,
+            "routing_boundary": EXTERNAL_CLOUD_BOUNDARY.format(hits=", ".join(external_hits)),
+        }
+
     router = load_router(router_path)
     service_aliases = load_service_aliases()
     scenario_contracts = load_scenario_contracts()

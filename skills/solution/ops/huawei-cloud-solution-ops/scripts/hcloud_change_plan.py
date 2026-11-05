@@ -484,7 +484,7 @@ def main() -> int:
     args = parse_args()
     result = build_plan(args)
     hcloud_common.emit_json(result, pretty=args.pretty)
-    return 0
+    return 0 if result["success"] else 1
 
 
 if __name__ == "__main__":

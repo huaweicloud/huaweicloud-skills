@@ -28,8 +28,8 @@
 set -euxo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
-mkdir -p /var/lib/huawei-cloud-solution-ops
-exec > >(tee -a /var/log/huawei-cloud-solution-ops-init.log) 2>&1
+mkdir -p /var/lib/huawei-cloud-solution-ops /var/log/huawei-cloud-solution-ops
+exec > >(tee -a /var/log/huawei-cloud-solution-ops/init.log) 2>&1
 
 apt_get_update() {
   for i in 1 2 3; do
@@ -49,7 +49,7 @@ HTML
 systemctl enable nginx
 systemctl restart nginx
 
-curl -fsS --max-time 10 http://127.0.0.1/ >/tmp/huawei-cloud-solution-ops-http-check.txt
+curl -fsS --max-time 10 http://127.0.0.1/ >/var/lib/huawei-cloud-solution-ops/http-check.txt
 
 cat >/var/lib/huawei-cloud-solution-ops/readiness.json <<'JSON'
 {"service":"nginx","status":"ready","port":80}

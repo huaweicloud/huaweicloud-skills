@@ -57,6 +57,7 @@ python3 scripts/hcloud_environment_doctor.py --need maas --pretty
 - Do not use non-Huawei model endpoints as fallback for this skill.
 - Do not treat `task_id` from video creation as a generated video.
 - Do not claim live MaaS availability from the local catalog alone.
+- A local `maas_models.py` result with `count:0` (for example `--capability chat`) means the curated local catalog has no such entry, not that MaaS offers no such model. Reply with the boundary and route to a live query (`MAAS_API_KEY` + `maas_models.py --capability <X> --online --execute`) or the MaaS console; a missing-API-key error is the configuration boundary, not evidence of model absence.
 
 ## Acceptance Evidence
 

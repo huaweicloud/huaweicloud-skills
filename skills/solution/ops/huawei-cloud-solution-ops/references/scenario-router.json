@@ -1,6 +1,8 @@
 {
   "schema_version": 1,
   "description": "Optional natural-language scenario router for broad or ambiguous Huawei Cloud goals. Routes to local registry, playbooks, hcloud, SDK, and Terraform candidates without external skill dependencies.",
+  "external_cloud_keywords": ["aws", "azure", "ec2", "kubectl", "gcp"],
+  "external_cloud_handling": "Queries containing an external cloud or generic Kubernetes control-surface keyword are rejected with external_cloud_request=true, empty matches, and a boundary message instead of being routed to a Huawei Cloud scenario.",
   "scenarios": [
     {
       "id": "maas-model-api-calls",

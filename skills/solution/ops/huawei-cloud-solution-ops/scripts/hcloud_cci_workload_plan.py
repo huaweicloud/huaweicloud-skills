@@ -404,8 +404,9 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     """Emit the non-executing CCI workload readiness plan."""
     args = parse_args()
-    hcloud_common.emit_json(build_plan(args), pretty=args.pretty)
-    return 0
+    result = build_plan(args)
+    hcloud_common.emit_json(result, pretty=args.pretty)
+    return 0 if result["success"] else 1
 
 
 if __name__ == "__main__":

@@ -660,15 +660,23 @@ python3 scripts/hcloud_billing_live_read.py \
   --pretty
 ```
 
-Use this to turn a reviewed Billing/BSS request plan into a guarded live read workflow. By default it only returns the plan and the reviewed `hcloud_safe_exec.py` command. To execute, the user must explicitly confirm the sensitive read:
+Use this to turn a reviewed Billing/BSS request plan into a guarded live read workflow. By default it only returns the plan, a one-time confirmation token, and the reviewed `hcloud_safe_exec.py` command. To execute, the user must first review the plan and then execute with the **specific one-time token returned by the planning step** (it cannot be read from source or documentation):
 
 ```bash
+# Step 1 — planning returns confirmation.token
+python3 scripts/hcloud_billing_live_read.py \
+  --entry-point monthly_spend \
+  --operation monthly-sum \
+  --bill-cycle 2026-05 \
+  --pretty
+
+# Step 2 — user approves, execute reusing the one-time token from step 1
 python3 scripts/hcloud_billing_live_read.py \
   --entry-point monthly_spend \
   --operation monthly-sum \
   --bill-cycle 2026-05 \
   --execute \
-  --confirm-live-billing-read READ_BILLING_DATA \
+  --confirm-live-billing-read <token-from-step-1> \
   --output-file <workspace>/monthly-billing.json \
   --pretty
 ```
@@ -685,13 +693,13 @@ python3 scripts/hcloud_billing_operation_gap.py --pretty
 
 Use this during skill maintenance to compare local `hcloud_billing_readonly.py` coverage with the normalized official-reference snapshot in `references/billing/operation-gap-baseline.json`. The default audit is fully self-contained and reports supported operations, P1/P2 missing operations, pricing API gaps, and enhanced pricing helper references without running `hcloud`, reading credentials, or querying billing data.
 
-To refresh that snapshot, pass the upstream files explicitly; the script never searches a sibling repository:
+To refresh that snapshot, pass the upstream BSS reference files explicitly; the script never searches a sibling repository or loads other skills:
 
 ```bash
 python3 scripts/hcloud_billing_operation_gap.py \
-  --scout-related-commands <upstream-root>/skills/bss/billing/huawei-cloud-billing-scout/references/related-commands.md \
-  --business-bss-guide <upstream-root>/skills/bss/billing/huawei-cloud-business-tf-support/references/bss/guide.md \
-  --business-bss-script-dir <upstream-root>/skills/bss/billing/huawei-cloud-business-tf-support/scripts/bss \
+  --scout-related-commands <path-to-bss-cli-reference>.md \
+  --business-bss-guide <path-to-bss-business-guide>.md \
+  --business-bss-script-dir <path-to-bss-script-dir> \
   --write-baseline references/billing/operation-gap-baseline.json \
   --pretty
 ```
@@ -723,7 +731,8 @@ python3 scripts/hcloud_cost_estimate.py \
 
 该入口为一个有界 SKU 变更复用现有 BSS 询价 planner/live-read 路径。plan 模式不会编造金额：它返回
 `cost_estimate.status=unknown`、`amount=null`、精确询价范围、排除组件和可执行的下一步命令。审查范围后
-才能增加 `--execute --confirm-live-billing-read READ_BILLING_DATA`。成功执行得到的是点时 provider
+执行实时询价：先跑 `--execute` 之外的 plan 模式取得一次性 confirmation token，用户确认后再带
+`--execute --confirm-live-billing-read <token>` 执行。成功执行得到的是点时 provider
 询价，不是历史账单证据，也不是购买承诺。包周期询价不会静默选择某个可选折扣方案。EIP 询价必须显式
 使用 `--pricing-preset eip-bw`、`eip-flow` 或 `eip-ip`。
 

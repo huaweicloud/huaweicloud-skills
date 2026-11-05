@@ -226,7 +226,12 @@ def live_read_args(args: argparse.Namespace, preset: str) -> SimpleNamespace:
 
 
 def quote_cli_command(args: argparse.Namespace, preset: str) -> str:
-    """Return the explicit command that can obtain the reviewed provider quote."""
+    """Return the plan-mode quote command (planning only, no execute flags).
+
+    Execution is never embedded here: confirming a live inquiry must reuse the
+    one-time confirmation.token returned by the planning step, which cannot be
+    read or copied from source code or documentation.
+    """
 
     command = [
         "python3",
@@ -261,13 +266,6 @@ def quote_cli_command(args: argparse.Namespace, preset: str) -> str:
         command.extend(
             ["--fee-installment-mode", args.fee_installment_mode]
         )
-    command.extend(
-        [
-            "--execute",
-            "--confirm-live-billing-read",
-            hcloud_billing_live_read.CONFIRM_TOKEN,
-        ]
-    )
     return shlex.join(command)
 
 
@@ -437,8 +435,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--confirm-live-billing-read",
         help=(
-            "Required in execute mode and must equal "
-            f"{hcloud_billing_live_read.CONFIRM_TOKEN}."
+            "One-time token returned by the planning step; required in execute mode. "
+            "Run without --execute first and reuse its confirmation.token."
         ),
     )
     parser.add_argument("--timeout", type=int, default=120)

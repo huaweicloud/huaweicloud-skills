@@ -358,8 +358,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     """CLI entrypoint."""
     args = parse_args(argv)
-    hcloud_common.emit_json(build_plan(args), pretty=args.pretty)
-    return 0
+    result = build_plan(args)
+    hcloud_common.emit_json(result, pretty=args.pretty)
+    return 0 if result["success"] else 1
 
 
 if __name__ == "__main__":

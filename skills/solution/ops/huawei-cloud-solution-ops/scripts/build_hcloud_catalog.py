@@ -642,45 +642,44 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     """Generate the hcloud service catalog."""
     args = parse_args()
-    source = Path(args.source_meta_repo).expanduser().resolve()
-    catalog = build_catalog(source, include_hcs=args.include_hcs)
-    output = Path(args.output).expanduser().resolve() if args.output else None
-    if output:
-        output.parent.mkdir(parents=True, exist_ok=True)
-        if args.pretty:
-            text = json.dumps(catalog, ensure_ascii=False, indent=2)
-        else:
-            text = json.dumps(catalog, ensure_ascii=False, separators=(",", ":"))
-        output.write_text(text + "\n", encoding="utf-8")
-    fingerprint_path = Path(args.fingerprint_output).expanduser().resolve() if args.fingerprint_output else None
-    if fingerprint_path:
-        fingerprint_path.parent.mkdir(parents=True, exist_ok=True)
-        fingerprint_path.write_text(
-            json.dumps(build_fingerprint(catalog), ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
-    index_path = Path(args.index_output).expanduser().resolve() if args.index_output else None
-    service_output_dir = Path(args.service_output_dir).expanduser().resolve()
-    if index_path:
-        index, service_payloads = split_service_catalog(catalog, service_output_dir, index_path)
-        write_json(index_path, index, pretty=True)
-        for service_file, payload in service_payloads.items():
-            write_json(service_file, payload, pretty=False)
-    print(
-        json.dumps(
-            {
-                "success": True,
-                "output": str(output) if output else None,
-                "fingerprint_output": str(fingerprint_path) if fingerprint_path else None,
-                "index_output": str(index_path) if index_path else None,
-                "service_output_dir": str(service_output_dir) if index_path else None,
-                "service_count": catalog["source"]["service_count"],
-                "operation_count": catalog["source"]["operation_count"],
-            },
-            ensure_ascii=False,
-        )
-    )
-    return 0
+    try:
+        source = Path(args.source_meta_repo).expanduser().resolve()
+        catalog = build_catalog(source, include_hcs=args.include_hcs)
+        output = Path(args.output).expanduser().resolve() if args.output else None
+        if output:
+            output.parent.mkdir(parents=True, exist_ok=True)
+            if args.pretty:
+                text = json.dumps(catalog, ensure_ascii=False, indent=2)
+            else:
+                text = json.dumps(catalog, ensure_ascii=False, separators=(",", ":"))
+            output.write_text(text + "\n", encoding="utf-8")
+        fingerprint_path = Path(args.fingerprint_output).expanduser().resolve() if args.fingerprint_output else None
+        if fingerprint_path:
+            fingerprint_path.parent.mkdir(parents=True, exist_ok=True)
+            fingerprint_path.write_text(
+                json.dumps(build_fingerprint(catalog), ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+        index_path = Path(args.index_output).expanduser().resolve() if args.index_output else None
+        service_output_dir = Path(args.service_output_dir).expanduser().resolve()
+        if index_path:
+            index, service_payloads = split_service_catalog(catalog, service_output_dir, index_path)
+            write_json(index_path, index, pretty=True)
+            for service_file, payload in service_payloads.items():
+                write_json(service_file, payload, pretty=False)
+        result = {
+            "success": bool(catalog.get("source", {}).get("service_count", 0)) or args.output is not None,
+            "output": str(output) if output else None,
+            "fingerprint_output": str(fingerprint_path) if fingerprint_path else None,
+            "index_output": str(index_path) if index_path else None,
+            "service_output_dir": str(service_output_dir) if index_path else None,
+            "service_count": catalog["source"]["service_count"],
+            "operation_count": catalog["source"]["operation_count"],
+        }
+    except Exception as exc:  # pragma: no cover - defensive exit-code contract.
+        result = {"success": False, "error": str(exc)}
+    print(json.dumps(result, ensure_ascii=False))
+    return 0 if result["success"] else 1
 
 
 if __name__ == "__main__":

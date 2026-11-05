@@ -2,7 +2,8 @@
   "schema_version": 1,
   "description": "Compact Chinese-English Huawei Cloud service aliases for local scenario routing.",
   "source_assets": [
-    "https://github.com/huaweicloud/huaweicloud-skills/blob/master/skills/devtools/common/huawei-cloud-find-skills/references/cn-en-map.json"
+    "https://support.huaweicloud.com/",
+    "Maintained locally by this skill from official Huawei Cloud service naming."
   ],
   "aliases": {
     "弹性云服务器": "ECS",
