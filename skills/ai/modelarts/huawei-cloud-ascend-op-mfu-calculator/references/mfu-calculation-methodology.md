@@ -16,7 +16,8 @@ $$
 
 - **FLOPs**: Number of floating-point operations
 - **TFLOPs/s**: Trillions of floating-point operations per second
-- **Execution Time**: Typically in milliseconds (ms)
+- **Execution Time**: Typically in milliseconds (ms) in the SKILL.md formula; Ascend profiling CSVs report **microseconds (us)** in `Task Duration(us)`
+- **ms ↔ us conversion**: `1 ms = 1000 us` (equivalently `1 us = 0.001 ms`). Always convert profiling `us` values to `ms` (÷1000) or to seconds (`×1e-6`) before the formula below. Mixing units silently changes MFU by ~1000×.
 
 ### Conversion Factors
 
@@ -24,6 +25,11 @@ $$
 Achieved FLOPs/s = FLOPs / Execution Time (seconds)
 Achieved TFLOPs/s = Achieved FLOPs/s ÷ 1e12
 MFU = Achieved TFLOPs/s ÷ Peak TFLOPs/s
+
+# time given in microseconds:
+time_s = time_us * 1e-6
+# time given in milliseconds:
+time_s = time_ms * 1e-3
 ```
 
 ## 2. Peak FLOPs Reference
@@ -94,7 +100,7 @@ $$
 Collect the following from user or profiler:
 - Operator type (matmul, GEMM, FlashAttention, etc.)
 - Tensor dimensions (batch, sequence length, hidden dimension, etc.)
-- Execution time (in milliseconds)
+- Execution time (milliseconds `time_ms` or microseconds `time_us`; profiling CSV columns such as `Task Duration(us)` are in microseconds)
 - Hardware peak FLOPs (from table above)
 
 ### Step 2: Calculate Operator FLOPs
@@ -110,8 +116,11 @@ def calculate_matmul_flops(M, N, K, batch=1):
 ### Step 3: Compute Achieved FLOPs/s
 
 ```python
-def calculate_achieved_tflops(flops, time_ms):
-    time_s = time_ms / 1000
+def calculate_achieved_tflops(flops, time_ms=None, time_us=None):
+    if time_us is not None:
+        time_s = time_us * 1e-6          # microseconds -> seconds
+    else:
+        time_s = time_ms / 1000          # milliseconds -> seconds
     flops_per_sec = flops / time_s
     tflops_per_sec = flops_per_sec / 1e12
     return tflops_per_sec
@@ -181,18 +190,20 @@ def calculate_mfu(achieved_tflops, peak_tflops):
 
 ## 7. Common Pitfalls
 
-### 7.1 Unit Mismatch
+### 7.1 Unit Mismatch (ms / us / s)
 
-**Problem:** Mixing milliseconds and seconds in calculations.
+**Problem:** Mixing milliseconds and seconds (or treating profiling microseconds as milliseconds) in calculations. Ascend profiling CSVs expose `Task Duration(us)` in **microseconds**; treating that value directly as `time_ms` in the formula inflates MFU by ~1000×.
 
-**Solution:** Always convert time to seconds before calculating FLOPs/s.
+**Solution:** Always convert time to seconds before calculating FLOPs/s. Convert profiling `us` values (`÷1000` → `ms`, or `×1e-6` → seconds) first.
 
 ```python
 # Correct
-time_s = time_ms / 1000
+time_s = time_us * 1e-6    # from profiling (us)
+time_s = time_ms / 1000    # from SKILL.md time_ms parameter
 
 # Incorrect
-# flops_per_sec = flops / time_ms  # Wrong units!
+# flops_per_sec = flops / time_us          # Wrong units!
+# flops_per_sec = flops / time_ms          # Wrong units!
 ```
 
 ### 7.2 Missing Batch Dimension

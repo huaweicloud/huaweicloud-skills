@@ -51,19 +51,22 @@ print(f"FLOPs: {flops:,}")
 
 ### 3. Get Execution Time
 
+**Unit note:** Ascend profiling CSVs (`OpBasicInfo.csv`) report duration in **microseconds (us)** (`Task Duration(us)`), while the SKILL.md MFU formula is expressed in **milliseconds (ms)**. Convert before computing — a missed ms↔us conversion changes MFU by ~1000×.
+
 ```python
-# From profiling data
+# From profiling data (microseconds)
 import pandas as pd
 df = pd.read_csv("OpBasicInfo.csv")
 exec_time_us = df[df["Op Name"] == "matmul"]["Task Duration(us)"].values[0]
-exec_time_s = exec_time_us * 1e-6
+exec_time_s = exec_time_us * 1e-6          # us -> s
+exec_time_ms = exec_time_us / 1e3          # us -> ms (for SKILL.md time_ms parameter)
 ```
 
 ### 4. Calculate MFU
 
 ```python
-achieved_tflops = flops / exec_time_s / 1e12
-peak_tflops = 294.91  # 910B3
+achieved_tflops = flops / exec_time_s / 1e12  # exec_time_s from us (×1e-6) or ms (×1e-3)
+peak_tflops = 294.91  # 910B3 — see per-model table in §Peak FLOPS Reference
 mfu = achieved_tflops / peak_tflops
 print(f"MFU: {mfu:.2%}")
 ```
