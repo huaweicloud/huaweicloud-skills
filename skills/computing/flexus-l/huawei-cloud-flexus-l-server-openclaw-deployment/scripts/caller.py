@@ -18,6 +18,35 @@ from scripts.channels import do_install_channel
 CONSOLE_URL = "https://console.huaweicloud.com/smb/?/resource/list"
 
 
+class FriendlyArgumentParser(argparse.ArgumentParser):
+    """
+    ArgumentParser that outputs user-friendly error messages instead of raw
+    argparse errors (e.g. 'invalid choice'). Unsupported operations (like
+    'list', 'delete', 'restart') are rejected with a clear hint about the
+    operations this skill actually supports.
+    """
+
+    def error(self, message):
+        if "invalid choice" in message:
+            sys.stderr.write(
+                "⚠️ 不支持此操作。\n"
+                "\n"
+                "本 skill 仅支持以下操作:\n"
+                "  deploy   - 一键部署 OpenClaw 到华为云 Flexus L 实例\n"
+                "  maas     - 为已部署的 OpenClaw 实例设置(安装)模型\n"
+                "  channel  - 为已部署的 OpenClaw 实例设置(安装)通道\n"
+                "\n"
+                "使用 --help 查看详细用法。\n"
+            )
+        else:
+            sys.stderr.write(
+                f"⚠️ 参数错误: {message}\n"
+                "\n"
+                "使用 --help 查看详细用法。\n"
+            )
+        sys.exit(2)
+
+
 def show_main_menu():
     """
     Display main menu for user to select operation type
@@ -61,6 +90,10 @@ def show_webui_info():
     print("          OpenClaw Web UI Access Instructions")
     print("=" * 60)
     print("")
+    print("⚠️  本 skill 不支持自动开启 WebUI 访问。")
+    print("原因: 开启公网访问需通过 Flexus L 控制台 API 修改实例的公网访问策略，")
+    print("本 skill 通过 COC 脚本执行方式无法调用该控制台 API，因此必须手动在控制台操作。")
+    print("")
     print("Web UI access requires manual security group configuration in Huawei Cloud console.")
     print("")
     print("Steps:")
@@ -89,7 +122,7 @@ def main():
     Returns:
         None
     """
-    parser = argparse.ArgumentParser(
+    parser = FriendlyArgumentParser(
         description="Huawei Cloud Flexus L Instance One-Click OpenClaw Deployment (Simplified Version)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
