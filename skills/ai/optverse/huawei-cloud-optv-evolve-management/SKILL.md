@@ -203,11 +203,14 @@ Activate this skill when any of the following user intents appears:
 
 ## 3. Safety & Risk Constraints
 
+- **Supported language scope**: this skill supports **Python** and **C++** only. Although the API enum for `CreateAlgorithm --lang` also accepts `java` (and `troubleshooting.md` lists it), this skill does **not** support Java projects — there is no Java project template or workflow documented here. For any non-Python / non-C++ language request, tell the user the language is unsupported rather than proceeding.
 - **Two-step confirmation for every destructive call**: print the command and a risk warning; only execute after explicit user confirmation. Applies to `IAM DeleteAgency`, `OptVerse DeleteAlgorithm`, `OptVerse DeleteEvolveTask`, `OptVerse BatchDeleteEvolveTask`, `OptVerse RevokePermission`.
 - **Never rename uploaded files**; the file path passed to `--file_path` must equal `os.path.basename(local_file)`.
 - **Time-based efficiency functions must use concurrency = 1**: `--evaluator_max_workers=1` and `--search_max_workers=1`.
 - **Credential safety**: only check presence via `hcloud configure list`; never echo values.
 - **C++ projects must supply `build_command`**; otherwise `evaluator.cpp` / `baseline.cpp` / `algorithm.cpp` cannot be compiled into executable commands.
+- **Service boundary**: this skill only manages the **OptVerse algorithm auto-design (code-evolution) service** (`hcloud OptVerse` + the IAM agency steps needed for bucket authorization). It does **NOT** manage other Huawei Cloud services — requests like ECS / RDS / VPC / OBS bucket CRUD ("create a VPC", "launch an ECS"…) are out of scope and must be rejected or redirected to the matching skill.
+- **Billing boundary**: this skill does **NOT** perform billing / pricing / refund / renewal / invoice / cost-query operations. Charge-related questions (OptVerse or other services) must be answered by pointing to the Huawei Cloud official pricing page, never by guessing prices.
 
 ---
 
@@ -359,6 +362,16 @@ hcloud OptVerse ShowTaskDetails --project_id=<project_id> --evolve_task_id=<tid>
 # ⚠️ --type uses lowercase underscore (4 values: progress / summary / best_result / generation_stats)
 hcloud OptVerse ShowTaskRunningDetails --project_id=<project_id> --evolve_task_id=<tid> \
   --type=progress --cli-region=<region>
+
+# Per-generation statistics (evolution trend across generations)
+# payload.item = list of {generation, best_fitness, population_size, ...}
+hcloud OptVerse ShowTaskRunningDetails --project_id=<project_id> --evolve_task_id=<tid> \
+  --type=generation_stats --cli-region=<region> --cli-output=json
+
+# Same output-filter convenience for the generation list
+hcloud OptVerse ShowTaskRunningDetails --project_id=<project_id> --evolve_task_id=<tid> \
+  --type=generation_stats --cli-region=<region> --cli-output=json \
+  --cli-query="payload.item"
 
 # Results
 hcloud OptVerse ShowTaskResultList   --project_id=<project_id> --evolve_task_id=<tid> --cli-region=<region>

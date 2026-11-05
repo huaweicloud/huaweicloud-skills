@@ -9,10 +9,11 @@ Grouped by error type: parameter errors, auth errors, agency / bucket authorizat
 | Error keywords | Cause | Resolution |
 |---|---|---|
 | `Missing required option '--xxx'` | Required parameter not passed | Re-run `hcloud OptVerse <Op> --help` to verify parameters |
-| `value should be one of [...]` | Illegal enum value | Only pass legal values like `python|c++|java`, `true|false` |
+| `value should be one of [...]` | Illegal enum value | Only pass legal values like `python|c++`, `true|false`. Note: the API enum also lists `java`, but this skill only supports `python` and `c++` |
 | `length should be at most N` | Length limit exceeded | Trim `name` / `description` etc. |
 | `array item count should be at most N` | Array too long (e.g. `llm_models` ≤ 30) | Limit the LLM model count; batch-delete N ≤ 50 |
 | `output_path should not be empty when bucket permission required` | Left `output_path` blank but no agency was set up | **Leave blank if no upload needed**; for upload, set up agency + authorization first |
+| `evolve.01050004` / `Algorithm id does not exist` | `--algorithm_id` points to a non-existent project (stale id, deleted project, or wrong format — e.g. hyphens stripped from a self-built uuid) | Run `hcloud OptVerse ListAlgorithms` to get a valid `algorithm_id`, then retry (see SKILL.md §4.3 for id formats) |
 
 Diagnostic flow:
 
@@ -156,13 +157,13 @@ hcloud --debug OptVerse <Op> ... 2>&1 | grep -i "http/1\.1"
 
 ---
 
-## 8. 5xx Internal Error
+## 9. 5xx Internal Error
 
 `eihealth.01000004 "Internal error"`: a generic error wrapper by the KooCLI client; **the original error lives in the backend logs**. Recommend adding `--debug` to record the request timestamp (with millisecond precision) + full payload + `X-Request-Id`, and provide that to ops for backend log lookup. **Wrapping automatic retries is discouraged** — a 500 is a data / state error; retrying does not solve it and only pollutes the backend logs.
 
 ---
 
-## 9. Diagnostic sequence summary
+## 10. Diagnostic sequence summary
 
 1. `hcloud OptVerse <Op> --help` — check parameters
 2. `hcloud configure list` — check credentials

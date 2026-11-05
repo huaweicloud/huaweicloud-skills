@@ -60,11 +60,11 @@ If hcloud limits apply (see [`troubleshooting.md`](troubleshooting.md)), you can
 
 ## 3. Enums and value ranges
 
-`hcloud --help` gives explicit value ranges (e.g. `lang` only allows `python|c++|java`). They must be strictly observed. Common key constraints:
+`hcloud --help` gives explicit value ranges (e.g. `lang` allows `python|c++|java` as the API enum). They must be strictly observed. **This skill only supports `python` and `c++`; `java` is not supported (see SKILL.md §3).** Common key constraints:
 
 | Parameter | Values |
 |---|---|
-| `--lang` | python \| c++ \| java |
+| `--lang` | python \| c++ (API enum also lists java; **java not supported by this skill**) |
 | `--evaluator_parameter.smaller_better` | true \| false |
 | `--cli-output` | json \| table \| yaml etc. |
 | `--type` (ShowTaskRunningDetails) | progress \| summary \| best_result \| generation_stats |

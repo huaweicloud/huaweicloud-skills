@@ -47,7 +47,7 @@ Global services like `IAM CreateAgency` ignore the region, but you can still pas
 ### 2.1 Key parameters
 
 `CreateAlgorithm` / `UpdateAlgorithm`:
-- Required `name`, `lang` (`python` | `c++` | `java`)
+- Required `name`, `lang` — the API enum accepts `python` | `c++` | `java`, but **this skill only supports `python` and `c++`** (see SKILL.md §3); Java projects are not supported
 - Optional `description`, `build_command`, `env`, `command`, `picture`
 - `build_command` is used in C++ projects to compile uploaded `.cpp` files into executable commands
 

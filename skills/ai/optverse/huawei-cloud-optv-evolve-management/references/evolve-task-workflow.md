@@ -135,6 +135,18 @@ hcloud OptVerse ShowTaskRunningDetails \
 
 Allowed `type`: `progress | summary | best_result | generation_stats` (**lowercase underscore**, not uppercase).
 
+Example — per-generation statistics (`--type=generation_stats`):
+
+```bash
+hcloud OptVerse ShowTaskRunningDetails \
+  --project_id=<project_id> --evolve_task_id=<tid> \
+  --type=generation_stats --cli-region=<region> --cli-output=json
+```
+
+Output format: `payload.item` contains a list of generation records (e.g. `[{ "generation": 1, "best_fitness": ..., "population_size": ... }, ...]`), one entry per evolution generation.
+
+**Usage scenario**: use it when you want to observe the evolution trend across generations (e.g. whether `best_fitness` keeps improving per generation) mid-RUNNING or after FINISHED, instead of only inspecting the final `best_result`. It complements — but does not replace — `--type=best_result` (best commit + score) and `--type=summary` (baseline / final_best / totals).
+
 ### 5.4 Task statistics (per algorithm, all tasks)
 
 ```bash
