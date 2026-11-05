@@ -11,7 +11,15 @@ description: "Manage Huawei Cloud ModelArts dedicated resource pools (专属资�
 
 ## Overview
 
-This skill enables users to manage Huawei Cloud ModelArts dedicated resource pools (专属资源池) and node pools through the `hcloud` CLI. It covers the complete lifecycle including resource pool CRUD, node management, node pool management, network resources, tag management, plugin management, workloads, scheduled events, OS configuration, and resource flavor queries. BSS pricing inquiry is included for chargeable operations.
+This skill enables users to manage Huawei Cloud ModelArts dedicated resource pools (专属资源池) and node pools through the `hcloud` CLI. It covers the complete lifecycle including resource pool CRUD, node management, node pool management, network resources, tag management, plugin management, workloads, scheduled events, OS configuration, and resource flavor queries. Pricing inquiry for chargeable operations is included via `scripts/query-pricing.sh` (KooCLI 7.3.12 no longer supports BSS, so the script fails loudly and a console/API Explorer fallback is documented).
+
+> **⚠️ Scope boundary**: This skill is used **ONLY** for ModelArts dedicated resource pool / node pool / network / tag / plugin management. It does **NOT** handle OBS buckets, ECS instances, or any other Huawei Cloud service operations. For non-ModelArts requests (e.g., "query my OBS bucket"), decline and point the user to the appropriate service-specific skill.
+
+### Known Capability Limitations (verified by real testing)
+
+- **CreatePool flavors must carry the `.d` suffix**: Only flavors like `modelarts.vm.cpu.16u64g.d` can create a dedicated pool. Flavors WITHOUT the `.d` suffix (e.g., `modelarts.vm.cpu.8ud`) fail with `ModelArts.50004000 Invalid flavor ... is not available for your project`. Always verify the targeted flavor with `ListResourceFlavors` before `CreatePool`.
+- **BatchResetPoolNodes is NOT available for regular VM pools**: `rollingConfig.strategy` has no valid value for VM pools, so batch reset only works when the pool supports a valid strategy. For regular VM nodes, resets must be done by deleting and recreating the nodes instead.
+- **BatchResizePoolNodes only supports hyperinstance nodes**: resizing is not supported for regular VM nodes; use delete-recreate as the fallback for VM pools.
 
 ### Architecture
 
@@ -95,7 +103,7 @@ HISTCONTROL=ignorespace
  hcloud configure set --cli-access-key=<YOUR_AK> --cli-secret-key=<YOUR_SK>
 ```
 
-> ⚠️ **Note**: hcloud CLI does **NOT** read `HW_ACCESS_KEY`/`HW_SECRET_KEY` environment variables (those are for Python SDK only). `hcloud configure set` is the only supported credential configuration method.
+> ⚠️ **Note**: hcloud CLI does **NOT** read `HW_ACCESS_KEY`/`HW_SECRET_KEY` environment variables (those are for Python SDK only). For environment-variable auth, KooCLI supports `HUAWEICLOUD_SDK_AK`/`HUAWEICLOUD_SDK_SK` (or `HUAWEI_ACCESS_KEY`/`HUAWEI_SECRET_KEY`) or the `--cli-access-key`/`--cli-secret-key` parameters; the recommended persistent method is `hcloud configure` (stores credentials in `~/.hcloud/config.json`). See [references/cli-installation-guide.md](references/cli-installation-guide.md) for details.
 
 ---
 
@@ -126,6 +134,21 @@ hcloud ModelArts <Operation> --cli-region={region} [--key=value ...]
 
 > `{region}` must be replaced with the actual region, e.g., `cn-north-4`. Do NOT hardcode the region.
 
+> **⚠️ MANDATORY: check the response body, not just the exit code.**
+> `hcloud` returns **exit code 0 even for business/parameter errors** — the error is only visible in the response body.
+> After every call, inspect the output for:
+> - a top-level `error_code` / `error_msg` (API business error), or
+> - a `[USE_ERROR]` prefix (CLI parameter/usage error, e.g. `[USE_ERROR]Invalid parameter: limit`).
+>
+> If either is present, treat the call as **FAILED**: stop, report `error_code` + `error_msg` to the user, and do **not** continue to dependent steps (especially write operations). Never infer success from `exit code 0` alone.
+>
+> ```bash
+> OUT=$(hcloud ModelArts ListPools --cli-region={region} 2>&1); RC=$?
+> if [ $RC -ne 0 ] || printf '%s' "$OUT" | grep -qE '\[USE_ERROR\]|"error_code"[[:space:]]*:[[:space:]]*"'; then
+>   echo "FAILED: $OUT" >&2; exit 1
+> fi
+> ```
+
 ### Step 2.5: ⚠️ Pre-Flight Check (MANDATORY for Write Operations)
 
 > **Before executing ANY write operation** (Create/Update/Delete/Patch/Batch/Accept), you MUST:
@@ -150,7 +173,15 @@ hcloud ModelArts <Operation> --cli-region={region} [--key=value ...]
 
 ### Step 3: Handle Write Operations
 
-For all write operations (Create/Update/Delete/Patch/Batch/Accept), **prompt the user for confirmation before execution**. For chargeable operations (CreatePool, CreateNodePool, PatchNodePool, BatchResizePoolNodes, CreateOrderId), **inquire BSS pricing first** to inform the user of costs. See [references/pricing-inquiry.md](references/pricing-inquiry.md) for the pricing inquiry workflow.
+For all write operations (Create/Update/Delete/Patch/Batch/Accept), **prompt the user for confirmation before execution**. For chargeable operations (CreatePool, CreateNodePool, PatchNodePool, BatchResizePoolNodes, CreateOrderId), **inquire pricing first** to inform the user of costs. See [references/pricing-inquiry.md](references/pricing-inquiry.md) for the pricing inquiry workflow.
+
+> **⚠️ BSS pricing is unavailable on KooCLI 7.3.12** — `hcloud BSS ...` fails with `[USE_ERROR]Unsupported service: BSS.` (and still exits 0). Therefore:
+> - Prefer `scripts/query-pricing.sh`, which **fails loudly** (non-zero exit) instead of reporting a misleading `0.00 元`;
+> - If the script reports pricing unavailable, **stop and tell the user pricing could not be verified**, and direct them to the BSS **API Explorer** or the console 费用中心 to confirm the price manually;
+> - **Never** present `0 元` / empty pricing as "free". The "user must confirm cost before any write" guardrail **stays in force** — only the inquiry mechanism is degraded.
+> See [references/pricing-inquiry.md](references/pricing-inquiry.md) for details.
+
+> **Pagination reminder**: `ListPools` is not paginated and takes no `--limit`/`--offset`/`--pool_name`; `ListPoolNodes` uses `--limit` + `--continue`. See [references/cli-command-examples.md](references/cli-command-examples.md).
 
 ---
 
@@ -205,11 +236,11 @@ All 53 CLI command examples across 10 functional domains are documented in a sep
 | Parameter | Required | Description | Example |
 |-----------|----------|-------------|---------|
 | `{region}` | Yes | Huawei Cloud region | `cn-north-4`, `cn-east-2` |
-| `{pool_name}` | Pool ops | Resource pool name | `my-resource-pool` |
+| `{pool_name}` | Pool ops | Resource pool **metadata.name** (returned by `ListPools`, e.g. `pool-74d9fd1a-xxx`) — NOT the user-facing label name (`os.modelarts/name`). Run `ListPools` first to obtain it | `pool-74d9fd1a-xxx`（from ListPools）|
 | `{node_name}` | Node ops | Pool node name | `node-xxx` |
 | `{nodepool_name}` | NodePool ops | Node pool name | `my-nodepool` |
 | `{network_name}` | Network ops | Network name | `my-network` |
-| `{flavor_id}` | Create/Resize | Resource flavor ID | `modelarts.vm.cpu.16u64g.d` |
+| `{flavor_id}` | Create/Resize | Resource flavor ID (CreatePool requires a flavor with `.d` suffix, e.g. `modelarts.vm.cpu.16u64g.d`; flavors without `.d` like `8ud` cannot create pools) | `modelarts.vm.cpu.16u64g.d` |
 | `{project_id}` | No (auto) | Project ID, auto-resolved if omitted | Omit for default |
 | `{order_name}` | ShowOrder | Order name | `order-xxx` |
 
@@ -262,8 +293,8 @@ client = ModelArtsClient.new_builder() \
 - **ListEvents**: `--resource` must be `pools` (plural), not `pool`
 
 **Known API limitations:**
-- **BatchResetPoolNodes**: `rollingConfig.strategy` has no valid value for VM pools
-- **BatchResizePoolNodes**: Only supports hyperinstance scaling, not regular VM nodes
+- **BatchResetPoolNodes**: `rollingConfig.strategy` has no valid value for VM pools — **NOT available for regular VM pools**; use delete-recreate as the fallback
+- **BatchResizePoolNodes**: **Only supports hyperinstance nodes** — resizing regular VM nodes is not supported; use delete-recreate as the fallback
 - **BatchMigratePoolNodes**: Source and target cluster names must differ
 - **DeleteNetwork**: Fails if network is in use by a resource pool (delete pool first)
 
@@ -278,7 +309,9 @@ client = ModelArtsClient.new_builder() \
 ## Notes
 
 - All write operations (Create/Update/Delete/Patch/Batch/Accept) require user confirmation before execution
-- Chargeable operations (CreatePool, CreateNodePool, PatchNodePool, BatchResizePoolNodes, CreateOrderId) require BSS pricing inquiry to inform users of costs before execution
+- Chargeable operations (CreatePool, CreateNodePool, PatchNodePool, BatchResizePoolNodes, CreateOrderId) require a pricing inquiry so costs are shown before execution. **KooCLI 7.3.12 no longer supports BSS** (`hcloud BSS ...` → `[USE_ERROR]Unsupported service: BSS.`), so use `scripts/query-pricing.sh` (which exits non-zero on failure) and fall back to the console 费用中心 / BSS API Explorer for manual price confirmation. User confirmation of cost remains mandatory; never report 0 元 as "free".
+- **Check the response body of every hcloud call** — `hcloud` returns exit code 0 even on business/parameter errors. Treat any non-empty `error_code`/`error_msg` or a `[USE_ERROR]` prefix as failure and stop.
+- **`--pool_name` must be the resource `metadata.name`** (from `ListPools`), NOT the user-facing label name (`metadata.labels.os.modelarts/name`). Always query `ListPools` first to obtain the correct `metadata.name` before Show/Delete/List-node operations; using the label name will fail with `ModelArts.50015001 pool not found`
 - Region is not hardcoded — uses `{region}` placeholder
 - `project_id` is auto-resolved when omitted
 - No hardcoded AK/SK in any file — credentials configured via `hcloud configure set` by the user outside the agent session

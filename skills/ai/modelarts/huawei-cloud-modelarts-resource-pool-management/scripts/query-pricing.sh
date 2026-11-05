@@ -21,6 +21,21 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
+# ── 询价失败处理（fail-loud）──────────────────────────────────────────────────
+# 询价必须"失败即停止"：绝不输出 0 元或空价格表让用户误以为免费。
+# 退出码: 2 = BSS 服务/CLI 不可用; 3 = 响应解析失败 / 结果为空 / 金额为 0
+fail_pricing() {
+    local code="$1"; shift
+    echo -e "${RED}[!] 询价不可用：$*${NC}" >&2
+    echo -e "${RED}[!] 已停止：不会输出 0 元或空价格表。${NC}" >&2
+    echo -e "${YELLOW}[i] 官方 KooCLI 7.3.12 已不支持 BSS 服务（hcloud BSS → [USE_ERROR]Unsupported service: BSS.）。${NC}" >&2
+    echo -e "${YELLOW}[i] 可执行替代方案（任选其一，确认价格后再执行写操作）：${NC}" >&2
+    echo -e "${YELLOW}    1) 华为云控制台 → 费用中心，按规格查询按需价格${NC}" >&2
+    echo -e "${YELLOW}    2) BSS API Explorer 在线调试 ListOnDemandResourceRatings${NC}" >&2
+    echo -e "${YELLOW}    3) 由用户人工确认价格后继续（不得按 0 元 / 免费处理）${NC}" >&2
+    exit "$code"
+}
+
 # ── 固定参数 (ModelArts BSS 询价) ─────────────────────────────────────────────
 CLOUD_SERVICE_TYPE="hws.service.type.modelarts"
 RESOURCE_TYPE="hws.resource.type.modelarts"
@@ -120,12 +135,85 @@ for i in "${!BILLING_CODES[@]}"; do
 done
 
 # ── 调用 BSS 询价 API（直接数组展开传参）──────────────────────────────────────
-RESULT=$(hcloud BSS ListOnDemandResourceRatings "${ARGS[@]}" 2>/dev/null) || true
+RESULT=$(hcloud BSS ListOnDemandResourceRatings "${ARGS[@]}" 2>&1) || true
 
+# ── 响应校验：任何异常一律非 0 退出，禁止静默报 0 元 ─────────────────────────
 if [ -z "${RESULT:-}" ]; then
-    echo -e "${RED}[!] BSS 询价失败，请检查参数或网络连接。${NC}"
-    exit 1
+    fail_pricing 2 "BSS 返回空响应（无法确认服务是否可用）"
 fi
+
+# hcloud 对业务/参数错误也返回 exit 0，错误只体现在 stdout/stderr 文本里
+if printf '%s' "${RESULT}" | grep -qE '\[USE_ERROR\]|Unsupported service'; then
+    _detail=$(printf '%s' "${RESULT}" | tr '\n' ' ' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')
+    fail_pricing 2 "KooCLI 调用 BSS 失败：${_detail}"
+fi
+
+# 校验 JSON 结构、结果数组与金额（不使用 set -e 中断，改为显式错误码）
+VALIDATION=$(RESULT_TEXT="${RESULT}" python3 - <<'PY'
+import sys, os, json, re
+
+raw = os.environ.get("RESULT_TEXT", "")
+match = re.search(r'\{.*\}', raw, re.DOTALL)
+if not match:
+    print("NOT_JSON")
+    sys.exit(0)
+
+try:
+    data = json.loads(match.group(0))
+except Exception:
+    print("NOT_JSON")
+    sys.exit(0)
+
+if "error_code" in data:
+    print("API_ERROR|%s|%s" % (data.get("error_code"), data.get("error_msg", "")))
+    sys.exit(0)
+
+results = data.get("product_rating_results")
+if not isinstance(results, list):
+    print("NO_RESULTS")
+    sys.exit(0)
+if len(results) == 0:
+    print("EMPTY_RESULTS")
+    sys.exit(0)
+
+total = data.get("amount")
+try:
+    total_f = float(total)
+except (TypeError, ValueError):
+    total_f = sum(float(r.get("amount") or 0) for r in results)
+
+if total_f <= 0:
+    print("ZERO_AMOUNT")
+    sys.exit(0)
+
+print("OK")
+PY
+)
+
+case "${VALIDATION}" in
+    OK)
+        ;;
+    NOT_JSON)
+        fail_pricing 3 "BSS 响应不是合法 JSON，无法解析价格"
+        ;;
+    API_ERROR\|*)
+        _code=$(printf '%s' "${VALIDATION}" | cut -d'|' -f2)
+        _msg=$(printf '%s' "${VALIDATION}" | cut -d'|' -f3-)
+        fail_pricing 3 "BSS 返回业务错误 ${_code}: ${_msg}"
+        ;;
+    NO_RESULTS)
+        fail_pricing 3 "响应中缺少 product_rating_results 字段"
+        ;;
+    EMPTY_RESULTS)
+        fail_pricing 3 "product_rating_results 为空数组（规格无报价或参数不匹配）"
+        ;;
+    ZERO_AMOUNT)
+        fail_pricing 3 "解析出的价格合计为 0 或缺失，结果不可信"
+        ;;
+    *)
+        fail_pricing 3 "未知的响应校验结果: ${VALIDATION}"
+        ;;
+esac
 
 # ── 将 billing codes 转为 JSON 传给 Python ───────────────────────────────────
 BILLING_JSON=$(printf '%s\n' "${BILLING_CODES[@]}" | python3 -c "import sys,json; print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))")
