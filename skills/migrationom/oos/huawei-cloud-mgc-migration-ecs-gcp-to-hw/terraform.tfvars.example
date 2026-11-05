@@ -1,0 +1,56 @@
+# Template for terraform.tfvars. Copy it to terraform.tfvars and fill in the
+# real values:
+#
+#   cp terraform.tfvars.example terraform.tfvars
+#
+# terraform.tfvars is ignored by git because it contains AK/SK credentials.
+# Never commit or paste real credentials into chat.
+
+# --- Source account ---------------------------------------------------------
+# Fill in the source AK/SK (read-only usage in this workflow).
+source_access_key    = ""
+source_secret_key    = ""
+source_region        = "ap-southeast-3"
+source_project_id    = ""
+# Batch list of source ECS IDs, mapped to destination ECS by fixed IP.
+# Example: ["11111111-1111-1111-1111-111111111111"]
+source_server_ids    = []
+
+# --- Destination account ----------------------------------------------------
+# Fill in the destination AK/SK.
+destination_access_key  = ""
+destination_secret_key  = ""
+destination_region      = "ap-southeast-3"
+# Optional display name for the SMS migration project; empty means auto-resolve.
+destination_region_name = ""
+destination_project_id  = ""
+
+# Target ECS image used when a target must be created/recreated.
+target_image_id     = ""
+eip_bandwidth_mbps  = 100
+sms_endpoint        = "https://sms.ap-southeast-3.myhuaweicloud.com"
+
+# --- Network / VPN bridge (optional) ---------------------------------------
+# Source private IPv4/CIDR used for security group and route preparation.
+source_private_ip    = ""
+# Explicit source network CIDR; required when enable_vpn_bridge=true and
+# source_private_ip is empty. Leave empty otherwise.
+source_network_cidr  = ""
+extra_peer_ips       = []
+
+# Set to true to automate the OpenVPN/VPC peering bridge. When enabled,
+# local_vpc_id and source_network_cidr (or source_private_ip) must be set.
+enable_vpn_bridge    = false
+local_vpc_id         = ""
+
+# --- rsync fallback (optional) ---------------------------------------------
+# Only used when SMS is incompatible (for example SMS.6504) or fails.
+rsync_source_host     = ""
+rsync_source_port     = 2222
+rsync_source_user     = "root"
+rsync_source_password = ""
+rsync_target_host     = ""
+rsync_target_port     = 22
+rsync_target_user     = "root"
+rsync_target_password = ""
+rsync_source_paths    = ["/"]

@@ -1,0 +1,4 @@
+interface:
+  display_name: "MGC Cross-Region Migration"
+  short_description: "Run and troubleshoot Huawei MGC/SMS migrations"
+  default_prompt: "Use $huawei-cloud-mgc-migration-ecs-gcp-to-hw to execute, verify, and troubleshoot the migration runbook."
