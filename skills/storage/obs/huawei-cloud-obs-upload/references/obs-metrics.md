@@ -135,47 +135,23 @@ Monitoring metrics reported by OBS to CES (Cloud Eye Service), with namespace `S
 
 ## Query Examples
 
-### Query bucket's external download traffic (this month)
+> **⚠️ Scope note**: This skill only queries **capacity metrics** (`capacity_total`) for bucket capacity statistics. The traffic and request metrics listed above are provided for general CES/OBS reference only and are **not** part of this skill's declared capabilities; download-traffic or request-count reporting is out of scope.
+
+### Query bucket capacity via `capacity_total`
 
 ```bash
 hcloud CES ShowMetricData \
   --region=cn-south-1 \
   --namespace=SYS.OBS \
-  --metric_name=download_traffic_extranet \
+  --metric_name=capacity_total \
   --dim.0=bucket_name,my-bucket \
   --period=86400 \
-  --filter=sum \
+  --filter=average \
   --from=1777564800000 \
   --to=1779181505463
 ```
 
-### Query bucket's internal download traffic (this month)
-
-```bash
-hcloud CES ShowMetricData \
-  --region=cn-south-1 \
-  --namespace=SYS.OBS \
-  --metric_name=download_traffic_intranet \
-  --dim.0=bucket_name,my-bucket \
-  --period=86400 \
-  --filter=sum \
-  --from=1777564800000 \
-  --to=1779181505463
-```
-
-### Query bucket's GET request count (this month)
-
-```bash
-hcloud CES ShowMetricData \
-  --region=cn-south-1 \
-  --namespace=SYS.OBS \
-  --metric_name=get_request_count \
-  --dim.0=bucket_name,my-bucket \
-  --period=86400 \
-  --filter=sum \
-  --from=1777564800000 \
-  --to=1779181505463
-```
+> Use `filter=average` (not sum), taking the latest sample value. The returned `datapoints[-1].average` is the current bucket capacity (Bytes).
 
 ---
 

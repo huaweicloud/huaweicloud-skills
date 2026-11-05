@@ -1,9 +1,9 @@
 ---
 name: huawei-cloud-obs-upload
 description: |
-  Upload local files or directories to Huawei Cloud OBS (Object Storage Service) buckets, list OBS buckets with capacity and object count, and schedule periodic uploads via crontab.
-  Use this skill when the user wants to: (1) upload a local file or directory to an OBS bucket, (2) list OBS buckets and check their storage capacity and object count, (3) set up a scheduled/periodic upload task to automatically sync a local directory to an OBS bucket.
-  Triggers include: user mentions "OBS", "object storage", "bucket list", "bucket capacity", "upload to OBS", "upload file", "upload directory", "scheduled upload", "periodic upload", "sync to bucket", "对象存储", "桶列表", "桶容量", "上传文件", "上传目录", "定时上传", "OBS管理"
+  Upload a local file or directory to a specified Huawei Cloud OBS (Object Storage Service) bucket with obsutil, and set up a scheduled/periodic upload task (crontab) that syncs a local directory to an OBS bucket. Also lists OBS buckets with storage capacity and object count.
+  Use this skill when the user wants to: (1) upload a specific local file or directory to a named OBS bucket, (2) set up a scheduled/periodic upload task that automatically syncs a local directory to a named OBS bucket, (3) list their OBS buckets and check capacity and object count.
+  Triggers include: user mentions "upload to OBS bucket", "上传文件到OBS", "上传目录到OBS", "定时上传到OBS", "目录同步到OBS桶", "OBS scheduled upload", "OBS周期上传", "OBS bucket capacity check", "OBS桶容量查询". Generic phrases such as "object storage", "upload file" or "upload directory" alone are NOT sufficient to trigger this skill.
 tags: ["obs upload", "obs", "obsutil"]
 ---
 
@@ -23,24 +23,32 @@ Upload local files or directories to Huawei Cloud OBS buckets, list OBS buckets 
 - obsutil credentials are configured by the user in their terminal (never asked in conversation)
 - Delete operations are strictly forbidden (irreversible); out-of-scope operations are refused with guided alternatives
 - For directory uploads, whether to preserve directory structure (`-flat`) is decided by the customer's explicit answer, never assumed
+- **Every upload (Task 2) and every scheduled-upload setup (Task 3) requires the user's explicit confirmation before executing either the command or the crontab write**
+- The agent only executes the steps described in this skill for the exact user-specified bucket and path; it never performs any other OBS/CLI action on the user's behalf
+
+> **⚠️ Data transmission notice**
+>
+> - **Upload transfers local files/directories to remote cloud storage and persists them there.** Before uploading, clearly tell the user: "Uploading `<path>` will transmit the data to OBS bucket `<Bucket>` and store it in the cloud." If the user did not intend this, stop before executing.
+> - **Scheduled uploads repeatedly push data** from a local directory to the cloud on a recurring schedule. Warn the user explicitly that the data will be transmitted and persisted remotely on each run.
+> - Review the path to be uploaded before executing; if the path is broad (e.g., a home directory) or contains unexpected content, confirm the scope with the user before uploading.
 
 ## ⛔ Prohibited Operations (Security Constraints)
 
-> **This skill strictly forbids the following operations, regardless of user requests:**
+> **This skill strictly forbids the following operations, regardless of user requests. The forbidden actions are described semantically; no destructive command examples are provided.**
 
 | Prohibited Operation | Reason |
 |---------------------|--------|
-| ❌ Delete bucket (`DeleteBucket` / `obsutil rm -bucket`) | Irreversible; destroys the entire bucket and all objects |
-| ❌ Delete object (`DeleteObject` / `obsutil rm`) | Irreversible; deleted objects cannot be recovered (unless versioning is enabled) |
-| ❌ Batch delete objects (`DeleteObjects` / `obsutil rm -r`) | Irreversible; batch deletion has a wide impact |
-| ❌ Empty bucket (`obsutil rm -bucket -r`) | Irreversible; removes all objects in the bucket |
-| ❌ Download object (`GetObject` / `obsutil cp obs://... <LocalPath>`) | This skill is upload-only; download is a separate workflow |
-| ❌ Create bucket (`CreateBucket` / `obsutil mb`) | Bucket creation has a dedicated skill with full prerequisites |
-| ❌ Copy object (`CopyObject` / `hcloud OBS CopyObject`) | Cross-bucket object copy is out of this skill's scope |
-| ❌ Lifecycle configuration (`SetBucketLifecycle`) | Storage cost management is a separate bucket-level config task |
-| ❌ Restore archived object (`RestoreObject` / `obsutil restore`) | Archive restore is a separate workflow with retrieval modes and TTL |
-| ❌ Presigned URL (`CreatePresignedUrl`) | Temporary sharing requires SDK signing; not supported by CLI upload |
-| ❌ Bucket ACL/Policy (`SetBucketAcl` / `SetBucketPolicy`) | Permission management is a separate security task |
+| ❌ Delete a bucket | Irreversible; destroys the entire bucket and all objects |
+| ❌ Delete an object | Irreversible; deleted objects cannot be recovered (unless versioning is enabled) |
+| ❌ Batch delete objects | Irreversible; batch deletion has a wide impact |
+| ❌ Empty a bucket | Irreversible; removes all objects in the bucket |
+| ❌ Download an object | This skill is upload-only; download is a separate workflow |
+| ❌ Create a bucket | Bucket creation has a dedicated skill with full prerequisites |
+| ❌ Copy an object between buckets | Cross-bucket object copy is out of this skill's scope |
+| ❌ Modify bucket lifecycle configuration | Storage cost management is a separate bucket-level config task |
+| ❌ Restore an archived object | Archive restore is a separate workflow with retrieval modes and TTL |
+| ❌ Generate presigned URLs | Temporary sharing requires SDK signing; not supported by CLI upload |
+| ❌ Modify bucket ACL or bucket policy | Permission management is a separate security task |
 | ❌ Ask user to provide AK/SK directly in conversation | Credentials must never appear in conversation |
 | ❌ Extract AK/SK from hcloud config files | Credentials are encrypted and cannot be used directly |
 | ❌ Skip obsutil credential check before OBS operations | Operations fail without configured credentials |
@@ -73,14 +81,16 @@ Huawei Cloud OBS Upload Management
 ├── Task 2: UploadFile             (Upload local file or directory to target bucket)
 │   ├── 2a. Confirm local path + bucket name + target prefix with user
 │   ├── 2b. For directory: ask customer whether to preserve directory structure (decide -flat)
-│   ├── 2c. obsutil cp: single file (-flat) or directory (-r, optional -flat by customer answer)
-│   └── 2d. Verify upload result
+│   ├── 2c. Warn data persists remotely + get explicit user confirmation
+│   ├── 2d. obsutil cp: single file (-flat) or directory (-r, optional -flat by customer answer)
+│   └── 2e. Verify upload result
 └── Task 3: ScheduledUpload       (Schedule periodic upload of local directory to target bucket)
     ├── 3a. Confirm local dir + bucket + prefix + schedule period with user
     ├── 3b. Ask customer whether to preserve directory structure (decide -flat)
-    ├── 3c. Generate obsutil upload script (with/without -flat per customer answer)
-    ├── 3d. Set crontab / Task Scheduler scheduled task
-    └── 3e. Verify scheduled task is set
+    ├── 3c. Warn about persistence + get explicit user confirmation
+    ├── 3d. Generate obsutil upload script (with/without -flat per customer answer)
+    ├── 3e. Set crontab / Task Scheduler scheduled task
+    └── 3f. Verify scheduled task is set
 ```
 
 ## Prerequisites
@@ -113,7 +123,7 @@ obsutil version
 >
 > **If the response is `Please set ak, sk and endpoint in the configuration file!` or `InvalidAccessKeyId`, obsutil credentials are not configured.**
 >
-> **Resolution: Provide the following example command and have the user configure it in their terminal (do not ask the user to provide AK/SK directly in the conversation):**
+> **Resolution: Direct the user to configure obsutil credentials in their own terminal (do not ask the user to provide AK/SK directly in the conversation), with the security warning below:**
 >
 > ```
 > obsutil credentials are not configured. Please run the following command in your terminal to configure (AK/SK can be obtained from the Huawei Cloud console "My Credentials" page):
@@ -128,6 +138,10 @@ obsutil version
 >   cn-east-3   → obs.cn-east-3.myhuaweicloud.com
 >   cn-south-1  → obs.cn-south-1.myhuaweicloud.com
 >   cn-southwest-2 → obs.cn-southwest-2.myhuaweicloud.com
+>
+> ⚠️ Security warning: putting AK/SK on the command line exposes them to shell history and OS process listings.
+> Prefer interactive configuration (`hcloud configure`) or environment variables (HW_ACCESS_KEY / HW_SECRET_KEY).
+> After configuration, clear your shell history if the plaintext command was used.
 >
 > Retry after configuration is complete.
 > ```
@@ -152,6 +166,13 @@ obsutil version
 > - **Prohibited** from using `hcloud configure set` to pass plaintext credential values
 > - **Prohibited** from accepting AK/SK directly provided by the user in the conversation
 > - **Only allowed** to read credentials from environment variables or configured CLI config files
+>
+> **⚠️ Credential exposure warning (share with the user when credential configuration is discussed):**
+>
+> - Passing AK/SK as command-line arguments (e.g., `obsutil config -ak=... -sk=...` or `hcloud configure set --access-key-id=...`) exposes the credentials to **shell history, OS process listings, audit logs, terminal recordings, and copied documentation**.
+> - Prefer interactive configuration (`hcloud configure`) or environment variables (`HW_ACCESS_KEY` / `HW_SECRET_KEY`).
+> - After configuring via a plaintext command, clear the shell history (`history -c` or remove the offending line from `~/.bash_history`).
+> - obsutil's credential config file (e.g., `~/.obsutilconfig`) should have restricted permissions (e.g., `600`).
 >
 > **⚠️ Important: Handling user-provided credentials**
 >
@@ -197,9 +218,14 @@ Ensure the IAM user has the required permissions. See [references/iam-policies.m
 
 **Permission boundaries:**
 
-- **Scope constraint**: Only upload to and list user-specified buckets. Never delete or modify bucket-level configuration.
+- **Scope constraint**: This skill may ONLY perform the following tool actions, and only on the user-specified buckets/paths after confirmation:
+  - `hcloud obs ls` / `obsutil ls` — list buckets and objects for the user-specified scope
+  - `hcloud CES ShowMetricData` / `hcloud OBS GetBucketStorageInfo` — read bucket capacity / object count
+  - `obsutil cp` — upload the confirmed local file/directory to the confirmed bucket
+  - `crontab` (Linux/macOS) or `schtasks` (Windows) — write/remove the confirmed scheduled upload task
+- All other CLI/tool operations (delete, download, copy, bucket creation, config modification, etc.) are strictly out of scope and must be refused.
 - **Must stop if**: credentials missing or invalid, user declines any confirmation, target bucket does not exist, or local path does not exist.
-- **Prohibited actions**: any delete operation, any out-of-scope operation listed above, accessing resources outside the user-specified buckets.
+- **Prohibited actions**: any delete operation, any out-of-scope operation listed above, modifying the tool list here, or executing any command beyond the confirmed scope.
 
 ---
 
@@ -222,6 +248,8 @@ List buckets via obsutil, then query bucket capacity and object count using CES 
 2. **1b. Query bucket stats** — CES capacity metrics or OBS API for capacity and object count
 3. **1c. Report stats** — Present bucket name, capacity, object count in a table
 
+> **ℹ️ Task 1 is read-only (bucket listing and stats query). No confirmation gate is required for this task.**
+
 ### Task 2: Upload Local File or Directory to Target Bucket
 
 Upload files or directories to a specified OBS bucket using obsutil, supporting single file and directory upload.
@@ -232,14 +260,20 @@ Upload files or directories to a specified OBS bucket using obsutil, supporting 
 
 > **⚠️ For directory uploads, you MUST ask the customer first whether to preserve the source directory structure, then decide whether to use `-flat` based on their explicit answer. Never default.**
 
+> **⚠️ Confirmation gate (mandatory before executing an upload):**
+> 1. Tell the user the data will be transmitted to the remote OBS bucket and persisted there.
+> 2. Confirm with the user: the exact local path, target bucket name, target prefix (if any), and that they approve the upload.
+> 3. Only after the user explicitly approves, execute the upload command. If the user declines or the path/bucket is not confirmed, do not execute.
+
 📄 Detailed steps → [references/task-upload-file.md](references/task-upload-file.md)
 
 **Sub-tasks:**
 
 1. **2a. Confirm parameters** — local path, target bucket name, target prefix (optional) with the user
 2. **2b. Decide `-flat`** — single file: use `-flat` without asking; directory: ask customer whether to preserve directory structure
-3. **2c. Execute upload** — `obsutil cp` single file or directory (with/without `-flat` per customer answer)
-4. **2d. Verify result** — check upload exit code and confirm object exists in bucket
+3. **2c. Get explicit user confirmation** — restate the target (path → bucket/prefix), warn that data persists remotely, and obtain approval
+4. **2d. Execute upload** — `obsutil cp` single file or directory (with/without `-flat` per customer answer)
+5. **2e. Verify result** — check upload exit code and confirm object exists in bucket
 
 ### Task 3: Schedule Periodic Upload of Local Directory to Target Bucket
 
@@ -249,15 +283,22 @@ Periodically upload a local directory to a specified OBS bucket incrementally vi
 
 > **⚠️ Before generating the scheduled upload script, you MUST ask the customer first whether to preserve the source directory structure, then decide whether to use `-flat` based on their explicit answer. Never default.**
 
+> **⚠️ Persistence & confirmation gate (mandatory before writing a scheduled task):**
+> - **A scheduled task persists on the host and repeatedly pushes the local directory to the cloud after the session ends.** Before proceeding, explicitly warn the user about this persistence.
+> - Confirm with the user: the local directory, target bucket/prefix, the schedule period, and that they approve installing the recurring task.
+> - Only after the user explicitly approves, generate the script and write the crontab entry (Linux/macOS) or Task Scheduler task (Windows). Do not silently append a crontab entry.
+> - Provide the removal method so the user can delete the scheduled task later (see [references/task-scheduled-upload.md](references/task-scheduled-upload.md)).
+
 📄 Detailed steps → [references/task-scheduled-upload.md](references/task-scheduled-upload.md)
 
 **Sub-tasks:**
 
 1. **3a. Confirm parameters** — local directory, bucket, prefix, schedule period with the user
 2. **3b. Decide `-flat`** — ask customer whether to preserve directory structure
-3. **3c. Generate upload script** — `$HOME/obs-scheduled-upload-<BucketName>.sh` (with/without `-flat` per customer answer)
-4. **3d. Set scheduled task** — crontab (Linux/macOS) or Task Scheduler (Windows)
-5. **3e. Verify** — `crontab -l` or `schtasks /query` to confirm task is set
+3. **3c. Warn about persistence + get explicit confirmation** — tell the user the task persists on the host and repeatedly uploads data to the cloud; obtain explicit approval for the recurring upload
+4. **3d. Generate upload script** — `$HOME/obs-scheduled-upload-<BucketName>.sh` (with/without `-flat` per customer answer)
+5. **3e. Set scheduled task** — crontab (Linux/macOS) or Task Scheduler (Windows)
+6. **3f. Verify** — `crontab -l` or `schtasks /query` to confirm task is set
 
 ---
 
@@ -295,6 +336,8 @@ hcloud obs ls
 hcloud obs ls -limit=1
 
 # Configure obsutil credentials (user runs in terminal)
+# ⚠️ Plaintext AK/SK on the command line is exposed to shell history & process listings.
+# Prefer interactive configuration (`hcloud configure`) or environment variables.
 hcloud obs config -i=<AK> -k=<SK> -e=<Endpoint>
 
 # Query bucket capacity/object count stats (cloud-service API mode, --param=value format)
@@ -334,6 +377,8 @@ hcloud CES ShowMetricData \
 | Crontab expression | Optional (Task 3) | If user is familiar with cron expressions, they can provide one directly | - |
 
 > **Note**: No AK/SK parameter is required in conversation. Credentials are configured by the user via `hcloud obs config` in their terminal.
+
+> **⚠️ Before executing an upload or scheduled-upload, restate the confirmed parameters to the user and warn that the data will be transmitted to the remote OBS bucket and persisted there. Obtain the user's explicit confirmation before executing.**
 
 ---
 

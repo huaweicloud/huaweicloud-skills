@@ -18,6 +18,12 @@
 | 2 | **Target bucket name** | The target OBS bucket name for upload |
 | 3 | **Target path prefix (optional)** | The target path prefix within the bucket; defaults to bucket root |
 
+> **⚠️ Confirmation gate before executing an upload**
+>
+> - **Data transmission notice**: uploading transmits the local file/directory to the remote OBS bucket and persists it in the cloud.
+> - Restate the confirmed parameters (local path → bucket/prefix) and obtain the user's explicit approval **before** running the upload command.
+> - If the user declines, or the path/bucket is not confirmed, do not execute.
+
 **Upload a single file:**
 
 ```bash
