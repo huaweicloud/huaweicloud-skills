@@ -109,6 +109,7 @@
 | AC-49q | `import-asset` Mode 3 SDK layer rejects image | Call SDK `import_asset(asset_id=<img-id>, version_id=<vid>, ...)` directly (bypass CLI); verify ValueError "import_asset does not support image assets" | ☐ |
 | AC-49r | `export-asset` algorithm missing code_dir error | Run `export-asset --asset-id <algo-id-no-code> --local-path ./out` on algorithm with empty ext_metadata; verify RuntimeError contains "code_dir" and recovery guidance | ☐ |
 | AC-49s | `export-asset` local_path not found raises FileNotFoundError | Run `export-asset --asset-id <id> --local-path /nonexistent`; verify FileNotFoundError "Local path does not exist" | ☐ |
+| AC-49t | `export-asset` no `data_read` permission blocked before download | Run `check-permission --asset-id <id> --version-id <vid> --permissions data_read` on a marketplace asset the account lacks `data_read` for; verdict=deny → do NOT run `export-asset`, inform user「无数据读取权限仅能导出元数据（README）」，不返回 `status:exported` 残缺结果 | ☐ |
 
 ## Non-Functional Criteria 非功能标准
 

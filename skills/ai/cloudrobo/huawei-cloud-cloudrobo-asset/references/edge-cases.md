@@ -9,7 +9,7 @@
 | `export-asset` no versions | RuntimeError "No versions found for asset {asset_id}" |
 | `export-asset` local_path not found | FileNotFoundError "Local path does not exist: {local_path}" — export-asset requires the target directory to exist (it creates a subdirectory `{local_path}/{asset_id}/` inside it) |
 | `export-asset` local_path is a file | ValueError "Local path must be a directory, not a file: {local_path}" |
-| `export-asset` no `data_read` permission | Export not allowed; inform user |
+| `export-asset` no `data_read` permission | 导出前调 `check-permission --asset-id <id> --version-id <vid> --permissions data_read`（`--version-id` 为 CLI 必填，需先用 `list-versions --asset-id <id>` 取最新版本 ID 显式传入，无默认取最新）；verdict=deny 时明确提示「当前账号无该资产数据读取权限，仅能导出元数据（README），无法下载数据文件」，不执行导出，避免返回误导性 `status:exported` 残缺结果 |
 | `export-asset` with `type=image` | Client raises ValueError "does not support image assets" — image is a SWR reference, no downloadable files |
 | `export-asset` with `type=algorithm` | Downloads code from version detail's `ext_metadata.code_dir` OBS path (not from `url` field which is null). If `code_dir` is missing or invalid, raises RuntimeError with recovery guidance: "Algorithm asset ... has no code_dir in ext_metadata. This usually means the algorithm was created but code upload failed or was skipped. Use import-asset with --asset-id and --version-id to upload code first." |
 | `list-assets` no repository-id or catalog-id | CLI raises UsageError |

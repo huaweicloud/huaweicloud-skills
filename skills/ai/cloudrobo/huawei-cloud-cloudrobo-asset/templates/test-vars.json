@@ -474,7 +474,9 @@
   },
   "notes": [
     "Read-only tests (TC-01 to TC-08, TC-13, TC-14, TC-19 to TC-29, TC-32, TC-38, TC-39) run automatically.",
-    "Mutation tests (TC-09 to TC-12, TC-15 to TC-18, TC-30 to TC-31, TC-33 to TC-37, TC-40, TC-41) require explicit user confirmation.",
+    "Dry-run mutation tests (unsafe operations previewed: update/delete/version/tag/action/import/export) run automatically when their env vars are set.",
+    "Real lifecycle mutations (create-asset, update-asset, add-tags, create-version) require RUN_LIFECYCLE=1 plus interactive user confirmation.",
+    "Tests whose required env vars are unset print an explicit SKIP line and are never counted as pass.",
     "Set REPOSITORY_ID to run catalog listing tests (TC-03).",
     "Set CATALOG_ID to run catalog-specific tests (TC-04 to TC-06, TC-08, TC-29 to TC-30, TC-38 to TC-39).",
     "Set ASSET_ID to run asset-specific tests (TC-07, TC-10 to TC-11, TC-13 to TC-14, TC-17 to TC-18, TC-21 to TC-24, TC-32 to TC-34, TC-40 to TC-41).",

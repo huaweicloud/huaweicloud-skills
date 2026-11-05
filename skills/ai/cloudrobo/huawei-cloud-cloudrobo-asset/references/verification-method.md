@@ -59,14 +59,21 @@ find skills/ai/cloudrobo/huawei-cloud-cloudrobo-asset/ -type f | wc -l
 ### CLI Testing CLI测试
 
 ```bash
-bash skills/ai/cloudrobo/huawei-cloud-cloudrobo-asset/scripts/test-cli-commands.sh skills/ai/cloudrobo/huawei-cloud-cloudrobo-asset --executor cli
+bash skills/ai/cloudrobo/huawei-cloud-cloudrobo-asset/scripts/test-cli-commands.sh -s skills/ai/cloudrobo/huawei-cloud-cloudrobo-asset -e cli
 ```
 
 ### SDK Testing SDK测试
 
 ```bash
-bash skills/ai/cloudrobo/huawei-cloud-cloudrobo-asset/scripts/test-cli-commands.sh skills/ai/cloudrobo/huawei-cloud-cloudrobo-asset --executor sdk
+bash skills/ai/cloudrobo/huawei-cloud-cloudrobo-asset/scripts/test-cli-commands.sh -s skills/ai/cloudrobo/huawei-cloud-cloudrobo-asset -e sdk
 ```
+
+### Optional env IDs 可选环境变量
+
+`REPOSITORY_ID` / `CATALOG_ID` / `ASSET_ID` / `VERSION_ID` gate the relevant test cases; a missing
+required env is reported as an explicit SKIP (no silent pass). Set `RUN_LIFECYCLE=1` to execute the
+key asset lifecycle (create→update→tag→version→delete) for real — the script confirms before each
+mutation. By default all mutating commands run with `--dry-run` only.
 
 ## Test Case List 测试用例列表
 
