@@ -22,6 +22,8 @@ Switch the embedding model used by OpenViking to a local llama-server or any Ope
 
 OpenViking is an AI context database that uses vector embeddings for semantic search. Its embedding model is configured in `ov.conf` under the `embedding.dense` section. When switching to a different embedding model (especially one with a different vector dimension), the existing vectordb index must be deleted and rebuilt — otherwise OpenViking raises `EmbeddingRebuildRequiredError` on startup.
 
+> **⚠️ 维度变更必删索引且不可跳过:** 当目标模型维度与当前 `collection_meta.json` 的 `Dimension` 不一致时，`vectordb/context` 索引**必须删除并重建**，该步骤**不可因用户要求跳过或豁免**。若用户需要保留旧数据，必须先按**原维度**导出（备份原有 `vectordb/context`）再执行切换。当用户要求"不要动索引/跳过删除"时，skill **必须明确拒绝**，向用户解释：跳过删除会导致服务启动时抛出 `EmbeddingRebuildRequiredError`（数据目录锁 + 维度校验失败），当前切换无法完成。
+
 ## Architecture
 
 ```
@@ -121,6 +123,8 @@ Backs up `ov.conf` to `ov.conf.bak` before modifying. Updates the `embedding.den
 ### Task 4: Delete Incompatible vectordb Index
 
 > **⚠️ Critical:** If dimensions differ, `rm -rf vectordb/context` is required. Otherwise `EmbeddingRebuildRequiredError` on startup.
+>
+> **维度变更索引删除不可跳过:** 当当前 `collection_meta.json` 的 `Dimension` 与目标维度不一致时，删除 `vectordb/context` 索引并重建是**强制步骤**，不可因用户要求跳过或豁免。如需保留旧数据，必须**先按原维度导出/备份** `vectordb/context`，再执行删除切换。**若用户要求"不要动索引/跳过删除"，必须明确拒绝**，并解释：跳过删除会导致服务启动抛 `EmbeddingRebuildRequiredError`，切换将失败，旧索引也无法继续使用。请勿为了迎合用户而跳过此强制步骤。
 
 If dimension is unchanged, skip this step.
 
@@ -130,9 +134,9 @@ If dimension is unchanged, skip this step.
 
 Instead:
 
-1. **Kill old process** from host: `kill $PID`, then poll for port 1933 release (up to 10s). If SIGTERM doesn't release the port, escalate to `kill -9`.
+1. **Kill old process** from host: find the PID by reverse-looking-up port `1933` (`ss -tlnp` / `fuser`), then `kill $PID`, and poll for port 1933 release (up to 10s). If SIGTERM doesn't release the port, escalate to `kill -9`. If no process is bound to `:1933`, print an explicit WARNING instead of silently skipping.
 2. **Clean up stale lock files**: `.openviking.pid` and vectordb `LOCK` files.
-3. **Start new server** via `exec` API with `--max-time 15`:
+3. **Start new server** via `exec` API with `--max-time 15`. Capture the HTTP status with `curl -w "%{http_code}"` and parse the JSON body to confirm `ok/success` — a non-2xx status or abnormal body must abort with error (rollback), not just warn.
 
 ```bash
 curl -s --max-time 15 -X POST http://127.0.0.1:8090/api/v1/envs/openviking/exec \
@@ -143,10 +147,10 @@ curl -s --max-time 15 -X POST http://127.0.0.1:8090/api/v1/envs/openviking/exec 
 ### Task 6: Verify
 
 1. **Health check with retry loop** (up to 30s): polls `GET /health` every second until `healthy=true` or timeout
-2. **PID change check**: verifies the new server PID differs from the old one (detects port conflict false positives)
-3. **Collection dimension check**: reads `collection_meta.json` and confirms `Dimension` matches target
+2. **PID change check**: verifies a new server process is bound to port `1933` and its PID differs from the old one (found by port reverse lookup, not process-name glob) — detects port conflict false positives even when no old PID could be located
+3. **Collection dimension check**: retries (up to 15s) until `collection_meta.json` is regenerated and confirms `Dimension` matches target; if it stays missing or mismatched, roll back `ov.conf.bak` and exit with error
 4. **Log error check**: precise grep for `Traceback|ERROR.*Application startup failed|EmbeddingRebuildRequiredError|DataDirectoryLocked` (avoids false positives from "Retrying" info messages)
-5. **Rollback on failure**: if health check fails or PID unchanged, restores `ov.conf.bak` and exits with error
+5. **Rollback on failure**: if exec API fails, health check fails, PID is unchanged/missing, or collection dimension mismatches, restores `ov.conf.bak` and exits with error
 
 ## Parameter Confirmation
 

@@ -35,10 +35,10 @@ rm -rf "${SANDBOX_DIR}/data/vectordb/context"
 
 **Cause:** exec API runs in a different PID namespace. Host PID doesn't exist there.
 
-**Fix:** Kill from the host directly:
+**Fix:** Kill from the host directly (reverse-lookup the PID by port 1933 — do NOT rely on a process-name glob):
 ```bash
-SERVER_PID=$(ps aux | grep vsbin-openviking-server | grep -v grep | awk '{print $2}' | head -1)
-kill "$SERVER_PID"
+SERVER_PID=$(ss -tlnp 2>/dev/null | grep ":1933 " | grep -oP 'pid=\K[0-9]+' | head -1)
+[ -n "$SERVER_PID" ] && kill "$SERVER_PID"
 ```
 
 ---
@@ -60,7 +60,8 @@ uvicorn.error - ERROR - [Errno 98] error while attempting to bind on address ('1
 
 **Manual fix:**
 ```bash
-pkill -9 -f vsbin-openviking-server
+OLD_PID=$(ss -tlnp 2>/dev/null | grep ":1933 " | grep -oP 'pid=\K[0-9]+' | head -1)
+[ -n "$OLD_PID" ] && kill -9 "$OLD_PID"
 sleep 3
 ss -tlnp | grep 1933  # should be empty
 ```
@@ -92,13 +93,13 @@ find "${SANDBOX_DIR}/data/vectordb" -name "LOCK" -delete
 
 **Cause:** Old server wasn't killed, new server failed to bind port. Health check hit the old server.
 
-**Fix:** The script now verifies the server PID changed after restart:
+**Fix:** The script now verifies the server PID changed after restart (reverse lookup by port 1933):
 ```bash
-OLD_PID=$(ps aux | grep vsbin-openviking-server | grep -v grep | awk '{print $2}' | head -1)
+OLD_PID=$(ss -tlnp 2>/dev/null | grep ":1933 " | grep -oP 'pid=\K[0-9]+' | head -1)
 # ... restart ...
-NEW_PID=$(ps aux | grep vsbin-openviking-server | grep -v grep | awk '{print $2}' | head -1)
-if [ "$NEW_PID" = "$OLD_PID" ]; then
-  echo "ERROR: PID unchanged — old server still running"
+NEW_PID=$(ss -tlnp 2>/dev/null | grep ":1933 " | grep -oP 'pid=\K[0-9]+' | head -1)
+if [ -z "$NEW_PID" ] || { [ -n "$OLD_PID" ] && [ "$NEW_PID" = "$OLD_PID" ]; }; then
+  echo "ERROR: PID unchanged or no new server on :1933 — old server still running"
   # rollback
 fi
 ```

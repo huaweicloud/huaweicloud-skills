@@ -21,6 +21,20 @@ JEM_BASE="http://127.0.0.1:8090/api/v1"
 SERVER_PORT=1933
 HEALTH_TIMEOUT=30  # seconds to wait for server health
 
+# Look up the PID listening on a given TCP port (host netns; sandboxes share-net)
+# Reverse lookup via 'ss' (primary) with 'fuser' fallback — no reliance on a
+# brittle process-name glob like 'vsbin-openviking-server'.
+get_pid_on_port() {
+  local port="$1" line pid=""
+  line=$(ss -tlnp 2>/dev/null | awk -v p=":${port} " 'index($0,p){print $NF}' | head -1 || true)
+  pid=$(echo "$line" | grep -oP 'pid=\K[0-9]+' | head -1 || true)
+  if [ -z "$pid" ] && command -v fuser >/dev/null 2>&1; then
+    # fuser output looks like "1933/tcp: 1234  5678"; keep only standalone ints
+    pid=$(fuser "${port}/tcp" 2>/dev/null | tr -s ' ' '\n' | grep -E '^[0-9]+$' | head -1 || true)
+  fi
+  echo "$pid"
+}
+
 echo "=== OpenViking Embedding Model Switch ==="
 echo "  Model:    $MODEL_NAME"
 echo "  Port:     $LLAMA_PORT"
@@ -125,7 +139,8 @@ echo ""
 echo "[5/6] Restarting openviking-server..."
 
 # 5a. Kill old process and wait for port release (BUG-1 fix)
-OLD_PID=$(ps aux | grep vsbin-openviking-server | grep -v grep | awk '{print $2}' | head -1 || true)
+# Locate the old server by port 1933 reverse lookup (NOT by process-name glob).
+OLD_PID=$(get_pid_on_port "$SERVER_PORT")
 if [ -n "$OLD_PID" ]; then
   echo "  Killing old server (PID $OLD_PID)..."
   kill "$OLD_PID" 2>/dev/null || true
@@ -143,6 +158,10 @@ if [ -n "$OLD_PID" ]; then
     }
     sleep 1
   done
+else
+  # ISSUE-002: never silently skip — surface the empty-PID case explicitly.
+  echo "  WARNING: no server process found on :${SERVER_PORT} (port reverse lookup) — nothing to kill."
+  echo "          If another process later binds :${SERVER_PORT}, the new server may fail to start."
 fi
 
 # BUG-3 fix: clean up stale lock files
@@ -152,14 +171,37 @@ echo "  Cleaned up lock files"
 
 # 5b. Start new server via exec API
 echo "  Starting new server via exec API..."
-EXEC_RESP=$(curl -s --max-time 15 -X POST "${JEM_BASE}/envs/openviking/exec" \
+EXEC_BODY_FILE=$(mktemp)
+EXEC_HTTP=$(curl -s --max-time 15 -o "$EXEC_BODY_FILE" -w "%{http_code}" \
+  -X POST "${JEM_BASE}/envs/openviking/exec" \
   -H 'Content-Type: application/json' \
-  -d '{"cmd":["bash","-c","nohup /root/runtime/openviking/venv/bin/openviking-server --config /workspace/process_dir/ov.conf > /workspace/process_dir/openviking-server.log 2>&1 & sleep 2 && echo started"]}' 2>&1) || true
+  -d '{"cmd":["bash","-c","nohup /root/runtime/openviking/venv/bin/openviking-server --config /workspace/process_dir/ov.conf > /workspace/process_dir/openviking-server.log 2>&1 & sleep 2 && echo started"]}' 2>/dev/null || true)
+EXEC_BODY=$(cat "$EXEC_BODY_FILE" 2>/dev/null || true)
+rm -f "$EXEC_BODY_FILE"
 
-# BUG-5 fix: check exec API response
-if echo "$EXEC_RESP" | grep -qi "error\|fail\|not found" 2>/dev/null; then
-  echo "  WARNING: exec API response unexpected: $EXEC_RESP"
+# ISSUE-004: validate exec HTTP status + JSON body (ok/success), not just grep "error".
+EXEC_OK="no"
+if [[ "$EXEC_HTTP" =~ ^2[0-9][0-9]$ ]]; then
+  EXEC_OK=$(echo "$EXEC_BODY" | python3 -c "
+import sys,json
+try:
+    d=json.load(sys.stdin)
+    ok = d.get('ok') if d.get('ok') is not None else d.get('success')
+    print('yes' if ok is True or str(ok).lower() in ('true','yes') else 'no')
+except Exception:
+    print('bad-json')
+" 2>/dev/null || echo "bad-json")
 fi
+
+if [[ ! "$EXEC_HTTP" =~ ^2[0-9][0-9]$ ]] || [ "$EXEC_OK" != "yes" ]; then
+  echo "  ❌ exec API failed: HTTP=$EXEC_HTTP ok=$EXEC_OK"
+  echo "  Response body: ${EXEC_BODY:-<empty>}"
+  echo "  Rolling back config (ov.conf.bak)..."
+  cp "${SANDBOX_DIR}/process_dir/ov.conf.bak" "${SANDBOX_DIR}/process_dir/ov.conf"
+  echo "  Check log: ${SANDBOX_DIR}/process_dir/openviking-server.log"
+  exit 1
+fi
+echo "  ✅ exec API accepted (HTTP $EXEC_HTTP)"
 
 # ── Step 6: Verify ──
 echo ""
@@ -188,27 +230,54 @@ if [ "$HEALTHY" != "True" ]; then
   exit 1
 fi
 
-# 6b. Verify the running server PID is NEW (BUG-1 fix: detect false positive)
-NEW_PID=$(ps aux | grep vsbin-openviking-server | grep -v grep | awk '{print $2}' | head -1 || true)
+# 6b. Verify the running server PID is NEW (BUG-1 fix, ISSUE-002: port-based lookup)
+# No matter whether OLD_PID was empty, the new server MUST be bound on :1933 and
+# its PID must differ from the old one — otherwise the health check may have hit
+# a stale/foreign process (false positive).
+NEW_PID=""
+for i in $(seq 1 15); do
+  NEW_PID=$(get_pid_on_port "$SERVER_PORT")
+  [ -n "$NEW_PID" ] && break
+  sleep 1
+done
+
+if [ -z "$NEW_PID" ]; then
+  echo "  ❌ No new server process is bound to port $SERVER_PORT after restart — restart failed!"
+  echo "  Rolling back config..."
+  cp "${SANDBOX_DIR}/process_dir/ov.conf.bak" "${SANDBOX_DIR}/process_dir/ov.conf"
+  echo "  Check log: ${SANDBOX_DIR}/process_dir/openviking-server.log"
+  exit 1
+fi
+
 if [ -n "$OLD_PID" ] && [ "$NEW_PID" = "$OLD_PID" ]; then
   echo "  ❌ Server PID unchanged ($OLD_PID) — old server still running, config not applied!"
   echo "  Rolling back config..."
   cp "${SANDBOX_DIR}/process_dir/ov.conf.bak" "${SANDBOX_DIR}/process_dir/ov.conf"
   exit 1
 fi
-echo "  ✅ New server PID: $NEW_PID (was: ${OLD_PID:-none})"
+echo "  ✅ New server PID: $NEW_PID bound on :${SERVER_PORT} (was: ${OLD_PID:-none})"
 
-# 6c. Collection dimension
-if [ -f "$COLLECTION_META" ]; then
-  NEW_DIM=$(python3 -c "import json; print(json.load(open('$COLLECTION_META'))['Dimension'])" 2>/dev/null || echo "unknown")
-  if [ "$NEW_DIM" = "$TARGET_DIMENSION" ]; then
-    echo "  ✅ Collection dimension: $NEW_DIM"
-  else
-    echo "  ❌ Collection dimension: $NEW_DIM (expected $TARGET_DIMENSION)"
+# 6c. Collection dimension — retry until generated; missing/mismatch fails the switch (ISSUE-003)
+if [ -f "$COLLECTION_META" ] && [ "${CURRENT_DIM:-}" = "$TARGET_DIMENSION" ]; then
+  echo "  ✅ Collection dimension unchanged: $CURRENT_DIM"
+else
+  echo "  Waiting for new collection_meta.json to be generated (up to 15s)..."
+  NEW_DIM="unknown"
+  for i in $(seq 1 15); do
+    if [ -f "$COLLECTION_META" ]; then
+      NEW_DIM=$(python3 -c "import json; print(json.load(open('$COLLECTION_META'))['Dimension'])" 2>/dev/null || echo "unknown")
+      [ "$NEW_DIM" = "$TARGET_DIMENSION" ] && break
+    fi
+    sleep 1
+  done
+  if [ "$NEW_DIM" != "$TARGET_DIMENSION" ]; then
+    echo "  ❌ collection_meta.json missing or dimension mismatch ($NEW_DIM, expected $TARGET_DIMENSION) — index rebuild failed!"
+    echo "  Rolling back config..."
+    cp "${SANDBOX_DIR}/process_dir/ov.conf.bak" "${SANDBOX_DIR}/process_dir/ov.conf"
+    echo "  Check log: ${SANDBOX_DIR}/process_dir/openviking-server.log"
     exit 1
   fi
-else
-  echo "  ⚠️  collection_meta.json not found (may still be initializing)"
+  echo "  ✅ Collection dimension: $NEW_DIM"
 fi
 
 # 6d. Log errors — precise pattern to avoid false positives (BUG-4 fix)

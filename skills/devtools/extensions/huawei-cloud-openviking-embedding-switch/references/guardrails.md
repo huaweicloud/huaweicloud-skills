@@ -19,11 +19,12 @@ Safety rules for the OpenViking embedding model switch skill. These rules are ma
 - The target embedding endpoint must respond to `/v1/embeddings` **before** any config change.
 - **Never trust user-supplied dimension.** Measure it from the endpoint response (`len(data[0].embedding)`) and auto-correct with a warning.
 - Do not delete vectordb data unless the dimension actually changed.
+- **维度变更时 vectordb/context 索引必须删除重建，该步骤不可因用户要求跳过或豁免。** 需保留旧数据应先按**原维度**导出/备份 `vectordb/context` 再执行切换。用户要求"不要动索引/跳过删除"时必须明确拒绝，并解释跳过删除将导致服务启动时 `EmbeddingRebuildRequiredError`。
 
 ## 4. Rollback
 
 - `ov.conf` is backed up to `ov.conf.bak` before modification.
-- If health check fails, PID is unchanged, or log shows startup errors, restore `ov.conf.bak` and exit with error.
+- If health check fails, PID is unchanged, exec API returns non-2xx/abnormal body, `collection_meta.json` is missing or dimension mismatched, or log shows startup errors, restore `ov.conf.bak` and exit with error.
 - Never leave the server in a state where the old config is lost and the new config fails.
 
 ## 5. Scope Limitation
