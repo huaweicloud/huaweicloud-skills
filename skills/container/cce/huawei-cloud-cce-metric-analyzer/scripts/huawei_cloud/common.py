@@ -172,6 +172,75 @@ def run_hcloud(
     return {"success": True, "data": data, "command": safe_cmd}
 
 
+def normalize_hcloud_result(result: Dict[str, Any]) -> Dict[str, Any]:
+    """Re-check a run_hcloud() result for KooCLI API-level errors.
+
+    KooCLI exits with code 0 even when the Huawei Cloud API rejects the request,
+    hiding the error object inside the JSON payload (e.g.
+    {"error_msg": "The resource could not be found...", "error_code": "SYS.0404"}
+    or {"error": {"code": "Ecs.0114", "message": "..."}}). Without normalizing,
+    callers would treat a rejected request as success with empty data. This
+    converts such payloads into a `success: False` result.
+    """
+    if not result.get("success"):
+        return result
+    data = result.get("data")
+    if not isinstance(data, dict):
+        return result
+    message = _extract_hcloud_error(data)
+    if not message:
+        return result
+    return {
+        "success": False,
+        "error": message,
+        "data": data,
+        "command": result.get("command"),
+    }
+
+
+def _extract_hcloud_error(data: Dict[str, Any]) -> str:
+    """Extract a readable error message from an hcloud error payload."""
+    error = data.get("error")
+    if isinstance(error, dict):
+        code = error.get("code") or error.get("error_code") or ""
+        message = error.get("message") or error.get("error_msg") or ""
+        if code or message:
+            return _format_error(code, message)
+        return ""
+    code = data.get("error_code")
+    message = data.get("error_msg")
+    if code or message:
+        return _format_error(code, message)
+    return ""
+
+
+def _format_error(code: Any, message: Any) -> str:
+    parts = []
+    if code:
+        parts.append(str(code))
+    if message:
+        parts.append(str(message))
+    return ": ".join(parts) if parts else ""
+
+
+def is_resource_not_found_error(message: Optional[str]) -> bool:
+    """Return True when an hcloud/API error message means the resource was not found.
+
+    Used to map "Show*" API failures to explicit "资源不存在/资源 ID 错误" responses
+    instead of generic errors or empty success results.
+    """
+    text = (message or "").lower()
+    markers = (
+        "could not be found",
+        "does not exist",
+        "not found",
+        "不存在",
+        "sys.0404",
+        "ecs.0114",
+    )
+    return any(marker in text for marker in markers)
+
+
 def hcloud_show_metric_data(
     region: str,
     namespace: str,
