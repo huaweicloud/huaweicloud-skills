@@ -82,10 +82,15 @@ export TF_CLI_CONFIG_FILE="/path/to/project/.tfrc" && terraform init -upgrade
 
 ### Image version mismatch
 
-| User confirms | Template uses | Result |
-|--------------|---------------|--------|
-| Ubuntu 22.04 | `os = "Ubuntu"` | Ubuntu 24.04 ❌ |
-| Ubuntu 22.04 | `os_version = "Ubuntu 22.04 server 64bit"` | Ubuntu 22.04 ✅ |
+| User confirms | Template uses | Result returned | Actual installed |
+|--------------|---------------|-----------------|------------------|
+| Ubuntu 22.04 | `os = "Ubuntu"` | Ubuntu 24.04 | Ubuntu 24.04 ❌ |
+| Ubuntu 22.04 | `os_version = "Ubuntu 22.04 server 64bit"` on the **plural** `huaweicloud_images_images` data source | 68 public images from every OS family; `images[0]` = `AlmaLinux 8.3 64bit` | Wrong OS family, silently ❌❌ |
+
+`os_version` does not filter the plural `huaweicloud_images_images` data source (provider 1.94.0) — the
+query returns every public image in the region and `terraform plan` reports no error, so the wrong OS
+family is only discovered after deployment. Use the **singular** `data "huaweicloud_images_image"` with
+the EXACT image `name` (including version, taken from the query result) instead.
 
 ### Handle empty query results
 

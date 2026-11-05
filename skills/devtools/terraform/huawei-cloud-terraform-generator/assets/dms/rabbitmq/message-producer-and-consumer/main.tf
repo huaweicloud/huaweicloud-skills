@@ -147,7 +147,7 @@ resource "huaweicloud_compute_instance" "producer" {
     charge_mode = var.eip_charge_mode
   }
 
-  user_data = templatefile("${path.module}/templates/user_data_producer_tpl", {
+  user_data = templatefile("${path.module}/templates/user_data_producer_tpl.sh", {
     producer_script   = file("${path.module}/apps/producer.py")
     rabbitmq_host     = huaweicloud_dms_rabbitmq_instance.test.connect_address
     rabbitmq_user     = var.instance_access_user_name
@@ -196,7 +196,7 @@ resource "huaweicloud_compute_instance" "consumer" {
     charge_mode = var.eip_charge_mode
   }
 
-  user_data = templatefile("${path.module}/templates/user_data_consumer_tpl", {
+  user_data = templatefile("${path.module}/templates/user_data_consumer_tpl.sh", {
     consumer_script   = file("${path.module}/apps/consumer.py")
     rabbitmq_host     = huaweicloud_dms_rabbitmq_instance.test.connect_address
     rabbitmq_user     = var.instance_access_user_name

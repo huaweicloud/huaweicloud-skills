@@ -75,6 +75,34 @@ data "huaweicloud_compute_flavors" "test" {
 - **cpu\_core\_count**: CPU core count, set to 2 cores
 - **memory\_size**: Memory size (GB), set to 4GB
 
+**huaweicloud_compute_flavors supported arguments** (verified against provider 1.94.0):
+
+| Argument | Type | Notes |
+|----------|------|-------|
+| `availability_zone` | string | Filter by AZ; strongly recommended so the flavor is usable by the instance |
+| `performance_type` | string | e.g. `normal`, `computing`, `memory`, `highmem`, `gpu` |
+| `cpu_core_count` | number | vCPU count |
+| `memory_size` | number | Memory size in GB |
+| `generation` | string | Flavor generation, e.g. `s6`, `c6`, `m6` |
+| `region` | string | Optional; defaults to the provider region |
+
+> **⚠️ Not supported:** `name`, `flavor_name`, `name_regex` (and any argument outside the table above)
+> are **not** arguments of this data source — passing them fails with `Unsupported argument`.
+> To pin one specific flavor, use the value confirmed through the `huawei-cloud-computing-query` skill
+> directly on the instance resource (`flavor_name = "s6.small.1"` / `flavor_id = "..."`) instead of
+> filtering a data source.
+
+```hcl
+# ✅ Correct: filter by the arguments the data source actually supports
+data "huaweicloud_compute_flavors" "selected" {
+  availability_zone = var.availability_zone
+  performance_type  = "normal"
+  cpu_core_count    = 2
+  memory_size       = 4
+  generation        = "s6"
+}
+```
+
 ### 4. Query Images Required for ECS Instance Resource Creation Through Data Source
 
 Add the following script to the TF file to instruct Terraform to query images that meet the conditions:

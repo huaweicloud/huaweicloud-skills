@@ -620,6 +620,10 @@ resource "random_password" "test" {
   length           = 16
   special          = true
   override_special = "_%@"
+  min_upper        = 1
+  min_lower        = 1
+  min_numeric      = 1
+  min_special      = 1
 }
 ```
 
@@ -629,6 +633,10 @@ resource "random_password" "test" {
 - **length**: The length of the password, set to 16 characters
 - **special**: Whether to include special characters, set to true to include special characters
 - **override\_special**: The special character set, set to "\_%@" indicating that the password can include underscore, percent sign, and @ symbol
+- **min\_upper**: Minimum number of uppercase letters, set to 1 to guarantee at least one uppercase letter
+- **min\_lower**: Minimum number of lowercase letters, set to 1 to guarantee at least one lowercase letter
+- **min\_numeric**: Minimum number of digits, set to 1 to guarantee at least one digit
+- **min\_special**: Minimum number of special characters, set to 1 to guarantee at least one special character
 
 ### 8. Create IAM User Resource
 

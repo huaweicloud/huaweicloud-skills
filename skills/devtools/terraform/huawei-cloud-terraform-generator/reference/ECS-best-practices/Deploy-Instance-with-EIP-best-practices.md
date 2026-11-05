@@ -73,6 +73,41 @@ This best practice requires creating prerequisite resources such as VPC, subnet,
 
 After completing the above steps, continue with the subsequent steps of this best practice.
 
+### 2.1 ECS flavor selection (`huaweicloud_compute_flavors`)
+
+**huaweicloud_compute_flavors supported arguments** (verified against provider 1.94.0):
+
+| Argument | Type | Notes |
+|----------|------|-------|
+| `availability_zone` | string | Filter by AZ; strongly recommended so the flavor is usable by the instance |
+| `performance_type` | string | e.g. `normal`, `computing`, `memory`, `highmem`, `gpu` |
+| `cpu_core_count` | number | vCPU count |
+| `memory_size` | number | Memory size in GB |
+| `generation` | string | Flavor generation, e.g. `s6`, `c6`, `m6` |
+| `region` | string | Optional; defaults to the provider region |
+
+> **⚠️ Not supported:** `name`, `flavor_name`, `name_regex` (and any argument outside the table above)
+> are **not** arguments of this data source — passing them fails with `Unsupported argument`.
+> To pin one specific flavor, use the value confirmed through the `huawei-cloud-computing-query` skill
+> directly on the instance resource (`flavor_name = "s6.small.1"` / `flavor_id = "..."`) instead of
+> filtering a data source.
+
+```hcl
+# ✅ Correct: filter by the arguments the data source actually supports
+data "huaweicloud_compute_flavors" "selected" {
+  availability_zone = var.availability_zone
+  performance_type  = "normal"
+  cpu_core_count    = 2
+  memory_size       = 4
+  generation        = "s6"
+}
+```
+
+> Image selection must use the **singular** `data "huaweicloud_images_image"` with the exact
+> `name` (including version) plus `visibility = "public"` and `most_recent = true`; do **not** use
+> `os_version` on the plural `huaweicloud_images_images` data source — that filter is ignored and
+> silently returns the wrong OS family. See `reference/terraform-generation-guide.md`.
+
 ### 3. Create Security Group Rules
 
 Add the following script to the TF file (e.g., main.tf) to instruct Terraform to create security group rule resources:

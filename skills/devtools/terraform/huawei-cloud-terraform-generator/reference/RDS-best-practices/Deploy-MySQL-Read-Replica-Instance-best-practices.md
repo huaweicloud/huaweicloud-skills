@@ -282,6 +282,10 @@ resource "random_password" "test" {
   length           = 12
   special          = true
   override_special = "!@%^*-_=+"
+  min_upper        = 1
+  min_lower        = 1
+  min_numeric      = 1
+  min_special      = 1
 }
 ```
 
@@ -291,6 +295,10 @@ resource "random_password" "test" {
 - **length**: Password length, set to 12 characters
 - **special**: Whether to include special characters, set to true
 - **override\_special**: Special character set, set to "!@%^\*-\_=+"
+- **min\_upper**: Minimum number of uppercase letters, set to 1 to guarantee at least one uppercase letter
+- **min\_lower**: Minimum number of lowercase letters, set to 1 to guarantee at least one lowercase letter
+- **min\_numeric**: Minimum number of digits, set to 1 to guarantee at least one digit (required by the RDS MySQL `validate_password` MEDIUM policy; otherwise account creation fails with `DBS.01010160`)
+- **min\_special**: Minimum number of special characters, set to 1 to guarantee at least one special character
 
 ### 9. Create RDS Primary-Standby Instance
 
