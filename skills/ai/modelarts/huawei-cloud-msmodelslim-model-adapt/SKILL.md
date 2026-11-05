@@ -41,6 +41,7 @@ Verification (4 Steps)
 - Multimodal generation (Stable Diffusion/Flux/Wan)
 - Encoder-only models
 - Non-Transformers architectures
+- High-level quantization methods (SmoothQuant/QuaRot/FA3/FlatQuant)
 
 ## Architecture
 
@@ -177,6 +178,7 @@ Scripts located in `scripts/` directory:
 | [Interface Checklist](references/interface_checklist.md) | Required interface implementation checklist |
 | [Core Workflow](references/core_workflow.md) | Core workflow documentation |
 | [Acceptance Criteria](references/acceptance-criteria.md) | Functional acceptance criteria |
+| [IAM Policies](references/iam-policies.md) | IAM permission policies required by this skill |
 | [Troubleshooting](references/troubleshooting.md) | Common issues and solutions |
 
 ## Requirements
@@ -188,20 +190,48 @@ Scripts located in `scripts/` directory:
 
 ## Core Commands
 
-```bash
-# Create model adapter
-python3 scripts/create_adapter.py \
-  --model Qwen2-7B \
-  --quantization W8A8
+The four-step verification workflow is executed through the scripts in
+the `scripts/` directory:
 
-# Run four-step verification
-python3 scripts/verify_adapter.py --adapter ./adapter.py
+```bash
+# Step 1: Generate a random-weight test model (slim)
+python3 scripts/step1_generate_test_model.py \
+  --model-path ./models/<model_name> \
+  --output-path ./test_model
+
+# Step 2: Run full fallback quantization (LLM / use --model-family vlm for VLM)
+python3 scripts/step2_run_quantization.py \
+  --model-path ./test_model \
+  --output-path ./quantized_model \
+  --model-type <model_type> \
+  --model-family llm
+
+# Step 3: Verify fallback weights match the float model exactly
+python3 scripts/step3_verify_weights.py \
+  --original-path ./test_model \
+  --quantized-path ./quantized_model \
+  --tolerance 1e-5
+
+# Step 4: Verify the quantization description file against your rules
+python3 scripts/step4_verify_quant_description.py \
+  --desc-path ./quantized_model \
+  --rules-path ./verify_rules.json
 ```
 
 ## Parameter Confirmation
 
-| Parameter | Description | Required |
-| ---------- | ------------- | ---------- |
-| model | Model name or path | Yes |
-| quantization | Quantization scheme (W8A8/W4A16) | Yes |
-| output | Adapter output path | No |
+| Script | Parameter | Required | Description |
+| ------ | --------- | -------- | ----------- |
+| step1 | `--model-path` | Yes | Path to the original model directory |
+| step1 | `--output-path` | Yes | Output directory for the generated test model |
+| step1 | `--num-layers` | No | Number of layers for the slim test model (default 2) |
+| step2 | `--model-path` | Yes | Test model directory (step1 output) |
+| step2 | `--output-path` | Yes | Output directory for the quantized model |
+| step2 | `--model-type` | Yes | Model type of the target model |
+| step2 | `--model-family` | No | `llm` (default) or `vlm` |
+| step2 | `--config-path` | No | Fallback quantization config; auto-generated if omitted |
+| step3 | `--original-path` | Yes | Directory of the float/step1 model |
+| step3 | `--quantized-path` | Yes | Directory of the step2 quantized model |
+| step3 | `--tolerance` | No | Max allowed weight difference (default 1e-5) |
+| step4 | `--desc-path` | Yes | Quantization output dir or description file path |
+| step4 | `--rules-path` | Yes | Verification rules JSON file path |
