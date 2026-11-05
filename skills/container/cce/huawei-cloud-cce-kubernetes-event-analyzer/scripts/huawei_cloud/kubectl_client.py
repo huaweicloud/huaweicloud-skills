@@ -20,7 +20,66 @@ def _parse_json_output(output: str, source: str) -> Dict[str, Any]:
     try:
         return {"success": True, "data": json.loads(text or "{}")}
     except json.JSONDecodeError as exc:
-        return {"success": False, "error": f"{source} returned non-JSON output: {exc}"}
+        return {
+            "success": False,
+            "error": f"{source} returned non-JSON output: {exc}",
+            "raw_output": text[:1024],
+        }
+
+
+_CLUSTER_NOT_FOUND_PATTERNS = (
+    re.compile(r"\b404\b"),
+    re.compile(r"CCE\.\d{4,}", re.IGNORECASE),
+    re.compile(r"Cluster(?:NotFind|NotExist|NotFoundException)", re.IGNORECASE),
+    re.compile(r"cluster[s]?[^,.\n!]{0,60}?(?:not\s+found|does\s*not\s+exist|not\s*exist)", re.IGNORECASE),
+    re.compile(r"error_code.{0,60}?(?:NotFound|CLUSTER_NOT_FOUND|CLUSTER_NOT_EXIST)", re.IGNORECASE),
+)
+
+
+def _mentions_cluster_not_found(error: Any) -> bool:
+    """Detect clear "cluster does not exist" signals in an underlying error."""
+    if not error:
+        return False
+    text = str(error)
+    return any(pattern.search(text) for pattern in _CLUSTER_NOT_FOUND_PATTERNS)
+
+
+def _cluster_not_found_error(original_error: Any) -> Dict[str, Any]:
+    """Build a clear, user-facing error for a nonexistent CCE cluster."""
+    result: Dict[str, Any] = {"success": False, "error": "集群不存在或 cluster_id 错误"}
+    text = str(original_error or "")
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    matched = next((line[:200] for line in lines if _mentions_cluster_not_found(line)), None)
+    summary = matched or (lines[0][:200] if lines else "")
+    if summary:
+        result["cluster_not_found"] = summary
+    if text:
+        result["raw_output"] = text[:1024]
+    return result
+
+
+def _cluster_not_found_fallback(primary: Dict[str, Any], secondary: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a clear cluster-not-found error when either path mentions a missing cluster."""
+    combined = " ".join(
+        str(value)
+        for value in (
+            primary.get("error"),
+            primary.get("raw_output"),
+            secondary.get("error"),
+            secondary.get("raw_output"),
+        )
+        if value
+    )
+    if _mentions_cluster_not_found(combined):
+        for source in (
+            primary.get("raw_output"),
+            primary.get("error"),
+            secondary.get("raw_output"),
+            secondary.get("error"),
+        ):
+            if source and str(source).strip():
+                return _cluster_not_found_error(source)
+    return {}
 
 
 def _run_command(cmd: List[str], env: Optional[Dict[str, str]] = None, timeout: int = 60) -> Dict[str, Any]:
@@ -103,6 +162,9 @@ def _get_events_with_external_kubeconfig(
 ) -> Dict[str, Any]:
     cluster_result = _run_hcloud("CCE", "ShowCluster", region, {"cluster_id": cluster_id}, ak, sk, project_id)
     if not cluster_result.get("success"):
+        not_found = _cluster_not_found_fallback(cluster_result, {})
+        if not_found:
+            return not_found
         return cluster_result
     if not _cluster_has_external_access(cluster_result.get("data") or {}):
         return {"success": False, "error": "cluster has no bound EIP/external endpoint"}
@@ -192,6 +254,9 @@ def get_cce_events_with_kubectl(
         token = security_token or os.environ.get("HUAWEI_SECURITY_TOKEN") or os.environ.get("HW_SECURITY_TOKEN")
         plugin_result = _get_events_with_cce_plugin(region, cluster_id, args, ak, sk, project_id, token)
         if not plugin_result.get("success"):
+            not_found = _cluster_not_found_fallback(external_result, plugin_result)
+            if not_found:
+                return not_found
             return {
                 "success": False,
                 "error": "failed to get Kubernetes events via external kubeconfig or kubectl cce plugin",
@@ -243,6 +308,9 @@ def get_cce_resource_with_kubectl(
         token = security_token or os.environ.get("HUAWEI_SECURITY_TOKEN") or os.environ.get("HW_SECURITY_TOKEN")
         plugin_result = _get_events_with_cce_plugin(region, cluster_id, args, ak, sk, project_id, token)
         if not plugin_result.get("success"):
+            not_found = _cluster_not_found_fallback(external_result, plugin_result)
+            if not_found:
+                return not_found
             return {
                 "success": False,
                 "error": f"failed to get Kubernetes resource {resource}/{name}",
