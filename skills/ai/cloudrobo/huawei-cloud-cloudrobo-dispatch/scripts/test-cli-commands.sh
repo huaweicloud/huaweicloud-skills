@@ -119,18 +119,28 @@ else
 fi
 echo ""
 
-# Test 12: Path traversal blocked
+# Test 12: Path traversal blocked (exit-code based; no reliance on specific error text)
 echo "Test 12: Path traversal blocked"
-cloudrobo dispatch show-task --session-id "$SESSION_ID" --task-id '../etc/passwd' 2>&1 | grep -iE "invalid|not allowed|traversal|safe_id" && echo "PASS: traversal blocked" || echo "Note: verify validate_safe_id behavior manually"
+if TRAVERSAL_OUTPUT=$(cloudrobo dispatch show-task --session-id "$SESSION_ID" --task-id '../etc/passwd' 2>&1); then
+    echo "FAIL: path traversal not blocked (command succeeded)"
+else
+    echo "PASS: traversal blocked (command exited non-zero; actual error below)"
+    echo "$TRAVERSAL_OUTPUT" | tail -3
+fi
 echo ""
 
 # Test 13: Cancel task (mutating, needs confirmation)
 echo "Test 13: Cancel task (mutating)"
-echo "Note: Only cancel if the task is still running/pending. Skipping actual cancellation to avoid side effects unless TASK_ID is set and user confirms."
 if [ -n "$TASK_ID" ]; then
-    echo "  (Task $TASK_ID left as-is; run cancel-task manually when needed.)"
+    echo "  Attempting to cancel task $TASK_ID (only valid while running/pending)..."
+    if cloudrobo dispatch cancel-task --session-id "$SESSION_ID" --task-id "$TASK_ID"; then
+        echo "PASS: cancel-task executed successfully for task $TASK_ID"
+    else
+        echo "  Note: cancel-task exited non-zero — the task may already be in a terminal state"
+        echo "  (cancelling a finished task is rejected; see SKILL.md Edge Cases). Verify with show-task."
+    fi
 else
-    echo "  (No TASK_ID; skipped.)"
+    echo "  (No TASK_ID; script did not verify cancellation capability. Create a task to obtain a TASK_ID and run cancel-task manually.)"
 fi
 echo ""
 

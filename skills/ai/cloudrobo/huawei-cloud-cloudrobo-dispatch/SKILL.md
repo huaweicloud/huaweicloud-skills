@@ -177,6 +177,11 @@ Scenario: "Abort that task — the robot picked the wrong object."
 - Tasks are always created under a `session_id`. In the current version `session_id` is the same as
   the current workspace's `workspace_id`; obtain it from `cloudrobo workspace current`. You may
   create many tasks within one session over time.
+- **Workspace/session isolation**: tasks are isolated by workspace/session. Querying tasks with the
+  `session_id` of a *different* workspace does **not** error — it returns an **empty task list**
+  (tasks in other workspaces are invisible to the current one). To query tasks in another workspace,
+  first switch to it with `cloudrobo workspace use <workspace_id>`, then use that workspace's id as
+  the `--session-id`.
 - **Stop condition**: every task should be created with `constraints.exec_constraints` so it stops
   on time — see the Create a Task section for the required object shape and defaults.
 - **strict services**: if the driving inference service was deployed with `skill_config.strict:true`,
