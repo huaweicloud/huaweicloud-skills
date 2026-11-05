@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import re
 import sys
 from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
@@ -27,6 +28,24 @@ BROWSE_PATTERNS = [
     "ai", "agent", "市场", "类目", "浏览", "探索", "发现", "列表",
     "有没有", "帮我找", "介绍", "具体做什么",
 ]
+
+CJK_RE = re.compile(r"[\u4e00-\u9fff]")
+CJK_RUN_RE = re.compile(r"([\u4e00-\u9fff]+|[^\u4e00-\u9fff]+)")
+SPLIT_PUNCT_RE = re.compile(r"[，。！？、；;:：,.!?()（）\[\]【】\"']+")
+
+# 中文自然语言中的指令词/语气词：搜索前先剔除，剩余部分才作为核心关键词
+INSTRUCTION_WORDS = [
+    "帮我找一个", "帮我找一下", "帮我找找", "请帮我找一下", "请帮我找", "帮我找",
+    "我想找一个", "我想找", "我要找一个", "我要找", "想要找一个", "想要找",
+    "有没有", "是否有", "是否存在", "介绍一下", "介绍下", "具体做什么",
+    "具体是做什么", "是做什么的", "做什么的", "大概是做什么", "大致是什么",
+    "帮我", "我想", "我要", "想要", "请帮", "请问", "请", "有的",
+    "一个", "一下", "同时", "两个方向", "方向", "找找", "看看",
+    "相关", "有关", "关于", "以及", "还有", "也是", "分别是",
+]
+
+# 中文连词/助词：作为切分符处理，避免跨词边界产生无意义 n-gram
+CJK_SEPARATORS = ["和", "与", "跟", "或", "及", "以及", "的", "之", "于"]
 
 
 def fetch_json(url):
@@ -68,11 +87,82 @@ def is_generic(kw):
     return k in GENERIC_KEYWORDS or "ai gallery" in k
 
 
+def strip_instruction_words(text):
+    for w in sorted(INSTRUCTION_WORDS, key=len, reverse=True):
+        if not w:
+            continue
+        text = text.replace(w, " ")
+    return text
+
+
+def split_separators(text):
+    for sep in sorted(CJK_SEPARATORS, key=len, reverse=True):
+        if not sep:
+            continue
+        text = text.replace(sep, " ")
+    return text
+
+
+def cjk_ngrams(run):
+    """对连续中文字符串做核心词 n-gram 切分。
+
+    短串（<=4 字）保留全部 2-4 字子串；长串仅取 3-4 字 n-gram，
+    避免"分析"“分类”这类高频 2 字词在长句中造成大量噪音匹配。
+    """
+    ngrams = set()
+    n = len(run)
+    if n == 1:
+        return ngrams
+    if n == 2:
+        sizes = (2,)
+    elif n == 3:
+        sizes = (2, 3)
+    else:
+        sizes = (3, 4)
+    for size in sizes:
+        if size > n:
+            continue
+        for i in range(n - size + 1):
+            gram = run[i:i + size]
+            if not is_generic(gram):
+                ngrams.add(gram)
+    return ngrams
+
+
 def parse_keywords(raw):
+    """将用户输入拆分为具体关键词与通用词。
+
+    中文整句（如"帮我找一个银行对公信贷分析的skill"）会先剔除指令词，
+    再对连续中文字符串按 2-4 字的核心词 n-gram 切分，保证任意核心子串
+    都能参与包含匹配，避免整个句子被当作单个关键词导致必不命中。
+    """
     if not raw:
         return [], []
-    parts = [p for p in raw.replace(",", " ").replace(";", " ").split() if p]
-    return [k for k in parts if not is_generic(k)], [k for k in parts if is_generic(k)]
+    text = split_separators(strip_instruction_words(format_input(raw)))
+    specific, generic = [], []
+    for token in text.split():
+        if is_generic(token):
+            generic.append(token)
+            continue
+        for run in CJK_RUN_RE.findall(token):
+            if not run:
+                continue
+            if CJK_RE.search(run):
+                for gram in cjk_ngrams(run):
+                    if gram not in specific:
+                        specific.append(gram)
+            else:
+                run = run.strip()
+                if is_generic(run):
+                    if run not in generic:
+                        generic.append(run)
+                elif run and run not in specific:
+                    specific.append(run)
+    return specific, generic
+
+
+def format_input(raw):
+    return SPLIT_PUNCT_RE.sub(" ", raw.lower())
 
 
 def is_browse_intent(keyword, specific_kws):
@@ -159,9 +249,15 @@ def main():
 
     if not results:
         print(f"未找到与 '{keyword}' 相关的技能。\n")
-        print("建议尝试：")
-        print("  1. 使用更广泛或替代的关键词")
-        print("  2. 中英文切换（例如 '图像分类' <-> 'image_classification'）")
+        if specific:
+            kws = "、".join(specific[:6])
+            if len(specific) > 6:
+                kws += " 等"
+            print(f"已按核心关键词「{kws}」匹配，仍无结果。\n")
+        print("可能原因与建议：")
+        print("  1. 关键词未命中：当前用词可能不是核心词，请用更短的 2-4 字词或英文重试")
+        print("     （例如 '银行' / '信贷' / '图像分类' / 'image_classification'）")
+        print("  2. AI Gallery 市场暂无此能力：可输入 \"有什么skill\" / \"浏览所有\" 查看市场全部技能")
         sys.exit(0)
 
     print_results(results)

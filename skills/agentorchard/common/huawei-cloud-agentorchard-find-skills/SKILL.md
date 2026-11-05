@@ -28,7 +28,7 @@ This skill enables the Agent to:
 
 ## Prerequisites
 
-- **Agent runtime** requires Python 3.6+ (script execution environment)
+- **Agent runtime** requires Python 3.6+. Commands below use `python3`; on environments with a `python` alias, `python` works the same way
 - **Network access** to AI Gallery API (`devdata.huaweicloud.com`)
 - **No authentication required** — the API is public and read-only
 
@@ -39,7 +39,7 @@ This skill enables the Agent to:
 Based on user input, run the search script (**execute only once**):
 
 ```bash
-PYTHONIOENCODING=utf-8 python scripts/search_skills.py -k "<user input>"
+PYTHONIOENCODING=utf-8 python3 scripts/search_skills.py -k "<user input>"
 ```
 
 > [!IMPORTANT]
@@ -56,8 +56,8 @@ The script automatically handles all scenarios:
 | User Input Type | Script Output |
 |-----------------|---------------|
 | Browse intent (e.g., "有什么skill") | Hot skills + guidance |
-| Search intent (e.g., "银行") | Matching skill list |
-| No results (e.g., gibberish) | Guidance |
+| Search intent (e.g., "银行" or full sentence "帮我找一个银行信贷分析的skill") | Matching skill list (Chinese sentences are auto-segmented into keywords) |
+| No results (keywords not matched / market lacks this capability) | Guidance distinguishing the two cases |
 
 **The Agent only needs to display the script output directly to the user, without adding any extra operations.**
 
@@ -67,22 +67,31 @@ After the user selects a skill, guide them to visit the detail page and subscrib
 
 **Rules:**
 - Only show the detail page URL when a specific `show_id` is available from the search results
-- Format: `详情页：https://pangu.huaweicloud.com/gallery/asset-detail.html?id={show_id}`
+- Format: `详情页：https://pangu.huaweicloud.com/gallery/asset-detail-page.html?id={show_id}`
 - Do NOT show URL templates or placeholder formats like `?id={show_id}` to the user
 
 The user clicks the "Subscribe" button on the detail page to complete installation.
+
+## Unsupported Operations
+
+This skill is **read-only** and covers **search, browse, and subscribe guidance only**.
+
+- ❌ **Does NOT support unsubscribe / cancel subscription / managing subscribed skills** — for unsubscription, direct the user to the AI Gallery console → "我的订阅" → cancel there
+- ❌ **Does NOT support uploading / publishing / deleting / managing AI Gallery skills** — for publishing own skills, direct the user to AI Gallery's publish entry
+
+Never attempt to perform these operations through this skill; guide the user to the AI Gallery console instead.
 
 ## Core Commands
 
 | Command | Purpose |
 |---------|---------|
-| `PYTHONIOENCODING=utf-8 python scripts/search_skills.py -k "<keyword>"` | Search skills by keyword |
+| `PYTHONIOENCODING=utf-8 python3 scripts/search_skills.py -k "<keyword>"` | Search skills by keyword |
 
 ## Parameter Confirmation
 
 | Parameter | Required | Description | Example |
 |-----------|----------|-------------|---------|
-| `-k, --keyword` | No | Search keyword, supports space/comma/semicolon separated | `-k "银行"` |
+| `-k, --keyword` | No | Search keyword; Chinese full sentences are auto-segmented | `-k "银行"` |
 | `--api-base` | No | AI Gallery API base URL (has default) | `--api-base "https://..."` |
 
 ## Reference Documents
