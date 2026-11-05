@@ -1,6 +1,34 @@
 from .common import *
 
 
+def check_ecs_instance_exists(region: str, instance_id: str, ak: Optional[str] = None, sk: Optional[str] = None, project_id: Optional[str] = None) -> tuple:
+    """Verify the ECS instance exists via ShowServer before querying CES metrics.
+
+    Returns (exists: bool, error_detail: Optional[str]). When the hcloud call
+    itself fails (non-zero exit) the instance is treated as not verifiable and
+    the error detail is returned so callers can report a clear reason.
+    """
+    try:
+        result = run_hcloud(
+            "ECS",
+            "ShowServer",
+            region,
+            {"server_id": instance_id, "project_id": project_id},
+            ak=ak,
+            sk=sk,
+            project_id=project_id,
+        )
+    except Exception as e:
+        return False, f"查询ECS实例失败: {e}"
+
+    result = normalize_hcloud_result(result)
+    if not result.get("success"):
+        error = result.get("error", "查询ECS实例失败")
+        return False, error
+
+    return True, None
+
+
 def get_ecs_metrics(region: str, instance_id: str, ak: Optional[str] = None, sk: Optional[str] = None, project_id: Optional[str] = None) -> Dict[str, Any]:
     """Get monitoring metrics for a specific ECS instance."""
     _, _, proj_id = get_credentials(ak, sk, project_id)
@@ -9,6 +37,17 @@ def get_ecs_metrics(region: str, instance_id: str, ak: Optional[str] = None, sk:
         return {
             "success": False,
             "error": "instance_id is required"
+        }
+
+    exists, exist_error = check_ecs_instance_exists(region, instance_id, ak, sk)
+    if not exists:
+        return {
+            "success": False,
+            "region": region,
+            "instance_id": instance_id,
+            "source": "hcloud",
+            "error": "ECS 实例不存在或资源 ID 错误" if is_resource_not_found_error(exist_error) else f"查询ECS实例失败: {exist_error}",
+            "detail": exist_error if is_resource_not_found_error(exist_error) else None,
         }
 
     try:

@@ -42,6 +42,48 @@ def list_eip_addresses(region: str, ak: Optional[str] = None, sk: Optional[str] 
         "eips": eips
     }
 
+def check_eip_exists(region: str, eip_id: str, ak: Optional[str] = None, sk: Optional[str] = None, project_id: Optional[str] = None) -> tuple:
+    """Verify the EIP exists via ShowPublicip before querying CES metrics."""
+    try:
+        result = run_hcloud(
+            "EIP",
+            "ShowPublicip/v3",
+            region,
+            {"publicip_id": eip_id, "project_id": project_id},
+            ak=ak,
+            sk=sk,
+            project_id=project_id,
+        )
+    except Exception as e:
+        return False, f"查询EIP失败: {e}"
+
+    result = normalize_hcloud_result(result)
+    if not result.get("success"):
+        return False, result.get("error", "查询EIP失败")
+    return True, None
+
+
+def check_nat_gateway_exists(region: str, nat_gateway_id: str, ak: Optional[str] = None, sk: Optional[str] = None, project_id: Optional[str] = None) -> tuple:
+    """Verify the NAT Gateway exists via ShowNatGateway before querying CES metrics."""
+    try:
+        result = run_hcloud(
+            "NAT",
+            "ShowNatGateway",
+            region,
+            {"nat_gateway_id": nat_gateway_id, "project_id": project_id},
+            ak=ak,
+            sk=sk,
+            project_id=project_id,
+        )
+    except Exception as e:
+        return False, f"查询NAT网关失败: {e}"
+
+    result = normalize_hcloud_result(result)
+    if not result.get("success"):
+        return False, result.get("error", "查询NAT网关失败")
+    return True, None
+
+
 def get_eip_metrics(region: str, eip_id: str, hours: int = 1, period: int = 300, ak: Optional[str] = None, sk: Optional[str] = None, project_id: Optional[str] = None) -> Dict[str, Any]:
     """获取指定弹性公网IP（EIP）的监控指标"""
     _, _, proj_id = get_credentials(ak, sk, project_id)
@@ -50,6 +92,18 @@ def get_eip_metrics(region: str, eip_id: str, hours: int = 1, period: int = 300,
         return {
             "success": False,
             "error": "eip_id是必填参数"
+        }
+
+    # 资源存在性校验：查询监控数据前先确认 EIP 存在，避免空数据误报查询成功
+    exists, exist_error = check_eip_exists(region, eip_id, ak, sk, proj_id)
+    if not exists:
+        return {
+            "success": False,
+            "region": region,
+            "eip_id": eip_id,
+            "source": "hcloud",
+            "error": "EIP 不存在或资源 ID 错误" if is_resource_not_found_error(exist_error) else f"查询EIP失败: {exist_error}",
+            "detail": exist_error if is_resource_not_found_error(exist_error) else None,
         }
 
     # 校验采样周期
@@ -165,6 +219,18 @@ def get_nat_gateway_metrics(region: str, nat_gateway_id: str, hours: int = 1, pe
         return {
             "success": False,
             "error": "nat_gateway_id是必填参数"
+        }
+
+    # 资源存在性校验：查询监控数据前先确认 NAT 网关存在，避免空数据误报查询成功
+    exists, exist_error = check_nat_gateway_exists(region, nat_gateway_id, ak, sk, proj_id)
+    if not exists:
+        return {
+            "success": False,
+            "region": region,
+            "nat_gateway_id": nat_gateway_id,
+            "source": "hcloud",
+            "error": "NAT 网关不存在或资源 ID 错误" if is_resource_not_found_error(exist_error) else f"查询NAT网关失败: {exist_error}",
+            "detail": exist_error if is_resource_not_found_error(exist_error) else None,
         }
 
     # 校验采样周期

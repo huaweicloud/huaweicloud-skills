@@ -150,6 +150,7 @@ def get_elb_metrics(region: str, elb_id: str, hours: int = 1, period: int = 300,
             sk=sk,
             project_id=project_id,
         )
+        elb_result = normalize_hcloud_result(elb_result)
         if not elb_result.get("success"):
             raise RuntimeError(elb_result.get("error", "failed to query ELB details"))
         elb_info = (elb_result.get("data") or {}).get("loadbalancer") or {}
@@ -162,11 +163,16 @@ def get_elb_metrics(region: str, elb_id: str, hours: int = 1, period: int = 300,
         support_l7 = bool(elb_info.get('l7_flavor_id'))
 
     except Exception as e:
-        # 查询ELB信息失败，默认同时查询四七层指标
-        support_l4 = True
-        support_l7 = True
-        elb_name = ""
-        elb_type = "未知类型（默认同时查询四七层）"
+        # 查询ELB信息失败（含资源不存在/ID错误），返回明确报错而非笼统的指标类型错误
+        is_not_found = is_resource_not_found_error(str(e))
+        return {
+            "success": False,
+            "region": region,
+            "elb_id": elb_id,
+            "source": "hcloud",
+            "error": "负载均衡器不存在或资源 ID 错误" if is_not_found else f"查询ELB信息失败: {e}",
+            "detail": str(e) if is_not_found else None,
+        }
 
     # ========== 第二步：根据ELB类型确定要查询的指标 ==========
     # 四层指标定义（华为云官方标准指标）
