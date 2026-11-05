@@ -42,11 +42,15 @@ Scan a single Huawei Cloud skill directory or a folder of skills, run three secu
 
 | # | Tool | Check Content | Implementation |
 |---|------|--------------|---------------|
-| 1 | **skillspector** | AI skill security scanner: 52 rules / 609 patterns across 18 categories (prompt injection, data exfiltration, privilege escalation, supply chain, behavioral AST, taint tracking, MCP analysis, YARA) | **Built-in** (pure Python, 52 rules + AST analysis) |
+| 1 | **skillspector** | AI skill security scanner: 52 rules / 620 patterns across 18 categories (prompt injection, data exfiltration, privilege escalation, supply chain, behavioral AST, taint tracking, MCP analysis, YARA) | **Built-in** (pure Python, 52 rules + AST analysis) |
 | 2 | **gitleaks** | Credential leak scan: 43 rules detecting hardcoded API keys, passwords, private keys, tokens | **Built-in** (pure Python, 43 rules + Shannon entropy) |
 | 3 | **runtime_security** | CWE high-risk runtime patterns: 36 rules (command injection, deserialization, credential theft, sandbox escape, persistence, destructive ops, mining) + 3 skill-quality rules (Q001-Q003) | **Built-in** (pure Python, level-independent, all rules always run) |
 
-> 规则数(52/609、43、36+3)以 `scripts/checks/*rules.json` 为准, 增删规则后请同步更新本表。
+> 规则数(52/620、43、36+3)以 `scripts/checks/*rules.json` 为准, 增删规则后请同步更新本表。
+
+> **⚠️ gitleaks 扫描范围限制（使用前必读）**:
+> - gitleaks 以 `--no-git` 模式运行，**仅扫描当前工作区文件内容，不扫描 git 历史**。
+> - gitleaks **不检测中文关键词凭据**，此类凭据需配合 `gitcode-security-scanner` 检测（见 Security Scanning 互补工具表）。
 
 ---
 
@@ -77,15 +81,16 @@ Input (skill path or folder)
     ├── Discover Skills ──── Find SKILL.md in target or subdirectories
     │
     ├── Run Three Checks ────
-    │   1. skillspector → AI security scan (52 rules, 609 patterns)
+    │   1. skillspector → AI security scan (52 rules, 620 patterns)
     │   2. gitleaks → Credential leak detection
     │   3. runtime_security → CWE high-risk runtime patterns (36 + 3 rules)
     │
     ├── Build Report ────
     │   Section 1: Scanned Skills
-    │   Section 2: Issue Summary (by severity)
-    │   Section 3: Issue Details (per-issue)
-    │   Section 4: Fix Strategies (per rule/category)
+    │   Section 2: Check Summary (per-check files/rules/findings + pass rate)
+    │   Section 3: Issue Summary (by severity)
+    │   Section 4: Issue Details (per-issue)
+    │   Section 5: Fix Strategies (per rule/category)
     │
     └── Gate Verdict ──── PASS or FAIL
 ```
@@ -200,12 +205,13 @@ Report is saved as `skill-gate-report-<timestamp>.txt` in the parent directory o
 | `/repo/skills/huawei-cloud-ecs-manage` | `/repo/skills/skill-gate-report-<timestamp>.txt` |
 | `/repo/skills` | `/repo/skill-gate-report-<timestamp>.txt` |
 
-Four sections:
+Five sections:
 
 1. **Scanned Skills** — list of all skills found
-2. **Issue Summary** — count by severity (CRITICAL/ERROR/WARNING) with rule breakdown (INFO excluded)
-3. **Issue Details** — per-issue: skill name, rule, line number, snippet, message
-4. **Fix Strategies** — actionable remediation for each unique rule/category
+2. **Check Summary** — per-check stats (files scanned / rules / findings) with verdict + pass rate
+3. **Issue Summary** — count by severity (CRITICAL/ERROR/WARNING) with rule breakdown (INFO excluded)
+4. **Issue Details** — per-issue: skill name, rule, line number, snippet, message
+5. **Fix Strategies** — actionable remediation for each unique rule/category
 
 ---
 
@@ -276,7 +282,7 @@ jobs:
 
 The built-in checks use their bundled rule sets — no external config required:
 
-- `scripts/checks/skillspector_rules.json` — skillspector rules (52 rules / 609 patterns)
+- `scripts/checks/skillspector_rules.json` — skillspector rules (52 rules / 620 patterns)
 - `scripts/checks/gitleaks_rules.json` — gitleaks rules (43 rules)
 
 `.markdownlint.json` and `skillcheck.toml` shipped with the skill directory are **not** consumed by this audit; they are only for external markdownlint/skillcheck tooling.
@@ -310,7 +316,7 @@ The built-in checks use their bundled rule sets — no external config required:
 
 ## Output Format
 
-Report is a plain text file with four sections (Scanned Skills, Issue Summary, Issue Details, Fix Strategies) followed by a Gate Verdict (PASS/FAIL).
+Report is a plain text file with five sections (Scanned Skills, Check Summary, Issue Summary, Issue Details, Fix Strategies) followed by a Gate Verdict (PASS/FAIL).
 
 ---
 
@@ -372,8 +378,6 @@ python3 "$AUDIT_DIR/scripts/skill_audit.py" --target .
 - **If AK/SK is missing for post-audit verification, prompt the user; do not skip**
 - Resources created during testing must be tracked; output manual cleanup instructions if any remain
 - INFO-level issues are excluded from the report; only CRITICAL/ERROR/WARNING appear
-- gitleaks `--no-git` mode scans current file contents only, not git history
-- gitleaks does not detect Chinese keyword credentials; use gitcode-security-scanner for those
 
 ---
 

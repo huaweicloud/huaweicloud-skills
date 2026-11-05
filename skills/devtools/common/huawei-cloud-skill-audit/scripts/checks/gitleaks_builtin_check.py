@@ -146,6 +146,7 @@ class GitleaksBuiltinCheck(Check):
             return CheckResult(source=self.name, passed=True, raw_output="No rules loaded")
         ignores = self._load_gitleaksignore(skill_dir)
         issues = []
+        files_scanned = 0
         for file_path in self._iter_files(skill_dir):
             rel = file_path.relative_to(skill_dir)
             if self._is_path_allowed(rel):
@@ -154,6 +155,7 @@ class GitleaksBuiltinCheck(Check):
                 text = file_path.read_text(encoding="utf-8", errors="ignore")
             except (OSError, PermissionError):
                 continue
+            files_scanned += 1
             lines = text.splitlines()
             for line_no, line in enumerate(lines, 1):
                 if self._is_line_allowed(line):
@@ -191,6 +193,9 @@ class GitleaksBuiltinCheck(Check):
             issues=issues,
             passed=len(issues) == 0,
             raw_output=raw,
+            files_scanned=files_scanned,
+            rules_count=len(self._rules),
+            findings_count=len(issues),
         )
 
     def _iter_files(self, skill_dir: Path):

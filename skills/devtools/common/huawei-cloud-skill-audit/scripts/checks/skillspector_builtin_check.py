@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """SkillspectorBuiltinCheck — pure Python AI skill security scanner (no external binary needed).
 
-Reimplements SkillSpector core static logic: regex pattern matching + Python AST analysis
-+ taint tracking, using the same 51 rules / 609 patterns from SkillSpector v2.3.13.
+自研简化版（非官方 SkillSpector 二进制）: 参考 SkillSpector 的静态检测思路, 以 regex
+pattern matching + Python AST analysis + taint tracking 实现, 覆盖 52 条规则 / 620 个模式
+（规则清单见 skillspector_rules.json）。检测范围与官方版本有差异: 包含 AST 反序列化
+(AST10) 与有害内容 (P5) 检测, 但不含官方 LLM 语义分析等深度检测, 详见 rules JSON 的
+note 字段; 版本号为本仓库自维护版本, 非官方 SkillSpector 版本号。
 """
 
 import ast
@@ -80,12 +83,16 @@ SEVERITY_MAP = {
 
 SCAN_LEVEL_ORDER = {"critical": 0, "high": 1, "quick": 0, "standard": 1, "deep": 2}
 
+# ISSUE-008: 与 skill_audit.SEVERITY_FLOOR_MAP 统一 severity 标签(Severity.value 口径)。
+# 规则 JSON 的 "high"/"medium"/"low" 经 SEVERITY_MAP 映射为 ERROR/WARNING/INFO 之后,
+# 再按本表过滤 —— 例如 high 档的 {"critical", "error"} 与 skill_audit.py 的
+# SEVERITY_FLOOR_MAP["high"] = {"critical", "error"} 为同一套标签, 避免两处漂移。
 SEVERITY_FLOOR = {
     "critical": {"critical"},
-    "high": {"critical", "high"},
-    "quick": {"critical", "high", "medium", "low"},
-    "standard": {"critical", "high", "medium", "low"},
-    "deep": {"critical", "high", "medium", "low"},
+    "high": {"critical", "error"},
+    "quick": {"critical", "error", "warning", "info"},
+    "standard": {"critical", "error", "warning", "info"},
+    "deep": {"critical", "error", "warning", "info"},
 }
 
 # ── 自扫描豁免（仅对工具自身安装目录生效，不参与任何其他目标的扫描）──
@@ -233,12 +240,16 @@ class SkillspectorBuiltinCheck(Check):
         except (FileNotFoundError, json.JSONDecodeError):
             return
         current_level = SCAN_LEVEL_ORDER.get(self.scan_level.value, 1)
-        severity_floor = SEVERITY_FLOOR.get(self.scan_level.value, {"critical", "high", "medium", "low"})
+        severity_floor = SEVERITY_FLOOR.get(self.scan_level.value, {"critical", "error", "warning", "info"})
         for rule in data.get("rules", []):
             rule_level = SCAN_LEVEL_ORDER.get(rule.get("scan_level", "quick"), 0)
             if rule_level > current_level:
                 continue
-            if rule.get("severity", "medium") not in severity_floor:
+            # ISSUE-008: 先经 SEVERITY_MAP 把规则 severity 字符串(high/medium/low)
+            # 统一映射为协议 Severity, 再按 Severity.value 过滤 —— 与 skill_audit.py
+            # 的 SEVERITY_FLOOR_MAP 保持同一套标签, 语义与旧 {"critical","high"} 等价。
+            rule_sev = _map_sev(rule.get("severity", "medium"))
+            if rule_sev.value not in severity_floor:
                 continue
             compiled_patterns = []
             for pat in rule.get("patterns", []):
@@ -297,6 +308,7 @@ class SkillspectorBuiltinCheck(Check):
         ignores = self._load_skillspectorignore(skill_dir)
         is_self = self._is_self_scan(skill_dir)
         issues = []
+        files_scanned = 0
         for file_path in self._iter_files(skill_dir):
             rel = file_path.relative_to(skill_dir)
             is_doc = file_path.suffix.lower() in DOC_EXTENSIONS
@@ -304,6 +316,7 @@ class SkillspectorBuiltinCheck(Check):
                 text = file_path.read_text(encoding="utf-8", errors="ignore")
             except (OSError, PermissionError):
                 continue
+            files_scanned += 1
             doc_lines = docstring_lines(text)
             lines = text.splitlines()
             for line_no, line in enumerate(lines, 1):
@@ -408,6 +421,9 @@ class SkillspectorBuiltinCheck(Check):
             issues=issues,
             passed=len(issues) == 0,
             raw_output=raw,
+            files_scanned=files_scanned,
+            rules_count=len(self._rules),
+            findings_count=len(issues),
         )
 
     def _iter_files(self, skill_dir: Path):

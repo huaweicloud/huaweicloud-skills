@@ -122,12 +122,14 @@ class RuntimeSecurityCheck(Check):
         ignores = self._load_skillspectorignore(skill_dir)
         is_self = self._is_self_scan(skill_dir)
         issues = []
+        files_scanned = 0
         for file_path in self._iter_files(skill_dir):
             rel = file_path.relative_to(skill_dir)
             try:
                 text = file_path.read_text(encoding="utf-8", errors="ignore")
             except (OSError, PermissionError):
                 continue
+            files_scanned += 1
             doc_lines = docstring_lines(text)
             for line_no, line in enumerate(text.splitlines(), 1):
                 for rule in self._rules:
@@ -188,6 +190,9 @@ class RuntimeSecurityCheck(Check):
             issues=issues,
             passed=len(issues) == 0,
             raw_output=f"runtime_security: {len(self._rules)} rules, {len(issues)} findings",
+            files_scanned=files_scanned,
+            rules_count=len(self._rules),
+            findings_count=len(issues),
         )
 
     def _iter_files(self, skill_dir: Path):

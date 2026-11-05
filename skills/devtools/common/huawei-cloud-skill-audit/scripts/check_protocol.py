@@ -60,6 +60,11 @@ class CheckResult:
     issues: list[Issue] = field(default_factory=list)
     passed: bool = True
     raw_output: str = ""
+    # 扫描完整性统计(ISSUE-004): 报告据此展示每个检查的扫描文件数/规则数/发现数,
+    # 便于无问题场景下判断扫描确实执行过, 而非"什么都没扫"。
+    files_scanned: int = 0
+    rules_count: int = 0
+    findings_count: int = 0
 
 
 class ScanLevel(Enum):
@@ -97,6 +102,9 @@ class Check:
         budget = self.timeout if self.timeout and self.timeout > 0 else 30
         all_issues = []
         passed = True
+        total_files = 0
+        total_findings = 0
+        max_rules = 0
         for s in skills:
             try:
                 if budget:
@@ -127,8 +135,14 @@ class Check:
                 i.skill = i.skill or s.name
                 all_issues.append(i)
             passed = passed and r.passed
+            total_files += r.files_scanned
+            total_findings += r.findings_count
+            max_rules = max(max_rules, r.rules_count)
         return CheckResult(
             source=self.name,
             issues=all_issues,
             passed=passed,
+            files_scanned=total_files,
+            rules_count=max_rules,
+            findings_count=total_findings,
         )
