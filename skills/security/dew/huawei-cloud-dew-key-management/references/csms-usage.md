@@ -82,9 +82,15 @@ data "huaweicloud_csms_secret" "db" {
 
 ## Rotation
 
-- Enable automatic rotation: `hcloud CSMS UpdateSecret --secret_name={name} --auto_rotation=true --rotation_period={days}` (R2)
+> ⚠️ **轮转前置 (prerequisite)**: 自动/手动轮转仅对**已配置轮转的凭据**生效 —— 凭据类型必须为
+> **RDS-FG / GaussDB-FG** 且创建时指定 `rotation_func_urn` + `rotation_config`。
+> **COMMON 类型普通凭据无法轮转**（`UpdateSecret --auto_rotation=true` / `RotateSecret` 均返回
+> `CSMS.0603 该凭据不能轮转`，即使附带 `rotation_func_urn`）。轮转函数模板
+> `ShowSecretFunctionTemplates --secret_type` 仅接受 `[RDS-FG|GaussDB-FG]`，COMMON 类型无模板。
+
+- Enable automatic rotation: `hcloud CSMS UpdateSecret --secret_name={name} --auto_rotation=true --rotation_period={days}` (R2; 前置：RDS-FG/GaussDB-FG 类型凭据)
 - Rotation function URN: provide a FuncGraph function that generates the new secret value
-- Immediate manual rotation: `hcloud CSMS RotateSecret --secret_name={name}` (R1)
+- Immediate manual rotation: `hcloud CSMS RotateSecret --secret_name={name}` (R1; 前置：RDS-FG/GaussDB-FG 类型凭据)
 - Recommended `rotation_period`: ≤ 90 days
 
 ## Policy rules
