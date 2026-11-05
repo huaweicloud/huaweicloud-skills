@@ -22,6 +22,18 @@ This skill provides read-only analysis of Huawei Cloud WAF (Web Application Fire
 - Anomaly investigation when suspicious activity is detected
 - Protection hardening decisions after attack events
 
+## Out of Scope
+
+This skill analyzes **Huawei Cloud WAF** security event logs **only**. The following requests are out of scope and the agent must clearly tell the user AND point them to the right place instead of attempting them:
+
+| Out-of-scope request | Correct channel |
+|----------------------|-----------------|
+| Querying other cloud resources (ECS, VPC, OBS, RDS, etc.) | Corresponding service console / dedicated skill (e.g., `huawei-cloud-ecs-list`, `huawei-cloud-obs-list`) |
+| WAF configuration changes, rule creation/modification/deletion | This skill is READ-ONLY — output the ready-to-run hcloud command and let the user execute it |
+| Non-Huawei Cloud web application firewall / security log analysis | Unsupported by this skill |
+
+If the user's request falls outside WAF security-event-log analysis, state explicitly that it is not in scope, explain why, and direct them to the correct tool or console.
+
 ## ⚠️ Read-Only Principle — STRICTLY ENFORCED
 
 **This skill is a READ-ONLY analysis skill.** The agent must follow these rules without exception:
@@ -79,6 +91,35 @@ This skill runs on **Windows PowerShell**. The agent MUST NOT use Linux/Unix she
 - Always use `Out-File -Encoding utf8` instead of `> file` for redirecting output (avoids encoding issues)
 - Use double quotes `"` around variable expansions inside strings: `"Total: $($items.Count)"`
 - Pipe hcloud JSON output to `ConvertFrom-Json` for structured analysis: `hcloud WAF ListEvent ... \| ConvertFrom-Json`
+
+#### 数据容错（Data Fault Tolerance）
+
+WAF event **free-text fields** such as `payload` / `request_body` may contain **unescaped backslashes** from malicious requests, e.g. `"[com.s\un.\r\owse\x74...]"`. Standard JSON parsers (`ConvertFrom-Json` in PowerShell / `json.load` in Python) then fail with `Invalid \uXXXX escape` and the whole analysis pipeline aborts on a single dirty record. **This is expected behavior for real attack data — handle it, do not get stuck.**
+
+Mandatory rules:
+1. **Never trust the whole response blindly.** When a single dirty field breaks `ConvertFrom-Json`, do NOT abort the analysis. Fall back to per-record fault-tolerant parsing (see below) and continue aggregating the remaining events.
+2. **Sanitize before parsing (recommended).** When using PowerShell, clean the raw text first so the strict parser can succeed:
+   ```powershell
+   # Read raw text, repair invalid \uXXXX escapes (e.g. \un, \owse, \x74 are NOT valid hex escapes)
+   $raw = Get-Content "$env:TEMP\waf_events.json" -Raw
+   $clean = $raw -replace '\\u([^0-9a-fA-F]{4})', '\\u005C$1' -replace '\\x([0-9a-f]{2})', '0x$1'
+   $data = $clean | ConvertFrom-Json
+   ```
+   Note: `\u005C` is the escape for a literal backslash; the exact replacement may need tuning per response, but the goal is to neutralize invalid escapes **before** invoking the strict parser.
+3. **Field-level extraction fallback.** If sanitizing is infeasible, extract the fields you need per record with a tolerant regex instead of full JSON parsing, so one malformed record is skipped without killing the batch:
+   ```powershell
+   # Tolerant per-field extraction (skip records that fail, keep the valid ones)
+   $items = @()
+   foreach ($line in $raw -split "`r?`n") {
+       try {
+           $obj = $line | ConvertFrom-Json -ErrorAction Stop
+           $items += $obj
+       } catch {
+           Write-Host "Skipping malformed record: $($_.Exception.Message)"
+       }
+   }
+   ```
+4. **不得因单条脏数据中断整体分析.** Always complete the totals and the multi-dimensional aggregation with whatever records parsed successfully, and report the number of skipped/dirty records to the user.
 
 ## Workflow
 
@@ -336,7 +377,7 @@ Count events by `attack` field. Map attack codes to human-readable names:
 
 Group by `sip` (source IP) field, sorted by frequency:
 - Identify top attacking IPs (>5 hits in analysis period)
-- Cross-reference with `ip_countries` and `ip_regions` for geographic distribution
+- Use the **`region`** field for geographic distribution — this is the real IP-geo field in the API response (values such as `Guangdong`, `Shanghai`, `Germany`). The response does **NOT** contain `ip_countries` / `ip_regions`; those two are only query **filter** parameters of `ListEvent` (e.g. `--ip_countries.N`, `--ip_regions.N`) and never appear as fields in event data. If per-event `region` is missing, fall back to a separate `--ip_countries.N` filtered query to narrow geography
 - Flag IPs from unexpected countries
 
 #### 3c. Target Asset Analysis
@@ -382,6 +423,13 @@ hcloud WAF ShowEvent --eventid={event_id}
 ```
 
 The detail view includes: full request headers, payload content, matched rule ID, and action taken.
+
+> **⚠️ Empty — Event Not Found:** `ShowEvent` may return an empty result (`total: 0`) **without any error code** when the event does not exist (e.g., wrong/missing event ID, or the event has been archived and is outside the query window). In that case the agent MUST truthfully tell the user **"未找到该事件"** ("event not found"), prompt them to double-check the event ID and time range, and **MUST NOT fabricate any event details** (payload, headers, rule, action, etc.) to fill the gap.
+>
+> **Troubleshooting steps for empty results:**
+> 1. Re-check the exact event ID (from `ListEvent` response, use the `id` field value, not the page number or row index)
+> 2. Confirm the event is within the queried time range — old events may have been archived and are no longer retrievable via `ShowEvent`
+> 3. If the event still cannot be found, use the fields already present in the `ListEvent` response (`request_body`, `headers`, `attack`, `action`, etc.) as the fallback source of detail
 
 > **⚠️ Timeout Warning:** `ShowEvent` may fail with `[USE_ERROR]调用API超时` if:
 > - The event is old and data retrieval is slow
