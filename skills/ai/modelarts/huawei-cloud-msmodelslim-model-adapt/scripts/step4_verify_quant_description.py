@@ -19,12 +19,12 @@ def find_description_file(path: str) -> str:
     """infingerdefinePathsearchfindDescriptionfile"""
     if os.path.isfile(path):
         return path
-    
-    p = os.path.join(path, "quant_weight_description.json")
 
-    if os.path.exists(p):
-        return p
-            
+    for fname in ("quant_weight_description.json", "quant_model_description.json"):
+        p = os.path.join(path, fname)
+        if os.path.exists(p):
+            return p
+
     return None
 
 def verify_description(desc_path: str, rules_path: str) -> bool:

@@ -112,7 +112,7 @@ pip install -e .
 **Solution:**
 ```bash
 # Check actual tolerance
-python3 scripts/step3_verify_weights.py --model-path ./test_model --ref-path ./models/<model_name> --verbose
+python3 scripts/step3_verify_weights.py --original-path ./test_model --quantized-path ./quantized_model --tolerance 1e-5
 
 # If using MoE, verify unpack logic
 # Increase tolerance if within acceptable range (e.g., 1e-3)
@@ -125,7 +125,7 @@ python3 scripts/step3_verify_weights.py --model-path ./test_model --ref-path ./m
 **Solution:**
 ```bash
 # Check which layers failed
-python3 scripts/step4_verify_quant_description.py --model-path ./test_model --rules-path ./rules.json --verbose
+python3 scripts/step4_verify_quant_description.py --desc-path ./quantized_model --rules-path ./rules.json
 
 # Update rules.json to match actual layer names
 ```
@@ -158,6 +158,6 @@ python3 -c "import json; c=json.load(open('models/<model>/config.json')); print(
 # Test adapter import
 python3 -c "from adapters.<model> import model_adapter; print('Import OK')"
 
-# Run verification with verbose
-python3 scripts/step1_generate_test_model.py --model-path ./models/<model> --output ./test --verbose
+# Run verification
+python3 scripts/step1_generate_test_model.py --model-path ./models/<model> --output-path ./test
 ```

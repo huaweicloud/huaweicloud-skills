@@ -51,16 +51,16 @@ python3 -c "import json; c=json.load(open('models/<model_name>/config.json')); p
 
 ```bash
 # Step 1: Generate test model
-python3 scripts/step1_generate_test_model.py --model-path ./models/<model_name> --output ./test_model
+python3 scripts/step1_generate_test_model.py --model-path ./models/<model_name> --output-path ./test_model
 
 # Step 2: Run quantization (fallback)
-python3 scripts/step2_run_quantization.py --model-path ./test_model --config ./references/llm/fallback_config.yaml
+python3 scripts/step2_run_quantization.py --model-path ./test_model --output-path ./quantized_model --model-type <model_type> --config-path ./references/llm/fallback_config.yaml
 
 # Step 3: Verify weights
-python3 scripts/step3_verify_weights.py --model-path ./test_model --ref-path ./models/<model_name>
+python3 scripts/step3_verify_weights.py --original-path ./test_model --quantized-path ./quantized_model --tolerance 1e-5
 
 # Step 4: Verify quant description
-python3 scripts/step4_verify_quant_description.py --model-path ./test_model --rules-path ./rules.json
+python3 scripts/step4_verify_quant_description.py --desc-path ./quantized_model --rules-path ./rules.json
 ```
 
 ### 3. Interface Implementation Verification
@@ -111,16 +111,16 @@ echo "=== 2. Verify Model Files ==="
 ls -la ${MODEL_PATH}/config.json
 
 echo "=== 3. Run Step 1: Generate Test Model ==="
-python3 scripts/step1_generate_test_model.py --model-path ${MODEL_PATH} --output ./test_model
+python3 scripts/step1_generate_test_model.py --model-path ${MODEL_PATH} --output-path ./test_model
 
 echo "=== 4. Run Step 2: Full Fallback Quantization ==="
-python3 scripts/step2_run_quantization.py --model-path ./test_model --config ./references/llm/fallback_config.yaml
+python3 scripts/step2_run_quantization.py --model-path ./test_model --output-path ./quantized_model --model-type <model_type> --config-path ./references/llm/fallback_config.yaml
 
 echo "=== 5. Run Step 3: Weight Verification ==="
-python3 scripts/step3_verify_weights.py --model-path ./test_model --ref-path ${MODEL_PATH}
+python3 scripts/step3_verify_weights.py --original-path ./test_model --quantized-path ./quantized_model
 
 echo "=== 6. Run Step 4: Quant Description ==="
-python3 scripts/step4_verify_quant_description.py --model-path ./test_model --rules-path ./rules.json
+python3 scripts/step4_verify_quant_description.py --desc-path ./quantized_model --rules-path ./rules.json
 
 echo "=== All verifications passed ==="
 ```

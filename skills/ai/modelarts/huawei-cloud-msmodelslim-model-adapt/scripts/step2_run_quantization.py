@@ -3,6 +3,7 @@
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 
@@ -72,15 +73,16 @@ def main():
     parser.add_argument("--model-family", choices=["llm", "vlm"], default="llm")
     args = parser.parse_args()
 
+    os.makedirs(args.output_path, exist_ok=True)
     config_path = args.config_path or os.path.join(args.output_path, "fallback_config.yaml")
     if not os.path.exists(config_path):
         _write_fallback_yaml(config_path, args.model_family)
 
-    os.makedirs(args.output_path, exist_ok=True)
+    # msmodelslim provides a console script entry point ('msmodelslim'); the
+    # package has no __main__.py, so `python -m msmodelslim` cannot be used.
+    msmodelslim_bin = shutil.which("msmodelslim") or "msmodelslim"
     cmd = [
-        sys.executable,
-        "-m",
-        "msmodelslim",
+        msmodelslim_bin,
         "quant",
         "--model_path",
         args.model_path,
