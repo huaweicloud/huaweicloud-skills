@@ -40,6 +40,17 @@ def _venv_path():
     return os.path.join(get_project_root(), ".venv")
 
 
+def _venv_python_path(venv_dir):
+    """返回平台对应的 venv 解释器路径。
+
+    Windows 上 venv 的可执行文件位于 Scripts/python.exe，
+    而 POSIX 上位于 bin/python3，需按平台分支。
+    """
+    if os.name == "nt":
+        return os.path.join(venv_dir, "Scripts", "python.exe")
+    return os.path.join(venv_dir, "bin", "python3")
+
+
 def _ensure_venv_and_reexec():
     """若不在 venv 中，创建 .venv 并用 venv Python 重新执行自身。
 
@@ -50,7 +61,7 @@ def _ensure_venv_and_reexec():
         return False
 
     venv_dir = _venv_path()
-    venv_python = os.path.join(venv_dir, "bin", "python3")
+    venv_python = _venv_python_path(venv_dir)
     if not os.path.isabs(venv_python):
         venv_python = os.path.abspath(venv_python)
 
@@ -60,7 +71,10 @@ def _ensure_venv_and_reexec():
         rc, out, err = run_cmd([sys.executable, "-m", "venv", venv_dir], timeout=60)
         if rc != 0:
             fail(f"创建虚拟环境失败: {err}")
-            print("  请手动执行: python3 -m venv .venv && source .venv/bin/activate")
+            if os.name == "nt":
+                print("  请手动执行: python -m venv .venv && .venv\\Scripts\\activate")
+            else:
+                print("  请手动执行: python3 -m venv .venv && source .venv/bin/activate")
             return False
         ok(f"虚拟环境已创建: {venv_dir}")
 
@@ -387,6 +401,7 @@ SDK_MODULES = [
     "huaweicloudsdkims",
     "huaweicloudsdkas",
     "huaweicloudsdkbms",
+    "huaweicloudsdkcce",
 ]
 
 

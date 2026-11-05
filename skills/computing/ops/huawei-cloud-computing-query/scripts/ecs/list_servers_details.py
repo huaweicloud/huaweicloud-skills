@@ -1,6 +1,9 @@
 import argparse
 import sys
 import os
+import csv
+import json
+from datetime import datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
@@ -13,6 +16,7 @@ from huaweicloudsdkecs.v2.region.ecs_region import EcsRegion
 PAGE_SIZE = 50  # 每页展示条数
 FETCH_SIZE = PAGE_SIZE + 1  # 多查1条用于判断是否还有更多
 API_LIMIT = 1000  # 服务端单次请求上限
+SCRIPT_NAME = os.path.splitext(os.path.basename(__file__))[0]  # 导出文件默认前缀
 
 # 初始化凭据
 AK, SK, Region, SecurityToken = load_credentials()
@@ -29,16 +33,44 @@ parser.add_argument("--ip", type=str, help="IPv4 地址，模糊匹配")
 parser.add_argument("--ip_eq", type=str, help="IPv4 地址，精确匹配")
 parser.add_argument("--tags", type=str, help="查询 tag 字段中包含该值的云服务器")
 parser.add_argument("--not_tags", type=str, help="查询 tag 字段中不包含该值的云服务器")
+parser.add_argument("--tag", type=str, action="append", metavar="key=value", help="按标签过滤，格式 key=value，可重复指定，多个标签之间为 AND 关系，例如 --tag env=prod --tag group=web")
+parser.add_argument("--not_tag", type=str, action="append", metavar="key=value", help="按标签排除，格式 key=value，可重复指定，多个标签之间为 AND 关系，例如 --not_tag env=test")
 parser.add_argument("--enterprise_project_id", type=str, help="企业项目 ID，查询所有可传 all_granted_eps，可通过 ../eps/list_enterprise_projects.py 获取")
 parser.add_argument("--reservation_id", type=str, help="批量创建时返回的预留 ID，用于查询本次批量创建的云服务器")
 parser.add_argument("--sort_by", type=str, help="排序字段和方向（客户端排序），格式: 字段:方向。字段可选: vcpus, ram, size；方向可选: asc(升序), desc(降序)。size 为综合规格大小(vCPU×内存GiB)，适合查找整体最小或最大的规格。例如 size:asc 表示按综合规格升序，vcpus:asc 表示按 vCPU 升序，ram:desc 表示按内存降序。与 --top 配合使用可快速查找最值")
 parser.add_argument("--top", type=int, help="取排序后的前 N 条（客户端截取），需与 --sort_by 配合使用。例如 --sort_by size:asc --top 5 查找综合规格最小的 5 个 ECS，--sort_by size:desc --top 3 查找综合规格最大的 3 个 ECS")
 parser.add_argument("--marker", type=str, help="分页标记，从上次查询结果的 next_marker 获取")
+parser.add_argument("--export", type=str, choices=["csv", "json"], help="把本次查询结果导出为文件，可选 csv（UTF-8-SIG 编码，Excel 可直接打开）或 json")
+parser.add_argument("--export_path", type=str, help="导出文件路径，不传时默认写入当前目录 <脚本名>_<时间戳>.<格式>")
 args = parser.parse_args()
 
 Region = args.region
 
+
+# 解析标签过滤参数（key=value，可重复，多个标签之间为 AND 关系）
+def parse_tag_pairs(items, option):
+    pairs = []
+    for item in items or []:
+        if '=' not in item or not item.split('=', 1)[0]:
+            print(f"{option} 格式错误，应为 key=value，例如 {option} env=prod，可重复指定多个标签")
+            exit(1)
+        pairs.append(item)
+    return ','.join(pairs)
+
+
 # 参数校验
+if args.tag and args.tags:
+    print("--tag 与 --tags 不能同时使用：--tag 按 key=value 标签过滤（可重复），--tags 查询 tag 字段中包含该值的云服务器")
+    exit(1)
+
+if args.not_tag and args.not_tags:
+    print("--not_tag 与 --not_tags 不能同时使用：--not_tag 按 key=value 标签排除（可重复），--not_tags 查询 tag 字段中不包含该值的云服务器")
+    exit(1)
+
+if args.export_path and not args.export:
+    print("--export_path 需要与 --export 配合使用，例如 --export csv --export_path ./servers.csv")
+    exit(1)
+
 if args.top is not None and args.sort_by is None:
     print("--top 需要与 --sort_by 配合使用，例如 --sort_by vcpus:asc --top 3")
     exit(1)
@@ -53,8 +85,72 @@ if args.top is not None and args.top <= 0:
     print("--top 必须为正整数")
     exit(1)
 
+# 标签过滤参数，多个标签拼成 key1=value1,key2=value2（对应 ECS API 的 tags / not_tags 查询参数）
+tag_filter = parse_tag_pairs(args.tag, "--tag")
+not_tag_filter = parse_tag_pairs(args.not_tag, "--not_tag")
+
 # 判断是否有自定义过滤参数（排序需要全量拉取）
 has_custom_filter = args.sort_by is not None
+
+
+# 取云服务器第一个 IPv4 地址（优先 primary，用于导出）
+def pick_ip(server):
+    addresses = getattr(server, 'addresses', None)
+    if not addresses:
+        return ''
+    fallback = ''
+    for entries in addresses.values():
+        for entry in entries or []:
+            if str(getattr(entry, 'version', '')) != '4':
+                continue
+            addr = getattr(entry, 'addr', '') or ''
+            if not addr:
+                continue
+            if getattr(entry, 'primary', False):
+                return addr
+            if not fallback:
+                fallback = addr
+    return fallback
+
+
+# 采集导出数据（字段与表格展示字段一致，另附 ip）
+def collect_export_rows(servers):
+    rows = []
+    for server in servers:
+        flavor = getattr(server, 'flavor', None)
+        rows.append({
+            "id": getattr(server, 'id', ''),
+            "name": getattr(server, 'name', ''),
+            "status": getattr(server, 'status', ''),
+            "flavor_id": getattr(flavor, 'id', '') if flavor else '',
+            "vcpus": getattr(flavor, 'vcpus', '') if flavor else '',
+            "memory(GiB)": str(int(getattr(flavor, 'ram', 0)) // 1024) if flavor and getattr(flavor, 'ram', 0) else '',
+            "availability_zone": getattr(server, 'os_ext_a_zavailability_zone', ''),
+            "created": getattr(server, 'created', ''),
+            "ip": pick_ip(server),
+        })
+    return rows
+
+
+# 导出查询结果到 CSV / JSON
+def export_servers(servers, export_format, export_path):
+    if not export_format or not servers:
+        return
+
+    if not export_path:
+        export_path = f"{SCRIPT_NAME}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{export_format}"
+
+    rows = collect_export_rows(servers)
+    if export_format == "csv":
+        with open(export_path, 'w', encoding='utf-8-sig', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(rows)
+    else:
+        with open(export_path, 'w', encoding='utf-8') as f:
+            json.dump(rows, f, ensure_ascii=False, indent=2)
+
+    print(f"已导出 {len(rows)} 条到 {export_path} (格式: {export_format})")
 
 
 # 渲染
@@ -129,9 +225,13 @@ try:
         request.ip = args.ip
     if args.ip_eq:
         request.ip_eq = args.ip_eq
-    if args.tags:
+    if tag_filter:
+        request.tags = tag_filter
+    elif args.tags:
         request.tags = args.tags
-    if args.not_tags:
+    if not_tag_filter:
+        request.not_tags = not_tag_filter
+    elif args.not_tags:
         request.not_tags = args.not_tags
     if args.enterprise_project_id:
         request.enterprise_project_id = args.enterprise_project_id
@@ -179,6 +279,9 @@ try:
 
         # 渲染结果（全量已拉取，无需翻页）
         render(all_servers, total_count=len(all_servers))
+
+        # 导出结果（全量拉取时为本次拉取到的全部数据）
+        export_servers(all_servers, args.export, args.export_path)
     else:
         # 无自定义过滤参数：只查1次
         request.limit = FETCH_SIZE
@@ -209,6 +312,9 @@ try:
 
         # 渲染结果
         render(display_servers, total_count=total_count, has_more=has_more, next_marker=next_marker)
+
+        # 导出结果（常规查询为当前页展示的数据，最多 PAGE_SIZE 条）
+        export_servers(display_servers, args.export, args.export_path)
 except Exception as e:
     print(f"ecs.list 查询失败: {e}")
     exit(1)

@@ -4,3 +4,4 @@ huaweicloudsdkiam>=3.1.0
 huaweicloudsdkims>=3.1.0
 huaweicloudsdkbms>=3.1.0
 huaweicloudsdkas>=3.1.0
+huaweicloudsdkcce>=3.1.0
