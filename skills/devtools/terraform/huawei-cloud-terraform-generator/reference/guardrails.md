@@ -92,11 +92,32 @@ story around it.
 | User confirms | Template uses | Result returned | Actual installed |
 |--------------|---------------|-----------------|------------------|
 | Ubuntu 22.04 | `os = "Ubuntu"` | Ubuntu 24.04 | Ubuntu 24.04 ❌ |
-| Ubuntu 22.04 | `os_version = "Ubuntu 22.04 server 64bit"` | Ubuntu 22.04 | Ubuntu 22.04 ✅ |
+| Ubuntu 22.04 | `os_version = "Ubuntu 22.04 server 64bit"` on the **plural** `huaweicloud_images_images` data source | 68 public images from every OS family; `images[0]` = `AlmaLinux 8.3 64bit` | Wrong OS family, silently ❌❌ |
+
+**Why `os_version` is not a fix:** on the plural `huaweicloud_images_images` data source (provider 1.94.0)
+`os_version` does not take part in filtering — the query returns every public image in the region and
+`images[0]` picks an arbitrary OS family. `terraform plan` reports no error, so the mistake only surfaces
+after deployment. The `imagetype` argument used in the old example does not exist in the provider 1.94.0
+schema either.
+
+**Correct pattern — singular data source with the exact image name:**
+```hcl
+data "huaweicloud_images_image" "selected" {
+  name        = "Ubuntu 22.04 server 64bit"  # EXACT name including version, taken from the query result
+  visibility  = "public"
+  most_recent = true
+}
+
+resource "huaweicloud_compute_instance" "main" {
+  image_id = data.huaweicloud_images_image.selected.id
+}
+```
 
 **Forbidden:**
 - ❌ Using image names like "EulerOS 2.0" without exact match
 - ❌ Using `os = "Ubuntu"` without version (may return wrong version)
+- ❌ Using `os_version` on the plural `huaweicloud_images_images` data source (the filter is ignored — it silently returns the wrong OS family)
+- ❌ Passing `imagetype` to `huaweicloud_images_images` / `huaweicloud_images_image` (not a schema argument in provider 1.94.0)
 - ❌ Using hardcoded image names without querying
 - ❌ Guessing image names based on common patterns
 - ❌ Proceeding if query returns empty results
@@ -223,12 +244,31 @@ Never ask the user to provide sensitive information directly in the conversation
 
 **Strong password characteristics:**
 
-- 16 characters minimum length
+- Length must stay inside the Huawei Cloud hard limit of **8–26 characters** — 16 characters is the
+  recommended length, and a generated password MUST NOT exceed 26 characters (ECS/RDS reject longer
+  passwords at apply time with `The password length must range from 8 to 26.`)
 - Contains uppercase letters (A-Z)
 - Contains lowercase letters (a-z)
 - Contains digits (0-9)
 - Contains special characters (!@#$%^&*)
 - Randomly generated, no predictable patterns
+- The `random_password` resource MUST pin every character class with `min_upper = 1`,
+  `min_lower = 1`, `min_numeric = 1`, `min_special = 1`. Without `min_*` only the total length is
+  guaranteed — a 16-character password can contain no digit at all, which RDS MySQL rejects when
+  creating an application account with `DBS.01010160` (`Invalid password. See validate_password.policy`).
+
+**Example (valid for both ECS and RDS):**
+```hcl
+resource "random_password" "test" {
+  length           = 16
+  special          = true
+  override_special = "!@%^*-_=+"
+  min_upper        = 1
+  min_lower        = 1
+  min_numeric      = 1
+  min_special      = 1
+}
+```
 
 **Allowed approach:**
 

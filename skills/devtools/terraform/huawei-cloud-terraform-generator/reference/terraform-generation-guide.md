@@ -269,6 +269,34 @@ data "huaweicloud_compute_flavors" "selected" {
 }
 ```
 
+**`huaweicloud_compute_flavors` supported arguments** (verified against provider 1.94.0):
+
+| Argument | Type | Notes |
+|----------|------|-------|
+| `availability_zone` | string | Filter by AZ; strongly recommended so the flavor is usable by the instance |
+| `performance_type` | string | e.g. `normal`, `computing`, `memory`, `highmem`, `gpu` |
+| `cpu_core_count` | number | vCPU count |
+| `memory_size` | number | Memory size in GB |
+| `generation` | string | Flavor generation, e.g. `s6`, `c6`, `m6` |
+| `region` | string | Optional; defaults to the provider region |
+
+> **⚠️ Not supported:** `name`, `flavor_name`, `name_regex` (and any other argument outside the table
+> above) are **not** arguments of this data source — passing them fails with
+> `Unsupported argument`. To pin one specific flavor, use the value confirmed through the
+> `huawei-cloud-computing-query` skill directly on the instance resource
+> (`flavor_name = "s6.small.1"` / `flavor_id = "..."`) instead of filtering a data source.
+
+```hcl
+# ✅ Correct: filter by the arguments the data source actually supports
+data "huaweicloud_compute_flavors" "selected" {
+  availability_zone = var.availability_zone
+  performance_type  = "normal"
+  cpu_core_count    = 2
+  memory_size       = 4
+  generation        = "s6"
+}
+```
+
 ### Images
 
 **Problem 1:** Image names must match EXACTLY. User may say "EulerOS 2.0" but actual name is "Huawei Cloud EulerOS 2.0 Standard 64 bit".
@@ -292,7 +320,7 @@ Workflow:
 | User confirms | Template uses | Result returned | Actual installed |
 |--------------|---------------|-----------------|------------------|
 | Ubuntu 22.04 | `os = "Ubuntu"` | Ubuntu 24.04 | Ubuntu 24.04 ❌ |
-| Ubuntu 22.04 | `os_version = "Ubuntu 22.04 server 64bit"` | Ubuntu 22.04 | Ubuntu 22.04 ✅ |
+| Ubuntu 22.04 | `os_version = "Ubuntu 22.04 server 64bit"` on the **plural** `huaweicloud_images_images` data source | 68 public images from every OS family; `images[0]` = `AlmaLinux 8.3 64bit` | Wrong OS family, silently ❌❌ |
 
 **Terraform usage:**
 ```hcl
@@ -301,17 +329,19 @@ data "huaweicloud_images_images" "selected" {
   os = "Ubuntu"  # Could return 16.04, 18.04, 20.04, 22.04, or 24.04
 }
 
-# ✅ Correct: Use exact image name
-data "huaweicloud_images_image" "selected" {
-  name        = "Ubuntu 22.04 server 64bit"  # EXACT match with version
+# ❌ Wrong: `os_version` does not filter the plural data source (provider 1.94.0).
+# It returns every public image in the region (68 in cn-north-4) and images[0] may be any OS family
+# (observed: AlmaLinux 8.3 64bit).
+data "huaweicloud_images_images" "wrong_os_version" {
+  os_version  = "Ubuntu 22.04 server 64bit"
+  visibility  = "public"
   most_recent = true
 }
 
-# ✅ Correct: Use os_version field (more stable)
-data "huaweicloud_images_images" "selected" {
-  os_version = "Ubuntu 22.04 server 64bit"  # Version included
-  visibility = "public"
-  imagetype  = "gold"
+# ✅ Correct: singular data source, EXACT image name with version
+data "huaweicloud_images_image" "selected" {
+  name        = "Ubuntu 22.04 server 64bit"  # EXACT match with version
+  visibility  = "public"
   most_recent = true
 }
 
@@ -319,6 +349,9 @@ resource "huaweicloud_compute_instance" "main" {
   image_id = data.huaweicloud_images_image.selected.id
 }
 ```
+
+`imagetype` is not a schema argument of either image data source in provider 1.94.0 — passing it fails
+with `Unsupported argument`.
 
 ### Forbidden practices
 

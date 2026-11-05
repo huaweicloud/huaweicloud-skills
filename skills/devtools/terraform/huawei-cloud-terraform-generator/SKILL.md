@@ -28,6 +28,11 @@ Before using this skill, ensure the following are available:
 1. **Terraform** — installed in PATH or auto-installable (see validation-workflow.md)
 2. **Provider download source** — the Huawei Cloud mirror should be reachable (see validation-workflow.md)
 3. **Target region** — the deployment region (e.g. cn-north-4, cn-south-1) must be identified
+4. **Windows long-path support (Windows only)** — this skill ships a deep `reference/**` + `assets/**` tree, and `git clone` on Windows can abort with `Filename too long` and leave an **incomplete work tree**. Before cloning on Windows:
+   - prefer a short clone root (e.g. `D:\hw-skills`) instead of a deeply nested project directory;
+   - or enable long paths for that single command: `git clone -c core.longpaths=true https://gitcode.com/developer-skill/huaweicloud-skills.git`;
+   - if an existing clone already has an incomplete work tree, repair it in place: `git config core.longpaths true && git checkout -f`.
+   Linux/macOS need no special handling for these paths.
 
 ## 3. Parameter Confirmation
 
@@ -295,6 +300,12 @@ Keep the final Terraform aligned with the user-confirmed plan and follow Minimum
 ### 8.5 Do not rely on templates blindly
 
 Always verify that the template matches the confirmed plan and validate through the normal validation workflow.
+
+### 8.6 Packaging and publishing size limits
+
+`assets/**` is a library of ready-to-use templates and accounts for most of the files in this skill package; `SKILL.md` + `reference/**` are the rules and must always ship. If the channel used to publish the skill enforces a file-count or archive-size ceiling, publish `SKILL.md` + `reference/**` only, exclude `assets/**`, and tell the user which templates were left out instead of silently dropping them.
+
+The duplicated `assets/rds/reference/**` copy (88 documents that already exist under `reference/**`) has been removed — shipping the same reference documents twice inflated both the file count and the archive size, and its deepest paths were the ones that broke Windows `git clone`. Do not re-introduce copies of `reference/**` inside `assets/**`.
 
 ## 9. Quality Checklist
 
