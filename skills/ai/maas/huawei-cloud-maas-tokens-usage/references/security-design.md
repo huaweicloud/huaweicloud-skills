@@ -10,6 +10,11 @@ Detailed security architecture for Huawei Cloud MaaS tokens usage query. Referen
 
 ---
 
+> **Operational rules** (what to do and what to refuse when handling credentials, refusal template, credential
+> configuration and credentials-file formats) are in [security-guide.md](security-guide.md).
+
+---
+
 ## Tool Separation for Security
 
 | Operation | Tool | Reason |
@@ -18,7 +23,8 @@ Detailed security architecture for Huawei Cloud MaaS tokens usage query. Referen
 | Request signing | Python `huaweicloudsdkcore.Signer` | SDK-HMAC-SHA256 signing inside Python process; AK/SK never on CLI |
 | HTTP POST | Python `requests` | Signed request sent from Python process; no shell, no `ps -ef` leakage |
 | Timezone resolution | Python `datetime` | Auto-detect OS local timezone; no hardcoded CST |
-| Time range segmentation | Python `datetime` | Auto-segment ranges > 30 days; aggregate in Python memory |
+| Time range segmentation | Python `datetime` | Auto-segment ranges > 29 days; aggregate in Python memory |
+| Optional webhook notification | Python `requests` (HTTPS + `verify=True`) | `--notify-url` is SSRF-guarded: HTTPS-only, Huawei Cloud host allowlist, IP literals rejected before the query runs |
 
 ## Credential Leakage Risk Elimination
 
@@ -37,7 +43,7 @@ Detailed security architecture for Huawei Cloud MaaS tokens usage query. Referen
 1. Python reads AK/SK from env vars (HW_ACCESS_KEY / HW_SECRET_KEY) or --credentials-file (in memory only)
 2. Python reads HW_SECURITY_TOKEN if present (temporary credentials, in memory only)
 3. Python resolves time range from --from / --to or user expression (last 7/14/30 days, this month)
-4. Python auto-segments ranges > 30 days into multiple ≤ 30-day segments
+4. Python auto-segments ranges > 29 days into multiple ≤ 29-day segments
 5. Python builds request body (service_type, start_time, end_time, timezone, infer_type, api_keys)
 6. Python SDK Signer signs the request (AK/SK in process memory, never exported)
 7. Python requests.post sends signed request to modelarts.{region}.myhuaweicloud.com
@@ -59,4 +65,5 @@ Detailed security architecture for Huawei Cloud MaaS tokens usage query. Referen
 | Document | Description |
 |----------|-------------|
 | [SKILL.md](../SKILL.md) | Skill overview and core workflows |
+| [security-guide.md](security-guide.md) | Operational security rules, refusal template, credential configuration, credentials-file formats |
 | [troubleshooting.md](troubleshooting.md) | Common query issues and solutions |

@@ -25,12 +25,16 @@ Response metrics and enum values for the MaaS ShowStatistics API.
 | Field | Type | Description | Unit | Conversion |
 |-------|------|-------------|------|------------|
 | `total_request_count` | Integer | Total request count | count | Use directly |
-| `total_error_count` | Integer | Total error count | count | Use directly |
+| `total_error_count` | Integer | Total failed request count | count | Use directly |
 | `total_token` | Double | Total tokens (prompt + completion) | thousand | Actual = value × 1000 |
-| `total_prompt_token` | Double | Total prompt tokens | thousand | Actual = value × 1000 |
-| `total_completion_token` | Double | Total completion tokens | thousand | Actual = value × 1000 |
-| `total_completion_tasks` | Integer | Completed batch inference tasks | count | Batch inference only |
-| `total_infer_count` | Integer | Total inference count | count | Batch inference only |
+| `total_prompt_token` | Double | Total prompt (input) tokens | thousand | Actual = value × 1000 |
+| `total_completion_token` | Double | Total completion (output) tokens | thousand | Actual = value × 1000 |
+| `total_completion_tasks` | Integer | Completed batch inference tasks | count | Use directly |
+| `total_infer_count` | Integer | Total inference count | count | Use directly |
+| `video_generate_duration` | Double | Total video generation duration | second | Use directly |
+| `image_generate_nums` | Integer | Number of generated images | count | Use directly |
+
+> **Every numeric field present in the response is printed** in the output table (issue #112 Gap-2). The 5 core metrics (`total_token`, `total_prompt_token`, `total_completion_token`, `total_request_count`, `total_error_count`) and `Error Rate` are always shown (missing core fields count as 0); `total_completion_tasks`, `total_infer_count`, `video_generate_duration`, `image_generate_nums` and any unmapped numeric field appear only when the response contains them. Source: [ShowStatistics API doc](https://support.huaweicloud.com/api-maas/ShowStatistics.html).
 
 ### service_type Values
 
@@ -51,6 +55,7 @@ Response metrics and enum values for the MaaS ShowStatistics API.
 
 ### Limitations
 
+- **Region**: only Southwest-Guiyang-1 (`cn-southwest-2`) is supported (official doc: 区域限制 — 仅支持西南-贵阳一区域)
 - Only retains 30 days of statistics data
 - API rate limit: total requests ≤ 1000/min, per-user ≤ 200/min
 

@@ -84,15 +84,23 @@ Please tell me your AK and SK
 ### ✅ Correct
 
 Strictly distinguish "last 7 days" and "this month":
-- "last 7 days": now-7d ~ now (rolling window)
-- "this month": 1st of month 00:00:00 ~ now (calendar month)
+- "last 7 days": `--last-days 7` (today 00:00 local time back 6 days → **the current instant**, today included up to now)
+- "this month": 1st of month 00:00:00 ~ today 00:00 (explicit `--from`/`--to`)
 - Specific range: `--from 2026-05-08 --to 2026-05-21`
+- Exactly one form is used: `--last-days N` **or** `--from` + `--to` (mutually exclusive)
+- `--last-days 1` = today 00:00 until now (never a zero-length window)
+- `--last-days N` stays inside the documented bound `1 <= N <= 3650` (`MAX_LAST_DAYS`)
 
 ### ❌ Incorrect
 
-Confuse time ranges:
+Confuse time ranges or misuse the options:
 - User says "last 7 days" but calculate as "this month"
 - User says "this month" but calculate as "last 30 days"
+- Describe `--last-days N` as ending at today 00:00 (it ends at the current instant)
+- Expect `--from 2026-07-01 --to 2026-07-01` to cover that whole day (both ends are local 00:00 → zero-length window)
+- Pass `--last-days 7 --from ... --to ...` → `Error: --last-days cannot be combined with --from / --to.`
+- Pass no time range at all → `Error: --from and --to are required unless --last-days is used.`
+- Pass `--last-days 5000` → `Error: --last-days must not exceed 3650 days, got '5000'.`
 
 ---
 
@@ -117,12 +125,16 @@ timezone = "Asia/Shanghai"  # Hardcoded, ignores OS timezone
 
 | Metric | Expected |
 |--------|----------|
-| Total Tokens | M tokens (thousand × 1000 = actual tokens) |
-| Prompt Tokens | M tokens |
-| Completion Tokens | M tokens |
-| Total Requests | Integer count |
-| Total Errors | Integer count |
-| Error Rate | Percentage (errors / requests × 100%) |
+| Total Tokens / Prompt Tokens / Completion Tokens | M tokens (always shown; thousand × 1000 = actual tokens) |
+| Total Requests / Total Errors | Integer count (always shown) |
+| Error Rate | Percentage (errors / requests × 100%; 0 requests → `0.00%`; always shown) |
+| Completed Batch Tasks | Integer count (`total_completion_tasks`), **only if present in the response** |
+| Total Inference Count | Integer count (`total_infer_count`), **only if present in the response** |
+| Video Duration (s) | Numeric seconds (`video_generate_duration`), **only if present in the response** |
+| Generated Images | Integer count (`image_generate_nums`), **only if present in the response** |
+| Unmapped numeric fields | Appended by raw field name, only if present (no fabricated 0 rows) |
+| Column widths | Adapt to the longest label/value printed |
+| All-zero result | Table + **two** `Note: ...` lines on stdout (exit code 0, not an error) |
 | Period | Start ~ End (auto-detected timezone) |
 
 ### Console Consistency
@@ -143,6 +155,7 @@ timezone = "Asia/Shanghai"  # Hardcoded, ignores OS timezone
 5. AK/SK never printed, never logged, never exported to shell
 6. Credentials destroyed when Python process exits
 7. Read-only IAM scope (`modelarts:monitoring:get`, `modelarts:service:get`, `iam:projects:get`)
+8. `--notify-url` (if used) is HTTPS on a trusted Huawei Cloud host (`*.myhuaweicloud.com` / `*.huaweicloud.com`), with TLS verification on; a delivery failure is only a `Warning` and exit code stays 0
 
 ### ❌ Incorrect Security Practices
 
@@ -153,6 +166,18 @@ timezone = "Asia/Shanghai"  # Hardcoded, ignores OS timezone
 5. Pass `X-Security-Token` via CLI argument
 6. Print or log AK/SK values
 7. Grant write/modify permissions beyond read-only scope
+8. Point `--notify-url` at `http://`, an IP literal, or an arbitrary domain → rejected before the query is sent
+9. Treat a failed `--notify-url` delivery as a query failure (the query succeeded; exit code stays 0)
+
+### Webhook (`--notify-url`) Security Standards
+
+| URL | Verdict | Description |
+|-----|---------|-------------|
+| `https://example.myhuaweicloud.com/hook` | ✅ Allowed | HTTPS + trusted Huawei Cloud subdomain |
+| `https://myhuaweicloud.com/hook` | ✅ Allowed | Exact allowlisted domain |
+| `http://example.myhuaweicloud.com/hook` | ❌ Prohibited | Plain HTTP rejected during validation |
+| `https://1.2.3.4/hook` | ❌ Prohibited | IP literal rejected (SSRF) |
+| `https://evil.example/hook` | ❌ Prohibited | Host outside the allowlist; nothing is sent |
 
 ### Credential Lifecycle Security Standards
 
@@ -171,7 +196,7 @@ timezone = "Asia/Shanghai"  # Hardcoded, ignores OS timezone
 | Request signing | Python `huaweicloudsdkcore.Signer` | SDK-HMAC-SHA256 in-process; AK/SK never on CLI |
 | HTTP POST | Python `requests` | Signed request from process memory; no `ps -ef` leakage |
 | Timezone resolution | Python `datetime` | Auto-detect OS timezone; no hardcode |
-| Time range segmentation | Python `datetime` | Auto-segment > 30 days; aggregate in memory |
+| Time range segmentation | Python `datetime` | Auto-segment > 29 days; aggregate in memory |
 
 ---
 
