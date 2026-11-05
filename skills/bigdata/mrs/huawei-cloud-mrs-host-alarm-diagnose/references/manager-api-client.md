@@ -6,6 +6,8 @@
 
 It is used by the **manager mode** of this skill: when `scripts/manager_api_config.yaml` exists and `auth.encrypted_password` is set, `check_api_mode.py` returns `manager`, and the diagnosis reads the knowledge base under `alarm_manager/` and runs `manager_api_client.py` commands instead of the LakeWatch client.
 
+> **Read-only constraint**: This skill is strictly read-only. Although `scripts/manager_api_apis/` includes some Manager **write** API definitions (`clear_alarm`, `shield_alarms`, `create_user`, `delete_user`, `abort_command`, `gather_log`), they MUST NOT be called by the agent. See the *Prohibited Manager Write APIs* section in SKILL.md. Only the read APIs such as `get_alarms`, `get_host_*`, `get_instances`, `start_log_search`, `browse_log` are allowed.
+
 ## Files
 
 | File | Description |
@@ -158,14 +160,20 @@ python3 scripts/manager_api_client.py -a get_log_search_progress \
 
 ## Password Encryption Mechanism
 
-The encryption method is selected automatically based on the platform (`platform.system()`), no configuration needed:
+The encryption method is selected by the `crypto.engine` setting in `manager_api_config.yaml` (`auto` default), with a built-in AES fallback:
 
-| Platform | Encryption | Description |
+| `crypto.engine` | Behavior |
+|----------|-----------|
+| `auto` (default) | Windows uses AES-256-CBC; Linux uses CryptoAPI (SCC), and falls back to built-in AES-256-CBC automatically when the CryptoAPI binary or SCC_CONF is unavailable |
+| `aes` | Always uses Python AES-256-CBC (Windows/Linux) |
+| `cryptoapi` | Always uses CryptoAPI; errors out if unavailable |
+
+| Platform | Typical Engine | Description |
 |----------|-----------|-------------|
-| Linux | CryptoAPI (SCC) | Production environment; keys managed by the security component |
+| Linux | CryptoAPI (SCC) | Production environment; keys managed by the security component. Falls back to AES when CryptoAPI is missing |
 | Windows | AES-256-CBC | Development environment; keys stored in the local `.aes_key` file |
 
-> **Note**: Ciphertexts are not interchangeable between the two platforms; run `--encrypt-password` on the target platform separately.
+> **Note**: Ciphertexts are not interchangeable between the two engines; run `--encrypt-password` on the target platform/engine separately.
 
 ## Dependencies
 

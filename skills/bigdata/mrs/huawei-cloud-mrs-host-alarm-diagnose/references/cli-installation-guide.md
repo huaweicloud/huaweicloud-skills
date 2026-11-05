@@ -51,15 +51,15 @@ python --version
 | Dependency | Required On | Purpose | Install |
 |------------|-------------|---------|---------|
 | `pyyaml` | All platforms | YAML config parsing | `pip3 install pyyaml` |
-| `cryptography` | Windows only | AES-256-CBC password encryption | `pip install cryptography` |
+| `cryptography` | Windows; Linux only when AES fallback is used | AES-256-CBC password encryption | `pip install cryptography` |
 
-> On Linux, password encryption uses CryptoAPI (SCC) provided by the security component; `cryptography` is NOT required.
+> On Linux, password encryption uses CryptoAPI (SCC) provided by the security component by default. When CryptoAPI (or its SCC_CONF) is unavailable, the client automatically falls back to built-in AES-256-CBC, which requires `cryptography`. To force a backend, set `crypto.engine` (`auto`/`aes`/`cryptoapi`) in the config YAML.
 
 ```bash
-# Linux
+# Linux (CryptoAPI is available, AES fallback used only if needed)
 pip3 install pyyaml
 
-# Windows
+# Linux (to guarantee the AES fallback works) / Windows
 pip install pyyaml cryptography
 ```
 
