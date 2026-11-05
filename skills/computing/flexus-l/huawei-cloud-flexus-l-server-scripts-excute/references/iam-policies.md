@@ -9,7 +9,6 @@
 | `coc:script:create` | Create script | Create custom scripts |
 | `coc:script:list` | List scripts | Query script list |
 | `coc:script:get` | Get script details | View script content |
-| `coc:script:update` | Update script | Modify script content |
 | `coc:script:delete` | Delete script | Delete specified script |
 
 ### Script Execution Permissions
@@ -25,8 +24,7 @@
 
 | Permission Name | Permission Description | Applicable Operations |
 |-----------------|------------------------|----------------------|
-| `coc:instance:list` | List target instances | Get list of instances where scripts can be executed |
-| `coc:instance:get` | Get instance details | View instance information |
+| `coc:instance:get` | Get instance details | View target instance information before/after execution |
 
 ## Recommended IAM Roles
 
@@ -45,7 +43,6 @@ Includes only script execution permissions:
 - `coc:execution:create`
 - `coc:execution:list`
 - `coc:execution:get`
-- `coc:instance:list`
 
 ## Permission Configuration Steps
 
@@ -62,9 +59,6 @@ You can verify if permissions are correctly configured by running the following 
 ```bash
 # Verify script list permission
 python {baseDir}/scripts/caller.py list
-
-# Verify instance list permission
-python {baseDir}/scripts/caller.py instances
 ```
 
 If the commands return normal results, the permission configuration is correct.

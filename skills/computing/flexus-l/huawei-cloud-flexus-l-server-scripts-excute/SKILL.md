@@ -153,12 +153,10 @@ This skill requires the following IAM permissions. For detailed information, ref
 | Script Management | `coc:script:create` | Create script |
 | Script Management | `coc:script:list` | List scripts |
 | Script Management | `coc:script:get` | Get script details |
-| Script Management | `coc:script:update` | Update script |
 | Script Management | `coc:script:delete` | Delete script |
 | Execution Management | `coc:execution:create` | Create execution task |
 | Execution Management | `coc:execution:list` | List execution tasks |
 | Execution Management | `coc:execution:get` | Get execution details |
-| Instance Management | `coc:instance:list` | List target instances |
 
 ### Permission Failure Handling Flow
 

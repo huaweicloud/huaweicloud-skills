@@ -126,6 +126,21 @@ def print_coc_service_region_list():
     print("-" * 40)
 
 
+def safe_input(display_prompt):
+    """
+    Read a line from stdin.
+
+    In non-interactive environments (CI/CD, pipelines) with empty stdin,
+    input() raises EOFError and would crash with a traceback. Catch it and
+    exit gracefully with a clear error instead.
+    """
+    try:
+        return input(display_prompt).strip()
+    except EOFError:
+        print("Error: Required parameter not provided in non-interactive mode.")
+        sys.exit(1)
+
+
 def prompt_for_region(prompt, required=False, default="cn-north-4", is_coc_service=False):
     """
     Interactive prompt for user to select region, displays region list
@@ -154,7 +169,7 @@ def prompt_for_region(prompt, required=False, default="cn-north-4", is_coc_servi
         else:
             display_prompt = f"\n{prompt} (enter 'list' to view list): "
         
-        user_input = input(display_prompt).strip()
+        user_input = safe_input(display_prompt)
         
         if user_input.lower() == 'list':
             continue
@@ -194,9 +209,12 @@ def prompt_for_input(prompt, required=True, default=None, choices=None, hide_inp
                 from getpass import getpass
                 user_input = getpass(display_prompt).strip()
             except ImportError:
-                user_input = input(display_prompt).strip()
+                user_input = safe_input(display_prompt)
+            except EOFError:
+                print("Error: Required parameter not provided in non-interactive mode.")
+                sys.exit(1)
         else:
-            user_input = input(display_prompt).strip()
+            user_input = safe_input(display_prompt)
 
         if user_input:
             if choices and user_input not in choices:
