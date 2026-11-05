@@ -2,7 +2,7 @@
 // check-gates.mjs — 发布前统一门禁复核（fail-stop，最终关卡）
 //
 // 背景:
-//   各门禁脚本（preflight.sh / ensure-utf8.mjs / screenshot-guard.mjs / verify-glyphs.py）
+//   各门禁脚本（preflight.sh / ensure-utf8.mjs / screenshot_guard.py / verify-glyphs.py）
 //   散落在 Step 5 / Step 7，发布 API 调用（Step 9）前无统一复核，agent 可跳过门禁直接发布。
 //   本脚本在发布前一次性校验全部门禁标记 + 产物文件存在性，任一未通过即 exit 1，
 //   程序性阻止发布 API 调用。

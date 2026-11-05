@@ -151,7 +151,7 @@ AI DevSpace / CodeArts 沙箱等环境通常无 root 或禁止写系统目录，
 | CJK 字体 | 用户字体目录 `~/.fonts` / `~/.local/share/fonts`（含下载安装的彩色 Emoji） | `sudo apt/yum`（如 `fonts-noto-cjk`、`google-noto-cjk-fonts`） |
 | 彩色 Emoji 字体 | `bash $SKILL_DIR/scripts/download-noto-color-emoji.sh`（**默认装到 `~/.local/share/fonts/noto-color-emoji/`**，无需 sudo） | `sudo apt install -y fonts-noto-color-emoji` / yum 包 |
 | fontconfig 规则 | `~/.config/fontconfig/conf.d/`（XDG 用户目录，`preflight.sh` 自动选择） | `/etc/fonts/conf.d/` |
-| numpy/pillow/playwright（Python） | `pip install --user ...`（`preflight.sh` `pip_user_install` 自动优先 `--user`） | venv / 系统 `pip` |
+| numpy/pillow/playwright（Python) | `pip install --user ...`（`preflight.sh` `pip_user_install` 自动优先 `--user`）；**Ubuntu 24.04+/Debian 12+ 等 PEP 668（externally-managed-environment）受保护环境回退 `pip install --break-system-packages`，脚本已内置该回退链** | venv / 系统 `pip` |
 | Playwright Chromium 浏览器 | 默认缓存 `~/.cache/ms-playwright`（Playwright 自带，已在 $HOME） | 系统 Chrome（`channel: 'chrome'` 复用） |
 
 > **fontconfig XDG 用户目录注意：** `resolve_fontconf_dir` 在 `~/.config/fontconfig/conf.d` 可写时优先写用户目录；`~/.fonts`/`~/.local/share/fonts` 下的字体经 `fc-cache -f` 后同样被 fontconfig 识别。无用户级可用时 `preflight.sh` 自动回退系统路径。

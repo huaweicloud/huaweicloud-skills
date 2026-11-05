@@ -10,7 +10,7 @@
 //   多页项目: 方案池 = 12 单图 + 3 多图（collage-h/collage-v/collage-grid）
 //   从池中等概率抽 1 个 → 决定布局/截图数量。多页时多图出现概率 = 3/15（≈1/5）。
 //
-// 多页判定: 项目内 .html 文件数 ≥ 2。候选页 = 其余 html 文件（排除 index.html / 404 等）。
+// 多页判定: 非首页页面数 ≥2（排除 index.html / 404 后剩余 html ≥2，即总 html ≥3）。
 //          SPA（单 html 但带 hash 路由）暂视为单页（不触发多图），后续可扩展。
 //
 // 用法:
@@ -237,7 +237,7 @@ function main() {
   const pages = detectPages(cli.dir);
   const htmlFiles = pages.map((f) => relPath(cli.dir, f));
   const nonIndex = htmlFiles.filter((f) => f.toLowerCase() !== "index.html");
-  // 仅 ≥3 页（首页+≥2 候选）才启用多图布局；2 页（首页+1 候选）多图意义薄弱且小图太稀疏
+  // 多页判定口径: 非首页页面数 ≥2（总 html ≥3）——与 SKILL.md/work-preparation.md 文档口径一致。
   const multipage = nonIndex.length >= 2;
   const pagesCount = 1 + nonIndex.length;
 

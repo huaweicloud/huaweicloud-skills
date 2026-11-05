@@ -185,23 +185,43 @@ try {
   const nlIdx = raw.indexOf("\n");
   const statusLine = nlIdx >= 0 ? raw.slice(0, nlIdx) : raw;
   const body = nlIdx >= 0 ? raw.slice(nlIdx + 1) : "";
-  if (statusLine.includes("201")) {
-    try {
-      const resp = JSON.parse(body);
-      const w = resp?.data?.work;
-      const r = resp?.data?.reward;
-      console.log(`#status=201`);
-      console.log(`workId=${w?.id ?? ""}`);
-      console.log(`workName=${w?.name ?? workName}`);
-      console.log(`workUrl=${w?.workUrl ?? resp?.data?.workUrl ?? ""}`);
-      if (r) console.log(`reward=${r.is_success ? "success" : "failed"} value=${r.value ?? ""} msg=${r.error_msg ?? ""}`);
-      else console.log(`reward=none`);
-    } catch {
-      // JSON 解析失败，回退到原样输出
-      process.stdout.write(raw);
+  // api.mjs 对任意 2xx 均 exit 0；此处显式解析真实状态码，区分 201 与其它 2xx
+  const codeMatch = statusLine.match(/#status=(\d+)/);
+  const statusCode = codeMatch ? Number(codeMatch[1]) : 0;
+  if (statusCode >= 200 && statusCode < 300) {
+    if (statusCode === 201) {
+      try {
+        const resp = JSON.parse(body);
+        const w = resp?.data?.work;
+        const r = resp?.data?.reward;
+        console.log(`#status=201`);
+        console.log(`workId=${w?.id ?? ""}`);
+        console.log(`workName=${w?.name ?? workName}`);
+        console.log(`workUrl=${w?.workUrl ?? resp?.data?.workUrl ?? ""}`);
+        if (r) console.log(`reward=${r.is_success ? "success" : "failed"} value=${r.value ?? ""} msg=${r.error_msg ?? ""}`);
+        else console.log(`reward=none`);
+      } catch {
+        // JSON 解析失败，回退到原样输出
+        process.stdout.write(raw);
+      }
+    } else {
+      // 非 201 的 2xx 仍属成功（202 Accepted 等），显式标注避免按文档误判失败
+      console.log(`#status=${statusCode}`);
+      console.log(`发布请求已成功但状态码非 201（${statusCode}，任意 2xx 均视为成功）。`);
+      try {
+        const resp = JSON.parse(body);
+        const w = resp?.data?.work;
+        const r = resp?.data?.reward;
+        console.log(`workId=${w?.id ?? ""}`);
+        console.log(`workName=${w?.name ?? workName}`);
+        console.log(`workUrl=${w?.workUrl ?? resp?.data?.workUrl ?? ""}`);
+        if (r) console.log(`reward=${r.is_success ? "success" : "failed"} value=${r.value ?? ""} msg=${r.error_msg ?? ""}`);
+      } catch {
+        process.stdout.write(raw);
+      }
     }
   } else {
-    // 非 201（409/其他错误）原样输出完整响应
+    // 非 2xx（409/其他错误）原样输出完整响应
     process.stdout.write(raw);
   }
   try { unlinkSync(credsFile); } catch {}

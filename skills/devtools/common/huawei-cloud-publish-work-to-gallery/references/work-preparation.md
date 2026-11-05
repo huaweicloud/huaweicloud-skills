@@ -339,7 +339,7 @@ Compose the work screenshot into a presentation-style cover image. **优先使�
 
 #### Screenshot Layout Rules (硬性要求)
 
-0. **布局种类（`generate_cover.py`）：** 单图 `classic/split/hero/showcase/polaroid/blur/topbar/spotlight/cinema/blueprint/diorama/glass`（共 12 个）；多图 `collage-h`（1 大上+4 小下）/`collage-v`（1 大左+3 小右）/`collage-grid`（1 大+3 小）。多图布局仅在项目为**多页**（`.html` ≥2）时可选，由 `build-cover.mjs` 统一概率池自动抽样（多页多图概率 3/15≈1/5），agent 无需感知。
+0. **布局种类（`generate_cover.py`）：** 单图 `classic/split/hero/showcase/polaroid/blur/topbar/spotlight/cinema/blueprint/diorama/glass`（共 12 个）；多图 `collage-h`（1 大上+4 小下）/`collage-v`（1 大左+3 小右）/`collage-grid`（1 大+3 小）。多图布局仅在项目为**多页**（**非首页页面数 ≥2**，即总 `.html` ≥3）时可选，由 `build-cover.mjs` 统一概率池自动抽样（多页多图概率 3/15≈1/5），agent 无需感知。
 1. **禁止多张大截图导致画面拥挤。** 合理排布示例：
    - 1 大 + 下方 3–4 小 ✅
    - 1 大 + 右侧 3–4 小 ✅
