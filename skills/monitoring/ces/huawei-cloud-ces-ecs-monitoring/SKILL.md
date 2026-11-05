@@ -6,9 +6,10 @@ description: |
   system metrics. Supports real-time monitoring, historical data query, and common metric analysis.
   Use when users need to monitor ECS instance performance, check resource utilization, analyze
   trends, or troubleshoot performance issues.
-  Triggers: "Huawei Cloud ECS monitoring", "ECS metrics", "Cloud Eye Service", "CES", "monitor ECS",
-  "CPU usage", "memory usage", "disk IO", "network traffic", "instance performance", "monitoring data",
-  "华为云ECS监控", "云监控", "CES监控", "ECS指标", "CPU使用率", "内存使用率", "磁盘IO", "网络流量"
+  Triggers: "Huawei Cloud ECS monitoring", "ECS metrics", "Cloud Eye Service ECS monitoring", "CES ECS monitoring",
+  "monitor ECS instance", "ECS CPU usage", "ECS memory usage", "ECS disk IO", "ECS network traffic",
+  "ECS instance performance", "ECS monitoring data",
+  "华为云ECS监控", "ECS云监控", "ECS监控", "ECS指标", "ECS CPU使用率", "ECS内存使用率", "ECS磁盘IO", "ECS网络流量"
 ---
 
 # Huawei Cloud ECS Monitoring Skill
@@ -61,7 +62,7 @@ Before starting any operations, you must install and verify Huawei Cloud CLI (hc
 **Verify Installation:**
 
 ```bash
-hcloud --version
+hcloud version
 ```
 
 **If not installed, follow the detailed installation guide:**
@@ -246,9 +247,9 @@ hcloud CES ListAlarmTemplates --cli-region=<region-id>
 
 ## 5. Core Commands
 
-refer to '../references/related-commands.md'
+refer to 'references/related-commands.md'
 
-## 6. Parameter Description
+## 6. Parameter Confirmation
 
 ### Required Parameters
 
@@ -266,9 +267,19 @@ refer to '../references/related-commands.md'
 |-----------|-------------|---------------|---------------|
 | `--from` | Start time (Unix timestamp in milliseconds) | `$(date -d '-1 hour' +%s)000` | Current time - 1 hour |
 | `--to` | End time (Unix timestamp in milliseconds) | `$(date +%s)000` | Current time |
-| `--period` | Statistics period (seconds) | `300` | `300` |
+| `--period` | Statistics period (seconds). Valid values: `1`, `60`, `300`, `1200`, `3600`, `14400`, `86400` | `300` | `300` |
 | `--filter` | Statistical method | `average` | `average` |
-| `--project-id` | Project ID | `project-id` | Project ID from configuration file |
+| `--cli-project-id` | Project ID | `--cli-project-id=<project-id>` | Project ID from configuration file |
+
+### Period Options
+
+- `1` - Real-time monitoring data
+- `60` - 1-minute granularity (AGT.ECS only)
+- `300` - 5-minute granularity (SYS.ECS minimum)
+- `1200` - 20-minute granularity
+- `3600` - 1-hour granularity
+- `14400` - 4-hour granularity
+- `86400` - 1-day granularity
 
 ### Time Range Options
 

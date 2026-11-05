@@ -32,7 +32,7 @@ hcloud configure init
 # - Output format (json recommended)
 
 # Step 3: Test authentication
-hcloud IAM ShowUser
+hcloud IAM ShowUser --user_id=<user-id>
 # Should return user information without errors
 
 # Step 4: Check IAM permissions
@@ -66,7 +66,7 @@ hcloud CES ListMetrics --namespace=SYS.ECS --cli-region=<region-id>
 
 ```bash
 # Symptom: hcloud command is not available
-hcloud --version
+hcloud version
 # bash: hcloud: command not found
 ```
 
@@ -90,7 +90,7 @@ For Windows and other platforms, see the complete installation guide.
 #### Step 2: Verify installation
 
 ```bash
-hcloud --version
+hcloud version
 # Should show version information (>= 3.2.0 recommended)
 ```
 
@@ -107,7 +107,7 @@ hcloud --version
 
 ```bash
 # Symptom: Commands fail with version errors
-hcloud --version
+hcloud version
 # Version: 1.0.0 (but newer features require 1.2.0+)
 ```
 
@@ -126,7 +126,7 @@ tar -zxvf huaweicloud-cli-linux-amd64.tar.gz
 sudo mv hcloud /usr/local/bin/
 
 # Verify update
-hcloud --version
+hcloud version
 ```
 
 For Windows and other platforms, see the complete installation guide.
@@ -134,7 +134,7 @@ For Windows and other platforms, see the complete installation guide.
 #### Step 2: Verify update
 
 ```bash
-hcloud --version
+hcloud version
 # Should show latest version
 ```
 
@@ -348,7 +348,7 @@ echo $HTTPS_PROXY
 # If using proxy, ensure it's configured correctly
 
 # Step 3: Increase timeout
-hcloud ECS NovaListServers --cli-region=<region-id> --timeout=60
+hcloud ECS NovaListServers --cli-region=<region-id> --cli-read-timeout=60
 # Default timeout is 30 seconds
 
 # Step 4: Check DNS resolution
@@ -366,25 +366,25 @@ hcloud ECS NovaListServers --cli-region=<other-region-id>
 
 ```bash
 # Symptom: CLI returns malformed JSON
-hcloud ECS NovaListServers --cli-region=<region-id> --output=json
+hcloud ECS NovaListServers --cli-region=<region-id>
 # Error: Invalid JSON or parsing error
 ```
 
 **Solution:**
 
 ```bash
-# Step 1: Use text output for debugging
-hcloud ECS NovaListServers --cli-region=<region-id> --output=text
-# Check if command works with text output
+# Step 1: Check the response content
+# hcloud outputs JSON by default; check if the returned data is well-formed
+hcloud ECS NovaListServers --cli-region=<region-id>
 
 # Step 2: Check for special characters
 # Some instance names or metadata may contain special characters
 # Use jq with raw output
-hcloud ECS NovaListServers --cli-region=<region-id> --output=json | jq -r '.'
+hcloud ECS NovaListServers --cli-region=<region-id> | jq -r '.'
 
 # Step 3: Update CLI version
 # Older versions may have JSON parsing issues
-hcloud --version
+hcloud version
 # Update to latest version if needed
 
 # Step 4: Check for API changes
@@ -396,7 +396,7 @@ hcloud --version
 
 ```bash
 # Symptom: JSON parsing fails due to missing jq
-hcloud ECS NovaListServers --cli-region=<region-id> --output=json | jq '.servers[].name'
+hcloud ECS NovaListServers --cli-region=<region-id> | jq '.servers[].name'
 # bash: jq: command not found
 ```
 
@@ -418,10 +418,10 @@ brew install jq
 
 # Step 2: Use alternative parsing if jq not available
 # Use grep/sed/awk for simple extraction
-hcloud ECS NovaListServers --cli-region=<region-id> --output=json | grep -o '"name":"[^"]*"' | cut -d'"' -f4
+hcloud ECS NovaListServers --cli-region=<region-id> | grep -o '"name":"[^"]*"' | cut -d'"' -f4
 
 # Step 3: Use Python for complex parsing
-hcloud ECS NovaListServers --cli-region=<region-id> --output=json | python3 -c "import sys,json; data=json.load(sys.stdin); [print(s['name']) for s in data['servers']]"
+hcloud ECS NovaListServers --cli-region=<region-id> | python3 -c "import sys,json; data=json.load(sys.stdin); [print(s['name']) for s in data['servers']]"
 ```
 
 ### 8. Performance Issues
@@ -458,7 +458,7 @@ time hcloud CES BatchListMetricData ...  # Takes > 30 seconds
 # Cache instance list and other static data
 INSTANCE_CACHE="/tmp/instances_$(date +%Y%m%d%H).json"
 if [ ! -f "$INSTANCE_CACHE" ]; then
-  hcloud ECS NovaListServers --cli-region=<region-id> --output=json > "$INSTANCE_CACHE"
+  hcloud ECS NovaListServers --cli-region=<region-id> > "$INSTANCE_CACHE"
 fi
 ```
 

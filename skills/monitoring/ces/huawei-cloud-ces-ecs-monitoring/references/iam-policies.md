@@ -60,14 +60,11 @@ For full functionality, including alarm management and advanced features:
     {
       "Effect": "Allow",
       "Action": [
-        // ECS Permissions
         "ecs:cloudServers:list",
         "ecs:cloudServers:get",
         "ecs:cloudServers:action",
         "ecs:cloudServerFlavors:list",
         "ecs:cloudServerImages:list",
-        
-        // CES Permissions
         "ces:metrics:list",
         "ces:metricData:get",
         "ces:alarms:list",
@@ -76,8 +73,6 @@ For full functionality, including alarm management and advanced features:
         "ces:alarmTemplates:get",
         "ces:alarmRules:list",
         "ces:alarmRules:get",
-        
-        // IAM Permissions (for credential verification)
         "iam:users:getUser",
         "iam:users:listUsers",
         "iam:permissions:listPermissionsForUser"
@@ -379,30 +374,23 @@ hcloud configure init
 # - Secret Access Key: <from CSV file>
 # - Region: <your-region>
 # - Project ID: <optional>
-# - Output format: json (recommended)
 ```
 
-### Method 2: Environment Variables
+### Method 2: `hcloud configure set`
+
+Configure credentials directly via the `configure set` command:
 
 ```bash
-export HUAWEICLOUD_ACCESS_KEY_ID="your-access-key-id"
-export HUAWEICLOUD_SECRET_ACCESS_KEY="your-secret-access-key"
-export HUAWEICLOUD_REGION="your-region"
-export HUAWEICLOUD_PROJECT_ID="your-project-id"
+# The access key and secret are entered interactively, never in the command line
+hcloud configure set
+# Enter:
+# - Access Key ID: <from CSV file>
+# - Secret Access Key: <from CSV file>
+# - Region: <your-region>
+# - Project ID: <optional>
 ```
 
-### Method 3: Config File
-
-Edit `~/.hcloud/credentials`:
-
-```ini
-[default]
-access_key_id = your-access-key-id
-secret_access_key = your-secret-access-key
-region = your-region
-project_id = your-project-id
-output = json
-```
+> **Note**: The Huawei Cloud CLI stores the active profile in `~/.hcloud/config.json` (JSON format). Do not edit the configuration file manually; always use `hcloud configure init` or `hcloud configure set` to manage credentials.
 
 ## Testing Permissions
 
@@ -410,17 +398,17 @@ output = json
 
 ```bash
 # List ECS instances (requires ecs:cloudServers:list)
-hcloud ECS NovaListServers --cli-region <region-id>
+hcloud ECS NovaListServers --cli-region=<region-id>
 
 # Get specific instance (requires ecs:cloudServers:get)
-hcloud ECS NovaShowServer --server_id <instance-uuid> --cli-region <region-id>
+hcloud ECS NovaShowServer --server_id=<instance-uuid> --cli-region=<region-id>
 ```
 
 ### Test CES Access
 
 ```bash
 # List available metrics (requires ces:metrics:list)
-hcloud CES ListMetrics --namespace "SYS.ECS" --cli-region <region-id>
+hcloud CES ListMetrics --namespace="SYS.ECS" --cli-region=<region-id>
 
 # Get metric data (requires ces:metricData:get)
 hcloud CES BatchListMetricData \
@@ -432,14 +420,14 @@ hcloud CES BatchListMetricData \
   --to=$(date +%s)000 \
   --period=300 \
   --filter="average" \
-  --cli-region <region-id>
+  --cli-region=<region-id>
 ```
 
 ### Test IAM Access (Optional)
 
 ```bash
 # Get user info (requires iam:users:getUser)
-hcloud IAM ShowUser
+hcloud IAM ShowUser --user_id=<user-id>
 ```
 
 ## Troubleshooting Permission Issues
@@ -451,7 +439,7 @@ hcloud IAM ShowUser
 hcloud configure list
 
 # Test basic IAM access
-hcloud iam show-user
+hcloud IAM ShowUser --user_id=<user-id>
 
 # If this fails, credentials may be invalid or expired
 ```
@@ -472,7 +460,7 @@ hcloud iam show-user
 
 ```bash
 # Check if resource exists
-hcloud ECS NovaListServers --cli-region <region-id>
+hcloud ECS NovaListServers --cli-region=<region-id>
 
 # Verify resource ID
 # Check project ID in policy conditions
