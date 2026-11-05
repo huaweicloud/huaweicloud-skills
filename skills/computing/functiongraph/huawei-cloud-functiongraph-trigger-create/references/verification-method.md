@@ -2,7 +2,22 @@
 
 ## Overview
 
-This document provides comprehensive methods to verify that FunctionGraph scheduled triggers have been correctly configured and are functioning as expected.
+This document describes how to verify that a FunctionGraph trigger created by this skill is
+correctly configured and working. It covers both trigger types the skill supports:
+
+| Trigger type | What to verify |
+|--------------|----------------|
+| `TIMER` | Trigger type, status, name, and the schedule (`event_data.schedule` / `event_data.schedule_type`) |
+| `OBS` | Trigger type, status, event-notification name, source `bucket`, `events`, and the optional `prefix` / `suffix` filters |
+
+This skill only creates triggers; verification is read-only and can be done with KooCLI, the
+Python SDK, or the console.
+
+> Field names in this document were checked against the unpacked
+> `huaweicloudsdkfunctiongraph` 3.1.220 models. In particular,
+> `ListFunctionTriggersResponse` exposes the trigger list as **`body`**
+> (`list[ListFunctionTriggerResult]`) — there is no `triggers` attribute — and the trigger name
+> lives in **`event_data.name`**, the status in **`trigger_status`**.
 
 ## Verification Steps
 
@@ -11,173 +26,236 @@ This document provides comprehensive methods to verify that FunctionGraph schedu
 #### Using KooCLI
 
 ```bash
-# List all triggers for the function
-hcloud functiongraph v2 list-function-triggers \
-    --function-urn "urn:fss:cn-north-4:project-id:function:default:my-function:latest"
+hcloud FunctionGraph ListFunctionTriggers \
+    --cli-region=cn-north-4 \
+    --function_urn "urn:fss:cn-north-4:project_id:function:default:my-function:latest"
 ```
 
-Expected output structure:
+The response contains one entry per trigger with `trigger_id`, `trigger_type_code`,
+`trigger_status`, `event_data`, and `created_time` / `last_updated_time`.
+
+A TIMER entry looks like this (abridged):
 
 ```json
 {
-    "triggers": [
-        {
-            "trigger_id": "timer-xxx-xxx-xxx",
-            "trigger_type": "TIMER",
-            "trigger_name": "daily-trigger",
-            "trigger_config": "{\"name\":\"daily-trigger\",\"schedule\":\"0 0 2 * * ?\",\"scheduleType\":\"Rate\"}",
-            "enable_status": "active",
-            "created_at": "2024-01-15T10:00:00Z",
-            "updated_at": "2024-01-15T10:00:00Z"
-        }
-    ]
+    "trigger_id": "timer-xxx-xxx-xxx",
+    "trigger_type_code": "TIMER",
+    "trigger_status": "ACTIVE",
+    "event_data": {
+        "name": "daily-trigger",
+        "schedule": "0 0 2 * * ?",
+        "schedule_type": "Cron"
+    },
+    "created_time": "2024-01-15T10:00:00Z",
+    "last_updated_time": "2024-01-15T10:00:00Z"
+}
+```
+
+An OBS entry looks like this (abridged):
+
+```json
+{
+    "trigger_id": "obs-xxx-xxx-xxx",
+    "trigger_type_code": "OBS",
+    "trigger_status": "ACTIVE",
+    "event_data": {
+        "name": "realtime-redact",
+        "bucket": "input-images",
+        "events": ["ObjectCreated"],
+        "prefix": "uploads/",
+        "suffix": ".jpg"
+    },
+    "created_time": "2024-01-15T10:00:00Z",
+    "last_updated_time": "2024-01-15T10:00:00Z"
 }
 ```
 
 #### Using Python SDK
 
 ```python
-from huaweicloudsdkfunctiongraph.v2 import FunctionGraphClient
+from huaweicloudsdkfunctiongraph.v2.model.list_function_triggers_request import (
+    ListFunctionTriggersRequest,
+)
 
-def verify_trigger(client, function_urn, trigger_name):
-    from huaweicloudsdkfunctiongraph.v2.model.list_function_triggers_request import ListFunctionTriggersRequest
-    
+def find_trigger(client, function_urn, trigger_name):
     request = ListFunctionTriggersRequest(function_urn=function_urn)
     response = client.list_function_triggers(request)
-    
-    for trigger in (response.triggers or []):
-        if trigger.trigger_name == trigger_name:
-            print(f"✓ Trigger found: {trigger.trigger_id}")
-            print(f"  Type: {trigger.trigger_type}")
-            print(f"  Status: {trigger.enable_status}")
+
+    # ListFunctionTriggersResponse.body is list[ListFunctionTriggerResult].
+    for trigger in (response.body or []):
+        event_data = trigger.event_data
+        name = event_data.name if event_data else None
+        if name == trigger_name:
+            print(f"Trigger found: {trigger.trigger_id}")
+            print(f"  Type: {trigger.trigger_type_code}")
+            print(f"  Status: {trigger.trigger_status}")
             return trigger
-    
-    print("✗ Trigger not found")
+
+    print("Trigger not found")
     return None
 ```
 
+The script itself prints the `trigger_id` on success, so you can also jump straight to
+Step 2 with that id.
+
 ### Step 2: Validate Trigger Configuration
 
-#### Check Trigger Properties
+Query one trigger directly. For TIMER:
 
 ```bash
-# Query specific trigger type
-hcloud functiongraph v2 show-function-trigger \
-    --function-urn "urn:fss:cn-north-4:project-id:function:default:my-function:latest" \
-    --trigger-type-codes "TIMER"
+hcloud FunctionGraph ShowFunctionTrigger \
+    --cli-region=cn-north-4 \
+    --function_urn "urn:fss:cn-north-4:project_id:function:default:my-function:latest" \
+    --trigger_type_code TIMER \
+    --trigger_id "timer-xxx-xxx-xxx"
 ```
 
-Validation checklist:
+For OBS:
 
-| Property | Expected Value | Verification Method |
-|----------|---------------|---------------------|
-| `trigger_type` | `TIMER` | Confirm in list output |
-| `trigger_name` | Matches input | Compare with specification |
-| `enable_status` | `active` | Verify in trigger details |
-| `schedule` | Valid Cron | Parse trigger_config JSON |
-| `maxRetryTime` | As configured | Check trigger_config |
+```bash
+hcloud FunctionGraph ShowFunctionTrigger \
+    --cli-region=cn-north-4 \
+    --function_urn "urn:fss:cn-north-4:project_id:function:default:redact-image:latest" \
+    --trigger_type_code OBS \
+    --trigger_id "obs-xxx-xxx-xxx"
+```
 
-### Step 3: Validate Cron Expression
+`ShowFunctionTrigger` returns `trigger_id`, `trigger_type_code`, `trigger_status`, `event_data`,
+`created_time`, and `last_updated_time`. The `event_data` object is the type-specific part; the
+OBS fields it can carry (`bucket`, `prefix`, `suffix`, `events`) are defined by the
+`TriggerEventDataResponseBody` model.
 
-#### Cron Expression Parser
+#### TIMER validation checklist
+
+| Property | Expected value | Where to look |
+|----------|----------------|---------------|
+| `trigger_type_code` | `TIMER` | Response root |
+| `event_data.name` | The `--name` you passed | `event_data` |
+| `trigger_status` | `ACTIVE` (or `DISABLED`) | Response root |
+| `event_data.schedule` | The `--schedule` value | `event_data` |
+| `event_data.schedule_type` | `Cron` or `Rate` | `event_data` |
+| `event_data.user_event` | The `--user-event` value, when set | `event_data` |
+
+#### OBS validation checklist
+
+| Property | Expected value | Where to look |
+|----------|----------------|---------------|
+| `trigger_type_code` | `OBS` | Response root |
+| `event_data.name` | The `--name` you passed (event notification name) | `event_data` |
+| `trigger_status` | `ACTIVE` | Response root |
+| `event_data.bucket` | The `--bucket` value | `event_data` |
+| `event_data.events` | Exactly the `--events` entries, e.g. `["ObjectCreated"]` or `["Put", "Post"]` | `event_data` |
+| `event_data.prefix` | The `--prefix` value, when set | `event_data` |
+| `event_data.suffix` | The `--suffix` value, when set | `event_data` |
+
+For OBS triggers the `name` is the event-notification name, not a schedule name; do not expect a
+`schedule` field on an OBS trigger.
+
+### Step 3: Validate the Cron Expression (TIMER only)
+
+Cron applies to TIMER triggers only. Read the expression from `event_data.schedule`, not from a
+top-level `trigger_config` field (the SDK models have no `trigger_config` attribute):
 
 ```python
-import json
-from datetime import datetime
+def describe_schedule(trigger, expected_cron=None):
+    event_data = trigger.event_data
+    if trigger.trigger_type_code != "TIMER":
+        print(f"Not a TIMER trigger: {trigger.trigger_type_code}")
+        return False
 
-def validate_cron_config(trigger_config):
-    config = json.loads(trigger_config)
-    cron = config.get('schedule')
-    
-    print(f"Cron Expression: {cron}")
-    
-    # Parse and display schedule
-    parts = cron.split()
-    fields = ['Second', 'Minute', 'Hour', 'Day', 'Month', 'Weekday']
-    
-    for field, value in zip(fields, parts):
-        print(f"  {field}: {value}")
-    
-    # Additional validation logic here
-    return True
+    schedule = event_data.schedule if event_data else None
+    schedule_type = event_data.schedule_type if event_data else None
+    print(f"Schedule: {schedule} (type: {schedule_type})")
+
+    if schedule_type == "Cron" and schedule:
+        parts = schedule.split()
+        field_names = ["Second", "Minute", "Hour", "Day", "Month", "Weekday", "Year"]
+        for field_name, value in zip(field_names, parts):
+            print(f"  {field_name}: {value}")
+
+    return expected_cron is None or schedule == expected_cron
 ```
+
+For the Cron syntax accepted by this skill's validator, see
+[Cron Expression Reference](./cron-reference.md).
 
 ### Step 4: Test Trigger Execution
 
-#### Option A: Manual Trigger Invocation
+#### TIMER: invoke the function manually
+
+Verify the function body works before waiting for a scheduled invocation. Use the console
+(Function details → **Test**) or the SDK invoke API, and confirm a normal response.
+
+#### TIMER: wait for a scheduled execution
+
+For a long interval, create a second, temporary trigger that runs more often instead of modifying
+the original. The skill is create-only, so this also keeps the production trigger untouched:
 
 ```bash
-# Invoke function manually to verify execution path
-hcloud functiongraph v2 invoke-function \
-    --function-urn "urn:fss:cn-north-4:project-id:function:default:my-function:latest" \
-    --body '{"test": true}'
+python3 scripts/create_trigger.py \
+    --function-urn "urn:fss:cn-north-4:project_id:function:default:my-function:latest" \
+    --name "verification-1min" \
+    --schedule "0 * * * * ?" \
+    --schedule-type "Cron" \
+    --status "ACTIVE"
 ```
 
-#### Option B: Wait for Scheduled Execution
+Watch the execution history for one or two invocations, then delete the temporary trigger from
+the FunctionGraph console.
 
-For triggers with long intervals, temporarily update to a shorter schedule:
+#### OBS: upload a matching object (end-to-end test)
 
-```bash
-# Temporarily set to 1-minute interval for testing
-hcloud functiongraph v2 update-function-trigger \
-    --function-urn "..." \
-    --trigger-id "timer-xxx" \
-    --body '{
-        "trigger_config": "{\"schedule\":\"1 minute\",\"scheduleType\":\"Rate\"}"
-    }'
+This is the decisive test for an upload-triggered pipeline:
 
-# Monitor for 1-2 executions
-# Then restore original schedule
-```
+1. Note the trigger's `bucket`, `prefix`, `suffix`, and `events`.
+2. Upload an object that matches all of them, for example `uploads/sample.jpg` into
+   `input-images`.
+3. Wait a few seconds and open Function details → **Triggers** → **Execution history** (or the
+   function's logs).
+4. Confirm one invocation appears and that the event payload contains the object key.
+
+Then upload an object that does **not** match (wrong prefix or suffix) and confirm no extra
+invocation is recorded — that proves the filters are active. Remember that `ObjectCreated` fires
+on creation only; re-uploading the same key overwrites the object and does fire, but modifying
+metadata alone may not.
 
 ### Step 5: Monitor Execution History
 
 #### Via Console
 
 1. Navigate to **FunctionGraph Console**
-2. Select **Functions** → Click function name
-3. Go to **Triggers** tab
-4. Click **Execution History** for the trigger
-5. Verify recent executions
+2. Select **Functions** → click the function name
+3. Open the **Triggers** tab
+4. Select the trigger → **Execution history**
+5. Verify recent executions, their result, and the event payload
 
-#### Via API
+#### Via Logs
 
-```python
-def get_execution_history(client, function_urn, limit=10):
-    from huaweicloudsdkfunctiongraph.v2.model.list_function_statistics_request import ListFunctionStatisticsRequest
-    
-    request = ListFunctionStatisticsRequest(
-        function_urn=function_urn,
-        period='1h'  # Last hour
-    )
-    response = client.list_function_statistics(request)
-    
-    print(f"Executions in last hour: {len(response.statistic)}")
-    
-    for stat in response.statistic:
-        print(f"  Duration: {stat.duration}ms")
-        print(f"  Status: {stat.status}")
-```
+Function invocations write to LTS. Use the console log viewer for the function (Function details
+→ **Logs**) and filter on the trigger's execution window. The KooCLI log-query operation is not
+verified in this document, so no command is shown.
 
 ### Step 6: Verify Alarm Configuration
 
-Ensure Cloud Eye alarms are configured:
-
-```bash
-# Check alarm rules for the function
-hcloud ces v2 list-alarms \
-    --namespace "SYS.FunctionGraph" \
-    --dimensions "name=function_urn,value=urn:fss:..."
-```
+Configure Cloud Eye alarms on the `SYS.FunctionGraph` namespace for the function (for example on
+error count or invocation count) from the Cloud Eye console. The exact KooCLI operation and
+parameters for listing alarms are not verified in this document.
 
 ## Automated Verification Script
 
 ```python
 #!/usr/bin/env python3
-import os
+"""Read-only verification of a FunctionGraph TIMER or OBS trigger."""
 import json
+import os
+
 from huaweicloudsdkcore.auth.credentials import BasicCredentials
-from huaweicloudsdkfunctiongraph.v2 import FunctionGraphClient, FunctionGraphRegion
+from huaweicloudsdkfunctiongraph.v2 import FunctionGraphClient
+from huaweicloudsdkfunctiongraph.v2.region.functiongraph_region import FunctionGraphRegion
+from huaweicloudsdkfunctiongraph.v2.model.list_function_triggers_request import (
+    ListFunctionTriggersRequest,
+)
+
 
 class TriggerVerifier:
     def __init__(self, ak, sk, project_id, region):
@@ -186,62 +264,70 @@ class TriggerVerifier:
             .with_credentials(credentials) \
             .with_region(FunctionGraphRegion.value_of(region)) \
             .build()
-    
-    def verify(self, function_urn, trigger_name, expected_cron):
-        results = []
-        
-        # 1. List triggers
-        triggers = self._list_triggers(function_urn) or []
-        trigger = next((t for t in triggers if t.trigger_name == trigger_name), None)
-        
+
+    def verify(self, function_urn, trigger_name, expected_type="TIMER",
+               expected_schedule=None, expected_bucket=None, expected_events=None):
+        request = ListFunctionTriggersRequest(function_urn=function_urn)
+        response = self.client.list_function_triggers(request)
+        triggers = response.body or []
+
+        trigger = next(
+            (t for t in triggers
+             if t.event_data and t.event_data.name == trigger_name),
+            None,
+        )
         if not trigger:
             return {"status": "failed", "error": "Trigger not found"}
-        
-        # 2. Verify properties
-        results.append(("trigger_type", trigger.trigger_type == "TIMER"))
-        results.append(("enable_status", trigger.enable_status == "active"))
-        
-        # 3. Verify cron
-        try:
-            config = json.loads(trigger.trigger_config)
-        except (json.JSONDecodeError, TypeError) as e:
-            return {"status": "failed", "error": f"Invalid trigger_config JSON: {e}"}
 
-        if not isinstance(config, dict) or "schedule" not in config:
-            return {"status": "failed", "error": "trigger_config is missing required 'schedule' field"}
+        event_data = trigger.event_data
+        results = [
+            ("trigger_type_code", trigger.trigger_type_code == expected_type),
+            ("trigger_status", trigger.trigger_status == "ACTIVE"),
+        ]
 
-        results.append(("cron_match", config.get("schedule") == expected_cron))
-        
-        # 4. Summary
-        all_passed = all(r[1] for r in results)
-        
+        if expected_type == "OBS":
+            results.append(("bucket", event_data.bucket == expected_bucket))
+            if expected_events is not None:
+                results.append(
+                    ("events", set(event_data.events or []) == set(expected_events))
+                )
+        else:
+            if expected_schedule is not None:
+                results.append(("schedule", event_data.schedule == expected_schedule))
+
+        all_passed = all(passed for _, passed in results)
         return {
             "status": "passed" if all_passed else "failed",
             "trigger_id": trigger.trigger_id,
-            "checks": [{"name": n, "passed": p} for n, p in results]
+            "checks": [{"name": name, "passed": passed} for name, passed in results],
         }
-    
-    def _list_triggers(self, function_urn):
-        from huaweicloudsdkfunctiongraph.v2.model.list_function_triggers_request import ListFunctionTriggersRequest
-        request = ListFunctionTriggersRequest(function_urn=function_urn)
-        response = self.client.list_function_triggers(request)
-        return response.triggers or []
 
-# Usage
+
 if __name__ == "__main__":
     verifier = TriggerVerifier(
         ak=os.environ.get("HUAWEI_AK"),
         sk=os.environ.get("HUAWEI_SK"),
         project_id=os.environ.get("HUAWEI_PROJECT_ID"),
-        region=os.environ.get("HUAWEI_REGION", "cn-north-4")
+        region=os.environ.get("HUAWEI_REGION", "cn-north-4"),
     )
-    
+
+    # TIMER example
     result = verifier.verify(
         function_urn="urn:fss:cn-north-4:xxx:function:default:my-function:latest",
         trigger_name="daily-trigger",
-        expected_cron="0 0 2 * * ?"
+        expected_type="TIMER",
+        expected_schedule="0 0 2 * * ?",
     )
-    
+
+    # OBS example
+    # result = verifier.verify(
+    #     function_urn="urn:fss:cn-north-4:xxx:function:default:redact-image:latest",
+    #     trigger_name="realtime-redact",
+    #     expected_type="OBS",
+    #     expected_bucket="input-images",
+    #     expected_events=["ObjectCreated"],
+    # )
+
     print(json.dumps(result, indent=2))
 ```
 
@@ -249,18 +335,23 @@ if __name__ == "__main__":
 
 ### Pre-Deployment
 
-- [ ] Cron expression validated
-- [ ] Function exists in target region
-- [ ] IAM permissions confirmed
-- [ ] Network connectivity verified
+- [ ] Function exists in the target region
+- [ ] Region in `HUAWEI_REGION` matches the function's region
+- [ ] IAM permissions confirmed (see [IAM Policies](./iam-policies.md))
+- [ ] Network connectivity to the FunctionGraph endpoint verified
+- [ ] TIMER: Cron expression validated
+- [ ] OBS: bucket exists, and the source bucket needs no further setup
 
 ### Post-Deployment
 
-- [ ] Trigger appears in function trigger list
-- [ ] Trigger type is `TIMER`
-- [ ] Enable status is correct
-- [ ] Cron expression matches specification
-- [ ] Trigger ID returned from API
+- [ ] Trigger appears in the function's trigger list
+- [ ] `trigger_type_code` is the requested type (`TIMER` or `OBS`)
+- [ ] `trigger_status` is correct
+- [ ] Trigger ID returned by the creation call matches the listed trigger
+- [ ] TIMER: `event_data.schedule` matches the requested expression
+- [ ] OBS: `event_data.bucket` matches the requested bucket
+- [ ] OBS: `event_data.events` contains exactly the requested event types
+- [ ] OBS: `event_data.prefix` / `event_data.suffix` match the requested filters (when used)
 
 ### Post-Execution
 
@@ -268,65 +359,86 @@ if __name__ == "__main__":
 - [ ] No execution errors in history
 - [ ] Execution duration within limits
 - [ ] Memory usage acceptable
+- [ ] OBS: only matching object events produced invocations
 
 ## Troubleshooting Verification Failures
 
 ### Trigger Not Found
 
-**Symptoms**: Trigger not in list output
+**Symptoms**: the trigger is missing from the list output
 
 **Checks**:
 
-1. Verify function URN is correct
-2. Check if creation request succeeded
-3. Verify trigger name spelling
-4. Check region alignment
+1. Verify the function URN is correct
+2. Check whether the creation call itself succeeded (non-zero exit means it did not)
+3. Verify the trigger name spelling — for OBS compare `event_data.name`
+4. Check region alignment between the client and the function
 
-### Trigger Not Executing
+### OBS Trigger Not Firing
 
-**Symptoms**: No execution history entries
+**Symptoms**: objects are uploaded but no execution history entries appear
 
 **Checks**:
 
-1. Confirm trigger status is `active`
-2. Verify function is deployed (not failed state)
-3. Check Cron expression validity
-4. Review function timeout settings
+1. Is `trigger_status` `ACTIVE`?
+2. Does the uploaded object key match `event_data.prefix` / `event_data.suffix` exactly?
+   Prefix/suffix matching is literal, so `uploads/` does not match `upload/`.
+3. Do the events cover this operation? `ObjectCreated` covers uploads; a deletion event such as
+   `ObjectRemoved` is a different value.
+4. Was the object uploaded **before** the trigger was created? Only events after creation fire.
+5. Is the object in the bucket named in `event_data.bucket`? A different bucket has no
+   notification attached.
+6. Does the function itself succeed when invoked manually? A failing function still appears in
+   history, so combine this with a manual test.
+
+### TIMER Trigger Not Executing
+
+**Symptoms**: no execution history entries
+
+**Checks**:
+
+1. Confirm `trigger_status` is `ACTIVE`
+2. Verify the function is deployed, not in a failed state
+3. Check the Cron expression: 6 or 7 fields, and no advanced Quartz characters (see
+   [Cron Expression Reference](./cron-reference.md))
+4. Remember the schedule is evaluated in UTC
+5. Review function timeout settings
 
 ### Execution Failures
 
-**Symptoms**: Execution history shows failures
+**Symptoms**: execution history shows failures
 
 **Checks**:
 
-1. Review function code logs
-2. Verify function has correct runtime
-3. Check function timeout settings
-4. Validate function input/output
+1. Review the function code logs
+2. Verify the function runtime and handler
+3. Check timeout and memory settings
+4. For OBS, validate that the function handles the OBS event payload
 
 ## Monitoring Commands
 
-### Real-time Monitoring
-
 ```bash
-# Stream function logs
-hcloud lts v2 list-logs \
-    --log-group-id "functiongraph-logs" \
-    --log-stream-id "my-function-logs" \
-    --start-time $(date -d '5 minutes ago' +%s)000
+# All triggers of a function, including type and status
+hcloud FunctionGraph ListFunctionTriggers \
+    --cli-region=cn-north-4 \
+    --function_urn "urn:fss:cn-north-4:project_id:function:default:my-function:latest"
+
+# One trigger, including the full event_data payload
+hcloud FunctionGraph ShowFunctionTrigger \
+    --cli-region=cn-north-4 \
+    --function_urn "urn:fss:cn-north-4:project_id:function:default:my-function:latest" \
+    --trigger_type_code OBS \
+    --trigger_id "obs-xxx-xxx-xxx"
 ```
 
-### Statistics Summary
-
-```bash
-# Get function statistics
-hcloud functiongraph v2 list-function-statistics \
-    --function-urn "..." \
-    --period "1d"
-```
+Both commands were verified against the KooCLI 7.2.12 `--help` output. For execution history and
+metrics, use the FunctionGraph console.
 
 ## Related Documentation
 
-- [FunctionGraph Console Guide](https://support.huaweicloud.com/usermanual-functiongraph/functiongraph_01_0100.html)
-- [Trigger Management](https://support.huaweicloud.com/api-functiongraph/FunctionGraph_06_0123.html)
-- [Execution Monitoring](https://support.huaweicloud.com/functiongraph/index.html)
+- [CreateFunctionTrigger API](https://support.huaweicloud.com/api-functiongraph/functiongraph_06_0122.html) — verified (fetched 2026-11-03)
+- [ShowFunctionTrigger API](https://support.huaweicloud.com/api-functiongraph/functiongraph_06_0120.html) — verified (fetched 2026-11-03)
+- [FunctionGraph Permissions and Authorization Items](https://support.huaweicloud.com/api-functiongraph/functiongraph_06_1100.html) — verified (fetched 2026-11-03)
+- [OBS Event Trigger Guide](./obs-trigger-guide.md)
+- [Acceptance Criteria](./acceptance-criteria.md)
+- [IAM Policies](./iam-policies.md)
