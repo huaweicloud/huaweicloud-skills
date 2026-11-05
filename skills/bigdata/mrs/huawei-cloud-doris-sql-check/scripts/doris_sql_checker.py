@@ -12,6 +12,7 @@ import sys
 import os
 import json
 import re
+import difflib
 from datetime import datetime
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -19,8 +20,8 @@ sys.path.insert(0, os.path.join(_THIS_DIR, '..', 'rules'))
 sys.path.insert(0, _THIS_DIR)
 
 from doris_sql_tokenizer import tokenize, TokenType
-from doris_sql_parser import parse_sql
-from keywords import is_keyword, is_reserved_keyword, KeywordCategory, ALL_KEYWORDS
+from doris_sql_parser import parse_sql, ParseResult
+from keywords import is_keyword
 
 
 class Violation:
@@ -72,6 +73,23 @@ class DorisSQLChecker:
 
     def check(self):
         """Run all checks and return the report"""
+        # ISSUE-004: Empty/blank input must return a clear error instead of "all passed"
+        if not self.sql_text.strip():
+            self.violations.append(Violation(
+                rule_id="SYN003",
+                rule_name="空 SQL 输入",
+                level="ERROR",
+                category="语法检查",
+                message="未提供 SQL 文本，请提供要检查的 SQL 语句",
+                line=0,
+                column=0,
+                sql_snippet="",
+                fix_suggestion="传入要检查的 SQL 语句，如：SELECT * FROM t1",
+            ))
+            self.parse_result = ParseResult(None, [], "EMPTY")
+            self._generate_report_needs_orig = True
+            return self._generate_report()
+
         # Step 0: SPEC046 - SQL length check
         if len(self.sql_text.encode('utf-8')) > 2 * 1024 * 1024:
             self.violations.append(Violation(
@@ -138,6 +156,9 @@ class DorisSQLChecker:
                     fix_suggestion="查阅 Doris SQL 参考手册确认支持的关键字",
                 ))
 
+        # SYN001: misspelled keyword not in the 504-keyword lexer list (e.g. SELEC for SELECT)
+        self._check_misspelled_keywords()
+
         # SYN002: Reserved keyword as identifier (without backticks)
         # Check identifiers that are reserved keywords used as table/column names
         for i, tok in enumerate(self.tokens):
@@ -194,6 +215,10 @@ class DorisSQLChecker:
             self._check_mtmv_syntax(ast)
         elif stmt_type == "KILL" and ast:
             self._check_kill_syntax(ast)
+        elif stmt_type == "ROUTINE_LOAD" and ast:
+            self._check_routine_load_syntax(ast)
+        elif stmt_type == "CREATE_USER" and ast:
+            self._check_create_user_syntax(ast)
         elif stmt_type == "GRANT" or stmt_type == "REVOKE":
             self._check_grant_revoke_syntax(stmt_type)
 
@@ -419,6 +444,89 @@ class DorisSQLChecker:
                 message=f"无效的 KILL 类型: {ast.kill_type}",
                 sql_snippet=self.sql_text[:100],
                 fix_suggestion="使用 KILL QUERY connection_id 或 KILL CONNECTION connection_id",
+            ))
+
+    def _check_misspelled_keywords(self):
+        """
+        SYN001: Detect misspelled keywords that the 504-keyword lexer list does not contain.
+        The tokenizer treats an unknown word as an IDENTIFIER (not a keyword), so a typo such as
+        SELEC (for SELECT) previously slipped through as 'IDENTIFIER' and only produced a generic
+        SYN003 parse error. Here we compare the statement-head token against known statement-start
+        keywords using fuzzy matching and report a clear SYN001 'keyword not supported by Doris'.
+
+        Detection is intentionally scoped to the first (head) token only, where a statement keyword
+        is expected, so ordinary identifiers (columns/tables like 'userid', 'date1') are not
+        false-flagged as keyword typos.
+        """
+        if not self.tokens:
+            return
+        head = self.tokens[0]
+        if head.type != TokenType.IDENTIFIER:
+            return
+        word = head.value
+        if len(word) < 3:
+            return
+        # Statement-start keywords that a head token would realistically be a typo of.
+        start_keywords = [
+            "select", "insert", "update", "delete", "create", "alter", "drop",
+            "truncate", "load", "export", "copy", "grant", "revoke", "begin",
+            "commit", "rollback", "explain", "desc", "describe", "set", "show",
+            "admin", "kill", "cancel", "backup", "restore", "recover", "clean",
+            "install", "uninstall", "lock", "use", "switch", "call", "help",
+            "sync", "warm", "pause", "resume", "stop", "refresh", "with",
+        ]
+        close = difflib.get_close_matches(word.lower(), start_keywords, n=1, cutoff=0.8)
+        if close and len(close[0]) != len(word):
+            self.violations.append(Violation(
+                rule_id="SYN001",
+                rule_name="无效关键字使用",
+                level="ERROR",
+                category="语法检查",
+                message=f"无效关键字 {word!r} - 关键字未被 Doris 支持，是否想写 {close[0].upper()!r}?",
+                line=head.line,
+                column=head.column,
+                sql_snippet=word,
+                fix_suggestion=f"将 {word!r} 修正为 {close[0].upper()!r}",
+            ))
+
+    def _check_routine_load_syntax(self, ast):
+        """
+        SYN014: CREATE ROUTINE LOAD syntax check.
+        A valid ROUTINE LOAD requires a job name and an 'ON <table>' clause.
+        """
+        job_missing = not getattr(ast, 'job_name', None)
+        table_missing = not getattr(ast, 'on_keyword', False) or not getattr(ast, 'table', None)
+        if job_missing or table_missing:
+            detail = []
+            if job_missing:
+                detail.append("缺少 ROUTINE LOAD 作业名称")
+            if table_missing:
+                detail.append("缺少 ON <table> 子句")
+            self.violations.append(Violation(
+                rule_id="SYN014",
+                rule_name="ROUTINE LOAD 语法错误",
+                level="ERROR",
+                category="语法检查",
+                message=("; ".join(detail)),
+                sql_snippet=self.sql_text[:100],
+                fix_suggestion="正确的 CREATE ROUTINE LOAD 语法：CREATE ROUTINE LOAD db.job_name ON table_name (COLUMNS(...)) PROPERTIES(...) FROM KAFKA (...)",
+            ))
+
+    def _check_create_user_syntax(self, ast):
+        """
+        SYN019: CREATE USER syntax check.
+        A valid CREATE USER requires a user identity (user name). Missing identity is an error,
+        not silently swallowed.
+        """
+        if getattr(ast, 'user_missing', False) or not getattr(ast, 'user_name', None):
+            self.violations.append(Violation(
+                rule_id="SYN019",
+                rule_name="CREATE USER 语法错误",
+                level="ERROR",
+                category="语法检查",
+                message="CREATE USER 语句缺少用户标识（user name）",
+                sql_snippet=self.sql_text[:100],
+                fix_suggestion="正确的 CREATE USER 语法：CREATE USER 'user'@'%' IDENTIFIED BY 'password'",
             ))
 
     def _check_grant_revoke_syntax(self, stmt_type):

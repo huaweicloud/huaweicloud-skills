@@ -303,11 +303,17 @@ For simple SQL checks, run directly:
 python ~/.cac/skills/huawei-cloud-doris-sql-check/scripts/doris_sql_checker.py "<sql_text>" [syntax|spec|all]
 ```
 
-Output is in JSON format. For Markdown format report, call in Python:
+The CLI **defaults to Markdown** output. To get JSON, run in `syntax` mode with the `--json` flag:
+
+```bash
+python ~/.cac/skills/huawei-cloud-doris-sql-check/scripts/doris_sql_checker.py "<sql_text>" syntax --json
+```
+
+Or call the JSON helper directly in Python for any mode:
 
 ```python
-from doris_sql_checker import check_sql_markdown
-report = check_sql_markdown("SELECT * FROM t1", "all")
+from doris_sql_checker import check_sql_json
+report = check_sql_json("SELECT * FROM t1", "all")
 print(report)
 ```
 
