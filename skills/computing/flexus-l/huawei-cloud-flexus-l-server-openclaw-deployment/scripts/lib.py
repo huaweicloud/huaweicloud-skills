@@ -13,6 +13,7 @@ Contains:
 import base64
 import json
 import os
+import shlex
 import requests
 import uuid
 from datetime import datetime
@@ -412,6 +413,29 @@ def coc_create_script(
         return _error("UNKNOWN_ERROR", error_msg)
 
 
+def _normalize_error_code(value: Any) -> Any:
+    """
+    Normalize a COC errorCode value for reliable comparison.
+
+    COC returns errorCode in different representations across API versions
+    (int ``0``, string ``"0"`` / ``"0.0"``). This helper coerces numeric
+    representations so that ``errorCode == 0`` checks behave consistently.
+
+    Args:
+        value: Raw errorCode value from COC response.
+
+    Returns:
+        int for parseable numeric values, original value otherwise, None for
+        missing/empty values.
+    """
+    if value is None or value == "":
+        return None
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return value
+
+
 def coc_execute_script(
     script_uuid: str,
     execute_user: str,
@@ -556,10 +580,12 @@ def coc_execute_script(
                 status = instances[0].get("status", "")
                 output = instances[0].get("message", "")
                 error = output if status == "ABNORMAL" else ""
+                error_code = _normalize_error_code(instances[0].get("error_code", instances[0].get("errorCode")))
             else:
                 status = data.get("status", "")
                 output = data.get("message", "")
                 error = output if status == "ABNORMAL" else ""
+                error_code = _normalize_error_code(data.get("error_code", data.get("errorCode")))
             
             # If status is UNKNOWN and waited for some time (e.g., 30 seconds), return error
             if status == "UNKNOWN" and elapsed_time > 60:
@@ -575,7 +601,8 @@ def coc_execute_script(
                             "execute_uuid": execute_uuid,
                             "status": status,
                             "output": output,
-                            "error": error
+                            "error": error,
+                            "error_code": error_code
                         }
                         
                         if status in ["SUCCESS", "FINISHED"]:
@@ -585,12 +612,24 @@ def coc_execute_script(
                                 "result": result_data,
                                 "error": None,
                             }
+                        elif status == "ABNORMAL" and error_code == 0:
+                            # COC 的 ABNORMAL 表示"脚本执行完成但退出码非标准"，
+                            # 若 errorCode=0 说明命令实际执行成功（如模型/通道已写入配置），
+                            # 不应误报失败（假阴性）。
+                            return {
+                                "ok": True,
+                                "text": f"Script executed (status: ABNORMAL, errorCode=0, completed with non-standard exit code): {execute_uuid}",
+                                "result": result_data,
+                                "error": None,
+                            }
                         else:
                             error_msg = f"Script execution failed, status: {status}"
+                            error_code_display = error_code if error_code is not None else "unknown"
                             if error:
                                 error_msg += f", error: {error[:200]}" if len(error) > 200 else f", error: {error}"
                             elif output:
                                 error_msg += f", output: {output[:200]}" if len(output) > 200 else f", output: {output}"
+                            error_msg += f", errorCode: {error_code_display}"
                             return {
                                 "ok": False,
                                 "text": error_msg,
@@ -760,6 +799,20 @@ def coc_query_execution(execute_uuid: str, ak: str = None, sk: str = None, secur
         
         response = client.get_script_job_batch(request)
         
+        # COC 可能在 execute_instances 中返回 errorCode/error_code 字段（例如
+        # status=ABNORMAL 但 errorCode=0，表示脚本执行完成但退出码非标准）。
+        # 该字段未必在 SDK 类型模型的 openapi_types 中声明，因此从原始 JSON 中
+        # 按索引对齐提取，透传给上层用于成功/失败判定。
+        raw_instances = []
+        try:
+            raw_obj = response.to_json_object() if hasattr(response, 'to_json_object') else None
+            if isinstance(raw_obj, dict):
+                raw_data = raw_obj.get("data", {})
+                if isinstance(raw_data, dict):
+                    raw_instances = raw_data.get("execute_instances", []) or []
+        except Exception:
+            raw_instances = []
+        
         result_dict = {}
         if hasattr(response, 'data') and response.data is not None:
             data = response.data
@@ -769,7 +822,7 @@ def coc_query_execution(execute_uuid: str, ak: str = None, sk: str = None, secur
                 result_dict['total_instances'] = data.total_instances
             if hasattr(data, 'execute_instances') and data.execute_instances:
                 instances = []
-                for instance in data.execute_instances:
+                for idx, instance in enumerate(data.execute_instances):
                     instance_dict = {}
                     if hasattr(instance, 'id'):
                         instance_dict['id'] = instance.id
@@ -779,6 +832,14 @@ def coc_query_execution(execute_uuid: str, ak: str = None, sk: str = None, secur
                         instance_dict['status'] = instance.status
                     if hasattr(instance, 'message'):
                         instance_dict['message'] = instance.message
+                    if hasattr(instance, 'error_code'):
+                        instance_dict['error_code'] = instance.error_code
+                    elif hasattr(instance, 'errorCode'):
+                        instance_dict['error_code'] = instance.errorCode
+                    if idx < len(raw_instances) and isinstance(raw_instances[idx], dict):
+                        raw_error_code = raw_instances[idx].get("errorCode", raw_instances[idx].get("error_code"))
+                        if raw_error_code is not None and "error_code" not in instance_dict:
+                            instance_dict['error_code'] = raw_error_code
                     if hasattr(instance, 'execute_costs'):
                         instance_dict['execute_costs'] = instance.execute_costs
                     if hasattr(instance, 'gmt_created'):
@@ -863,62 +924,131 @@ def _b64_encode_param(value: str) -> str:
     return base64.b64encode((value or "").encode("utf-8")).decode("ascii")
 
 
+_USERDATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "userdata")
+
+
+def _read_bundled_script(name: str) -> str:
+    """Read a bounded shell script shipped inside the skill package.
+
+    The OpenClaw userdata shell scripts (multi_model.sh / multi_channel.sh /
+    multi-agent.sh / openclaw_gateway_manager.sh) are bundled next to lib.py
+    under ``userdata/`` so that COC scripts never download code over the
+    network at runtime (supply-chain / SC2 mitigation).
+
+    Args:
+        name: File name inside the ``userdata/`` directory.
+
+    Returns:
+        str: Raw content of the shell script.
+
+    Raises:
+        FileNotFoundError: If the bundled script is missing from the package.
+    """
+    path = os.path.join(_USERDATA_DIR, name)
+    with open(path, "r", encoding="utf-8") as fh:
+        return fh.read()
+
+
+def _bundle_script_into_content(name: str, dest: str = "/tmp/openclaw_bundle.sh") -> str:
+    """Generate shell lines that extract a bundled script onto the remote host.
+
+    The returned snippet base64-encodes the bundled script content and writes it
+    to ``dest`` as a plain file (no ``curl ... | bash`` chain), so no code is
+    fetched from external servers at execution time.
+
+    Args:
+        name: Bundled script file name (relative to ``userdata/``).
+        dest: Absolute path where the script will be written on the target.
+
+    Returns:
+        str: Shell snippet that materialises the bundled script on the host.
+    """
+    content = _read_bundled_script(name)
+    content_b64 = base64.b64encode(content.encode("utf-8")).decode("ascii")
+    return (
+        "cat > {dest} << 'OPENCLAW_BUNDLE_EOF'\n"
+        "{content}\n"
+        "OPENCLAW_BUNDLE_EOF\n"
+        "chmod +x {dest}\n"
+    ).format(dest=dest, content=content)
+
+
+# The userdata scripts are pinned/bundled project versions. They are injected
+# into the COC script content below, so the remote L instance executes the
+# packaged code — never a runtime network download.
+_INSTALL_MAAS_TAIL = '''
+if [ -d "/home/openclaw" ]; then
+  export PNPM_HOME="/home/openclaw/.local/share/pnpm"
+  export NVM_DIR="/home/openclaw/.nvm"
+  ln -sf /home/openclaw/.nvm/versions/node/v22.22.1/bin/node /usr/local/bin/node
+  ln -sf /home/openclaw/.nvm/versions/node/v22.22.1/bin/npm /usr/local/bin/npm
+  CMD_NAME=/home/openclaw/.local/share/pnpm/openclaw
+  sudo -i -u openclaw env DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus $CMD_NAME gateway restart >> /var/manage_operate.log 2>&1
+  GATEWAY_STATUS_OUTPUT=$(sudo -i -u openclaw env DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus $CMD_NAME gateway status 2>&1)
+else
+  ln -sf /root/.nvm/versions/node/v22.22.0/bin/node /usr/local/bin/node
+  ln -sf /root/.nvm/versions/node/v22.22.0/bin/npm /usr/local/bin/npm
+  CMD_NAME=/root/.local/share/pnpm/openclaw
+  /root/.local/share/pnpm/openclaw gateway restart >> /var/manage_operate.log 2>&1
+  GATEWAY_STATUS_OUTPUT=$($CMD_NAME gateway status 2>&1)
+fi'''
+
+
+def _build_install_maas_content() -> str:
+    bundle = _bundle_script_into_content("multi_model.sh", "/tmp/openclaw_multi_model.sh")
+    return (
+        "#!/bin/bash\n"
+        + bundle
+        + 'bash /tmp/openclaw_multi_model.sh "$(printf \'%s\' \'${modelParamsB64}\' | base64 -d)"\n'
+        + _INSTALL_MAAS_TAIL
+    )
+
+
+def _build_install_channel_content() -> str:
+    bundle_channel = _bundle_script_into_content("multi_channel.sh", "/tmp/multi_channel.sh")
+    bundle_agent = _bundle_script_into_content("multi-agent.sh", "/tmp/multi-agent.sh")
+    return (
+        "#!/bin/bash\n"
+        + bundle_channel
+        + bundle_agent
+        # multi_channel.sh resolves its bundled multi-agent.sh sibling via
+        # dirname("$0"), so both scripts must land in the same /tmp directory
+        # with the original names.
+        + 'bash /tmp/multi_channel.sh "$(printf \'%s\' \'${channelListB64}\' | base64 -d)"\n'
+        + _INSTALL_MAAS_TAIL
+    )
+
+
+def _build_check_gateway_content() -> str:
+    bundle = _bundle_script_into_content("openclaw_gateway_manager.sh", "/tmp/openclaw_gateway_manager.sh")
+    return (
+        "#!/bin/bash\n"
+        + bundle
+        + "bash /tmp/openclaw_gateway_manager.sh status\n"
+    )
+
+
 SCRIPT_TEMPLATES = {
     "install_maas": {
         "name": "OpenClaw-MaaS-Model-Installation",
         "type": "SHELL",
         "description": "Install MaaS models on OpenClaw instance",
         "risk_level": "MEDIUM",
-        "content": '''#!/bin/bash
-curl -sSL https://documentation-samples.obs.cn-north-4.myhuaweicloud.com/solution-as-code-publicbucket/solution-as-code-moudle/deploying-clawdbot-agents/userdata/multi_model.sh | bash -s "$(printf '%s' '${modelParamsB64}' | base64 -d)"
-
-if [ -d "/home/openclaw" ]; then
-  export PNPM_HOME="/home/openclaw/.local/share/pnpm"
-  export NVM_DIR="/home/openclaw/.nvm"
-  ln -sf /home/openclaw/.nvm/versions/node/v22.22.1/bin/node /usr/local/bin/node
-  ln -sf /home/openclaw/.nvm/versions/node/v22.22.1/bin/npm /usr/local/bin/npm
-  CMD_NAME=/home/openclaw/.local/share/pnpm/openclaw
-  sudo -i -u openclaw env DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus $CMD_NAME gateway restart >> /var/manage_operate.log 2>&1
-  GATEWAY_STATUS_OUTPUT=$(sudo -i -u openclaw env DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus $CMD_NAME gateway status 2>&1)
-else
-  ln -sf /root/.nvm/versions/node/v22.22.0/bin/node /usr/local/bin/node
-  ln -sf /root/.nvm/versions/node/v22.22.0/bin/npm /usr/local/bin/npm
-  CMD_NAME=/root/.local/share/pnpm/openclaw
-  /root/.local/share/pnpm/openclaw gateway restart >> /var/manage_operate.log 2>&1
-  GATEWAY_STATUS_OUTPUT=$($CMD_NAME gateway status 2>&1)
-fi'''
+        "content": _build_install_maas_content(),
     },
     "install_channel": {
         "name": "OpenClaw-Channel-Installation",
         "type": "SHELL",
         "description": "Install channels on OpenClaw instance (WeChat Work/Feishu/DingTalk/QQ)",
         "risk_level": "MEDIUM",
-        "content": '''#!/bin/bash
-curl -sSL https://documentation-samples.obs.cn-north-4.myhuaweicloud.com/solution-as-code-publicbucket/solution-as-code-moudle/deploying-clawdbot-agents/userdata/multi_channel.sh | bash -s "$(printf '%s' '${channelListB64}' | base64 -d)"
-
-if [ -d "/home/openclaw" ]; then
-  export PNPM_HOME="/home/openclaw/.local/share/pnpm"
-  export NVM_DIR="/home/openclaw/.nvm"
-  ln -sf /home/openclaw/.nvm/versions/node/v22.22.1/bin/node /usr/local/bin/node
-  ln -sf /home/openclaw/.nvm/versions/node/v22.22.1/bin/npm /usr/local/bin/npm
-  CMD_NAME=/home/openclaw/.local/share/pnpm/openclaw
-  sudo -i -u openclaw env DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus $CMD_NAME gateway restart >> /var/manage_operate.log 2>&1
-  GATEWAY_STATUS_OUTPUT=$(sudo -i -u openclaw env DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus $CMD_NAME gateway status 2>&1)
-else
-  ln -sf /root/.nvm/versions/node/v22.22.0/bin/node /usr/local/bin/node
-  ln -sf /root/.nvm/versions/node/v22.22.0/bin/npm /usr/local/bin/npm
-  CMD_NAME=/root/.local/share/pnpm/openclaw
-  /root/.local/share/pnpm/openclaw gateway restart >> /var/manage_operate.log 2>&1
-  GATEWAY_STATUS_OUTPUT=$($CMD_NAME gateway status 2>&1)
-fi'''
+        "content": _build_install_channel_content(),
     },
     "check_gateway": {
         "name": "OpenClaw-Gateway-Status",
         "type": "SHELL",
         "description": "Query OpenClaw gateway status",
         "risk_level": "LOW",
-        "content": '''#!/bin/bash
-curl -sSL https://documentation-samples.obs.cn-north-4.myhuaweicloud.com/solution-as-code-publicbucket/solution-as-code-moudle/deploying-clawdbot-agents/userdata/openclaw_gateway_manager.sh | bash -s status'''
+        "content": _build_check_gateway_content(),
     }
 }
 
@@ -1114,9 +1244,14 @@ def install_maas_models_local(model_params=""):
         print("Starting model installation...")
         
         model_params_b64 = _b64_encode_param(model_params)
-        # Security: 下面这条命令的注入安全性完全依赖 _b64_encode_param 产出的 base64
-        # （字母表 A-Za-z0-9+/= 不含 shell 元字符）。请勿改回直接插入 model_params 原文。
-        install_command = f"curl -sSL https://documentation-samples.obs.cn-north-4.myhuaweicloud.com/solution-as-code-publicbucket/solution-as-code-moudle/deploying-clawdbot-agents/userdata/multi_model.sh | bash -s \"$(printf '%s' '{model_params_b64}' | base64 -d)\""
+        # Security: 打包内置的脚本与 lib.py 同目录存放（scripts/userdata/），
+        # 不再运行时 curl 下载外部脚本（SC2 供应链修复）。
+        # 注入安全性仍然依赖 _b64_encode_param 产出的 base64
+        # （字母表 A-Za-z0-9+/= 不含 shell 元字符）。
+        model_script = os.path.join(_USERDATA_DIR, "multi_model.sh")
+        install_command = "bash {script} \"$(printf '%s' '{model_params_b64}' | base64 -d)\"".format(
+            script=shlex.quote(model_script), model_params_b64=model_params_b64
+        )
         
         # install_command 内含可逆的 base64 载荷（含 api_key），禁止打印原文，仅打印脱敏提示
         print("Executing model installation command (payload with credentials redacted)")
@@ -1203,9 +1338,14 @@ def install_channel_local(channel_list=""):
         print("Starting channel installation...")
         
         channel_list_b64 = _b64_encode_param(channel_list)
-        # Security: 下面这条命令的注入安全性完全依赖 _b64_encode_param 产出的 base64
-        # （字母表 A-Za-z0-9+/= 不含 shell 元字符）。请勿改回直接插入 channel_list 原文。
-        install_command = f"curl -sSL https://documentation-samples.obs.cn-north-4.myhuaweicloud.com/solution-as-code-publicbucket/solution-as-code-moudle/deploying-clawdbot-agents/userdata/multi_channel.sh | bash -s \"$(printf '%s' '{channel_list_b64}' | base64 -d)\""
+        # Security: 打包内置的脚本与 lib.py 同目录存放（scripts/userdata/），
+        # 不再运行时 curl 下载外部脚本（SC2 供应链修复）。multi_channel.sh 内部
+        # 会通过 dirname("$0") 定位同目录的 multi-agent.sh，因此本地执行路径下
+        # 两个脚本必须保持在同一个 userdata/ 目录中。
+        channel_script = os.path.join(_USERDATA_DIR, "multi_channel.sh")
+        install_command = "bash {script} \"$(printf '%s' '{channel_list_b64}' | base64 -d)\"".format(
+            script=shlex.quote(channel_script), channel_list_b64=channel_list_b64
+        )
         
         # install_command 内含可逆的 base64 载荷（含 channel secret），禁止打印原文，仅打印脱敏提示
         print("Executing channel installation command (payload with credentials redacted)")
