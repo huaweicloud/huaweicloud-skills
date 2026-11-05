@@ -21,7 +21,7 @@ This document defines the acceptance criteria for this skill, used to determine 
 |-----------------|----------|---------------------|
 | EIP Binding | Bound with public IP | Query EIP status |
 | Security Group | sg-dsh created | Query security group list |
-| Security Group Status | **Empty security group** after deployment (no inbound rules) | Query security group rules |
+| Security Group Status | **No external inbound rules** after deployment (only intra-group self-traffic, no `0.0.0.0/0`) | Query security group rules |
 | Manual Configuration Verification | Port **22** rule (SSH) added manually by user in console | Huawei Cloud console verification |
 | Rule Format | All inbound rules source IP are `your_ip/32` | Check security group rules |
 | **No 0.0.0.0/0** | **Absolutely no 0.0.0.0/0 inbound rules allowed** | Security group rules audit |
@@ -40,7 +40,7 @@ This document defines the acceptance criteria for this skill, used to determine 
 | Auto-restart | systemd Restart=on-failure policy enabled | Check `systemctl cat dsh` |
 | Dedicated User | System user `dsh` created, DSH_HOME owned by it | Check `id dsh` and DSH_HOME permissions |
 | Service Logs | Deployment logs normal | Check /var/log/dsh-bootstrap.log |
-| Data Directory | DSH_HOME created (default /home/dsh/.dsh) | Check directory existence |
+| Data Directory | DSH_HOME created under the dedicated system user's home directory (default: `$DSH_HOME`) | Check `echo $DSH_HOME` and directory existence |
 
 ### 4. Security
 
@@ -48,7 +48,7 @@ This document defines the acceptance criteria for this skill, used to determine 
 |-----------------|----------|---------------------|
 | Loopback Binding | dsh binds to 127.0.0.1 only (no public exposure) | Check `ss -tlnp \| grep 3080` |
 | No Hardcoded Credentials | No AK/SK in code or scripts | Code review |
-| API Key Handling | DEEPSEEK_API_KEY only via systemd drop-in (mode 600), never logged | Code review + check /etc/systemd/system/dsh.service.d/ |
+| API Key Handling | DEEPSEEK_API_KEY only via the dsh unit's systemd drop-in (mode 600), never logged | Code review + inspect the dsh systemd drop-in directory |
 | npm Registry | npmmirror registry configured for China acceleration | Check `npm config get registry` |
 
 ## Performance Acceptance Criteria
@@ -63,11 +63,11 @@ This document defines the acceptance criteria for this skill, used to determine 
 
 | Acceptance Item | Standard | Verification Method |
 |-----------------|----------|---------------------|
-| SSH Access Restriction | Security group is empty, must **manually add** `your_ip/32` to access port 22, **no 0.0.0.0/0** | Check security group rules |
+| SSH Access Restriction | Security group has no external inbound rules (only intra-group self-traffic), must **manually add** `your_ip/32` to access port 22, **no 0.0.0.0/0** | Check security group rules |
 | dsh Web Access | dsh accessed via **SSH tunnel** (`ssh -L 3080:127.0.0.1:3080 root@<public_ip>` → `http://127.0.0.1:3080`); **no public 80/3080 rules** | Check security group rules + local tunnel verification |
 | **No 0.0.0.0/0 Rules** | **Absolutely prohibit any 0.0.0.0/0 inbound rules** (including user manually added) | Security group rules audit |
 | **CIDR Range Restriction** | All inbound rules must use `/32` (single IP), prohibit `/24, /16, /0` and other broad ranges | Security group rules audit |
-| **Empty Security Group Policy** | Script only creates empty security group, does not automatically add any inbound rules | Code review |
+| **Security Group Policy** | Script only creates security group with intra-group self-traffic rules, does not automatically add any external (`0.0.0.0/0`) inbound rules | Code review |
 | **User Manual Configuration** | After deployment, guide user to manually configure security group in Huawei Cloud console | Check deployment output |
 | COC Deployment | Use Cloud Operations Center for secure deployment | Check deployment method |
 | UniAgent Status | UniAgent online and available | Check COC resource status |
@@ -166,7 +166,7 @@ python3 deploy_dsh.py \
 - Returns clear error message
 - No resource residue (or cleaned up)
 
-### Test Case 5: Empty Security Group Verification (Critical Security Test)
+### Test Case 5: Security Group Verification (Critical Security Test)
 
 **Preconditions**:
 - Valid AK/SK
@@ -188,7 +188,7 @@ python3 deploy_dsh.py \
 2. Add inbound rule: TCP port 22, source IP `your_ip/32` (required for SSH tunnel)
 
 **Expected Result**:
-- Security group `sg-dsh` created but **has no inbound rules** (only necessary outbound rules)
+- Security group `sg-dsh` created with **no external inbound rules** (only intra-group self-traffic; no `0.0.0.0/0`)
 - Deployment output clearly prompts user to manually configure security group in Huawei Cloud console
 - After user manually adds the rule, all inbound rules source_ip are only `your_ip/32`
 - **No 0.0.0.0/0 inbound rules exist**

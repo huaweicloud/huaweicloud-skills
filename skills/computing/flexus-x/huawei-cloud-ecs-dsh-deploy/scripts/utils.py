@@ -76,7 +76,7 @@ def check_dependencies(auto_install=True):
 
     send_progress_notification(
         "Starting dependency installation",
-        f"Installing missing dependencies:\n" + "\n".join([f"- {item}" for item in missing_list]),
+        f"Installing missing dependencies:{chr(10)}" + "\n".join([f"- {item}" for item in missing_list]),
         "info"
     )
 
@@ -290,7 +290,7 @@ def check_lock_file():
             try:
                 with open(config.LOCK_FILE, 'r') as f:
                     content = f.read()
-                    print(f"\nLock file content:\n{content}")
+                    print(f"{chr(10)}Lock file content:{chr(10)}{content}")
             except:
                 pass
 

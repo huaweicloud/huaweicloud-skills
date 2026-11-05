@@ -157,12 +157,14 @@ fi
 echo "[$(date)] ===== Setting Up Dedicated User ====="
 
 DSH_USER="dsh"
-DSH_HOME="/home/$DSH_USER/.dsh"
 
 if ! id "$DSH_USER" > /dev/null 2>&1; then
     useradd --system --create-home --shell /usr/sbin/nologin --comment "DeepSeek Harness" "$DSH_USER"
     echo "[$(date)] Created system user: $DSH_USER"
 fi
+# Resolve the dedicated user's home from the account database (never hardcode a local path)
+DSH_HOME="$(getent passwd "$DSH_USER" | cut -d: -f6 2>/dev/null)/.dsh"
+[ -n "$DSH_HOME" ] && [ "$DSH_HOME" != "/.dsh" ] || { echo "[$(date)] ERROR: cannot resolve home directory for $DSH_USER"; exit 1; }
 mkdir -p "$DSH_HOME"
 chown -R "$DSH_USER:$DSH_USER" "$DSH_HOME"
 echo "[$(date)] DSH_HOME=$DSH_HOME"
@@ -171,7 +173,10 @@ echo "[$(date)] DSH_HOME=$DSH_HOME"
 echo "[$(date)] ===== Writing systemd Service ====="
 
 DSH_BIN="$(command -v dsh)"
-cat > /etc/systemd/system/dsh.service << EOF
+SYSTEMD_DIR="/etc/systemd/system"
+DSH_SERVICE_FILE="${SYSTEMD_DIR}/dsh.service"
+DSH_DROP_IN_FILE="${DSH_SERVICE_FILE}.d/10-credentials.conf"
+cat > "$DSH_SERVICE_FILE" << EOF
 [Unit]
 Description=DeepSeek Harness (dsh) Web UI
 Documentation=https://github.com/deepseek-ai/deepseek-harness
@@ -200,9 +205,9 @@ EOF
 
 # Inject DEEPSEEK_API_KEY as a drop-in if provided (never log it)
 if [ -n "$API_KEY" ]; then
-    mkdir -p /etc/systemd/system/dsh.service.d
-    printf '[Service]\nEnvironment=DEEPSEEK_API_KEY=%s\n' "$API_KEY" > /etc/systemd/system/dsh.service.d/10-credentials.conf
-    chmod 600 /etc/systemd/system/dsh.service.d/10-credentials.conf
+    mkdir -p "$(dirname "$DSH_DROP_IN_FILE")"
+    printf '[Service]\nEnvironment=DEEPSEEK_API_KEY=%s\n' "$API_KEY" > "$DSH_DROP_IN_FILE"
+    chmod 600 "$DSH_DROP_IN_FILE"
     echo "[$(date)] DEEPSEEK_API_KEY pre-seeded via systemd drop-in (file mode 600)"
 fi
 
@@ -271,9 +276,13 @@ echo "[$(date)] ===== Starting dsh Service ====="
 systemctl start dsh || { echo "[$(date)] dsh failed to start"; journalctl -u dsh -n 50 --no-pager; exit 1; }
 
 # Wait for dsh to respond on 127.0.0.1:$DSH_PORT (it only binds to loopback by design)
+# dsh web requires a token: an unauthenticated request returns 401, which still proves
+# the service is up and listening. Any HTTP code (2xx/401/302/...) => UP; only a total
+# connection failure (000 / timeout) means the service is DOWN.
 DSH_READY=0
 for i in $(seq 1 30); do
-    if curl -fsS --max-time 2 -o /dev/null "http://127.0.0.1:$DSH_PORT"; then
+    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "http://127.0.0.1:$DSH_PORT" || echo "000")
+    if [ "$code" != "000" ]; then
         DSH_READY=1
         break
     fi

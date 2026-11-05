@@ -83,7 +83,7 @@ This skill provides one-click deployment of **DeepSeek Harness (dsh)** — the o
 
 ### Important Notes
 
-**⚠️ All scripts and environment check scripts are in the skill package. Must use skill `action=exec` for execution, do NOT run directly in shell.**
+**⚠️ All scripts and environment check scripts are in the skill package. It is **strongly recommended** to execute them through the skill `action=exec` so that credentials and logs are uniformly managed. The scripts themselves can also be run directly in a shell (e.g. `python3 scripts/deploy_dsh.py ...`) — when you do, you are responsible for passing credentials safely via environment variables and for keeping secret values out of logs/conversation.**
 
 ## Prerequisites
 
@@ -165,7 +165,7 @@ pip install requests huaweicloudsdkcore huaweicloudsdkecs huaweicloudsdkcoc
 
 | Rule | Description |
 |------|------|
-| 1 | All scripts must be executed through skill action=exec, **prohibited** from running directly in shell |
+| 1 | All scripts should preferably be executed through skill action=exec for unified credential/log management; direct shell execution is allowed but credentials must still be passed via environment variables |
 | 2 | **Prohibited** from printing script content or commands containing AK/SK/Token in conversation |
 | 3 | **Prohibited** from creating temporary script files, prefer inline execution (python3 -c) |
 | 4 | On execution failure, return only error message, **prohibited** from rewriting script or printing complete commands |
@@ -178,7 +178,7 @@ pip install requests huaweicloudsdkcore huaweicloudsdkecs huaweicloudsdkcoc
 
 | Setting | Value | Description |
 |---------|-------|-----------|
-| **Security Group Status** | Empty (no inbound rules) | Script only creates security group, does not add any rules |
+| **Security Group Status** | No external inbound rules (only intra-group self-traffic, no 0.0.0.0/0) | Script creates security group and only allows instances within the same group to reach each other; no public inbound rules are added |
 | **Default Access** | All ports blocked | Before you configure rules, no IP can access the server |
 | **Ports to Open** | **Only 22 (SSH)** | dsh Web UI is accessed via SSH tunnel; 80/443 do not need to be public |
 
@@ -189,7 +189,7 @@ pip install requests huaweicloudsdkcore huaweicloudsdkecs huaweicloudsdkcoc
 3. **Manually** add an inbound rule: protocol TCP, port **22**, source IP = your public IP + `/32` suffix (e.g., `203.0.113.10/32`)
 4. **Do not** add broad 80/443 rules — dsh is accessed only through the SSH tunnel; no other ports need to be exposed
 
-> 💡 **Why Use Empty Security Group?** Security First - You have full control over which IPs can access the server. Only port 22 + SSH tunnel — dsh Web UI is never exposed publicly, so even an API key leak cannot be accessed from the internet.
+> 💡 **Why no external inbound rules?** Security First - You have full control over which IPs can access the server. Only port 22 + SSH tunnel — dsh Web UI is never exposed publicly, so even an API key leak cannot be accessed from the internet. The security group only allows instances within the same security group to reach each other (intra-group self-traffic); no `0.0.0.0/0` (public internet) inbound rules exist.
 
 **⚠️ AK/SK Security:** See [Prerequisites - AK/SK Credentials](#2-aksk-credentials). **Prohibited from exposing, recording, or printing AK/SK/Token values in any form.**
 
@@ -519,7 +519,7 @@ This skill uses **COC (Cloud Operations Center)** for secure deployment, replaci
 │  │                                 ▼                   │    │
 │  │                            dsh web (Node.js 22)     │    │
 │  │                             user: dsh (no-shell)   │    │
-│  │                             DSH_HOME: /home/dsh/.dsh│    │
+│  │                            DSH_HOME: <dsh-home>/.dsh│    │
 │  └───────────┬──────────────────────┬──────────────────┘    │
 │              │                      │                       │
 │              │              ┌───────┴───────┐              │
@@ -556,7 +556,7 @@ This skill uses **COC (Cloud Operations Center)** for secure deployment, replaci
 | Stage | Operation | Description |
 |------|------|------|
 | 1 | Create Server | Create Flexus X instance via Huawei Cloud SDK |
-| 2 | Configure Security Group | Create sg-dsh security group (empty rules, manual config needed) |
+| 2 | Configure Security Group | Create sg-dsh security group (no external inbound rules; intra-group self-traffic only, manual config needed) |
 | 3 | Wait for UniAgent | Wait for COC UniAgent to come online |
 | 4 | Create COC Script | Create installation script in Cloud Operations Center |
 | 5 | Execute Script | Execute script on target instance via COC |
@@ -579,9 +579,9 @@ Compared to SSH method, COC deployment has the following advantages:
 | File Path | Description |
 |----------|------|
 | /var/log/dsh-bootstrap.log | Deployment script execution log |
-| /home/dsh/.dsh/ | dsh data directory (sessions, workspaces, artifacts) |
-| /etc/systemd/system/dsh.service | dsh systemd unit file |
-| /etc/systemd/system/dsh.service.d/10-credentials.conf | DEEPSEEK_API_KEY drop-in (mode 600, only if --api-key used) |
+| $DSH_HOME/ | dsh data directory (sessions, workspaces, artifacts) |
+| $DSH_SERVICE_FILE | dsh systemd unit file |
+| $DSH_DROP_IN_FILE | DEEPSEEK_API_KEY drop-in (mode 600, only if --api-key used) |
 | /etc/nginx/conf.d/dsh.conf | Nginx reverse proxy config |
 
 ## File Structure
