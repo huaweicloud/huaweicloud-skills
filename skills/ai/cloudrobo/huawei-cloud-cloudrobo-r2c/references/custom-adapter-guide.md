@@ -5,7 +5,7 @@ the built-in adapter list. The R2C SDK provides three integration paths:
 
 | Path | Discovery | Use Case | Recommended When |
 |------|-----------|----------|------------------|
-| **Entry-point adapter** | `r2c_sdk.adapters` entry point; appears in `list-adapters` | Reusable third-party adapters | Sharing across projects/teams, pip-installable packages |
+| **Entry-point adapter** | `r2c_sdk.adapters` entry point; discovered automatically by `AdapterRegistry` | Reusable third-party adapters | Sharing across projects/teams, pip-installable packages |
 | **`--hardware-class` CLI override** | Dotted import path on CLI; no registration needed | One-off custom adapters | Quick prototyping, local development |
 | **`hardware.type: "custom"` + `class_path`** | Config-driven dynamic loading | Config-only loading | When CLI flags are inconvenient |
 
@@ -13,7 +13,8 @@ the built-in adapter list. The R2C SDK provides three integration paths:
 
 Create a standalone pip package that registers a hardware adapter via the `r2c_sdk.adapters`
 entry-point group. After `pip install`, the adapter is automatically discovered by
-`AdapterRegistry` and appears in `cloudrobo r2c list-adapters`.
+`AdapterRegistry`. See SKILL.md → Built-in Hardware Adapters (or `cloudrobo r2c client --help`)
+for the list of registered adapter types.
 
 > A complete working example is available at
 > `cloudrobo-r2c/examples/third_party_adapter/` in the `cloudrobo-r2c` package.
@@ -274,12 +275,12 @@ r2c_to_device:
 # Install the adapter package
 pip install .            # or pip install -e . for development
 
-# Verify the adapter is discovered
-cloudrobo r2c list-adapters
-# Expected: "my_robot" appears in the list
+# Verify the adapter is discovered (adapter types are listed in SKILL.md → Built-in Hardware Adapters)
+cloudrobo r2c client --help
 
-# Validate the robot config
-cloudrobo r2c validate-config --robot-config robot_my_robot_config.yaml
+# The robot config is validated automatically at client startup (Invalid robot config in <path>
+# prints all schema errors and exits 1); start the client to validate robot_my_robot_config.yaml
+cloudrobo r2c client --bundle <path/to/cert_config_*.zip> --robot-config robot_my_robot_config.yaml --duration 1
 
 # Start the client
 cloudrobo r2c client --bundle <path/to/cert_config_*.zip> --robot-config robot_my_robot_config.yaml
@@ -643,8 +644,10 @@ Always test custom adapters with `dry_run: true` first:
 ### Step 1: Syntax Check
 
 ```bash
-# Validate the config
-cloudrobo r2c validate-config --robot-config config/my_robot_config.yaml
+# The config is validated automatically when the client starts:
+# an invalid config prints "Invalid robot config in <path>:" followed by all
+# schema errors and exits with code 1 (there is no separate validate-config command).
+cloudrobo r2c client --bundle <path/to/cert_config_*.zip> --robot-config config/my_robot_config.yaml --duration 1
 ```
 
 ### Step 2: Dry-Run Test
@@ -776,8 +779,9 @@ model_to_r2c:
   without risking robot damage.
 - **Use ConfigurableDeviceTranslator**: Prefer config-driven mapping over custom translator
   code. Only implement a custom translator when the mapping logic is too complex for YAML.
-- **Validate config first**: Run `cloudrobo r2c validate-config` before starting the client
-  to catch schema errors early.
+- **Validate config first**: Robot config is validated automatically at `r2c client` startup
+  (invalid config prints "Invalid robot config in <path>:" plus all schema errors and exits 1).
+  Start the client once to catch schema errors early before running longer sessions.
 - **Handle exceptions in get_observation/send_action**: The control loop calls these methods
   at high frequency; unhandled exceptions will crash the client.
 - **Log adapter state**: Use Python `logging` for debug info; the client's `--log-level DEBUG`

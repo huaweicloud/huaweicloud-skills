@@ -55,7 +55,24 @@ if [ -n "$BUNDLE_PATH" ] && [ -f "$BUNDLE_PATH" ]; then
     # Create a temporary dry_run config
     DRY_RUN_CONFIG="/tmp/r2c_dryrun_config.yaml"
     if [ -f "$ROBOT_CONFIG" ]; then
-        sed 's/dry_run: false/dry_run: true/g' "$ROBOT_CONFIG" > "$DRY_RUN_CONFIG"
+        # Generate a dry_run config by YAML semantics (not string sed) so that any
+        # formatting (no-space/quoting/multi-line variants) reliably yields dry_run=true.
+        python3 - "$ROBOT_CONFIG" "$DRY_RUN_CONFIG" <<'PYEOF'
+import sys
+import yaml
+
+src, dst = sys.argv[1], sys.argv[2]
+with open(src, "r", encoding="utf-8") as f:
+    data = yaml.safe_load(f) or {}
+# Ensure a runtime section and force dry_run=true
+runtime = data.setdefault("runtime", {})
+if not isinstance(runtime, dict):
+    runtime = {}
+    data["runtime"] = runtime
+runtime["dry_run"] = True
+with open(dst, "w", encoding="utf-8") as f:
+    yaml.safe_dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+PYEOF
         timeout "$DURATION" cloudrobo r2c client \
           --bundle "$BUNDLE_PATH" \
           --robot-config "$DRY_RUN_CONFIG" \
