@@ -28,7 +28,7 @@ def _is_ctrl_alive(ctrl_path):
     return check.returncode == 0
 
 
-def _ensure_connection(host, port, user, password):
+def _ensure_connection(host, port, user, password, key=None):
     """Ensure SSH ControlMaster connection is established, return ctrl_path"""
     ctrl_path = _get_ctrl_path(host, port, user)
 
@@ -52,13 +52,19 @@ def _ensure_connection(host, port, user, password):
         '-p', str(port),
     ]
 
-    # Prefer sshpass (password auth) if available, otherwise try key auth
-    if password and os.path.exists('/usr/bin/sshpass'):
+    # Prefer sshpass (password auth) if available, otherwise try key/no-password auth
+    if key:
+        cmd = ['ssh', '-i', key] + ssh_opts + [f'{user}@{host}', 'true']
+    elif password and os.path.exists('/usr/bin/sshpass'):
         cmd = ['sshpass', '-p', password, 'ssh'] + ssh_opts + [f'{user}@{host}', 'true']
     else:
         cmd = ['ssh'] + ssh_opts + [f'{user}@{host}', 'true']
 
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+    except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:
+        print(f"[ERROR] connection_failed\nMessage: 连接 {host}:{port} 超时或失败，请检查网络可达性和防火墙设置\nSuggestion: ping {host} 确认主机可达")
+        return None
     if result.returncode != 0:
         return None
 
@@ -104,21 +110,22 @@ def _is_shell_command(command):
     return False
 
 
-def run_one_shot_fast(host, port, user, password, command, raw=False):
+def run_one_shot_fast(host, port, user, password, command, raw=False, key=None):
     """Fast mode: Use SSH ControlMaster to reuse connection
     First time ~1.5s, subsequent ~0.2s
     When raw=True, skip natural language parsing and execute raw command directly"""
-    ctrl_path = _ensure_connection(host, port, user, password)
+    ctrl_path = _ensure_connection(host, port, user, password, key=key)
     if not ctrl_path:
-        return run_one_shot_paramiko(host, port, user, password, command, raw=raw)
+        return run_one_shot_paramiko(host, port, user, password, command, raw=raw, key=key)
 
     # Raw mode: execute directly, bypass NL routing
     if raw:
-        result = subprocess.run(
-            ['ssh', '-o', f'ControlPath={ctrl_path}', '-o', 'ControlMaster=auto',
-             '-o', 'BatchMode=yes', '-p', str(port), f'{user}@{host}', command],
-            capture_output=True, text=True, timeout=60
-        )
+        ssh_cmd = ['ssh']
+        if key:
+            ssh_cmd += ['-i', key]
+        ssh_cmd += ['-o', f'ControlPath={ctrl_path}', '-o', 'ControlMaster=auto',
+                    '-o', 'BatchMode=yes', '-p', str(port), f'{user}@{host}', command]
+        result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=60)
         if result.returncode == 0:
             if result.stdout.strip():
                 print(result.stdout.strip())
@@ -136,7 +143,10 @@ def run_one_shot_fast(host, port, user, password, command, raw=False):
     if is_nl:
         # Natural language goes through executor (requires paramiko connection)
         executor = CommandExecutor()
-        connect_text = f"SSH connect {host} port {port} user {user} password {password}"
+        if key:
+            connect_text = f"SSH connect {host} port {port} user {user} key {key}"
+        else:
+            connect_text = f"SSH connect {host} port {port} user {user} password {password}"
         executor.handle_command(connect_text)
         result = executor.handle_command(command)
         print(result)
@@ -144,11 +154,12 @@ def run_one_shot_fast(host, port, user, password, command, raw=False):
         return 0
     else:
         # Direct shell command goes through fast mode
-        result = subprocess.run(
-            ['ssh', '-o', f'ControlPath={ctrl_path}', '-o', 'ControlMaster=auto',
-             '-o', 'BatchMode=yes', '-p', str(port), f'{user}@{host}', command],
-            capture_output=True, text=True, timeout=60
-        )
+        ssh_cmd = ['ssh']
+        if key:
+            ssh_cmd += ['-i', key]
+        ssh_cmd += ['-o', f'ControlPath={ctrl_path}', '-o', 'ControlMaster=auto',
+                    '-o', 'BatchMode=yes', '-p', str(port), f'{user}@{host}', command]
+        result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=60)
         if result.returncode == 0:
             if result.stdout.strip():
                 print(result.stdout.strip())
@@ -160,12 +171,15 @@ def run_one_shot_fast(host, port, user, password, command, raw=False):
         return result.returncode
 
 
-def run_one_shot_paramiko(host, port, user, password, command, raw=False):
+def run_one_shot_paramiko(host, port, user, password, command, raw=False, key=None):
     """Paramiko mode: connect -> execute -> disconnect (fallback)
     When raw=True, execute command directly without NL routing"""
     executor = CommandExecutor()
-    
-    connect_text = f"SSH connect {host} port {port} user {user} password {password}"
+
+    if key:
+        connect_text = f"SSH connect {host} port {port} user {user} key {key}"
+    else:
+        connect_text = f"SSH connect {host} port {port} user {user} password {password}"
     result = executor.handle_command(connect_text)
     if 'failed' in result.lower() or 'error' in result.lower():
         print(result)
@@ -176,7 +190,10 @@ def run_one_shot_paramiko(host, port, user, password, command, raw=False):
         import paramiko
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(host, port=port, username=user, password=password)
+        if key:
+            ssh.connect(host, port=port, username=user, key_filename=key)
+        else:
+            ssh.connect(host, port=port, username=user, password=password)
         stdin, stdout, stderr = ssh.exec_command(command, timeout=60)
         out = stdout.read().decode()
         err = stderr.read().decode()
@@ -186,17 +203,17 @@ def run_one_shot_paramiko(host, port, user, password, command, raw=False):
         if err.strip():
             print(f"⚠️ stderr: {err.strip()}")
         return 0 if not err.strip() else 1
-    
+
     result = executor.handle_command(command)
     print(result)
-    
+
     executor.session_manager.close_all_sessions()
     return 0
 
 
-def run_one_shot(host, port, user, password, command, raw=False):
+def run_one_shot(host, port, user, password, command, raw=False, key=None):
     """One-shot mode: prefer fast mode, fallback to paramiko"""
-    return run_one_shot_fast(host, port, user, password, command, raw=raw)
+    return run_one_shot_fast(host, port, user, password, command, raw=raw, key=key)
 
 
 def main():
@@ -206,6 +223,7 @@ def main():
     parser.add_argument('--port', type=int, default=22, help='SSH port (default 22)')
     parser.add_argument('--user', default='root', help='SSH username (default root)')
     parser.add_argument('--password', help='SSH password')
+    parser.add_argument('--key', help='SSH private key file path')
     parser.add_argument('--command', help='command to execute (one-time mode)')
     parser.add_argument('--raw', action='store_true', help='Skip NL parsing, execute raw command')
     
@@ -215,6 +233,8 @@ def main():
     # One-time execution mode
     if args.host and args.password and args.command:
         sys.exit(run_one_shot(args.host, args.port, args.user, args.password, args.command, raw=args.raw))
+    if args.host and args.key and args.command:
+        sys.exit(run_one_shot(args.host, args.port, args.user, args.password, args.command, raw=args.raw, key=args.key))
     
     executor = CommandExecutor()
     
@@ -222,7 +242,10 @@ def main():
     if remaining or (args.host and not args.command):
         text_parts = []
         if args.host:
-            text_parts.append(f"SSH connect {args.host} port {args.port} user {args.user} password {args.password or ''}")
+            if args.key:
+                text_parts.append(f"SSH connect {args.host} port {args.port} user {args.user} key {args.key}")
+            else:
+                text_parts.append(f"SSH connect {args.host} port {args.port} user {args.user} password {args.password or ''}")
         text_parts.extend(remaining)
         text = ' '.join(text_parts)
         if text.strip():
@@ -246,6 +269,8 @@ def main():
     # Dead loop protection - only idle timeout (suitable for remote connection scenarios)
     idle_timeout = 600  # Auto exit after 10 minutes idle
     last_activity_time = time.time()
+    
+    executor.interactive = True
     
     while True:
         try:
@@ -274,12 +299,14 @@ Help Information:
 
 Connect command:
   SSH connect 192.168.1.100 port 22 user root password xxx
+  SSH connect 192.168.1.100 port 22 user root key /path/to/id_rsa
   
 Execute commands:
   Enter Linux commands directly, e.g.: ls -la, df -h, top -bn1
   
 System commands:
   view connections - List all active connections
+  Switch to <ip> - Switch active session to another connected host
   disconnect/disconnect SSH - Disconnect current connection
   cancel - Cancel pending confirmation
   confirm - Confirm sensitive operation
@@ -289,6 +316,7 @@ Security Features:
   - Sensitive operations (delete, modify, etc.) require confirmation
   - High-risk commands are automatically blocked
   - Passwords are only stored in memory, not written to disk
+  - Interactive mode does not accept passwords typed in the conversation (use --password or --key CLI args)
                 """)
                 continue
             

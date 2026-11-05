@@ -1,9 +1,9 @@
 ---
 name: huawei-cloud-ascend-remote-connect
 description: |
-  Provides temporary SSH remote connection for Huawei Cloud Ascend devices with dynamic host/port/user/password input (in-memory only), disk management, NPU monitoring, container management, security auditing and log analysis; sensitive operations require user confirmation before execution
-  Use this skillthis skill to remotely connect to Ascend servers, monitor NPU health, manage disks/LVM, or troubleshoot Ascend devices.
-  Triggerer words: SSH, remote, Ascend, NPU, 远程连接, 昇腾, NPU监控
+  Provides temporary SSH remote connection for Huawei Cloud Ascend devices with dynamic host/port/user/password input (in-memory only), covering disk management, NPU monitoring, container management, security auditing and log analysis; sensitive operations require user confirmation before execution.
+  Use this skill to remotely connect to Ascend servers, monitor NPU health, manage disks/LVM, or troubleshoot Ascend devices.
+  Triggers include: SSH, remote, Ascend, NPU, 远程连接, 昇腾, NPU监控
 version: 1.0.0
 tags: [huawei-cloud, ascend, npu, ssh, remote]
 allowed-tools:
@@ -99,6 +99,8 @@ Provides temporary SSH remote connection capability for Huawei Cloud Ascend devi
 > - **Prohibited** from reading, echoing, or printing password values
 > - **Prohibited** from asking the user to input passwords directly in the conversation
 > - **Only allowed** to read credentials from command line arguments
+> - **Interactive mode** rejects any connection command that embeds a password in the conversation for the same reason; use `--password` or `--key` CLI arguments instead
+> - Connection passwords are stored in memory only and cleared when the session ends
 
 ## Parameter Confirmation
 
@@ -106,17 +108,18 @@ Provides temporary SSH remote connection capability for Huawei Cloud Ascend devi
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| host | Yes | Target server IP address |
+| host | Yes | Target server IP address (IPv4 only, e.g. 192.168.1.100; domain names are not supported) |
 | port | No | SSH port (default: 22) |
 | user | Yes | SSH username |
-| password | Yes | SSH password |
+| password | Yes* | SSH password (`*` required unless `--key` is provided) |
+| key | No | SSH private key file path (alternative to `password`) |
 
 ### Parameter Validation
 
 - IP address format: IPv4 (e.g., 192.168.1.100)
 - Port range: 1-65535
 - Username: alphanumeric and underscore
-- Password: non-empty string
+- Password must be a non-empty string
 
 ### Confirmation Requirements
 
@@ -144,6 +147,14 @@ Ensure the target server has SSH service enabled and the provided credentials ha
 ```bash
 python3 scripts/main.py --host <ascend-server-ip> --port 22 --user root --password <your-password> --command "npu-smi info"
 ```
+
+Prefer key-based authentication (recommended):
+
+```bash
+python3 scripts/main.py --host <ascend-server-ip> --port 22 --user root --key <private-key-file> --command "npu-smi info"
+```
+
+> **Note:** Only IPv4 addresses are supported (e.g. `192.168.1.100`). Domain names and hostnames are not supported.
 
 ### Task 2: Interactive Mode
 
@@ -491,7 +502,7 @@ The following commands are blocked by default:
 
 ### Limitations
 
-- SSH password authentication only (no interactive password prompt)
+- SSH password or key authentication (no interactive password prompt in dialogue; passwords only via command-line credentials)
 - Single-user session per connection
 - Maximum 50 concurrent connections (configurable)
 

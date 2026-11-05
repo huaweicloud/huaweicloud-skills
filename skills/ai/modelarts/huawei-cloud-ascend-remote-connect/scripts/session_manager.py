@@ -37,7 +37,8 @@ class SessionManager:
         return None
 
     def create_session(self, host: str, port: int, username: str, 
-                      password: Optional[str] = None, timeout: int = 30) -> Tuple[bool, str]:
+                      password: Optional[str] = None, key_filename: Optional[str] = None,
+                      timeout: int = 30) -> Tuple[bool, str]:
         self._cleanup_expired()
         
         if len(self._sessions) >= self._max_sessions:
@@ -49,13 +50,16 @@ class SessionManager:
                 self._active_session = client.session_id
                 return True, f"Already connected to {host}:{port} (reusing connection)"
 
-        conn_info = ConnectionInfo(
-            host=host,
-            port=port,
-            username=username,
-            password=password,
-            timeout=timeout
-        )
+        connect_options = {
+            "host": host,
+            "port": port,
+            "username": username,
+            "key_filename": key_filename,
+            "timeout": timeout,
+        }
+        if password is not None:
+            connect_options["password"] = password
+        conn_info = ConnectionInfo(**connect_options)
 
         try:
             # Get connection from pool (auto-reuse)

@@ -12,6 +12,7 @@ class CommandExecutor:
         self.command_validator = CommandValidator()
         self.pending_confirmation = None
         self.pending_disk_merge = None
+        self.interactive = False
 
     # ========== Connection Parsing ==========
 
@@ -21,6 +22,7 @@ class CommandExecutor:
             'port': r'(?:port|port)\s*[:：]?\s*(\d+)',
             'user': r'(?:account|username|user|root|admin)\s*[:：]?\s*(\w+)',
             'password': r'(?:password|pwd|pass)\s*[:：]?\s*(\S+)',
+            'key': r'(?:key|key-file|keyfile|private[_-]?key)\s*[:：]?\s*(\S+)',
         }
         result = {}
         for key, pattern in patterns.items():
@@ -47,16 +49,33 @@ class CommandExecutor:
         if text == 'confirm' and self.pending_confirmation:
             command = self.pending_confirmation
             self.pending_confirmation = None
-            return self._validate_and_execute(command)
+            return self._validate_and_execute(command, confirmed=True)
 
         if text == 'confirm' and self.pending_disk_merge:
             return self._execute_disk_merge(self.pending_disk_merge)
+
+        # Security: in interactive mode, never accept passwords passed in the conversation
+        if self.interactive and (re.search(r'\b(?:password|pass|pwd)\b', text, re.IGNORECASE) or '密码' in text):
+            return "❌ 出于安全考虑，禁止在对话中输入密码。请使用命令行参数 --password 传入。"
+
+        # Switch Target (Switch to)
+        switch_match = re.match(r'(?:switch\s+to)\s+(\d{1,3}(?:\.\d{1,3}){3})', text, re.IGNORECASE)
+        if switch_match:
+            host = switch_match.group(1)
+            if self.session_manager.switch_by_host(host):
+                return f"Switched to {host}"
+            return f"❌ No active connection to {host}"
 
         # Connection Management
         if text == 'view connections':
             return self._list_connections()
         if text in ('disconnect SSH', 'disconnect', 'exit SSH'):
             return self._disconnect()
+
+        # connect (parsed BEFORE natural language modules to avoid misrouting)
+        connect_info = self.parse_connection_string(text)
+        if connect_info:
+            return self._connect(connect_info)
 
         # ===== Natural Language Module Routing =====
         # Match modules by priority
@@ -96,15 +115,13 @@ class CommandExecutor:
         if r:
             return r
 
-        # connect
-        connect_info = self.parse_connection_string(text)
-        if connect_info:
-            return self._connect(connect_info)
-
         # Execute directly if connected
         if self.session_manager.active_session:
             return self._validate_and_execute(text)
 
+        # Domain/hostname connection attempt → only IPv4 supported
+        if re.search(r'[a-zA-Z]', text) and re.search(r'connect|连接|链接', text, re.IGNORECASE):
+            return '❌ 仅支持 IPv4 地址格式的主机（如 192.168.1.100），不支持域名或主机名'
         return 'Please provide target host IP, port, username and password'
 
     # ========== Disk Module ==========
@@ -113,18 +130,19 @@ class CommandExecutor:
         """Disk-related natural language"""
         keywords_map = {
             # detect/view
-            ('detect disk', 'view disk', 'unmounted disk', 'disk status', 'disk list', 'lsblk'): 'detect',
-            ('disk health', 'disk SMART', 'smartctl', 'disk check'): 'health',
-            ('free space', 'available space', 'disk free', 'space check'): 'space',
-            ('disk space', 'disk detail', 'disk full', 'disk comprehensive'): 'full_report',
+            ('detect disk', 'view disk', 'unmounted disk', 'disk status', 'disk list', 'lsblk',
+             '磁盘', '查看磁盘', '磁盘情况', '挂载', '硬盘', '磁盘列表'): 'detect',
+            ('disk health', 'disk SMART', 'smartctl', 'disk check', '磁盘健康', '磁盘检查', '硬盘健康'): 'health',
+            ('free space', 'available space', 'disk free', 'space check', '磁盘空间', '剩余空间', '可用空间', '空间检查'): 'space',
+            ('disk space', 'disk detail', 'disk full', 'disk comprehensive', '磁盘详情', '磁盘总览', '磁盘综合', '磁盘使用'): 'full_report',
             # LVM
-            ('LVM information', 'volume group info', 'VG info', 'LV info', 'logical volume'): 'lvm_info',
-            ('LVM extend', 'LV extend', 'logical volume extend', 'extend'): 'lvm_extend',
+            ('LVM information', 'volume group info', 'VG info', 'LV info', 'logical volume', 'LVM信息', '逻辑卷', '卷组信息'): 'lvm_info',
+            ('LVM extend', 'LV extend', 'logical volume extend', 'extend', '扩展逻辑卷', '扩容'): 'lvm_extend',
             # Partition
-            ('partition information', 'view partition', 'fdisk'): 'partition_info',
+            ('partition information', 'view partition', 'fdisk', '分区信息', '查看分区'): 'partition_info',
             # mounted at/unmount
-            ('auto mount on boot', 'boot mount', 'fstab', 'auto mount'): 'auto_mount',
-            ('unmount', 'umount'): 'umount',
+            ('auto mount on boot', 'boot mount', 'fstab', 'auto mount', '开机自动挂载', '自动挂载'): 'auto_mount',
+            ('unmount', 'umount', '卸载'): 'umount',
         }
 
         for keywords, action in keywords_map.items():
@@ -210,17 +228,17 @@ class CommandExecutor:
             return None
 
         keywords_map = {
-            ('CPU info', 'CPU monitoring', 'CPU usage', 'CPU usage', 'cpu'): 'cpu',
-            ('memory info', 'memory monitoring', 'memory usage', 'memory usage', 'memory'): 'memory',
-            ('system info', 'system overview', 'system status', 'system monitoring', 'overview'): 'overview',
-            ('system update', 'update system', 'upgrade', 'update'): 'update',
-            ('uptime', 'uptime', 'start time'): 'uptime',
-            ('user list', 'online users', 'logged-in users', 'who'): 'users',
-            ('scheduled tasks', 'crontab', 'scheduled tasks', 'cron'): 'crontab',
-            ('process list', 'process view', 'ps', 'top processes'): 'processes',
-            ('environment variables', 'env'): 'env',
-            ('system version', 'version info', 'OS version'): 'version',
-            ('hostname', 'hostname'): 'hostname',
+            ('CPU info', 'CPU monitoring', 'CPU usage', 'cpu', 'CPU', '处理器', 'CPU占用', 'CPU使用', 'cpu占用'): 'cpu',
+            ('memory info', 'memory monitoring', 'memory usage', 'memory', '内存', '内存占用', '内存使用', '内存信息', '内存情况'): 'memory',
+            ('system info', 'system overview', 'system status', 'system monitoring', 'overview', '系统信息', '系统状态', '系统监控', '系统概览', '系统情况'): 'overview',
+            ('system update', 'update system', 'upgrade', 'update', '系统更新', '更新系统', '升级系统'): 'update',
+            ('uptime', 'start time', '运行时间', '开机时间'): 'uptime',
+            ('user list', 'online users', 'logged-in users', 'who', '用户列表', '在线用户'): 'users',
+            ('scheduled tasks', 'crontab', 'cron', '定时任务', '计划任务'): 'crontab',
+            ('process list', 'process view', 'ps', 'top processes', '进程列表', '进程'): 'processes',
+            ('environment variables', 'env', '环境变量'): 'env',
+            ('system version', 'version info', 'OS version', '系统版本', '版本信息'): 'version',
+            ('hostname', '主机名'): 'hostname',
         }
 
         for keywords, action in keywords_map.items():
@@ -239,7 +257,7 @@ class CommandExecutor:
                 elif action == 'users':
                     return self._exec_simple('online users', 'who; echo; echo "=== recent logins ==="; last -5')
                 elif action == 'crontab':
-                    return self._exec_simple('scheduled tasks', 'echo "=== root crontab ==="; crontab -l 2>/dev/null || echo "none"; echo; for user in $(cut -d: -f1 /etc/passwd | head -10); do crontab -u $user -l 2>/dev/null && echo "[$user]:" && crontab -u $user -l 2>/dev/null; done 2>/dev/null | head -50')
+                    return self._exec_simple('scheduled tasks', 'echo "=== current user crontab ==="; crontab -l 2>/dev/null; echo "=== end of crontab ==="')
                 elif action == 'processes':
                     return self._exec_simple('process list', 'ps aux --sort=-%cpu | head -20')
                 elif action == 'env':
@@ -270,13 +288,13 @@ class CommandExecutor:
             return None
 
         keywords_map = {
-            ('port scan', 'port list', 'listening ports', 'open ports'): 'ports',
-            ('firewall status', 'firewall', 'firewall', 'iptables', 'ufw'): 'firewall',
-            ('routing table', 'route', 'route'): 'route',
-            ('network interface', 'network interface', 'network interface', 'ip addr'): 'nic',
-            ('DNS', 'dns', 'Dns', 'domain name parse'): 'dns',
-            ('network connections', 'connection status', 'netstat', 'ss'): 'connections',
-            ('network test', 'ping'): 'ping',
+            ('port scan', 'port list', 'listening ports', 'open ports', '端口', '端口扫描', '端口开放', '端口情况', '开放端口', '监听端口'): 'ports',
+            ('firewall status', 'firewall', 'iptables', 'ufw', '防火墙'): 'firewall',
+            ('routing table', 'route', '路由表', '路由'): 'route',
+            ('network interface', 'ip addr', '网卡', '网络接口'): 'nic',
+            ('DNS', 'dns', 'Dns', 'domain name parse', '域名解析', 'dns解析'): 'dns',
+            ('network connections', 'connection status', 'netstat', 'ss', '网络连接', '连接状态'): 'connections',
+            ('network test', 'ping', '网络测试', '网络连通'): 'ping',
         }
 
         for keywords, action in keywords_map.items():
@@ -316,17 +334,19 @@ class CommandExecutor:
             return None
 
         # First check if it is a container-related command
-        docker_keywords = ('container', 'docker', 'Docker', 'image', 'compose', 'Compose')
+        docker_keywords = ('container', 'docker', 'Docker', 'image', 'compose', 'Compose',
+                           '容器', '镜像')
         if not any(kw in text for kw in docker_keywords):
             return None
 
         keywords_map = {
-            ('container list', 'container status', 'docker ps', 'running containers'): 'ps',
-            ('all containers', 'all containers', 'all containers'): 'ps_all',
-            ('image list', 'docker images', 'image view'): 'images',
-            ('container logs', 'dockerlog', 'logview'): 'logs',
-            ('docker info', 'docker info', 'docker status', 'docker status', 'docker info'): 'info',
-            ('docker disk', 'docker disk', 'docker size', 'docker size', 'docker usage', 'docker usage'): 'disk_usage',
+            ('container list', 'container status', 'docker ps', 'running containers',
+             '容器列表', '运行容器', '容器状态', '容器'): 'ps',
+            ('all containers', '全部容器', '所有容器'): 'ps_all',
+            ('image list', 'docker images', 'image view', '镜像列表', '查看镜像'): 'images',
+            ('container logs', 'dockerlog', 'logview', '容器日志'): 'logs',
+            ('docker info', 'docker status', 'docker信息'): 'info',
+            ('docker disk', 'docker size', 'docker usage', 'docker磁盘', 'docker占用'): 'disk_usage',
             ('compose status', 'compose ps'): 'compose_ps',
         }
 
@@ -405,13 +425,13 @@ class CommandExecutor:
             return None
 
         keywords_map = {
-            ('login audit', 'login records', 'recent logins', 'last'): 'login_audit',
-            ('failed logins', 'login failures', 'brute force', 'btmp'): 'failed_login',
-            ('SSH config', 'SSH config', 'sshd config'): 'ssh_config',
-            ('key list', 'SSH keys', 'authorized_keys'): 'ssh_keys',
-            ('security check', 'security audit', 'security status'): 'security_check',
-            ('user list', 'system users'): 'system_users',
-            ('SUID files', 'suid', 'privileged files'): 'suid_check',
+            ('login audit', 'login records', 'recent logins', 'last', '登录审计', '登录记录', '最近登录', '登录日志'): 'login_audit',
+            ('failed logins', 'login failures', 'brute force', 'btmp', '登录失败', '失败登录'): 'failed_login',
+            ('SSH config', 'sshd config', 'ssh配置'): 'ssh_config',
+            ('key list', 'SSH keys', 'authorized_keys', '密钥列表', 'ssh密钥'): 'ssh_keys',
+            ('security check', 'security audit', 'security status', '安全检查', '安全审计', '安全状态'): 'security_check',
+            ('user list', 'system users', '用户列表', '系统用户'): 'system_users',
+            ('SUID files', 'suid', 'privileged files', '特权文件'): 'suid_check',
         }
 
         for keywords, action in keywords_map.items():
@@ -423,18 +443,19 @@ class CommandExecutor:
                 elif action == 'ssh_config':
                     return self._exec_simple('SSH config', 'grep -v "^#" /etc/ssh/sshd_config 2>/dev/null | grep -v "^$"')
                 elif action == 'ssh_keys':
-                    return self._exec_simple('SSH keys', 'echo "=== root authorized_keys ==="; cat /root/.ssh/authorized_keys 2>/dev/null || echo "none"; for user in $(ls /home/ 2>/dev/null | head -5); do echo; echo "=== $user ==="; cat /home/$user/.ssh/authorized_keys 2>/dev/null || echo "none"; done')
+                    return '❌ 出于安全合规考虑，已禁用读取远程 SSH 授权密钥/凭据文件（authorized_keys 等）的功能，请使用其他安全检查命令。'
                 elif action == 'security_check':
                     return self._exec_simple('security check', 'echo "=== open ports ==="; ss -tlnp 2>/dev/null | head -20; echo; echo "=== firewall ==="; iptables -L -n 2>/dev/null | head -10 || echo "none"; echo; echo "=== SSH config ==="; grep -E "^(PermitRootLogin|PasswordAuthentication|Port)" /etc/ssh/sshd_config 2>/dev/null; echo; echo "=== failed logins (recent 5) ==="; lastb -10 2>/dev/null | head -5 || echo "none"')
                 elif action == 'system_users':
-                    return self._exec_simple('system users', 'cat /etc/passwd | grep -v nologin | grep -v false | grep -v sync')
+                    return self._exec_simple('system users', 'echo "=== logged-in users ==="; who 2>/dev/null || echo "none"; echo; echo "=== recent login failures ==="; lastb -10 2>/dev/null || echo "none"')
                 elif action == 'suid_check':
                     return self._exec_simple('SUID files', 'find / -perm -4000 -type f 2>/dev/null | head -30')
 
         # Key generation (sensitive)
         if 'generate key' in text or 'create key' in text:
-            self.pending_confirmation = 'ssh-keygen -t ed25519 -f /root/.ssh/id_ed25519 -N "" && cat /root/.ssh/id_ed25519.pub'
-            return '⚠️ Will generate new ED25519 key pair\n\nPlease reply "confirm" or "cancel"'
+            key_file = '$HOME/.ssh/oa_ed25519'
+            self.pending_confirmation = f'ssh-keygen -t ed25519 -f {key_file} -N "" -q && cat {key_file}.pub'
+            return '⚠️ Will generate a new ED25519 key pair and print the public key\n\nPlease reply "confirm" or "cancel"'
 
         return None
 
@@ -446,10 +467,10 @@ class CommandExecutor:
             return None
 
         keywords_map = {
-            ('system logs', 'syslog', 'messages'): 'syslog',
-            ('kernel log', 'dmesg', 'kernellog'): 'dmesg',
-            ('SSH logs', 'sshlog', 'authlog'): 'auth_log',
-            ('error log', 'errorlog', 'troubleshoot'): 'errors',
+            ('system logs', 'syslog', 'messages', '系统日志', '日志'): 'syslog',
+            ('kernel log', 'dmesg', 'kernellog', '内核日志'): 'dmesg',
+            ('SSH logs', 'sshlog', 'authlog', 'SSH日志'): 'auth_log',
+            ('error log', 'errorlog', 'troubleshoot', '错误日志'): 'errors',
         }
 
         for keywords, action in keywords_map.items():
@@ -487,16 +508,40 @@ class CommandExecutor:
         if not self.session_manager.active_session:
             return None
 
+        # delete file/directory(high-risk) — checked first so delete intent wins over list/view
+        Delete_hit = ('delete' in text.lower() or '删除' in text)
+        if Delete_hit and 'container' not in text and 'image' not in text and '容器' not in text and '镜像' not in text:
+            rm_path = None
+            rm_match = re.search(r'(?:delete|删除)\s*(?:file|directory|folder|文件|目录)?\s+(\S+)', text, re.IGNORECASE)
+            if rm_match and rm_match.group(1):
+                rm_path = rm_match.group(1)
+            else:
+                path_match = re.search(r'(?:/[\w.\-/]+)', text)
+                if path_match:
+                    rm_path = path_match.group(0)
+            if rm_path:
+                self.pending_confirmation = f'rm -rf {rm_path}'
+                return f'⚠️⚠️ High-risk: Will delete {rm_path}\n\nPlease reply "confirm" or "cancel"'
+
         # view file/directory
-        if any(kw in text for kw in ('view file', 'read file', 'cat file')):
-            path = re.search(r'(?:view|read|cat)\s+(?:file\s+)?(\S+)', text)
+        if any(kw in text for kw in ('view file', 'read file', 'cat file', '查看文件', '读取文件')):
+            path = re.search(r'(?:view|read|cat|查看|读取)\s+(?:file\s+)?(\S+)', text)
+            if not path:
+                path = re.search(r'(?:/[\w.\-/]+)', text)
             if path:
                 return self._exec_simple(f'view {path.group(1)}', f'cat {path.group(1)} 2>/dev/null || echo "file does not exist"')
 
         # list directory
-        ls_match = re.search(r'(?:list|ls|view)\s*(?:directory\s+)?(\S+)', text)
-        if ls_match and ('list' in text or 'ls' in text or 'directory' in text):
-            path = ls_match.group(1)
+        if ('list' in text or 'ls' in text or 'directory' in text or '查看' in text or '列出' in text or '目录' in text or '文件' in text):
+            path_match = re.search(r'(?:/[\w.\-/]+)', text)
+            if path_match:
+                path = path_match.group(0)
+            else:
+                ls_match = re.search(r'(?:list|ls|view|查看|列出)\s*(?:directory\s+)?(\S+)', text)
+                if not ls_match or not ls_match.group(1):
+                    path = '/tmp'
+                else:
+                    path = ls_match.group(1)
             return self._exec_simple(f'list {path}', f'ls -lah {path} 2>/dev/null || echo "path does not exist"')
 
         # findfile
@@ -518,13 +563,6 @@ class CommandExecutor:
             path = touch_match.group(1)
             self.pending_confirmation = f'touch {path}'
             return f'Will create file {path}，confirm？\n\nPlease reply "confirm" or "cancel"'
-
-        # delete file/directory(high-risk)
-        rm_match = re.search(r'delete\s*(?:file|directory|folder)?\s+(\S+)', text)
-        if rm_match and 'container' not in text and 'image' not in text:
-            path = rm_match.group(1)
-            self.pending_confirmation = f'rm -rf {path}'
-            return f'⚠️⚠️ High-risk: Will delete {path}\n\nPlease reply "confirm" or "cancel"'
 
         # copyfile
         cp_match = re.search(r'copy\s+(\S+)\s*(?:to|→|->)\s*(\S+)', text)
@@ -972,15 +1010,17 @@ df -h {mount_point}
     def _connect(self, info: Dict[str, Any]) -> str:
         try:
             host, port = info['host'], int(info.get('port', 22))
-            user, password = info.get('user', 'root'), info.get('password')
-            success, message = self.session_manager.create_session(host=host, port=port, username=user, password=password, timeout=30)
+            user = info.get('user', 'root')
+            cred = info.get('password')
+            key = info.get('key')
+            success, message = self.session_manager.create_session(host=host, port=port, username=user, password=cred, key_filename=key, timeout=30)
             if success:
                 return f"✅ SSH connection successful\nhost: {host}:{port}\nuser: {user}\n\nYou can now execute commands\n\n💡 Available natural language commands:\n- CPU info / memory info / system overview\n- container list / image list / container logs xxx\n- port scan / firewall status / network interface\n- disk space / disk health / LVM information\n- login audit / security check\n- system logs / SSH logs\n- Or enter Linux commands directly"
             return f"❌ Connection failed: {message}"
         except Exception as e:
             return f"❌ Connection error: {str(e)}"
 
-    def _validate_and_execute(self, command: str) -> str:
+    def _validate_and_execute(self, command: str, confirmed: bool = False) -> str:
         # Special internal commands
         if command.startswith('_set_auto_mount '):
             parts = command.split(' ')
@@ -990,11 +1030,12 @@ df -h {mount_point}
         if command == '_repair_fstab_action':
             return self._execute_repair_fstab()
 
-        if self.command_validator.is_blocked(command):
-            return f"⚠️ Command blocked: High risk, execution prohibited"
-        if self.command_validator.is_sensitive(command):
-            self.pending_confirmation = command
-            return f'⚠️ Security warning\n\nThis involves sensitive operation, confirm to execute?\n\nCommand: {command}\n\nPlease reply "confirm" or "cancel"'
+        if not confirmed:
+            if self.command_validator.is_blocked(command):
+                return f"⚠️ Command blocked: High risk, execution prohibited"
+            if self.command_validator.is_sensitive(command):
+                self.pending_confirmation = command
+                return f'⚠️ Security warning\n\nThis involves sensitive operation, confirm to execute?\n\nCommand: {command}\n\nPlease reply "confirm" or "cancel"'
         return self._execute_command(command)
 
     def _execute_command(self, command: str) -> str:

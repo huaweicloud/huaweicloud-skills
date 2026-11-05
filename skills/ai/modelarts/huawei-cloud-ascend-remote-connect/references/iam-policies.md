@@ -14,7 +14,7 @@ The user account used for SSH connection must have:
 |------------|-------------|
 | SSH login | Access to SSH service (port 22) |
 | Command execution | Execute basic shell commands |
-| sudo privileges | For system management operations |
+| Administrator privileges | For system management operations |
 
 ### Minimum Required Privileges
 
@@ -90,10 +90,10 @@ iptables -A INPUT -p tcp --dport 22 -j DROP
 | Connect to server | SSH access |
 | View NPU status | Regular user |
 | View system info | Regular user |
-| Disk management | sudo |
-| System updates | sudo |
-| Container management | sudo or docker group |
-| User management | sudo |
+| Disk management | Administrator privileges |
+| System updates | Administrator privileges |
+| Container management | Administrator privileges or Docker group membership |
+| User management | Administrator privileges |
 
 ## Audit Logging
 
