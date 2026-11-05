@@ -1,16 +1,22 @@
 # Firmware Upgrade Reference
 
+> **Routed vs. manual:** entries marked **Routed** are reachable through natural
+> language and are implemented in `scripts/executor.py` /
+> `scripts/npu_client.py`. Entries marked **Manual** document an available
+> `npu-smi` capability that the skill does not currently route; run them
+> directly (for example via the `npu-smi` passthrough).
+
 ## Firmware Information
 
-### Get Firmware Version
+### Get Firmware Version — Routed
 
-**Command:** `npu-smi info -t version -i <npu_id>`
+**Command:** `npu-smi upgrade -b <component> -i <npu_id>` (default component `mcu`)
 
-**Natural Language:** `Firmware version`
+**Natural Language:** `Firmware version`, `Query firmware`
 
 **Output:** Current firmware version
 
-### Get All Versions
+### Get All Versions — Manual
 
 **Command:** `npu-smi info -t all-version -i <npu_id>`
 
@@ -20,27 +26,27 @@
 
 ## Upgrade Process
 
-### Check for Updates
+### Check Upgrade Status — Routed
 
-**Command:** `npu-smi upgrade -c -i <npu_id>`
+**Command:** `npu-smi upgrade -q <component> -i <npu_id>` (default component `mcu`)
 
-**Natural Language:** `Check firmware update`
+**Natural Language:** `Upgrade status`, `Upgrade check`
 
-**Output:** Available firmware versions
+**Output:** Current upgrade status
 
-### Upgrade Firmware
+### Upgrade Firmware — Routed
 
-**Command:** `npu-smi upgrade -f <firmware_file> -i <npu_id>`
+**Command:** `npu-smi upgrade -t <component> -i <npu_id> -f <firmware_file>`
 
-**Natural Language:** `Upgrade firmware`
+**Natural Language:** `Upgrade firmware`, `Upload firmware`
 
 **Sensitive:** Requires confirmation
 
-**Parameters:** Path to firmware file
+**Parameters:** Component (default `mcu`) and path to the firmware file
 
 **Example:**
 ```bash
-npu-smi upgrade -f /path/to/firmware.bin -i 0
+npu-smi upgrade -t mcu -i 0 -f /path/to/firmware.hpm
 ```
 
 **Important Notes:**
@@ -49,17 +55,17 @@ npu-smi upgrade -f /path/to/firmware.bin -i 0
 3. Upgrade may take several minutes
 4. Device may reboot after upgrade
 
-### Upgrade from Repository
+### Upgrade from Repository — Manual
 
 **Command:** `npu-smi upgrade -r <repo_url> -i <npu_id>`
 
 **Natural Language:** `Upgrade from repository`
 
-**Sensitive:** Requires confirmation
+**Sensitive:** Requires confirmation (run directly; the skill does not route it)
 
 ## Upgrade Status
 
-### Get Upgrade Progress
+### Get Upgrade Progress — Manual
 
 **Command:** `npu-smi info -t upgrade-progress -i <npu_id>`
 
@@ -67,13 +73,32 @@ npu-smi upgrade -f /path/to/firmware.bin -i 0
 
 **Output:** Current upgrade progress percentage
 
-### Cancel Upgrade
+### Cancel Upgrade — Manual
 
 **Command:** `npu-smi upgrade -a cancel -i <npu_id>`
 
 **Natural Language:** `Cancel upgrade`
 
+**Sensitive:** Requires confirmation (run directly; the skill does not route it)
+
+## Activate Firmware
+
+### Activate Uploaded Firmware
+
+**Command:** `npu-smi upgrade -a <component> -i <npu_id>`
+
+**Natural Language:** `Activate firmware`, `Activate upgrade`, `Firmware activate`
+
+**Example:** `activate upgrade mcu NPU0` → `npu-smi upgrade -a mcu -i 0`
+
+**Component:** parsed from the input (`mcu` / `bootloader` / `vrd`), default `mcu`
+
+**Confirm gate:** `⚠️ Sensitive operation: Activate <component> firmware on NPU <npu_id> (requires reboot)`
+
 **Sensitive:** Requires confirmation
+
+**Note:** `activate upgrade` is an accepted synonym of `activate firmware` and
+enters the same confirmation gate (ISSUE-006 / B115-6).
 
 ## Rollback
 
@@ -81,11 +106,18 @@ npu-smi upgrade -f /path/to/firmware.bin -i 0
 
 **Command:** `npu-smi upgrade -a rollback -i <npu_id>`
 
-**Natural Language:** `Rollback firmware`
+**Natural Language:** `Rollback firmware`, `Roll back firmware`, `Rollback`
+
+**Confirm gate:** a rollback confirmation gate that warns "rollback may not be supported on all devices" → reply `confirm` / `cancel`
 
 **Sensitive:** Requires confirmation
 
 **Important:** Rollback may not be available on all devices
+
+**Implementation:** routed by the firmware **rollback** branch (evaluated after
+version / upload / status and before activate) to the
+`rollback_firmware(npu_id)` client method. Example:
+`rollback firmware NPU1` → `npu-smi upgrade -a rollback -i 1`.
 
 ## Upgrade Best Practices
 
