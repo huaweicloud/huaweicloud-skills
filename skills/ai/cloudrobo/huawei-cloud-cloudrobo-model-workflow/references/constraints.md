@@ -1,5 +1,41 @@
 # Constraints
 
+## 不支持的操作
+
+> 以下操作**不在本 skill 能力范围内**。用户提出这些请求时，必须明确告知"不支持"，并提供替代方案，不得尝试自行执行。
+> 本 skill 只编排模型开发流水线（asset 查询 → 训练 → 部署 → 评测）中的受支持操作，见 SKILL.md「Core Commands」表。
+
+### Training
+
+- `train delete-task`（删除训练任务）：**不支持**。请使用 `cloudrobo train delete-task --task-id <id>` CLI 命令或 CloudRobo 控制台操作
+- `train list-tasks`（列出历史训练任务）：**不支持**。请使用 `cloudrobo train list-tasks --workspace-id <id>` CLI 命令
+- `train update-task`（修改训练任务超参）：**不支持**。训练任务创建后超参不可修改，如需变更参数请新建训练任务
+
+### Inference
+
+- `infer stop`（暂停推理服务）：**不支持**。请使用 `cloudrobo infer stop --service-id <id>` CLI 命令
+- `infer delete`（删除推理服务）：**不支持**。请使用 `cloudrobo infer delete --service-id <id>` CLI 命令
+
+### Asset
+
+- `asset download-version`（下载模型/数据集到本地）：**不支持**。训练输出模型存储在 CloudRobo 平台 workspace 内，不支持下载到本地
+
+### Workspace
+
+- `workspace create`（创建工作空间）：**不支持**。请使用 `cloudrobo-workspace` skill 或 CloudRobo 控制台操作
+
+### Data Processing / Evaluation
+
+- `proc-tasks`/`eval-tasks`（数据处理和数据评测）：**不支持**。请使用 `cloudrobo-dataset` skill 处理数据集
+
+### Dispatch
+
+- `dispatch export-result`（导出评测结果）：**不支持**。评测结果通过 `dispatch show-task-result --session-id <id> --task-id <id>` 在终端查看，如需保存请手动重定向输出到文件
+
+### 跨服务操作
+
+- ECS/RDS/OBS 等其他华为云服务管理（如查询 ECS 列表）：**不在本 skill 能力范围内**。请使用对应的 `hcloud` 命令或专项 skill 处理
+
 ## General
 
 - **Use CLI commands throughout**; Python SDK is prohibited

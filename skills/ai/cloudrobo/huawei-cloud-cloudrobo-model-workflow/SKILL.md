@@ -185,6 +185,21 @@ cloudrobo asset update-version --asset-id <asset_id> --version-id <version_id> -
 
 **Case D: Not Specified** — Use question tool to ask user for dataset source.
 
+#### Step 1.3: Query Resource Pool (Get cluster_id)
+
+> **Mandatory before Stage 2**: The training config requires `cluster_id` (resource pool ID).
+> Query pools during Stage 1 (or before constructing the Stage 2 config) — do not defer to Stage 3.
+
+```bash
+cloudrobo resource list-pools   # filter pools whose usages include MODEL_TRAINING
+```
+
+Select a pool (DEDICATED preferred, SHARED allowed) and derive:
+- `cluster_id = "pool-<resource_id>"` — take the selected pool's `resource_id` from `list-pools`
+  output and prefix it with `pool-` (e.g. `resource_id: d1cc6d45-...` → `cluster_id: pool-d1cc6d45-...`).
+
+The `<cluster_id_from_stage1>` placeholder in the Stage 2 config below refers to this value.
+
 ### Stage 2: Model Training
 
 > **Use CLI throughout**. `cloudrobo train create-task --config <JSON>` accepts full config JSON.
@@ -228,7 +243,7 @@ Write config JSON to temp file (avoid PowerShell special character issues):
 }
 ```
 
-**Required fields**: `name` (unique), `train_mode` (fixed `MODEL_TUNING`), `train_method` (from model actions), `algorithm`, `input_models[0].source_type` (`PUBLIC_MODEL_ASSET`), `output_models[0].model_name` (unique), `output_models[0].model_type` (fixed `vla`), `spec` (string), `cluster_id` (pool ID with `pool-` prefix), `parameters` (JSON array string with full format from Step 1.1c).
+**Required fields**: `name` (unique), `train_mode` (fixed `MODEL_TUNING`), `train_method` (from model actions), `algorithm`, `input_models[0].source_type` (`PUBLIC_MODEL_ASSET`), `datasets[0].source_type` (`CUSTOM_DATASET_ASSET` for workspace/registered dataset assets, `OBS` for OBS paths, `PUBLIC_DATASET_ASSET` for gallery datasets; `DATASET` is not a valid value), `output_models[0].model_name` (unique), `output_models[0].model_type` (fixed `vla`), `spec` (string), `cluster_id` (resource pool ID with `pool-` prefix; obtained via `cloudrobo resource list-pools` in Step 1.3), `workspace_id`, `parameters` (JSON array string with full format from Step 1.1c).
 
 **parameters construction**: From algorithm `ext_metadata.hyperparams`, construct full-format array preserving `desc` and `constraint` from the asset query:
 
@@ -456,6 +471,7 @@ See `references/pipeline-templates.md` for pipeline state tracking template.
 | 1 | `cloudrobo asset update-version --status RELEASE` | Publish version |
 | 1 | `cloudrobo asset import-asset` | Import local dir to OBS |
 | 1 | `cloudrobo workspace current` | Get current workspace + catalog_id |
+| 1/2 | `cloudrobo resource list-pools` | List resource pools; get `cluster_id` (`pool-<resource_id>`) for training config |
 | 2 | `cloudrobo train create-task --config <json>` | Create training task |
 | 2 | `cloudrobo train show-task --task-id <id>` | Query training status |
 | 2 | `cloudrobo train get-stages --task-id <id>` | Get training stages |
@@ -487,6 +503,7 @@ See `references/pipeline-templates.md` for pipeline state tracking template.
 | `model_keyword` | Yes | Base model name for search | `LeRobot_PI05-Base` |
 | `train_method` | Yes | From model actions | `FFT` or `LORA` |
 | `spec` | Yes | Resource spec string | `Ascend: 1 * SNT9B2 \| 24 vCPUs \| 192 GiB` |
+| `cluster_id` | Yes (Stage 2) | Resource pool ID with `pool-` prefix, from `cloudrobo resource list-pools` | `pool-d1cc6d45-...` |
 | `parameters` | Yes | Hyperparameter JSON array string | `[{"key":"batch_size","value":"32"}]` |
 | `pool_id` | No (Stage 3; pass only for DEDICATED pool) | Resource pool ID with `pool-` prefix | `pool-d1cc6d45-...` |
 | `pool_type` | Yes (Stage 3) | Pool type uppercase | `DEDICATED` or `SHARED` |
