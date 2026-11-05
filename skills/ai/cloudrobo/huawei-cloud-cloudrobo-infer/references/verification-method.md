@@ -31,12 +31,13 @@ cloudrobo asset show-asset --asset-id <asset-id>
 # 4. Resolve pool & flavor
 cloudrobo resource list-pools --resource-type MODELARTS
 # → resource_id (prefix with "pool-" for --pool-id), pool_type, config.flavor
+#   pool_id is optional — omit for SHARED pools; pass --pool-id only for DEDICATED pools
 
 # 5. Dry-run validate deploy (optional)
-cloudrobo infer create --name verify-infer --flavor "<flavor>" --model-json '{"model_id": "<asset-id>", "model_version_id": "<latest-version-id>"}' --workspace-id <ws-id> --pool-id pool-<resource-id> --pool-type <pool-type> --stop-schedule-json '{"duration": 60, "time_unit": "MINUTES"}' --dry-run
+cloudrobo infer create --name verify-infer --flavor "<flavor>" --model-json '{"model_id": "<asset-id>", "model_version_id": "<latest-version-id>"}' --workspace-id <ws-id> --pool-type <pool-type> --stop-schedule-json '{"duration": 60, "time_unit": "MINUTES"}' [--pool-id pool-<resource-id>] --dry-run
 
 # 6. Create service (user must confirm)
-cloudrobo infer create --name verify-infer --flavor "<flavor>" --model-json '{"model_id": "<asset-id>", "model_version_id": "<latest-version-id>"}' --workspace-id <ws-id> --pool-id pool-<resource-id> --pool-type <pool-type> --stop-schedule-json '{"duration": 60, "time_unit": "MINUTES"}'
+cloudrobo infer create --name verify-infer --flavor "<flavor>" --model-json '{"model_id": "<asset-id>", "model_version_id": "<latest-version-id>"}' --workspace-id <ws-id> --pool-type <pool-type> --stop-schedule-json '{"duration": 60, "time_unit": "MINUTES"}' [--pool-id pool-<resource-id>]
 # → Returns service_id (service auto-enters CREATING → DEPLOYING)
 
 # 7. Wait for deployment (do NOT call start — service auto-deploys)
@@ -77,7 +78,7 @@ cloudrobo asset show-version --asset-id <algorithm_asset_id> --version-id <algor
 #    → file content → --model-ext-metadata
 
 # 5. Verify all discovered parameters are included in create command
-cloudrobo infer create --name verify-discover --flavor "<flavor>" --model-json '{"model_id":"<mid>","model_version_id":"<mvid>","mount_path":"<mount>"}' --workspace-id <ws> --pool-id pool-<rid> --pool-type <type> --stop-schedule-json '{"duration": 60, "time_unit": "MINUTES"}' --cmd "<command>" --image-swr-url "<image>" --envs-json '{"K":"V"}' --skill-config-json '{"skills":[{"name":"...","prompt":"..."}],"strict":true}' --service-invoke-json '{"auth_type":"...","port":8080,"protocol":"HTTP"}' --readiness-health-json '{"path":"/ready","port":8080}' --model-ext-metadata '<r2c_content>' --dry-run
+cloudrobo infer create --name verify-discover --flavor "<flavor>" --model-json '{"model_id":"<mid>","model_version_id":"<mvid>","mount_path":"<mount>"}' --workspace-id <ws> --pool-type <type> --stop-schedule-json '{"duration": 60, "time_unit": "MINUTES"}' [--pool-id pool-<rid>] --cmd "<command>" --image-swr-url "<image>" --envs-json '{"K":"V"}' --skill-config-json '{"skills":[{"name":"...","prompt":"..."}],"strict":true}' --service-invoke-json '{"auth_type":"...","port":8080,"protocol":"HTTP"}' --readiness-health-json '{"path":"/ready","port":8080}' --model-ext-metadata '<r2c_content>' --dry-run
 ```
 
 **Pass criteria**: All discoverable parameters resolved; dry-run validates
@@ -118,11 +119,11 @@ cloudrobo infer show --service-id "../etc/passwd"
 # → Expected validation error
 
 # 2. Invalid JSON rejected
-cloudrobo infer create --name x --flavor f --model-json '{"model_id":"m","model_version_id":"mv"}' --workspace-id w --pool-id p --pool-type SHARED --envs-json "not-json"
+cloudrobo infer create --name x --flavor f --model-json '{"model_id":"m","model_version_id":"mv"}' --workspace-id w --pool-type SHARED --envs-json "not-json"
 # → Expected Click validation error: Invalid JSON
 
 # 3. Missing workspace rejected
-cloudrobo infer create --name x --flavor f --model-json '{"model_id":"m","model_version_id":"mv"}' --pool-id p --pool-type SHARED
+cloudrobo infer create --name x --flavor f --model-json '{"model_id":"m","model_version_id":"mv"}' --pool-type SHARED
 # → Expected Click validation error: Missing option '--workspace-id'
 ```
 

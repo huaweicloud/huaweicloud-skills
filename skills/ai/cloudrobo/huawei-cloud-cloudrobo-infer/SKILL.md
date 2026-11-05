@@ -72,11 +72,11 @@ All operations target the `cloudrobo-service` backend and require a valid `works
   `--model-json '{"model_id": "<asset_id>", "model_version_id": "<latest_version_id>"}'`.
   The model must have `ONLINE_DEPLOYMENT` action with `status: "ENABLE"` in its `show-asset`
   output. Models in `DRAFT`/`CREATING` status cannot be deployed (403 error).
-- A compute pool: `pool_id` (prefix `resource_id` with `pool-`, i.e. `pool-<resource_id>`)
+- A compute pool: `pool_id` (optional; prefix `resource_id` with `pool-`, i.e. `pool-<resource_id>`, pass it only when deploying to a **dedicated** pool)
   + `pool_type` + `flavor`, resolved via `cloudrobo resource list-pools --resource-type MODELARTS`. Only pools with
-  `status: "AVAILABLE"` are usable.
-- `--stop-schedule-json` is **required in practice** for `create` (though not CLI-required).
-  Format: `{"duration": <N>, "time_unit": "MINUTES"}`.
+  `status: "AVAILABLE"` are usable. `pool_id` is no longer required by the backend — it is validated
+  only when a dedicated pool is involved.
+- `--stop-schedule-json` is **required by the backend** for `create`. Format: `{"duration": <N>, "time_unit": "MINUTES"}`.
 
 ## Workflow
 
@@ -210,6 +210,8 @@ full command → execute.**
    - Only pools with `status: "AVAILABLE"` are usable.
    - Pool fields: `resource_id` → `--pool-id` (prefix with `pool-`, e.g.
      `pool-d1cc6d45-...`), `pool_type` → `--pool-type` (Choice: `DEDICATED` / `SHARED`).
+   - `--pool-id` is **optional** (backend no longer requires it): omit it for `SHARED`
+     pools; pass `pool-<resource_id>` only when the deployment targets a `DEDICATED` pool.
    - Flavors are under `config.flavor` grouped by hardware type (CPU/GPU/ASCEND).
    - Let the user select a pool and a flavor string (e.g. `"1 * SNT9B2 | 24 vCPUs | 192 GiB"`).
 
@@ -220,8 +222,9 @@ full command → execute.**
 
    **Variant A — embodiment plaza model (具身广场, required core parameters ONLY):**
    ```bash
-   cloudrobo infer create --name <service-name> --flavor "<flavor>" --model-json '{"model_id": "<asset_id>", "model_version_id": "<latest_version_id>"}' --workspace-id <workspace_id> --pool-id pool-<resource_id> --pool-type <pool_type> --stop-schedule-json '{"duration": 60, "time_unit": "MINUTES"}' [--dry-run]
+   cloudrobo infer create --name <service-name> --flavor "<flavor>" --model-json '{"model_id": "<asset_id>", "model_version_id": "<latest_version_id>"}' --workspace-id <workspace_id> --pool-type <pool_type> --stop-schedule-json '{"duration": 60, "time_unit": "MINUTES"}' [--pool-id pool-<resource_id>] [--dry-run]
    ```
+   - `--pool-id` is optional: omit for `SHARED`; include `pool-<resource_id>` only for a `DEDICATED` pool.
    - **Do NOT add** `--cmd`/`--image-swr-url`/`--envs-json`/`--skill-config-json`/
      `--service-invoke-json`/`--readiness-health-json`/`--model-ext-metadata`/`--model-json.mount_path`.
      Plaza models are pre-configured on the platform; carrying these extra parameters is a
@@ -229,16 +232,17 @@ full command → execute.**
 
    **Variant B — space asset / custom model (空间资产/自定义, with auto-discovered params):**
    ```bash
-   cloudrobo infer create --name <service-name> --flavor "<flavor>" --model-json '{"model_id": "<asset_id>", "model_version_id": "<latest_version_id>", "mount_path": "<mount_path>"}' --workspace-id <workspace_id> --pool-id pool-<resource_id> --pool-type <pool_type> --stop-schedule-json '{"duration": 60, "time_unit": "MINUTES"}' [--cmd "<command>"] [--image-swr-url "<image_url>"] [--envs-json '{"KEY":"VALUE"}'] [--skill-config-json '{"skills":[{"name":"...","prompt":"..."}],"strict":true}'] [--service-invoke-json '{"auth_type":"...","port":8080,"protocol":"HTTP"}'] [--readiness-health-json '{"path":"/ready","port":8080}'] [--model-ext-metadata '<r2c_config_file_content>'] [--dry-run]
+   cloudrobo infer create --name <service-name> --flavor "<flavor>" --model-json '{"model_id": "<asset_id>", "model_version_id": "<latest_version_id>", "mount_path": "<mount_path>"}' --workspace-id <workspace_id> --pool-type <pool_type> --stop-schedule-json '{"duration": 60, "time_unit": "MINUTES"}' [--pool-id pool-<resource_id>] [--cmd "<command>"] [--image-swr-url "<image_url>"] [--envs-json '{"KEY":"VALUE"}'] [--skill-config-json '{"skills":[{"name":"...","prompt":"..."}],"strict":true}'] [--service-invoke-json '{"auth_type":"...","port":8080,"protocol":"HTTP"}'] [--readiness-health-json '{"path":"/ready","port":8080}'] [--model-ext-metadata '<r2c_config_file_content>'] [--dry-run]
    ```
    - Only include parameters that were actually discovered (Step 5); omit undiscovered ones.
+   - `--pool-id` optional: omit for `SHARED`; pass `pool-<resource_id>` for a `DEDICATED` pool.
    - `--model-json.mount_path` only included when algorithm's `deployment_config` provides it.
    - `--envs-json` must be converted from asset array format to map format.
    - `--skill-config-json` skill items keep only `name`+`prompt`; drop `priority`/`description`.
    - `--model-ext-metadata` takes the raw file content (string).
    - Recommend `--dry-run` first to validate parameter assembly.
-   - `--stop-schedule-json` is **required in practice** (though not CLI-required); without it
-     the backend may reject the creation. Format: `{"duration": <N>, "time_unit": "MINUTES"}`.
+   - `--stop-schedule-json` is **required by the backend**; without it creation fails.
+     Format: `{"duration": <N>, "time_unit": "MINUTES"}`.
    - After dry-run succeeds, confirm with the user and execute without `--dry-run`.
    - Record the returned `service_id`.
 
@@ -270,7 +274,7 @@ and then apply exactly the matching column — **do not mix variants**.
 
 | Model source (from Step 2) | Search command (Step 3) | Auto-discovery (Step 5) | `create` parameters to carry |
 |----------------------------|-------------------------|--------------------------|------------------------------|
-| **Embodiment plaza (具身广场)** | `asset list-publication-assets --type model --actions ONLINE_DEPLOYMENT --action-status ENABLE` | **SKIP entirely** — model is pre-configured on platform | **Required core only**: `--name`, `--flavor`, `--model-json` (`model_id`+`model_version_id`), `--workspace-id`, `--pool-id`, `--pool-type`, `--stop-schedule-json`. **Do NOT carry** `--cmd`/`--image-swr-url`/`--envs-json`/`--skill-config-json`/`--service-invoke-json`/`--readiness-health-json`/`--model-ext-metadata`/`--model-json.mount_path` |
+| **Embodiment plaza (具身广场)** | `asset list-publication-assets --type model --actions ONLINE_DEPLOYMENT --action-status ENABLE` | **SKIP entirely** — model is pre-configured on platform | **Required core only**: `--name`, `--flavor`, `--model-json` (`model_id`+`model_version_id`), `--workspace-id`, `--pool-type`, `--stop-schedule-json`; `--pool-id` only for `DEDICATED` pool. **Do NOT carry** `--cmd`/`--image-swr-url`/`--envs-json`/`--skill-config-json`/`--service-invoke-json`/`--readiness-health-json`/`--model-ext-metadata`/`--model-json.mount_path` |
 | **Space asset / custom (空间资产/自定义)** | `asset list-assets --catalog-id <asset_catalog_id> --type model` / `search-assets --keyword ...` | **Run Step 5 fully** — query algorithm asset (cmd/image/envs/mount_path/service-invoke/readiness-health) + download `skill_config.json` + r2c config | Required core **plus** every parameter actually discovered in Step 5; omit undiscovered ones silently |
 | Unknown model id (user passed explicit id) | `asset show-asset --asset-id <id>` | Determine from `show-asset`: if the model carries an `ONLINE_DEPLOYMENT` action pointing to a platform algorithm → treat as space-asset path (run Step 5). If the model's deployment config is self-contained/pre-configured → carry required core only | As per the resolved path |
 
@@ -355,9 +359,10 @@ Scenario: "I trained a VLA model; deploy it as an inference service."
     applies to embodiment plaza models.
 5. `cloudrobo infer create --name <name> --flavor "<flavor>"
    --model-json '{"model_id": "<asset_id>", "model_version_id": "<latest_version_id>"}'
-   --workspace-id <ws> --pool-id pool-<resource_id>
+   --workspace-id <ws>
    --pool-type <type> --stop-schedule-json '{"duration": 60, "time_unit": "MINUTES"}'`
-   — add any parameters actually discovered in step 4a (per Step 7 Variant B).
+   — add `--pool-id pool-<resource_id>` only when deploying to a `DEDICATED` pool, and any
+   parameters actually discovered in step 4a (per Step 7 Variant B).
 6. `cloudrobo infer wait-deploy --service-id <sid>` — polls every 5s until status is no longer
    `DEPLOYING` (service auto-deploys after create; do NOT call `start` — it will fail with 400)
 7. Report `service_id` and status. The service is now consumable.
@@ -376,7 +381,7 @@ cloudrobo infer <command> [OPTIONS]
 
 | Subcommand | Description | Key options |
 | ---------- | ----------- | ----------- |
-| `create` | Deploy a new inference service | `--name`, `--flavor`, `--model-json`, `--workspace-id`, `--pool-id`, `--pool-type`, `--stop-schedule-json` |
+| `create` | Deploy a new inference service | `--name`, `--flavor`, `--model-json`, `--workspace-id`, `--pool-type`, `--stop-schedule-json` (required); `--pool-id` optional (dedicated pools only) |
 | `wait-deploy` | Poll until deployment completes | `--service-id`, `--timeout` |
 | `list` | List inference services | `--workspace-id`, `--status`, `--limit`, `--offset` |
 | `show` | Show service detail | `--service-id` |
@@ -451,7 +456,7 @@ service lifecycle, logs, and safety scenarios.
   for deployable plaza models; use `list-assets --catalog-id <id>` for workspace models;
   use `search-assets --keyword "<kw>"` for fuzzy/keyword search
 - `--model-json`'s `model_version_id` must be `latest_version_id` from `show-asset`, NOT `actions[].algorithm.version_id`
-- Always include `--stop-schedule-json '{"duration": N, "time_unit": "MINUTES"}'` in `create`
+- Always include `--stop-schedule-json '{"duration": N, "time_unit": "MINUTES"}'` in `create` (required by backend); omit `--pool-id` unless deploying to a dedicated pool
 - Use `wait-deploy` after `create` to poll until deployment completes (5s interval, 600s default). Do NOT call `start` after `create` — the service auto-deploys
 - `wait-deploy` returns when `status != "DEPLOYING"`; it only blocks on the `DEPLOYING` phase (not `CREATING`), so call it after `create` and let the backend transition `CREATING → DEPLOYING → RUNNING` — if it returns while still `CREATING`, immediately re-invoke `wait-deploy`
 - Use `--dry-run` on `create` to validate parameter assembly before actual submission
