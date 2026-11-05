@@ -140,14 +140,62 @@ test_pool_list_pagination() {
     fi
 }
 
-# Conditional test cases (require environment variables)
+# Conditional test cases (require environment variables, or auto-derive pool_id)
 test_pool_show() {
     local pool_id="${POOL_ID:-}"
+    local api_output=""
     if [ -z "$pool_id" ]; then
-        echo "=== TC-10: show-pool (SKIPPED - no POOL_ID) ==="
+        # Auto-derive the first resource_id from list-pools output as the default pool_id
+        echo "=== TC-10: show-pool (auto-detect pool_id from list-pools) ==="
+        if [ "$EXECUTOR" = "sdk" ]; then
+            api_output=$(python3 -c "
+from cloudrobo_resource.client import ResourceClient
+from cloudrobo_core.sdk import Config, HttpClient
+client = ResourceClient(HttpClient(Config()))
+result = client.list_pools()
+import json
+try:
+    data = json.loads(str(result))
+    pools = data.get('resources') or []
+except Exception:
+    pools = []
+for r in pools:
+    rid = (r or {}).get('resource_id')
+    if rid:
+        print(rid)
+        break
+" 2>&1 || true)
+            pool_id=$(echo "$api_output" | grep -oE '[0-9a-fA-F-]{36}' | head -1 || true)
+        else
+            api_output=$(cloudrobo resource list-pools 2>/dev/null || true)
+            pool_id=$(echo "$api_output" | python3 -c "
+import json, re, sys
+text = sys.stdin.read()
+match = re.search(r'out\((.*)\)\s*$', text, re.DOTALL)
+if match:
+    text = match.group(1)
+try:
+    data = json.loads(text)
+    resources = data.get('resources') or []
+    for r in resources:
+        rid = (r or {}).get('resource_id')
+        if rid:
+            print(rid)
+            break
+except Exception:
+    pass
+" 2>/dev/null || true)
+        fi
+    else
+        echo "=== TC-10: show-pool --pool-id $pool_id (POOL_ID env) ==="
+    fi
+    if [ -z "$pool_id" ]; then
+        echo "=== TC-10: show-pool (SKIPPED - no pool_id available) ==="
+        echo "      list-pools returned no resources or parsing failed;"
+        echo "      enable this case by exporting POOL_ID=<pool-id> or ensuring at least one pool exists."
         return
     fi
-    echo "=== TC-10: show-pool --pool-id $pool_id ==="
+    echo "       using pool_id=$pool_id"
     if [ "$EXECUTOR" = "cli" ]; then
         cloudrobo resource show-pool --pool-id "$pool_id" 2>&1 | head -20
     elif [ "$EXECUTOR" = "sdk" ]; then
@@ -189,5 +237,6 @@ echo ""
 echo "NOTE: All tests are read-only. No write operations in this skill."
 echo ""
 echo "Optional environment variables for conditional tests:"
-echo "  POOL_ID=<pool-id>        — Run pool show test"
+echo "  POOL_ID=<pool-id>        — Override pool show test pool id (default: auto-derived"
+echo "                             from the first resource_id returned by list-pools)"
 echo "  WORKSPACE_ID=<ws-id>     — Filter quota list by workspace"
