@@ -1,4 +1,5 @@
 import argparse
+import json
 import sys
 import os
 
@@ -17,6 +18,7 @@ parser.add_argument("--project_id", type=str, required=True, help="项目 ID")
 parser.add_argument("--region", type=str, help="区域，默认 cn-north-4")
 parser.add_argument("--limit", type=int, help="返回结果个数限制")
 parser.add_argument("--offset", type=int, help="偏移量")
+parser.add_argument("--format", type=str, choices=["text", "json"], default="text", help="输出格式，默认 text")
 args = parser.parse_args()
 
 if args.region is not None:
@@ -40,7 +42,35 @@ try:
     response = client.list_features(request)
 
     body = getattr(response, 'body', {})
-    print(body)
+
+    if args.format == "json":
+        print(json.dumps(body, ensure_ascii=False, default=str))
+        exit(0)
+
+    if not body:
+        print("查询结果为空")
+        exit(0)
+
+    if isinstance(body, list):
+        for item in body:
+            if isinstance(item, dict):
+                print("\t".join(f"{k}={v}" for k, v in item.items() if v is not None))
+            else:
+                print(item)
+    elif isinstance(body, dict):
+        for key, value in body.items():
+            if isinstance(value, (list, dict)) and value:
+                print(f"{key}:")
+                for item in value if isinstance(value, list) else [value]:
+                    if isinstance(item, dict):
+                        print("\t" + "\t".join(f"{k}={v}" for k, v in item.items() if v is not None))
+                    else:
+                        print(f"\t{item}")
+            else:
+                print(f"{key}: {value}")
+    else:
+        print(body)
+    exit(0)
 except Exception as e:
     print(f"cbr.list_features 查询失败: {e}")
     exit(1)

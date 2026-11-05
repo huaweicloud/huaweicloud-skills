@@ -123,8 +123,15 @@ Usage: python scripts/cbr/show_op_log.py -h
 
 ### list_protectable.py — List Protectable Resources
 
-Purpose: List CBR protectable resources, supports filtering by name, status, resource ID, cloud server ID. Output fields: id, name, type, size (GB), status. Required: --project_id, --protectable_type (e.g., OS::Nova::Server, OS::Cinder::Volume, OS::Sfs::Turbo, OS::Workspace::DesktopV2); Optional: --region, --limit, --marker, --name, --offset, --status, --id, --server_id.
+Purpose: List CBR protectable resources, supports filtering by name, status, resource ID, cloud server ID. Output fields: id, name, type, size (GB), status. Required: --project_id, --protectable_type (one of server, disk, turbo, workspace, workspace_v2); Optional: --region, --limit, --marker, --name, --offset, --status, --id, --server_id, --retries, --format.
 Usage: python scripts/cbr/list_protectable.py -h
+
+> **Notes:**
+> - `--protectable_type` is pre-validated against the whitelist
+>   `server|disk|turbo|workspace|workspace_v2`; an invalid value returns a clear
+>   parameter error instead of a server-side `500`.
+> - When the CBR service returns `500 "The system is busy"`, the script retries
+>   automatically (default 3 retries, configurable via `--retries`).
 
 ---
 
@@ -169,8 +176,11 @@ Usage: python scripts/cbr/show_agent.py -h
 
 ### list_features.py — List Supported Features
 
-Purpose: List CBR service supported features, returns complete feature information. Required: --project_id; Optional: --region, --limit, --offset.
+Purpose: List CBR service supported features, returns complete feature information. Required: --project_id; Optional: --region, --limit, --offset, --format.
 Usage: python scripts/cbr/list_features.py -h
+
+> **Note:** Output is rendered as structured text by default; pass `--format json`
+> for machine-readable JSON output.
 
 ---
 

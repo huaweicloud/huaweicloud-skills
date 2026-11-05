@@ -1,4 +1,5 @@
 import argparse
+import json
 import sys
 import os
 
@@ -17,6 +18,7 @@ parser.add_argument("--project_id", type=str, required=True, help="项目 ID，�
 parser.add_argument("--region", type=str, default="cn-north-4", help="区域，默认 cn-north-4")
 parser.add_argument("--limit", type=int, help="查询列表返回元素个数")
 parser.add_argument("--offset", type=int, help="查询偏移量")
+parser.add_argument("--format", type=str, choices=["text", "json"], default="text", help="输出格式，默认 text")
 args = parser.parse_args()
 
 if args.region is not None:
@@ -44,15 +46,34 @@ try:
         print("查询结果为空")
         exit(0)
 
-    output = "文件系统类型列表:\n"
-    output += "share_type\tspec_code\tstorage_media\tsupport_period\n"
-    
+    # 对 share_type 去重，避免 API 原始返回中的重复条目 (standard/performance 各出现多次)
+    seen = set()
+    deduped = []
     for share_type in share_types:
         st = getattr(share_type, 'share_type', '')
-        spec_code = getattr(share_type, 'spec_code', '')
-        storage_media = getattr(share_type, 'storage_media', '')
-        support_period = getattr(share_type, 'support_period', '')
-        output += f"{st}\t{spec_code}\t{storage_media}\t{support_period}\n"
+        if st in seen:
+            continue
+        seen.add(st)
+        deduped.append({
+            "share_type": st,
+            "spec_code": getattr(share_type, 'spec_code', ''),
+            "storage_media": getattr(share_type, 'storage_media', ''),
+            "support_period": getattr(share_type, 'support_period', '')
+        })
+
+    if not deduped:
+        print("查询结果为空")
+        exit(0)
+
+    if args.format == "json":
+        print(json.dumps({"total": len(deduped), "share_types": deduped}, ensure_ascii=False))
+        exit(0)
+
+    output = f"文件系统类型列表共 {len(deduped)} 个:\n"
+    output += "share_type\tspec_code\tstorage_media\tsupport_period\n"
+
+    for item in deduped:
+        output += f"{item['share_type']}\t{item['spec_code']}\t{item['storage_media']}\t{item['support_period']}\n"
 
     print(output.strip())
     exit(0)

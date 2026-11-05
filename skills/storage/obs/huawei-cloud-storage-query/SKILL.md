@@ -1,6 +1,9 @@
 ---
 name: huawei-cloud-storage-query
-description: "Queries Huawei Cloud storage resources (EVS/OBS/SFS/CBR). Covers cloud disks (volumes/snapshots/types/quotas/recycle bin), OBS buckets (ACL/metadata/notifications/policies/objects), SFS Turbo file systems (shares/perm rules/backend targets/quotas/LDAP/AD), and CBR backups (vaults/policies/backups/tasks/agents/protectables). No write operations. Use this skill when the user needs to query disk info, list buckets/objects, check file system status, or view backup/policy details. Triggers: 云硬盘, EVS, 对象存储, OBS, 文件系统, SFS, 备份, CBR, 存储库, 快照, 桶, volume, bucket, backup, vault."
+description: |
+  Queries Huawei Cloud storage resources (EVS/OBS/SFS/CBR). Covers cloud disks (volumes/snapshots/types/quotas/recycle bin), OBS buckets (ACL/metadata/notifications/policies/objects), SFS Turbo file systems (shares/perm rules/backend targets/quotas/LDAP/AD), and CBR backups (vaults/policies/backups/tasks/agents/protectables). No write operations. Use this skill when the user needs to query disk info, list buckets/objects, check file system status, or view backup/policy details. Triggers include: "云硬盘", "EVS", "对象存储", "OBS", "文件系统", "SFS", "备份", "CBR", "存储库", "快照", "桶", "volume", "bucket", "backup", "vault".
+triggers: [云硬盘, EVS, 对象存储, OBS, 文件系统, SFS, 备份, CBR, 存储库, 快照, 桶, volume, bucket, backup, vault]
+tags: [huawei-cloud, storage, evs, obs, sfs, cbr, query, backup]
 ---
 # Huawei Cloud Resource Query
 
@@ -163,6 +166,11 @@ Query results are output in JSON format, containing the following common fields:
 - `items`: Resource list, each resource contains key fields such as id, name, status, etc.
 - Specific fields vary by resource type; see individual guide.md for details
 
+Most scripts accept a `--format` option:
+
+- `--format text` (default): human-readable aligned text/table output
+- `--format json`: machine-readable structured JSON output suitable for automation
+
 ---
 
 ## Verification Method
@@ -187,6 +195,7 @@ Query results are output in JSON format, containing the following common fields:
 ## Reference Documentation
 
 - Service query script usage guides: `references/<service>/guide.md`
+- IAM permission policies: `references/iam-policies.md`
 
 ---
 
