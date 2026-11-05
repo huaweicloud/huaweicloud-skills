@@ -4,6 +4,30 @@
 
 ---
 
+## ⚠️ 重要：KooCLI 7.3.12 已不支持 BSS 服务
+
+官方 KooCLI **7.3.12 已移除 BSS 服务支持**，实测：
+
+```bash
+$ hcloud BSS ListOnDemandResourceRatings --cli-region=cn-north-1 ...
+[USE_ERROR]Unsupported service: BSS.
+$ echo $?
+0          # ⚠️ 错误写到 stdout，且退出码仍为 0
+```
+
+因此：
+
+1. **优先使用本 skill 的 `scripts/query-pricing.sh`** —— 该脚本会校验响应，遇到 `USE_ERROR`、非法 JSON、`product_rating_results` 为空或金额为 0 时 **非 0 退出并说明原因**，不会把失败伪装成 `合计 0.00 元`。
+2. 若脚本提示询价不可用，**必须停止并明确告知用户「价格未能核实」**，然后引导用户通过以下任一方式手工确认价格：
+   - 华为云**控制台 → 费用中心**，按规格查询按需价格；
+   - **BSS API Explorer** 在线调试 `ListOnDemandResourceRatings`（需账号具备 BSS 权限）。
+3. **不得**把 `0 元` / 空价格表当作「免费」呈现给用户。
+4. **护栏保留**：「任何会产生费用的写操作（CreatePool / CreateNodePool / PatchNodePool 扩容 / BatchResizePoolNodes / CreateOrderId）在执行前必须让用户确认费用」这一条不因询价手段降级而取消。询价手段不可用时，用人工渠道确认价格后再取得用户确认。
+
+下面记录的 BSS 参数与调用方式保留作参考（在支持 BSS 的 KooCLI 版本或直接调用 REST API 时仍然适用）。
+
+---
+
 ## 概述
 
 在执行 ModelArts 资源池的**创建**、**扩容**（新增节点池或扩容节点池）等会产生费用的操作前，应先通过 BSS API 查询目标规格的按需价格，向用户展示费用信息并获得确认后再执行操作。
@@ -26,8 +50,9 @@
 ```
 1. 获取规格 billing code  ← ModelArts ListResourceFlavors
 2. 获取项目 ID            ← IAM KeystoneListAuthProjects
-3. 调用 BSS 按需询价 API   ← BSS ListOnDemandResourceRatings
-4. 展示价格给用户          ← 格式化输出
+3. 查询按需价格           ← scripts/query-pricing.sh（内部走 BSS ListOnDemandResourceRatings）
+                            └─ 若返回非 0（BSS 不可用）→ 引导用户到控制台费用中心 / API Explorer 人工确认
+4. 展示价格给用户          ← 格式化输出（或人工确认的价格）
 5. 用户确认后执行操作      ← CreatePool / CreateNodePool / PatchNodePool / BatchResizePoolNodes
 ```
 
@@ -165,7 +190,17 @@ bash scripts/query-pricing.sh --region cn-north-4 --billing modelarts.vm.cpu.8ud
 脚本会自动：
 1. 获取目标区域的项目 ID
 2. 调用 BSS 询价 API
-3. 格式化输出价格表
+3. **校验响应**（`USE_ERROR` / `Unsupported service` / 非法 JSON / 缺少或空的 `product_rating_results` / 金额为 0）
+4. 校验通过后格式化输出价格表
+
+> **失败即大声报错**：任一校验不通过时，脚本以非 0 退出码退出，并在 **stderr** 写明具体原因和替代方案（控制台费用中心 / BSS API Explorer）。它**不会**输出空表或 `合计 0.00 元/h`，因此可以安全地把「脚本退出码非 0」当作「询价不可用，必须走人工确认」处理。
+>
+> ```bash
+> if ! bash scripts/query-pricing.sh --region cn-north-4 --billing modelarts.vm.cpu.16u64g.d; then
+>   echo "价格未能核实：请通过控制台费用中心或 BSS API Explorer 确认后再操作" >&2
+>   exit 1
+> fi
+> ```
 
 ---
 
@@ -226,7 +261,8 @@ Agent: 执行创建/扩容操作
 
 ## PatchNodePool 扩容询价流程（必须执行）
 
-> ⚠️ **强制要求**：在调用 `PatchNodePool` 增加 `spec.resources.count` 前，**必须**先完成 BSS 询价并向用户展示费用。未询价直接扩容属于违规操作。
+> ⚠️ **强制要求**：在调用 `PatchNodePool` 增加 `spec.resources.count` 前，**必须**先完成询价并向用户展示费用。未询价直接扩容属于违规操作。
+> 若 `scripts/query-pricing.sh` 因 KooCLI 7.3.12 不支持 BSS 而退出非 0，则按上文降级路径让用户通过控制台费用中心 / API Explorer 确认单价后再继续 —— 护栏不取消，只是询价手段降级。
 
 ### 扩容场景识别
 
@@ -314,7 +350,16 @@ hcloud ModelArts PatchNodePool --cli-region=cn-north-4 \
 
 ### Q: CreateOrderId API 能否用于创建前询价？
 
-**不能**。`CreateOrderId` 仅对已存在的资源池生成订单，不能用于创建前的价格查询。必须使用 BSS `ListOnDemandResourceRatings` API。
+**不能**。`CreateOrderId` 仅对已存在的资源池生成订单，不能用于创建前的价格查询。创建前询价应使用 `scripts/query-pricing.sh`（BSS `ListOnDemandResourceRatings`）；若 KooCLI 7.3.12 下 BSS 不可用，则改用控制台费用中心 / BSS API Explorer 人工确认。
+
+### Q: KooCLI 报 `[USE_ERROR]Unsupported service: BSS.` 怎么办？
+
+KooCLI 7.3.12 已不支持 BSS 服务。脚本会检测到该错误并以非 0 退出。此时**不要**把价格当作 0 元，改用以下方式人工确认：
+- 华为云控制台 → 费用中心 → 按需价格查询；
+- BSS API Explorer 调试 `ListOnDemandResourceRatings`；
+- 或安装/使用支持 BSS 的旧版 KooCLI（不推荐，版本差异可能引入其他问题）。
+
+确认价格后仍须让用户确认费用，再执行写操作。
 
 ### Q: 为什么 usage_measure_id 用 4 而不是 1？
 

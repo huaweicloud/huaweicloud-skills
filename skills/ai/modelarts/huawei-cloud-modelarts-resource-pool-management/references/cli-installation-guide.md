@@ -11,19 +11,31 @@ echo $HOSTTYPE
 - `x86_64` → use AMD 64-bit commands
 - `aarch64` → use ARM 64-bit commands
 
-### Method 1: One-line Install (Recommended)
+### Method 1: Verified Install (Recommended)
+
+Download the official installer, verify its **SHA256 checksum** before executing, then run it.
+Never pipe the remote script directly into `bash` — always verify integrity first (supply-chain protection).
 
 ```bash
-curl -sSL https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/hcloud_install.sh -o ./hcloud_install.sh && bash ./hcloud_install.sh
+# Install (Linux x86_64/ARM64)
+curl -fsSL https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/hcloud_install.sh -o /tmp/hcloud_install.sh
+echo "cd2c99bf92861ee5760c72e07bfa51f46d990d3e0e8411f12d69e32f1981cdf2  /tmp/hcloud_install.sh" | sha256sum -c - || { echo "installer checksum mismatch — aborting"; exit 1; }
+bash /tmp/hcloud_install.sh
 ```
 
 Default install path: `/usr/local/hcloud/`, symlinked to `/usr/local/bin/hcloud`.
 
-To skip interactive prompts with defaults:
+To skip interactive prompts with defaults, add the `-y` flag after checksum verification:
 
 ```bash
-curl -sSL https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/hcloud_install.sh -o ./hcloud_install.sh && bash ./hcloud_install.sh -y
+curl -fsSL https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/hcloud_install.sh -o /tmp/hcloud_install.sh
+echo "cd2c99bf92861ee5760c72e07bfa51f46d990d3e0e8411f12d69e32f1981cdf2  /tmp/hcloud_install.sh" | sha256sum -c - || { echo "installer checksum mismatch — aborting"; exit 1; }
+bash /tmp/hcloud_install.sh -y
 ```
+
+> The pinned SHA256 is for the official installer at `/cli/latest/hcloud_install.sh` (verified 2026-11-03).
+> If the checksum fails after an upstream CLI update, re-fetch the installer and re-record its
+> checksum — never execute a script whose checksum does not match.
 
 ### Method 2: Step-by-step Install
 
@@ -114,7 +126,7 @@ HISTCONTROL=ignorespace
  hcloud configure set --cli-lang=cn
 ```
 
-hcloud CLI stores credentials in `~/.hcloud/config.json`. It does **NOT** support `HW_ACCESS_KEY`/`HW_SECRET_KEY` environment variables (those are for Python SDK only).
+hcloud CLI stores credentials in `~/.hcloud/config.json`. It does **NOT** read `HW_ACCESS_KEY`/`HW_SECRET_KEY` environment variables (those are for Python SDK only). For environment-variable authentication, KooCLI supports its own set of env vars — **`HUAWEICLOUD_SDK_AK` / `HUAWEICLOUD_SDK_SK`** (also `HUAWEI_ACCESS_KEY` / `HUAWEI_SECRET_KEY`) — or the `--cli-access-key` / `--cli-secret-key` parameters. **Recommended**: prefer `hcloud configure` (`~/.hcloud/config.json`) for persistent credentials; env vars or `--cli-access-key`/`--cli-secret-key` are valid alternatives.
 
 ### Verify Authentication
 

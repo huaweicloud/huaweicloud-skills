@@ -3,6 +3,13 @@
 > Detailed command syntax and examples for all 53 ModelArts resource pool CLI APIs.
 > Replace `{region}` with actual region (e.g., `cn-north-4`). `project_id` auto-resolved if omitted.
 
+> **⚠️ CRITICAL — `--pool_name` uses resource `metadata.name`, NOT the display label name.**
+> The `--pool_name` accepted by pool-scoped operations (everything except `ListPools`, which takes no `--pool_name`) is the resource **`metadata.name`** (a machine-generated name like `pool-74d9fd1a-2b7e-40bc-b3c7-5fb267d0440a`) returned by `ListPools`. It is **NOT** the user-facing label name set at creation time via `--metadata.labels.os.modelarts/name` (e.g. `ljf-res-pool`).
+>
+> **Always run `ListPools` first**, read `metadata.name` from its response, and pass that value to ShowPool / DeletePool / ListPoolNodes / node ops / node pool ops / tags / plugins etc. Passing the label name will fail with `ModelArts.50015001 pool "<name>" not found`. To locate a pool by name, match the returned `metadata.name` (or the label) locally — `ListPools` has no server-side name filter.
+>
+> **Workflow**: `ListPools` → extract `metadata.name` → use it as `--pool_name` in subsequent operations.
+
 ---
 
 ## Operation Summary
@@ -71,17 +78,35 @@
 
 ### 1.1 ListPools — 查询资源池列表
 
+> **⚠️ This API is NOT paginated and has NO `--pool_name` filter** (verified with KooCLI 7.3.12).
+> `--limit`, `--offset` and `--pool_name` are rejected with `[USE_ERROR]Invalid parameter: limit`.
+>
+> **To find a pool by name**: call `ListPools` to get the full list (optionally filter server-side by `--status`), then match `metadata.name` / the display label locally, and pass the resulting `metadata.name` to subsequent operations.
+
 ```bash
-hcloud ModelArts ListPools --cli-region={region} [--limit=10] [--offset=0] [--pool_name={name}]
+# All pools
+hcloud ModelArts ListPools --cli-region={region} --project_id={project_id}
+
+# Filter by status and/or label selector
+hcloud ModelArts ListPools --cli-region={region} --project_id={project_id} \
+  [--status={status}] [--labelSelector={label_selector}] [--workspaceId={workspace_id}]
 ```
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `--limit` | No | Max results per page (default 10) |
-| `--offset` | No | Pagination offset (default 0) |
-| `--pool_name` | No | Filter by pool name (fuzzy match) |
+| `--project_id` | Yes | Project ID (the API requires it explicitly; may be auto-resolved by KooCLI when omitted) |
+| `--status` | No | Filter by pool status: `created` / `creating` / `failed` |
+| `--labelSelector` | No | Label selector filter (e.g. `os.modelarts/name=my-pool`) |
+| `--workspaceId` | No | Filter by workspace ID (工作空间) |
+| `--limit` | ❌ Not supported | The API is not paginated |
+| `--offset` | ❌ Not supported | The API is not paginated |
+| `--pool_name` | ❌ Not supported | Filter locally on `metadata.name` instead |
+
+> The `metadata.name` in the response is the value to use for all other pool operations (`--pool_name`).
 
 ### 1.2 ShowPool — 查询资源池详情
+
+> ⚠️ Run `ListPools` first and use the returned `metadata.name` as `--pool_name` (NOT the display label name).
 
 ```bash
 hcloud ModelArts ShowPool --cli-region={region} --pool_name={pool_name}
@@ -89,23 +114,24 @@ hcloud ModelArts ShowPool --cli-region={region} --pool_name={pool_name}
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `--pool_name` | Yes | Resource pool name |
+| `--pool_name` | Yes | Resource pool **metadata.name** (from `ListPools`), NOT the user-facing label name |
 
 ### 1.3 CreatePool — 创建资源池
 
-> ⚠️ **Write operation** — requires user confirmation.
+> **⚠️ Write operation** — requires user confirmation.
 > 💰 **Pricing inquiry required** — query BSS on-demand price for the target flavor before creation.
+> ⚠️ **Flavor constraint**: Only flavors with a **`.d` suffix** (e.g. `modelarts.vm.cpu.16u64g.d`) can create a dedicated pool. Flavors WITHOUT `.d` (e.g. `modelarts.vm.cpu.8ud` for 8C32G) fail with `ModelArts.50004000 Invalid flavor ... is not available for your project`. Always confirm the flavor via `ListResourceFlavors` before creating.
 
 #### Required Information to Collect
 
 | # | Information | CLI Parameter | Options |
 |---|-------------|---------------|---------|
 | 1 | Region | `--cli-region` | e.g., `cn-north-4` |
-| 2 | Pool name | `--metadata.labels.os.modelarts/name` | User-defined name |
+| 2 | Pool name | `--metadata.labels.os.modelarts/name` | User-defined name (display label) |
 | 3 | Pool type | `--spec.type` | `Dedicate`(物理/专属), `Logical`(逻辑) |
 | 4 | Job scope | `--spec.scope.1` | `Train`, `Infer`, `Notebook` (at least one) |
 | 5 | Billing mode | `--metadata.annotations.os.modelarts/billing.mode` | `0`(按需), `1`(包周期) |
-| 6 | Node flavor | `--spec.resources.1.flavor` | Query `ListResourceFlavors` first |
+| 6 | Node flavor | `--spec.resources.1.flavor` | Query `ListResourceFlavors` first; use a flavor with `.d` suffix (see above) |
 | 7 | Node count | `--spec.resources.1.count` | Positive integer |
 | 8 | Network (Dedicate only) | `--spec.network.name` | Query `ListNetworks` first |
 
@@ -271,11 +297,13 @@ hcloud ModelArts PatchPool --cli-region={region} --pool_name={pool_name} --cli-j
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `--pool_name` | Yes | Resource pool name |
+| `--pool_name` | Yes | Resource pool **metadata.name** (from `ListPools`), NOT the user-facing label name |
 | `--cli-jsonInput` | Yes | JSON file with header.Content-Type=application/merge-patch+json |
 | `body.metadata.annotations` | No | Annotations to merge-patch (e.g., description) |
 
 ### 1.5 DeletePool — 删除资源池
+
+> ⚠️ Run `ListPools` first and use the returned `metadata.name` as `--pool_name` (NOT the display label name).
 
 ```bash
 # ⚠️ Write operation — requires user confirmation (irreversible)
@@ -284,7 +312,7 @@ hcloud ModelArts DeletePool --cli-region={region} --pool_name={pool_name}
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `--pool_name` | Yes | Resource pool name |
+| `--pool_name` | Yes | Resource pool **metadata.name** (from `ListPools`), NOT the user-facing label name |
 
 ### 1.6 ShowPoolMonitor — 查询资源池监控
 
@@ -339,15 +367,19 @@ hcloud ModelArts ShowOrder --cli-region={region} --order_name={order_name}
 
 ### 2.1 ListPoolNodes — 查询资源池节点列表
 
+> ⚠️ Run `ListPools` first and use the returned `metadata.name` as `--pool_name` (NOT the display label name).
+
 ```bash
-hcloud ModelArts ListPoolNodes --cli-region={region} --pool_name={pool_name} [--limit=10] [--offset=0]
+hcloud ModelArts ListPoolNodes --cli-region={region} --pool_name={pool_name} [--limit=10] [--continue={next_token}]
 ```
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `--pool_name` | Yes | Resource pool name |
+| `--pool_name` | Yes | Resource pool **metadata.name** (from `ListPools`), NOT the user-facing label name |
 | `--limit` | No | Max results per page |
-| `--offset` | No | Pagination offset |
+| `--continue` | No | Next-page token returned by the previous page (this API has **no `--offset`**) |
+
+> **Pagination**: request page 1 with `--limit`; if the response returns a continuation token, pass it via `--continue` to fetch the next page. Repeat until the token is empty.
 
 ### 2.2 ShowPoolNode — 查询资源池节点详情
 
@@ -357,7 +389,7 @@ hcloud ModelArts ShowPoolNode --cli-region={region} --pool_name={pool_name} --no
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `--pool_name` | Yes | Resource pool name |
+| `--pool_name` | Yes | Resource pool **metadata.name** (from `ListPools`), NOT the user-facing label name |
 | `--node_name` | Yes | Node name |
 
 ### 2.3 BatchDeletePoolNodes — 批量删除节点
@@ -420,6 +452,9 @@ hcloud ModelArts BatchRebootPoolNodes --cli-region={region} --pool_name={pool_na
 
 ### 2.8 BatchResetPoolNodes — 批量重置节点
 
+> ⚠️ **Not available for regular VM pools**: `rollingConfig.strategy` has no valid value for VM pools, so this operation does not work on regular VM nodes. For VM pools, delete and recreate the nodes instead.
+> See [known-issues.md](known-issues.md#19-batchresetpoolnodes-strategy-not-supported) for details.
+
 ```bash
 # ⚠️ Write operation — requires user confirmation
 hcloud ModelArts BatchResetPoolNodes --cli-region={region} --pool_name={pool_name} --node_name.1={node1} --image_id={image_id}
@@ -427,21 +462,24 @@ hcloud ModelArts BatchResetPoolNodes --cli-region={region} --pool_name={pool_nam
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `--pool_name` | Yes | Resource pool name |
+| `--pool_name` | Yes | Resource pool **metadata.name** (from `ListPools`), NOT the user-facing label name |
 | `--node_name.1` | Yes | Node name (indexed) |
 | `--image_id` | Yes | Image ID for OS reinstallation |
 
 ### 2.9 BatchResizePoolNodes — 批量变更节点规格
 
+> ⚠️ **Only supports hyperinstance nodes**: resizing regular VM nodes is not supported. For VM pools, use delete-recreate as the fallback.
+> See [known-issues.md](known-issues.md#20-batchresizepoolnodes-only-supports-hyperinstance) for details.
+
 ```bash
-# ⚠️ Write operation — requires user confirmation
+# ⚠️ Write operation — requires user confirmation (irreversible)
 # 💰 Pricing inquiry recommended — resizing changes flavor and may change costs
 hcloud ModelArts BatchResizePoolNodes --cli-region={region} --pool_name={pool_name} --node_name.1={node1} --flavor_id={flavor_id}
 ```
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `--pool_name` | Yes | Resource pool name |
+| `--pool_name` | Yes | Resource pool **metadata.name** (from `ListPools`), NOT the user-facing label name |
 | `--node_name.1` | Yes | Node name (indexed) |
 | `--flavor_id` | Yes | Target flavor ID |
 
@@ -463,7 +501,7 @@ hcloud ModelArts BatchBindPoolNodes --cli-region={region} --pool_name={pool_name
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `--pool_name` | Yes | Resource pool name |
+| `--pool_name` | Yes | Resource pool **metadata.name** (from `ListPools`), NOT the user-facing label name |
 | `--node_name.1` | Yes | First node name (indexed) |
 | `--node_name.2` | No | Second node name (indexed) |
 | `--node_name.N` | No | Nth node name (indexed) |
@@ -506,7 +544,7 @@ hcloud ModelArts CreateNodePool --cli-region={region} \
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `--pool_name` | Yes | Resource pool name |
+| `--pool_name` | Yes | Resource pool **metadata.name** (from `ListPools`), NOT the user-facing label name |
 | `--nodepool_name` | Yes | Node pool name |
 | `--metadata.name` | Yes | Node pool name |
 | `--spec.resources.flavor` | Yes | Resource flavor (from ListResourceFlavors) |
@@ -546,7 +584,7 @@ hcloud ModelArts PatchNodePool --cli-region={region} --pool_name={pool_name} --n
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `--pool_name` | Yes | Resource pool name |
+| `--pool_name` | Yes | Resource pool **metadata.name** (from `ListPools`), NOT the user-facing label name |
 | `--nodepool_name` | Yes | Node pool name |
 | `--cli-jsonInput` | Yes | JSON file with header.Content-Type=application/merge-patch+json |
 
@@ -567,7 +605,7 @@ hcloud ModelArts ListNodePoolNodes --cli-region={region} --pool_name={pool_name}
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `--pool_name` | Yes | Resource pool name |
+| `--pool_name` | Yes | Resource pool **metadata.name** (from `ListPools`), NOT the user-facing label name |
 | `--nodepool_name` | Yes | Node pool name (note: no underscore) |
 
 ---
@@ -691,7 +729,7 @@ hcloud ModelArts BatchCreatePoolTags --cli-region={region} \
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `--pool_name` | Yes | Resource pool name |
+| `--pool_name` | Yes | Resource pool **metadata.name** (from `ListPools`), NOT the user-facing label name |
 | `--tags.1.key` | Yes | Tag key (indexed) |
 | `--tags.1.value` | Yes | Tag value (indexed) |
 
@@ -742,7 +780,7 @@ hcloud ModelArts CreatePoolPlugin --cli-region={region} \
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `--pool_name` | Yes | Resource pool name |
+| `--pool_name` | Yes | Resource pool **metadata.name** (from `ListPools`), NOT the user-facing label name |
 | `--plugintemplate_name` | Yes | Plugin template name |
 | `--metadata.name` | Yes | Plugin name |
 
@@ -786,7 +824,7 @@ hcloud ModelArts ListScheduledEvents --cli-region={region} --poolName={pool_name
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `--poolName` | Yes | Resource pool name (note: camelCase) |
+| `--poolName` | Yes | Resource pool **metadata.name** (from `ListPools`), not display label (note: camelCase) |
 
 ### 8.2 AcceptScheduledEvent — 接受定时事件
 
@@ -842,7 +880,7 @@ hcloud ModelArts ListEvents --cli-region={region} --name={pool_name} --resource=
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `--name` | Yes | Resource pool name |
+| `--name` | Yes | Resource pool **metadata.name** (from `ListPools`), not display label |
 | `--resource` | Yes | Resource type — must be `pools` (plural) |
 
 ### 10.3 ShowNodeConfigTemplate — 查询节点配置模板
@@ -876,12 +914,20 @@ hcloud ModelArts ShowPoolNodeConfigTemplate --cli-region={region} --pool_name={p
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `--pool_name` | string | Conditional | Resource pool name (required for pool-specific operations) |
+| `--pool_name` | string | Conditional | Resource pool **metadata.name** (from `ListPools`), not the user-facing label name (required for pool-specific operations) |
 | `--nodepool_name` | string | Conditional | Node pool name (required for node pool operations) |
 | `--network_name` | string | Conditional | Network name (required for network operations) |
 | `--node_name` | string | Conditional | Node name (required for node-specific operations) |
-| `--limit` | int | No | Maximum number of results (default: 10) |
-| `--offset` | int | No | Pagination offset (default: 0) |
+| `--limit` | int | No | Maximum number of results per page (only for APIs that support pagination, e.g. `ListJobs`, `ListPoolNodes`) |
+| `--offset` | int | No | Pagination offset (only for APIs that support it, e.g. `ListJobs`) |
+| `--continue` | string | No | Next-page token for APIs that use token pagination, e.g. `ListPoolNodes` |
+
+> **⚠️ Pagination varies by API** — always check the specific operation's parameter list:
+> - `ListPools` is **not paginated** and accepts **no** `--limit` / `--offset` / `--pool_name`.
+> - `ListPoolNodes` uses **`--limit` + `--continue`** (no `--offset`).
+> - `ListJobs` uses **`--limit` + `--offset`**.
+>
+> Passing a pagination parameter an API does not support fails with `[USE_ERROR]Invalid parameter: <name>`.
 
 ### Indexed Parameters
 
@@ -902,7 +948,7 @@ For batch operations and array-type parameters, use indexed syntax:
 
 | Expected | Actual | Reason |
 |----------|--------|--------|
-| `pool_id` | `pool_name` | API uses resource name, not ID |
+| `pool_id` | `pool_name` | API uses the resource **metadata.name** (from `ListPools`), not an ID and not the display label |
 | `node_pool_id` | `nodepool_name` | API uses resource name, no underscore |
 | `pool_name` (ListScheduledEvents) | `poolName` | camelCase in this specific API |
 | `resource_id` (ListEvents) | `name` + `resource` | Split into two parameters |
