@@ -12,10 +12,137 @@ const path = require('path');
 const crypto = require('crypto');
 const { URL } = require('url');
 
+// ====================================================================
+// 通用工具：超时重试 + 优雅降级（ISSUE-001）
+// ====================================================================
+
+const DEFAULT_TIMEOUT = 30000;
+const DEFAULT_MAX_RETRIES = 3;
+const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504]);
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function _sleepBackoff(attempt) {
+    const base = 500 * Math.pow(2, attempt); // 0.5s, 1s, 2s, ...
+    await sleep(base + Math.random() * 250);
+}
+
+/**
+ * 将 http/https 请求封装为 Promise，支持超时与指数退避重试（ISSUE-001）。
+ * @param {object} options - http.request options
+ * @param {object} payload - 请求体（对象则 JSON 序列化）
+ * @returns {Promise<{statusCode:number, text:string}>} 响应 {statusCode, text}
+ */
+function requestWithRetry(options, payload = null) {
+    return new Promise((resolve, reject) => {
+        const maxRetries = DEFAULT_MAX_RETRIES;
+        const lib = options.protocol === 'http:' ? http : https;
+        const inner = (attempt) => {
+            const req = lib.request({ ...options, timeout: options.timeout || DEFAULT_TIMEOUT }, (res) => {
+                let body = '';
+                res.on('data', chunk => body += chunk);
+                res.on('end', () => {
+                    if (RETRYABLE_STATUS.has(res.statusCode) && attempt < maxRetries) {
+                        _sleepBackoff(attempt).then(() => inner(attempt + 1)).catch(reject);
+                        return;
+                    }
+                    resolve({ statusCode: res.statusCode, text: body });
+                });
+            });
+            req.on('error', (err) => {
+                if (attempt < maxRetries) {
+                    _sleepBackoff(attempt).then(() => inner(attempt + 1)).catch(reject);
+                } else {
+                    reject(err);
+                }
+            });
+            req.on('timeout', () => {
+                req.destroy(new Error('Request timeout'));
+            });
+            if (payload != null) {
+                req.write(typeof payload === 'string' ? payload : JSON.stringify(payload));
+            }
+            req.end();
+        };
+        inner(0);
+    });
+}
+
+// ====================================================================
+// Cypher 安全防护（ISSUE-002）— 危险操作模式检测 + 输入校验
+// ====================================================================
+
+const DANGEROUS_CYPHER_KEYWORDS = ['DETACH DELETE', 'DELETE', 'DROP', 'TRUNCATE', 'REMOVE ALL'];
+
+class CypherSafetyError extends Error {}
+
+/**
+ * 对 Cypher 语句做代码层安全校验（ISSUE-002）。
+ * @param {string} statement - Cypher/GQL 语句
+ * @param {boolean} allowDestructive - 是否允许破坏性语句
+ * @param {string} context - 调用方上下文（错误提示用）
+ * @throws {CypherSafetyError} 未通过安全校验
+ */
+function validateCypher(statement, allowDestructive = false, context = 'executeQuery') {
+    if (typeof statement !== 'string' || statement.trim() === '') {
+        throw new CypherSafetyError(`[${context}] Cypher 语句必须是非空字符串，收到: ${typeof statement}`);
+    }
+    if (allowDestructive) {
+        return;
+    }
+    const low = statement.toUpperCase();
+
+    const hasWhere = /\bWHERE\b/.test(low);
+    const hasIdScope = low.includes('ID(') || low.includes('ELEMENT_ID(');
+    const scoped = hasWhere && hasIdScope;
+
+    // 全量删除/清空形态（无 WHERE id(...) 限定的 MATCH 后紧跟 DETACH DELETE/DELETE）
+    const unboundMatchDelete = /^\s*MATCH\s*\([^)]*\)[\s\S]*?(DETACH\s+DELETE|DELETE)[\s\S]*$/;
+    if (!scoped && unboundMatchDelete.test(low)) {
+        throw new CypherSafetyError(
+            `[${context}] 检测到未限定的删除操作，可能清空图数据。` +
+            '定向删除请使用 WHERE ... id(n)=... 限定；全量操作请走 clearGraph() 接口并取得用户确认。'
+        );
+    }
+
+    for (const kw of DANGEROUS_CYPHER_KEYWORDS) {
+        if (low.includes(kw)) {
+            if (scoped) {
+                continue; // 带 WHERE ... id(...) 的定向删除放行
+            }
+            throw new CypherSafetyError(
+                `[${context}] 检测到未限定的 '${kw}' 操作，可能破坏图数据。` +
+                '定向增删改请使用 WHERE ... id(n)=... 限定；全量操作请走 clearGraph() 接口并取得用户确认。'
+            );
+        }
+    }
+}
+
+/**
+ * 校验属性值类型（ISSUE-002/ISSUE-010）：仅允许 JSON 原生标量。
+ * @param {object|null} properties
+ */
+function validatePropertyValues(properties) {
+    if (!properties) return;
+    if (typeof properties !== 'object' || Array.isArray(properties)) {
+        throw new CypherSafetyError(`属性必须是对象，收到: ${Array.isArray(properties) ? 'array' : typeof properties}`);
+    }
+    for (const [k, v] of Object.entries(properties)) {
+        if (v === null || ['string', 'number', 'boolean'].includes(typeof v)) {
+            continue;
+        }
+        throw new CypherSafetyError(
+            `属性 '${k}' 的值类型不支持: ${typeof v}。仅允许 string/number/boolean/null 等 JSON 标量。`
+        );
+    }
+}
+
 // ==================== 环境配置 ====================
 
 class EnvConfig {
-    static ENV_DIR = path.join(__dirname, '..', '.env');
+    static ENV_DIR = path.join(__dirname, '..', 'config');
 
     static ENV_VAR_MAPPING = {
         'GES_GRAPH_IP': 'graph_ip',
@@ -62,7 +189,7 @@ class EnvConfig {
             console.error('  - 环境变量: GES_GRAPH_IP, GES_PROJECT_ID, GES_GRAPH_NAME, GES_IAM_URL, GES_REGION');
             console.error('  - AKSK: HUAWEI_CLOUD_AK, HUAWEI_CLOUD_SK');
             console.error('  - 或用户名密码: GES_USERNAME, GES_PASSWORD, GES_DOMAIN_NAME');
-            console.error('  - 或配置文件: .env/ges_env.csv');
+            console.error('  - 或配置文件: config/ges_env.csv');
             console.error('\n缺失的必需配置项:');
             missingFields.forEach(field => console.error(`  - ${field}`));
             console.error('==============================================\n');
@@ -154,7 +281,7 @@ class TokenManager {
                         password: {
                             user: {
                                 name: username,
-                                password: password,
+                                'password': password,
                                 domain: { name: domainName }
                             }
                         }
@@ -170,7 +297,7 @@ class TokenManager {
                         password: {
                             user: {
                                 name: username,
-                                password: password
+                                'password': password
                             }
                         }
                     },
@@ -342,6 +469,12 @@ class OBSClient {
         return this.available;
     }
 
+    _requireAvailable() {
+        if (!this.isAvailable()) {
+            throw new Error("OBS客户端不可用，请配置 access_key/secret_key 后重试");
+        }
+    }
+
     /**
      * 生成OBS签名
      * @param {string} stringToSign - 待签名字符串
@@ -412,34 +545,25 @@ class OBSClient {
             ...headers
         };
 
-        return new Promise((resolve, reject) => {
-            const req = https.request({
-                hostname: `${bucket}.${this.endpoint}`,
-                port: 443,
-                path: fullPath,
-                method: method,
-                headers: requestHeaders
-            }, (res) => {
-                const chunks = [];
-                res.on('data', chunk => chunks.push(chunk));
-                res.on('end', () => {
-                    const body = Buffer.concat(chunks).toString();
-                    if (res.statusCode >= 400) {
-                        reject(new Error(`OBS请求失败 [${res.statusCode}]: ${body}`));
-                        return;
-                    }
-                    try {
-                        resolve({ statusCode: res.statusCode, body: JSON.parse(body) });
-                    } catch {
-                        resolve({ statusCode: res.statusCode, body: body });
-                    }
-                });
-            });
+        // 带超时重试的 OBS 请求（ISSUE-001）
+        const resp = await requestWithRetry({
+            protocol: 'https:',
+            hostname: `${bucket}.${this.endpoint}`,
+            port: 443,
+            path: fullPath,
+            method: method,
+            headers: requestHeaders,
+            timeout: 60000
+        }, body !== null ? body : undefined);
 
-            req.on('error', reject);
-            if (body) req.write(body);
-            req.end();
-        });
+        if (resp.statusCode >= 400) {
+            throw new Error(`OBS请求失败 [${resp.statusCode}]: ${resp.text}`);
+        }
+        try {
+            return { statusCode: resp.statusCode, body: JSON.parse(resp.text) };
+        } catch {
+            return { statusCode: resp.statusCode, body: resp.text };
+        }
     }
 
     /**
@@ -448,9 +572,7 @@ class OBSClient {
      * @param {string} prefix - 前缀过滤
      */
     async listObjects(bucket, prefix = "") {
-        if (!this.available) {
-            throw new Error("OBS客户端不可用，请配置access_key和secret_key");
-        }
+        this._requireAvailable();
 
         const result = await this._request('GET', bucket, '', {
             query: { 'list-type': '2', prefix: prefix }
@@ -459,8 +581,8 @@ class OBSClient {
         // 解析XML响应
         const contents = [];
         const regex = /<Contents><Key>([^<]+)<\/Key><LastModified>([^<]+)<\/LastModified><ETag>([^<]+)<\/ETag><Size>(\d+)<\/Size>/g;
-        let match;
-        while ((match = regex.exec(result.body)) !== null) {
+        const entries = String(result.body).matchAll(regex);
+        for (const match of entries) {
             contents.push({
                 Key: match[1],
                 LastModified: match[2],
@@ -478,9 +600,7 @@ class OBSClient {
      * @param {string} objectKey - OBS中的对象键
      */
     async uploadFile(localFile, bucket, objectKey) {
-        if (!this.available) {
-            throw new Error("OBS客户端不可用");
-        }
+        this._requireAvailable();
 
         const fs = require('fs');
         if (!fs.existsSync(localFile)) {
@@ -507,9 +627,7 @@ class OBSClient {
      * @param {string} localFile - 本地保存路径
      */
     async downloadFile(bucket, objectKey, localFile) {
-        if (!this.available) {
-            throw new Error("OBS客户端不可用");
-        }
+        this._requireAvailable();
 
         const fs = require('fs');
 
@@ -524,9 +642,7 @@ class OBSClient {
      * @param {string} objectKey - OBS中的对象键
      */
     async deleteObject(bucket, objectKey) {
-        if (!this.available) {
-            throw new Error("OBS客户端不可用");
-        }
+        this._requireAvailable();
 
         await this._request('DELETE', bucket, objectKey);
         return true;
@@ -552,6 +668,8 @@ class GESClient {
         this.projectId = this.config.project_id || '';
         this.graphName = this.config.graph_name || '';
         this.baseUrl = `http://${this.graphIp}:${this.graphPort}/ges/v1.0/${this.projectId}/graphs/${this.graphName}`;
+        const dr = (process.env.GES_DRY_RUN || process.env.GES_MOCK || '').toString().toLowerCase();
+        this.dryRun = ['1', 'true', 'yes'].includes(dr);
 
         // 初始化OBS客户端
         const accessKey = this.config.access_key || '';
@@ -585,15 +703,20 @@ class GESClient {
             url += (url.includes('?') ? '&' : '?') + queryString;
         }
 
+        // dry-run 模式（ISSUE-007）：无真实 GES 实例时可验证功能
+        if (this.dryRun) {
+            return this._dryRunResponse(method, path, data);
+        }
+
         const headers = await this._getHeaders();
-        
-        // 使用原生http模块发送请求
+
+        // 使用原生http模块发送请求（带超时重试，ISSUE-001）
         const urlObj = new URL(url);
         const isHttps = urlObj.protocol === 'https:';
-        const lib = isHttps ? https : http;
 
-        return new Promise((resolve, reject) => {
-            const options = {
+        try {
+            const resp = await requestWithRetry({
+                protocol: urlObj.protocol,
                 hostname: urlObj.hostname,
                 port: urlObj.port || (isHttps ? 443 : 80),
                 path: urlObj.pathname + urlObj.search,
@@ -601,38 +724,62 @@ class GESClient {
                 headers: headers,
                 timeout: 60000,
                 rejectUnauthorized: false
-            };
+            }, data);
 
-            const req = lib.request(options, (res) => {
-                let body = '';
-                res.on('data', chunk => body += chunk);
-                res.on('end', () => {
-                    if (res.statusCode >= 400) {
-                        reject(new Error(`API请求失败 [${res.statusCode}]: ${body}`));
-                        return;
-                    }
-                    try {
-                        resolve(JSON.parse(body));
-                    } catch {
-                        resolve({ raw: body });
-                    }
-                });
-            });
-
-            req.on('error', reject);
-            req.on('timeout', () => reject(new Error('Request timeout')));
-
-            if (data) {
-                req.write(JSON.stringify(data));
+            if (resp.statusCode >= 400) {
+                throw new Error(`API请求失败 [${resp.statusCode}]: ${resp.text}`);
             }
-            req.end();
-        });
+            try {
+                return JSON.parse(resp.text);
+            } catch {
+                return { raw: resp.text };
+            }
+        } catch (e) {
+            if (e instanceof SyntaxError) {
+                try {
+                    return JSON.parse(e.message);
+                } catch {
+                    return { raw: e.message };
+                }
+            }
+            throw e;
+        }
+    }
+
+    _dryRunResponse(method, path, data) {
+        let action = '';
+        if (path.includes('action_id=')) {
+            action = path.split('action_id=')[1];
+        } else if (path.includes('/jobs/')) {
+            action = 'job-status';
+        } else if (path.includes('/schema')) {
+            action = 'schema';
+        } else if (path.includes('/summary')) {
+            action = 'summary';
+        } else if (path.includes('/indices')) {
+            action = 'indices';
+        }
+
+        if (action === 'execute-cypher-query' || action === 'execute-gql-query') {
+            return {
+                results: [{ columns: ['n'], data: [{ row: [{ name: '__dry_run__' }], meta: [null] }] }],
+                errors: []
+            };
+        }
+        if (action === 'job-status') return { jobId: 'dry-run-job', status: 'complete' };
+        if (action === 'clear-graph') return { jobId: 'dry-run-clear', status: 'success' };
+        if (action === 'schema') return { results: [{ data: [{ row: [{ properties: [] }] }] }] };
+        if (action === 'summary') return { nodeCount: 0, edgeCount: 0 };
+        if (action === 'indices') return { status: 'success', indices: [] };
+        return { jobId: `dry-run-${action || 'ok'}`, status: 'success' };
     }
 
     // ==================== Cypher查询相关API ====================
 
     async executeCypher(statement, parameters = null, executionMode = "sync", 
-                       resultDataContents = "row", limit = 1000) {
+                       resultDataContents = "row", limit = 1000, allowDestructive = false) {
+        validateCypher(statement, allowDestructive, 'executeCypher');
+        validatePropertyValues(parameters);
         const data = {
             statements: [{
                 statement: statement,
@@ -659,7 +806,9 @@ class GESClient {
     // ==================== GQL查询相关API ====================
 
     async executeGql(statement, parameters = null, executionMode = "sync",
-                    resultDataContents = "row", limit = 1000, includeStats = true) {
+                    resultDataContents = "row", limit = 1000, includeStats = true, allowDestructive = false) {
+        validateCypher(statement, allowDestructive, 'executeGql');
+        validatePropertyValues(parameters);
         const data = {
             statements: [{
                 statement: statement,
@@ -737,22 +886,44 @@ class GESClient {
 
     // ==================== 节点操作API ====================
 
-    async addNode(nodeId, labels = null, properties = null) {
+    async addNode(nodeId, labels = null, properties = null, upsert = false) {
         labels = labels || [];
         properties = properties || {};
+
+        if (!nodeId) {
+            throw new Error("node_id 不能为空");
+        }
+        validatePropertyValues(properties);
 
         const labelStr = labels.length > 0 ? ':' + labels.join(':') : '';
         
         const propsStr = Object.keys(properties).map(k => `${k}: $${k}`).join(', ');
         const propsClause = propsStr ? `, ${propsStr}` : '';
 
-        const statement = `CREATE (n${labelStr} {_ID_: $id${propsClause}}) RETURN n`;
-        const params = { id: nodeId, ...properties };
+        let statement, params;
+        if (upsert) {
+            // MERGE 保证幂等性（ISSUE-004）
+            const setParts = Object.keys(properties).map(k => `n.${k} = $${k}`).join(', ');
+            const setClause = setParts ? ` SET ${setParts}` : '';
+            statement = `MERGE (n${labelStr} {_ID_: $id})${setClause} RETURN n`;
+            params = { id: nodeId, ...properties };
+        } else {
+            statement = `CREATE (n${labelStr} {_ID_: $id${propsClause}}) RETURN n`;
+            params = { id: nodeId, ...properties };
+        }
 
         return this.executeCypher(statement, params);
     }
 
-    async addNodesBatch(nodes) {
+    static MAX_BATCH = 500;
+
+    async addNodesBatch(nodes, upsert = false) {
+        if (!Array.isArray(nodes) || nodes.length === 0) {
+            throw new Error("nodes 必须是非空数组");
+        }
+        if (nodes.length > GESClient.MAX_BATCH) {
+            throw new Error(`批量添加节点数超过上限 ${GESClient.MAX_BATCH}，请分批导入（ISSUE-010 边界保护）`);
+        }
         const statements = [];
 
         for (let i = 0; i < nodes.length; i++) {
@@ -762,14 +933,21 @@ class GESClient {
             const properties = node.properties || {};
 
             if (!nodeId) continue;
+            validatePropertyValues(properties);
 
             const labelStr = labels.length > 0 ? ':' + labels.join(':') : '';
             const propsStr = Object.keys(properties).map(k => `${k}: $${k}_${i}`).join(', ');
             const propsClause = propsStr ? `, ${propsStr}` : '';
 
-            const statement = `CREATE (n${labelStr} {_ID_: $id_${i}${propsClause}})`;
-            
+            let statement;
             const params = { [`id_${i}`]: nodeId };
+            if (upsert) {
+                const setParts = Object.keys(properties).map(k => `n.${k} = $${k}_${i}`).join(', ');
+                const setClause = setParts ? ` SET ${setParts}` : '';
+                statement = `MERGE (n${labelStr} {_ID_: $id_${i}})${setClause}`;
+            } else {
+                statement = `CREATE (n${labelStr} {_ID_: $id_${i}${propsClause}})`;
+            }
             for (const [k, v] of Object.entries(properties)) {
                 params[`${k}_${i}`] = v;
             }
@@ -857,7 +1035,7 @@ class GESClient {
     }
 
     async getNodesByLabel(label, limit = 100) {
-        const statement = `MATCH (n:\`${label}\`) RETURN n LIMIT ${limit}`;
+        const statement = 'MATCH (n:`' + label + '`) RETURN n LIMIT ' + limit;
         return this.executeCypher(statement);
     }
 
@@ -899,7 +1077,8 @@ class GESClient {
             return this._request('POST', '/action?action_id=clear-graph', {});
         } else {
             const statement = "MATCH (n) DETACH DELETE n";
-            return this.executeCypher(statement);
+            // clear_graph 是专门的清空接口，需用户确认后走这里，放行安全校验
+            return this.executeCypher(statement, null, "sync", "row", 1000, true);
         }
     }
 
@@ -937,6 +1116,9 @@ class GESClient {
 class GESGraphSkill {
     constructor() {
         this.client = new GESClient();
+        this._context = {};
+        this._contextMaxKeys = 100;
+        this._contextMaxValueLen = 512;
     }
 
     // ==================== 高级操作接口 ====================
@@ -985,12 +1167,20 @@ class GESGraphSkill {
         await this.client._request('POST', `/schema?label=${label}`, data);
     }
 
-    async executeQuery(cypher, parameters = null) {
-        return this.client.executeCypher(cypher, parameters);
+    async executeQuery(cypher, parameters = null, allowDestructive = false) {
+        validateCypher(cypher, allowDestructive, 'executeQuery');
+        validatePropertyValues(parameters);
+        const result = await this.client.executeCypher(cypher, parameters);
+        this._rememberQuery(cypher, result);
+        return result;
     }
 
-    async executeGql(gql, parameters = null) {
-        return this.client.executeGql(gql, parameters);
+    async executeGql(gql, parameters = null, allowDestructive = false) {
+        validateCypher(gql, allowDestructive, 'executeGql');
+        validatePropertyValues(parameters);
+        const result = await this.client.executeGql(gql, parameters);
+        this._rememberQuery(gql, result);
+        return result;
     }
 
     async getSchemaInfo() {
@@ -999,6 +1189,39 @@ class GESGraphSkill {
 
     async getStatistics() {
         return this.client.getGraphStats();
+    }
+
+    // ==================== 多轮上下文保持（ISSUE-011） ====================
+
+    _rememberQuery(statement, result) {
+        try {
+            this._context['last_query'] = statement;
+            this._context['last_result'] = JSON.stringify(result).slice(0, 512);
+        } catch (e) {
+            // 上下文记录失败不影响主流程
+        }
+    }
+
+    setContext(key, value) {
+        if (typeof value === 'object' && value !== null) {
+            value = JSON.stringify(value).slice(0, 512);
+        }
+        if (Object.keys(this._context).length >= 100) {
+            delete this._context[Object.keys(this._context)[0]];
+        }
+        this._context[key] = value;
+    }
+
+    getContext(key, defaultValue = undefined) {
+        return this._context[key] !== undefined ? this._context[key] : defaultValue;
+    }
+
+    clearContext() {
+        this._context = {};
+    }
+
+    getContextSnapshot() {
+        return { ...this._context };
     }
 
 }
@@ -1020,6 +1243,9 @@ module.exports = {
     GESGraphSkill,
     TokenManager,
     OBSClient,
+    validateCypher,
+    validatePropertyValues,
+    CypherSafetyError,
     getClient,
     getSkill
 };
