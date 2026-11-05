@@ -42,6 +42,15 @@ Two capabilities, one skill:
 - ✅ Only temporary credentials with SecurityToken, least privilege, shortest TTL
 - ✅ Modification ops (`apply`, `destroy`) require explicit user confirmation
 
+### Capability Boundary
+
+- ✅ **In scope**: SAC（Solution as Code）国际站方案目录检索（Find）与 Terraform 一键部署（Deploy），即本 skill 定义的 find + deploy 两条核心能力。
+- 🚫 **Out of scope（不提供）**：
+  - 账单、余额、费用查询等账务/计费类操作；
+  - 非 SAC 目录的云服务直接管理（如直接创建/管理 ECS、IMS、CCE 等资源）；
+  - 账号管理、实名认证、代金券等账号与计费相关操作。
+- 若用户提出上述边界外请求，说明不在本 skill 能力范围内并建议转至对应云服务/计费入口，不要尝试用 Terraform 或脚本绕过。
+
 ## Core Commands
 
 > **⚠️ Mandatory: every hcloud command in this skill MUST be wrapped with `skill-quality-cli run --skill-name sac-intl-find-and-deploy-skill -- ` — bare hcloud calls are strictly forbidden.** (No hcloud commands in this skill; Terraform-only.)
@@ -66,9 +75,15 @@ Placeholder values (see Parameter Confirmation for per-OS resolution):
 <python> <script_dir>/download_tf_template_file.py --url "<template_url>" --out-dir <temp_dir>/<workdir>
 
 # 3. Normalize providers (reads HW_* env vars; writes terraform.auto.tfvars.json with 600)
+#    --region alone does NOT require credentials; without complete temp creds (AK/SK/SecurityToken)
+#    the script SCANS successfully, leaves credential fields empty and prints a manual-fallback notice.
+#    Empty/workdir 无 .tf/.tf.json 模板时: exit 2, prints "No Terraform files found in: <dir>" —
+#    re-check the dir path is correct and contains template files.
 <python> <script_dir>/normalize_tf_providers.py <temp_dir>/<workdir> --region "<console_region>"
 
 # 4. List variables for review
+#    Empty/目录无任何变量定义时: exit 2, prints "No Terraform variables found." —
+#    re-check the dir path is correct and contains variable-declaring template files.
 <python> <script_dir>/list_tf_variables.py <temp_dir>/<workdir>
 
 # 5. Deploy
@@ -163,11 +178,11 @@ Block `plan`/`apply` until the user confirms credentials are in place.
 
 #### 6. Download and normalize template
 
-Run Core Commands steps 2–3. `normalize_tf_providers.py` unifies provider sources and writes `<workdir>/terraform.auto.tfvars.json` (`600`, `sensitive=true`). If env vars were absent at this point, the credential fields stay empty — apply the fallback from step 5.
+Run Core Commands steps 2–3. `normalize_tf_providers.py` unifies provider sources and writes `<workdir>/terraform.auto.tfvars.json` (`600`, `sensitive=true`). Passing `--region <console_region>` alone is valid even without environment credentials — the script still scans and normalizes, and with no complete temporary credentials (AK/SK/SecurityToken) it leaves the credential fields empty and prints a manual-fallback notice instead of failing. If env vars were absent at this point, follow the fallback from step 5 (fill the credential fields manually or export env vars before re-running). If the directory contains no `.tf`/`.tf.json` template, the script exits `2` with `No Terraform files found in: <dir>` — check the directory path and that it contains template files.
 
 #### 7. Confirm variables
 
-Run Core Commands step 4. User must confirm login passwords, flavors, billing, and region variables. Sensitive names (key/secret/password/token) display as `********` only. Block `apply` on empty/weak secrets.
+Run Core Commands step 4. If the directory defines no Terraform variables, the script exits `2` with `No Terraform variables found.` — check the directory path and that it contains variable-declaring template files. User must confirm login passwords, flavors, billing, and region variables. Sensitive names (key/secret/password/token) display as `********` only. Block `apply` on empty/weak secrets.
 
 #### 8. Deploy, verify, cleanup
 

@@ -310,10 +310,13 @@ def main() -> int:
         print(f"Directory does not exist: {root}", file=sys.stderr)
         return 1
 
-    has_any_cred = bool(args.ak or args.sk or args.region or args.token)
-    has_all_cred = bool(args.ak and args.sk and args.region)
+    # --region alone is NOT a credential: normalizing provider sources never
+    # needs credentials, so passing --region to pick the console region must not
+    # trip the "partial credentials" error. Credentials are AK/SK/SecurityToken only.
+    has_any_cred = bool(args.ak or args.sk or args.token)
+    has_all_cred = bool(args.ak and args.sk)
     if has_any_cred and not has_all_cred:
-        print("When providing credentials, --ak --sk --region must all be set.", file=sys.stderr)
+        print("When providing credentials, --ak --sk must both be set.", file=sys.stderr)
         return 3
     if has_all_cred and not args.token:
         print(
@@ -352,9 +355,9 @@ def main() -> int:
             print(f"Using existing credentials tfvars: {tfvars_path}")
         else:
             print(
-                "No credentials provided and no tfvars file found. "
-                "Set --ak --sk --region --token or env HW_ACCESS_KEY/HW_SECRET_KEY/HW_REGION/HW_SECURITY_TOKEN "
-                "(temporary credentials with SecurityToken only).",
+                "未提供完整临时凭据（AK/SK/SecurityToken），未生成 tfvars，请走手动创建路径。"
+                "请设置 --ak --sk --token 或环境变量 HW_ACCESS_KEY/HW_SECRET_KEY/HW_SECURITY_TOKEN "
+                "（接受含 SecurityToken 的临时凭据），或在 tfvars 文件中手动填写凭据字段。",
                 file=sys.stderr,
             )
 
