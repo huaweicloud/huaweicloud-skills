@@ -46,6 +46,24 @@ and change auditing. The skill covers:
 | **Diagnose** | Aggregate audit events by user/time/operation (`huawei_analyze_cts_traces`), evaluate retention & compliance (`huawei_analyze_cts_retention`) |
 | **Manage** | Create tracker (`huawei_create_cts_tracker`), create notification (`huawei_create_cts_notification`), delete tracker (`huawei_delete_cts_tracker`) |
 
+### Capability Boundary (NOT supported by this skill)
+
+This skill covers the query/analyze/manage actions listed above **only**. The following CTS operations are
+**outside this skill's scope** — for them, refuse with a clear statement and refer the user to the
+Huawei Cloud CTS console:
+
+| Operation | Why outside scope |
+|-----------|-------------------|
+| `UpdateTracker` | Updating an existing tracker is out of scope; create (then delete) or use the console |
+| `UpdateNotification` | Updating a notification rule is out of scope; use the console |
+| `DeleteNotification` | Deleting a notification rule is out of scope; use the console |
+| `ListQuotas` | Quota query is out of scope; use the console |
+| `ListUserResources` | User resource listing is out of scope; use the console |
+| `CheckObsBuckets` | Verifying OBS bucket accessibility is out of scope; verify via `hcloud OBS ListBuckets` or the console |
+
+When a request falls into any of these, reply clearly: "Operation X is not supported by this skill —
+please perform it in the Huawei Cloud CTS console", and do **not** attempt a guessed partial command.
+
 > **Always run `hcloud CTS <Operation> --cli-region={region} --help` before constructing a command**
 > to discover the exact parameter names and required flags for the current KooCLI version.
 > Do not answer from general knowledge — follow the procedures in this document.
