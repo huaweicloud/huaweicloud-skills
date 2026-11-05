@@ -12,9 +12,27 @@ description: >
 tags:
   - huawei-cloud-cloudrobo
   - asset-management
+  - asset-import
+  - asset-export
   - version-management
-  - import-export
+  - tag-management
+  - action-configuration
+  - permission-check
   - marketplace-search
+  - lineage-query
+  - repository-listing
+  - catalog-listing
+  - publication-asset-discovery
+  - 资产管理
+  - 资产导入导出
+  - 版本管理
+  - 标签管理
+  - Action配置
+  - 权限校验
+  - 广场搜索
+  - 血缘关系
+  - 资产仓库
+  - 目录查询
 ---
 
 > **Windows / PowerShell:** Examples use bash syntax. To run on Windows PowerShell:
@@ -144,11 +162,15 @@ uploaded, version stays in `CREATING` status), do NOT create a new version. Two 
 
 **Browse official/community:** `cloudrobo asset list-publication-assets --type <type>`
 
-**Export after search:** Only when the user requests export. If the marketplace asset permission
-does not include `data_read`, export is not allowed. `cloudrobo asset export-asset --asset-id <id>
---local-path <path>` (default latest version; add `--version-id` for specific version). Export
-automatically generates `README.md` with YAML frontmatter containing asset metadata, enabling
-seamless re-import with minimal CLI parameters.
+**Export after search:** Only when the user requests export. Before downloading, check that the
+current account holds `data_read` permission on the asset version; `--version-id` is **required** —
+if the user did not provide one, resolve the latest version ID via `list-versions --asset-id <id>`, then run:
+`cloudrobo asset check-permission --asset-id <id> --version-id <version-id> --permissions data_read`
+If the verdict is `deny`, do **not** run the export and inform the user: **"当前账号无该资产数据读取
+权限，仅能导出元数据（README），无法下载数据文件"**. Only when `data_read` is granted, run
+`cloudrobo asset export-asset --asset-id <id> --local-path <path>` (default latest version; add
+`--version-id` for specific version). Export automatically generates `README.md` with YAML frontmatter
+containing asset metadata, enabling seamless re-import with minimal CLI parameters.
 
 ### Scenario 3: List Workspace Assets 列举空间资产
 
@@ -211,6 +233,17 @@ cloudrobo asset <command> [OPTIONS]
 | list-catalogs | `--repository-id <id> [--name] [--sort-dir] [--offset] [--limit]` | `client.list_catalogs(repository_id, **params)` | `GET /v1/catalogs` |
 | show-catalog | `--catalog-id <id>` | `client.show_catalog(catalog_id)` | `GET /v1/catalogs/{catalog_id}` |
 
+**List return structure (unified):** All list commands — `list-repositories`, `list-catalogs`,
+`list-assets`, `list-versions`, `list-publication-assets`, `list-tags` — return a unified JSON
+shape with a `data` array plus a `page_info` pagination object:
+
+```json
+{"page_info": {"total": 3, "limit": 10, "offset": 0}, "data": [{"name": "my-repo", "repository_id": "a1b2c3d4-..."}]}
+```
+
+Always read list results from `data` (may be empty `[]`) and pagination totals from `page_info.total`;
+do not treat the top-level object as a single record.
+
 ### Asset Management 资产管理
 
 #### Create asset
@@ -233,6 +266,11 @@ cloudrobo asset list-assets [--repository-id <id>] [--catalog-id <id>] [--type <
 ```
 - **SDK:** `client.list_assets(**params)`
 - **API:** `GET /v1/assets`
+
+**Return structure:** same unified list shape as Repository & Catalog — top-level `data` array
+plus `page_info` (`{"page_info": {"total": N}, "data": [...]}`). `list-versions` and
+`list-publication-assets` also follow this structure. Read records from `data` and totals from
+`page_info.total`.
 
 **Note:** `repository-id` and `catalog-id` — at least one must be provided; both provided =
 AND filter.
@@ -364,8 +402,16 @@ cloudrobo asset import-asset --local-path <local-folder> [--catalog-id <id>] [--
 
 #### Export asset
 ```bash
+cloudrobo asset check-permission --asset-id <id> --version-id <version-id> --permissions data_read
+# verify verdict; only proceed with export when verdict=allow
 cloudrobo asset export-asset --asset-id <id> --local-path <local-folder> [--version-id <version-id>] [--dry-run]
 ```
+
+**Permission pre-check (required):** Before exporting an asset the current account may not own
+(e.g. marketplace/published assets), always run `check-permission --asset-id <id> --version-id <vid> --permissions data_read` first (`--version-id` required; resolve via `list-versions --asset-id <id>` if unknown).
+If the verdict is `deny`, do **not** run `export-asset` and inform the user: **"当前账号无该资产数据读取
+权限，仅能导出元数据（README），无法下载数据文件"** — otherwise the CLI would return a misleading
+`status:exported` result with missing data files (OBS 403).
 
 **Type constraints:**
 - **`image` type is NOT supported** — raises ValueError (SWR reference, no downloadable files); use `create-asset` instead
@@ -426,8 +472,10 @@ full table.
 ## Verification Method 验证方法
 
 ```bash
-# Specification compliance + functional testing
-bash scripts/test-cli-commands.sh . --executor {cli|sdk|api}
+# Specification compliance + functional testing (read-only + --dry-run rehearsal; no side effects)
+bash scripts/test-cli-commands.sh -s . -e {cli|sdk}
+# Key lifecycle real execution (create→update→tag→version→delete; confirms each mutation):
+#   RUN_LIFECYCLE=1 REPOSITORY_ID=... CATALOG_ID=... ASSET_ID=... VERSION_ID=... bash scripts/test-cli-commands.sh -s . -e cli
 ```
 
 Test cases: see `templates/test-vars.json` for the full list covering all asset operations.
@@ -436,6 +484,7 @@ Test cases: see `templates/test-vars.json` for the full list covering all asset 
 - After create/update/import: verify via `show-asset`/`show-version`/`list-actions` that changes took effect
 - After list/search/check-permission: verify results match filter criteria and `verdict` contains `allow`/`deny`
 - Before delete: confirm with user — deletion is irreversible
+- Before export: run `check-permission --asset-id <id> --version-id <vid> --permissions data_read` first (version-id required; resolve via list-versions if unknown); deny → inform user, do not export
 - After export: check local directory file structure matches OBS source
 
 ## Best Practices 最佳实践
