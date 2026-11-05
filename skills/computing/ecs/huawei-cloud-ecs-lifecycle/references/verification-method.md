@@ -14,7 +14,14 @@ authenticated project and by reading back the instance state.
 | Stop | Run `BatchStopServers` — verify `status=SHUTOFF` via `ShowServer` |
 | Reboot | Run `BatchRebootServers` — expect job; verify `status=ACTIVE` after reboot |
 | Rename | Run `BatchUpdateServersName --dry_run=true` first, then with confirmation; verify `name` via `ShowServer` |
+| Reinstall OS | Run `ReinstallServerWithCloudInit` / `ReinstallServerWithoutCloudInit` (after user confirmation, server stopped or `--os-reinstall.mode=withStopServer`) — expect success; verify `status` settles on `ACTIVE` and the credential (`key_name`) via `ShowServer` |
+| Change OS | Run `ChangeServerOsWithCloudInit` / `ChangeServerOsWithoutCloudInit` (after user confirmation, with `--os-change.imageid`) — expect success; verify `image.id` equals the requested image and `status=ACTIVE` via `ShowServer` |
+| Resize | Confirm the target is allowed with `ListResizeFlavors --instance_uuid={id}`, then run `ResizeServer` / `ResizePostPaidServer` / `BatchResizeServers` (after user confirmation) — expect success; verify `flavor.id` equals the requested `--resize.flavorRef` and `status=ACTIVE` via `ShowServer` |
 | Delete | Run `DeleteServers` (after user confirmation) — expect job; verify instance gone from `ListServersDetails` |
+
+> Change operations (reinstall OS / change OS / resize) are asynchronous: `ShowServer` may report a
+> transitional state such as `RESIZE` or `BUILD` before settling. Re-read until stable. See
+> `references/lifecycle-change-operations.md` for the verified operation and parameter names.
 
 ## Fallback Test (SDK)
 
