@@ -1,7 +1,6 @@
 ---
 name: huawei-cloud-flexus-l-deploy-jiuwenswarm
 description: "One-click deployment of JiuwenSwarm multi-Agent collaboration platform on Huawei Cloud Flexus L instances. Usage scenarios: When users need to quickly deploy JiuwenSwarm/JiuwenClaw on Huawei Cloud Flexus L instances, when they need to automatically create cloud instances and deploy AI Agent platforms, when they need to configure model APIs and message channels (Xiaoyi/Feishu/DingTalk). Automatically create instances, deploy applications via COC, configure models and message channels. Trigger keywords: JiuwenSwarm deployment, JiuwenClaw deployment, 九问Swarm部署, 九问Claw部署, 一键部署JiuwenSwarm, AI智能体平台部署, 部署九问Swarm, 部署九问Claw,云服务器部署AI平台."
-version: 1.0.0
 tags:
   - JiuwenSwarm
   - JiuwenClaw
@@ -13,7 +12,6 @@ metadata: {"jiuwenswarm": {"requires": {"bins": ["python3", "hcloud"]}, "install
 1. All Python files in the `scripts` directory have implemented all functions. **Do not create additional py files**.
 2. **Do not modify** the script files in the `scripts` directory.
 3. Please operate directly according to the provided code and documentation. No need to check Huawei Cloud official API documentation.
----
 
 ## security Execution Rules (Highest Priority):
 1. All scripts MUST be executed via skill action=exec, NEVER run directly in shell
@@ -25,7 +23,6 @@ metadata: {"jiuwenswarm": {"requires": {"bins": ["python3", "hcloud"]}, "install
    - hcloud CLI config file (~/.hcloud/config.json) — primary source, auto-detected
    - Temporary Security Credentials (STS Token) via environment variables — fallback
    - Permanent credentials via environment variables — fallback
----
 
 # JiuwenSwarm Deployment Skill for Huawei Cloud Flexus L Instance
 
@@ -75,7 +72,6 @@ This skill provides a complete automated deployment solution for the JiuwenSwarm
 - Model API credentials (API_BASE, API_KEY) for LLM integration (required for Phase 6)
 - Message channel credentials (Xiaoyi/Feishu/DingTalk) if channel configuration is needed (required for Phase 7)
 
----
 
 ### Architecture Diagram
 
@@ -112,7 +108,6 @@ User/Agent      ──────▶│   Flexus L Instance   │────�
 4. **"I want to configure JiuwenSwarm to use custom model"**
 5. **"Help me deploy JiuwenSwarm with one click and configure Xiaoyi channel"**
 
----
 
 ## 工作流
 
@@ -176,6 +171,16 @@ Query COC execution status by UUID. Supports single query, verbose output, wait-
 | FINISHED | Completed successfully |
 | ABNORMAL | Execution abnormal, failed |
 | CANCELED | Canceled |
+
+---
+
+### 在已有实例上部署 (Deploy on an Existing Instance)
+
+If the Flexus L instance is **already created**, skip `create_instance.py` and deploy JiuwenSwarm directly onto it: run `install_deps.py` → `deploy_service.py` → `verify_deployment.py` → `config_model.py` → `config_channel.py`, chaining with `--ip <public_ip>` (or `--instance-id` / `--ecs-instance-id`). Keep the customer confirmation step before any COC execution. Full step-by-step guide and command examples: [references/existing-instance-deploy-and-resource-cleanup.md](references/existing-instance-deploy-and-resource-cleanup.md)
+
+## 资源清理 (Resource Cleanup)
+
+Deployed Flexus L instances keep being billed (esp. **包年包月 / prePaid**). When no longer needed, release via Flexus L Console (**释放/删除**, or **退订** for prePaid) after customer confirmation. Full cleanup steps, backup and post-cleanup verification: [references/existing-instance-deploy-and-resource-cleanup.md](references/existing-instance-deploy-and-resource-cleanup.md)
 
 ---
 
@@ -243,7 +248,6 @@ python scripts/query_coc_status.py --uuid <execute_uuid> --wait --timeout 3600 -
 python scripts/query_coc_status.py --from-file new_instance_info.json
 ```
 
----
 
 ## 参数确认
 
@@ -283,6 +287,8 @@ Please reply "confirm" or "agree" to continue.
 | --name | Instance name | jiuwenSwarm-{timestamp} |
 | --flavor | Instance flavor (2c-4g-50g / 2c-4g-70g / 4c-8g-180g) | 2c-4g-50g |
 | `--region` | Region (cn-north-4/cn-east-3/cn-south-1/cn-southwest-2). If not specified, interactive selection will be shown. | (Interactive) |
+| `--image` / `--image-id` | System image. **Only Ubuntu 24.04 is supported** and used by default. Any other image is rejected with a clear message ("仅支持 Ubuntu 24.04，您指定的 {image} 不被支持") instead of being silently replaced. | Ubuntu 24.04 |
+| `--charging-mode` | Charging mode: only `prePaid` (包年包月) is supported by the HCSS CreateFlexusL API. `postPaid` is NOT supported and rejected with a clear message. | prePaid |
 | `--wait` | Wait for creation completion (polls RMS every **30s** for instance status) | False |
 | --timeout | Maximum time to wait in seconds when `--wait` is used | 600 (10 minutes) |
 | --confirm | Skip confirmation prompt | False |
@@ -322,7 +328,6 @@ Please reply "confirm" or "agree" to continue.
 | --timeout, -t | Wait timeout in seconds | 1800 |
 | --interval, -i | Polling interval in seconds | 60 |
 
----
 
 ## Directory Structure
 
@@ -425,7 +430,7 @@ No environment variables needed — the script reads directly from the config fi
 
 **Supported Regions**: cn-north-4 (North Beijing 4), cn-east-3 (East Shanghai 1), cn-south-1 (South Guangzhou), cn-southwest-2 (Southwest Guiyang 1)
 
-**System Image**: Ubuntu 24.04 LTS
+**System Image & Charging Mode**: Only **Ubuntu 24.04 LTS** is supported — a different requested image (e.g. CentOS) is rejected with a clear message, never silently replaced. Instances are **包年包月 (prePaid)** only — the HCSS CreateFlexusL API (POST `/v1/light-instances`) does not support `postPaid` (按需), and passing it returns HTTP 400 (`chargingMode illegal, periodNum/periodType must not be null`); any request for on-demand billing is rejected with a clear message. The mandatory period fields (`period_type`/`period_num`) are always included.
 
 ---
 
@@ -490,4 +495,5 @@ The following reference documents provide detailed information for this skill:
 | [references/verification-method.md](references/verification-method.md) | Verification methods and acceptance testing procedures |
 | [references/acceptance-criteria.md](references/acceptance-criteria.md) | Acceptance criteria and sign-off requirements |
 | [references/troubleshooting.md](references/troubleshooting.md) | Troubleshooting guide for common deployment issues |
+| [references/existing-instance-deploy-and-resource-cleanup.md](references/existing-instance-deploy-and-resource-cleanup.md) | Deploy on an existing instance and resource cleanup / release guide |
 
