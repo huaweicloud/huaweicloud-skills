@@ -215,6 +215,20 @@ exit 0
                 web_url = f"http://{public_ip}:5173"
                 print_info(f"Web URL: {web_url}")
                 print_info("Ensure security group allows inbound TCP 5173")
+                print("\n------------------------------------------------------------")
+                print("Security Group Configuration for Web Access (port 5173):")
+                print("  1. Login to Huawei Cloud Flexus L Console:")
+                print("     https://console.huaweicloud.com/smb/?/resource/list")
+                print("  2. Find the instance -> instance details -> Security/Network")
+                print("  3. Configure security group rules to open port 5173 (TCP inbound)")
+                print("     - Direction: Inbound; Protocol: TCP; Port: 5173;")
+                print("       Source: 0.0.0.0/0 (or restrict to trusted IPs)")
+                print("  4. Apply the rule, then JiuwenSwarm Web UI is reachable at:")
+                print(f"     {web_url}")
+                print("Security Warning: Opening port 5173 exposes the JiuwenSwarm Web")
+                print("interface to the public. Evaluate the risk before enabling and close")
+                print("the rule after use when not needed.")
+                print("------------------------------------------------------------")
 
                 verification_result = {
                     'deploy_success': True,

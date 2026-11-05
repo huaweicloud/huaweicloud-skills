@@ -45,6 +45,30 @@ REGION_SPEC_PREFIX = {
     "cn-southwest-2": "ahf."
 }
 
+# Supported system images: only Ubuntu 24.04 LTS is available for JiuwenSwarm deployment.
+# Common aliases of Ubuntu 24.04 are accepted; any other image is rejected with a clear message
+# instead of being silently replaced by Ubuntu (FLEXUS-L-DEPLOY-JIUWENSWARM-ISSUE-001).
+SUPPORTED_IMAGES = {
+    "Ubuntu 24.04": {"image_name": "Ubuntu", "image_version": "24.04"},
+    "Ubuntu24.04": {"image_name": "Ubuntu", "image_version": "24.04"},
+    "Ubuntu-24.04": {"image_name": "Ubuntu", "image_version": "24.04"},
+    "ubuntu-24.04": {"image_name": "Ubuntu", "image_version": "24.04"},
+    "Ubuntu": {"image_name": "Ubuntu", "image_version": "24.04"},
+    "ubuntu": {"image_name": "Ubuntu", "image_version": "24.04"},
+}
+DEFAULT_IMAGE = "Ubuntu 24.04"
+
+# Charging mode: the HCSS CreateFlexusL API (POST /v1/light-instances) only supports
+# prePaid (包年包月). postPaid (按需) is NOT supported by the interface and returns
+# HTTP 400 ("chargingMode illegal, periodNum/periodType must not be null"). Any other
+# mode is rejected with a clear message instead of being silently forced to prePaid
+# (FLEXUS-L-DEPLOY-JIUWENSWARM-ISSUE-002 / PR885-REAL-001). period_type/period_num are
+# mandatory fields for every order.
+SUPPORTED_CHARGING_MODES = {
+    "prePaid": "包年包月"
+}
+DEFAULT_CHARGING_MODE = "prePaid"
+
 sys.path.insert(0, str(Path(__file__).parent))
 from utils import get_huaweicloud_credentials, get_project_id_by_region, rms_list_all_resources, masked
 
@@ -66,28 +90,41 @@ def get_flexus_flavors_for_region(region: str):
         "4c-8g-180g": f"{prefix}xlarge.1.linux"
     }
 
-def create_flexus_l_instance(ak, sk, security_token, project_id, region, instance_name, flavor="2c-4g-50g", wait=True, timeout=600):
+def create_flexus_l_instance(ak, sk, security_token, project_id, region, instance_name, flavor="2c-4g-50g",
+                             image=None, charging_mode=DEFAULT_CHARGING_MODE, wait=True, timeout=600):
     flavors = get_flexus_flavors_for_region(region)
     flavor_ref = flavors.get(flavor)
     if not flavor_ref:
         raise ValueError(f"Unsupported flavor: {flavor}")
 
+    # Image validation: default to Ubuntu 24.04, reject any unsupported image with a clear hint
+    image_key = image if image else DEFAULT_IMAGE
+    if image_key not in SUPPORTED_IMAGES:
+        raise ValueError(f"仅支持 Ubuntu 24.04，您指定的 {image_key} 不被支持")
+    image_ref = SUPPORTED_IMAGES[image_key]
+
+    # Charging mode validation: only prePaid (包年包月) is supported by the API
+    if charging_mode not in SUPPORTED_CHARGING_MODES:
+        supported = ", ".join(f"{k}({v})" for k, v in SUPPORTED_CHARGING_MODES.items())
+        raise ValueError(f"不支持的付费方式: {charging_mode}。仅支持 {supported}，您指定的 {charging_mode} 不被支持")
+
     request_body = {
         "instance_name": instance_name,
         "plan_spec": flavor_ref,
-        "image_ref": {
-            "image_name": "Ubuntu",
-            "image_version": "24.04"
-        },
+        "image_ref": image_ref,
         "region": region,
-        "charging_mode": "prePaid",
-        "period_type": "month",
-        "period_num": 1,
+        "charging_mode": charging_mode,
         "purchase_quantity": 1,
         "description": f"JiuwenSwarm deployment - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         "is_auto_renew": True,
         "is_auto_pay": True
     }
+
+    # The HCSS CreateFlexusL API requires period_type/period_num for every order
+    # (PR885-REAL-001: HTTP 400 "periodNum/periodType must not be null"). As prePaid
+    # is the only supported charging mode, these two fields are always mandatory.
+    request_body["period_type"] = "month"
+    request_body["period_num"] = 1
 
     if not project_id:
         project_id = get_project_id_by_region(region)
@@ -227,7 +264,7 @@ def interactive_select_region():
         except ValueError:
             print(f"[ERROR] Invalid input, please enter a number (1-{len(region_list) + 1})")
 
-def show_confirmation(instance_name, flavor, region):
+def show_confirmation(instance_name, flavor, region, image=None, charging_mode=DEFAULT_CHARGING_MODE):
     flavor_display = {
         "2c-4g-50g": "2 vCPU 4GB 50GB",
         "2c-4g-70g": "2 vCPU 4GB 70GB",
@@ -241,6 +278,8 @@ def show_confirmation(instance_name, flavor, region):
     }
 
     region_display = SUPPORTED_REGIONS.get(region, region)
+    image_display = image if image else DEFAULT_IMAGE
+    charging_display = SUPPORTED_CHARGING_MODES.get(charging_mode, charging_mode)
 
     print("\n" + "=" * 60)
     print("  ⚠️ Cloud Resource Creation Confirmation")
@@ -250,6 +289,8 @@ def show_confirmation(instance_name, flavor, region):
     print(f"  - Name: {instance_name}")
     print(f"  - Flavor: {flavor_display.get(flavor, flavor)}")
     print(f"  - Region: {region_display} ({region})")
+    print(f"  - Image: {image_display}")
+    print(f"  - Charging Mode: {charging_mode} ({charging_display})")
     print(f"  - Estimated Cost: {flavor_cost.get(flavor, 'Estimated 60 CNY/month')}, actual price subject to Huawei Cloud official website\n")
     print("Resources will be created immediately after confirmation.")
     print("=" * 60)
@@ -264,6 +305,8 @@ def parse_args():
     parser.add_argument('--name', type=str, default=f"jiuwenSwarm-{datetime.now().strftime('%Y%m%d%H%M%S')}", help='Instance name')
     parser.add_argument('--flavor', type=str, default='2c-4g-50g', choices=['2c-4g-50g', '2c-4g-70g', '4c-8g-180g'], help='Instance flavor (2c-4g-50g: ~60 CNY/month, 2c-4g-70g: ~100 CNY/month, 4c-8g-180g: ~170 CNY/month)')
     parser.add_argument('--region', type=str, default=None, choices=list(SUPPORTED_REGIONS.keys()), help='Region to create instance in. If not specified, interactive selection will be shown.')
+    parser.add_argument('--image', '--image-id', dest='image', type=str, default=None, help=f'System image. Only "{DEFAULT_IMAGE}" is supported (default). Any other image is rejected with a clear message.')
+    parser.add_argument('--charging-mode', type=str, default=DEFAULT_CHARGING_MODE, help='Charging mode: only prePaid (包年包月) is supported by the HCSS API.')
     parser.add_argument('--wait', action='store_true', help='Wait for instance creation to complete')
     parser.add_argument('--timeout', type=int, default=600, help='Timeout in seconds')
     parser.add_argument('--confirm', action='store_true', help='Skip confirmation prompt')
@@ -299,8 +342,23 @@ def main():
         print(f"[INFO] Supported regions: {', '.join(SUPPORTED_REGIONS.keys())}")
         sys.exit(1)
 
+    # Validate image: only Ubuntu 24.04 is supported; reject others with a clear message
+    # (FLEXUS-L-DEPLOY-JIUWENSWARM-ISSUE-001 - no longer silently replaced by Ubuntu).
+    image = args.image
+    if image and image not in SUPPORTED_IMAGES:
+        print(f"[ERROR] 仅支持 Ubuntu 24.04，您指定的 {image} 不被支持")
+        print(f"[INFO] Supported image: {DEFAULT_IMAGE}")
+        sys.exit(1)
+
+    # Validate charging mode: only prePaid (包年包月) is supported by the API
+    charging_mode = args.charging_mode
+    if charging_mode not in SUPPORTED_CHARGING_MODES:
+        supported = ", ".join(f"{k}({v})" for k, v in SUPPORTED_CHARGING_MODES.items())
+        print(f"[ERROR] 不支持的付费方式: {charging_mode}。仅支持 {supported}，您指定的 {charging_mode} 不被支持")
+        sys.exit(1)
+
     if not args.confirm:
-        if not show_confirmation(args.name, args.flavor, target_region):
+        if not show_confirmation(args.name, args.flavor, target_region, image, charging_mode):
             print("\n[INFO] User cancelled operation")
             sys.exit(0)
 
@@ -308,6 +366,8 @@ def main():
     print(f"[INFO] Instance name: {args.name}")
     print(f"[INFO] Flavor: {args.flavor}")
     print(f"[INFO] Region: {target_region}")
+    print(f"[INFO] Image: {image if image else DEFAULT_IMAGE}")
+    print(f"[INFO] Charging Mode: {charging_mode} ({SUPPORTED_CHARGING_MODES[charging_mode]})")
 
     project_id = get_project_id_by_region(target_region)
     if not project_id:
@@ -315,7 +375,8 @@ def main():
         sys.exit(1)
     print(f"[INFO] Project ID: {project_id}")
 
-    order_id = create_flexus_l_instance(AK, SK, SECURITY_TOKEN, project_id, target_region, args.name, args.flavor, args.wait, args.timeout)
+    order_id = create_flexus_l_instance(AK, SK, SECURITY_TOKEN, project_id, target_region, args.name, args.flavor,
+                                        image, charging_mode, args.wait, args.timeout)
     if not order_id:
         print("[ERROR] Instance creation request failed")
         sys.exit(1)
@@ -324,7 +385,8 @@ def main():
 
     result_file = Path(__file__).parent / "instance_order.json"
     with open(result_file, 'w', encoding='utf-8') as f:
-        json.dump({'order_id': order_id, 'instance_name': args.name, 'flavor': args.flavor, 'region': target_region}, f, indent=2)
+        json.dump({'order_id': order_id, 'instance_name': args.name, 'flavor': args.flavor, 'region': target_region,
+                   'image': image if image else DEFAULT_IMAGE, 'charging_mode': charging_mode}, f, indent=2)
     print(f"[INFO] Order information saved to: {result_file}")
 
     if args.wait:
