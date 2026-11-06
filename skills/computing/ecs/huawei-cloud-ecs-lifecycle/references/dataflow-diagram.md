@@ -10,10 +10,22 @@ flowchart TD
     A --> B{Request Type?}
     B -->|Knowledge Q&A| C[Answer from FAQ / official docs]
     B -->|Query| D[Build query filters]
+    B -->|Linked Resource Query| DQ[Resolve server_id<br/>via ShowServer]
     B -->|Mutating Op| E[Resolve server_id + params]
 
     D --> F[hcloud ECS ListServersDetails / ShowServer /<br/>ListResizeFlavors]
     F --> G[Format & present instance info]
+
+    DQ --> Q1[EVS ListVolumes --server_id / ListServerVolumeAttachments]
+    DQ --> Q2[EVS ListSnapshots / ShowSnapshot]
+    DQ --> Q3[VPC ShowVpc / ListSubnets / ShowSubnet]
+    DQ --> Q4[VPC ListSecurityGroups / ShowSecurityGroup / ListSecurityGroupRules]
+    DQ --> Q5[EIP ListPublicips / ShowPublicip]
+    Q1 --> GQ[Aggregate & present linked-resource info]
+    Q2 --> GQ
+    Q3 --> GQ
+    Q4 --> GQ
+    Q5 --> GQ
 
     E --> H{User Confirmed?}
     H -->|No| I[Cancel — no change]
@@ -29,7 +41,9 @@ flowchart TD
     J1 --> L[Return result / job id]
     K --> L
     L --> M[Suggest verification via ShowServer / ListServersDetails]
-    M --> N[Quality report via skill_quality_sdk]
+    G --> N[Quality report via skill_quality_sdk]
+    GQ --> N
+    M --> N
 ```
 
 ## Instance Lifecycle State Machine
