@@ -20,6 +20,11 @@
 | 14 | Skill resizes an instance (change flavor) | `ListResizeFlavors` returns candidate flavors; `ResizeServer --dry_run=true` validates without changing anything; `ResizeServer` applies and `ShowServer` reports the new `flavor.id` |
 | 15 | OS-change and resize operations warn about disruption and require confirmation | Command sections carry explicit confirmation + system-disk-reset / restart warnings |
 | 16 | Documented operation names exist in KooCLI | `hcloud ECS <Operation> --help` succeeds for every documented operation; the nonexistent `ReinstallOs` / `ChangeServerFleet` are documented only as a correction mapping |
+| 17 | Skill queries linked EVS volumes | `ECS ListServerVolumeAttachments --server_id={id}` and `EVS ListVolumes --server_id={id}` return the attached volumes; `EVS ShowVolume --volume_id` returns volume detail |
+| 18 | Skill queries EVS snapshots | `EVS ListSnapshots --volume_id={v}` and `EVS ShowSnapshot --snapshot_id={s}` return snapshot objects |
+| 19 | Skill queries linked VPC/subnets | `ShowServer` yields `metadata.vpc_id`; `VPC ShowVpc/v3 --vpc_id` / `ListSubnets --vpc_id` return the instance's VPC/subnet topology, with the subnet located by matching the instance's private IP against the subnet CIDR (`addresses` keys are the `vpc_id`, not subnet IDs) |
+| 20 | Skill queries linked security groups & rules | `VPC ListSecurityGroups/v3` maps names→IDs; `VPC ShowSecurityGroup/v3` and `VPC ListSecurityGroupRules/v3 --security_group_id.1` show SG details/rules |
+| 21 | Skill queries bound EIPs | `EIP ListPublicips/v2 --port_id.1={port_id}` (NIC port ID, not server ID) and `EIP ShowPublicip/v2 --publicip_id` return the instance's public IP |
 
 ## Quality Criteria
 
@@ -29,11 +34,13 @@
 | 2 | No AK/SK hardcoded anywhere in the skill |
 | 3 | SKILL.md ≤ 500 lines; references use lowercase kebab-case filenames |
 | 4 | Frontmatter: `name` matches directory name, no `version` field |
-| 5 | Required sections present: Overview, Prerequisites, Workflow, Core Commands, Parameter Confirmation, Reference Documents |
+| 5 | Required sections present: Overview, Prerequisites, Workflow, Core Commands, Linked Resource Queries, Parameter Confirmation, Reference Documents |
 | 6 | `references/iam-policies.md` and `references/cli-installation-guide.md` exist |
 | 7 | `scripts/preflight_check.sh` exists, passes `bash -n`, and is referenced by both SKILL.md Step 0 and `references/cli-installation-guide.md` |
 | 8 | `references/lifecycle-change-operations.md` exists and every operation/parameter it documents was verified against `hcloud ECS <Operation> --help` |
 | 9 | No fabricated operation or parameter name anywhere in the skill (notably `ReinstallOs` / `ChangeServerFleet` appear only as an explicitly-labelled correction) |
+| 10 | `references/linked-resource-queries.md` exists and every linked-query command/parameter was verified against KooCLI `--help` |
+| 11 | `tests/test_linked_resource_query.py` passes; linked-query CLI commands return a valid (possibly empty) list for resources the account does not own |
 
 ## Constraints
 

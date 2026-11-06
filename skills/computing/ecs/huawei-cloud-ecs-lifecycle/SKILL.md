@@ -5,14 +5,16 @@ description: |
   details, start, stop, reboot, rename, delete, reinstall or switch the operating system, and resize
   (change flavor) cloud servers — plus basic ECS knowledge Q&A.
   Covers CRUD, power-state orchestration (start/stop/reboot) with batch support, OS reinstall/change,
-  flavor resize, pagination, and filters. A Step 0 preflight check validates the KooCLI installation,
-  credentials, and region before anything runs. All mutating operations require explicit user
-  confirmation before execution.
+  flavor resize, pagination, and filters. Also queries the instance's linked cross-product resources
+  (attached EVS volumes and snapshots, VPC/subnet topology, security groups and rules, bound EIPs).
+  A Step 0 preflight check validates the KooCLI installation, credentials, and region before anything
+  runs. All mutating operations require explicit user confirmation before execution.
   Triggers include: "创建云服务器", "删除云服务器", "启动云服务器", "停止云服务器", "重启云服务器",
   "修改云服务器名称", "查询云服务器列表", "查询云服务器详情", "重装操作系统", "切换操作系统",
-  "变更云服务器规格", "ECS生命周期管理", "ECS运维",
+  "变更云服务器规格", "查询云服务器关联资源", "查询挂载云硬盘", "云硬盘快照", "ECS生命周期管理",
+  "ECS运维", "ECS关联资源",
   "create ecs", "delete ecs", "start ecs", "stop ecs", "reboot ecs", "reinstall os", "resize ecs",
-  "change flavor", "ecs lifecycle", "弹性云服务器管理", "云服务器增删改查".
+  "change flavor", "ecs lifecycle", "linked resources", "elastic cloud server management", "云服务器增删改查".
 tags: [huawei-cloud, ecs, lifecycle, management, computing]
 ---
 
@@ -29,6 +31,7 @@ using the KooCLI `ECS` service (with the `huaweicloudsdkecs` Python SDK as fallb
 | Capability | Operations | Actions |
 | ------------ | ----------- | --------- |
 | **Query** | `ListServersDetails`, `ShowServer` | List instances with filters/pagination; show instance detail |
+| **Linked query** | `ListServerVolumeAttachments`, EVS `ListVolumes`/`ShowVolume`/`ListSnapshots`/`ShowSnapshot`, VPC `ShowVpc`/`ListSubnets`/`ShowSubnet`/`ListSecurityGroups`/`ShowSecurityGroup`/`ListSecurityGroupRules`, EIP `ListPublicips`/`ShowPublicip` | Query the instance's attached EVS volumes & snapshots, VPC/subnet topology, security groups & rules, and bound EIPs |
 | **Create** | `CreateServers` | Create one or more pay-per-use cloud servers |
 | **Power state** | `BatchStartServers`, `BatchStopServers`, `BatchRebootServers` | Start / stop / reboot (batch) |
 | **Update** | `BatchUpdateServersName` | Rename one or more servers |
@@ -85,6 +88,10 @@ safe to run anytime. Reinstall OS, change OS, and resize are **destructive or di
 2. **Resolve the target server(s)** — for instance-specific operations, get `server_id` from the
    user, or list instances first (`ListServersDetails`) if the ID is unknown.
 3. **Query operations** — build the command with the requested filters and execute directly.
+   For linked-resource queries (attached EVS volumes/snapshots, VPC/subnets, security groups,
+   EIPs), call `ShowServer` first to resolve the server's `vpc_id`, security-group names, and NIC
+   `port_id`s, then run the corresponding EVS/VPC/EIP query from
+   [Linked Resource Queries](#linked-resource-queries) below.
 4. **Mutating operations** — present the exact command and parameters to the user, **wait for
    explicit confirmation**, then execute. If the CLI fails (e.g. SDK/permission error), fall back
    to the `huaweicloudsdkecs` SDK equivalent.
@@ -132,6 +139,38 @@ hcloud ECS ShowServer --cli-region=cn-north-4 --server_id=6a2f0b1c-8d4e-4f3a-9b7
 | `--cli-region` | Yes (auto) | string | Region |
 | `--project_id` | Yes (auto) | string | Project ID |
 | `--server_id` | Yes | string | 云服务器ID (UUID) |
+
+### Linked Resource Queries
+
+> Read-only cross-product lookups — safe to run anytime, no confirmation needed. Resolve
+> `server_id` and the derived IDs (`metadata.vpc_id`, `security_groups[].name`, NIC `port_id`)
+> from `ShowServer` first. Full parameter tables: `references/linked-resource-queries.md`.
+
+```bash
+# Attached EVS volumes / snapshots
+hcloud ECS ListServerVolumeAttachments --cli-region=cn-north-4 --server_id={server_id}
+hcloud EVS ListVolumes --cli-region=cn-north-4 --server_id={server_id}
+hcloud EVS ShowVolume --cli-region=cn-north-4 --volume_id={volume_id}
+hcloud EVS ListSnapshots --cli-region=cn-north-4 --volume_id={volume_id}
+hcloud EVS ShowSnapshot --cli-region=cn-north-4 --snapshot_id={snapshot_id}
+
+# VPC / subnet topology (vpc_id from ShowServer metadata.vpc_id)
+# ShowVpc needs the /v3 suffix or KooCLI prints a version notice before the JSON
+# addresses keys are the vpc_id, NOT subnet ids: locate the subnet by matching the
+# instance private IP against the CIDR returned by ListSubnets
+hcloud VPC ShowVpc/v3 --cli-region=cn-north-4 --vpc_id={vpc_id}
+hcloud VPC ListSubnets --cli-region=cn-north-4 --vpc_id={vpc_id}
+hcloud VPC ShowSubnet --cli-region=cn-north-4 --subnet_id={subnet_id}
+
+# Security groups / rules (ShowServer gives names only -> map names to IDs first)
+hcloud VPC ListSecurityGroups/v3 --cli-region=cn-north-4
+hcloud VPC ShowSecurityGroup/v3 --cli-region=cn-north-4 --security_group_id={sg_id}
+hcloud VPC ListSecurityGroupRules/v3 --cli-region=cn-north-4 --security_group_id.1={sg_id}
+
+# Bound EIP (join key is the NIC port_id, not server_id)
+hcloud EIP ListPublicips/v2 --cli-region=cn-north-4 --port_id.1={port_id}
+hcloud EIP ShowPublicip/v2 --cli-region=cn-north-4 --publicip_id={eip_id}
+```
 
 ### Create ECS instance(s)
 
@@ -343,6 +382,8 @@ hcloud ECS ResizeServer --cli-region={region} --server_id={server_id} \
 | --------- | ---------------------------------------------- |
 | `ListServersDetails` | none (filters optional) |
 | `ShowServer` | `--server_id` |
+| Linked volumes / snapshots | `--server_id` (then `ListVolumes` / `ShowVolume` / `ListSnapshots` / `ShowSnapshot` by `--volume_id` / `--snapshot_id`) |
+| Linked VPC / subnet / security groups / EIP | `--vpc_id`, `--subnet_id`, `--security_group_id` / `--security_group_id.1`, `--port_id.1`, `--publicip_id` |
 | `CreateServers` | `--server.name`, `--server.flavorRef`, `--server.imageRef`, `--server.vpcid`, `--server.root_volume.volumetype` |
 | `DeleteServers` | `--servers.[N].id` |
 | `BatchStartServers` | `--os-start.servers.[N].id` |
@@ -376,6 +417,7 @@ only parameter the agent must always supply explicitly.
 - `references/cli-installation-guide.md` — KooCLI installation, authentication, and the Step 0 preflight check
 - `references/verification-method.md` — How to verify each operation
 - `references/lifecycle-change-operations.md` — Reinstall / change OS and resize: verified operations, parameters, sequences, and the `ReinstallOs` / `ChangeServerFleet` name mapping
+- `references/linked-resource-queries.md` — Linked EVS volume/snapshot, VPC/subnet, security-group, and EIP read-only queries with full parameter tables
 - `references/dataflow-diagram.md` — Mermaid data flow diagram
 - `references/acceptance-criteria.md` — Acceptance criteria for this skill
 
@@ -400,6 +442,9 @@ are meant to be run directly.
 | ---------- | ---------- |
 | Unknown `server_id` / empty query result | Return "no ECS instance matches" and suggest listing first |
 | `--server_id` combined with other filters | `server_id` wins; other filters ignored (CLI behavior) |
+| Linked query returns empty volumes/SGs/EIPs | Report "no linked resources" — the instance may have none; verify via `ShowServer` output |
+| `security_groups` only has names (no IDs) | Map names to IDs via `VPC ListSecurityGroups/v3` before `ShowSecurityGroup/v3` |
+| Instance has no bound EIP | Skip the EIP query and state the instance is not bound to a public IP |
 | Create without subnet/security group | Explain that VPC networking config is needed; confirm before executing |
 | User asks to delete an ACTIVE server | Warn about data loss, require explicit confirmation |
 | `--limit` > 1000 | CLI rejects; keep <= 1000 (default 25) |

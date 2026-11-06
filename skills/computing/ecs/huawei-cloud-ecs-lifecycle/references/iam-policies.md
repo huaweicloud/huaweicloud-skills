@@ -11,6 +11,9 @@ that has exactly these permissions — no more.
 | Create / Rename / Start / Stop / Reboot / Delete ECS | `ECS FullAccess` |
 | Reinstall OS / Change OS / Resize (incl. batch resize) | `ECS FullAccess` |
 | Create instances (network resources referenced) | `VPC ReadOnlyAccess` (to resolve VPC/subnet/SG) |
+| Linked queries — EVS volumes/snapshots | `EVS ReadOnlyAccess` |
+| Linked queries — VPC/subnets/security groups | `VPC ReadOnlyAccess` |
+| Linked queries — EIP | `EIP ReadOnlyAccess` |
 
 > If the account uses fine-grained policies, use the JSON below instead of built-in roles.
 
@@ -40,10 +43,50 @@ that has exactly these permissions — no more.
         "ecs:cloudServers:updateName"
       ],
       "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:serverVolumes:list"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "evs:volumes:list",
+        "evs:volumes:get",
+        "evs:snapshots:list",
+        "evs:snapshots:get"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "vpc:vpcs:get",
+        "vpc:subnets:get",
+        "vpc:subnets:list",
+        "vpc:securityGroups:get",
+        "vpc:securityGroups:list",
+        "vpc:securityGroupRules:get",
+        "vpc:securityGroupRules:list",
+        "vpc:publicIps:get",
+        "vpc:publicIps:list"
+      ],
+      "Resource": "*"
     }
   ]
 }
 ```
+
+> - `ecs:serverVolumes:list` covers `ListServerVolumeAttachments` (linked volume query).
+> - The EVS/VPC/EIP statements cover the linked queries in `SKILL.md`
+>   (`references/linked-resource-queries.md`): volumes/snapshots, VPC/subnets/security groups,
+>   and EIPs. They are read-only (`list` / `get`) — grant them only when linked-query capability
+>   is needed.
+> - Action names follow the Huawei Cloud 「权限及授权项」 catalogue (`service:resourceType:action`),
+>   consistent with previously merged skills (e.g. `huawei-cloud-ecs-manage`).
 
 > **Note:** action names may vary slightly by region/version — verify against the IAM permission
 > catalogue for the target project (`统一身份认证服务 → 权限`, filter by `ECS`).

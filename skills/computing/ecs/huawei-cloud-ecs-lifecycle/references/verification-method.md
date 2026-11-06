@@ -8,7 +8,12 @@ authenticated project and by reading back the instance state.
 | Operation | Verification |
 | ----------- | -------------- |
 | List instances | Run `ListServersDetails` — expect a JSON array of servers, or an empty list with no error |
-| Show detail | Run `ShowServer --server_id={id}` — expect `server` object with `id`, `status`, `name` |
+| Show detail | Run `ShowServer --server_id={id}` — expect `server` object with `id`, `status`, `name`, `security_groups`, `addresses` |
+| Linked volumes | Run `ListServerVolumeAttachments --server_id={id}` — expect `volumeAttachments`; cross-check with `EVS ListVolumes --server_id={id}` |
+| Linked snapshots | From a volume id, run `EVS ListSnapshots --volume_id={v}` then `EVS ShowSnapshot --snapshot_id={s}` — expect snapshot objects |
+| Linked VPC/subnet | From `ShowServer` output `metadata.vpc_id`, run `VPC ShowVpc/v3 --vpc_id` and `VPC ListSubnets --vpc_id` — expect VPC/subnet objects; match the instance's private IP against the subnet CIDR (keys of `addresses` are the `vpc_id`, not subnet IDs) |
+| Linked security groups | Map `ShowServer` `security_groups[].name` to ids via `VPC ListSecurityGroups/v3`, then `VPC ShowSecurityGroup/v3 --security_group_id` / `VPC ListSecurityGroupRules/v3 --security_group_id.1` |
+| Linked EIP | From NIC `port_id` in `ShowServer` addresses, run `EIP ListPublicips/v2 --port_id.1={pid}` — expect publicip; then `EIP ShowPublicip/v2 --publicip_id={eip}` |
 | Create | Run `CreateServers` (after user confirmation) — expect HTTP 200 + job/server_id; then `ShowServer` / `ListServersDetails` until `status=ACTIVE` (or `BUILD` then `ACTIVE`) |
 | Start | Run `BatchStartServers` — expect job; verify `status=ACTIVE` via `ShowServer` |
 | Stop | Run `BatchStopServers` — verify `status=SHUTOFF` via `ShowServer` |
