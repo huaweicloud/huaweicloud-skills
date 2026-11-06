@@ -12,7 +12,7 @@ Required fields after SDK defaults: `name`, `algorithm`, `spec`, `workspace_id`,
 | `spec` | string | Yes | Resource spec (Ascend format; choose a flavor offered by the selected pool) | `"Ascend: 1 * SNT9B2 \| 24 vCPUs \| 192 GiB"` |
 | `workspace_id` | string (UUID) | Yes | Workspace ID | `w1b2c3d4-e5f6-7890-g1h2-i3j4k5l6m7n8` |
 | `train_mode` | string enum | No | MODEL_TUNING (finetune) / TRAIN_FROM_SCRATCH (pretrain) | `MODEL_TUNING` |
-| `train_method` | string enum | No | SFT / LORA / QLORA / DEEPSPEED | `LORA` |
+| `train_method` | string enum | No | FFT / SFT / LORA / QLORA / DEEPSPEED | `LORA` |
 | `datasets` | array[Dataset] | No | Data input (max 1 item) | `[{"source_type":"CUSTOM_DATASET_ASSET",...}]` |
 | `input_models` | array[ModelInfo] | No | Input models (max 1, for finetune base model) | `[{"source_type":"PUBLIC_MODEL_ASSET","model_asset_id":"..."}]` |
 | `output_models` | array[ModelInfo] | No | Output models (max 1) | `[{"save_mode":"NEW_MODEL","model_name":"..."}]` |
@@ -307,6 +307,7 @@ For users bringing their own code/image — no preset algorithm. 5 fields, with
 
 | train_method | Description |
 | ------------- | ------------- |
+| `FFT` | Full fine-tuning |
 | `SFT` | Supervised fine-tuning |
 | `LORA` | LoRA fine-tuning |
 | `QLORA` | QLoRA fine-tuning |
@@ -314,7 +315,7 @@ For users bringing their own code/image — no preset algorithm. 5 fields, with
 
 > **Important**: `train_method` is uppercase enum. The legacy skill used lowercase `lora` — this is **incorrect**.
 
-## Status enum (16 states)
+## Status enum (17 states)
 
 | Status | Category | Description |
 | -------- | ---------- | ------------- |
@@ -385,7 +386,7 @@ Event fields: `time` (ISO 8601 +08:00), `level`, `message`, `source`.
 
 ## Three-layer coverage matrix
 
-SDK (33 methods: 12 `train_*` + 15 `sim_rl_*` + 6 unprefixed) / CLI (20 commands) coverage:
+SDK (33 methods: 12 `train_*` + 15 `sim_rl_*` + 6 unprefixed) / CLI (18 commands) coverage:
 
 ### Regular training tasks
 
@@ -424,6 +425,7 @@ SDK (33 methods: 12 `train_*` + 15 `sim_rl_*` + 6 unprefixed) / CLI (20 commands
 | stop_sim_rl_task | `stop_sim_rl_task(task_id)` | `stop-task --sim-rl` | `POST /v1/training/rl-tasks/simulation/{task_id}/stop` |
 | copy_sim_rl_task | `copy_sim_rl_task(task_id, req=None, task_detail=None)` | `clone-task` | `POST /v1/training/rl-tasks/simulation/{task_id}/copy` |
 | restart_sim_rl_task | `restart_sim_rl_task(task_id, req=None, workspace_id=None, task_detail=None)` | `restart-task --sim-rl` | `POST /v1/training/rl-tasks/simulation/{task_id}/restart` |
+| get_sim_rl_task_stages | no SDK method (CLI-only) | `get-stages --sim-rl` | `GET /v1/training/rl-tasks/simulation/{task_id}/stages` |
 | show_sim_rl_task_resource_usage | `show_sim_rl_task_resource_usage(task_id, metric, start, end, **params)` | `get-resource-usage --sim-rl` | `GET /v1/training/rl-tasks/simulation/{task_id}/resource-usage` |
 | list_sim_rl_task_events | `list_sim_rl_task_events(task_id, start_time, end_time, **params)` | `get-events --sim-rl` | `GET /v1/training/rl-tasks/simulation/{task_id}/events` |
 | list_sim_rl_task_observations | `list_sim_rl_task_observations(task_id, **params)` | (SDK only) | `GET /v1/training/rl-tasks/simulation/{task_id}/observability` |
@@ -436,8 +438,8 @@ SDK (33 methods: 12 `train_*` + 15 `sim_rl_*` + 6 unprefixed) / CLI (20 commands
 
 - `list_observations` / `list_sim_rl_task_observations`: SDK-only (no dedicated CLI command; CLI `get-logs` covers content)
 - `resume_train_task`: train-only (SimRL has no resume endpoint)
-- **SimRL has no stages endpoint/method** — `get-stages` is train-only (`list_train_stages`); with `--sim-rl` it is not available
-- `--sim-rl` flag present on 15 commands; absent on `resume-task`
+- **SimRL stages**: CLI `get-stages --sim-rl` is supported and routes to the SimRL stages API; the SDK ships no `list_sim_rl_task_stages` method — use the CLI command for SimRL stage queries
+- `--sim-rl` flag present on 15 commands; absent on `resume-task`/`list-checkpoints`/`register-checkpoint`
 
 ## Task creation via create-task
 

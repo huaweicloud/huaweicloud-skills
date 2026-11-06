@@ -115,8 +115,9 @@ export CLOUDROBO_ENDPOINT_CLOUDROBO-SERVICE="https://cloudrobo.cn-north-4.myhuaw
 | `cloudrobo train stats` | Count tasks by status (--workspace-id required) | Yes |
 
 > The `--sim-rl` flag (present on 15 commands) routes the command to the SimRL API surface
-> (`/v1/training/rl-tasks/simulation`). It is absent on `pretrain`, `finetune`,
-> `resume-task`, `list-checkpoints`, and `register-checkpoint` (train-only).
+> (`/v1/training/rl-tasks/simulation`). There are no dedicated `pretrain`/`finetune` subcommands;
+> creation goes through `create-task --config`. The flag is absent on `resume-task`,
+> `list-checkpoints`, and `register-checkpoint` (train-only).
 
 ## Troubleshooting
 

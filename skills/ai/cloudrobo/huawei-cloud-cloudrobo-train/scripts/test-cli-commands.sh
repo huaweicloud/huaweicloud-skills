@@ -1,19 +1,22 @@
 #!/bin/bash
 # Test script for cloudrobo-train skill
-# Usage: ./test-cli-commands.sh [-w workspace_id] [-s start_ts] [-e end_ts]
+# Usage: ./test-cli-commands.sh [-w workspace_id] [-s start_ts] [-e end_ts] [-f log_file_name]
 # If a workspace id is provided via -w, stats tests will use it; otherwise stats is skipped.
+# Use -f to pass a real log file name for get-signed-url tests (otherwise they are skipped).
 
 set -euo pipefail
 
 WORKSPACE_ID=""
+LOG_FILE_NAME=""
 START_TS=$(date -d '1 hour ago' +%s 2>/dev/null || expr $(date +%s) - 3600)
 END_TS=$(date +%s)
 
-while getopts ":w:s:e:" opt; do
+while getopts ":w:s:e:f:" opt; do
     case "$opt" in
         w) WORKSPACE_ID="$OPTARG" ;;
         s) START_TS="$OPTARG" ;;
         e) END_TS="$OPTARG" ;;
+        f) LOG_FILE_NAME="$OPTARG" ;;
         \?) echo "Unknown option: -$OPTARG" >&2; exit 1 ;;
         :) echo "Option -$OPTARG requires an argument." >&2; exit 1 ;;
     esac
@@ -80,24 +83,28 @@ if [ -n "$DRAFT_TASK_ID" ]; then
     echo ""
 fi
 
-# Test 9: Get events (requires --start-time/--end-time)
+# Test 9: Get events (requires --start-time/--end-time, milliseconds)
 if [ -n "$DRAFT_TASK_ID" ]; then
     echo "Test 9: Get events (requires --start-time/--end-time)"
-    cloudrobo train get-events --task-id "$DRAFT_TASK_ID" --start-time "$START_TS" --end-time "$END_TS" || echo "Expected: draft task has no events yet"
+    cloudrobo train get-events --task-id "$DRAFT_TASK_ID" --start-time "$((START_TS * 1000))" --end-time "$((END_TS * 1000))" || echo "Expected: draft task has no events yet"
     echo ""
 fi
 
-# Test 10: Get logs (uses --file-name)
+# Test 10: Get logs (uses --catalog + --file-name)
 if [ -n "$DRAFT_TASK_ID" ]; then
     echo "Test 10: Get logs"
-    cloudrobo train get-logs --task-id "$DRAFT_TASK_ID" || echo "Expected: draft task has no logs yet"
+    cloudrobo train get-logs --task-id "$DRAFT_TASK_ID" --catalog logs || echo "Expected: draft task has no logs yet"
     echo ""
 fi
 
-# Test 11: Get signed URL (requires --file-source/--file-name)
+# Test 11: Get signed URL (requires --catalog/--file-source/--file-name)
 if [ -n "$DRAFT_TASK_ID" ]; then
-    echo "Test 11: Get signed URL (requires --file-source/--file-name)"
-    cloudrobo train get-signed-url --task-id "$DRAFT_TASK_ID" --file-source TRAIN --file-name "train.log" || echo "Expected: may fail if file does not exist"
+    echo "Test 11: Get signed URL (requires --catalog/--file-source/--file-name)"
+    if [ -n "$LOG_FILE_NAME" ]; then
+        cloudrobo train get-signed-url --task-id "$DRAFT_TASK_ID" --catalog logs --file-source TRAIN --file-name "$LOG_FILE_NAME" || echo "Expected: may fail if the file has no signed-URL availability"
+    else
+        echo "  Skipped: pass -f <real_log_file_name> to run get-signed-url"
+    fi
     echo ""
 fi
 
@@ -172,23 +179,28 @@ if [ -n "$SIM_RL_TASK_ID" ]; then
     cloudrobo train show-task --task-id "$SIM_RL_TASK_ID" --sim-rl
     echo ""
 
-    echo "Test 22: Get SimRL stages"
-    echo "  Skipped: SimRL has no stages endpoint (get-stages is train-only)"
+    echo "Test 22: Get SimRL stages (CLI get-stages --sim-rl is supported)"
+    cloudrobo train get-stages --task-id "$SIM_RL_TASK_ID" --sim-rl || echo "Expected: may fail if the SimRL task has no stages yet"
+    echo ""
 
     echo "Test 23: Get SimRL resource usage"
     cloudrobo train get-resource-usage --task-id "$SIM_RL_TASK_ID" --metric cpu_util --start "$START_TS" --end "$END_TS" --sim-rl
     echo ""
 
     echo "Test 24: Get SimRL events"
-    cloudrobo train get-events --task-id "$SIM_RL_TASK_ID" --start-time "$START_TS" --end-time "$END_TS" --sim-rl
+    cloudrobo train get-events --task-id "$SIM_RL_TASK_ID" --start-time "$((START_TS * 1000))" --end-time "$((END_TS * 1000))" --sim-rl
     echo ""
 
     echo "Test 25: Get SimRL logs"
-    cloudrobo train get-logs --task-id "$SIM_RL_TASK_ID" --sim-rl
+    cloudrobo train get-logs --task-id "$SIM_RL_TASK_ID" --catalog logs --sim-rl
     echo ""
 
     echo "Test 26: Get SimRL signed URL"
-    cloudrobo train get-signed-url --task-id "$SIM_RL_TASK_ID" --file-source TRAIN --file-name "train.log" --sim-rl || echo "May fail if file does not exist"
+    if [ -n "$LOG_FILE_NAME" ]; then
+        cloudrobo train get-signed-url --task-id "$SIM_RL_TASK_ID" --catalog logs --file-source TRAIN --file-name "$LOG_FILE_NAME" --sim-rl || echo "May fail if the file has no signed-URL availability"
+    else
+        echo "  Skipped: pass -f <real_log_file_name> to run get-signed-url"
+    fi
     echo ""
 fi
 

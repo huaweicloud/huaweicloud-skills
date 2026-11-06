@@ -29,12 +29,12 @@ flowchart LR
     SimAPI --> SimClient[15 sim_rl_* SDK methods<br/>+ 6 unprefixed = 33 total]
 ```
 
-## Task Lifecycle (16 states)
+## Task Lifecycle (17 states)
 
 ```mermaid
 stateDiagram-v2
     [*] --> DRAFT: save-draft
-    [*] --> CREATING: pretrain/finetune/create-task
+    [*] --> CREATING: create-task
     DRAFT --> CREATING: restart-task (edit & resubmit)
     CREATING --> WAITING: submit accepted
     CREATING --> CREATE_FAILED: submit error
@@ -114,7 +114,7 @@ flowchart LR
 flowchart TD
     Start[SimRL task request] --> Create[create-task --sim-rl<br/>POST /v1/training/rl-tasks/simulation]
     Create --> Poll[Poll status<br/>show-task --sim-rl]
-    Poll --> Monitor[Monitor<br/>get-resource-usage --sim-rl --metric --start --end<br/>get-events --sim-rl --start-time --end-time<br/>get-logs --sim-rl<br/>get-signed-url --sim-rl --file-source --file-name<br/>(no get-stages — train-only)]
+    Poll --> Monitor[Monitor<br/>get-resource-usage --sim-rl --metric --start --end<br/>get-events --sim-rl --start-time --end-time<br/>get-logs --sim-rl --catalog logs<br/>get-signed-url --sim-rl --catalog logs --file-source --file-name<br/>get-stages --sim-rl]
     Monitor --> Terminal{Terminal?}
     Terminal -->|No| Poll
     Terminal -->|Yes| Done[FINISHED/FAILED]

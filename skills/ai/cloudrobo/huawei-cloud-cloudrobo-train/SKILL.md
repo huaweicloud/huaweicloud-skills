@@ -517,7 +517,8 @@ cloudrobo train <command> [OPTIONS] [--sim-rl]
 - Output: JSON to stdout
 
 > CloudRobo CLI is a self-developed Click-based tool (not `hcloud`/KooCLI). SDK exposes 33 methods
-> (12 `train_*` + 15 `sim_rl_*` + 6 unprefixed); CLI exposes 20 commands. `list_observations` is
+> (12 `train_*` + 15 `sim_rl_*` + 6 unprefixed); CLI exposes 18 commands (verified via `cloudrobo
+> train --help`). `list_observations` is
 > SDK-only; `resume` and checkpoint methods are train-only. See
 > `references/task-config-catalog.md` for the coverage matrix.
 
@@ -629,14 +630,22 @@ All accept `--sim-rl` (except `resume-task`, `clone-task` which is SimRL-only). 
 > **Clone** is SimRL-only (train copy API removed). SDK auto-generates a new name with `-copy-{4hex}`
 > suffix (e.g., `my-task-copy-a1b2`) unless `req` provides an explicit `name`. **Resume** is train-only.
 
+#### Resume-task applicability (train-only)
+
+`resume-task` is **not universally supported**. It requires the algorithm to declare
+`train_config.support_resume=true` — this applies to gallery pre-trained algorithms run without a
+base model (e.g. `LeRobot_ACT`/`LeRobot_Diffusion`). Model-tuning paths (FFT/LORA) do **not**
+support resume. Check `show-task`/`train_config.support_resume` first; if resume is not supported or
+the resume call fails, fall back to `restart-task` (edit & resubmit).
+
 ### Task Monitoring
 
 | Command | Required params | SDK Method | Returns |
 | ------- | --------------- | ---------- | ------- |
 | `get-stages --task-id <id>` | `--task-id` | `list_train_stages` | 4 stages: SCHEDULING→PREPARING→RUNNING→END |
 | `get-resource-usage --task-id <id> --metric <m> --start <s> --end <e>` | `--metric` `--start`(sec) `--end`(sec) | `show_resource_usage` / `show_sim_rl_task_resource_usage` | CPU/GPU/NPU utilization |
-| `get-logs --task-id <id> [--file-name] [--log-name-pre]` | `--task-id` | `get_log_content` / `show_sim_rl_task_observations_content` | Log content (`--file-name` not `--file-path`) |
-| `get-signed-url --task-id <id> --file-source <s> --file-name <n>` | `--file-source` `--file-name` | `get_log_signed_url` / `show_sim_rl_task_observations_signed_url` | OBS temp download URL |
+| `get-logs --task-id <id> --catalog logs|metrics [--file-name] [--log-name-pre]` | `--task-id` `--catalog` | `get_log_content` / `show_sim_rl_task_observations_content` | Log content (`--file-name` not `--file-path`) |
+| `get-signed-url --task-id <id> --catalog logs|metrics --file-source <s> --file-name <n>` | `--catalog` `--file-source` `--file-name` | `get_log_signed_url` / `show_sim_rl_task_observations_signed_url` | OBS temp download URL |
 | `get-events --task-id <id> --start-time <ms> --end-time <ms>` | `--start-time`(**ms**) `--end-time`(**ms**) | `list_events` / `list_sim_rl_task_events` | INFO/WARNING/ERROR/DEBUG events |
 | (SDK-only) `list_observations` | `--task-id` | `list_observations` / `list_sim_rl_task_observations` | File listing (CLI `get-logs` covers content) |
 
@@ -704,10 +713,9 @@ print "（无）" for empty env. For `restart-task --verbose`: show task_id + ch
 | ------- | --------------- | ----- |
 | `get-resource-usage` | `--metric` `--start` `--end` | seconds (10-digit) |
 | `get-events` | `--start-time` `--end-time` | **milliseconds** (13-digit) |
-| `get-signed-url` | `--file-source` `--file-name` | file_source from 8-value enum |
+| `get-logs` | `--catalog` | `--catalog` required (logs/metrics); `--file-name` / `--log-name-pre` optional |
+| `get-signed-url` | `--catalog` `--file-source` `--file-name` | `--catalog` required (logs/metrics); file_source from 8-value enum |
 | `stats` | `--workspace-id` | — |
-| `finetune` | `--method` | Uppercase: FFT/SFT/LORA/QLORA/DEEPSPEED |
-| `pretrain`/`finetune` | `--spec` | `Ascend: N * Model \| vCPUs vCPUs \| GiB GiB` |
 
 ## Reference Documents
 
@@ -740,14 +748,25 @@ print "（无）" for empty env. For `restart-task --verbose`: show task_id + ch
 | `parameters` format | JSON string; each item: `key`+`desc`+`value`+`constraint`; pass ALL hyperparams                                                                                                                                                                          |
 | `env` format | JSON string; pass `"[]"` if no custom env vars                                                                                                                                                                                                           |
 | `cluster_id` | Copy from a successful task in the same workspace. `list-pools` identifies pools but does not reliably determine the task value: ModelArts `config.cluster_id` may be `None`, and DEDICATED pool formats are not inferred. SHARED format observed: `pool-<resource_id>` |
-| Task status | `status` 10 values: CREATING/RUNNING/FAILED/WAITING/DRAFT/FINISHED/STOPPING/DELETING/ABNORMAL; `detail_status` 15 values (adds CREATE_FAILED/RUN_FAILED/STOP_FAILED/NOT_EXIST/UNKNONW); terminal status: FINISHED/FAILED/STOPPED/ABNORMAL                |
+| Task status | `status`/`detail_status` 17 values: CREATING/RUNNING/FAILED/WAITING/DRAFT/FINISHED/STOPPING/DELETING/ABNORMAL/RUN_FAILED/CREATE_FAILED/STOP_FAILED/STOPPED/DELETED/DELETE_FAILED/NOT_EXIST/UNKNOWN (align with task-config-catalog); terminal status: FINISHED/FAILED/RUN_FAILED/CREATE_FAILED/STOPPED/STOP_FAILED/DELETED/DELETE_FAILED/NOT_EXIST/ABNORMAL |
 | Task deletion | Irreversible. CLI `delete-tasks --task-id <id>` auto-resolves `execution_id` from task_id for regular training tasks; no manual lookup needed                                                                                                            |
 | Algorithm info | Dynamically fetched from `ext_metadata`; do not hardcode asset_ids                                                                                                                                                                                       |
 | Object storage | Must use `obs://` protocol; `s3://` prohibited                                                                                                                                                                                                           |
 | Cross-skill | Does not call other skills; data processing → `cloudrobo-dataset`, deployment → `cloudrobo-infer`                                                                                                                                                        |
-| `--sim-rl` flag | On 14 commands; absent on `pretrain`/`finetune`/`resume-task`/`list-checkpoints`/`register-checkpoint`                                                                                                                                                   |
+| `--sim-rl` flag | On 15 commands; absent on `resume-task`/`list-checkpoints`/`register-checkpoint` (train-only); `clone-task` is inherently SimRL-only |
 | `get-logs` file selection | `--file-name` (not `--file-path`); `--log-name-pre` matches by prefix                                                                                                                                                                                    |
 | Clone task name conflict | SDK auto-generates `{original-name}-copy-{4hex}` name; pass `--config '{"name":"custom-name"}'` to override                                                                                                                                              |
+
+## Out of Scope
+
+Explicitly decline the following out-of-scope requests and point the user to the corresponding ability:
+
+| Request | Handling |
+| ------- | -------- |
+| Model deployment / online inference | Not in scope — refer to `cloudrobo-infer` |
+| Data processing (proc/eval) | Not in scope — refer to `cloudrobo-dataset` |
+| Creating a workspace | Not in scope — refer to workspace-management capabilities |
+| Submitting training from local/other Kubernetes clusters | Not supported — this skill only manages cloud-side CloudRobo tasks |
 
 ## Verification & Best Practices
 
@@ -755,7 +774,8 @@ print "（无）" for empty env. For `restart-task --verbose`: show task_id + ch
 - **Polling**: 30-60s intervals; report status + stage changes. On FINISHED → suggest export/deploy; on FAILED → offer logs/events
 - **Draft workflow**: save-draft → verify DRAFT → restart-task → verify leaves DRAFT → poll to terminal
 - **Monitoring**: `get-stages` (4-stage flow), `get-resource-usage` (CPU/GPU/NPU), `get-events` (filter `--level Error`)
-- **SimRL**: repeat monitoring with `--sim-rl` (no `get-stages` — SimRL has no stages endpoint); verify `resume-task` rejects `--sim-rl`
+- **SimRL**: repeat monitoring with `--sim-rl` (`get-stages --sim-rl` is supported and routes to the
+  SimRL stages API); verify `resume-task` rejects `--sim-rl`
 - **Dry-run**: not supported by this CLI; validate params via `save-draft` + `show-task` before
   submitting with `create-task`
 - **Drafts**: use SDK `restart_train_task(task_id, req)` to submit with edited config (CLI doesn't accept config body)
