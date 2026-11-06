@@ -21,6 +21,9 @@ The official Terraform registry (registry.terraform.io) and GitHub releases may 
        url = "https://mirrors.huaweicloud.com/terraform/"
        include = ["registry.terraform.io/huaweicloud/*"]
      }
+     direct {
+       include = ["registry.terraform.io/hashicorp/*"]
+     }
    }
    ```
 
