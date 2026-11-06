@@ -40,7 +40,7 @@ or credential is required.
 This skill enables users to:
 
 - **Search Skills**: Find skills by keyword, category, or both (matched against name, description, and triggers)
-- **Browse Categories**: Explore available skill categories
+- **Browse Categories**: Explore available skill categories via `-l/--list-categories` (see Step 1.5)
 - **View Skill Details**: Fetch full SKILL.md content from GitHub for specific skills
 - **Install Skills**: Guide users through skill installation via `npx skills add` (GitCode default), `npx skills add https://clawhub.ai/huaweicloudskill/skills/<skill-name>` (ClawHub), or fallback GitHub method
 
@@ -193,6 +193,8 @@ then falls through to Gitee raw — a different IP/WAF unaffected by GitCode rat
 
 Given `keyword` (from AI-understood user intent) and optional `category`, run the search script:
 
+> **Category semantics (`-c/--category`)**: the index stores every category as a two-level path (`<top>/<sub>`). A **top-level** value matches by prefix — `-c <top>` returns every `<top>/*` skill; a **two-level path** matches exactly — `-c <top>/<sub>` returns only that subcategory's skills. Do not conclude "this category has no skills" before checking `-l` (Step 1.5) to confirm the category name exists.
+
 > **⚠️ MANDATORY (质量上报)**: 搜索命令必须用 `skill-quality-cli run --skill-name huawei-cloud-find-skills -- ` 包装, 保证每次搜索都触发质量上报。严禁裸调 `python scripts/search-skills.py`。
 
 ```powershell
@@ -223,9 +225,20 @@ skill-quality-cli run --skill-name huawei-cloud-find-skills -- python scripts/se
 4. Sorts by score descending, outputs formatted results with matched keywords
 5. Reports only the top-3 results' skill names to the install-count API (`skills/<category>/<service>/<name>`) as exposure impressions — fire-and-forget, never blocks or fails the search
 
-**Fallback iteration** (if no results): 1) Switch CN↔EN keywords 2) Expand keywords 3) Remove category filter 4) Try synonyms 5) List all skills
+**Fallback iteration** (if no results): 1) Switch CN↔EN keywords 2) Expand keywords 3) Remove category filter 4) Try synonyms 5) Browse categories with `-l` and list all skills under a category with `-c <top-level>`
 
 The process should persist until the skill is found or its absence is confirmed. In the event of total failure, notify the user of the specific steps that were attempted.
+
+### Step 1.5: Browse Categories (optional, no keyword needed)
+
+Print the category tree aggregated from `index.json` — one line per top-level category with its skill count plus the concrete two-level paths. Use it before filtering, or to explain "category not found" to the user.
+
+```bash
+skill-quality-cli run --skill-name huawei-cloud-find-skills -- python scripts/search-skills.py -l
+skill-quality-cli run --skill-name huawei-cloud-find-skills -- python scripts/search-skills.py -l -c "<category>"
+```
+
+The output lists lines of the form `<top> (N skill(s))` followed by `<top>/<sub>(n), ...`. Pass a listed path to `-c` in Step 1 — either its top-level part (prefix match) or the full path (exact match).
 
 ### Step 2: View Skill Details (optional)
 
@@ -301,7 +314,7 @@ If all installation attempts fail, report the error message to the user. Do NOT 
 | Parameter | Required/Optional | Description | Default |
 |-----------|-------------------|-------------|---------|
 | `Keyword` | Optional | Search keyword (matched against name, description, triggers, service) | None |
-| `Category` | Optional | Category code for filtering (e.g., "computing", "storage", "network") | None |
+| `Category` | Optional | Category filter: a top-level category matched by prefix (covers all its subcategories) or a two-level path matched exactly | None |
 | `skill-name` | Required (Step 3) | Exact skill name for installing | None |
 
 ## References
@@ -361,11 +374,12 @@ already present) and never blocks the business flow.
 
 ### Issue: Search returns no results
 
-**Cause**: Keywords don't match any skill
+**Cause**: Keywords don't match any skill, or the `-c` value is not a category that exists in the index
 **Solution**:
-1. Try broader keywords
-2. Switch between Chinese and English keywords (e.g., "对象存储" → "obs")
-3. List all skills: `python scripts/search-skills.py -c "computing"`
+1. List the available categories first: `python scripts/search-skills.py -l` (or narrow with `-l -c "<category>"`)
+2. If the category exists, browse everything under it without a keyword: `python scripts/search-skills.py -c "<top-level>"` (prefix match) or `-c "<top>/<sub>"` (exact path)
+3. Switch between Chinese and English keywords (e.g., "对象存储" → "obs")
+4. Try broader keywords
 
 ## Notes
 
