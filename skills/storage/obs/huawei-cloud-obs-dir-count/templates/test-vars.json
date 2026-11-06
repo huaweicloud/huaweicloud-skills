@@ -1,0 +1,47 @@
+{
+  "description": "Test cases for huawei-cloud-obs-dir-count. Run with: bash scripts/test-cli-commands.sh <skill-path>",
+  "notes": "Read-only operations only; counting directories never creates/modifies/deletes any resource. 只读操作，无资源创建/修改/删除风险。Live count test cases require a real OBS bucket with obsutil credentials configured.",
+  "default_bucket": "obs-skills-test-cn4",
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "Count immediate directories in a bucket (CLI mode)",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "python3 scripts/count_obs_directories.py --bucket obs-skills-test-cn4",
+      "expected": "single integer (>=0); exit code 0"
+    },
+    {
+      "id": "TC-02",
+      "name": "Count immediate directories under a prefix",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "python3 scripts/count_obs_directories.py --bucket obs-hd-skills-test --prefix skills",
+      "expected": "single integer (>=0); exit code 0"
+    },
+    {
+      "id": "TC-03",
+      "name": "Count directories recursively",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "python3 scripts/count_obs_directories.py --bucket obs-hd-skills-test --prefix skills --recursive --max-depth 1",
+      "expected": "single integer (>=0); exit code 0"
+    },
+    {
+      "id": "TC-04",
+      "name": "JSON output",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "python3 scripts/count_obs_directories.py --bucket obs-skills-test-cn4 --json",
+      "expected": "JSON object with directory_count; exit code 0"
+    },
+    {
+      "id": "TC-05",
+      "name": "Script help (CLI present check)",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "python3 scripts/count_obs_directories.py --help",
+      "expected": "usage/help text; exit code 0"
+    }
+  ]
+}
