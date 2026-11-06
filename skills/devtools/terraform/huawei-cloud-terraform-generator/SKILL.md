@@ -59,7 +59,12 @@ This skill works in nine phases:
 
 ### 4.0 Credential handling (MUST READ)                                                                                                                                                                                                                                           
 
-AK/SK credentials are read from environment variables `HW_ACCESS_KEY` and `HW_SECRET_KEY`. For temporary/STS credentials, the agent **must** read `HW_SECURITY_TOKEN` (or `HUAWEICLOUD_SECURITY_TOKEN`) from environment variables and write it to `terraform.tfvars` as `security_token`. The provider does not reliably resolve `security_token` from env vars. If the env var is not set, omit it (permanent AK/SK scenario).
+AK/SK credentials are read from environment variables `HW_ACCESS_KEY` and `HW_SECRET_KEY` (plus `HW_SECURITY_TOKEN` or `HUAWEICLOUD_SECURITY_TOKEN` for temporary/STS). They authenticate the **Terraform provider only** — they are NOT written into the FunctionGraph function `user_data`, which holds only a pre-created DevBridge API Key (see `reference/ecs-devbridge-option.md`).
+
+Because the provider does not reliably resolve `security_token` from env vars, the agent **must** write it to `terraform.tfvars` as `security_token` when using temporary/STS credentials. AK/SK themselves may be passed via `TF_VAR_access_key` / `TF_VAR_secret_key`.
+
+**DevBridge API Key handling:** the key MUST be pre-created in the sandbox before apply — reuse the sandbox key if valid, otherwise create one via DevStage API using the sandbox's user-level AK/SK (which DevStage accepts). Pass it as `devbridge_api_key`. The FunctionGraph function only forwards this key and never creates keys, so it carries no AK/SK.
+
 Before any step that depends on credentials (resource queries, `terraform plan`, etc.), read the complete rules in `reference/guardrails.md`.
 If an API or Terraform call fails with an authentication error: tell the user the specific error, ask them to confirm when the issue is resolved, then retry. Do not guide the user on how to configure credentials.
 
@@ -126,6 +131,10 @@ resource "huaweicloud_networking_secgroup_rule" "egress" {
 - ❌ Using hardcoded default ports without asking user
 - ❌ Generating rules that don't match user confirmation
 
+### 4.3.2 ECS creation extensions
+
+When creating ECS, check `reference/ecs-devbridge-option.md` for DevBridge SSH tunnel option. If the file exists, read it and follow its instructions (ask user, check conditions, generate with DevBridge, post-apply guidance, destroy cleanup).
+
 ### 4.4 Verify resource availability BEFORE generating any code
 
 **This step is mandatory and must never be skipped. A failed query is not a license to proceed — it is a blocker that must be resolved.**
@@ -184,6 +193,9 @@ See `reference/guardrails.md` for rules about AK/SK handling.
      network_mirror {
        url = "https://mirrors.huaweicloud.com/terraform/"
        include = ["registry.terraform.io/huaweicloud/*"]
+     }
+     direct {
+       include = ["registry.terraform.io/hashicorp/*"]
      }
    }
    ```
@@ -282,6 +294,7 @@ Use the reference materials, templates, examples, and helper utilities in the sk
 | **通用规则** | `reference/guardrails.md` + `reference/terraform-generation-guide.md` | 密码自动生成、不向用户要敏感信息 |
 | Security Group | `reference/VPC-best-practices/VPC-best-practices.md` → "Deploy Security Group" | `ethertype` is required |
 | ECS with EIP | `reference/ECS-best-practices/Deploy-Instance-with-EIP-best-practices.md` | Use `huaweicloud_compute_eip_associate`, `public_ip = .address` |
+| **ECS with DevBridge** | `reference/ECS-best-practices/Deploy-Instance-with-DevBridge-best-practices.md` | user_data + zero ingress SG + EIP for outbound + DevBridge auto-setup |
 | VPC/Subnet | `reference/VPC-best-practices/VPC-best-practices.md` → "Deploy Basic Network" | VPC/subnet structure |
 | RDS | `reference/RDS-best-practices/RDS-best-practices.md` | Database + network config |
 
