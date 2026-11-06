@@ -83,7 +83,7 @@
     {
       "id": "TC-11",
       "name": "get-logs",
-      "command": "cloudrobo train get-logs --task-id {task_id} --file-name {file_name}",
+      "command": "cloudrobo train get-logs --task-id {task_id} --catalog logs --file-name {file_name}",
       "description": "Get log content by file name",
       "expected": "Log text content",
       "type": "read"
@@ -91,8 +91,8 @@
     {
       "id": "TC-12",
       "name": "get-signed-url",
-      "command": "cloudrobo train get-signed-url --task-id {task_id} --file-source TRAIN --file-name {file_name}",
-      "description": "Get log file download signed URL (requires file-source/file-name)",
+      "command": "cloudrobo train get-signed-url --task-id {task_id} --catalog logs --file-source TRAIN --file-name {file_name}",
+      "description": "Get log file download signed URL (requires catalog/file-source/file-name)",
       "expected": "JSON with OBS temp URL",
       "type": "read"
     },
@@ -196,11 +196,11 @@
     },
     {
       "id": "TC-25",
-      "name": "sim-rl-get-stages-unavailable",
+      "name": "sim-rl-get-stages",
       "command": "cloudrobo train get-stages --task-id {sim_rl_task_id} --sim-rl",
-      "description": "Confirm get-stages is train-only (SimRL has no stages endpoint)",
-      "expected": "Error: get-stages does not accept --sim-rl",
-      "type": "negative"
+      "description": "Get SimRL task stages (CLI supports --sim-rl)",
+      "expected": "JSON with SimRL task stages",
+      "type": "read"
     },
     {
       "id": "TC-26",
@@ -221,7 +221,7 @@
     {
       "id": "TC-28",
       "name": "sim-rl-get-logs",
-      "command": "cloudrobo train get-logs --task-id {sim_rl_task_id} --file-name {file_name} --sim-rl",
+      "command": "cloudrobo train get-logs --task-id {sim_rl_task_id} --catalog logs --file-name {file_name} --sim-rl",
       "description": "Get SimRL task log content",
       "expected": "Log text content",
       "type": "read"
@@ -229,7 +229,7 @@
     {
       "id": "TC-29",
       "name": "sim-rl-get-signed-url",
-      "command": "cloudrobo train get-signed-url --task-id {sim_rl_task_id} --file-source TRAIN --file-name {file_name} --sim-rl",
+      "command": "cloudrobo train get-signed-url --task-id {sim_rl_task_id} --catalog logs --file-source TRAIN --file-name {file_name} --sim-rl",
       "description": "Get SimRL task log signed URL",
       "expected": "JSON with OBS temp URL",
       "type": "read"
@@ -269,16 +269,17 @@
     "image_url": "Algorithm image URL (for pretrain)",
     "command": "Algorithm command (for pretrain)",
     "boot_file": "Algorithm boot file (for pretrain)",
-    "file_name": "Log file name (for get-logs/get-signed-url)",
-    "start_timestamp": "Start Unix timestamp in seconds (for get-resource-usage/get-events)",
-    "end_timestamp": "End Unix timestamp in seconds (for get-resource-usage/get-events)"
+    "file_name": "Log file name (for get-logs/get-signed-url; use a real file under the catalog)",
+    "start_timestamp": "Start Unix timestamp in seconds (for get-resource-usage) or milliseconds (for get-events)",
+    "end_timestamp": "End Unix timestamp in seconds (for get-resource-usage) or milliseconds (for get-events)"
   },
   "notes": [
     "Some tests require actual asset IDs (models, datasets, algorithms) from the workspace",
     "Creation has no --dry-run; validate params via save-draft + show-task before create-task (TC-19, TC-20 are mutating and require confirmation)",
     "Cross-package tests (TC-16, TC-17, TC-18) query the asset service",
     "SimRL tests (TC-21 ~ TC-31) use the --sim-rl flag to route to the SimRL API surface",
-    "TC-25 confirms get-stages is train-only (SimRL has no stages endpoint)",
+    "TC-25 verifies get-stages --sim-rl is supported (routes to the SimRL stages API)",
+    "get-events uses millisecond timestamps; get-resource-usage uses seconds",
     "TC-32 verifies that resume-task correctly rejects --sim-rl (resume is train-only)",
     "Mutating tests (type=write) require user confirmation before execution",
     "For comprehensive end-to-end testing beyond these checks, run the commands from SKILL.md manually"

@@ -60,12 +60,12 @@ cloudrobo train get-resource-usage --task-id <task-id> --metric cpu_util --start
 cloudrobo train get-events --task-id <task-id> --start-time <start-timestamp-milliseconds> --end-time <end-timestamp-milliseconds>
 # → Returns event list
 
-# 9. View logs
-cloudrobo train get-logs --task-id <task-id> --file-name <log-file>
+# 9. View logs (requires --catalog logs/metrics)
+cloudrobo train get-logs --task-id <task-id> --catalog logs --file-name <log-file>
 # → Returns log content
 
-# 10. Get signed URL (requires file-source/file-name)
-cloudrobo train get-signed-url --task-id <task-id> --file-source TRAIN --file-name <log-file>
+# 10. Get signed URL (requires catalog/file-source/file-name)
+cloudrobo train get-signed-url --task-id <task-id> --catalog logs --file-source TRAIN --file-name <log-file>
 # → Returns OBS temp download URL
 
 # 11. Clean up (user must confirm)
@@ -115,8 +115,8 @@ cloudrobo train get-stages --task-id <failed-task-id>
 cloudrobo train get-events --task-id <failed-task-id> --start-time <start-timestamp-milliseconds> --end-time <end-timestamp-milliseconds> --level Error
 # → Filter for level=Error
 
-# 4. Get logs
-cloudrobo train get-logs --task-id <failed-task-id>
+# 4. Get logs (requires --catalog logs/metrics)
+cloudrobo train get-logs --task-id <failed-task-id> --catalog logs
 # → Detailed error output
 ```
 
@@ -140,11 +140,12 @@ cloudrobo train create-task --config '<sim-rl-json>' --sim-rl
 # 4. Show SimRL task
 cloudrobo train show-task --task-id <task-id> --sim-rl
 
-# 5. Monitor (same required params as train; no get-stages — SimRL has no stages endpoint)
+# 5. Monitor (same required params as train; get-stages is supported with --sim-rl)
 cloudrobo train get-resource-usage --task-id <task-id> --metric cpu_util --start <ts-seconds> --end <ts-seconds> --sim-rl
 cloudrobo train get-events --task-id <task-id> --start-time <ts-milliseconds> --end-time <ts-milliseconds> --sim-rl
-cloudrobo train get-logs --task-id <task-id> --sim-rl
-cloudrobo train get-signed-url --task-id <task-id> --file-source TRAIN --file-name <name> --sim-rl
+cloudrobo train get-logs --task-id <task-id> --catalog logs --sim-rl
+cloudrobo train get-signed-url --task-id <task-id> --catalog logs --file-source TRAIN --file-name <name> --sim-rl
+cloudrobo train get-stages --task-id <task-id> --sim-rl
 
 # 6. Lifecycle (user must confirm)
 cloudrobo train stop-task --task-id <task-id> --sim-rl
@@ -193,7 +194,8 @@ cloudrobo train resume-task --task-id <task-id> --sim-rl
 | 400 spec invalid | spec not matching Ascend format | Use `Ascend: N * Model \| vCPUs vCPUs \| GiB GiB` |
 | 400 train_method invalid | lowercase method | Use uppercase: SFT/LORA/QLORA/DEEPSPEED |
 | 400 missing metric/start/end | get-resource-usage requires all three | Pass `--metric`, `--start`, `--end` |
-| 400 missing start-time/end-time | get-events requires both | Pass `--start-time`, `--end-time` |
+| 400 missing start-time/end-time | get-events requires both | Pass `--start-time`, `--end-time` (milliseconds) |
+| Missing option --catalog | get-logs/get-signed-url require `--catalog` | Pass `--catalog logs` or `--catalog metrics` |
 | 400 missing file-source/file-name | get-signed-url requires both | Pass `--file-source`, `--file-name` |
 | CREATE_FAILED | spec/cluster_id/resource issue | Check spec format, cluster capacity |
 | RUN_FAILED | algorithm/dataset/OOM | Check image_url, dataset access, spec memory |

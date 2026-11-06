@@ -84,7 +84,10 @@ endpoints:
 - **No hardcoded credentials**: AK/SK must come from environment variables or `~/.cloudrobo/config.yaml` (never in scripts or SKILL.md)
 - **No credential logging**: The HttpClient masks AK/SK in traffic logs
 - **Workspace boundary**: Base model, dataset, and training task must be in the same workspace
-- **Write operations require user confirmation**: Create / Stop / Restart / Delete / Save-draft / Update / Resume must prompt user before execution (Clone is SimRL-only)
+- **Write-operation confirmation policy (aligned with SKILL.md)**: Destructive write operations
+  (`stop-task`/`delete-tasks`/`resume-task`/`update-task`) must prompt the user for confirmation;
+  creation-type operations (`create-task`/`restart-task`/`save-draft`/`register-checkpoint`) submit
+  silently (no yes/no; `--verbose` shows a summary before submit)
 - **Irreversible operations**: Task deletion is irreversible; always confirm task IDs before delete
 - **Resource consumption awareness**: Training tasks consume compute (Ascend NPU) resources; always confirm before creating long-running tasks
 

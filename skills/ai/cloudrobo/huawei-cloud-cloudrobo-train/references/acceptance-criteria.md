@@ -80,14 +80,14 @@
 | AC-43 | Can stop SimRL task via `stop-task --sim-rl` | status → STOPPING → STOPPED |
 | AC-44 | Can restart SimRL task via `restart-task --sim-rl` | Task resubmits |
 | AC-45 | Can clone SimRL task via `clone-task` | New SimRL task_id returned |
-| AC-46 | Can monitor SimRL: get-resource-usage/get-events/get-logs/get-signed-url with `--sim-rl` (no get-stages — SimRL has no stages endpoint) | Monitoring data returned |
+| AC-46 | Can monitor SimRL: get-resource-usage/get-events/get-logs/get-signed-url/get-stages with `--sim-rl` | Monitoring data returned |
 | AC-47 | `resume-task --sim-rl` correctly rejected | Error (resume is train-only) |
 
 ### Status Enum
 
 | # | Criterion | Verification |
 | --- | ----------- | ------------- |
-| AC-48 | Status enum has 16 states | All states documented and observed |
+| AC-48 | Status enum has 17 states | All states documented and observed |
 | AC-49 | Terminal states correctly identified | FINISHED/FAILED/RUN_FAILED/etc. stop polling |
 | AC-50 | Non-terminal states continue polling | DRAFT/CREATING/WAITING/RUNNING/etc. |
 
@@ -96,7 +96,7 @@
 | # | Criterion | Verification |
 | --- | ----------- | ------------- |
 | NFR-01 | No hardcoded credentials | grep SKILL.md and references for AK/SK patterns |
-| NFR-02 | All mutating operations prompt user confirmation | SKILL.md documents confirmation requirement |
+| NFR-02 | Destructive write ops (stop/delete/resume/update) prompt user confirmation; creation ops submit silently | SKILL.md documents confirmation requirement |
 | NFR-03 | No cross-skill invocation | grep for other skill names |
 | NFR-04 | All object storage paths use `obs://` | grep for `s3://` (should be none) |
 | NFR-05 | SKILL.md frontmatter has name + description + tags | YAML frontmatter check |
@@ -108,7 +108,7 @@
 | NFR-11 | spec documented as string format | grep for Ascend format pattern |
 | NFR-12 | train_method documented as uppercase enum | grep for SFT/LORA/QLORA/DEEPSPEED |
 | NFR-13 | --sim-rl flag documented on 15 commands | grep '--sim-rl' in SKILL.md |
-| NFR-14 | Required params documented (metric/start/end, start-time/end-time, file-source/file-name) | grep in SKILL.md |
+| NFR-14 | Required params documented (metric/start/end, start-time/end-time, catalog/file-source/file-name) | grep in SKILL.md |
 
 ## Test Cases Summary
 

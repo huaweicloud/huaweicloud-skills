@@ -83,11 +83,14 @@ SimRL API root:      /v1/training/rl-tasks/simulation
 | Operation | Method | Path | SDK Method |
 | ----------- | -------- | ------ | ------------ |
 | Show resource usage | GET | `/v1/training/rl-tasks/simulation/{task_id}/resource-usage` | `show_sim_rl_task_resource_usage(task_id, metric, start, end, **params)` |
-| List stages | GET | `/v1/training/rl-tasks/simulation/{task_id}/stages` | `list_sim_rl_task_stages(task_id)` |
 | List events | GET | `/v1/training/rl-tasks/simulation/{task_id}/events` | `list_sim_rl_task_events(task_id, start_time, end_time, **params)` |
 | List observations | GET | `/v1/training/rl-tasks/simulation/{task_id}/observability` | `list_sim_rl_task_observations(task_id, **params)` |
 | Get log content | GET | `/v1/training/rl-tasks/simulation/{task_id}/observability/content` | `show_sim_rl_task_observations_content(task_id, **params)` |
 | Get log signed URL | GET | `/v1/training/rl-tasks/simulation/{task_id}/observability/signed-url` | `show_sim_rl_task_observations_signed_url(task_id, file_source, file_name, **params)` |
+
+> **Note**: CLI `get-stages --sim-rl` routes to the SimRL stages endpoint
+> (`GET /v1/training/rl-tasks/simulation/{task_id}/stages`), but the SDK ships **no**
+> `list_sim_rl_task_stages` method — use the CLI command for SimRL stage queries.
 
 > **Note**: SimRL has no `resume` endpoint. `resume-task` is train-only.
 
@@ -137,16 +140,16 @@ SimRL API root:      /v1/training/rl-tasks/simulation
 | ----------- | ------ | ---------- | ------------- |
 | `file_source` | string enum | Yes | Log type (8 values: EVALUATE/TRAIN/TRAINING_METRICS/...) |
 | `file_name` | string | Yes | Log file name |
-| `catalog` | string | No | File directory type: logs/metrics |
+| `catalog` | string | Yes | File directory type: logs/metrics |
 
 ### Get Log Content
 
 | Parameter | Type | Required | Description |
 | ----------- | ------ | ---------- | ------------- |
+| `catalog` | string | Yes | File directory type: logs/metrics |
 | `file_name` | string | No | Log file name |
 | `log_name_pre` | string | No | Log file name prefix |
 | `work_num` | int | No | Multi-node training node index |
-| `catalog` | string | No | File directory type: logs/metrics |
 | `start_byte` | int | No | Start byte offset |
 | `end_byte` | int | No | End byte offset |
 | `offset` | int | No | Pagination offset |
@@ -239,7 +242,6 @@ grep "_url(" $(python -c "import cloudrobo_train.client as m; print(m.__file__)"
 # self._url(f"{self._SIM}/{task_id}/copy")
 # self._url(f"{self._SIM}/{task_id}/restart")
 # self._url(f"{self._SIM}/{task_id}/resource-usage")
-# self._url(f"{self._SIM}/{task_id}/stages")
 # self._url(f"{self._SIM}/{task_id}/events")
 # self._url(f"{self._SIM}/{task_id}/observability")
 # self._url(f"{self._SIM}/{task_id}/observability/content")
