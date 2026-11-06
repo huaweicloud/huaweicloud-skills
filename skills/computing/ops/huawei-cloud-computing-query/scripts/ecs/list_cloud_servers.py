@@ -122,6 +122,24 @@ def pick_ip(server):
     return fallback
 
 
+# 计费模式取值映射：0-按需，1-包周期，2-竞价；空值渲染 '-'，未知值原样透出
+CHARGING_MODE_LABELS = {
+    '0': '按需',
+    '1': '包周期',
+    '2': '竞价',
+}
+
+
+def get_charging_mode(server):
+    metadata = getattr(server, 'metadata', None)
+    if not isinstance(metadata, dict):
+        return '-'
+    value = metadata.get('charging_mode')
+    if value in (None, ''):
+        return '-'
+    return CHARGING_MODE_LABELS.get(str(value), str(value))
+
+
 # 采集导出数据（字段与表格展示字段一致，另附 ip）
 def collect_export_rows(servers, show_image):
     rows = []
@@ -131,6 +149,7 @@ def collect_export_rows(servers, show_image):
             "id": getattr(server, 'id', ''),
             "name": getattr(server, 'name', ''),
             "status": getattr(server, 'status', ''),
+            "charging_mode": get_charging_mode(server),
             "flavor_id": getattr(flavor, 'id', '') if flavor else '',
             "vcpus": str(getattr(flavor, 'vcpus', '')) if flavor else '',
             "ram(GiB)": str(int(getattr(flavor, 'ram', 0)) // 1024) if flavor else '',
@@ -172,7 +191,7 @@ def render(servers, show_image, total_count=None, has_more=False, next_marker=No
         print("没有找到 ECS 云服务器")
         return
 
-    header = "id\tname\tstatus\tflavor_id\tvcpus\tram(GiB)\tavailability_zone\tcreated"
+    header = "id\tname\tstatus\tcharging_mode\tflavor_id\tvcpus\tram(GiB)\tavailability_zone\tcreated"
     if show_image:
         header += "\timage_id"
     output = header + "\n"
@@ -180,13 +199,14 @@ def render(servers, show_image, total_count=None, has_more=False, next_marker=No
         sid = getattr(server, 'id', '')
         name = getattr(server, 'name', '')
         status = getattr(server, 'status', '')
+        charging_mode = get_charging_mode(server)
         flavor = getattr(server, 'flavor', None)
         flavor_id = getattr(flavor, 'id', '') if flavor else ''
         vcpus = str(getattr(flavor, 'vcpus', '')) if flavor else ''
         ram = str(int(getattr(flavor, 'ram', 0)) // 1024) if flavor else ''
         availability_zone = getattr(server, 'availability_zone', '')
         created = getattr(server, 'created', '')
-        row = f"{sid}\t{name}\t{status}\t{flavor_id}\t{vcpus}\t{ram}\t{availability_zone}\t{created}"
+        row = f"{sid}\t{name}\t{status}\t{charging_mode}\t{flavor_id}\t{vcpus}\t{ram}\t{availability_zone}\t{created}"
         if show_image:
             image = getattr(server, 'image', None)
             image_id = getattr(image, 'id', '') if image else ''
@@ -271,8 +291,11 @@ try:
         request.launched_since = args.launched_since
     if args.enterprise_project_id:
         request.enterprise_project_id = args.enterprise_project_id
-    if args.expect_fields:
-        request.expect_fields = args.expect_fields
+    # metadata 非默认返回字段，必须始终请求，否则无法展示 charging_mode
+    expect_fields = list(args.expect_fields or [])
+    if "metadata" not in expect_fields:
+        expect_fields.append("metadata")
+    request.expect_fields = expect_fields
 
     if has_custom_filter:
         # 有自定义过滤参数（排序）：全量拉取 + 本地排序

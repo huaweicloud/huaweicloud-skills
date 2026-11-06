@@ -113,6 +113,24 @@ def pick_ip(server):
     return fallback
 
 
+# 计费模式取值映射：0-按需，1-包周期，2-竞价；空值渲染 '-'，未知值原样透出
+CHARGING_MODE_LABELS = {
+    '0': '按需',
+    '1': '包周期',
+    '2': '竞价',
+}
+
+
+def get_charging_mode(server):
+    metadata = getattr(server, 'metadata', None)
+    if not isinstance(metadata, dict):
+        return '-'
+    value = metadata.get('charging_mode')
+    if value in (None, ''):
+        return '-'
+    return CHARGING_MODE_LABELS.get(str(value), str(value))
+
+
 # 采集导出数据（字段与表格展示字段一致，另附 ip）
 def collect_export_rows(servers):
     rows = []
@@ -122,6 +140,7 @@ def collect_export_rows(servers):
             "id": getattr(server, 'id', ''),
             "name": getattr(server, 'name', ''),
             "status": getattr(server, 'status', ''),
+            "charging_mode": get_charging_mode(server),
             "flavor_id": getattr(flavor, 'id', '') if flavor else '',
             "vcpus": getattr(flavor, 'vcpus', '') if flavor else '',
             "memory(GiB)": str(int(getattr(flavor, 'ram', 0)) // 1024) if flavor and getattr(flavor, 'ram', 0) else '',
@@ -159,11 +178,12 @@ def render(servers, total_count=None, has_more=False, next_marker=None):
         print("没有找到 ECS")
         return
 
-    output = f"id\tname\tstatus\tflavor_id\tvcpus\tmemory(GiB)\tavailability_zone\tcreated\n"
+    output = f"id\tname\tstatus\tcharging_mode\tflavor_id\tvcpus\tmemory(GiB)\tavailability_zone\tcreated\n"
     for server in servers:
         sid = getattr(server, 'id', '')
         name = getattr(server, 'name', '')
         status = getattr(server, 'status', '')
+        charging_mode = get_charging_mode(server)
         flavor = getattr(server, 'flavor', None)
         flavor_id = getattr(flavor, 'id', '') if flavor else ''
         vcpus = getattr(flavor, 'vcpus', '') if flavor else ''
@@ -171,7 +191,7 @@ def render(servers, total_count=None, has_more=False, next_marker=None):
         ram_gib = str(int(ram_mb) // 1024) if ram_mb else ''
         availability_zone = getattr(server, 'os_ext_a_zavailability_zone', '')
         created = getattr(server, 'created', '')
-        output += f"{sid}\t{name}\t{status}\t{flavor_id}\t{vcpus}\t{ram_gib}\t{availability_zone}\t{created}\n"
+        output += f"{sid}\t{name}\t{status}\t{charging_mode}\t{flavor_id}\t{vcpus}\t{ram_gib}\t{availability_zone}\t{created}\n"
 
     # 汇总信息
     showing_count = len(servers)

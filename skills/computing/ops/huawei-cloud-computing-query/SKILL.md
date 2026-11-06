@@ -198,6 +198,7 @@ Query results are output in JSON format, containing the following common fields:
 
 - `total`: Total number of matching resources
 - `items`: Resource list, each resource containing key fields such as id, name, and status
+- ECS instance lists (`list_servers_details.py`, `list_cloud_servers.py`) include a `charging_mode` column: `0`→按需, `1`→包周期, `2`→竞价; empty values render `-` and unknown values pass through unchanged
 - Specific fields vary by resource type; see individual guide.md files for details
 
 ---
