@@ -6,7 +6,7 @@
 
 ### list_servers_details.py — Query ECS Instance List
 
-Purpose: Query the list of ECS instances, including ID, name, status, flavor_id, vCPU, memory(GiB).
+Purpose: Query the list of ECS instances, including ID, name, status, charging_mode, flavor_id, vCPU, memory(GiB).
 Usage: python scripts/ecs/list_servers_details.py -h
 
 Key options:
@@ -15,7 +15,9 @@ Key options:
 - `--not_tag key=value`：按标签排除，可重复指定，多个标签之间为 AND 关系，对应 API 的 `not_tags` 查询参数。
 - `--export csv|json`：把本次查询结果导出为文件；CSV 使用 UTF-8-SIG 编码，Excel 可直接打开。
 - `--export_path <file>`：导出文件路径；不传时默认写入当前目录 `<脚本名>_<时间戳>.<格式>`，例如 `list_servers_details_20261102_194203.csv`。
-- 导出内容包含表格展示字段（id/name/status/flavor_id/vcpus/memory(GiB)/availability_zone/created），并额外包含首个 IPv4 地址 `ip`；导出完成后打印 `已导出 N 条到 <文件> (格式: ...)`。
+- 导出内容包含表格展示字段（id/name/status/charging_mode/flavor_id/vcpus/memory(GiB)/availability_zone/created），并额外包含首个 IPv4 地址 `ip`；导出完成后打印 `已导出 N 条到 <文件> (格式: ...)`。
+
+输出中的 `charging_mode` 来源于实例 `metadata.charging_mode`，取值映射为 `0`→按需、`1`→包周期、`2`→竞价；空值显示 `-`，未知值原样透出。
 
 示例：
 
@@ -38,16 +40,19 @@ Usage: python scripts/ecs/list_servers_details_by_id.py -h
 
 ### list_cloud_servers.py — Query Cloud Server List (v1.1)
 
-Purpose: Query the list of ECS cloud servers, including name, status, flavor_id, vCPU, ram(GiB), image ID.
+Purpose: Query the list of ECS cloud servers, including name, status, charging_mode, flavor_id, vCPU, ram(GiB), image ID.
 Usage: python scripts/ecs/list_cloud_servers.py -h
 
 Key options:
 
 - `--tag key=value`：按标签过滤，可重复指定，多个标签之间为 AND 关系，最终拼成 ECS API 的 `tags` 查询参数（格式 `key1=value1,key2=value2`）。
 - `--not_tag key=value`：按标签排除，可重复指定，多个标签之间为 AND 关系，对应 API 的 `not_tags` 查询参数。
+- `--charging_mode 0|1|2`：按计费类型过滤（0-按需，1-包周期，2-竞价），仅筛选不改变输出列；输出列始终展示 `charging_mode`。
 - `--export csv|json`：把本次查询结果导出为文件；CSV 使用 UTF-8-SIG 编码，Excel 可直接打开。
 - `--export_path <file>`：导出文件路径；不传时默认写入当前目录 `<脚本名>_<时间戳>.<格式>`，例如 `list_cloud_servers_20261102_194203.json`。
-- 导出内容包含表格展示字段（id/name/status/flavor_id/vcpus/ram(GiB)/availability_zone/created），并额外包含首个 IPv4 地址 `ip`；指定 `--expect_fields image` 时还会导出 `image_id`。导出完成后打印 `已导出 N 条到 <文件> (格式: ...)`。
+- 导出内容包含表格展示字段（id/name/status/charging_mode/flavor_id/vcpus/ram(GiB)/availability_zone/created），并额外包含首个 IPv4 地址 `ip`；指定 `--expect_fields image` 时还会导出 `image_id`。导出完成后打印 `已导出 N 条到 <文件> (格式: ...)`。
+
+输出中的 `charging_mode` 来源于实例 `metadata.charging_mode`。该接口的 `metadata` 属非默认返回字段，脚本会自动将其并入 `--expect_fields` 一并请求（与用户传入值求并集），取值映射为 `0`→按需、`1`→包周期、`2`→竞价；空值显示 `-`，未知值原样透出。
 
 示例：
 
