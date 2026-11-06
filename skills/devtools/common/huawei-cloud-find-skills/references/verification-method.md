@@ -39,22 +39,29 @@ python scripts/search-skills.py -k "对象存储"
 ### 3. 分类过滤验证
 
 ```bash
-python scripts/search-skills.py -c "computing"
+python scripts/search-skills.py -c "<top-level>"       # 一级类目: 前缀匹配
+python scripts/search-skills.py -c "<top>/<sub>"   # 二级路径: 精确匹配
+python scripts/search-skills.py -l                   # 列出可用类目
 ```
 
 **预期结果**：
-- 只返回 `computing` 分类下的 skill
-- 不包含其他分类的结果
+- 一级类目返回其全部子类目下的 skill（条数以当前索引为准）
+- 二级路径只返回该子路径下的 skill
+- 一级类目不会误配同名前缀的其它类目（前缀比较以 `/` 结尾判定）
+- `-l` 输出一级类目 + 技能数 + 二级路径明细
 
 ### 4. 无结果场景验证
 
 ```bash
 python scripts/search-skills.py -k "不存在的关键词xyz123"
+python scripts/search-skills.py -c "nonexistent-category"
 ```
 
 **预期结果**：
 - 输出 "No results for keyword=..." 提示
-- 输出 Fallback suggestions 引导语
+- 仅关键词无结果 → 输出 Fallback suggestions（含 `-l` 浏览类目入口）
+- `-c` 值不存在 → 提示 "Category '...' was not found in the index."，给出近似类目候选并列出可用类目清单（由 `index.json` 聚合，不写死任何类目）
+- `-c` 存在但关键词无命中 → 提示该类目下的技能数并建议不带关键词浏览
 
 ### 5. 缺少参数场景验证
 
@@ -63,7 +70,7 @@ python scripts/search-skills.py
 ```
 
 **预期结果**：
-- 输出 Usage 提示与可用分类列表
+- 输出 Usage 提示（`-k` / `-c` / `-l` 三种用法）
 - 脚本以非零状态退出（参数错误）
 
 ## 安装流程验证

@@ -16,6 +16,7 @@ repeated network calls within the same session.
 import argparse
 import base64
 import binascii
+import difflib
 import hashlib
 import json
 import os
@@ -316,6 +317,50 @@ def expand_keywords(raw_keyword, cn_en_map):
     return specific, generic
 
 
+# 连续中文片段。复合词拆分词典取自技能语料(triggers/name)的中文子串,
+# 使连写复合词在整词未命中时可拆为子词联合搜索 (issue #1004)。
+_CJK_RUN = r"[一-鿿]+"
+
+
+def build_cjk_vocab(skills):
+    """从技能 triggers/name 提取所有长度>=2 的连续中文子串, 作为复合词拆分词典。"""
+    vocab = set()
+
+    def _add(text):
+        for seg in re.findall(_CJK_RUN, text or ""):
+            n = len(seg)
+            for i in range(n):
+                for j in range(i + 2, n + 1):
+                    vocab.add(seg[i:j])
+
+    for s in skills:
+        for t in s["triggers"]:
+            _add(t)
+        _add(s["name"])
+    return vocab
+
+
+def split_cjk_compound(word, vocab):
+    """纯中文复合词按词典正向最长匹配拆分; 仅当能完整覆盖且拆出>=2 个子词时返回子词列表,
+    否则返回 [](回退整词)。短词/单词/无法覆盖的复合词(如 对象存储)不拆。"""
+    if not re.fullmatch(_CJK_RUN, word or "") or len(word) < 4:
+        return []
+    n = len(word)
+    parts = []
+    i = 0
+    while i < n:
+        hit = None
+        for j in range(n, i + 1, -1):
+            if word[i:j] in vocab:
+                hit = word[i:j]
+                break
+        if not hit:
+            return []
+        parts.append(hit)
+        i += len(hit)
+    return parts if len(parts) >= 2 else []
+
+
 def extract_skill_fields(skill):
     """批量提取 skill 字段(一次性字典访问, 后续循环内只做本地匹配)。"""
     name = skill.get("name", "")
@@ -331,6 +376,47 @@ def extract_skill_fields(skill):
         "description": description,
         "triggers": triggers,
     }
+
+
+def category_matches(category, wanted):
+    """类目过滤: 一级类目按前缀匹配(命中其全部子类目), 二级及更深路径精确匹配。
+
+    索引中的 category 均为 "一级/二级" 形式; 用户传单级类目通常是「按大类浏览」,
+    传完整路径则要求精确命中; 前缀比较以 "/" 结尾, 避免一级类目误匹配同名前缀的其它类目。
+    """
+    if not wanted:
+        return True
+    return category == wanted or category.startswith(wanted + "/")
+
+
+def build_category_catalog(skills):
+    """从 index.json 聚合成 {一级类目: {"count": N, "subs": {二级: N}}}。"""
+    catalog = {}
+    for skill in skills:
+        category = skill.get("category") or ""
+        if not category:
+            continue
+        top, _, sub = category.partition("/")
+        entry = catalog.setdefault(top, {"count": 0, "subs": {}})
+        entry["count"] += 1
+        if sub:
+            entry["subs"][sub] = entry["subs"].get(sub, 0) + 1
+    return catalog
+
+
+def format_catalog_lines(catalog):
+    """把类目树渲染为可读清单(一级汇总 + 二级明细路径)。"""
+    subs_total = sum(len(e["subs"]) for e in catalog.values())
+    lines = [f"Available categories ({len(catalog)} top-level / {subs_total} second-level):"]
+    for top in sorted(catalog):
+        entry = catalog[top]
+        lines.append(f"  {top} ({entry['count']} skill(s))")
+        if entry["subs"]:
+            sub_desc = ", ".join(
+                f"{top}/{sub}({n})" for sub, n in sorted(entry["subs"].items())
+            )
+            lines.append(f"    {sub_desc}")
+    return lines
 
 
 # 技能类型推断: 从 name 识别 查询/管理/演练/营销 四类, 用于意图加权与结果标签。
@@ -531,18 +617,51 @@ def main():
 
     parser = argparse.ArgumentParser(description="Search Huawei Cloud skills")
     parser.add_argument("-k", "--keyword", default="", help="Search keyword(s), space/comma/semicolon separated")
-    parser.add_argument("-c", "--category", default="", help="Filter by category")
+    parser.add_argument("-c", "--category", default="",
+                        help="Filter by category: a top-level category (prefix match, covers all its subcategories) "
+                             "or an exact two-level path")
+    parser.add_argument("-l", "--list-categories", action="store_true",
+                        help="List available categories from the index (optionally narrow with -c)")
     parser.add_argument("--explain", action="store_true", help="Show per-keyword score breakdown for each result")
     args = parser.parse_args()
 
-    if not args.keyword and not args.category:
+    if not args.keyword and not args.category and not args.list_categories:
         print("Usage: python search-skills.py -k <keyword> [-c <category>]")
+        print("       python search-skills.py -c <category>            # exact path or top-level prefix")
+        print("       python search-skills.py -l [-c <category>]       # browse available categories")
         print("ERROR: missing keyword and category (U02)", file=sys.stderr)
         return 1
 
     idx, idx_source = load_json_dual_source("index.json", "index.json")
     raw_skills = idx.get("skills", [])
     skills = [extract_skill_fields(s) for s in raw_skills]
+    catalog = build_category_catalog(skills)
+
+    if args.list_categories:
+        filtered = catalog
+        if args.category:
+            filtered = {}
+            for top, entry in catalog.items():
+                if category_matches(top, args.category):
+                    filtered[top] = entry
+                    continue
+                matched_subs = {
+                    sub: n for sub, n in entry["subs"].items()
+                    if category_matches(f"{top}/{sub}", args.category)
+                }
+                if matched_subs:
+                    filtered[top] = {"count": sum(matched_subs.values()), "subs": matched_subs}
+            if not filtered:
+                print(f"No category matched '{args.category}'.")
+                print()
+                print("\n".join(format_catalog_lines(catalog)))
+                print()
+                print(f"  [data source: index: {idx_source}]")
+                return 0
+        print("\n".join(format_catalog_lines(filtered)))
+        print()
+        print(f"  [data source: index: {idx_source}]")
+        return 0
 
     if args.keyword:
         cn_en_map, map_source = load_json_dual_source("cn-en-map.json", "cn-en-map.json")
@@ -561,7 +680,7 @@ def main():
         exact = [s for s in skills if s["name"].strip().lower() == kw_lower]
         if len(exact) == 1:
             skill = exact[0]
-            if not args.category or skill["category"] == args.category:
+            if category_matches(skill["category"], args.category):
                 print(f"Found 1 skill (exact name match) for keyword='{args.keyword}':")
                 print()
                 print(f"  [{skill['category']}/{skill['service']}] {skill['name']}")
@@ -574,10 +693,11 @@ def main():
 
     results = []
     explain_info = {}
+    cjk_split_note = ""
 
     for skill in skills:
         category = skill["category"]
-        if args.category and category != args.category:
+        if not category_matches(category, args.category):
             continue
         sc, matched, extra = score_skill(skill, specific_kws, generic_kws, user_intent=user_intent, explain=True)
         if has_specific and sc == 0:
@@ -607,7 +727,7 @@ def main():
                 retry_results = []
                 for skill in skills:
                     category = skill["category"]
-                    if args.category and category != args.category:
+                    if not category_matches(category, args.category):
                         continue
                     sc, matched = score_skill(skill, retry_specific, retry_generic, user_intent=user_intent)
                     if sc > 0:
@@ -626,20 +746,81 @@ def main():
                     specific_kws = retry_specific
                     generic_kws = retry_generic
 
+    # 中文复合词回退(issue #1004): 整词未命中(<=1 结果)且关键词为单一连写中文复合词时,
+    # 用语料子串词典做最长匹配拆分, 子词联合搜索, 命中更多则采用并标注拆分。
+    if has_specific and len(results) <= 1:
+        kw_cjk = args.keyword.strip()
+        if re.fullmatch(_CJK_RUN, kw_cjk) and len(kw_cjk) >= 4:
+            sub_words = split_cjk_compound(kw_cjk, build_cjk_vocab(skills))
+            if sub_words:
+                retry_specific, retry_generic = expand_keywords(" ".join(sub_words), cn_en_map)
+                if retry_specific:
+                    retry_results = []
+                    for skill in skills:
+                        if not category_matches(skill["category"], args.category):
+                            continue
+                        sc, matched = score_skill(skill, retry_specific, retry_generic, user_intent=user_intent)
+                        if sc > 0:
+                            retry_results.append({
+                                "score": sc,
+                                "name": skill["name"],
+                                "category": skill["category"],
+                                "service": skill["service"],
+                                "description": truncate(skill["description"]),
+                                "triggers": skill["triggers"][:5],
+                                "matched": matched,
+                            })
+                    if len(retry_results) > len(results):
+                        retry_results.sort(key=lambda r: r["score"], reverse=True)
+                        results = retry_results
+                        specific_kws = retry_specific
+                        generic_kws = retry_generic
+                        cjk_split_note = " + ".join(sub_words)
+
     impressions = report_search_results_impressions(results)
 
     if not results:
         print(f"No results for keyword='{args.keyword}' category='{args.category}'")
         print()
-        print("Fallback suggestions:")
-        print("  1. Try broader or alternative keywords")
-        print("  2. Remove category filter")
-        print("  3. Switch CN<->EN (e.g., 'obs' <-> 'object storage')")
-        print("  4. List all: python search-skills.py -c 'computing'")
+        if args.category:
+            # 区分「类目存在但关键词无命中」与「类目名写错」, 并给出近似候选;
+            # 类目清单由 index.json 聚合去重生成(不再写死具体类目值)。
+            all_paths = sorted(
+                set(catalog)
+                | {f"{top}/{sub}" for top, entry in catalog.items() for sub in entry["subs"]}
+            )
+            hit_count = sum(1 for s in skills if category_matches(s["category"], args.category))
+            if hit_count:
+                print(f"Category '{args.category}' exists ({hit_count} skill(s)) but no skill matched "
+                      f"keyword='{args.keyword}'.")
+                print(f"  Browse it without a keyword: python search-skills.py -c '{args.category}'")
+            else:
+                print(f"Category '{args.category}' was not found in the index.")
+                candidates = difflib.get_close_matches(args.category, all_paths, n=5, cutoff=0.5)
+                if not candidates:
+                    needle = args.category.lower()
+                    candidates = [p for p in all_paths if needle in p.lower()][:5]
+                if candidates:
+                    print("  Similar available categories:")
+                    for cand in candidates:
+                        print(f"    {cand} "
+                              f"({sum(1 for s in skills if category_matches(s['category'], cand))} skill(s))")
+            print()
+            print("\n".join(format_catalog_lines(catalog)))
+            print()
+        else:
+            print("Fallback suggestions:")
+            print("  1. Try broader or alternative keywords")
+            print("  2. Remove category filter")
+            print("  3. Switch CN<->EN (e.g., 'obs' <-> 'object storage')")
+            print("  4. Browse available categories: python search-skills.py -l")
+        print(f"  [data source: index: {idx_source}]")
         return 0
 
     all_kws = specific_kws + generic_kws
     print(f"Found {len(results)} skill(s) for keyword='{args.keyword}' category='{args.category}':")
+    if cjk_split_note:
+        print(f"  (复合词拆分: {cjk_split_note})")
     if len(all_kws) > 1 or (len(all_kws) == 1 and all_kws[0] != args.keyword):
         print(f"  (expanded: {', '.join(all_kws)})")
     print()
