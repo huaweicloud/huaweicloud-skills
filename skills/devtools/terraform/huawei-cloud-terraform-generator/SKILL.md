@@ -89,13 +89,44 @@ For example:
 
 ### 4.3 Propose a resource plan for confirmation
 
+**Pre-confirmation checklist (CRITICAL — MUST complete ALL items before proposing the plan when ECS is in the resource set):**
+
+When the resource set includes ECS instances, the following checklist MUST be completed before proposing the resource plan to the user. Each item must be explicitly resolved — "skipped" is not a valid state.
+
+- [ ] **DevBridge decision (4.3.1)**: Read `reference/ecs-devbridge-option.md` and ask the user whether to install DevBridge SSH tunnel. Record the answer (yes/no). This decision determines the security group configuration (see 4.3.2).
+- [ ] **Security group ports (4.3.2)**: If DevBridge = yes → zero inbound rules, egress limited to TCP 443/80 + UDP 53. If DevBridge = no → ask user which ports to open.
+- [ ] **Region confirmed**: User has confirmed or accepted the recommended region.
+- [ ] **OS image confirmed**: User has confirmed or accepted the recommended OS image.
+
+**Forbidden:**
+- ❌ Proposing a resource plan without completing the pre-confirmation checklist when ECS is in the resource set
+- ❌ Skipping the DevBridge question or assuming the answer
+- ❌ Proceeding to 4.4 (resource availability verification) with unresolved checklist items
+
 Before generating Terraform, propose a concrete resource plan for the user to confirm following the rules in the Parameter Confirmation section.
 
 See `reference/guardrails.md` for rules about handling sensitive information.
 
-### 4.3.1 Confirm security group rules with user (CRITICAL)
+### 4.3.1 ECS DevBridge SSH tunnel decision (CRITICAL — MUST ask before security group configuration)
 
-**Required workflow:**
+**This step MUST be executed before 4.3.2 (security group rules).** The DevBridge decision determines the security group configuration:
+- DevBridge = yes → zero inbound rules (SSH comes through tunnel, not public port), egress limited to TCP 443 + TCP 80 + UDP 53
+- DevBridge = no → ask user which ports to open (4.3.2)
+
+When creating ECS, check `reference/ecs-devbridge-option.md` for DevBridge SSH tunnel option. If the file exists, read it and follow its instructions (ask user, check conditions, generate with DevBridge, post-apply guidance, destroy cleanup).
+
+**Forbidden:**
+- ❌ Skipping this step and proceeding directly to security group configuration
+- ❌ Assuming the user's DevBridge preference without asking
+- ❌ Reading `reference/ecs-devbridge-option.md` but not asking the user
+
+### 4.3.2 Confirm security group rules with user (CRITICAL)
+
+**Prerequisite: 4.3.1 (DevBridge decision) must be completed first.** The security group configuration depends on the DevBridge decision:
+- If DevBridge = yes: zero inbound rules, egress limited to TCP 443 + TCP 80 + UDP 53 (DevBridge tunnel connects out on TCP 443). Do NOT ask about inbound ports.
+- If DevBridge = no: proceed with the normal port confirmation workflow below.
+
+**Required workflow (when DevBridge = no):**
 
 1. Infer likely ports from user's goal (Web server → 80, 443; SSH → 22; Database → 3306, 5432)
 2. Ask user to confirm ports: "需要开放哪些端口？推荐：80、443、22"
@@ -130,10 +161,7 @@ resource "huaweicloud_networking_secgroup_rule" "egress" {
 - ❌ Using only egress rule without ingress rules
 - ❌ Using hardcoded default ports without asking user
 - ❌ Generating rules that don't match user confirmation
-
-### 4.3.2 ECS creation extensions
-
-When creating ECS, check `reference/ecs-devbridge-option.md` for DevBridge SSH tunnel option. If the file exists, read it and follow its instructions (ask user, check conditions, generate with DevBridge, post-apply guidance, destroy cleanup).
+- ❌ Configuring security group before completing the DevBridge decision (4.3.1)
 
 ### 4.4 Verify resource availability BEFORE generating any code
 
@@ -164,6 +192,15 @@ Before writing a single line of Terraform, you MUST verify every resource specif
 **When modifying existing Terraform** (user asks to change a flavor, switch regions, use a different instance type, etc.): re-run the availability query for the new specification in the new region BEFORE editing any .tf file. Do not assume the previously-queried results still apply.
 
 ### 4.5 Generate Terraform after confirmation
+
+**Pre-generation validation (CRITICAL — MUST pass before writing any .tf file):**
+
+If the resource plan includes ECS instances, verify:
+- [ ] DevBridge decision was explicitly made (yes or no) in 4.3.1 — not skipped
+- [ ] If DevBridge = yes: `reference/ecs-devbridge-option.md` was read and all conditions checked
+- [ ] Security group rules match the DevBridge decision (DevBridge = yes → zero inbound; DevBridge = no → user-confirmed ports)
+
+If any check fails, go back to 4.3 and complete the pre-confirmation checklist. Do NOT generate Terraform with unresolved decisions.
 
 **CRITICAL: Before generating, MUST read relevant reference documents from Section 8.1 mapping table.**
 
@@ -332,3 +369,4 @@ Before finalizing, ensure:
 - [ ] Cost estimation includes ALL required elements: resource list, specifications, estimated cost per resource, total cost, pricing calculator link
 - [ ] User was asked for confirmation via confirmation dialog before terraform apply
 - [ ] `terraform apply` was executed only after explicit user confirmation (or user declined)
+- [ ] If ECS is in the plan: DevBridge decision was explicitly asked and recorded (yes/no) in 4.3.1
