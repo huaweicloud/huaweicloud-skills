@@ -2,6 +2,40 @@
 
 This file contains the full DevBridge setup flow for ECS creation. Referenced by SKILL.md section 4.3.2.
 
+## Part 0: DevBridge 是什么、有什么好处、何时该装
+
+### 它是什么
+
+DevBridge 是华为云的安全中继隧道：ECS 主动**出站**连到中继，SSH/RDP 再从隧道反向接入。因此 ECS 的**安全组入方向可以全关**，公网上没有任何可被扫描的端口。
+
+### 好处（按价值排序）
+
+1. **零暴露（核心价值）**：没有公网 IP 暴露、没有入站端口，杜绝 SSH 爆破与端口扫描。这是装它最根本的理由，与机器台数无关。
+2. **省公网资源（规模越大越明显）**：
+   - 不需要每台 ECS 各绑一个 EIP → 省下 N 个公网 IP 及对应配额/费用；
+   - 没有公网入向流量 → 省入向带宽；
+   - 多台共用一条出站通道（NAT 网关 + 1 个 EIP），而不是每台单独一个 EIP。
+3. **连接稳定方便**：开机自动连隧道、重启不断线；本地 `ssh root@localhost -p <端口>` 直连，无需记公网 IP。
+
+### 代价（是「复杂度」，不是「钱」）
+
+DevBridge 的前置资源——FunctionGraph 函数、IAM 委托/自定义角色、DevBridge API Key、DevStage 环境——**基本不产生费用**：
+
+- 函数在免费额度内（100 万次/月），转发 Key 只在开机跑几次，约等于免费；
+- IAM 委托/自定义角色、DevBridge API Key：免费；
+- DevStage 环境：只要「存在但不启动」就不产生运行费，仅占用配额（配额≠钱）；只有真把它开机才有运行费。
+
+真正的代价是**组件多、链路长**：每多一环就多一个失败点，destroy 时也要一起清干净。
+
+另外 ECS 仍需一条出站通道（NAT 或 EIP）供隧道出站——但这**不是 DevBridge 独有**（传统 SSH 也要 EIP），而且多台能共用一条，规模大反而更省。
+
+### 决策规则（装 / 不装）
+
+- **推荐装**：要「零暴露/安全合规」（核心价值，与规模无关）；或规模大到省 N 个 EIP 值得为之加复杂度；或账号已有 DevStage 环境与 devbridge CLI。
+- **不推荐装**：一次性测试、测完就删、且不在乎暴露 22；规模小（省不到钱还白加复杂度）；只想省 EIP（跳板机复杂度更低、更省事）。
+
+> 一句话：DevBridge 加的是复杂度，换的是「零暴露 + 规模化的省 EIP」；它只在规模大时才"省钱"，但任何规模下都"买安全"。
+
 ## Part 1: Always ask (before generating Terraform)
 
 When creating ECS instances from within AI DevSpace, always ask the user whether to install DevBridge. Do NOT force it, do NOT skip the question.
@@ -16,6 +50,11 @@ After confirming the basic ECS plan (region, flavor, image, etc.), ask the user:
     - SSH 走隧道进来，不需要开 22 端口，不需要知道公网 IP
     - 开机自动连隧道，重启不断线
     - 从本地直接 ssh root@localhost -p <端口> 就能连
+
+  省钱的好处：
+    - 省一台跳板机/堡垒机：传统「不开公网 SSH」要单独买跳板机或堡垒机服务，DevBridge 自带中继隧道，省下这笔钱
+    - 纯后台机器不用每台配公网 EIP：SSH 走隧道、出网共享 NAT 网关即可，比每台绑一个独立 EIP 更省
+    - 零入站攻击面，免去被爆破/入侵的隐性成本（突发流量费、被拿来挖矿产生的超额账单）
 
   安装方式（唯一 — B1，FunctionGraph 代理）：
     用户凭证不进 user_data，ECS 通过 FunctionGraph 代理获取 DevBridge API Key
