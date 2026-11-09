@@ -18,6 +18,7 @@ token: IAM_TOKEN 环境变量(推荐) > --token-file(权限 600) > 交互式输�
 import argparse
 import json
 import os
+import re
 import stat
 import sys
 
@@ -55,7 +56,7 @@ A5_GROUP_FIELDS = {
 }
 
 A5_UNIT_FIELDS = {
-    "termination_grace": {"termination_grace_period_seconds": 30},
+    "termination_grace": {"termination_grace_period_seconds": 1},
     "npu_reset_enable": False,
     "cpu_affinity": False,
     "codes": [],
@@ -90,10 +91,8 @@ def apply_a5_group_fields(group, force_secret_type=False):
     return group
 
 
-def apply_a5_unit_fields(unit, replicas=None):
+def apply_a5_unit_fields(unit):
     """为 unit 补 A5 特殊字段(不改动已有值,setdefault 语义)。"""
-    if replicas is not None:
-        unit.setdefault("group_count", replicas)
     for key, value in A5_UNIT_FIELDS.items():
         if key not in unit:
             unit[key] = value
@@ -126,7 +125,8 @@ def build_request_body(args):
     """构建 CreateInferService 请求体(顶层平铺结构)。
 
 单部署单元: 所有 role 收集到 group_configs[0].unit_configs[]。
-PD 分离: 2 个 unit(prefill/decode);其余形式: 1 个 unit。
+3 种部署形式: single(1 unit master)/multi_node(2 unit master+worker)/pd(3 unit proxy+prefill+decode)。
+PD 分离: 3 个 unit(proxy/prefill/decode);多机部署: 2 个 unit(master/worker);单机: 1 个 unit(master)。
 --raw-json 优先级最高,直接放行平铺 JSON。
 """
     roles = []
@@ -185,8 +185,9 @@ PD 分离: 2 个 unit(prefill/decode);其余形式: 1 个 unit。
             sys.exit(f"[错误] --role-extra-json 不是合法 JSON: {e}")
 
     # 所有 role(推理单元)收集到单一 group_configs[0].unit_configs[]
-    # (单部署单元;PD 分离 = 2 个单元 prefill/decode,其余形式 = 1 个单元)
-    group_replicas = getattr(args, "group_replicas", 1)
+    # (单部署单元;PD 分离 = 3 个单元 proxy/prefill/decode,多机部署 = 2 个单元 master/worker,单机 = 1 个单元 master)
+    group_replicas = getattr(args, "group_replicas", 1) or 1
+    unit_replicas = getattr(args, "unit_replicas", 1) or 1
     unit_configs = []
     for i, role in enumerate(roles):
         role_name = role.get("name", f"role-{i + 1}")
@@ -197,6 +198,7 @@ PD 分离: 2 个 unit(prefill/decode);其余形式: 1 个 unit。
         unit = {
             "name": role_name,
             "count": replicas,
+            "group_count": unit_replicas,
             "role": "COMMON",
             "cmd": "bash /home/ma-user/code/start_vllm.sh",
             "image": {"source": "SWR", "swr_path": ""},
@@ -228,6 +230,7 @@ PD 分离: 2 个 unit(prefill/decode);其余形式: 1 个 unit。
                 "timeout_seconds": 60,
             },
             "recovery": "Instance",
+            "termination_grace": {"termination_grace_period_seconds": 1},
         }
         # code 目录挂载(骨架可选参数;host_cache=true 本地加速,所有芯片统一开启)
         code_obs_path = getattr(args, "code_obs_path", "")
@@ -238,12 +241,21 @@ PD 分离: 2 个 unit(prefill/decode);其余形式: 1 个 unit。
             ]
         if is_a5:
             # A5 特殊字段(unit 级,共享常量 apply_a5_unit_fields)
-            apply_a5_unit_fields(unit, replicas)
+            apply_a5_unit_fields(unit)
         # 应用 --role-extra-json 附加字段(键为单元名或索引)
         if role_name in extra:
             unit.update(extra[role_name])
         elif str(i) in extra:
             unit.update(extra[str(i)])
+        # PD 分离 proxy 单元: --proxy-custom-spec 注入 custom_spec(card=0,替代 flavor)
+        # proxy 不消耗 NPU 卡,资源池无 0 卡预置 flavor,必须用 custom_spec;recovery/termination_grace 与其他单元一致(骨架默认 Instance + 1s)
+        proxy_custom_spec = getattr(args, "proxy_custom_spec", "")
+        if role_name == "proxy" and proxy_custom_spec:
+            try:
+                unit["custom_spec"] = json.loads(proxy_custom_spec)
+            except json.JSONDecodeError as e:
+                sys.exit(f"[错误] --proxy-custom-spec 不是合法 JSON: {e}")
+            unit.pop("flavor", None)
         unit_configs.append(unit)
 
     group = {
@@ -252,6 +264,7 @@ PD 分离: 2 个 unit(prefill/decode);其余形式: 1 个 unit。
         "count": group_replicas,
         "secret_type": "agency",
         "schedule_strategy": "HIGH_AVAILABILITY",
+        "async_scheduling": True,
         "unit_configs": unit_configs,
     }
     # 资源池与权重挂载(骨架可选参数;host_cache=true 本地加速,所有芯片统一开启)
@@ -320,6 +333,7 @@ PD 分离: 2 个 unit(prefill/decode);其余形式: 1 个 unit。
                 for uc in g.get("unit_configs", []):
                     if not isinstance(uc, dict):
                         continue
+                    uc.setdefault("group_count", uc.get("count", 1))
                     if is_a5:
                         apply_a5_unit_fields(uc)
                     for f in uc.get("files", []):
@@ -345,6 +359,7 @@ PD 分离: 2 个 unit(prefill/decode);其余形式: 1 个 unit。
             unit = {
                 "name": r.pop("name", f"role-{i + 1}"),
                 "count": replicas,
+                "group_count": replicas,
                 "role": "COMMON",
                 "cmd": "bash /home/ma-user/code/start_vllm.sh",
             }
@@ -397,6 +412,7 @@ def request_with_auth(method, url, token, body=None, workspace_id=None):
     if workspace_id:
         # 所有环境需要 workspace 头;GET 接口需同时拼接 URL 双查询参数(见 append_workspace_query)
         headers["X-Workspace-Id"] = workspace_id
+    # 敏感凭据脱敏: 日志只打印 method + URL(不含 token),禁止打印 headers/Authorization
     print(f"[请求] {method} {url}")
     try:
         if method in ("POST", "PUT", "PATCH"):
@@ -404,10 +420,19 @@ def request_with_auth(method, url, token, body=None, workspace_id=None):
         else:
             resp = requests.request(method, url, headers=headers, timeout=120, verify=False)
     except requests.exceptions.RequestException as e:
-        sys.exit(f"[错误] 请求失败: {e}")
+        # 异常 message 可能含 URL 但不含 Authorization 头(requests 不把 header 写进 message)
+        # 但保险起见,显式剔除可能的 Authorization/X-Auth-Token 子串后再打印
+        err_msg = str(e)
+        for secret in ("Authorization", "X-Auth-Token", "X-Subject-Token", "Bearer "):
+            err_msg = err_msg.replace(secret, "***")
+        sys.exit(f"[错误] 请求失败: {err_msg}")
     print(f"[响应] HTTP {resp.status_code}")
     if resp.status_code >= 300:
-        sys.exit(f"[错误] HTTP {resp.status_code}: {resp.text}")
+        # resp.text 是平台返回的错误体,不含客户端 token;但保险起见剔除可能的 token 子串
+        err_body = resp.text or ""
+        for secret in ("Authorization", "X-Auth-Token", "X-Subject-Token", "Bearer "):
+            err_body = err_body.replace(secret, "***")
+        sys.exit(f"[错误] HTTP {resp.status_code}: {err_body}")
     if not resp.text:
         return None
     try:
@@ -509,8 +534,16 @@ def validate_request_body(body):
                 continue
             if "instance_groups" in uc:
                 problems.append(f"unit_configs[{j}] 不应包含 instance_groups")
-            if not uc.get("flavor"):
-                problems.append(f"unit_configs[{j}].flavor 缺失")
+            if "group_count" not in uc:
+                problems.append(f"unit_configs[{j}].group_count 缺失(单元副本数,通用必填)")
+            elif not isinstance(uc.get("group_count"), int) or uc.get("group_count") < 1:
+                problems.append(f"unit_configs[{j}].group_count 须为 >=1 的整数")
+            if "count" not in uc:
+                problems.append(f"unit_configs[{j}].count 缺失(单元部署实例数,通用必填)")
+            elif not isinstance(uc.get("count"), int) or uc.get("count") < 1:
+                problems.append(f"unit_configs[{j}].count 须为 >=1 的整数")
+            if not uc.get("flavor") and not uc.get("custom_spec"):
+                problems.append(f"unit_configs[{j}].flavor 缺失(proxy 单元可用 custom_spec 替代)")
             if not (uc.get("image") or {}).get("swr_path"):
                 problems.append(f"unit_configs[{j}].image.swr_path 缺失")
             if not uc.get("cmd"):
@@ -525,6 +558,16 @@ def validate_request_body(body):
             for k, f in enumerate(uc.get("files", [])):
                 if isinstance(f, dict) and f.get("host_cache") is not True:
                     problems.append(f"unit_configs[{j}].files[{k}].host_cache 未开启(应为 true 本地加速,所有芯片必开)")
+        # 核心规范(强制): 第一推理单元(unit_configs[0])不能是 worker/decode
+        # ModelArts 所有请求都发送到 group 0(unit_configs[0]),worker/decode 不具备接受请求功能
+        if ucs:
+            first_unit_name = (ucs[0].get("name") or "").lower()
+            if first_unit_name in ("worker", "decode"):
+                problems.append(
+                    f"unit_configs[0].name='{ucs[0].get('name')}' 违反核心规范: "
+                    f"第一推理单元不能是 worker/decode(ModelArts 请求都发送到 group 0,"
+                    f"worker/decode 不具备接受请求功能);须为 master(single/multi_node)或 proxy(PD 分离)"
+                )
     # service_invoke 三项必填(缺任一项报 ModelArts.6400);A5 时 port 在 advanced_config
     si = (body.get("runtime_config") or {}).get("service_invoke") or {}
     if is_a5_body:
@@ -638,25 +681,38 @@ def parse_args():
     p.add_argument("--service-name", required=True, help="服务名称,1-64 字符,同一地域唯一")
     p.add_argument("--replicas", type=int, default=1, help="(兼容保留)部署副本数,等价于 --group-replicas")
     p.add_argument("--group-replicas", type=int, default=None,
-                   help="部署单元副本数(group_configs[].count): 默认 1(单副本多实例);"
-                        "多副本单实例(可靠性)时 >1")
+                   help="部署副本数(group_configs[].count,服务级部署副本,平台内置流量分发): "
+                        "默认 1(单部署副本);除非用户主动提出修改,固定为 1。"
+                        "与单元副本数 R(unit_configs[].group_count)、实例数 N(unit_configs[].count)正交独立")
+    p.add_argument("--unit-replicas", type=int, default=None,
+                   help="单元副本数 R(unit_configs[].group_count,原可靠性维度副本): "
+                        "默认 1(单副本);可靠性需求时 >1(多副本,平台内置流量分发)。"
+                        "与实例数 N(unit_configs[].count)正交独立")
     p.add_argument("--role", action="append", default=[],
                    help="推理单元,可重复: name=role-1,replicas=1。**单部署单元结构**: "
-                        "所有 --role 收集到同一 group_configs[0].unit_configs[]——单节点/多节点/"
-                        "PD 共置传 1 个,PD 分离传 2 个(name=prefill,replicas=N name=decode,replicas=M);"
-                        "unit_configs[].count(=replicas)为单元内实例数(跨节点数);"
+                        "所有 --role 收集到同一 group_configs[0].unit_configs[]——"
+                        "单机部署传 1 个(name=master);多机部署传 2 个(name=master,replicas=1 name=worker,replicas=N-1);"
+                        "PD 分离传 3 个(name=proxy,replicas=1 name=prefill,replicas=N name=decode,replicas=M);"
+                        "unit_configs[].count(=replicas)为单元部署实例数 N(按部署形态自适应);"
                         "单元名仅允许小写字母/数字/连字符)")
     p.add_argument("--role-extra-json", default="",
                    help="按角色附加字段的 JSON(键为单元名,仅小写字母/数字/连字符),如 "
-                        '{"prefill":{"image":"swr.xxx/vllm-ascend:v0.23.0","envs":{"VLLM_ROLE":"prefill","PORT":"8080"}},'
-                        '"decode":{"image":"swr.xxx/vllm-ascend:v0.23.0","envs":{"VLLM_ROLE":"decode","PORT":"7101"}}}')
+                        '{"proxy":{"flavor":"modelarts.vm.arm.10u.1024g.npu.0","cmd":"python /home/ma-user/code/load_balance_proxy_server_example.py --host 0.0.0.0 --port 8080 --prefiller-hosts ... --decoder-hosts ..."},'
+                        '"prefill":{"image":"swr.xxx/vllm-ascend:v0.23.0","envs":{"VLLM_ROLE":"prefill"}},'
+                        '"decode":{"image":"swr.xxx/vllm-ascend:v0.23.0","envs":{"VLLM_ROLE":"decode"}}}'
+                        "(PORT 已在脚本内按角色内置默认值 proxy=8080/prefill=8080/decode=7100,envs 无需注入 PORT)")
+    p.add_argument("--proxy-custom-spec", default="",
+                   help="PD 分离 proxy 单元 custom_spec JSON(card=0,proxy 不消耗 NPU,资源池无 0 卡预置 flavor 时必填),"
+                        "如 '{\"arch\":\"arm64\",\"card\":0.0,\"cpu\":10,\"memory\":102400.0,\"ratio\":2,\"type_alias\":\"Snt9b23\"}';"
+                        "传入后自动注入到名为 proxy 的 unit(custom_spec 替代 flavor;recovery/termination_grace 与其他单元一致,骨架默认 Instance+1s)")
     p.add_argument("--chip-model", choices=["a2", "a3", "a5"], default="a2",
                    help="目标资源池芯片型号: a2(910B)/a3(910C)/a5(950 系列 snt9e)。"
                         "默认 a2,走 A2/A3 已验证的请求体骨架;选 a5 时补充 A5 特殊字段"
-                        "(workload_type=LWS/async_scheduling=true/advanced_config/group_count/"
+                        "(workload_type=LWS/async_scheduling=true/advanced_config/"
                         "termination_grace/npu_reset_enable/cpu_affinity/codes/models/dumps/"
                         "unit 级 secret_type/探针 name/runtime_config 扩展字段/tags/log_configs,"
-                        "secret_type 用 dew)")
+                        "secret_type 用 dew)。"
+                        "group_count(unit_configs[].group_count 单元副本数)为通用必填字段,所有芯片均注入,不属 A5 特殊字段")
     p.add_argument("--pool-id", default="",
                    help="专属资源池 ID(metadata.name,如 pool-xxxx-...);骨架路径填充 group_configs[].pool_id")
     p.add_argument("--model-obs-path", default="",
@@ -684,6 +740,17 @@ def parse_args():
 
 def main():
     args = parse_args()
+    # 校验 project-id 必须为 32 位 UUID 格式(非 Project Name/region name 格式)。
+    # ModelArts API 路径段 {project_id} 必须是 UUID,用 Project Name(如 cn-north-7)
+    # 占位会被平台报 400 "token should contains projectId"(实测 GET /v1/cn-north-7/workspaces
+    # 报错,改用 UUID 返回 200)。
+    if not re.fullmatch(r"[0-9a-fA-F]{32}", args.project_id):
+        sys.exit(
+            f"[错误] --project-id 必须是 32 位 UUID(如 00000000000000000000000000000000),"
+            f"当前值 '{args.project_id}' 非 UUID 格式(可能是 Project Name/region name)。"
+            f"用 'GET <IAM_DOMAIN>/v3/auth/projects'(带 X-Auth-Token 头)按 name 匹配 "
+            f"PROJECT_NAME 取 id 为 Project ID(UUID)"
+        )
     # 安全获取 token(环境变量/--token-file/交互式),并挂到 args 供各子命令使用
     args.token = load_token(args)
     dispatch = {

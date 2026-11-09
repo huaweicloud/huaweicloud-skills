@@ -52,6 +52,6 @@ print(resp.json()["choices"][0]["message"]["content"])
 | `404 ModelArts.2836 Path not found` | 路径缺 `/v2/infer/{service_id}` 前缀 |
 | 401/403 | 推理请求认证 token 错误/缺失;或 IAM token 失效 |
 | `choices` 为空/报模型错误 | ① `--model` 参数与 `served-model-name`(部署的 MODEL_NAME)一致;② 权重/镜像版本是否配套 |
-| 服务反复重启 | 健康检查 startup 延迟 600s + 失败次数 300 是否配置;探针路径/端口与启动脚本一致(详见 `references/troubleshooting.md` 首条) |
+| 服务反复重启 | 健康检查 startup 延迟 300s + 失败次数 300 是否配置;探针路径/端口与启动脚本一致(详见 `references/troubleshooting.md` 首条) |
 
 > 完整排查表见 `references/troubleshooting.md`。

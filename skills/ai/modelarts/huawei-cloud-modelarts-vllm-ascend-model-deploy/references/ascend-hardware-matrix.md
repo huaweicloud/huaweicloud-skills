@@ -50,7 +50,7 @@
 
 1. 向用户确认 ModelArts 资源池的**芯片型号**(必要时用 `npu-smi info` 在节点上确认)
 2. **若为 950 系列(A5),必须继续细分确认 950DT / 950PR**(强制,禁止合并为单一选项)——两者单卡显存不同、同一模型适配文档示例参数可能不同,直接影响脚本取值
-3. **确认 TP 大小**(步骤 3.0): 合法 TP 候选 = 模型注意力头数约数 ∩ 资源池卡数档位 ∩ 模型文档启动脚本 TP 值——资源池卡数档位**按芯片型号直接推导,与 ShowInferServiceCluster 查询无关**: **非 A3 芯片(910B(A2)/310P/950 系列等)档位 1/2/4/8;A3 芯片(910C)档位 2/4/6/8/16**。`ShowInferServiceCluster` 只在步骤 4 方式 A(API 自动部署)构造请求体 `flavor` 字段时才查询,与本步档位推导无关
+3. **确认 TP 大小**(步骤 3.0): 合法 TP 候选 = 模型注意力头数约数 ∩ 资源池卡数档位 ∩ 模型文档启动脚本 TP 值 ∩ 显存可容纳(KV cache 非负)——资源池卡数档位**按芯片型号直接推导,与 ShowInferServiceCluster 查询无关**: **非 A3 芯片(910B(A2)/310P/950 系列等)档位 1/2/4/8;A3 芯片(910C)档位 2/4/6/8/16**。`ShowInferServiceCluster` 只在步骤 4 方式 A(API 自动部署)构造请求体 `flavor` 字段时才查询,与本步档位推导无关。**显存可容纳(第四条件,违反=vllm 启动崩溃 `ValueError: No available memory for the cache blocks`)**: `(单卡显存 × gpu_memory_utilization) - 模型权重大小/TP ≥ 1`(单位 GB),权重占满预留空间后 KV cache 为负直接崩溃(日志特征: `Available KV cache memory: -<Y> GiB` 负值),详见 SKILL.md 步骤 1.1 第 2 步
 4. 记录为部署方案的一部分(如 `Ascend 950DT,TP=4`)
 5. 回到 SKILL.md 步骤 3.1,在 vllm-ascend 适配文档中找**与该芯片型号/TP 匹配**的启动示例
 6. 若文档未覆盖该芯片型号 → 告知用户需自行验证适配,不保证可用

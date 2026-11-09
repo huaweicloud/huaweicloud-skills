@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""从全局 rank table 获取 master IP、DP start rank 与 DP size(节点数)。
+"""从全局 rank table 获取 master IP。
 
 从 GLOBAL_RANK_TABLE_FILE_PATH 指向的 rank table JSON 读取:
-  - 默认: 输出 master IP(与 POD_IP 比较判定角色)
-  - --dp-rank: 输出当前节点 DP start rank
-  - --dp-size: 输出 DP 总数 = rank table 节点数(动态推导,禁硬编码)
+  - 默认(group_idx=0): 输出 group 0 第一个 server IP(多机部署 master / PD 分离 proxy)
+  - group_idx=1: 输出 group 1 第一个 server IP(PD 分离 prefill 组 master)
+  - group_idx=2: 输出 group 2 第一个 server IP(PD 分离 decode 组 master)
 
 环境变量: GLOBAL_RANK_TABLE_FILE_PATH(rank table 路径)、POD_IP(当前节点 IP)
 """
@@ -47,13 +47,27 @@ def get_rank_table(global_rank_table_path=None):
         return None
 
 
-def get_master_ip():
-    """从 rank table 的第一个 server_group 的第一个 server 取 master IP。"""
+def get_master_ip(group_idx=0):
+    """从 rank table 的指定 server_group 的第一个 server 取 master IP。
+
+    部署形态对应 group_idx:
+    - 单机部署: 不调用此文件
+    - 多机部署: group_idx=0(server_group_list[0]['server_list'][0] = master IP)
+      master 推理单元实例数只能为 1,group 0 只有 1 个 server
+    - PD 分离部署:
+      - proxy(group 0): 实例数只能为 1,通过源码获取 masterIp(group_idx=0)
+      - prefill(group 1): 多实例场景下需要主从结构
+        server_group_list[1]['server_list'][0] = master,其余为 worker
+      - decode(group 2): 多实例场景下需要主从结构
+        server_group_list[2]['server_list'][0] = D 组自己的 master,其余 = worker
+      (官网 V2: D 组的 --dp-address 指向 D 组自己的第一个 server,不是 prefill 组的 master;
+       内网证据: 8机 3P1D 部署 D 组 master 在 rank table 位置 6,独立于 P 组位置 0/2/4)
+    """
     try:
         rank_table = wait_and_get_completed_global_rank_table()
         if rank_table is None:
             return None
-        master = rank_table["server_group_list"][0]["server_list"][0]
+        master = rank_table["server_group_list"][group_idx]["server_list"][0]
         return master["server_ip"]
     except Exception as e:
         print(e, file=sys.stderr)
@@ -62,9 +76,11 @@ def get_master_ip():
 def get_dp_start_rank():
     """根据 POD_IP 在 rank table 中匹配当前节点的 data-parallel start rank。
 
-    遍历所有 server_group 的 server_list,匹配 server_ip / server_id / container_ip
-    等于 POD_IP 的条目,返回其在全局遍历顺序中的序号(rank)。
-    未匹配时回退为 0(master 节点)。
+    multi_node 形态每节点 1 个实例,按 rank table 全局遍历序号取 rank
+    (master=0, worker=1/2/...)。ModelArts multi_node 不注入 DP_START_RANK
+    envs(与 PD 分离不同),必须从 rank table 动态推导;硬编码 0 会导致 worker
+    也启动 engine rank 0,与 master 冲突,vLLM 报 "HELLO message from remote
+    engine 0, expected it to be local"。未匹配时回退为 0(master 节点)。
     """
     try:
         rank_table = wait_and_get_completed_global_rank_table()
@@ -95,12 +111,12 @@ def get_dp_start_rank():
 
 
 def get_dp_size():
-    """统计 rank table 中全部 server 数(节点总数)。
+    """统计 rank table 中全部 server 数(multi_node DP 总数 = 节点数)。
 
-    单引擎 DP 形态(multinode / pd_colocate)下,每个节点运行 1 个实例,
-    数据并行总数(DATA_PARALLEL_SIZE)= rank table 中全部 server_list 条目数。
-    硬编码默认值(如 1/2)在节点数变化时会与 --data-parallel-size 不符,
-    导致跨节点通信失败,因此由 rank table 动态推导。
+    multi_node 形态每节点运行 1 个实例,DP 总数 = rank table 全部 server_list
+    条目数。硬编码(如 2)在节点数变化时与 --data-parallel-size 不符导致跨
+    节点通信失败,因此动态推导。PD 分离由 envs/脚本固定填入 PREFILL_DP_SIZE
+    /DECODE_DP_SIZE,不调用此函数。
     """
     try:
         rank_table = wait_and_get_completed_global_rank_table()
@@ -124,4 +140,12 @@ if __name__ == "__main__":
     elif len(sys.argv) > 1 and sys.argv[1] == "--dp-size":
         print(get_dp_size())
     else:
-        print(get_master_ip())
+        group_idx = 0
+        if len(sys.argv) > 1:
+            try:
+                group_idx = int(sys.argv[1])
+            except ValueError:
+                pass
+        result = get_master_ip(group_idx)
+        if result is not None:
+            print(result)

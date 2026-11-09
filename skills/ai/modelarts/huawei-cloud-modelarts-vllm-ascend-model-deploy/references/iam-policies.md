@@ -126,6 +126,8 @@ token = re.search(r"(?i)^X-Subject-Token:\s*(\S+)", content, re.M).group(1)
 print(token)  # 供 IAM_TOKEN 环境变量使用
 ```
 
-**校验 token 可见项目(可选)**: `GET <IAM_DOMAIN>/v3/auth/projects`(带 `X-Auth-Token: <token>`),在 `projects[]` 中按 `name` 匹配 **`PROJECT_NAME`**(已确认,非 region)取 `id` 为 project-id。
+**校验 token 可见项目(强制,取 Project ID UUID)**: `GET <IAM_DOMAIN>/v3/auth/projects`(带 `X-Auth-Token: <token>`),在 `projects[]` 中按 `name` 匹配 **`PROJECT_NAME`**(已确认,非 region)取 `id` 为 **Project ID(32 位 UUID,如 `<PROJECT_ID_UUID>`)**。**⚠️ Project ID 必须用 UUID(强制,违反=API 报 `token should contains projectId`)**: 后续所有 ModelArts API 路径段 `{project_id}` 必须用此 UUID;`PROJECT_NAME`(region name 格式如 `cn-north-7`)仅用于获取 token 的 `scope.project.name`,**禁止用 PROJECT_NAME 占据 API 路径段**——平台拿非 UUID 值无法定位 project,报错被泛化为 `token should contains projectId`(实测 `GET /v1/cn-north-7/workspaces` 报 400,改用 `GET /v1/<PROJECT_ID_UUID>/workspaces` 返回 200)。`create_infer_service.py --project-id` 已增加 UUID 格式校验,非 UUID 直接拒绝。
+
+**查 workspace-id(`GET /v1/{project_id}/workspaces`,路径 `{project_id}` 用 UUID Project ID)**: 按工作空间名(如 `default`)匹配出 `id` 记为 `WORKSPACE_ID`。**⚠️ workspace-id 不假设 UUID 格式**: 多数工作空间 `id` 是 UUID(如 `<WORKSPACE_ID_UUID>`),但 `default` 工作空间 `id` 实测为简写 `"0"`(非 UUID),**直接用 API 返回的 `id` 值作为 WORKSPACE_ID**,不假设格式;后续 API 调用 GET 接口带 `X-Workspace-Id: {WORKSPACE_ID}` 头 + URL 双查询参数,POST 创建请求放请求 body 顶层 `workspace_id` 字段。
 
 > **字段对应关系(必须先与用户确认)**: 用 AskUserQuestion 收集 IAM 凭据时,**索要顺序固定为「账号名(domain.name)→ IAM 用户名(user.name)→ 密码(password)」**——账号名(主账号)放第一位、用户名(IAM 子用户)次之、密码最后。用户常按"账号名(domain)/ 用户名 / 密码"给出三行——**账号名是主账号(`domain.name`)、用户名是 IAM 子用户(`user.name`)、密码是登录密码**。收集后按"账号名(domain.name)、IAM 用户名(user.name)、密码(password)"顺序复述字段对应关系再取 token。顺序错配会 401(`The username or password is wrong`,连续错有账号锁定风险)。

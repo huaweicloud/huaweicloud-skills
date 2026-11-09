@@ -75,6 +75,9 @@ def upload_dir(obs_client, bucket, prefix, code_dir):
                 continue
             local_path = os.path.join(root, name)
             rel = os.path.relpath(local_path, code_dir)
+            # OBS 对象 key 必须用正斜杠(/),Windows os.path.relpath 返回反斜杠(\),
+            # 直接拼接会导致 OBS key 含反斜杠,Linux 容器挂载后路径不匹配 → bash 找不到文件。
+            rel = rel.replace(os.sep, "/")
             object_key = f"{prefix}/{rel}" if prefix else rel
             print(f"[上传] {local_path} -> obs://{bucket}/{object_key}")
             resp = obs_client.putFile(bucket, object_key, local_path)
