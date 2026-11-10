@@ -8,18 +8,29 @@ Detailed Description:
     full list of check items, triggers a check for every item, pulls
     paginated check results, and aggregates all results into a single JSON
     file.
+    An optional `--cloud-services` whitelist narrows the triggered check
+    items to the requested cloud services before any check is started. The
+    narrowing is a performance optimization only: it reduces the number of
+    rate-limited StartItemCheck calls, and the merge step remains the
+    authoritative filter for the final report scope. The resolution outcome
+    is recorded in `meta.cloud_service_filter` so the merge step can adopt
+    it when it does not receive the option itself.
 
 Workflow:
-    1. Parse command line arguments (region, language, concurrency, etc.).
+    1. Parse command line arguments (language, concurrency, cloud services,
+       etc.). The OA region is not configurable: it is fixed to OA_REGION.
     2. Set up logging to stderr with an optional file handler.
     3. Call `hcloud OA ShowCheckItemList` to get all check items.
-    4. Process check items concurrently: trigger check via StartItemCheck,
+    4. Narrow the check item list by the optional cloud-service whitelist.
+    5. Process check items concurrently: trigger check via StartItemCheck,
        then fetch paginated results via ShowCheckItemResult.
-    5. Merge results in original order and write them to a single JSON file.
+    6. Merge results in original order and write them to a single JSON file.
 
 Dependencies:
     - Python 3.8+ standard library only (subprocess, json, argparse,
       logging, concurrent.futures, datetime).
+    - Local module: `cloud_service_filter` (alias resolution and record
+      matching shared with the merge and report scripts).
     - External: `hcloud` (KooCLI) installed, configured and authenticated.
       The script itself does not check credentials.
 """
@@ -36,9 +47,18 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone, timedelta
 
+from cloud_service_filter import (
+    MATCH_MATCHED,
+    classify_record_service,
+    load_alias_map,
+    normalize_token,
+    parse_cloud_services,
+    record_service_value,
+)
+
 LOGGER = logging.getLogger(__name__)
 
-DEFAULT_REGION = "cn-southwest-2"
+OA_REGION = "cn-southwest-2"
 DEFAULT_LANGUAGE = "zh-cn"
 DEFAULT_THREADS = 3
 DEFAULT_PAGE_SIZE = 10
@@ -50,17 +70,13 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_FILE_NAME = "oa_risk_inspection_results_{ts}.json"
 TIMESTAMP_FORMAT = "%Y_%m_%d_%H_%M_%S"
 
-# OA service is only verified available in cn-southwest-2 (cn-south-4
-# returned APIGW.0101 in the pagination verification report). No hard-coded
-# whitelist: the remote CLI version may change, so the region is user input.
-SUPPORTED_REGIONS_HINT = ("cn-southwest-2", "cn-south-4")
-
 
 def build_arg_parser() -> argparse.ArgumentParser:
     """Build the command line argument parser.
 
-    1. Add region, language, concurrency and page options.
-    2. Add retry, timeout, output and logging options.
+    1. Add language, concurrency and page options.
+    2. Add retry, timeout, cloud-service and logging options. The OA region
+       is not an option: it is fixed to OA_REGION.
 
     Args:
         None
@@ -70,23 +86,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
     Examples:
         >>> parser = build_arg_parser()
-        >>> args = parser.parse_args(["--region", "cn-south-4"])
-        >>> args.region == "cn-south-4"
+        >>> args = parser.parse_args(["--threads", "5"])
+        >>> args.threads == 5
         True
     """
     parser = argparse.ArgumentParser(
         prog="oa_risk_inspection",
         description=(
             "Fetch Huawei Cloud OA risk check results via the hcloud CLI "
-            "and save them to a single JSON file."
-        ),
-    )
-    parser.add_argument(
-        "--region",
-        default=DEFAULT_REGION,
-        help=(
-            "Optional. Cloud region for the OA service (default: %(default)s; "
-            "hint: {})".format(", ".join(SUPPORTED_REGIONS_HINT))
+            "and save them to a single JSON file. The OA region is fixed "
+            "to {}.".format(OA_REGION)
         ),
     )
     parser.add_argument(
@@ -128,6 +137,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=int,
         default=DEFAULT_TIMEOUT,
         help="Optional. Timeout in seconds for each hcloud subprocess call (default: %(default)s).",
+    )
+    parser.add_argument(
+        "--cloud-services",
+        default=None,
+        help=(
+            "Optional. Comma-separated cloud services to inspect, accepting service codes, "
+            "Chinese names, English names or abbreviations (e.g. ECS,CCE). The check items "
+            "of other services are not triggered. This only speeds up collection: the merge "
+            "step decides the final report scope."
+        ),
     )
     parser.add_argument(
         "--log-file",
@@ -749,6 +768,51 @@ def collect_results(
     return [record for _, record in ordered_results]
 
 
+def _filter_check_items_by_cloud_services(
+    check_items: list[dict],
+    parsed_filter: dict,
+) -> list[dict]:
+    """Narrow the check item list to the requested cloud services.
+
+    1. Classify every check item against the resolved service codes.
+    2. Keep only the matched items, preserving the original order.
+    3. Record the services never seen in the item list, so the merge step can
+       report them as unmatched.
+    4. Log the kept / dropped counts so the narrowing is visible.
+
+    Args:
+        check_items: list[dict] — All check items from ShowCheckItemList.
+        parsed_filter: dict — The structure returned by
+            parse_cloud_services; its `services` key is read and its
+            `unmatched` key is filled in place.
+
+    Returns:
+        list[dict]: The check items whose service is whitelisted.
+
+    Examples:
+        >>> _filter_check_items_by_cloud_services(
+        ...     [{"id": "a", "service_type_code": "ecs"}, {"id": "b", "service_type_code": "rds"}],
+        ...     {"services": ["ecs"]})[0]["id"]
+        'a'
+    """
+    services = list(parsed_filter.get("services", []))
+    allowed = {normalize_token(code) for code in services}
+    seen: set[str] = set()
+    kept: list[dict] = []
+    for check_item in check_items:
+        outcome = classify_record_service(check_item, services)
+        if outcome == MATCH_MATCHED:
+            kept.append(check_item)
+            seen.add(normalize_token(record_service_value(check_item)))
+    parsed_filter["unmatched"] = [
+        code for code in services if normalize_token(code) not in seen]
+    LOGGER.info(
+        "Cloud service filter kept %d of %d check items (services: %s)",
+        len(kept), len(check_items), ",".join(services),
+    )
+    return kept
+
+
 def _build_output_document(
     check_items: list[dict],
     records: list[dict],
@@ -757,12 +821,14 @@ def _build_output_document(
     threads: int,
     page_size: int,
     output_path: str,
+    cloud_service_filter: dict | None = None,
 ) -> dict:
     """Assemble the final output JSON document.
 
     1. Count succeeded and failed records.
     2. Build the meta block with run configuration and timestamps.
-    3. Return the document with meta and results in original order.
+    3. Attach the cloud-service filter resolution when one was applied.
+    4. Return the document with meta and results in original order.
 
     Args:
         check_items: list[dict] — All check items (for the total count).
@@ -772,6 +838,9 @@ def _build_output_document(
         threads: int — Worker thread count used.
         page_size: int — Page size used.
         output_path: str — Output file path (absolute form included).
+        cloud_service_filter: dict | None — The whitelist resolution
+            (requested / resolved / services), or None when no whitelist was
+            applied.
 
     Returns:
         dict: Output document with meta and results.
@@ -794,6 +863,8 @@ def _build_output_document(
         "page_size": page_size,
         "output_path": os.path.abspath(output_path),
     }
+    if cloud_service_filter:
+        meta["cloud_service_filter"] = cloud_service_filter
     document: dict = {"meta": meta, "results": records}
     return document
 
@@ -829,30 +900,55 @@ def main() -> int:
     """Orchestrate the full inspection workflow.
 
     1. Parse command line arguments.
-    2. Set up logging and log start with the output absolute path.
-    3. Fetch all check items, run them concurrently, and write the aggregated
-       JSON document.
-    4. Log completion counts and the output absolute path.
+    2. Set up logging.
+    3. Resolve the optional cloud-service whitelist; an invalid or empty
+       value terminates with a non-zero exit code.
+    4. Fetch all check items from the fixed OA_REGION, narrow them by the
+       whitelist, run them concurrently, and write the aggregated JSON
+       document.
+    5. Log completion counts and the output absolute path.
 
     Args:
         None
 
     Returns:
         int: Process exit code (0 on success, 1 on fatal failure).
+
+    Examples:
+        # >>> main()
+        # 0
     """
     parser = build_arg_parser()
     args = parser.parse_args()
     setup_logging(args.log_file)
 
+    cloud_service_filter: dict | None = None
+    if args.cloud_services:
+        try:
+            parsed_filter = parse_cloud_services(
+                args.cloud_services, load_alias_map())
+        except ValueError as exc:
+            LOGGER.error("Invalid --cloud-services value: %s", exc)
+            return 1
+        cloud_service_filter = {
+            "requested": parsed_filter["requested"],
+            "resolved": parsed_filter["resolved"],
+            "services": parsed_filter["services"],
+            "unmatched": [],
+        }
+
     timestamp = datetime.now().strftime(TIMESTAMP_FORMAT)
     output_absolute = resolve_output_path(timestamp)
     LOGGER.info("Task started. Output file(s): %s", output_absolute)
     try:
-        check_items = list_check_items(args.region, args.language, args.timeout)
-        LOGGER.info("Fetched %d check items from region %s", len(check_items), args.region)
+        check_items = list_check_items(OA_REGION, args.language, args.timeout)
+        LOGGER.info("Fetched %d check items from region %s", len(check_items), OA_REGION)
+        if cloud_service_filter is not None:
+            check_items = _filter_check_items_by_cloud_services(
+                check_items, cloud_service_filter)
         records = collect_results(
             check_items,
-            args.region,
+            OA_REGION,
             args.language,
             args.threads,
             args.page_size,
@@ -863,11 +959,12 @@ def main() -> int:
         document = _build_output_document(
             check_items,
             records,
-            args.region,
+            OA_REGION,
             args.language,
             args.threads,
             args.page_size,
             output_absolute,
+            cloud_service_filter,
         )
         written_path = write_output_document(document, output_absolute)
         meta = document.get("meta", {})

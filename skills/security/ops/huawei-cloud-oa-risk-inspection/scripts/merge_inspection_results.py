@@ -12,19 +12,27 @@ Detailed Description:
     1. The script reads three input JSON files whose absolute paths are passed
        in explicitly via --oa-file, --config-file and --secmaster-file; it
        never scans directories for timestamped files, because the output
-       directory may hold results of multiple inspection runs.
+       directory may hold results of multiple inspection runs. All three
+       options are optional: an omitted, unreadable or unparsable source is
+       merged as an empty result set and recorded in meta.sources, so one
+       failed collector does not prevent a report. Only when all three
+       sources are unavailable does the script exit non-zero.
     2. Config records are converted per state: each resource-level compliance
        state becomes one OA-format record, with the rule-level judgment
        standard (assignment.description) copied into
-       summary.check_item_description. OA fields that have no counterpart in
-       the Config source are left empty; no data is fabricated.
+       summary.check_item_description. The dimension is fixed to 资源合规
+       because the Config inspection semantics is resource compliance; other
+       OA fields that have no counterpart in the Config source are left
+       empty, and no data is fabricated.
     3. SecMaster records are converted per baseline record: each data_object
        becomes one OA-format record with dimension fixed to Security and
        risk_level derived from the source severity enum (High -> high, Low ->
        low), the original severity kept in summary.check_item_severity, and
-       the source workspace instance name (resolved from the top-level
-       workspaces array, workspace_id fallback) kept in workspace_name;
-       remaining OA fields without a counterpart are left empty.
+       the source workspace instance identity (workspace_name resolved from
+       the top-level workspaces array with workspace_id fallback, plus the
+       raw workspace_id and the instance's region_id) kept in workspace_name
+       / workspace_id / workspace_region_id; remaining OA fields without a
+       counterpart are left empty.
     4. OA records pass through unchanged except for the source marker.
     5. Every merged record carries a source field (OA / Config / SecMaster).
     6. Config failures and the daily compliance trend are preserved verbatim
@@ -32,18 +40,32 @@ Detailed Description:
        being disguised as OA records.
     7. The merged data is written to a timestamped JSON file next to the
        script, and a summary is emitted to stderr via logging.
+    8. An optional --cloud-services whitelist filters the merged records
+       after blacklist deduplication and after source conversion. It is the
+       authoritative scope filter for the whole pipeline: the collectors
+       only narrow their own work, while this step decides what the report
+       contains. Records whose cloud service cannot be determined are
+       excluded and counted separately instead of being attributed to a
+       guessed service. When the OA input already records a whitelist but
+       this script receives none, the recorded whitelist is adopted so a
+       partially narrowed run never produces a mixed-scope result.
 
 Workflow:
-    1. Parse the command-line arguments and validate the required input files.
+    1. Parse the command-line arguments (all three input files optional).
     2. Set up logging to stderr with an optional file handler.
-    3. Load the three input JSON files.
-    4. Convert Config and SecMaster records and merge all three sources.
-    5. Write the merged JSON file and emit the summary via logging.
+    3. Load the blacklists and each provided input JSON file; record missing
+       or unreadable sources as empty result sets.
+    4. Resolve the optional cloud-service whitelist.
+    5. Convert Config and SecMaster records, merge all three sources, and
+       apply the cloud-service whitelist.
+    6. Write the merged JSON file and emit the summary via logging.
 
 Dependencies:
     Python standard library only: json, argparse, logging, datetime, pathlib,
-    sys. No third-party dependencies. The script is purely local and does not
-    call hcloud or access the network.
+    sys, unicodedata. Local module: cloud_service_filter (alias resolution
+    and record matching shared with the OA and report scripts). No
+    third-party dependencies. The script is purely local and does not call
+    hcloud or access the network.
 """
 
 from __future__ import annotations
@@ -57,6 +79,18 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from cloud_service_filter import (
+    MATCH_MATCHED,
+    accumulate_match,
+    build_filter_metadata,
+    classify_record_service,
+    load_alias_map,
+    new_match_counters,
+    normalize_token,
+    parse_cloud_services,
+    record_service_value,
+)
+
 
 logger = logging.getLogger(__name__)
 
@@ -65,9 +99,19 @@ logger = logging.getLogger(__name__)
 SOURCE_OA = "OA"
 SOURCE_CONFIG = "Config"
 SOURCE_SECMASTER = "SecMaster"
+# Per-source input status recorded in meta.sources. A collector that failed
+# upstream leaves its source missing or unreadable; the merge still proceeds
+# with an empty result set for that source.
+SOURCE_STATUS_OK = "ok"
+SOURCE_STATUS_MISSING = "missing"
+SOURCE_STATUS_UNREADABLE = "unreadable"
 # SecMaster baseline records all belong to the security dimension and carry a
 # severity enum (High / Low) that maps to the OA risk level vocabulary.
 DIMENSION_SECURITY = "Security"
+# Config records carry no dimension field of their own; the Config compliance
+# inspection semantics is resource compliance, so every converted record takes
+# this fixed value instead of an empty string.
+DIMENSION_RESOURCE_COMPLIANCE = "资源合规"
 RISK_LEVEL_MAP = {
     "High": "high",
     "Low": "low",
@@ -147,6 +191,45 @@ def load_json_file(file_path: str) -> Any:
         raise ValueError(f"Input file is not valid JSON: {file_path} ({exc})") from exc
 
 
+def _load_source(source_name: str, file_path: Optional[str]) -> tuple[Dict[str, Any], str]:
+    """Load one source input, degrading a missing or bad file to an empty result.
+
+    1. Return an empty dict with status "missing" when no path was provided.
+    2. Load and parse the file otherwise; on ValueError log a WARNING and
+       return an empty dict with status "unreadable".
+    3. Return the parsed object with status "ok" on success. A parsed object
+       that is not a dict is also treated as unreadable, because every
+       converter expects a JSON object.
+
+    Args:
+        source_name: str — Human readable source name used in log messages.
+        file_path: Optional[str] — Absolute path of the input file, or None.
+
+    Returns:
+        tuple[dict[str, Any], str]: The parsed object (empty dict when the
+            source is unavailable) and its status constant.
+
+    Examples:
+        # >>> _load_source("OA", None)
+        # ({}, 'missing')
+    """
+    if not file_path:
+        logger.warning("Source %s was not provided; merging it as an empty result set.", source_name)
+        return {}, SOURCE_STATUS_MISSING
+    try:
+        data = load_json_file(file_path)
+    except ValueError as exc:
+        logger.warning("Source %s cannot be read; merging it as an empty result set: %s", source_name, exc)
+        return {}, SOURCE_STATUS_UNREADABLE
+    if not isinstance(data, dict):
+        logger.warning(
+            "Source %s does not contain a JSON object; merging it as an empty result set.",
+            source_name,
+        )
+        return {}, SOURCE_STATUS_UNREADABLE
+    return data, SOURCE_STATUS_OK
+
+
 def _convert_config_state(state: Dict[str, Any],
                           summary_counts: Dict[str, int],
                           rule_description: str = "") -> Dict[str, Any]:
@@ -155,8 +238,10 @@ def _convert_config_state(state: Dict[str, Any],
     1. Map the OA identity fields from the Config state: check_item_id from
        policy_assignment_id, check_item_name from policy_assignment_name,
        service_type_code from the lowercased resource_provider.
-    2. Leave dimension, risk_level and check_num empty because the Config
-       source has no counterpart for them.
+    2. Set dimension to the fixed DIMENSION_RESOURCE_COMPLIANCE value because
+       the Config source has no dimension field and its inspection semantics
+       is resource compliance; leave risk_level and check_num empty because
+       the Config source has no counterpart for them.
     3. Build the summary with check_item_status derived from the compliance
        state, the rule-level compliance counts and the rule-level description
        (the judgment standard text shared by all states of the same rule).
@@ -174,14 +259,14 @@ def _convert_config_state(state: Dict[str, Any],
 
     Examples:
         # >>> _convert_config_state({"compliance_state": "NonCompliant"}, {"total": 1})
-        # {'check_item_id': '', 'summary': {'check_item_status': 'risk', ...}}
+        # {'check_item_id': '', 'dimension': '资源合规', 'summary': {'check_item_status': 'risk', ...}}
     """
     provider = state.get("resource_provider", "") or ""
     status = "risk" if state.get("compliance_state") == "NonCompliant" else "qualified"
     record: Dict[str, Any] = {
         "check_item_id": state.get("policy_assignment_id", "") or "",
         "check_item_name": state.get("policy_assignment_name", "") or "",
-        "dimension": "",
+        "dimension": DIMENSION_RESOURCE_COMPLIANCE,
         "service_type_code": provider.lower(),
         "risk_level": "",
         "check_num": "",
@@ -209,7 +294,8 @@ def _convert_config_state(state: Dict[str, Any],
 
 
 def _convert_secmaster_record(data_object: Dict[str, Any],
-                              workspace_name: str = "") -> Dict[str, Any]:
+                              workspace_name: str = "",
+                              workspace_region_id: str = "") -> Dict[str, Any]:
     """Convert one SecMaster baseline data_object into an OA record.
 
     1. Map the OA identity fields from the data_object: check_item_id from
@@ -222,14 +308,19 @@ def _convert_secmaster_record(data_object: Dict[str, Any],
        keep the original severity in summary.check_item_severity for trace.
     4. Build the summary with check_item_status taken verbatim from
        handle_status and the description / advice text.
-    5. Attach the source instance name via the workspace_name field; empty
-       input keeps it empty.
+    5. Attach the source instance identity: workspace_name and
+       workspace_region_id from the caller (empty when unknown), plus
+       workspace_id from the data_object's own workspace_id, so downstream
+       consumers can keep same-named instances apart without inferring the id
+       from the name.
     6. Build a single resource entry from the embedded resource object and
        attach error null.
 
     Args:
         data_object: dict[str, Any] — One baseline inspection data_object.
         workspace_name: str — The display name of the source SecMaster
+            workspace instance (may be empty).
+        workspace_region_id: str — The region of the source SecMaster
             workspace instance (may be empty).
 
     Returns:
@@ -256,6 +347,8 @@ def _convert_secmaster_record(data_object: Dict[str, Any],
             "check_item_severity": severity,
         },
         "workspace_name": workspace_name,
+        "workspace_id": str(data_object.get("workspace_id", "") or ""),
+        "workspace_region_id": workspace_region_id,
         "resources": [
             {
                 "id": resource.get("id", "") or "",
@@ -304,10 +397,11 @@ def _convert_config(config_data: Dict[str, Any]) -> List[Dict[str, Any]]:
 def _convert_secmaster(secmaster_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Convert all SecMaster baseline records into OA-format records.
 
-    1. Build the workspace id -> name mapping from the input top-level
-       workspaces array.
+    1. Build the workspace id -> (name, region_id) mapping from the input
+       top-level workspaces array.
     2. Iterate over every data entry, resolving each record's workspace_name
-       (workspace name preferred, workspace_id fallback) from the mapping.
+       (workspace name preferred, workspace_id fallback) and
+       workspace_region_id from the mapping.
     3. Convert each data_object into an OA-format record.
     4. Return the list of OA-format records.
 
@@ -322,16 +416,20 @@ def _convert_secmaster(secmaster_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         # []
     """
     name_by_id: Dict[str, str] = {}
+    region_by_id: Dict[str, str] = {}
     for ws in secmaster_data.get("workspaces", []) or []:
         ws_id = str(ws.get("id", "") or "").strip()
         if ws_id:
             name_by_id[ws_id] = str(ws.get("name", "") or "").strip()
+            region_by_id[ws_id] = str(ws.get("region_id", "") or "").strip()
     records: List[Dict[str, Any]] = []
     for entry in secmaster_data.get("data", []) or []:
         data_object = entry.get("data_object", {}) or {}
         workspace_id = str(data_object.get("workspace_id", "") or "").strip()
         workspace_name = name_by_id.get(workspace_id, "") or workspace_id
-        records.append(_convert_secmaster_record(data_object, workspace_name))
+        workspace_region_id = region_by_id.get(workspace_id, "")
+        records.append(_convert_secmaster_record(
+            data_object, workspace_name, workspace_region_id))
     return records
 
 
@@ -621,39 +719,150 @@ def _filter_secmaster_data(secmaster_data: Dict[str, Any],
     return removed
 
 
+def _available_service_codes(records: List[Dict[str, Any]]) -> List[str]:
+    """Collect the cloud service codes actually present in the merged records.
+
+    1. Derive each record's cloud service value and normalise it.
+    2. Drop empty values because they are not a usable service code.
+    3. Return the unique codes in first-seen order so the failure log can
+       tell the user what is available.
+
+    Args:
+        records: list[dict[str, Any]] — The merged records before filtering.
+
+    Returns:
+        list[str]: The distinct normalised cloud service codes.
+
+    Examples:
+        >>> _available_service_codes([{"service_type_code": "ECS"}, {"service_type_code": "rds"}])
+        ['ecs', 'rds']
+    """
+    codes: List[str] = []
+    for record in records:
+        code = normalize_token(record_service_value(record))
+        if code and code not in codes:
+            codes.append(code)
+    return codes
+
+
+def _filter_records_by_cloud_services(
+    records: List[Dict[str, Any]],
+    source_key: str,
+    services: List[str],
+    counters: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """Drop the records whose cloud service is not whitelisted.
+
+    1. Classify every record against the resolved service codes.
+    2. Keep the matched records and accumulate the exclusion counters, so
+       the caller can report what was dropped and why.
+    3. Preserve the original record order.
+
+    Args:
+        records: list[dict[str, Any]] — One source's converted records.
+        source_key: str — One of oa / config / secmaster, used for counting.
+        services: list[str] — The resolved cloud service code list.
+        counters: dict[str, Any] — The structure from new_match_counters.
+
+    Returns:
+        list[dict[str, Any]]: The records inside the whitelist.
+
+    Examples:
+        >>> counters = new_match_counters()
+        >>> _filter_records_by_cloud_services([{"service_type_code": "ecs"}], "oa", ["ecs"], counters)
+        [{'service_type_code': 'ecs'}]
+    """
+    kept: List[Dict[str, Any]] = []
+    for record in records:
+        outcome = classify_record_service(record, services)
+        accumulate_match(counters, source_key, outcome, record)
+        if outcome == MATCH_MATCHED:
+            kept.append(record)
+    return kept
+
+
+def _resolve_input_path(file_path: Optional[str]) -> Optional[str]:
+    """Resolve an input path to an absolute POSIX-style string.
+
+    1. Return None when no path was provided.
+    2. Return the resolved absolute path in POSIX form otherwise, so the
+       output stays comparable across platforms.
+
+    Args:
+        file_path: Optional[str] — Absolute or relative input file path.
+
+    Returns:
+        Optional[str]: The resolved absolute POSIX path, or None.
+
+    Examples:
+        >>> _resolve_input_path(None) is None
+        True
+    """
+    if not file_path:
+        return None
+    return Path(file_path).resolve().as_posix()
+
+
 def merge_all(oa_data: Dict[str, Any], config_data: Dict[str, Any],
               secmaster_data: Dict[str, Any],
-              oa_file: str, config_file: str,
-              secmaster_file: str,
+              oa_file: Optional[str], config_file: Optional[str],
+              secmaster_file: Optional[str],
               config_match_keys: Optional[Dict[str, Any]] = None,
-              secmaster_match_keys: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+              secmaster_match_keys: Optional[Dict[str, Any]] = None,
+              source_statuses: Optional[Dict[str, str]] = None,
+              cloud_service_filter: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Merge the three sources into one OA-format output document.
 
     1. Tag OA records and convert Config / SecMaster records.
     2. Concatenate all records into the merged results array.
-    3. Preserve the Config failures and daily trend verbatim on the meta side.
-    4. Build the meta block with input paths, counts and generation time.
+    3. Apply the optional cloud-service whitelist after blacklist filtering
+       and conversion, dropping the records outside it and counting the
+       excluded and unclassified records per source.
+    4. Preserve the Config failures and daily trend verbatim on the meta side.
+    5. Build the meta block with input paths, per-source status, counts and
+       generation time.
 
     Args:
-        oa_data: dict[str, Any] — The parsed OA inspection JSON.
+        oa_data: dict[str, Any] — The parsed OA inspection JSON (empty when
+            the source is unavailable).
         config_data: dict[str, Any] — The parsed Config inspection JSON.
         secmaster_data: dict[str, Any] — The parsed SecMaster inspection JSON.
-        oa_file: str — Absolute path of the OA input file.
-        config_file: str — Absolute path of the Config input file.
-        secmaster_file: str — Absolute path of the SecMaster input file.
+        oa_file: Optional[str] — Absolute path of the OA input file, or None
+            when the source was not provided.
+        config_file: Optional[str] — Absolute path of the Config input file,
+            or None.
+        secmaster_file: Optional[str] — Absolute path of the SecMaster input
+            file, or None.
         config_match_keys: Optional[dict[str, Any]] — The Config blacklist
             name sets plus reasons, or None to skip Config filtering.
         secmaster_match_keys: Optional[dict[str, Any]] — The SecMaster
             blacklist name sets plus reasons, or None to skip SecMaster
             filtering.
+        source_statuses: Optional[dict[str, str]] — Per-source status keyed by
+            "oa" / "config" / "secmaster"; defaults to "ok" for every source
+            so direct callers keep the previous behaviour.
+        cloud_service_filter: Optional[dict[str, Any]] — The resolved
+            whitelist (requested / resolved / services) from
+            parse_cloud_services, or None to merge every record.
 
     Returns:
         dict[str, Any]: The output document with meta and merged results.
+
+    Raises:
+        ValueError: The whitelist matched no record in any source; the
+            message names the cloud services present in the input.
 
     Examples:
         # >>> merge_all({"results": []}, {"assignments": []}, {"data": []}, "a", "b", "c")["meta"]["converted_total"]
         # 0
     """
+    statuses = {
+        "oa": SOURCE_STATUS_OK,
+        "config": SOURCE_STATUS_OK,
+        "secmaster": SOURCE_STATUS_OK,
+    }
+    if source_statuses:
+        statuses.update(source_statuses)
     config_filtered = 0
     secmaster_filtered = 0
     if config_match_keys is not None:
@@ -663,15 +872,42 @@ def merge_all(oa_data: Dict[str, Any], config_data: Dict[str, Any],
     oa_records = _tag_oa_records(oa_data)
     config_records = _convert_config(config_data)
     secmaster_records = _convert_secmaster(secmaster_data)
+    filter_metadata: Optional[Dict[str, Any]] = None
+    if cloud_service_filter is not None:
+        services = list(cloud_service_filter.get("services", []))
+        available = _available_service_codes(
+            oa_records + config_records + secmaster_records)
+        counters = new_match_counters()
+        oa_records = _filter_records_by_cloud_services(
+            oa_records, "oa", services, counters)
+        config_records = _filter_records_by_cloud_services(
+            config_records, "config", services, counters)
+        secmaster_records = _filter_records_by_cloud_services(
+            secmaster_records, "secmaster", services, counters)
+        filter_metadata = build_filter_metadata(cloud_service_filter, counters)
+        if services and len(filter_metadata["unmatched"]) == len(services):
+            raise ValueError(
+                "Cloud service filter matched no record for any requested service "
+                "({}); available cloud services in the input: {}".format(
+                    ",".join(services),
+                    ",".join(available) or "none",
+                )
+            )
     statistics = config_data.get("statistics", []) or []
     config_failures = config_data.get("failures", []) or []
+    resolved_inputs = {
+        "oa": _resolve_input_path(oa_file),
+        "config": _resolve_input_path(config_file),
+        "secmaster": _resolve_input_path(secmaster_file),
+    }
     meta: Dict[str, Any] = {
         "generator": "merge_inspection_results",
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "inputs": {
-            "oa": Path(oa_file).resolve().as_posix(),
-            "config": Path(config_file).resolve().as_posix(),
-            "secmaster": Path(secmaster_file).resolve().as_posix(),
+        "inputs": resolved_inputs,
+        "sources": {
+            "oa": {"status": statuses["oa"], "path": resolved_inputs["oa"]},
+            "config": {"status": statuses["config"], "path": resolved_inputs["config"]},
+            "secmaster": {"status": statuses["secmaster"], "path": resolved_inputs["secmaster"]},
         },
         "counts": {
             "oa_total": len(oa_records),
@@ -690,6 +926,8 @@ def merge_all(oa_data: Dict[str, Any], config_data: Dict[str, Any],
             "config": config_failures,
         },
     }
+    if filter_metadata is not None:
+        meta["cloud_service_filter"] = filter_metadata
     return {
         "meta": meta,
         "results": oa_records + config_records + secmaster_records,
@@ -742,8 +980,10 @@ def print_summary(data: Dict[str, Any], written_files: List[str]) -> None:
     """Emit the merge summary via logging to stderr.
 
     1. Output the input paths, per-source counts and conversion total.
-    2. Output the Config trend and failure information when present.
-    3. Output the written file paths.
+    2. Output the cloud-service filter scope and the records it excluded,
+       keeping the blacklist line untouched.
+    3. Output the Config trend and failure information when present.
+    4. Output the written file paths.
 
     Args:
         data: dict[str, Any] — The merged output document.
@@ -761,10 +1001,14 @@ def print_summary(data: Dict[str, Any], written_files: List[str]) -> None:
     logger.info("=" * 60)
     logger.info("Merge of OA / Config / SecMaster inspection results completed")
     logger.info("=" * 60)
+    sources = meta.get("sources", {}) or {}
     logger.info("Input files:")
-    logger.info("  - OA: %s", inputs.get("oa", ""))
-    logger.info("  - Config: %s", inputs.get("config", ""))
-    logger.info("  - SecMaster: %s", inputs.get("secmaster", ""))
+    for source_key, source_label in (("oa", "OA"), ("config", "Config"),
+                                     ("secmaster", "SecMaster")):
+        source = sources.get(source_key, {}) or {}
+        logger.info("  - %s: %s (status: %s)", source_label,
+                    inputs.get(source_key) or "not provided",
+                    source.get("status", SOURCE_STATUS_OK))
     logger.info("Records: OA %d, Config %d, SecMaster %d, total %d",
                 counts.get("oa_total", 0),
                 counts.get("config_total", 0),
@@ -774,6 +1018,23 @@ def print_summary(data: Dict[str, Any], written_files: List[str]) -> None:
     logger.info("Filtered: Config %d, SecMaster %d",
                 filtered.get("config", 0),
                 filtered.get("secmaster", 0))
+    service_filter = meta.get("cloud_service_filter") or {}
+    if service_filter:
+        excluded = service_filter.get("excluded_by_service", {}) or {}
+        unclassified = service_filter.get("excluded_unclassified", {}) or {}
+        logger.info("Cloud service scope: %s",
+                    ",".join(service_filter.get("services", [])) or "none")
+        logger.info("Cloud service filtered out: OA %d, Config %d, SecMaster %d",
+                    excluded.get("oa", 0),
+                    excluded.get("config", 0),
+                    excluded.get("secmaster", 0))
+        logger.info("Cloud service unclassified excluded: Config %d, SecMaster %d",
+                    unclassified.get("config", 0),
+                    unclassified.get("secmaster", 0))
+        unmatched = service_filter.get("unmatched", []) or []
+        if unmatched:
+            logger.warning("Cloud services matched no record: %s",
+                           ",".join(unmatched))
     trends = meta.get("trends", {}) or {}
     config_daily = trends.get("config_daily", []) or []
     if config_daily:
@@ -795,8 +1056,8 @@ def print_summary(data: Dict[str, Any], written_files: List[str]) -> None:
 def build_parser() -> argparse.ArgumentParser:
     """Build the command-line argument parser.
 
-    1. Add the three required input file options.
-    2. Add the optional logging option.
+    1. Add the three input file options.
+    2. Add the optional cloud-service and logging options.
 
     Args:
         None
@@ -810,15 +1071,68 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="merge_inspection_results",
         description="Merge OA / Config / SecMaster inspection results into one OA-format JSON file")
-    parser.add_argument("--oa-file", required=True,
-                        help="Required. Absolute path of the OA inspection results JSON file")
-    parser.add_argument("--config-file", required=True,
-                        help="Required. Absolute path of the Config inspection results JSON file")
-    parser.add_argument("--secmaster-file", required=True,
-                        help="Required. Absolute path of the SecMaster inspection results JSON file")
+    parser.add_argument("--oa-file", default=None,
+                        help=("Optional. Absolute path of the OA inspection results JSON file; "
+                              "when omitted or unreadable the source is merged as an empty result set"))
+    parser.add_argument("--config-file", default=None,
+                        help=("Optional. Absolute path of the Config inspection results JSON file; "
+                              "when omitted or unreadable the source is merged as an empty result set"))
+    parser.add_argument("--secmaster-file", default=None,
+                        help=("Optional. Absolute path of the SecMaster inspection results JSON file; "
+                              "when omitted or unreadable the source is merged as an empty result set"))
+    parser.add_argument("--cloud-services", default=None,
+                        help=("Optional. Comma-separated cloud services that the merged result is "
+                              "limited to, accepting service codes, Chinese names, English names or "
+                              "abbreviations (e.g. ECS,CCE); records outside the scope and records "
+                              "whose cloud service is unknown are dropped and counted. When omitted "
+                              "every record is merged"))
     parser.add_argument("--log-file", default=None,
                         help="Optional. Path to a log file; logs are appended to stderr as well")
     return parser
+
+
+def _resolve_cloud_service_filter(args: Any,
+                                  oa_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Resolve the cloud-service whitelist for this merge run.
+
+    1. Parse the explicit --cloud-services value when one was provided.
+    2. Otherwise adopt the whitelist recorded by the OA input, so an OA
+       pre-filtered run cannot produce a mixed-scope result; log a WARNING
+       because the caller did not pass the option.
+    3. Return None when neither source supplies a whitelist, which keeps the
+       merge output identical to the pre-whitelist behaviour.
+
+    Args:
+        args: argparse.Namespace — Parsed arguments carrying cloud_services.
+        oa_data: dict[str, Any] — The parsed OA inspection JSON.
+
+    Returns:
+        Optional[dict[str, Any]]: The resolved whitelist, or None.
+
+    Raises:
+        ValueError: The explicit value is empty or the alias table is invalid.
+
+    Examples:
+        # >>> _resolve_cloud_service_filter(argparse.Namespace(cloud_services=None), {}) is None
+        # True
+    """
+    raw_value = getattr(args, "cloud_services", None)
+    if raw_value:
+        return parse_cloud_services(raw_value, load_alias_map())
+    recorded = ((oa_data.get("meta") or {}).get("cloud_service_filter") or {})
+    recorded_services = recorded.get("services") or []
+    if not recorded_services:
+        return None
+    logger.warning(
+        "The OA input records a cloud service scope (%s) but this run did not receive "
+        "--cloud-services; adopting the recorded scope to avoid a mixed-scope result.",
+        ",".join(str(code) for code in recorded_services),
+    )
+    return {
+        "requested": list(recorded.get("requested", []) or recorded_services),
+        "resolved": list(recorded.get("resolved", []) or []),
+        "services": [str(code) for code in recorded_services],
+    }
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -826,17 +1140,22 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     1. Configure basic logging output (stderr by default, optional
        --log-file handler).
-    2. Parse the command-line arguments; the three input files are required.
-    3. Load the three input JSON files.
-    4. Merge the three sources and write the merged document to disk.
-    5. Emit the summary via logging.
+    2. Parse the command-line arguments; the three input files are optional.
+    3. Load each provided input JSON file, recording missing or unreadable
+       sources as empty result sets.
+    4. Resolve the cloud-service whitelist, adopting the whitelist recorded
+       by the OA input when this run did not receive one.
+    5. Merge the three sources and write the merged document to disk.
+    6. Emit the summary via logging.
 
     Args:
         argv: Optional[list[str]] — The command-line argument list, or
             sys.argv[1:] when None.
 
     Returns:
-        int: The exit code; 0 for success, 1 for failure.
+        int: The exit code; 0 for success, 1 when all three sources are
+            unavailable, the blacklists cannot be loaded, the alias table is
+            invalid, or the whitelist matches no record.
 
     Examples:
         # >>> main(["--oa-file", "a.json", "--config-file", "b.json", "--secmaster-file", "c.json"])
@@ -848,20 +1167,39 @@ def main(argv: Optional[List[str]] = None) -> int:
     output_absolute = resolve_output_path(timestamp)
     logger.info("Task started. Output file(s): %s", output_absolute)
     try:
-        oa_data = load_json_file(args.oa_file)
-        config_data = load_json_file(args.config_file)
-        secmaster_data = load_json_file(args.secmaster_file)
         config_match_keys = _build_match_keys(
             _load_blacklist(BLACKLIST_DIR / CONFIG_BLACKLIST_NAME))
         secmaster_match_keys = _build_match_keys(
             _load_blacklist(BLACKLIST_DIR / SECMASTER_BLACKLIST_NAME))
     except ValueError as exc:
-        logger.error("Failed to load input files: %s", exc)
+        logger.error("Failed to load the blacklists: %s", exc)
         return 1
-    data = merge_all(oa_data, config_data, secmaster_data,
-                     args.oa_file, args.config_file, args.secmaster_file,
-                     config_match_keys=config_match_keys,
-                     secmaster_match_keys=secmaster_match_keys)
+    oa_data, oa_status = _load_source(SOURCE_OA, args.oa_file)
+    config_data, config_status = _load_source(SOURCE_CONFIG, args.config_file)
+    secmaster_data, secmaster_status = _load_source(SOURCE_SECMASTER, args.secmaster_file)
+    source_statuses = {
+        "oa": oa_status,
+        "config": config_status,
+        "secmaster": secmaster_status,
+    }
+    if all(status != SOURCE_STATUS_OK for status in source_statuses.values()):
+        logger.error("No input source could be loaded; nothing to merge.")
+        return 1
+    try:
+        cloud_service_filter = _resolve_cloud_service_filter(args, oa_data)
+    except ValueError as exc:
+        logger.error("Invalid cloud service scope: %s", exc)
+        return 1
+    try:
+        data = merge_all(oa_data, config_data, secmaster_data,
+                         args.oa_file, args.config_file, args.secmaster_file,
+                         config_match_keys=config_match_keys,
+                         secmaster_match_keys=secmaster_match_keys,
+                         source_statuses=source_statuses,
+                         cloud_service_filter=cloud_service_filter)
+    except ValueError as exc:
+        logger.error("Cloud service scope produced no data: %s", exc)
+        return 1
     written_files = write_outputs(data, output_absolute)
     print_summary(data, written_files)
     logger.info("Task finished. Output file(s): %s", written_files[0])

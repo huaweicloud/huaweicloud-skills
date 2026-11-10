@@ -7,26 +7,40 @@ Overview:
     JSON (the artifact written by `merge_inspection_results.py`), classifies
     every record into risk / non-risk / failure, aggregates risk records by
     inspection item, and renders two offline deliverables into the output
-    directory: an offline HTML analysis report (metadata, statistics charts
-    and risk item table with nested resource details) and an Excel workbook
-    (overview sheet plus one detail sheet per aggregated risk item). Artifacts
-    are written to a timestamped subdirectory under --output-dir so repeated
-    runs do not mix in the same directory.
+    directory: an offline HTML analysis report (metadata, three statistics
+    charts and the risk item table with nested resource details) and an Excel
+    workbook (overview sheet plus one detail sheet per aggregated risk item).
+    Artifacts are written to a timestamped subdirectory under --output-dir so
+    repeated runs do not mix in the same directory.
 
 Detailed Description:
     1. Configure basic logging output, parse command-line arguments
-       (--input/--output-dir/--cli-region/--log-file).
+       (--input/--output-dir/--timeout/--log-file).
     2. Load and validate the merged input JSON (meta and results structure).
-    3. Classify records into risk / non-risk / failure and aggregate risk
-       records into inspection items (keyed by check_item_id + source); each
-       item carries a display_source label so SecMaster items are shown with
-       their workspace instance name (e.g. SecMaster (test)).
-    4. Resolve the account user name and ID via the hcloud CLI
-       (IAM KeystoneListAuthDomains) for the Excel overview page.
-    5. Render the HTML report (template injection) and the Excel workbook
+    3. Classify records into risk / non-risk / hint / uninspected / failure and
+       aggregate risk records into inspection items (keyed by check_item_id +
+       source + workspace_id, so same-named baselines of different SecMaster
+       instances stay separate); each item carries a display_source label so
+       SecMaster items are shown with their workspace instance name (e.g.
+       SecMaster (test)), with the instance region appended when two instances
+       share the name. Only the risk items reach the HTML table and the Excel
+       detail sheets; the other buckets feed the check-item level coverage
+       counts reported in the generation log.
+    4. Compute the check-item level coverage per source (OA console four
+       categories, Config rule compliance, SecMaster baseline) plus the
+       deduplicated failure count for the generation log, and the three chart
+       distributions (product / source / dimension) consumed by the HTML
+       report. The coverage counts are not rendered into any deliverable.
+    5. Resolve the account user name and ID via the hcloud CLI
+       (IAM KeystoneListAuthDomains) using the fixed CLI_REGION; the name
+       and ID feed the Excel overview page, and the ID is also written to
+       analysis.meta.domain_id for the HTML metadata block.
+    6. Render the HTML report (template injection) and the Excel workbook
        (overview + detail sheets), writing all artifacts to the output
-       directory.
-    6. Emit a summary via logging to stderr.
+       directory. When the merged input records a cloud-service whitelist,
+       also write the scoped risk-item JSON from the same aggregated items,
+       so the agent can present the scoped result without parsing the HTML.
+    7. Emit a summary via logging to stderr.
 
 Dependencies:
     Python standard library: argparse, json, logging, subprocess, sys,
@@ -49,6 +63,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from cloud_service_filter import (
+    build_display_name_map,
+    display_service_name,
+    load_alias_map,
+    normalize_token,
+    resolve_service_code,
+)
+
 
 logger = logging.getLogger(__name__)
 
@@ -58,8 +80,13 @@ DEFAULT_OUTPUT_DIR = "analysis"
 TEMPLATE_FILENAME = "report.html"
 OUTPUT_HTML_NAME = "merge_inspection_report_{ts}.html"
 OUTPUT_XLSX_NAME = "merge_inspection_report_{ts}.xlsx"
+# Written only when a cloud-service whitelist applied, so the agent can
+# present the scoped result without parsing the HTML report.
+OUTPUT_RISK_ITEMS_NAME = "merge_inspection_report_{ts}_risk_items.json"
 TIMESTAMP_FORMAT = "%Y_%m_%d_%H_%M_%S"
-DEFAULT_CLI_REGION = "cn-north-4"
+# Fixed hcloud region for the IAM domain query; it is never rendered into an
+# artifact and is not exposed as a command-line option.
+CLI_REGION = "cn-north-4"
 IAM_SERVICE = "IAM"
 AUTH_DOMAINS_API = "KeystoneListAuthDomains"
 AUTH_DOMAINS_KEY = "domains"
@@ -75,26 +102,30 @@ SOURCE_OA = "OA"
 SOURCE_CONFIG = "Config"
 SOURCE_SECMASTER = "SecMaster"
 # Chinese labels shown for the OA risk dimension, matching the Optimize
-# Advisor console wording. The fallback label 不适用 (Not Applicable) is
-# shown for dimension values that do not map to a known key; Config records
-# carry no dimension at all, so their dimension displays empty instead.
+# Advisor console wording. Config records already carry the Chinese value
+# 资源合规 in the merged data, so the map keeps it unchanged. The fallback
+# label 不适用 (Not Applicable) is shown for dimension values that do not
+# map to a known key.
 DIMENSION_MAP = {
     "Performance": "性能效率",
     "Security": "安全性",
     "Reliability": "可靠性",
     "Cost": "成本优化",
     "Service Restriction": "服务配额",
+    "资源合规": "资源合规",
 }
 DIMENSION_UNKNOWN = "不适用"
 # Fixed semantic order for the risk dimension chart; every dimension is
-# always shown even when its count is zero.
+# always shown even when its count is zero. All six entries are real
+# categories: the 不适用 bucket retired once Config records received the
+# fixed 资源合规 dimension, so it is no longer part of the chart.
 DIMENSION_ORDER = [
     "性能效率",
     "安全性",
     "可靠性",
     "成本优化",
     "服务配额",
-    DIMENSION_UNKNOWN,
+    "资源合规",
 ]
 RISK_LEVEL_UNKNOWN = "不适用"
 # OA console four-category classification keys. The Optimize Advisor console
@@ -104,29 +135,13 @@ OA_CATEGORY_RISK = "risk"
 OA_CATEGORY_SECURITY = "security"
 OA_CATEGORY_NOT_INVOLVED = "not_involved"
 OA_CATEGORY_HINT = "hint"
-# Chinese labels shown for the OA console four categories.
-OA_CATEGORY_LABELS = {
-    OA_CATEGORY_RISK: "风险项",
-    OA_CATEGORY_SECURITY: "安全项",
-    OA_CATEGORY_NOT_INVOLVED: "不涉及",
-    OA_CATEGORY_HINT: "提示项",
-}
+# Label shown by the product chart when an item carries no cloud service at
+# all; it is the only bucket the chart may invent.
+PRODUCT_UNKNOWN = "未知"
 SHEET_NAME_MAX_LENGTH = 31
 OVERVIEW_SHEET_NAME = "风险检查总览"
 LINK_BLUE = "0563C1"
 RESOURCE_COLUMNS = ["区域", "资源ID", "资源名称", "检查账号", "状态", "标签", "企业项目ID", "扩展属性"]
-DETAIL_HEADER_ROWS = [
-    ("检查时间", ""),
-    ("风险检查维度", ""),
-    ("产品", ""),
-    ("检查项名称", ""),
-    ("判断标准", ""),
-    ("检查结果", ""),
-    ("风险资源数/资源总数", ""),
-    ("风险影响", ""),
-    ("优化建议", ""),
-    ("风险资源列表", ""),
-]
 
 
 def setup_logging(log_file: Optional[str]) -> None:
@@ -330,6 +345,56 @@ def _risk_level_display(record: Dict[str, Any]) -> str:
     return fallback or RISK_LEVEL_UNKNOWN
 
 
+_ALIAS_MAP_CACHE: Optional[Dict[str, str]] = None
+_DISPLAY_MAP_CACHE: Optional[Dict[str, str]] = None
+
+
+def _alias_map() -> Dict[str, str]:
+    """Return the cloud-service alias map, loading it at most once.
+
+    1. Return the cached map when a previous call already loaded it.
+    2. Otherwise load the project table, caching the result so the renderer
+       does not re-read the file once per record.
+
+    Args:
+        None
+
+    Returns:
+        dict[str, str]: Normalised alias to canonical code.
+
+    Examples:
+        # >>> _alias_map()["ecs"]
+        # 'ecs'
+    """
+    global _ALIAS_MAP_CACHE
+    if _ALIAS_MAP_CACHE is None:
+        _ALIAS_MAP_CACHE = load_alias_map()
+    return _ALIAS_MAP_CACHE
+
+
+def _display_name_map() -> Dict[str, str]:
+    """Return the code to display-name map, loading it at most once.
+
+    1. Return the cached map when a previous call already loaded it.
+    2. Otherwise build it from the same table the alias map came from, so the
+       two maps can never disagree about a code.
+
+    Args:
+        None
+
+    Returns:
+        dict[str, str]: Canonical code to its first alias name.
+
+    Examples:
+        # >>> _display_name_map()["idme"]
+        # 'iDME'
+    """
+    global _DISPLAY_MAP_CACHE
+    if _DISPLAY_MAP_CACHE is None:
+        _DISPLAY_MAP_CACHE = build_display_name_map(_alias_map())
+    return _DISPLAY_MAP_CACHE
+
+
 def _service_type_display(record: Dict[str, Any]) -> str:
     """Derive the display cloud service type for a record.
 
@@ -353,6 +418,57 @@ def _service_type_display(record: Dict[str, Any]) -> str:
     if direct:
         return direct
     return _summary_value(record, "check_item_service")
+
+
+def _service_code(record: Dict[str, Any]) -> str:
+    """Resolve a record's cloud service to its canonical code.
+
+    1. Derive the raw service value via `_service_type_display`.
+    2. Resolve it through the alias table so case and historical spellings
+       (`ECS` / `ecs` / `hecs`) collapse onto one product.
+    3. Fall back to the normalised raw value when the table does not cover
+       it, so an unmapped service still groups consistently with itself.
+
+    Args:
+        record: dict[str, Any] — One merged record.
+
+    Returns:
+        str: The canonical service code, or an empty string when the record
+            carries no service at all.
+
+    Examples:
+        # >>> _service_code({"service_type_code": "hecs"})
+        # 'ecs'
+    """
+    raw = _service_type_display(record)
+    if not raw:
+        return ""
+    alias_map = _alias_map()
+    return resolve_service_code(raw, alias_map) or normalize_token(raw)
+
+
+def _service_display(record: Dict[str, Any]) -> str:
+    """Derive the product label shown by the chart and the HTML filter.
+
+    1. Resolve the canonical code via `_service_code`.
+    2. Return the alias table's first name for that code, so official
+       spellings such as `iDME` survive.
+    3. Fall back to the upper-cased code when the table has no entry.
+
+    Args:
+        record: dict[str, Any] — One merged record.
+
+    Returns:
+        str: The product label, or an empty string when no service exists.
+
+    Examples:
+        # >>> _service_display({"service_type_code": "ecs"})
+        # 'ECS'
+    """
+    code = _service_code(record)
+    if not code:
+        return ""
+    return display_service_name(code, _display_name_map())
 
 
 def _dimension_display(record: Dict[str, Any]) -> str:
@@ -384,42 +500,75 @@ def _dimension_cn(record: Dict[str, Any]) -> str:
     """Derive the Chinese display dimension for a record.
 
     1. Resolve the raw dimension via _dimension_display.
-    2. Map it through DIMENSION_MAP; unmapped values fall back to the
-       DIMENSION_UNKNOWN placeholder.
-    3. Return an empty string when the source is Config and the raw
-       dimension is empty, because Config records carry no dimension.
+    2. Map it through DIMENSION_MAP; unmapped values, including an empty
+       dimension, fall back to the DIMENSION_UNKNOWN placeholder.
 
     Args:
         record: dict[str, Any] — One merged record.
 
     Returns:
-        str: The Chinese display dimension; empty for Config records
-            without a dimension.
+        str: The Chinese display dimension.
 
     Examples:
         >>> _dimension_cn({"dimension": "Reliability"})
         '可靠性'
+        >>> _dimension_cn({"dimension": "资源合规"})
+        '资源合规'
         >>> _dimension_cn({"source": "Config"})
-        ''
+        '不适用'
         >>> _dimension_cn({"dimension": "Other"})
         '不适用'
     """
     raw = _dimension_display(record)
-    if not raw and record.get("source", "") == SOURCE_CONFIG:
-        return ""
     return DIMENSION_MAP.get(raw, DIMENSION_UNKNOWN)
 
 
-def _source_display(record: Dict[str, Any]) -> str:
+def _duplicated_workspace_names(records: Sequence[Dict[str, Any]]) -> set:
+    """Collect SecMaster workspace names shared by more than one instance.
+
+    1. Group the distinct workspace_id values of every SecMaster record by
+       its workspace_name.
+    2. Return the names whose group holds at least two distinct instances.
+
+    Names are compared verbatim; a name used by a single instance is left out
+    so its label stays the plain `SecMaster (实例名)` form.
+
+    Args:
+        records: Sequence[dict[str, Any]] — The merged records to scan.
+
+    Returns:
+        set: The workspace names shared by two or more instances.
+
+    Examples:
+        >>> _duplicated_workspace_names([{"source": "SecMaster", "workspace_name": "test", "workspace_id": "a"}])
+        set()
+    """
+    ids_by_name: Dict[str, set] = {}
+    for record in records:
+        if (record.get("source", "") or "") != SOURCE_SECMASTER:
+            continue
+        name = record.get("workspace_name", "") or ""
+        if not name:
+            continue
+        workspace_id = record.get("workspace_id", "") or ""
+        ids_by_name.setdefault(name, set()).add(workspace_id)
+    return {name for name, ids in ids_by_name.items() if len(ids) > 1}
+
+
+def _source_display(record: Dict[str, Any], duplicated_names: set | None = None) -> str:
     """Derive the display source label for a record.
 
     1. Return the record source when it is not SecMaster.
     2. Return `SecMaster (实例名)` when the record carries a non-empty
-       workspace_name.
-    3. Otherwise return the plain source value.
+       workspace_name that is unique across instances.
+    3. Append the instance region as `SecMaster (实例名 @ 区域ID)` when the
+       name is shared by several instances, so the label stays unambiguous.
+    4. Otherwise return the plain source value.
 
     Args:
         record: dict[str, Any] — One merged record or aggregated item.
+        duplicated_names: set | None — Workspace names shared by more than one
+            instance, as returned by _duplicated_workspace_names.
 
     Returns:
         str: The display source label.
@@ -431,11 +580,18 @@ def _source_display(record: Dict[str, Any]) -> str:
         'SecMaster (test)'
         >>> _source_display({"source": "SecMaster", "workspace_name": ""})
         'SecMaster'
+        >>> _source_display({"source": "SecMaster", "workspace_name": "test",
+        ...                  "workspace_region_id": "cn-east-2"}, {"test"})
+        'SecMaster (test @ cn-east-2)'
     """
     source = record.get("source", "") or ""
     if source == SOURCE_SECMASTER:
         workspace_name = record.get("workspace_name", "") or ""
         if workspace_name:
+            if duplicated_names and workspace_name in duplicated_names:
+                region_id = record.get("workspace_region_id", "") or ""
+                if region_id:
+                    return f"SecMaster ({workspace_name} @ {region_id})"
             return f"SecMaster ({workspace_name})"
     return source
 
@@ -749,12 +905,16 @@ def classify_all(results: Sequence[Dict[str, Any]]) -> Dict[str, List[Dict[str, 
 def aggregate_risk_items(risk_records: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Aggregate risk records into inspection items.
 
-    1. Group records by (check_item_id, source) preserving first-seen order.
-    2. Build one inspection item per group: display fields from the first
+    1. Group records by (check_item_id, source, workspace_id) preserving
+       first-seen order; the workspace id keeps same-named baselines of
+       different SecMaster instances apart and is empty for other sources.
+    2. Collect the workspace names shared by several instances so the source
+       label can append the region and stay unambiguous.
+    3. Build one inspection item per group: display fields from the first
        record, merged resource list, summed risk / checked resource counts
        and description / advice / effect / end time.
-    3. Keep records sharing an item id but a different source in separate
-       items so the source column stays unambiguous.
+    4. Keep records sharing an item id but a different source or instance in
+       separate items so the source column stays unambiguous.
 
     Args:
         risk_records: Sequence[dict[str, Any]] — The risk-classified records.
@@ -766,10 +926,15 @@ def aggregate_risk_items(risk_records: Sequence[Dict[str, Any]]) -> List[Dict[st
         # >>> aggregate_risk_items([{"check_item_id": "a", "source": "Config", "resources": [{"id": "r1"}]}, {"check_item_id": "a", "source": "Config", "resources": [{"id": "r2"}]}])
         # [{'check_item_id': 'a', 'resource_count': 2, 'resources': [{'id': 'r1'}, {'id': 'r2'}]}]
     """
-    order: List[Tuple[str, str]] = []
-    groups: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
+    duplicated_names = _duplicated_workspace_names(risk_records)
+    order: List[Tuple[str, str, str]] = []
+    groups: Dict[Tuple[str, str, str], List[Dict[str, Any]]] = {}
     for record in risk_records:
-        key = (_item_id_display(record), record.get("source", "") or "")
+        key = (
+            _item_id_display(record),
+            record.get("source", "") or "",
+            record.get("workspace_id", "") or "",
+        )
         if key not in groups:
             groups[key] = []
             order.append(key)
@@ -791,9 +956,14 @@ def aggregate_risk_items(risk_records: Sequence[Dict[str, Any]]) -> List[Dict[st
             "check_item_name": _item_name_display(first),
             "dimension": _dimension_cn(first),
             "service_type_code": _service_type_display(first),
+            "service_code": _service_code(first),
+            "service_display": _service_display(first),
             "risk_level": _risk_level_display(first),
             "source": key[1],
-            "display_source": _source_display(first),
+            "workspace_id": key[2],
+            "workspace_name": first.get("workspace_name", "") or "",
+            "workspace_region_id": first.get("workspace_region_id", "") or "",
+            "display_source": _source_display(first, duplicated_names),
             "resource_count": resource_count,
             "resources": resources,
             "description": _description_display(first),
@@ -803,29 +973,6 @@ def aggregate_risk_items(risk_records: Sequence[Dict[str, Any]]) -> List[Dict[st
             "total_resources": total_resources,
         })
     return items
-
-
-def _source_counts(buckets: Dict[str, List[Dict[str, Any]]]) -> Dict[str, int]:
-    """Count per-source records inside a classification bucket.
-
-    1. Iterate over the bucket records and count by source field.
-    2. Return a dict keyed by source name.
-
-    Args:
-        buckets: dict[str, list[dict[str, Any]]] — One classification bucket.
-
-    Returns:
-        dict[str, int]: Source name to record count.
-
-    Examples:
-        # >>> _source_counts([{"source": "OA"}, {"source": "Config"}])
-        # {'OA': 1, 'Config': 1}
-    """
-    counts: Dict[str, int] = {}
-    for record in buckets:
-        source = record.get("source", "") or ""
-        counts[source] = counts.get(source, 0) + 1
-    return counts
 
 
 def _source_distribution(items: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -852,54 +999,6 @@ def _source_distribution(items: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]
     pairs = [{"name": name, "value": value} for name, value in counts.items()]
     pairs.sort(key=lambda p: p["value"], reverse=True)
     return pairs
-
-
-def _coverage_oa(results: Sequence[Dict[str, Any]]) -> Dict[str, int]:
-    """Compute the OA check-item level status coverage.
-
-    1. Filter records whose source is OA and count distinct check_item_id per
-       status: risk / normal / not_involved / hint.
-    2. Route risk-status items through _is_hint_record so quota-alarm
-       placeholder items count as hints instead of risks.
-    3. Count distinct check_item_id of OA records with a non-empty error as
-       failed.
-    4. Return the five counts; every OA check item falls into exactly one
-       bucket because a record carries either an error or a result summary.
-
-    Args:
-        results: Sequence[dict[str, Any]] — The merged results array.
-
-    Returns:
-        dict[str, int]: OA coverage keyed by risk / normal / not_involved /
-            hint / failed.
-
-    Examples:
-        # >>> _coverage_oa([{"source": "OA", "summary": {"check_item_status": "risk"}}])
-        # {'risk': 1, 'normal': 0, 'not_involved': 0, 'hint': 0, 'failed': 0}
-    """
-    status_buckets: Dict[str, set] = {
-        "risk": set(), "normal": set(), "not_involved": set(), "hint": set()
-    }
-    failed_ids: set = set()
-    for record in results:
-        if record.get("source", "") != SOURCE_OA:
-            continue
-        item_id = _item_id_display(record)
-        if record.get("error"):
-            failed_ids.add(item_id)
-            continue
-        status = _summary_value(record, "check_item_status")
-        if status == STATUS_RISK:
-            status_buckets["hint" if _is_hint_record(record) else "risk"].add(item_id)
-        elif status in status_buckets:
-            status_buckets[status].add(item_id)
-    return {
-        "risk": len(status_buckets["risk"]),
-        "normal": len(status_buckets["normal"]),
-        "not_involved": len(status_buckets["not_involved"]),
-        "hint": len(status_buckets["hint"]),
-        "failed": len(failed_ids),
-    }
 
 
 def _oa_console_coverage(results: Sequence[Dict[str, Any]]) -> Dict[str, int]:
@@ -990,7 +1089,9 @@ def _coverage_secmaster(results: Sequence[Dict[str, Any]]) -> Dict[str, int]:
     """Compute the SecMaster baseline-level coverage.
 
     1. Filter records whose source is SecMaster and count distinct
-       checkitem_id per handle_status: qualified / risk / uninspected.
+       (checkitem_id, workspace_id) pairs per handle_status: qualified / risk /
+       uninspected; the instance id keeps the same baseline of two instances
+       counted separately instead of collapsing into one.
     2. Return the three counts; uninspected (待处理) baselines are counted
        separately and never folded into qualified.
 
@@ -1011,7 +1112,7 @@ def _coverage_secmaster(results: Sequence[Dict[str, Any]]) -> Dict[str, int]:
     for record in results:
         if record.get("source", "") != SOURCE_SECMASTER:
             continue
-        item_id = _item_id_display(record)
+        item_id = (_item_id_display(record), record.get("workspace_id", "") or "")
         status = _summary_value(record, "check_item_status")
         if status == STATUS_RISK:
             risk_ids.add(item_id)
@@ -1027,15 +1128,16 @@ def _coverage_secmaster(results: Sequence[Dict[str, Any]]) -> Dict[str, int]:
 
 
 def build_analysis_data(merged: Dict[str, Any]) -> Dict[str, Any]:
-    """Build the full analysis payload for the HTML report and Excel output.
+    """Build the analysis payload for the HTML report and Excel output.
 
     1. Classify all results into risk / non-risk / hint / uninspected /
        failure buckets.
     2. Aggregate risk records into inspection items.
-    3. Compute chart distributions (risk status, product, source, dimension,
-       trend).
-    4. Compute the check-item level coverage per source.
-    5. Attach per-source counts and the original meta block.
+    3. Compute the chart distributions consumed by the HTML report (product,
+       source and dimension).
+    4. Compute the check-item level coverage per source for the generation log
+       (the run summary).
+    5. Attach the original meta block.
 
     Args:
         merged: dict[str, Any] — The parsed merged inspection JSON.
@@ -1045,22 +1147,16 @@ def build_analysis_data(merged: Dict[str, Any]) -> Dict[str, Any]:
 
     Examples:
         # >>> build_analysis_data({"meta": {}, "results": []})
-        # {'meta': {}, 'items': [], 'charts': {...}}
+        # {'meta': {}, 'items': [], 'coverage': {...}, 'charts': {...}}
     """
     results = merged.get("results", []) or []
     buckets = classify_all(results)
     items = aggregate_risk_items(buckets["risk"])
-    non_risk_counts = _source_counts(buckets["non-risk"])
-    hint_counts = _source_counts(buckets["hint"])
-    uninspected_counts = _source_counts(buckets["uninspected"])
-    failure_counts = _source_counts(buckets["failure"])
-    oa_coverage = _coverage_oa(results)
     config_coverage = _coverage_config(results)
     secmaster_coverage = _coverage_secmaster(results)
     oa_console_coverage = _oa_console_coverage(results)
     failed_item_ids = {_item_id_display(r) for r in results if r.get("error")}
     coverage = {
-        "oa": oa_coverage,
         "oa_console": oa_console_coverage,
         "config": config_coverage,
         "secmaster": secmaster_coverage,
@@ -1068,93 +1164,52 @@ def build_analysis_data(merged: Dict[str, Any]) -> Dict[str, Any]:
             "total": len(failed_item_ids),
         },
     }
-    hint_views: List[Dict[str, Any]] = []
-    for record in buckets["hint"]:
-        hint_view = dict(record)
-        hint_view["dimension"] = _dimension_cn(record)
-        hint_views.append(hint_view)
-    uninspected_views: List[Dict[str, Any]] = []
-    for record in buckets["uninspected"]:
-        uninspected_view = dict(record)
-        uninspected_view["dimension"] = _dimension_cn(record)
-        uninspected_view["display_source"] = _source_display(record)
-        uninspected_views.append(uninspected_view)
-    oa_category_views: Dict[str, List[Dict[str, Any]]] = {
-        category: [] for category in OA_CATEGORY_LABELS
-    }
-    for record in results:
-        if record.get("source", "") != SOURCE_OA or record.get("error"):
-            continue
-        category = _oa_console_category(record)
-        view = dict(record)
-        view["dimension_cn"] = _dimension_cn(record)
-        view["oa_category"] = category
-        view["oa_category_label"] = OA_CATEGORY_LABELS[category]
-        oa_category_views[category].append(view)
     charts = {
-        "status": [
-            {"name": "风险项", "value": len(items)},
-            {"name": "提示项", "value": oa_console_coverage.get("hint", 0)},
-            {"name": "非风险项", "value": (
-                oa_console_coverage.get("security", 0)
-                + oa_console_coverage.get("not_involved", 0)
-                + config_coverage.get("compliant_rules", 0)
-                + secmaster_coverage.get("qualified", 0)
-            )},
-            {"name": "待处理项", "value": len(uninspected_views)},
-            {"name": "采集失败项", "value": len(failed_item_ids)},
-        ],
         "products": _product_distribution(items),
         "sources": _source_distribution(items),
         "dimensions": _dimension_distribution(items),
-        "trend": _trend_series(merged),
     }
-    failure_views: List[Dict[str, Any]] = []
-    for record in buckets["failure"]:
-        failure_view = dict(record)
-        failure_view["display_source"] = _source_display(record)
-        failure_views.append(failure_view)
     return {
         "meta": merged.get("meta", {}),
         "items": items,
-        "non_risk": buckets["non-risk"],
-        "hints": hint_views,
-        "uninspected": uninspected_views,
-        "failures": failure_views,
-        "oa_categories": oa_category_views,
-        "source_counts": {
-            "risk": _source_counts(buckets["risk"]),
-            "non_risk": non_risk_counts,
-            "hint": hint_counts,
-            "uninspected": uninspected_counts,
-            "failure": failure_counts,
-        },
         "coverage": coverage,
         "charts": charts,
     }
 
 
 def _product_distribution(items: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Compute the risk item count per cloud service type.
+    """Compute the risk item count per cloud service product.
 
-    1. Count inspection items by service_type_code.
-    2. Sort descending by count and return name/value pairs.
+    1. Group by the resolved service code carried by each item, so values the
+       alias table treats as one product (`ECS` / `ecs` / `hecs`) collapse
+       into a single bar; an item without a resolved code falls back to its
+       raw value.
+    2. Sort descending by count and return name/value pairs labelled with the
+       item's display service name.
 
     Args:
-        items: Sequence[dict[str, Any]] — The aggregated inspection items.
+        items: Sequence[dict[str, Any]] — The aggregated inspection items,
+            each carrying `service_code` / `service_display`.
 
     Returns:
-        list[dict[str, Any]]: name/value pairs, empty service shown as 未知.
+        list[dict[str, Any]]: name/value pairs; an empty service is shown as 未知.
 
     Examples:
-        # >>> _product_distribution([{"service_type_code": "ecs"}, {"service_type_code": "ecs"}])
-        # [{'name': 'ecs', 'value': 2}]
+        # >>> _product_distribution([{"service_code": "ecs", "service_display": "ECS"},
+        # ...                          {"service_code": "ecs", "service_display": "ECS"}])
+        # [{'name': 'ECS', 'value': 2}]
     """
-    counts: Dict[str, int] = {}
+    counts: Dict[str, Dict[str, Any]] = {}
     for item in items:
-        service = item.get("service_type_code") or "未知"
-        counts[service] = counts.get(service, 0) + 1
-    pairs = [{"name": name, "value": value} for name, value in counts.items()]
+        key = item.get("service_code") or item.get("service_type_code") or ""
+        if not key:
+            counts.setdefault("", {"name": PRODUCT_UNKNOWN, "value": 0})
+            counts[""]["value"] += 1
+            continue
+        entry = counts.setdefault(
+            key, {"name": item.get("service_display") or key.upper(), "value": 0})
+        entry["value"] += 1
+    pairs = list(counts.values())
     pairs.sort(key=lambda p: p["value"], reverse=True)
     return pairs
 
@@ -1164,8 +1219,11 @@ def _dimension_distribution(items: Sequence[Dict[str, Any]]) -> List[Dict[str, A
 
     1. Seed every dimension in DIMENSION_ORDER with a zero count so
        dimensions without data still appear in the chart.
-    2. Count inspection items by their Chinese dimension field.
-    3. Return name/value pairs in the fixed semantic order.
+    2. Count inspection items by their Chinese dimension field; an empty
+       dimension falls back to DIMENSION_UNKNOWN.
+    3. Return name/value pairs in the fixed semantic order. Only the six
+       dimensions in DIMENSION_ORDER are charted, so an item whose dimension
+       resolves to DIMENSION_UNKNOWN is not represented.
 
     Args:
         items: Sequence[dict[str, Any]] — The aggregated inspection items.
@@ -1176,49 +1234,15 @@ def _dimension_distribution(items: Sequence[Dict[str, Any]]) -> List[Dict[str, A
 
     Examples:
         >>> _dimension_distribution([{"dimension": "可靠性"}, {"dimension": "可靠性"}])
-        [{'name': '性能效率', 'value': 0}, {'name': '安全性', 'value': 0}, {'name': '可靠性', 'value': 2}, {'name': '成本优化', 'value': 0}, {'name': '服务配额', 'value': 0}, {'name': '未知', 'value': 0}]
+        [{'name': '性能效率', 'value': 0}, {'name': '安全性', 'value': 0}, {'name': '可靠性', 'value': 2}, {'name': '成本优化', 'value': 0}, {'name': '服务配额', 'value': 0}, {'name': '资源合规', 'value': 0}]
+        >>> _dimension_distribution([{"dimension": "资源合规"}])
+        [{'name': '性能效率', 'value': 0}, {'name': '安全性', 'value': 0}, {'name': '可靠性', 'value': 0}, {'name': '成本优化', 'value': 0}, {'name': '服务配额', 'value': 0}, {'name': '资源合规', 'value': 1}]
     """
     counts: Dict[str, int] = {dimension: 0 for dimension in DIMENSION_ORDER}
     for item in items:
         dimension = item.get("dimension") or DIMENSION_UNKNOWN
         counts[dimension] = counts.get(dimension, 0) + 1
     return [{"name": name, "value": counts[name]} for name in DIMENSION_ORDER]
-
-
-def _trend_series(merged: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Extract the Config daily compliance trend series.
-
-    1. Read meta.trends.config_daily rows.
-    2. Map each row into date / total_resource / non_compliant_resource /
-       total_policy / non_compliant_policy / rate fields.
-
-    Args:
-        merged: dict[str, Any] — The parsed merged inspection JSON.
-
-    Returns:
-        list[dict[str, Any]]: The trend series for the chart.
-
-    Examples:
-        # >>> _trend_series({"meta": {"trends": {"config_daily": [{"statistic_date": "2026-09-12", "total_resource_count": 895, "non_compliant_resource_count": 97, "total_policy_count": 30, "non_compliant_policy_count": 19}]}}})
-        # [{'date': '2026-09-12', 'total_resource': 895, 'non_compliant_resource': 97, 'total_policy': 30, 'non_compliant_policy': 19, 'rate': 89.2}]
-    """
-    rows = ((merged.get("meta") or {}).get("trends") or {}).get("config_daily") or []
-    series: List[Dict[str, Any]] = []
-    for row in rows:
-        total_resource = row.get("total_resource_count", 0) or 0
-        non_compliant_resource = row.get("non_compliant_resource_count", 0) or 0
-        rate = ""
-        if total_resource:
-            rate = round(100 * (total_resource - non_compliant_resource) / total_resource, 1)
-        series.append({
-            "date": row.get("statistic_date", "") or "",
-            "total_resource": total_resource,
-            "non_compliant_resource": non_compliant_resource,
-            "total_policy": row.get("total_policy_count", 0) or 0,
-            "non_compliant_policy": row.get("non_compliant_policy_count", 0) or 0,
-            "rate": rate,
-        })
-    return series
 
 
 def resolve_domain_info(cli_region: str, timeout: int) -> Tuple[str, str]:
@@ -1375,7 +1399,8 @@ def load_template() -> Optional[str]:
     return template_path.read_text(encoding="utf-8")
 
 
-def render_html(analysis: Dict[str, Any], out_dir: Path) -> Optional[Path]:
+def render_html(analysis: Dict[str, Any], out_dir: Path,
+                timestamp: str) -> Optional[Path]:
     """Render the offline HTML report (echarts inlined into the template).
 
     1. Load the static template templates/report.html; return None when
@@ -1384,18 +1409,20 @@ def render_html(analysis: Dict[str, Any], out_dir: Path) -> Optional[Path]:
        __ECHARTS_BUNDLE__ placeholder.
     3. Serialize the analysis payload and inject it into the __DATA__
        placeholder.
-    4. Write the HTML file to the output directory.
+    4. Write the HTML file to the output directory using the run timestamp,
+       so the file name and its directory never disagree.
 
     Args:
         analysis: dict[str, Any] — The analysis payload.
         out_dir: Path — The output directory.
+        timestamp: str — The run timestamp shared by every artifact.
 
     Returns:
         Optional[Path]: The written HTML file path; None when the template is
             missing.
 
     Examples:
-        # >>> render_html({"meta": {}, "items": []}, Path("analysis"))
+        # >>> render_html({"meta": {}, "items": []}, Path("analysis"), "2026_11_06_18_30_00")
     """
     template = load_template()
     if template is None:
@@ -1405,9 +1432,125 @@ def render_html(analysis: Dict[str, Any], out_dir: Path) -> Optional[Path]:
     data_json = json.dumps(analysis, ensure_ascii=False, indent=1)
     html = html.replace("__DATA__", data_json)
     out_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime(TIMESTAMP_FORMAT)
     target = out_dir / OUTPUT_HTML_NAME.format(ts=timestamp)
     target.write_text(html, encoding="utf-8")
+    return target
+
+
+def _risk_item_resources(item: Dict[str, Any]) -> List[Dict[str, str]]:
+    """Project one inspection item's resources onto the JSON fields.
+
+    1. Iterate over the aggregated item resources.
+    2. Keep the region, resource ID, resource name and status only, because
+       those are what the scoped result has to show; the remaining Excel
+       columns are not part of the risk-item document.
+
+    Args:
+        item: dict[str, Any] — One aggregated inspection item.
+
+    Returns:
+        list[dict[str, str]]: One entry per resource with the four fields.
+
+    Examples:
+        >>> _risk_item_resources({"resources": [{"id": "a", "name": "n"}]})
+        [{'region': '', 'id': 'a', 'name': 'n', 'status': ''}]
+    """
+    resources: List[Dict[str, str]] = []
+    for res in item.get("resources") or []:
+        resources.append({
+            "region": res.get("region_id", "") or "",
+            "id": res.get("id", "") or "",
+            "name": res.get("name", "") or "",
+            "status": res.get("status", "") or "",
+        })
+    return resources
+
+
+def build_risk_item_document(analysis: Dict[str, Any],
+                             record_count: int) -> Dict[str, Any]:
+    """Build the scoped risk-item document from the analysis payload.
+
+    1. Read the cloud-service scope recorded by the merge step.
+    2. Copy the aggregated risk items into the document, projecting each
+       item's resources onto the region / id / name / status fields.
+    3. Sum the risk items and their resources, and carry the number of
+       merged records that entered the analysis, so the caller can state
+       "matched N records but found no risk" correctly.
+
+    Args:
+        analysis: dict[str, Any] — The analysis payload built by
+            build_analysis_data.
+        record_count: int — The number of merged records analysed.
+
+    Returns:
+        dict[str, Any]: The risk-item document with services / totals / items.
+
+    Examples:
+        # >>> build_risk_item_document({"meta": {"cloud_service_filter": {"services": ["ecs"]}}, "items": []}, 30)["totals"]["records"]
+        # 30
+    """
+    meta = analysis.get("meta") or {}
+    scope = meta.get("cloud_service_filter") or {}
+    items: List[Dict[str, Any]] = []
+    for item in analysis.get("items") or []:
+        items.append({
+            "service_type_code": item.get("service_type_code", "") or "",
+            "check_item_name": item.get("check_item_name", "") or "",
+            "dimension": item.get("dimension", "") or "",
+            "risk_level": item.get("risk_level", "") or "",
+            "source": item.get("source", "") or "",
+            "display_source": item.get("display_source", "") or "",
+            "resource_count": item.get("resource_count", 0),
+            "total_resources": item.get("total_resources", 0),
+            "description": item.get("description", "") or "",
+            "advice": item.get("advice", "") or "",
+            "effect": item.get("effect", "") or "",
+            "resources": _risk_item_resources(item),
+        })
+    total_resources = sum(len(entry["resources"]) for entry in items)
+    return {
+        "services": list(scope.get("services", []) or []),
+        "totals": {
+            "items": len(items),
+            "resources": total_resources,
+            "records": record_count,
+        },
+        "items": items,
+    }
+
+
+def render_risk_items(analysis: Dict[str, Any], out_dir: Path,
+                      timestamp: str, record_count: int) -> Optional[Path]:
+    """Write the scoped risk-item JSON when a cloud-service whitelist applied.
+
+    1. Return None when the merged metadata carries no cloud-service scope,
+       keeping full-tenant runs artifact-identical to before.
+    2. Build the document from the same aggregated items the HTML and Excel
+       renderers consume, so the three artifacts cannot disagree.
+    3. Write it next to the reports with the shared run timestamp.
+
+    Args:
+        analysis: dict[str, Any] — The analysis payload.
+        out_dir: Path — The output directory.
+        timestamp: str — The run timestamp shared by every artifact.
+        record_count: int — The number of merged records analysed.
+
+    Returns:
+        Optional[Path]: The written JSON path, or None when the run has no
+            cloud-service scope.
+
+    Examples:
+        # >>> render_risk_items({"meta": {}, "items": []}, Path("analysis"), "2026_11_06_18_30_00", 0) is None
+        True
+    """
+    meta = analysis.get("meta") or {}
+    if not meta.get("cloud_service_filter"):
+        return None
+    document = build_risk_item_document(analysis, record_count)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    target = out_dir / OUTPUT_RISK_ITEMS_NAME.format(ts=timestamp)
+    target.write_text(
+        json.dumps(document, ensure_ascii=False, indent=2), encoding="utf-8")
     return target
 
 
@@ -1449,6 +1592,55 @@ def _sanitize_sheet_name(name: str, used: set[str]) -> str:
     return candidate
 
 
+def _quote_sheet_reference(sheet_name: str) -> str:
+    """Escape a sheet name for use inside a workbook-internal reference.
+
+    1. Double every embedded apostrophe, which is Excel's escape for a quote
+       inside a quoted sheet name.
+    2. Wrap the result in single quotes so spaces and other characters that
+       are illegal in an unquoted reference stay literal.
+
+    Args:
+        sheet_name: str — The worksheet name to reference.
+
+    Returns:
+        str: The sheet name ready to be used as `'<name>'!A1`.
+
+    Examples:
+        >>> _quote_sheet_reference("ECS 实例检查")
+        "'ECS 实例检查'"
+        >>> _quote_sheet_reference("it's")
+        "'it''s'"
+    """
+    return "'" + str(sheet_name).replace("'", "''") + "'"
+
+
+def _internal_hyperlink(cell: Any, sheet_name: str, anchor: str = "A1") -> None:
+    """Attach a workbook-internal jump to a cell.
+
+    1. Build the target as a `location` reference rather than a URL, because
+       openpyxl writes a plain string as an *external* relationship and Excel
+       then reports the target as an invalid reference.
+    2. Point the hyperlink at the cell's own coordinate and apply the link
+       font so the cell reads as clickable.
+
+    Args:
+        cell: Any — The openpyxl cell that becomes the link.
+        sheet_name: str — Destination worksheet name.
+        anchor: str — Destination cell in A1 notation.
+
+    Returns:
+        None
+
+    Examples:
+        # >>> _internal_hyperlink(ws.cell(row=5, column=10), "风险检查总览")
+    """
+    from openpyxl.worksheet.hyperlink import Hyperlink
+    location = "{}!{}".format(_quote_sheet_reference(sheet_name), anchor)
+    cell.hyperlink = Hyperlink(ref=cell.coordinate, location=location)
+    _style_hyperlink(cell)
+
+
 def _style_hyperlink(cell: Any) -> None:
     """Apply the classic link-blue underlined font to a hyperlink cell.
 
@@ -1470,47 +1662,6 @@ def _style_hyperlink(cell: Any) -> None:
     cell.font = Font(color=LINK_BLUE, underline="single")
 
 
-def _write_coverage_block(ws: Any, analysis: Dict[str, Any], start_row: int) -> None:
-    """Write the check coverage summary block on the overview sheet.
-
-    1. Write the block title at the start row.
-    2. Write a per-source coverage table below it: OA check-item level
-       status counts, Config rule-level compliance counts, SecMaster
-       baseline counts and the deduplicated failure-item total.
-
-    Args:
-        ws: Any — The openpyxl worksheet.
-        analysis: dict[str, Any] — The analysis payload with coverage.
-        start_row: int — The row where the block title is written.
-
-    Returns:
-        None
-
-    Examples:
-        # >>> _write_coverage_block(ws, {"coverage": {}}, 20)
-    """
-    coverage = analysis.get("coverage") or {}
-    oa = coverage.get("oa_console") or coverage.get("oa") or {}
-    config = coverage.get("config") or {}
-    secmaster = coverage.get("secmaster") or {}
-    failed = coverage.get("failed") or {}
-    ws.cell(row=start_row, column=1, value="检查覆盖汇总（检查项级）")
-    rows = [
-        ("优化顾问 OA", "风险项 {} · 安全项 {} · 不涉及 {} · 提示项 {} · 采集失败 {}".format(
-            oa.get("risk", 0), oa.get("security", 0), oa.get("not_involved", 0),
-            oa.get("hint", 0), oa.get("failed", 0))),
-        ("配置审计 Config", "合规规则 {} · 不合规规则 {} · 规则总数 {}".format(
-            config.get("compliant_rules", 0), config.get("non_compliant_rules", 0),
-            config.get("total_rules", 0))),
-        ("安全云脑 SecMaster", "合格基线 {} · 不合格基线 {}".format(
-            secmaster.get("qualified", 0), secmaster.get("risk", 0))),
-        ("采集失败项总数", "{} （检查项级去重）".format(failed.get("total", 0))),
-    ]
-    for offset, (label, value) in enumerate(rows, start=1):
-        ws.cell(row=start_row + offset, column=1, value=label)
-        ws.cell(row=start_row + offset, column=2, value=value)
-
-
 def _write_overview_sheet(ws: Any, analysis: Dict[str, Any], sheet_names: Dict[str, str]) -> None:
     """Write the Excel overview sheet (account info + risk item table).
 
@@ -1519,8 +1670,9 @@ def _write_overview_sheet(ws: Any, analysis: Dict[str, Any], sheet_names: Dict[s
        item / standard / result / risk level / risk resource count / total
        resources plus data source and jump-link columns).
     3. Write one row per aggregated inspection item; the jump-link cell
-       shows 点击查看详情 and links to the item detail sheet via #Sheet!A1.
-    4. Append the check coverage summary block below the risk item table.
+       shows 点击查看详情 and links to the item detail sheet through a
+       workbook-internal `location` reference, which Excel and WPS both
+       accept (a `#Sheet!A1` string would be written as an external link).
 
     Args:
         ws: Any — The openpyxl worksheet.
@@ -1543,7 +1695,7 @@ def _write_overview_sheet(ws: Any, analysis: Dict[str, Any], sheet_names: Dict[s
     for col, header in enumerate(headers, start=1):
         ws.cell(row=4, column=col, value=header)
     for row_offset, item in enumerate(analysis.get("items") or [], start=5):
-        sheet_name = sheet_names.get(item["check_item_id"] + "\u0000" + item["source"], "")
+        sheet_name = sheet_names.get(_item_sheet_key(item), "")
         row = [
             item.get("dimension", ""),
             item.get("service_type_code", ""),
@@ -1559,13 +1711,9 @@ def _write_overview_sheet(ws: Any, analysis: Dict[str, Any], sheet_names: Dict[s
             ws.cell(row=row_offset, column=col, value=value)
         link_cell = ws.cell(row=row_offset, column=10, value="点击查看详情")
         if sheet_name:
-            link_cell.hyperlink = f"#{sheet_name}!A1"
-            _style_hyperlink(link_cell)
+            _internal_hyperlink(link_cell, sheet_name)
         else:
             link_cell.hyperlink = None
-
-    coverage_start = 5 + len(analysis.get("items") or []) + 1
-    _write_coverage_block(ws, analysis, coverage_start)
 
 
 def _write_detail_sheet(ws: Any, item: Dict[str, Any]) -> None:
@@ -1607,8 +1755,7 @@ def _write_detail_sheet(ws: Any, item: Dict[str, Any]) -> None:
         ws.cell(row=row, column=1, value=label)
         ws.cell(row=row, column=2, value=value)
     top_cell = ws.cell(row=2, column=1, value="返回总览")
-    top_cell.hyperlink = f"#{OVERVIEW_SHEET_NAME}!A1"
-    _style_hyperlink(top_cell)
+    _internal_hyperlink(top_cell, OVERVIEW_SHEET_NAME)
 
     resources = item.get("resources") or []
     resource_header_row = len(header_values) + 4
@@ -1622,28 +1769,54 @@ def _write_detail_sheet(ws: Any, item: Dict[str, Any]) -> None:
     else:
         last_row = len(header_values) + 2
     back_cell = ws.cell(row=last_row + 2, column=1, value="返回总览")
-    back_cell.hyperlink = f"#{OVERVIEW_SHEET_NAME}!A1"
-    _style_hyperlink(back_cell)
+    _internal_hyperlink(back_cell, OVERVIEW_SHEET_NAME)
 
 
-def render_xlsx(analysis: Dict[str, Any], out_dir: Path) -> Optional[Path]:
+def _item_sheet_key(item: Dict[str, Any]) -> str:
+    """Build the key that links an inspection item to its detail sheet.
+
+    1. Join check_item_id, source and workspace_id with a NUL separator.
+    2. Return the joined key so the sheet lookup mirrors the aggregation key
+       and same-named baselines of different instances keep separate sheets.
+
+    Args:
+        item: dict[str, Any] — One aggregated inspection item.
+
+    Returns:
+        str: The stable key shared by the sheet-name map and its lookups.
+
+    Examples:
+        # >>> _item_sheet_key({"check_item_id": "a", "source": "Config"}) == "a\\u0000Config\\u0000"
+        True
+    """
+    return "\u0000".join([
+        item.get("check_item_id", "") or "",
+        item.get("source", "") or "",
+        item.get("workspace_id", "") or "",
+    ])
+
+
+def render_xlsx(analysis: Dict[str, Any], out_dir: Path,
+                timestamp: str) -> Optional[Path]:
     """Render the Excel workbook (overview + detail sheets).
 
     1. Try to import openpyxl; log a warning and return None when missing.
     2. Create the overview sheet first, then one detail sheet per
        aggregated inspection item.
-    3. Write the workbook to the output directory with a timestamped name.
+    3. Write the workbook to the output directory using the run timestamp,
+       so the file name and its directory never disagree.
 
     Args:
         analysis: dict[str, Any] — The analysis payload.
         out_dir: Path — The output directory.
+        timestamp: str — The run timestamp shared by every artifact.
 
     Returns:
         Optional[Path]: The written xlsx file path; None when openpyxl is
             missing.
 
     Examples:
-        # >>> render_xlsx({"meta": {}, "items": []}, Path("analysis"))
+        # >>> render_xlsx({"meta": {}, "items": []}, Path("analysis"), "2026_11_06_18_30_00")
     """
     try:
         from openpyxl import Workbook
@@ -1658,16 +1831,15 @@ def render_xlsx(analysis: Dict[str, Any], out_dir: Path) -> Optional[Path]:
     used: set[str] = {OVERVIEW_SHEET_NAME}
     for item in analysis.get("items") or []:
         sheet_name = _sanitize_sheet_name(item.get("check_item_name", ""), used)
-        key = item["check_item_id"] + "\u0000" + item["source"]
+        key = _item_sheet_key(item)
         sheet_names[key] = sheet_name
     _write_overview_sheet(overview_ws, analysis, sheet_names)
     for item in analysis.get("items") or []:
-        key = item["check_item_id"] + "\u0000" + item["source"]
+        key = _item_sheet_key(item)
         detail_ws = wb.create_sheet(title=sheet_names.get(key, "检查项"))
         _write_detail_sheet(detail_ws, item)
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime(TIMESTAMP_FORMAT)
     target = out_dir / OUTPUT_XLSX_NAME.format(ts=timestamp)
     wb.save(str(target))
     return target
@@ -1682,7 +1854,8 @@ def build_parser() -> argparse.ArgumentParser:
     """Build the command-line argument parser.
 
     1. Add the required --input option.
-    2. Add the optional --output-dir / --cli-region / --log-file options.
+    2. Add the optional --output-dir / --timeout / --log-file options. No
+       region option is registered: the region is fixed to CLI_REGION.
 
     Args:
         None
@@ -1700,8 +1873,6 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Required. Absolute path of the merged inspection results JSON file")
     parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR,
                         help="Optional. Output directory for artifacts (default: %(default)s)")
-    parser.add_argument("--cli-region", default=DEFAULT_CLI_REGION,
-                        help="Optional. hcloud CLI region used for the IAM domain query (default: %(default)s)")
     parser.add_argument("--timeout", type=int, default=30,
                         help="Optional. Timeout in seconds for the hcloud command (default: %(default)s).")
     parser.add_argument("--log-file", default=None,
@@ -1725,12 +1896,11 @@ def print_summary(analysis: Dict[str, Any], written_files: List[str]) -> None:
         None
 
     Examples:
-        # >>> print_summary({"meta": {}, "items": [], "failures": []}, [])
+        # >>> print_summary({"meta": {}, "items": [], "coverage": {}}, [])
     """
     items = analysis.get("items") or []
-    failures = analysis.get("failures") or []
     coverage = analysis.get("coverage") or {}
-    oa_console_cov = coverage.get("oa_console") or coverage.get("oa") or {}
+    oa_console_cov = coverage.get("oa_console") or {}
     config_cov = coverage.get("config") or {}
     secmaster_cov = coverage.get("secmaster") or {}
     failed_cov = coverage.get("failed") or {}
@@ -1754,7 +1924,7 @@ def print_summary(analysis: Dict[str, Any], written_files: List[str]) -> None:
     logger.info("Non-risk items (check-item level): %d", non_risk_total)
     logger.info("Uninspected items (check-item level): %d",
                 secmaster_cov.get("uninspected", 0))
-    logger.info("Failed items (check-item level): %d", failed_cov.get("total", len(failures)))
+    logger.info("Failed items (check-item level): %d", failed_cov.get("total", 0))
     if written_files:
         logger.info("-" * 60)
         logger.info("Generated files:")
@@ -1770,9 +1940,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
        --log-file handler).
     2. Parse the command-line arguments and validate the required input.
     3. Load the merged input and build the analysis payload.
-    4. Resolve the account user name / ID via hcloud for the Excel overview.
+    4. Resolve the account user name / ID via hcloud with the fixed
+       CLI_REGION, store the pair on analysis.user for the Excel overview
+       and the ID on analysis.meta.domain_id for the HTML metadata block.
     5. Render the HTML report and the Excel workbook into a timestamped
-       subdirectory under --output-dir.
+       subdirectory under --output-dir, plus the scoped risk-item JSON when
+       the merged input records a cloud-service whitelist.
     6. Emit the summary via logging.
 
     Args:
@@ -1795,16 +1968,26 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         logger.error("Failed to load input file: %s", exc)
         return 1
     analysis = build_analysis_data(merged)
-    user_name, account_id = resolve_domain_info(args.cli_region, args.timeout)
+    user_name, account_id = resolve_domain_info(CLI_REGION, args.timeout)
     analysis["user"] = {"name": user_name, "account": account_id}
-    out_dir = Path(args.output_dir).resolve() / datetime.now().strftime(TIMESTAMP_FORMAT)
+    # The HTML metadata block reads the account ID from meta.domain_id.
+    analysis.setdefault("meta", {})["domain_id"] = account_id
+    # One run timestamp for the directory and every file name, so a run that
+    # crosses a second boundary cannot split them.
+    timestamp = datetime.now().strftime(TIMESTAMP_FORMAT)
+    out_dir = Path(args.output_dir).resolve() / timestamp
+    record_count = len(merged.get("results", []) or [])
     written_files: List[str] = []
-    html_path = render_html(analysis, out_dir)
+    html_path = render_html(analysis, out_dir, timestamp)
     if html_path is not None:
         written_files.append(str(html_path))
-    xlsx_path = render_xlsx(analysis, out_dir)
+    xlsx_path = render_xlsx(analysis, out_dir, timestamp)
     if xlsx_path is not None:
         written_files.append(str(xlsx_path))
+    risk_items_path = render_risk_items(analysis, out_dir, timestamp, record_count)
+    if risk_items_path is not None:
+        written_files.append(str(risk_items_path.resolve()))
+        logger.info("Risk item scope file: %s", risk_items_path.resolve())
     print_summary(analysis, written_files)
     logger.info("Task finished. Output files: %s", ", ".join(written_files))
     return 0

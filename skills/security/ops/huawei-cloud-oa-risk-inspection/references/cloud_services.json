@@ -1,0 +1,881 @@
+[
+  {
+    "code": "aad",
+    "names": [
+      "AAD",
+      "DDoS高防",
+      "Advanced Anti-DDoS"
+    ]
+  },
+  {
+    "code": "aom",
+    "names": [
+      "AOM",
+      "应用运维管理",
+      "Application Operations Management"
+    ]
+  },
+  {
+    "code": "apig",
+    "names": [
+      "APIG",
+      "API网关",
+      "API Gateway"
+    ]
+  },
+  {
+    "code": "as",
+    "names": [
+      "AS",
+      "弹性伸缩",
+      "Auto Scaling"
+    ]
+  },
+  {
+    "code": "bcs",
+    "names": [
+      "BCS",
+      "区块链服务",
+      "Blockchain Service"
+    ]
+  },
+  {
+    "code": "bms",
+    "names": [
+      "BMS",
+      "裸金属服务器",
+      "Bare Metal Server"
+    ]
+  },
+  {
+    "code": "cae",
+    "names": [
+      "CAE",
+      "云应用引擎",
+      "Cloud Application Engine"
+    ]
+  },
+  {
+    "code": "cbh",
+    "names": [
+      "CBH",
+      "云堡垒机",
+      "Cloud Bastion Host"
+    ]
+  },
+  {
+    "code": "cbr",
+    "names": [
+      "CBR",
+      "云备份",
+      "Cloud Backup and Recovery"
+    ]
+  },
+  {
+    "code": "cbs",
+    "names": [
+      "CBS",
+      "对话机器人服务",
+      "Conversational Bot Service"
+    ]
+  },
+  {
+    "code": "cc",
+    "names": [
+      "CC",
+      "云连接",
+      "Cloud Connect"
+    ]
+  },
+  {
+    "code": "ccaas",
+    "names": [
+      "CCAAS",
+      "云联络中心",
+      "Cloud Contact Center as a Service"
+    ]
+  },
+  {
+    "code": "cce",
+    "names": [
+      "CCE",
+      "云容器引擎",
+      "Cloud Container Engine"
+    ]
+  },
+  {
+    "code": "ccm",
+    "names": [
+      "CCM",
+      "云证书与管理服务",
+      "Cloud Certificate & Manager"
+    ]
+  },
+  {
+    "code": "cdn",
+    "names": [
+      "CDN",
+      "内容分发网络",
+      "Content Delivery Network"
+    ]
+  },
+  {
+    "code": "ces",
+    "names": [
+      "CES",
+      "云监控服务",
+      "Cloud Eye"
+    ]
+  },
+  {
+    "code": "cfw",
+    "names": [
+      "CFW",
+      "云防火墙",
+      "Cloud Firewall"
+    ]
+  },
+  {
+    "code": "cloudtable",
+    "names": [
+      "CloudTable",
+      "表格存储服务",
+      "CloudTable Service"
+    ]
+  },
+  {
+    "code": "cnad",
+    "names": [
+      "CNAD",
+      "云原生应用防火墙",
+      "Cloud Native Anti-DDoS"
+    ]
+  },
+  {
+    "code": "codearts",
+    "names": [
+      "CodeArts",
+      "软件开发生产线"
+    ]
+  },
+  {
+    "code": "codeartsbuild",
+    "names": [
+      "CodeArtsBuild",
+      "编译构建",
+      "CodeArts Build"
+    ]
+  },
+  {
+    "code": "codeartsdeploy",
+    "names": [
+      "CodeArtsDeploy",
+      "部署",
+      "CodeArts Deploy"
+    ]
+  },
+  {
+    "code": "config",
+    "names": [
+      "Config",
+      "配置审计"
+    ]
+  },
+  {
+    "code": "craftartsipdcenter",
+    "names": [
+      "CraftArtsIPDCenter",
+      "硬件开发工具链平台云服务",
+      "Integrated Product Development Center Cloud Service",
+      "ipdcenter",
+      "craftartssim"
+    ]
+  },
+  {
+    "code": "csbs",
+    "names": [
+      "CSBS",
+      "云服务器备份",
+      "Cloud Server Backup Service"
+    ]
+  },
+  {
+    "code": "cse",
+    "names": [
+      "CSE",
+      "微服务引擎",
+      "Cloud Service Engine"
+    ]
+  },
+  {
+    "code": "csms",
+    "names": [
+      "CSMS",
+      "密码安全中心-凭据管理",
+      "Data Encryption Workshop CSMS"
+    ]
+  },
+  {
+    "code": "css",
+    "names": [
+      "CSS",
+      "云搜索服务",
+      "Cloud Search Service"
+    ]
+  },
+  {
+    "code": "cts",
+    "names": [
+      "CTS",
+      "云审计服务",
+      "Cloud Trace Service"
+    ]
+  },
+  {
+    "code": "das",
+    "names": [
+      "DAS",
+      "数据管理服务",
+      "Data Admin Service"
+    ]
+  },
+  {
+    "code": "dataartsstudio",
+    "names": [
+      "DataArtsStudio",
+      "数据治理中心",
+      "DataArts Studio"
+    ]
+  },
+  {
+    "code": "dbss",
+    "names": [
+      "DBSS",
+      "数据库安全服务",
+      "Database Security Service"
+    ]
+  },
+  {
+    "code": "dc",
+    "names": [
+      "DC",
+      "云专线",
+      "Direct Connect",
+      "dcaas"
+    ]
+  },
+  {
+    "code": "dcs",
+    "names": [
+      "DCS",
+      "分布式缓存服务",
+      "Distributed Cache Service"
+    ]
+  },
+  {
+    "code": "ddm",
+    "names": [
+      "DDM",
+      "分布式数据库中间件",
+      "Distributed Database Middleware"
+    ]
+  },
+  {
+    "code": "dds",
+    "names": [
+      "DDS",
+      "文档数据库服务",
+      "Document Database Service"
+    ]
+  },
+  {
+    "code": "deh",
+    "names": [
+      "DeH",
+      "专属主机",
+      "Dedicated Host"
+    ]
+  },
+  {
+    "code": "dew",
+    "names": [
+      "DEW",
+      "数据加密服务"
+    ]
+  },
+  {
+    "code": "dis",
+    "names": [
+      "DIS",
+      "数据接入服务",
+      "Data Ingestion Service"
+    ]
+  },
+  {
+    "code": "dli",
+    "names": [
+      "DLI",
+      "数据湖探索",
+      "Data Lake Insight"
+    ]
+  },
+  {
+    "code": "dlv",
+    "names": [
+      "DLV",
+      "数据可视化",
+      "Data Lake Visualization"
+    ]
+  },
+  {
+    "code": "dms",
+    "names": [
+      "DMS",
+      "分布式消息服务",
+      "Distributed Message Service"
+    ]
+  },
+  {
+    "code": "dns",
+    "names": [
+      "DNS",
+      "云解析服务",
+      "Domain Name Service",
+      "domains"
+    ]
+  },
+  {
+    "code": "drs",
+    "names": [
+      "DRS",
+      "数据复制服务",
+      "Data Replication Service"
+    ]
+  },
+  {
+    "code": "dsc",
+    "names": [
+      "DSC",
+      "数据安全中心",
+      "Data Security Center"
+    ]
+  },
+  {
+    "code": "dss",
+    "names": [
+      "DSS",
+      "专属分布式存储服务",
+      "Dedicated Distributed Storage Service"
+    ]
+  },
+  {
+    "code": "dws",
+    "names": [
+      "DWS",
+      "数据仓库服务",
+      "Data Warehouse Service",
+      "gaussdb(dws)"
+    ]
+  },
+  {
+    "code": "ec",
+    "names": [
+      "EC",
+      "企业连接",
+      "Enterprise Connect"
+    ]
+  },
+  {
+    "code": "ecs",
+    "names": [
+      "ECS",
+      "弹性云服务器",
+      "Elastic Cloud Server",
+      "hecs"
+    ]
+  },
+  {
+    "code": "eds",
+    "names": [
+      "EDS",
+      "交换数据空间",
+      "Exchange Data Space"
+    ]
+  },
+  {
+    "code": "eip",
+    "names": [
+      "EIP",
+      "弹性公网IP",
+      "Elastic IP"
+    ]
+  },
+  {
+    "code": "elb",
+    "names": [
+      "ELB",
+      "弹性负载均衡",
+      "Elastic Load Balance"
+    ]
+  },
+  {
+    "code": "er",
+    "names": [
+      "ER",
+      "企业路由器",
+      "Enterprise Router"
+    ]
+  },
+  {
+    "code": "esw",
+    "names": [
+      "ESW",
+      "企业交换机",
+      "Enterprise Switch"
+    ]
+  },
+  {
+    "code": "evs",
+    "names": [
+      "EVS",
+      "云硬盘",
+      "Elastic Volume Service"
+    ]
+  },
+  {
+    "code": "functiongraph",
+    "names": [
+      "FunctionGraph",
+      "函数工作流",
+      "fgs"
+    ]
+  },
+  {
+    "code": "ga",
+    "names": [
+      "GA",
+      "全球加速",
+      "Global Accelerator"
+    ]
+  },
+  {
+    "code": "gaussdb",
+    "names": [
+      "GaussDB",
+      "云数据库TaurusDB"
+    ]
+  },
+  {
+    "code": "gaussdbfornosql",
+    "names": [
+      "GaussDBforNoSQL",
+      "云数据库 GeminiDB",
+      "GeminiDB"
+    ]
+  },
+  {
+    "code": "ges",
+    "names": [
+      "GES",
+      "图引擎服务",
+      "Graph Engine Service"
+    ]
+  },
+  {
+    "code": "hss",
+    "names": [
+      "HSS",
+      "企业主机安全",
+      "Host Security Service"
+    ]
+  },
+  {
+    "code": "iam",
+    "names": [
+      "IAM",
+      "统一身份认证服务",
+      "Identity and Access Management"
+    ]
+  },
+  {
+    "code": "iamaccessanalyzer",
+    "names": [
+      "IAMAccessAnalyzer",
+      "访问分析",
+      "accessanalyzer"
+    ]
+  },
+  {
+    "code": "identitycenter",
+    "names": [
+      "IdentityCenter",
+      "IAM 身份中心",
+      "IAM Identity Center"
+    ]
+  },
+  {
+    "code": "idme",
+    "names": [
+      "iDME",
+      "工业数字模型驱动引擎",
+      "Industrial Digital Model Engine"
+    ]
+  },
+  {
+    "code": "iec",
+    "names": [
+      "IEC",
+      "智能边缘云",
+      "Intelligent EdgeCloud"
+    ]
+  },
+  {
+    "code": "imagesearch",
+    "names": [
+      "ImageSearch",
+      "图像搜索"
+    ]
+  },
+  {
+    "code": "ims",
+    "names": [
+      "IMS",
+      "镜像服务",
+      "Image Management Service"
+    ]
+  },
+  {
+    "code": "innostageworkbench",
+    "names": [
+      "InnoStageWorkbench"
+    ]
+  },
+  {
+    "code": "iotda",
+    "names": [
+      "IoTDA",
+      "设备接入",
+      "IoT Device Access"
+    ]
+  },
+  {
+    "code": "kms",
+    "names": [
+      "KMS",
+      "密码安全中心-密钥管理",
+      "Data Encryption Workshop KMS"
+    ]
+  },
+  {
+    "code": "koophone",
+    "names": [
+      "KooPhone",
+      "云手机服务"
+    ]
+  },
+  {
+    "code": "lakeformation",
+    "names": [
+      "LakeFormation",
+      "湖仓构建",
+      "DataArts Lake Formation"
+    ]
+  },
+  {
+    "code": "lts",
+    "names": [
+      "LTS",
+      "云日志服务",
+      "Log Tank Service"
+    ]
+  },
+  {
+    "code": "mas",
+    "names": [
+      "MAS",
+      "多活高可用",
+      "Multi-Active Site"
+    ]
+  },
+  {
+    "code": "modelarts",
+    "names": [
+      "ModelArts",
+      "AI开发平台"
+    ]
+  },
+  {
+    "code": "moderation",
+    "names": [
+      "Moderation",
+      "内容审核",
+      "Content Moderation"
+    ]
+  },
+  {
+    "code": "mpc",
+    "names": [
+      "MPC",
+      "媒体转码",
+      "Media Processing Center"
+    ]
+  },
+  {
+    "code": "mrs",
+    "names": [
+      "MRS",
+      "MapReduce服务",
+      "MapReduce Service"
+    ]
+  },
+  {
+    "code": "mssi",
+    "names": [
+      "MSSI",
+      "开天集成工作台",
+      "MacroVerse SmartStage for Integrators"
+    ]
+  },
+  {
+    "code": "nat",
+    "names": [
+      "NAT",
+      "NAT网关",
+      "NAT Gateway"
+    ]
+  },
+  {
+    "code": "nosql",
+    "names": [
+      "NoSQL",
+      "多模NoSQL服务",
+      "Multi-Model NoSQL Service"
+    ]
+  },
+  {
+    "code": "obs",
+    "names": [
+      "OBS",
+      "对象存储服务",
+      "Object Storage Service"
+    ]
+  },
+  {
+    "code": "oms",
+    "names": [
+      "OMS",
+      "对象存储迁移服务",
+      "Object Storage Migration Service"
+    ]
+  },
+  {
+    "code": "organizations",
+    "names": [
+      "Organizations",
+      "组织"
+    ]
+  },
+  {
+    "code": "pca",
+    "names": [
+      "PCA",
+      "私有证书管理",
+      "Private Certificate Authority"
+    ]
+  },
+  {
+    "code": "ram",
+    "names": [
+      "RAM",
+      "资源访问管理",
+      "Resource Access Manager"
+    ]
+  },
+  {
+    "code": "rds",
+    "names": [
+      "RDS",
+      "云数据库",
+      "Relational Database Service",
+      "flexusrds",
+      "rdsformysql",
+      "rdsforsqlserver"
+    ]
+  },
+  {
+    "code": "rfs",
+    "names": [
+      "RFS",
+      "资源编排服务",
+      "Resource Formation Service",
+      "rf"
+    ]
+  },
+  {
+    "code": "roma",
+    "names": [
+      "ROMA",
+      "应用与数据集成平台",
+      "romaconnect"
+    ]
+  },
+  {
+    "code": "scm",
+    "names": [
+      "SCM",
+      "SSL证书管理",
+      "SSL Certificate Manager"
+    ]
+  },
+  {
+    "code": "sdrs",
+    "names": [
+      "SDRS",
+      "存储容灾服务",
+      "Storage Disaster Recovery Service"
+    ]
+  },
+  {
+    "code": "secmaster",
+    "names": [
+      "SecMaster",
+      "安全云脑"
+    ]
+  },
+  {
+    "code": "servicestage",
+    "names": [
+      "ServiceStage",
+      "应用管理与运维平台"
+    ]
+  },
+  {
+    "code": "sfs",
+    "names": [
+      "SFS",
+      "弹性文件服务",
+      "Scalable File Service"
+    ]
+  },
+  {
+    "code": "sfsturbo",
+    "names": [
+      "SFSTurbo",
+      "弹性文件服务(SFS Turbo)",
+      "Scalable File Service(SFS Turbo)",
+      "sfs turbo"
+    ]
+  },
+  {
+    "code": "smn",
+    "names": [
+      "SMN",
+      "消息通知服务",
+      "Simple Message Notification"
+    ]
+  },
+  {
+    "code": "swr",
+    "names": [
+      "SWR",
+      "容器镜像服务",
+      "Software Repository for Container"
+    ]
+  },
+  {
+    "code": "taurusdb",
+    "names": [
+      "TaurusDB",
+      "云数据库 TaurusDB",
+      "gaussdbformysql"
+    ]
+  },
+  {
+    "code": "tms",
+    "names": [
+      "TMS",
+      "标签管理服务",
+      "Tag Management Service"
+    ]
+  },
+  {
+    "code": "ucs",
+    "names": [
+      "UCS",
+      "华为云UCS",
+      "Ubiquitous Cloud Native Service"
+    ]
+  },
+  {
+    "code": "ugo",
+    "names": [
+      "UGO",
+      "数据库和应用迁移 UGO",
+      "Database and Application Migration UGO"
+    ]
+  },
+  {
+    "code": "vbs",
+    "names": [
+      "VBS",
+      "云硬盘备份",
+      "Volume Backup Service"
+    ]
+  },
+  {
+    "code": "vod",
+    "names": [
+      "VOD",
+      "视频点播",
+      "Video on Demand"
+    ]
+  },
+  {
+    "code": "voicecall",
+    "names": [
+      "VoiceCall",
+      "语音通话",
+      "Voice Call"
+    ]
+  },
+  {
+    "code": "vpc",
+    "names": [
+      "VPC",
+      "虚拟私有云",
+      "Virtual Private Cloud"
+    ]
+  },
+  {
+    "code": "vpcep",
+    "names": [
+      "VPCEP",
+      "VPC终端节点",
+      "VPC Endpoint"
+    ]
+  },
+  {
+    "code": "vpn",
+    "names": [
+      "VPN",
+      "虚拟专用网络",
+      "Virtual Private Network",
+      "vpnaas"
+    ]
+  },
+  {
+    "code": "waf",
+    "names": [
+      "WAF",
+      "Web应用防火墙",
+      "Web Application Firewall"
+    ]
+  },
+  {
+    "code": "workspace",
+    "names": [
+      "Workspace",
+      "云桌面"
+    ]
+  }
+]

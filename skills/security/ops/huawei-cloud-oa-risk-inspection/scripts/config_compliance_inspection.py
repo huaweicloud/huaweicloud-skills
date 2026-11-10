@@ -11,8 +11,7 @@ Overview:
     manual review.
 
 Detailed Description:
-    1. Configure basic logging output, parse command-line arguments and
-       validate required parameters and hcloud executability.
+    1. Configure basic logging output and parse command-line arguments.
     2. Paginate through the compliance rule list.
     3. For each rule, paginate through resource-level compliance results; a
        single failure is recorded into failures by default and collection
@@ -26,9 +25,9 @@ Detailed Description:
 Dependencies:
     Python standard library: subprocess, json, argparse, logging, datetime,
     pathlib, sys. No third-party dependencies. The hcloud CLI must be
-    installed, configured and authenticated with AK/SK in advance;
-    --cli-region must be specified explicitly from the outside; this script
-    does not hard-code a region.
+    installed, configured and authenticated with AK/SK in advance. The
+    hcloud region is not a command line option: it is fixed to the module
+    constant CLI_REGION.
 """
 
 from __future__ import annotations
@@ -48,6 +47,9 @@ logger = logging.getLogger(__name__)
 
 # Constants
 DEFAULT_TIMEOUT = 60
+# The Config service is only collected from this region, so the region is a
+# script constant rather than a command line option.
+CLI_REGION = "cn-north-4"
 COMPLIANT_STATE = "Compliant"
 NON_COMPLIANT_STATE = "NonCompliant"
 IAM_SERVICE = "IAM"
@@ -293,8 +295,8 @@ def resolve_domain_id(cli_region: str, timeout: int) -> str:
     3. Raise HcloudOutputParseError when domains is missing or empty.
 
     Args:
-        cli_region: str — The hcloud command region (specified externally,
-            not hard-coded).
+        cli_region: str — The hcloud command region, supplied by the
+            caller from the module constant CLI_REGION.
         timeout: int — The timeout in seconds for a single command.
 
     Returns:
@@ -330,8 +332,8 @@ class HcloudClient:
            call, not during construction.
 
         Args:
-            cli_region: str — The hcloud command region (specified externally,
-                not hard-coded).
+            cli_region: str — The hcloud command region, supplied by the
+                caller from the module constant CLI_REGION.
             timeout: int — The timeout in seconds for a single command,
                 default 60.
 
@@ -797,6 +799,9 @@ def print_summary(data: Dict[str, Any], written_files: List[str]) -> None:
 def build_parser() -> argparse.ArgumentParser:
     """Build the command-line argument parser.
 
+    1. Register the optional logging, fail-fast and timeout options.
+    2. Do not register a region option: the region is fixed to CLI_REGION.
+
     Args:
         None
 
@@ -808,9 +813,11 @@ def build_parser() -> argparse.ArgumentParser:
     """
     parser = argparse.ArgumentParser(
         prog="config_compliance_inspection",
-        description="Huawei Cloud Config compliance inspection collector (requires hcloud CLI installed and authenticated)")
-    parser.add_argument("--cli-region", default=None,
-                        help="Required. hcloud CLI region, e.g. cn-north-4 (not hard-coded)")
+        description=(
+            "Huawei Cloud Config compliance inspection collector "
+            "(requires hcloud CLI installed and authenticated). The hcloud "
+            "region is fixed to {}.".format(CLI_REGION)
+        ))
     parser.add_argument("--log-file", default=None,
                         help="Optional. Path to a log file; logs are appended to stderr as well")
     parser.add_argument("--fail-fast", action="store_true",
@@ -826,8 +833,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     1. Configure basic logging output (stderr by default, optional
        --log-file handler).
     2. Parse the command-line arguments.
-    3. Create HcloudClient and run the full collection; the account ID is
-       auto-detected by the script.
+    3. Create HcloudClient with the fixed CLI_REGION and run the full
+       collection; the account ID is auto-detected by the script.
     4. Render to the requested format, write to disk, and emit the summary to
        stderr via logging.
 
@@ -839,18 +846,16 @@ def main(argv: Optional[List[str]] = None) -> int:
         int: The exit code; 0 for success, 1 for failure.
 
     Examples:
-        # >>> main(["--cli-region", "cn-north-4"])
+        # >>> main([])
     """
     parser = build_parser()
     args = parser.parse_args(argv)
     setup_logging(args.log_file)
-    if not args.cli_region:
-        parser.error("--cli-region is required")
     timestamp = datetime.now().strftime(TIMESTAMP_FORMAT)
     output_absolute = resolve_output_path(timestamp)
     logger.info("Task started. Output file(s): %s", output_absolute)
     try:
-        client = HcloudClient(cli_region=args.cli_region,
+        client = HcloudClient(cli_region=CLI_REGION,
                               timeout=args.timeout)
         data = collect_all(
             client=client,

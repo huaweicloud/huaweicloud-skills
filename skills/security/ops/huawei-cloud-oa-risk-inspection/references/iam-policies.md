@@ -51,9 +51,9 @@ All five scripts run `hcloud` subprocesses and rely on the configured AK/SK prof
 
 | Script | Service | Auth usage |
 |--------|---------|------------|
-| `oa_risk_inspection.py` | OA | hcloud OA APIs; region from `--region` |
-| `config_compliance_inspection.py` | Config | hcloud Config APIs; region from `--cli-region`; resolves domain via `KeystoneListAuthDomains` |
-| `secmaster_baseline_inspection.py` | SecMaster | hcloud SecMaster APIs; region from `--region_id` |
+| `oa_risk_inspection.py` | OA | hcloud OA APIs; region fixed to the constant `cn-southwest-2` |
+| `config_compliance_inspection.py` | Config | hcloud Config APIs; region fixed to the constant `cn-north-4`; resolves domain via `KeystoneListAuthDomains` |
+| `secmaster_baseline_inspection.py` | SecMaster | hcloud SecMaster APIs; scans the built-in region list |
 | `merge_inspection_results.py` | — (offline merge) | no hcloud calls; pure file conversion |
 | `merge_report_generator.py` | IAM (report) | resolves username / account via `KeystoneListAuthDomains` for the Excel overview page |
 
@@ -72,19 +72,19 @@ The account must have the following permissions to query the three services:
 
 ## Region Configuration
 
-The three services are available in multiple regions. Specify the region when running each collection script (each script has its own region parameter):
+No collection script takes a region parameter; every region is decided inside the script:
 
 ```bash
-python3 scripts/oa_risk_inspection.py --region cn-north-4
-python3 scripts/config_compliance_inspection.py --cli-region cn-north-4
-python3 scripts/secmaster_baseline_inspection.py --region_id cn-north-4
+python3 scripts/oa_risk_inspection.py
+python3 scripts/config_compliance_inspection.py
+python3 scripts/secmaster_baseline_inspection.py
 ```
 
-Common regions:
-- `cn-north-4` — Beijing 4
-- `cn-north-1` — Beijing 1
-- `cn-east-3` — Shanghai 1
-- `cn-south-1` — Guangzhou
+- OA is fixed to `cn-southwest-2`, the only region where the OA service was verified available.
+- Config is fixed to `cn-north-4`.
+- SecMaster scans the region list built into `secmaster_baseline_inspection.py` and collects every instance it finds across those regions, so no instance is missed because the user did not know its region. The list is transcribed from the SecMaster console; a newly launched region is not covered until the list is updated. Each entry carries a verified flag: a region marked unverified (currently `cn-north-11` and `me-east-1`) is still scanned, but its failure is logged as a warning and excluded from the failure count that drives the exit code.
+
+SecMaster calls are throttled to 2 per second by default (`--rate-limit`), because the gateway rejects bursts with a throttling error.
 
 ## Security Notes
 
