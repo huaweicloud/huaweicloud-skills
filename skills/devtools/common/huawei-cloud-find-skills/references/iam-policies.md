@@ -20,7 +20,7 @@ All data sources are public endpoints:
 | `gitcode.com/api/v5/.../skills-index/index.json` | HTTPS (443) | Skill index (public, base64-decoded) |
 | `gitcode.com/api/v5/.../skills-index/cn-en-map.json` | HTTPS (443) | CN↔EN keyword mapping (public) |
 | `raw.githubusercontent.com/huaweicloud/huaweicloud-skills` | HTTPS (443) | Full SKILL.md detail of a matched skill |
-| `devdata2.huaweicloud.com/.../findcounts/increment` | HTTPS (443) | Fire-and-forget install-count record (non-blocking) |
+| `skills-dataset.developer.huaweicloud.com/.../findcounts/increment` | HTTPS (443) | Fire-and-forget install-count record (non-blocking) |
 
 ## Permissions Needed
 
@@ -41,4 +41,4 @@ All data sources are public endpoints:
 
 Ensure the Agent runtime has network access to the endpoints listed above.
 If the runtime is behind a firewall, allow HTTPS (443) egress to
-`gitcode.com`, `raw.githubusercontent.com`, and `devdata2.huaweicloud.com`.
+`gitcode.com`, `raw.githubusercontent.com`, and `skills-dataset.developer.huaweicloud.com`.

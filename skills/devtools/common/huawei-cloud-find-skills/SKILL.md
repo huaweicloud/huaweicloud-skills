@@ -28,8 +28,8 @@ or credential is required.
 
 | 上报内容 | 触发点 | 目的地 | 是否含敏感数据 |
 |----------|--------|--------|----------------|
-| 搜索 top-3 曝光计数 | `scripts/search-skills.py`（每次搜索） | `devdata2.huaweicloud.com` install-count API | 否（仅技能名/类目/服务） |
-| 安装计数 | Step 3.1 `curl`（每次安装前） | `devdata2.huaweicloud.com` install-count API | 否（仅 `skill_id`，即 `skills/<category>/<service>/<name>`） |
+| 搜索 top-3 曝光计数 | `scripts/search-skills.py`（每次搜索） | `skills-dataset.developer.huaweicloud.com` install-count API | 否（仅技能名/类目/服务） |
+| 安装计数 | Step 3.1 `curl`（每次安装前） | `skills-dataset.developer.huaweicloud.com` install-count API | 否（仅 `skill_id`，即 `skills/<category>/<name>`） |
 | 质量上报 | `skill-quality-cli run` 包装执行 | quality 上报 APIG（测试环境） | 否（执行状态/耗时/技能名） |
 
 - **默认开启 / 关闭方式**: 以上三类上报**默认开启**(未设置该环境变量即会上报)；如需关闭, 执行 `export SKILL_QUALITY_REPORT=0`（`skill-quality-cli` 与 `search-skills.py` 均遵循该开关）。
@@ -223,7 +223,9 @@ skill-quality-cli run --skill-name huawei-cloud-find-skills -- python scripts/se
 2. Expands keywords via `cn-en-map.json` (bidirectional CN↔EN, e.g., "ECS" → "ECS, 弹性云服务器, 云服务器")
 3. Scores each skill: name match **+10**, trigger match **+8**, description match **+5**, service match **+3**
 4. Sorts by score descending, outputs formatted results with matched keywords
-5. Reports only the top-3 results' skill names to the install-count API (`skills/<category>/<service>/<name>`) as exposure impressions — fire-and-forget, never blocks or fails the search
+5. Renders each result's full coverage: multi-service skills print `覆盖: <services>` (from the index `services` array) plus the index capability type (`[只读查询]` / `[管理]` / `[演练]` / `[通用]`), so a skill whose primary `service` is one product is not mistaken for that product only
+6. Appends an `Other skills covering '<keyword>'` group after the main ranking, listing coverage-only skills (index `services` covers the product but the skill name does not) so they are not buried under product-specific skills
+7. Reports only the top-3 results' skill names to the install-count API (`skills/<category>/<name>`) as exposure impressions — fire-and-forget, never blocks or fails the search
 
 **Fallback iteration** (if no results): 1) Switch CN↔EN keywords 2) Expand keywords 3) Remove category filter 4) Try synonyms 5) Browse categories with `-l` and list all skills under a category with `-c <top-level>`
 
@@ -257,20 +259,20 @@ The agent can fetch this URL using `curl` or its web-fetch tool, then present th
 
 #### Step 3.1: Record Install Count
 
-Before executing the install command, call the install-count API. The `skill_id` is constructed from the search results in Step 1: `skills/<category>/<service>/<skill-name>`.
+Before executing the install command, call the install-count API. The `skill_id` is constructed from the search results in Step 1: `skills/<category>/<skill-name>`（`category` 本身已是两级路径，如 `container/cce`）.
 
-> **IMPORTANT**: The `category` and `service` values MUST be taken directly from the Step 1 search output (format: `name (category/service)`). Do NOT guess or hardcode them.
+> **IMPORTANT**: The `category` value MUST be taken directly from the Step 1 search output (format: `name (category/service)`), using only the two-level category path. Do NOT append the `service` segment — the API accepts exactly `skills/<category>/<name>` and returns 404 otherwise. Do NOT guess or hardcode them.
 >
 
 > **⚠️ MANDATORY (质量上报)**: 安装计数请求同样用 `run` 包装, 保证安装流程触发质量上报。
 
 ```bash
-skill-quality-cli run --skill-name huawei-cloud-find-skills -- curl -s -X POST "https://devdata2.huaweicloud.com/rest/developer/fwdo/rest/developer/servlet/hdskillservice/v1/obs/findcounts/increment" -H "Accept: application/json, text/plain, */*" -H "Content-Type: application/json" -H "Origin: https://skills.huaweicloud.com" -H "Referer: https://skills.huaweicloud.com/" -d "{\"skill_id\":\"skills/<category>/<service>/<skill-name>\"}"
+skill-quality-cli run --skill-name huawei-cloud-find-skills -- curl -s -X POST "https://skills-dataset.developer.huaweicloud.com/rest/developer/servlet/hdskillservice/v1/obs/findcounts/increment" -H "Accept: application/json, text/plain, */*" -H "Content-Type: application/json" -H "Origin: https://skills.developer.huaweicloud.com" -H "Referer: https://skills.developer.huaweicloud.com/" -d "{\"skill_id\":\"skills/<category>/<skill-name>\"}"
 ```
 
 ```powershell
 # PowerShell — Windows 原生（curl.exe，非 Invoke-WebRequest 别名）
-skill-quality-cli run --skill-name huawei-cloud-find-skills -- curl.exe -s -X POST "https://devdata2.huaweicloud.com/rest/developer/fwdo/rest/developer/servlet/hdskillservice/v1/obs/findcounts/increment" -H "Accept: application/json, text/plain, */*" -H "Content-Type: application/json" -H "Origin: https://skills.huaweicloud.com" -H "Referer: https://skills.huaweicloud.com/" -d '{"skill_id":"skills/<category>/<service>/<skill-name>"}'
+skill-quality-cli run --skill-name huawei-cloud-find-skills -- curl.exe -s -X POST "https://skills-dataset.developer.huaweicloud.com/rest/developer/servlet/hdskillservice/v1/obs/findcounts/increment" -H "Accept: application/json, text/plain, */*" -H "Content-Type: application/json" -H "Origin: https://skills.developer.huaweicloud.com" -H "Referer: https://skills.developer.huaweicloud.com/" -d '{"skill_id":"skills/<category>/<skill-name>"}'
 ```
 
 > This is a fire-and-forget request. Do NOT block the install flow on its success or failure.
@@ -313,7 +315,7 @@ If all installation attempts fail, report the error message to the user. Do NOT 
 
 | Parameter | Required/Optional | Description | Default |
 |-----------|-------------------|-------------|---------|
-| `Keyword` | Optional | Search keyword (matched against name, description, triggers, service) | None |
+| `Keyword` | Optional | Search keyword (matched against name, description, triggers, service/services) | None |
 | `Category` | Optional | Category filter: a top-level category matched by prefix (covers all its subcategories) or a two-level path matched exactly | None |
 | `skill-name` | Required (Step 3) | Exact skill name for installing | None |
 

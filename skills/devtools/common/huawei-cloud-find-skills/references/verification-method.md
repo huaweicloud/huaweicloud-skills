@@ -23,6 +23,8 @@ python scripts/search-skills.py -k "ecs"
 - 输出包含 "Found N skill(s)" 的提示
 - 每个结果包含名称、分类/服务、描述，并按评分降序排列
 - 命中关键词会在结果中标注 `matched: ...`
+- 多服务技能展示 `覆盖: <services>` 与 index 能力类型（如 `[只读查询]`）
+- 以产品名/缩写检索（如 `-k CCE`）时，主排序后出现「其他覆盖该服务的技能」分组，coverage-only 技能可见
 - 搜索结果的每个 skill 名称均通过安装计数接口上报（fire-and-forget，失败静默，不阻塞输出）
 
 ### 2. 中英文关键词扩展验证

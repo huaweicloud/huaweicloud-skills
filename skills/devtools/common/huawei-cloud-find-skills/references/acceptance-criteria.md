@@ -7,6 +7,9 @@
 - [ ] 输入自然语言关键词，返回相关 skill 列表
 - [ ] 结果按评分降序排列
 - [ ] 每个结果包含：名称、分类/服务、描述
+- [ ] 多服务技能结果行展示 `覆盖: <services>` 全量服务清单（取自 index 的 `services` 数组）与 index `type` 能力类型（如 `[只读查询]`、`[管理]`）
+- [ ] 关键词可映射为云服务代码时，主排序后追加「其他覆盖 <关键词> 的技能」分组，列出 coverage-only 技能（名称未体现该产品、但 `services` 覆盖它）
+- [ ] 验收样例：`python3 scripts/search-skills.py -k CCE`（及 `-k CCE --explain`）的输出中，`huawei-cloud-computing-query` 展示 `覆盖: ECS+BMS+IMS+AS+CCE+EVS [只读查询]`（含 `ECS+BMS+IMS+AS+CCE` 覆盖标注），且该技能出现在「其他覆盖 CCE 的技能」分组中
 - [ ] 未提供关键词且未提供分类时，输出 Usage 与分类列表并提示参数错误
 
 ### AC-2: 中英文扩展
@@ -38,7 +41,7 @@
 ### AC-4c: 搜索结果曝光上报
 
 - [ ] 搜索返回多个结果时，每个结果的 skill 名称均通过安装计数接口上报
-  （`skills/<category>/<service>/<name>`，fire-and-forget）
+  （`skills/<category>/<name>`，fire-and-forget）
 - [ ] 上报失败或超时不影响搜索结果输出与退出码
 - [ ] Step 3 安装计数接口逻辑保持不变
 

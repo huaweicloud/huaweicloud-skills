@@ -68,7 +68,7 @@ CACHE_TTL = int(os.environ.get("FIND_SKILLS_CACHE_TTL", "3600"))  # default 1h
 # Install-count API (same endpoint as Step 3 install counting). Used to report
 # every search-result skill name as an exposure impression - fire-and-forget,
 # never blocks or fails the search.
-INSTALL_COUNT_URL = "https://devdata2.huaweicloud.com/rest/developer/fwdo/rest/developer/servlet/hdskillservice/v1/obs/findcounts/increment"
+INSTALL_COUNT_URL = "https://skills-dataset.developer.huaweicloud.com/rest/developer/servlet/hdskillservice/v1/obs/findcounts/increment"
 INSTALL_COUNT_TIMEOUT = HTTP_TIMEOUT
 
 GENERIC_KEYWORDS = {
@@ -362,10 +362,23 @@ def split_cjk_compound(word, vocab):
 
 
 def extract_skill_fields(skill):
-    """批量提取 skill 字段(一次性字典访问, 后续循环内只做本地匹配)。"""
+    """批量提取 skill 字段(一次性字典访问, 后续循环内只做本地匹配)。
+
+    除索引的单一 `service` 外, 一并保留 `services` 全量服务清单与 `type`
+    能力类型(index 已提供), 供结果展示与覆盖分组使用。
+    """
     name = skill.get("name", "")
     category = skill.get("category", "")
     service = skill.get("service", "")
+    raw_services = skill.get("services") or []
+    services = []
+    for svc in raw_services:
+        if svc and svc not in services:
+            services.append(svc)
+    if not services and service:
+        services = [service]
+    if not service and services:
+        service = services[0]
     description = skill.get("description", "")
     raw_triggers = skill.get("triggers") or []
     triggers = [t for t in raw_triggers if t]
@@ -373,6 +386,8 @@ def extract_skill_fields(skill):
         "name": name,
         "category": category,
         "service": service,
+        "services": services,
+        "type": (skill.get("type") or "").lower(),
         "description": description,
         "triggers": triggers,
     }
@@ -441,7 +456,88 @@ def infer_skill_type(name):
     return ""
 
 
-TYPE_LABELS = {"query": "查询", "manage": "管理", "experiment": "演练", "marketing": "优惠"}
+TYPE_LABELS = {
+    "query": "只读查询",
+    "manage": "管理",
+    "experiment": "演练",
+    "marketing": "优惠",
+    "general": "通用",
+}
+
+
+def resolve_skill_type(fields):
+    """优先使用 index 的 `type` 字段; 缺失时回退到从技能名推断。"""
+    stype = (fields.get("type") or "").lower()
+    if stype in TYPE_LABELS:
+        return stype
+    return infer_skill_type(fields["name"])
+
+
+def format_services(fields):
+    """渲染结果行的覆盖服务清单与能力类型。
+
+    单服务技能保持原有 `(category/service)` 形态; 多服务技能追加
+    `覆盖: ...` 全量清单与 `[类型]` 标签, 避免覆盖能力被主服务隐藏。
+    """
+    services = fields.get("services") or []
+    stype = resolve_skill_type(fields)
+    parts = []
+    if len(services) > 1:
+        parts.append("覆盖: " + "+".join(svc.upper() for svc in services))
+    if stype:
+        parts.append(f"[{TYPE_LABELS[stype]}]")
+    return "".join(f" {p}" for p in parts)
+
+
+_NAME_TOKEN_RE = re.compile(r"[a-z0-9]+")
+
+
+def _name_tokens(name):
+    return set(_NAME_TOKEN_RE.findall((name or "").lower()))
+
+
+def keyword_service_codes(specific_kws, cn_en_map, all_service_codes):
+    """把检索关键词映射为云服务代码, 用于识别「仅覆盖该服务」的技能。
+
+    支持三种来源: 关键词本身就是服务代码(如 CCE)、cn-en-map 的中文别名
+    (如 弹性云服务器 -> ecs)、以及关键词中的英文 token(如 "CCE 集群")。
+    """
+    codes = set()
+    for kw in specific_kws:
+        k = (kw or "").lower().strip()
+        if not k:
+            continue
+        if k in all_service_codes:
+            codes.add(k)
+            continue
+        mapped = cn_en_map.get(kw) or cn_en_map.get(k)
+        if mapped and mapped.lower() in all_service_codes:
+            codes.add(mapped.lower())
+        for tok in _NAME_TOKEN_RE.findall(k):
+            if tok in all_service_codes:
+                codes.add(tok)
+    return codes
+
+
+def collect_coverage_only(skills, service_codes, category="", scores=None):
+    """收集名称未体现、但 services 覆盖了目标服务的技能 (coverage-only)。
+
+    这类技能在主排序中天然处于劣势(名称无产品词), 单独分组列出可避免
+    被同产品专项技能掩埋 (issue #1047)。
+    """
+    rows = []
+    for fields in skills:
+        if not category_matches(fields["category"], category):
+            continue
+        services = [s.lower() for s in fields.get("services") or []]
+        if not (set(services) & service_codes):
+            continue
+        if _name_tokens(fields["name"]) & service_codes:
+            continue
+        rows.append(fields)
+    scores = scores or {}
+    rows.sort(key=lambda f: (-scores.get(f["name"], 0), len(f.get("services") or []), f["name"]))
+    return rows
 
 
 def detect_user_intent(keyword):
@@ -556,6 +652,21 @@ def truncate(desc, limit=150):
     return desc
 
 
+def build_result(fields, score, matched):
+    """构造统一的结果行, 保留 services/type 供覆盖展示与分组使用。"""
+    return {
+        "score": score,
+        "name": fields["name"],
+        "category": fields["category"],
+        "service": fields["service"],
+        "services": fields["services"],
+        "type": fields["type"],
+        "description": truncate(fields["description"]),
+        "triggers": fields["triggers"][:5],
+        "matched": matched,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Telemetry: install-count impression (unchanged from master)
 # ---------------------------------------------------------------------------
@@ -569,8 +680,8 @@ def _post_impression(skill_id):
         headers={
             "Content-Type": "application/json",
             "Accept": "application/json, text/plain, */*",
-            "Origin": "https://skills.huaweicloud.com",
-            "Referer": "https://skills.huaweicloud.com/",
+            "Origin": "https://skills.developer.huaweicloud.com",
+            "Referer": "https://skills.developer.huaweicloud.com/",
             "User-Agent": "huawei-cloud-find-skills/1.0",
         },
     )
@@ -586,7 +697,7 @@ def report_search_results_impressions(results):
     """Report only the top-3 search results via the install-count API.
 
     Only the first three results (already sorted by score descending) are reported —
-    each skill_id (`skills/<category>/<service>/<name>`) is POSTed to the same
+    each skill_id (`skills/<category>/<name>`) is POSTed to the same
     endpoint Step 3 uses for install counting, so search-result exposures are
     counted too. Fire-and-forget: reporting runs in a daemon background thread and
     returns immediately, so it never blocks or delays the search output.
@@ -599,7 +710,7 @@ def report_search_results_impressions(results):
 
     def _worker():
         for r in results[:3]:
-            if _post_impression("skills/{}/{}/{}".format(r["category"], r["service"], r["name"])):
+            if _post_impression("skills/{}/{}".format(r["category"], r["name"])):
                 reported["n"] += 1
 
     threading.Thread(target=_worker, daemon=True).start()
@@ -635,6 +746,9 @@ def main():
     idx, idx_source = load_json_dual_source("index.json", "index.json")
     raw_skills = idx.get("skills", [])
     skills = [extract_skill_fields(s) for s in raw_skills]
+    all_service_codes = set()
+    for _skill in skills:
+        all_service_codes.update(x.lower() for x in _skill["services"])
     catalog = build_category_catalog(skills)
 
     if args.list_categories:
@@ -683,7 +797,7 @@ def main():
             if category_matches(skill["category"], args.category):
                 print(f"Found 1 skill (exact name match) for keyword='{args.keyword}':")
                 print()
-                print(f"  [{skill['category']}/{skill['service']}] {skill['name']}")
+                print(f"  [{skill['category']}/{skill['service']}] {skill['name']}{format_services(skill)}")
                 print(f"    {skill['description']}")
                 if skill["triggers"]:
                     print(f"    triggers: {', '.join(skill['triggers'][:5])}")
@@ -702,17 +816,7 @@ def main():
         sc, matched, extra = score_skill(skill, specific_kws, generic_kws, user_intent=user_intent, explain=True)
         if has_specific and sc == 0:
             continue
-        desc = truncate(skill["description"])
-        trig_preview = skill["triggers"][:5]
-        results.append({
-            "score": sc,
-            "name": skill["name"],
-            "category": category,
-            "service": skill["service"],
-            "description": desc,
-            "triggers": trig_preview,
-            "matched": matched,
-        })
+        results.append(build_result(skill, sc, matched))
         if args.explain:
             explain_info[skill["name"]] = extra
 
@@ -731,15 +835,7 @@ def main():
                         continue
                     sc, matched = score_skill(skill, retry_specific, retry_generic, user_intent=user_intent)
                     if sc > 0:
-                        retry_results.append({
-                            "score": sc,
-                            "name": skill["name"],
-                            "category": category,
-                            "service": skill["service"],
-                            "description": truncate(skill["description"]),
-                            "triggers": skill["triggers"][:5],
-                            "matched": matched,
-                        })
+                        retry_results.append(build_result(skill, sc, matched))
                 if len(retry_results) > 1:
                     retry_results.sort(key=lambda r: r["score"], reverse=True)
                     results = retry_results
@@ -761,15 +857,7 @@ def main():
                             continue
                         sc, matched = score_skill(skill, retry_specific, retry_generic, user_intent=user_intent)
                         if sc > 0:
-                            retry_results.append({
-                                "score": sc,
-                                "name": skill["name"],
-                                "category": skill["category"],
-                                "service": skill["service"],
-                                "description": truncate(skill["description"]),
-                                "triggers": skill["triggers"][:5],
-                                "matched": matched,
-                            })
+                            retry_results.append(build_result(skill, sc, matched))
                     if len(retry_results) > len(results):
                         retry_results.sort(key=lambda r: r["score"], reverse=True)
                         results = retry_results
@@ -826,9 +914,7 @@ def main():
     print()
     for r in results:
         match_info = f" matched: {','.join(r['matched'])}" if r["matched"] else ""
-        stype = infer_skill_type(r["name"])
-        type_label = f" [{TYPE_LABELS[stype]}]" if stype else ""
-        print(f"  [{r['score']}pts] {r['name']} ({r['category']}/{r['service']}){type_label}{match_info}")
+        print(f"  [{r['score']}pts] {r['name']} ({r['category']}/{r['service']}){format_services(r)}{match_info}")
         print(f"    {r['description']}")
         if r["triggers"]:
             print(f"    triggers: {', '.join(r['triggers'])}")
@@ -840,6 +926,23 @@ def main():
             if not info["detail"]:
                 print("      (no keyword hit, browse-fallback score)")
         print()
+
+    # 覆盖分组(issue #1047): 名称未体现、但索引 services 覆盖了目标服务的
+    # 技能在主排序中天然偏低, 单独分组列出, 避免被同产品专项技能掩埋。
+    if has_specific:
+        service_codes = keyword_service_codes(specific_kws, cn_en_map, all_service_codes)
+        if service_codes:
+            scores = {r["name"]: r["score"] for r in results}
+            coverage_rows = collect_coverage_only(skills, service_codes, args.category, scores)
+            if coverage_rows:
+                covered = ",".join(sorted(service_codes))
+                print(f"  Other skills covering '{args.keyword}' ({covered}) — 其他覆盖该服务的技能:")
+                print()
+                for fields in coverage_rows:
+                    print(f"    {fields['name']} ({fields['category']}/{fields['service']})"
+                          f"{format_services(fields)}")
+                    print(f"      {truncate(fields['description'])}")
+                print()
 
     # 同域重叠提示: 同一 category/service 下多个候选能力可能重叠,
     # 提示开发者/智能体先对比 description 再选择, 避免装了再卸载试错。
