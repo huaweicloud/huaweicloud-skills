@@ -111,7 +111,9 @@ payload = {
         'scope': {'project': {'name': '<PROJECT_NAME>'}}  # 非 region!须与用户确认
     }
 }
-resp = requests.post(url, json=payload, verify=False, timeout=30)
+# 证书校验默认开启;仅自签证书/企业代理 MITM 调试场景可临时关闭,
+# 须使用与 scripts/create_infer_service.py 一致的开关(--insecure 或 MODELARTS_INSECURE_TLS=1)并打印告警,禁止作为默认值
+resp = requests.post(url, json=payload, verify=True, timeout=30)
 # 凭据正确返回 201;响应头 X-Subject-Token 即 token
 token = resp.headers.get('X-Subject-Token', '')
 print('STATUS:', resp.status_code, 'TOKEN_LEN:', len(token))

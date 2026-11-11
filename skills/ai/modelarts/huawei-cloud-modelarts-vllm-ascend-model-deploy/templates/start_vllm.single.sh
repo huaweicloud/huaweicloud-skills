@@ -35,8 +35,8 @@ ROUTE_CONF_PATH="${ROUTE_CONF_PATH:-/lib/route.conf}"
 HCCL_ROOTINFO_PATH="${HCCL_ROOTINFO_PATH:-/etc/hccl_rootinfo.json}"
 # 是否在启动前自动生成 hixlep(默认开启,主机已挂载完整 hixlep 可设 AUTOGEN_HIXLEP=0)
 AUTOGEN_HIXLEP="${AUTOGEN_HIXLEP:-1}"
-# 离线包目录(随 scripts/a5_hixlep/ 整目录复制到产物目录,
-# 无网环境直接使用;generate_ep.py / fix_ub_endpoint.py / gen_route.sh / wheel 全在此目录下)
+# a5_hixlep 脚本目录(随 scripts/a5_hixlep/ 整目录复制到产物目录;
+# generate_ep.py / fix_ub_endpoint.py / gen_route.sh 均在此目录,均可离线直接使用)
 OFFLINE_PKG_DIR="${OFFLINE_PKG_DIR:-${SCRIPT_DIR}/a5_hixlep}"
 
 export ASCEND_RT_VISIBLE_DEVICES
@@ -91,12 +91,67 @@ export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 # 950DT 超平面通信(UBC 协议)自动配置,作为镜像无 hixl 自动生成功能时的兜底
 export ASCEND_LOCAL_COMM_RES="${ASCEND_LOCAL_COMM_RES:-{\"version\":\"1.3\"}}"
 
+# ---------- unofficial-ascend-tools 获取与入口解析 ----------
+# 该 wheel 只提供 console script `mindcluster-tools`(entry_points.txt),没有可供 `python3 -m`
+# 调用的同名模块;且 rankinfo/main.py 无 `if __name__ == "__main__"` 守卫,不能用 `python3 -m` 调用
+# (会 exit 0 且不产出任何文件,把"必然报错"变成"静默失败")。
+install_ascend_tools() {
+    local wheel="${HCCL_TOOLS_WHEEL:-}"
+    if [ -n "${wheel}" ]; then
+        # 显式指定了 HCCL_TOOLS_WHEEL 就必须用它: 文件不存在直接报错,禁止静默回落 PyPI
+        if [ ! -f "${wheel}" ]; then
+            echo "[ERROR] HCCL_TOOLS_WHEEL=${wheel} 不存在,离线安装失败(不会回落到 PyPI),请检查该路径" >&2
+            return 1
+        fi
+        python3 -m pip install --no-index --no-deps --quiet "${wheel}" || {
+            echo "[ERROR] 安装 unofficial-ascend-tools 失败(本地 wheel: ${wheel})" >&2
+            return 1
+        }
+        return 0
+    fi
+    local bundled="${OFFLINE_PKG_DIR}/unofficial_ascend_tools-0.0.7rc4-py3-none-any.whl"
+    if [ -f "${bundled}" ]; then
+        python3 -m pip install --no-index --no-deps --quiet "${bundled}" || {
+            echo "[ERROR] 安装 unofficial-ascend-tools 失败(内置 wheel: ${bundled})" >&2
+            return 1
+        }
+        return 0
+    fi
+    echo "[hixlep] 未指定 HCCL_TOOLS_WHEEL,从 PyPI 安装 unofficial-ascend-tools==0.0.7rc4"
+    python3 -m pip install --quiet "unofficial-ascend-tools==0.0.7rc4" || {
+        echo "[ERROR] 安装 unofficial-ascend-tools==0.0.7rc4 失败(PyPI 不可达);离线环境请下载同版本 wheel 后用 HCCL_TOOLS_WHEEL 指定本地路径" >&2
+        return 1
+    }
+}
+
+# 调用 rootinfo 并校验产物: console script 优先,不在 PATH(pip install --user 常见)时回退包入口
+run_mindcluster_rootinfo() {
+    local out="$1" rc
+    # &&/|| 形式避免 set -e 下直接退出,保证能捕获真实退出码
+    if command -v mindcluster-tools >/dev/null 2>&1; then
+        mindcluster-tools rootinfo --product_type server --output "${out}" && rc=0 || rc=$?
+    else
+        python3 -c 'from unofficial_ascend_tools.rankinfo.main import main; import sys; sys.exit(main())' \
+            rootinfo --product_type server --output "${out}" && rc=0 || rc=$?
+    fi
+    if [ "${rc}" -ne 0 ]; then
+        echo "[ERROR] mindcluster-tools rootinfo 执行失败(rc=${rc}): 入口解析或工具执行异常,请确认 unofficial-ascend-tools 已安装、Ascend HDK 驱动与 npu-smi 可用" >&2
+        return "${rc}"
+    fi
+    # 不只信退出码: 实测 `python3 -m ...` 形式会 exit 0 却不产出文件,必须断言产物存在且非空
+    if [ ! -s "${out}" ]; then
+        echo "[ERROR] mindcluster-tools rootinfo 退出码 0 但 ${out} 不存在或为空,入口未真正执行" >&2
+        return 1
+    fi
+    return 0
+}
+
 # ---------- hixlep 自检与按需生成(A5 单机多卡 TP>1 跨卡 UB 通信必需) ----------
 # 仅 A5(950DT/950PR/950) 系列且 TP>1 时触发;A2/A3 走 RoCE 跳过,A5 单机单卡 TP=1 无跨卡通信跳过
 # vllm-ascend 通过 additional-config.ascend_local_comm_res_path 显式读取;
-# 若主机侧 /etc/hixlep 缺失(裸机环境或非 cloud_a5:0.5 镜像),使用 skill 内置离线包生成:
+# 若主机侧 /etc/hixlep 缺失(裸机环境或非 cloud_a5:0.5 镜像),使用内置脚本自动生成:
 #   - generate_ep.py(随 scripts/a5_hixlep/ 复制到产物 a5_hixlep/ 目录,生成 /etc/hixlep/ub_endpoint_npu_*.json)
-#   - a5_hixlep/unofficial_ascend_tools-0.0.7rc4-py3-none-any.whl(生成 /etc/hccl_rootinfo.json)
+#   - unofficial-ascend-tools==0.0.7rc4(运行时从 PyPI 安装,生成 /etc/hccl_rootinfo.json;不随 skill 内置)
 # route.conf 与拓扑 JSON 需 A5 主机 HDK 驱动自带,缺失时报错明确指引(无网无法现生成)
 generate_hixlep() {
     if [ "${AUTOGEN_HIXLEP}" != "1" ]; then
@@ -118,24 +173,15 @@ generate_hixlep() {
         echo "[hixlep] ${HIXLEP_PATH} 已有 ${existing} 个 endpoint 文件,跳过生成"
         return 0
     fi
-    echo "[hixlep] ${HIXLEP_PATH} 缺失,使用 skill 内置离线包生成(A5 单机多卡 UB 通信必需)"
+    echo "[hixlep] ${HIXLEP_PATH} 缺失,使用内置脚本自动生成(A5 单机多卡 UB 通信必需)"
 
-    # 1) hccl_rootinfo.json 缺失则用内置 unofficial-ascend-tools 离线 wheel 生成
+    # 1) hccl_rootinfo.json 缺失则运行时获取 unofficial-ascend-tools 生成
+    #    该 wheel 不随 skill 内置(二进制文件不在产物文件类型白名单);运行时从 PyPI 安装同版本,
+    #    离线环境可下载同版本 wheel 后用 HCCL_TOOLS_WHEEL 指定本地路径(必须真实存在)。
     if [ ! -s "${HCCL_ROOTINFO_PATH}" ]; then
-        local wheel="${OFFLINE_PKG_DIR}/unofficial_ascend_tools-0.0.7rc4-py3-none-any.whl"
-        if [ ! -f "${wheel}" ]; then
-            echo "[ERROR] 离线包 ${wheel} 不存在,无法生成 hccl_rootinfo.json" >&2
-            exit 1
-        fi
-        echo "[hixlep] ${HCCL_ROOTINFO_PATH} 缺失,离线安装 ${wheel##*/} 生成"
-        python3 -m pip install --no-index --no-deps --quiet "${wheel}" || {
-            echo "[ERROR] 离线安装 unofficial-ascend-tools 失败" >&2
-            exit 1
-        }
-        python3 -m mindcluster_tools.rootinfo --product_type server --output "${HCCL_ROOTINFO_PATH}" || {
-            echo "[ERROR] mindcluster-tools rootinfo 生成 hccl_rootinfo.json 失败" >&2
-            exit 1
-        }
+        echo "[hixlep] ${HCCL_ROOTINFO_PATH} 缺失,获取 unofficial-ascend-tools==0.0.7rc4 生成"
+        install_ascend_tools || exit 1
+        run_mindcluster_rootinfo "${HCCL_ROOTINFO_PATH}" || exit 1
     fi
 
     # 1.5) hccl_rootinfo.json 的 rank_list[].local_id 范围调整:

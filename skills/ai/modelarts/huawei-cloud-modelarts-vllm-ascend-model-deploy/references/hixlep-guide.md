@@ -30,7 +30,7 @@
 
 ## 3. 生成工具链
 
-### 3.1 生成依赖（skill 已内置,无网环境直接可用）
+### 3.1 生成依赖（脚本随 skill 内置;unofficial-ascend-tools 运行时获取）
 
 | 文件 | 位置 | 作用 |
 |------|------|------|
@@ -38,7 +38,7 @@
 | `fix_ub_endpoint.py` | `${SCRIPT_DIR}/a5_hixlep/fix_ub_endpoint.py` | hixlep 生成后修正 NPU ID ↔ Chip Phy-ID 文件名映射(用 `npu-smi info -m` 建立映射重命名) |
 | `gen_route.sh` | `${OFFLINE_PKG_DIR}/gen_route.sh` | 纯 bash 脚本,读 `/proc/ascend_ub` 驱动接口,生成 `/lib/route.conf` |
 | `get_route_eid.py` | `${OFFLINE_PKG_DIR}/get_route_eid.py` | 独立脚本,多机场景由 gen_route.sh 调用读 `/home/source_dest_ips.txt` |
-| `unofficial_ascend_tools-0.0.7rc4-py3-none-any.whl` | `${SCRIPT_DIR}/a5_hixlep/` | 纯 wheel 无 Python 依赖,提供 `mindcluster-tools rootinfo` 命令生成 `/etc/hccl_rootinfo.json` |
+| `unofficial-ascend-tools==0.0.7rc4` | 运行时安装(PyPI) | 纯 Python 包无外部依赖,由包内 console script `mindcluster-tools` 提供 `rootinfo` 子命令生成 `/etc/hccl_rootinfo.json`(包内**没有**可供 `python3 -m` 调用的同名模块,入口以 `entry_points.txt` 的 `mindcluster-tools = unofficial_ascend_tools.rankinfo.main:main` 为准)。该 wheel 不随 skill 内置(二进制文件不在产物文件类型白名单);启动脚本运行时执行 `python3 -m pip install unofficial-ascend-tools==0.0.7rc4`,离线环境可下载同版本 wheel 后用 `HCCL_TOOLS_WHEEL` 指定本地路径;显式指定但文件不存在时脚本直接报错退出,不会静默回落联网 |
 
 `generate_ep.py` 仅依赖 Python 标准库(argparse/json/pathlib/typing),无需 pip 安装任何依赖。`gen_route.sh` 是纯 bash 脚本,仅需 `/proc/ascend_ub`(或 `/proc/asdrv_ub`)+ `/proc/uda/namespace_node` 驱动接口,无额外 Python 依赖。
 
@@ -49,16 +49,39 @@
 | 输入 | 路径 | 来源 |
 |------|------|------|
 | route.conf | `/lib/route.conf` | 容器内调用内置 `gen_route.sh` 生成(纯 bash,读 `/proc/ascend_ub` 驱动接口);需主机 HDK 驱动已装且容器可访问 `/proc` |
-| hccl_rootinfo.json | `/etc/hccl_rootinfo.json` | 主机已存在则直接用;缺失则用内置 `unofficial_ascend_tools` 离线 wheel 生成 |
+| hccl_rootinfo.json | `/etc/hccl_rootinfo.json` | 主机已存在则直接用;缺失则运行时安装 `unofficial-ascend-tools==0.0.7rc4` 生成 |
 | 拓扑 JSON | hccl_rootinfo.json 中 `topo_file_path` 字段指向 | 随 hccl_rootinfo.json 一并由 mindcluster-tools 生成 |
 
 ### 3.3 生成流程(skill 启动脚本内置自动执行)
 
+> `HCCL_TOOLS_WHEEL` 显式设置但文件不存在 → 脚本直接 `[ERROR]` 非零退出(不会静默改走 PyPI);未设置且产物目录无内置 wheel 时才从 PyPI 安装并打印提示。`rootinfo` 入口优先用 console script `mindcluster-tools`,不在 PATH 时回退 `python3 -c 'from unofficial_ascend_tools.rankinfo.main import main; ...'`;禁止用 `python3 -m unofficial_ascend_tools.rankinfo.*`(无 `__main__` 守卫,会静默 exit 0 不产出文件)。
+
 ```bash
-# 1) hccl_rootinfo.json 缺失则用内置离线 wheel 生成
+# 1) hccl_rootinfo.json 缺失则运行时获取 unofficial-ascend-tools 生成
 if [ ! -s /etc/hccl_rootinfo.json ]; then
-    python3 -m pip install --no-index --no-deps a5_hixlep/unofficial_ascend_tools-0.0.7rc4-py3-none-any.whl
-    python3 -m mindcluster_tools.rootinfo --product_type server --output /etc/hccl_rootinfo.json
+    # 有网: 直接从 PyPI 安装同版本;离线: 用 HCCL_TOOLS_WHEEL 指定已下载的本地 wheel 路径
+    if [ -n "${HCCL_TOOLS_WHEEL:-}" ]; then
+        # 显式指定就必须命中,文件不存在直接报错退出(不会静默回落到 PyPI 联网安装)
+        [ -f "${HCCL_TOOLS_WHEEL}" ] || { echo "[ERROR] HCCL_TOOLS_WHEEL=${HCCL_TOOLS_WHEEL} 不存在,离线安装失败(不会回落到 PyPI)" >&2; exit 1; }
+        python3 -m pip install --no-index --no-deps "${HCCL_TOOLS_WHEEL}" || { echo "[ERROR] 安装 unofficial-ascend-tools 失败: ${HCCL_TOOLS_WHEEL}" >&2; exit 1; }
+    else
+        echo "[hixlep] 未指定 HCCL_TOOLS_WHEEL,从 PyPI 安装 unofficial-ascend-tools==0.0.7rc4"
+        python3 -m pip install "unofficial-ascend-tools==0.0.7rc4" || { echo "[ERROR] 安装 unofficial-ascend-tools==0.0.7rc4 失败;离线环境可下载同版本 wheel 后用 HCCL_TOOLS_WHEEL 指定本地路径" >&2; exit 1; }
+    fi
+    # 入口是 unofficial-ascend-tools 提供的 console script `mindcluster-tools`(见 entry_points.txt),
+    # 包内没有可供 python3 -m 调用的同名模块;rankinfo/main.py 也无 __main__ 守卫,`python3 -m ...` 会
+    # exit 0 但不产出文件(静默失败),禁止使用。
+    # &&/|| 形式避免 set -e 下直接退出,保证能捕获真实退出码
+    if command -v mindcluster-tools >/dev/null 2>&1; then
+        mindcluster-tools rootinfo --product_type server --output /etc/hccl_rootinfo.json && rc=0 || rc=$?
+    else
+        # console script 不在 PATH(pip install --user 常落到 ~/.local/bin)时直接调用包入口
+        python3 -c 'from unofficial_ascend_tools.rankinfo.main import main; import sys; sys.exit(main())' \
+            rootinfo --product_type server --output /etc/hccl_rootinfo.json && rc=0 || rc=$?
+    fi
+    [ "${rc}" -eq 0 ] || { echo "[ERROR] mindcluster-tools rootinfo 执行失败(rc=${rc}): 入口解析或工具执行异常(检查安装与 Ascend HDK 驱动)" >&2; exit 1; }
+    # 不只信退出码: 断言产物存在且非空
+    [ -s /etc/hccl_rootinfo.json ] || { echo "[ERROR] mindcluster-tools rootinfo 退出码 0 但未生成 /etc/hccl_rootinfo.json" >&2; exit 1; }
 fi
 
 # 1.5) hccl_rootinfo.json rank_list[].local_id 范围调整:

@@ -40,7 +40,8 @@
 - **所有运行 skill 产生的临时文件一律写入 `/tmp/`,禁止在 skill 本体(`scripts/`/`templates/`/`references/` 及 skill 根目录)或部署产物目录外创建任何文件**
 
 ### 2.4 获取 token 必须用 Python requests 调 IAM API
-- `resp = requests.post('<IAM_DOMAIN>/v3/auth/tokens', json=<IAM请求体>, verify=False, timeout=30)`(requests 直接传 dict/JSON,凭据正确即返回 201),响应头 `resp.headers['X-Subject-Token']` 取 token
+- `resp = requests.post('<IAM_DOMAIN>/v3/auth/tokens', json=<IAM请求体>, verify=True, timeout=30)`(requests 直接传 dict/JSON,凭据正确即返回 201),响应头 `resp.headers['X-Subject-Token']` 取 token
+- **HTTPS 证书校验默认保持开启**: 仅自签证书/企业代理 MITM 调试场景可临时关闭,须使用与 `scripts/create_infer_service.py` 一致的开关 `--insecure` 或 `MODELARTS_INSECURE_TLS=1`(不得引入第二套开关名)并在 stderr 打印告警;禁止在脚本中把关闭校验写成默认值
 - **禁止用 curl `-d` 字符串拼接 JSON body 获取 token**(Windows bash 下 `'"$VAR"'` 引号拼接致密码传递错误,凭据正确也返回 401)
 
 ### 2.5 token 必须用 project scope 获取

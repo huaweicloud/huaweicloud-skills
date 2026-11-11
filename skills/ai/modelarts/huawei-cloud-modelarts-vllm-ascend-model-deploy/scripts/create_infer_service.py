@@ -13,6 +13,7 @@
                   GET 查询接口带头 X-Workspace-Id + URL 双查询参数
 
 token: IAM_TOKEN 环境变量(推荐) > --token-file(权限 600) > 交互式输入
+TLS: HTTPS 证书校验默认开启;仅 --insecure 或 MODELARTS_INSECURE_TLS=1 时关闭(打印告警)
 """
 
 import argparse
@@ -401,7 +402,26 @@ def append_workspace_query(url, workspace_id):
     return f"{url}{sep}workspaceId={workspace_id}&workspace_id={workspace_id}"
 
 
-def request_with_auth(method, url, token, body=None, workspace_id=None):
+def tls_verify_enabled(args):
+    """解析 HTTPS 证书校验开关。
+
+    默认开启校验;仅当显式传入 --insecure 或设置环境变量 MODELARTS_INSECURE_TLS=1
+    时才降级为 False(自签证书调试场景),并在 stderr 打印告警。
+    """
+    insecure = bool(getattr(args, "insecure", False)) or os.environ.get(
+        "MODELARTS_INSECURE_TLS", ""
+    ).strip() == "1"
+    if insecure:
+        print(
+            "[警告] 已关闭 HTTPS 证书校验(不安全),仅限自签证书调试环境;"
+            "生产环境请移除 --insecure / MODELARTS_INSECURE_TLS",
+            file=sys.stderr,
+        )
+        return False
+    return True
+
+
+def request_with_auth(method, url, token, body=None, workspace_id=None, verify=True):
     try:
         import requests
     except ImportError:
@@ -416,9 +436,9 @@ def request_with_auth(method, url, token, body=None, workspace_id=None):
     print(f"[请求] {method} {url}")
     try:
         if method in ("POST", "PUT", "PATCH"):
-            resp = requests.request(method, url, headers=headers, json=body, timeout=120, verify=False)
+            resp = requests.request(method, url, headers=headers, json=body, timeout=120, verify=verify)
         else:
-            resp = requests.request(method, url, headers=headers, timeout=120, verify=False)
+            resp = requests.request(method, url, headers=headers, timeout=120, verify=verify)
     except requests.exceptions.RequestException as e:
         # 异常 message 可能含 URL 但不含 Authorization 头(requests 不把 header 写进 message)
         # 但保险起见,显式剔除可能的 Authorization/X-Auth-Token 子串后再打印
@@ -592,7 +612,7 @@ def cmd_create(args):
     print(json.dumps(body, indent=2, ensure_ascii=False))
     validate_request_body(body)
     data = request_with_auth("POST", api_url(args.endpoint, args.project_id), args.token, body,
-                             workspace_id=args.workspace_id)
+                             workspace_id=args.workspace_id, verify=args.verify)
     if data is None:
         sys.exit("[错误] 创建服务失败: 无响应")
     print("")
@@ -609,7 +629,7 @@ def cmd_list(args):
     url = api_url(args.endpoint, args.project_id)
     # GET 接口须带双 workspace 查询参数(头 X-Workspace-Id 不起过滤作用)
     url = append_workspace_query(url, args.workspace_id)
-    data = request_with_auth("GET", url, args.token, workspace_id=args.workspace_id)
+    data = request_with_auth("GET", url, args.token, workspace_id=args.workspace_id, verify=args.verify)
     if data is None:
         sys.exit("[错误] 查询服务列表失败: 无响应")
     # GetServices 响应字段是 "data"(非 "services"),取错会误判无服务
@@ -627,7 +647,7 @@ def cmd_show(args):
     url = api_url(args.endpoint, args.project_id, f"/{args.service_id}")
     # GET 接口须带双 workspace 查询参数(头 X-Workspace-Id 不起过滤作用)
     url = append_workspace_query(url, args.workspace_id)
-    data = request_with_auth("GET", url, args.token, workspace_id=args.workspace_id)
+    data = request_with_auth("GET", url, args.token, workspace_id=args.workspace_id, verify=args.verify)
     if data is None:
         sys.exit("[错误] 查询服务详情失败: 无响应")
     print("")
@@ -651,7 +671,7 @@ def cmd_scale(args):
         url = api_url(args.endpoint, args.project_id,
                       f"/{args.service_id}/deployments/{args.deployment_id}/scale")
     body = {"replicas": args.replicas}
-    data = request_with_auth("POST", url, args.token, body, workspace_id=args.workspace_id)
+    data = request_with_auth("POST", url, args.token, body, workspace_id=args.workspace_id, verify=args.verify)
     if data is None:
         sys.exit("[错误] 扩缩容失败: 无响应")
     print(f"[OK] 扩缩容请求已提交: replicas={args.replicas}")
@@ -675,6 +695,10 @@ def parse_args():
                        help="Workspace ID(所有环境需要;POST 创建请求自动注入请求 body 顶层 "
                             "workspace_id 字段(非请求头/URL 查询参数,缺失报 8179);GET 接口自动拼接 "
                             "`?workspaceId={}&workspace_id={}` 双查询参数 + X-Workspace-Id 头)")
+        # 安全: HTTPS 证书校验默认开启,仅显式开关(自签证书调试)才关闭
+        p.add_argument("--insecure", action="store_true",
+                       help="关闭 HTTPS 证书校验(默认开启;仅自签证书调试环境使用,"
+                            "等价于环境变量 MODELARTS_INSECURE_TLS=1,会在 stderr 打印告警)")
 
     # create 专属参数
     p = sub.choices["create"]
@@ -753,6 +777,8 @@ def main():
         )
     # 安全获取 token(环境变量/--token-file/交互式),并挂到 args 供各子命令使用
     args.token = load_token(args)
+    # HTTPS 证书校验默认开启;仅 --insecure 或 MODELARTS_INSECURE_TLS=1 时降级
+    args.verify = tls_verify_enabled(args)
     dispatch = {
         "create": cmd_create,
         "list": cmd_list,
