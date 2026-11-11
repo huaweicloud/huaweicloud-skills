@@ -6,9 +6,9 @@
 
 | # | Criterion | Verification |
 | --- | ----------- | ------------- |
-| AC-01 | Can create an inference service with valid params | service_id returned, status non-terminal |
+| AC-01 | Can create an inference service with valid params | `id` returned (service identifier; some docs call it `service_id`), status non-terminal |
 | AC-02 | Can dry-run validate create params | `[DRY-RUN]` message, no service created |
-| AC-03 | Can create with health-check JSONs | service_id returned, probes applied |
+| AC-03 | Can create with health-check JSONs | `id` returned (service identifier), probes applied |
 | AC-04 | Rejects invalid JSON param (envs/health) | Click validation error on malformed JSON |
 
 ### Wait-Deploy

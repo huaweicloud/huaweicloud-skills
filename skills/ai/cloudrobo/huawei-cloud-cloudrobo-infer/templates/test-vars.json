@@ -21,7 +21,7 @@
       "name": "create-service",
       "command": "cloudrobo infer create --name verify-infer --flavor {flavor} --model-json '{\"model_id\": \"{model_id}\", \"model_version_id\": \"{model_version_id}\"}' --workspace-id {workspace_id} --pool-type SHARED --stop-schedule-json '{\"duration\": 60, \"time_unit\": \"MINUTES\"}'",
       "description": "Create an inference service",
-      "expected": "JSON with service_id returned",
+      "expected": "JSON with id returned (service identifier)",
       "type": "write"
     },
     {

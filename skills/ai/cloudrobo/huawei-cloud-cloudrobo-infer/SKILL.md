@@ -13,11 +13,23 @@ tags:
   - huawei-cloud-cloudrobo
   - infer
   - inference
+  - model-deployment
+  - deploy-model
+  - inference-service
   - service-deployment
-  - model-serving
-  - infer-service
+  - start-inference
+  - stop-inference
+  - service-logs
   - wait-deploy
+  - model-serving
   - model-inference
+  - 推理
+  - 推理服务
+  - 模型部署
+  - 部署模型
+  - 推理服务管理
+  - 服务日志
+  - 模型服务
 ---
 
 > **Windows / PowerShell:** Examples use bash syntax. To run on Windows PowerShell:
@@ -44,6 +56,20 @@ and use `wait-deploy` to poll until the service status is no longer `DEPLOYING`
 - **Log diagnosis** — `list-logs` with millisecond time range and keyword filter
 - **Cross-skill orchestration** — Consume models exported by `cloudrobo-train`; expose the
   service to `robo-dispatcher` for embodied tasks (via `infer_service_id`).
+
+**Out of Scope:**
+
+- **Model training / dataset** — training jobs, dataset management, and train metrics are handled
+  by the `huawei-cloud-cloudrobo-train` / `huawei-cloud-cloudrobo-dataset` skills, not by this skill.
+- **Robots** — robot management / registration is handled by the `huawei-cloud-cloudrobo-robot` skill.
+- **Dispatch** — embodied task dispatch is handled by the `huawei-cloud-cloudrobo-dispatch` skill;
+  this skill only produces an inference service that dispatch consumes via the service `id`.
+- **Asset / resource / workspace lifecycle** — creating model assets, compute pools, or workspace
+  configuration is covered by the respective `huawei-cloud-cloudrobo-asset` / `-resource` /
+  `-workspace` skills.
+- This skill **does NOT** belong to the train / dataset / robot / dispatch scope. If a user request
+  targets those capabilities, route it to the corresponding skill above (the workflow here is
+  inference-service lifecycle only).
 
 **Architecture:**
 
@@ -244,7 +270,10 @@ full command → execute.**
    - `--stop-schedule-json` is **required by the backend**; without it creation fails.
      Format: `{"duration": <N>, "time_unit": "MINUTES"}`.
    - After dry-run succeeds, confirm with the user and execute without `--dry-run`.
-   - Record the returned `service_id`.
+   - The CLI returns the created service's identifier in the `id` field, e.g.
+     `{"id": "1722b017-..."}` — some API/SDK docs also refer to this field as
+     `service_id`. Record that `id` value and pass it to downstream commands as
+     `--service-id <id>` (wait-deploy / show / start / stop / update / delete / list-logs).
 
 8. **Wait for deployment** — `cloudrobo infer wait-deploy --service-id <sid>` to poll every
    5s until status is no longer `DEPLOYING` (`status != "DEPLOYING"`), returning whatever state
@@ -257,7 +286,8 @@ full command → execute.**
      returns immediately with the `CREATING` status. In practice, call it after `create` and let
      the backend transition `CREATING → DEPLOYING → RUNNING`; the helper blocks on `DEPLOYING`.
 
-9. **Report** — output `service_id`, model name, flavor, and final status.
+9. **Report** — output the service `id` (the returned service identifier), model name, flavor,
+   and final status.
    - If status is `FAILED` → run `cloudrobo infer list-logs` for diagnosis.
    - **Never auto-delete a failed service.** If cleanup is needed, present the `delete`
      command and **ask the user for explicit confirmation** before executing it.
@@ -337,7 +367,13 @@ Scenario: "Reconfigure this service" / "Shut down and remove this service."
 
 - **Update** — `cloudrobo infer update --service-id <sid> [--description <desc>]
   [--model-ext-metadata <json>] [--dry-run]` (mutating; confirm).
+  - `update` **only supports** `--description` and `--model-ext-metadata`. Changing the
+    image, flavor, model, pool, or stop-schedule of an existing service is **not** supported
+    by `update` — use `delete` + `create` to rebuild the service with the new parameters.
 - **Delete** — `cloudrobo infer delete --service-id <sid> [--dry-run]` (mutating; irreversible; confirm).
+  - `delete` only removes the service itself. It does **NOT** delete the underlying model
+    asset (`model_id`) — model assets must be deleted separately via the
+    `huawei-cloud-cloudrobo-asset` skill (see `cloudrobo asset delete-asset`).
 
 ### Combined Workflow A — Deploy a trained model (infer + train + asset)
 
@@ -365,7 +401,7 @@ Scenario: "I trained a VLA model; deploy it as an inference service."
    parameters actually discovered in step 4a (per Step 7 Variant B).
 6. `cloudrobo infer wait-deploy --service-id <sid>` — polls every 5s until status is no longer
    `DEPLOYING` (service auto-deploys after create; do NOT call `start` — it will fail with 400)
-7. Report `service_id` and status. The service is now consumable.
+7. Report the service `id` (the returned service identifier) and status. The service is now consumable.
 
 > **Parameter auto-discovery**: For space asset / custom models, deployment parameters
 > (cmd, image, envs, skill-config, health-checks, model-ext-metadata, etc.) are
@@ -397,6 +433,11 @@ cloudrobo infer <command> [OPTIONS]
 > `wait-deploy` is a client-side polling helper available in both CLI and SDK.
 > When CLI is inconvenient (dynamic JSON, cross-package queries), use the Python
 > SDK directly — `InferClient` exposes the 9 methods.
+>
+> **Return identifier**: `create`/`show`/`list`/`wait-deploy` identify the created service
+> with the `id` field (some API/SDK docs also call it `service_id`). Use that field's value
+> as `--service-id` for all downstream commands — do not expect a top-level `service_id`
+> key in create/show responses.
 
 ## Reference Documents
 

@@ -203,8 +203,13 @@ service = client.create_infer_service({
     "stop_schedule": {"duration": 60, "time_unit": "MINUTES"},
     "description": "VLA inference service"
 })
-print(service)  # includes service_id
+print(service)  # returns {"id": "..."}; the service identifier field is `id` (some docs call it service_id)
 ```
+
+> **Return identifier**: `create` returns the created service's identifier in the `id` field
+> (e.g. `{"id": "1722b017-..."}`). `show`/`list`/`wait-deploy` identify the service the same
+> way — the top-level identifier key is `id`; some API/SDK docs also refer to it as
+> `service_id`. Feed that value into `--service-id` for all downstream commands.
 
 ### Wait-Deploy (CLI convenience)
 
@@ -240,8 +245,9 @@ cloudrobo infer list --workspace-id <ws> [--limit 20] [--offset 0] [--status <st
 
 ```python
 services = client.list_infer_services(workspace_id=config.workspace_id)
-for s in services.get("items", []):
-    print(s["name"], s["status"], s["model"]["model_id"])
+# list returns a top-level `services` array (plus `page_info`), NOT an `items` key.
+for s in services.get("services", []):
+    print(s["id"], s["name"], s["status"])
 ```
 
 ### Show Service Detail
@@ -252,7 +258,7 @@ cloudrobo infer show --service-id <service-id>
 
 ```python
 svc = client.show_infer_service("<service-id>")
-print(svc["name"], svc["status"])
+print(svc["id"], svc["name"], svc["status"])  # identifier field is `id`
 ```
 
 ### Start / Stop Service

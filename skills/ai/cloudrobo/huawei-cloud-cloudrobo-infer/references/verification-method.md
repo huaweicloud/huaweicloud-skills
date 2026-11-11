@@ -38,7 +38,7 @@ cloudrobo infer create --name verify-infer --flavor "<flavor>" --model-json '{"m
 
 # 6. Create service (user must confirm)
 cloudrobo infer create --name verify-infer --flavor "<flavor>" --model-json '{"model_id": "<asset-id>", "model_version_id": "<latest-version-id>"}' --workspace-id <ws-id> --pool-type <pool-type> --stop-schedule-json '{"duration": 60, "time_unit": "MINUTES"}' [--pool-id pool-<resource-id>]
-# → Returns service_id (service auto-enters CREATING → DEPLOYING)
+# → Returns {"id": "..."} — service identifier field is `id` (some docs call it service_id); service auto-enters CREATING → DEPLOYING
 
 # 7. Wait for deployment (do NOT call start — service auto-deploys)
 cloudrobo infer wait-deploy --service-id <service-id> --timeout 600
@@ -134,7 +134,7 @@ cloudrobo infer create --name x --flavor f --model-json '{"model_id":"m","model_
 | Test Case | Input | Expected Output |
 | ----------- | ------- | ---------------- |
 | TC-01: List services | `infer list --workspace-id <ws>` | JSON array of services |
-| TC-02: Create service | valid params | service_id returned |
+| TC-02: Create service | valid params | `id` returned (service identifier; some docs call it `service_id`) |
 | TC-03: Dry-run create | valid params + `--dry-run` | `[DRY-RUN]` message, no service created |
 | TC-04: Show service | service_id | Service object with full fields |
 | TC-05: Start service | service_id | status → RUNNING |
