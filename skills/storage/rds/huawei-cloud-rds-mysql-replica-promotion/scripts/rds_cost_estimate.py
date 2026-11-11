@@ -6,10 +6,10 @@ Overview:
     This script estimates the price of creating a Huawei Cloud RDS for
     MySQL instance through the `hcloud` (KooCLI) command line tool. It
     quotes on-demand (hourly) and prepaid (month/year) prices through the
-    BSS rating APIs without creating any resource. It is a standalone
-    companion tool of the SKILL workflow, used by the Agent to present
-    concrete cost figures during the risk disclosure step; it writes a
-    structured JSON report instead of text tables.
+    BSS rating APIs without creating any resource. It is the Step 5 tool
+    of the SKILL workflow (cost assessment, after the pre-check and before
+    the change confirmation), used by the Agent to present concrete cost
+    figures; it writes a structured JSON report instead of text tables.
 
 Detailed Description:
     The region's project id is resolved automatically via
@@ -105,6 +105,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     """Build the command line argument parser.
 
     1. Add the region, spec input, deploy type, period, storage and output
+       options.
+    2. Register the platform-injected `--domain_id` and `--x_user_auth_token`
        options.
 
     Args:
@@ -211,8 +213,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--storage-type",
-        default="GPSSD",
-        help="Optional. Storage volume type used as the volume resource_spec (default GPSSD).",
+        default="CLOUDSSD",
+        help=(
+            "Optional. Storage volume type used as the volume resource_spec "
+            "(default CLOUDSSD). Must be a type present in the storage spec "
+            "map (CLOUDSSD/ESSD/ESSD2/GPSSD2); an unmapped type skips the "
+            "storage quote with a warning."
+        ),
     )
     parser.add_argument(
         "--charge-mode",
@@ -230,6 +237,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional. Path to the output JSON report file.",
     )
+    common.add_platform_arguments(parser)
     return parser
 
 
@@ -456,7 +464,8 @@ def parse_on_demand(payload: dict) -> dict | None:
         dict | None: On-demand result dict, or None on error.
 
     Examples:
-        >>> result = parse_on_demand({"amount": "0.34", "currency": "CNY"})
+        >>> result = parse_on_demand({"amount": "0.34", "currency": "CNY",
+        ...     "product_rating_results": [{"id": "1", "amount": "0.34"}]})
         >>> result["hourly_price"] == "0.34"
         True
         >>> result["compute"]["hourly_price"] == "0.34"
@@ -791,8 +800,8 @@ def resolve_specs(
 def derive_ha_spec_code(spec_code: str) -> str:
     """Derive the ha spec code from a single instance spec code.
 
-    1. Replace a trailing .single suffix with .ha for ARM flavors.
-    2. Otherwise append .ha for x86 flavors.
+    1. Delegate to the shared rds_common rule so the cost estimate and the
+       pre-condition check never diverge.
 
     Args:
         spec_code: str — The single instance spec code.
@@ -806,9 +815,7 @@ def derive_ha_spec_code(spec_code: str) -> str:
         >>> derive_ha_spec_code("rds.mysql.large.arm2.single")
         'rds.mysql.large.arm2.ha'
     """
-    if spec_code.endswith(".single"):
-        return spec_code[: -len(".single")] + ".ha"
-    return spec_code + ".ha"
+    return common.derive_ha_spec_code(spec_code)
 
 
 def resolve_periods(args: argparse.Namespace) -> list[tuple[int, int]]:
@@ -868,7 +875,25 @@ def run_compare(args: argparse.Namespace) -> int:
     any_success_ref: list[bool] = [False]
 
     def storage_for(mode: str) -> dict | None:
-        """Build the storage params for a mode, or None when skipped."""
+        """Build the storage params for a mode, or None when skipped.
+
+        1. Return None when no storage size was requested.
+        2. Resolve the mode-specific volume resource_spec; when the type is
+           unmapped, record a warning and return None.
+        3. Return the size, resource_spec, type and mode for the quote.
+
+        Args:
+            mode: str — Deployment mode (single or ha).
+
+        Returns:
+            dict | None: Storage params, or None when skipped.
+
+        Examples:
+            # Inside a compare run with --storage-size-gb and the default
+            # storage type:
+            # >>> storage_for("ha")["resource_spec"]
+            # 'rds.mysql.volume.cloudssd.ha'
+        """
         if args.storage_size_gb is None:
             return None
         resource_spec = resolve_storage_spec(args.storage_type, mode)
@@ -900,6 +925,12 @@ def run_compare(args: argparse.Namespace) -> int:
 
         Returns:
             dict: The spec result dict.
+
+        Examples:
+            # Inside a compare run; quote results require hcloud credentials:
+            # >>> result = quote_spec("rds.mysql.x1.large.2", "single")
+            # >>> result["spec_code"]
+            # 'rds.mysql.x1.large.2'
         """
         storage = storage_for(mode)
         on_demand = None
@@ -1275,7 +1306,9 @@ def resolve_default_output() -> str:
         str: Absolute default output file path.
 
     Examples:
-        >>> resolve_default_output().endswith("rds_cost_estimate_result_")
+        >>> os.path.basename(resolve_default_output()).startswith("rds_cost_estimate_result_")
+        True
+        >>> resolve_default_output().endswith(".json")
         True
     """
     return os.path.join(
@@ -1287,7 +1320,8 @@ def resolve_default_output() -> str:
 def main() -> int:
     """Run the cost estimation workflow.
 
-    1. Parse arguments and validate the spec input.
+    1. Parse arguments, including the platform-injected compatibility
+       options, and validate the spec input.
     2. Set up logging and delegate to run().
 
     Args:
@@ -1302,7 +1336,7 @@ def main() -> int:
         1
     """
     parser = build_arg_parser()
-    args = parser.parse_args()
+    args = common.parse_known_arguments(parser)
     validate_spec_input(parser, args)
     logging.basicConfig(
         level=logging.INFO,

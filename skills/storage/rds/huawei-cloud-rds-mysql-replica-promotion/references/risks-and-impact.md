@@ -36,7 +36,7 @@ A single instance uses a single database node deployment architecture. Compared 
 | Connection information | Does not change the instance connection information, including VPC, subnet, security group, private address, private domain name, and database port | No impact |
 | Instance restart | The primary instance does not need to restart; it keeps serving during the conversion | No impact |
 | CPU usage | Because the standby node must sync the primary node's full data, CPU usage may rise briefly | Minor impact |
-| Conversion duration | Depends on the size of the data to be backed up; more data means a longer duration. The full flow (manual backup + single-to-HA conversion) typically takes about 10-20 minutes | Evaluate |
+| Conversion duration | Depends on the size of the data to be backed up; more data means a longer duration. The full flow (manual backup + single-to-HA conversion) typically takes about 10 minutes, and longer for large data volumes | Evaluate |
 | Reversibility | RDS supports converting a single instance to primary/standby only; primary/standby cannot be converted back to single (irreversible) | Irreversible |
 
 **Why CPU rises and what to expect**: During the single-to-HA conversion, the system must back up the primary node's full data and sync it to the newly created standby node. The primary node performs a full backup, which consumes extra CPU and I/O resources and may cause a brief CPU usage rise of 5%-15% (depending on data volume and instance flavor). It is recommended to run the conversion during a business low-peak period.
@@ -59,6 +59,7 @@ Remaining period = remaining days of each natural month / maximum days of that n
 
 ### 4.3 Other Costs
 
+- **Compute cost**: The primary/standby instance adds a standby node, so the compute price rises. The multiple is **not a fixed 2x**: verified quotes are about 2.0x for dedicated and Kunpeng general-enhanced flavors, but 2.2x–3.2x for general-purpose flavors, with the smaller flavors showing the highest multiple. Always quote the actual price for the target flavor instead of assuming a doubling.
 - **Storage cost**: A primary/standby instance stores 2 copies of the data (one for the primary node and one for the standby node), so storage capacity doubles. The storage price also rises because HA storage is billed at a higher rate than single storage (verified for 40 GB CLOUDSSD: about +60% monthly/yearly, +10% on-demand).
 - **Backup cost**: The backup policy is unchanged after the conversion; backup storage is billed by the actual backup volume (manual backups consume the backup storage quota, and storage beyond the free quota is billed by volume).
 - **Network cost**: Primary/standby sync within the same VPC generates no extra network cost; cross-AZ sync uses the private network and generates no public traffic cost.

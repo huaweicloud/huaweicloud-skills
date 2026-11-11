@@ -5,22 +5,24 @@
 Overview:
     This script verifies that a Huawei Cloud RDS for MySQL instance is
     eligible for single-to-HA conversion via the `hcloud` (KooCLI) command
-    line tool, and writes a structured JSON report. It is the Step 5 tool
-    of the SKILL workflow: it never mutates the cloud instance.
+    line tool, and writes a structured JSON report. It is the Step 4 tool
+    of the SKILL workflow: it never mutates the cloud instance, and it runs
+    before the user is asked to confirm the irreversible change.
 
 Detailed Description:
     The region's project id is resolved automatically via
     KeystoneListAuthProjects. The script runs the three pre-condition
     checks in order: instance status/type (ListInstances), HA flavor
-    support for the target AZ (ListFlavors, `{flavor_ref}.ha` entry), and
-    automatic backup enablement (ShowBackupPolicy, keep_days > 0). The
-    instance_status entry also carries the instance name, current
-    availability zone and charge mode so the SKILL workflow can source
-    Step 6 display data (charge_mode) from the pre-check report. If any
-    check fails, the report is still written with the failure detail and
-    the script exits non-zero. The command line stays minimal: only
-    --region, --instance-id, --target-az and an optional --output are
-    exposed; the subprocess timeout is a rds_common default.
+    support for the target AZ (ListFlavors, with the HA spec derived by the
+    shared rds_common.derive_ha_spec_code rule), and automatic backup
+    enablement (ShowBackupPolicy, keep_days > 0). The instance_status entry
+    also carries the instance name, current availability zone, charge mode,
+    storage type and storage size so the SKILL workflow can source the
+    Step 5 cost assessment from the pre-check report. If any check fails,
+    the report is still written with the failure detail and the script
+    exits non-zero. The command line stays minimal: only --region,
+    --instance-id, --target-az and an optional --output are exposed; the
+    subprocess timeout is a rds_common default.
 
 Workflow:
     1. Parse the command line arguments (region, instance id, target AZ,
@@ -54,6 +56,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     """Build the command line argument parser.
 
     1. Add the region, instance id, target AZ and output options only.
+    2. Register the platform-injected `--domain_id` and `--x_user_auth_token`
+       options.
 
     Args:
         None
@@ -63,8 +67,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
     Examples:
         >>> parser = build_arg_parser()
-        >>> args = parser.parse_args(["--instance-id", "i"])
-        >>> args.instance_id == "i"
+        >>> args = parser.parse_args(["--region", "r", "--instance-id", "i", "--target-az", "az-b"])
+        >>> args.instance_id == "i" and args.target_az == "az-b"
         True
     """
     parser = argparse.ArgumentParser(
@@ -98,6 +102,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional. Path to the output JSON report file.",
     )
+    common.add_platform_arguments(parser)
     return parser
 
 
@@ -250,7 +255,8 @@ def run(args: argparse.Namespace) -> int:
 def main() -> int:
     """Run the pre-condition check workflow.
 
-    1. Parse arguments and set up logging.
+    1. Parse arguments, including the platform-injected compatibility
+       options, and set up logging.
     2. Delegate to run() for resolution, checks and reporting.
 
     Args:
@@ -264,7 +270,7 @@ def main() -> int:
         # >>> main()
         1
     """
-    args = build_arg_parser().parse_args()
+    args = common.parse_known_arguments(build_arg_parser())
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",

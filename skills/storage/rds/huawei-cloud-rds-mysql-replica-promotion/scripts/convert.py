@@ -5,9 +5,9 @@
 Overview:
     This script executes the full single-to-HA conversion for a Huawei
     Cloud RDS for MySQL instance via the `hcloud` (KooCLI) command line
-    tool: pre-checks, a mandatory manual pre-backup, the conversion job,
-    job polling, result verification and a structured JSON report. It is
-    the Step 8 tool of the SKILL workflow and is irreversible.
+    tool: pre-checks, a manual pre-backup (skipped with --skip-backup), the
+    conversion job, job polling, result verification and a structured JSON
+    report. It is the Step 7 tool of the SKILL workflow and is irreversible.
 
 Detailed Description:
     The region's project id is resolved automatically via
@@ -62,6 +62,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     """Build the command line argument parser.
 
     1. Add the region, instance id, target AZ, backup and output options.
+    2. Register the platform-injected `--domain_id` and `--x_user_auth_token`
+       options.
 
     Args:
         None
@@ -71,10 +73,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
     Examples:
         >>> parser = build_arg_parser()
-        >>> args = parser.parse_args(["--instance-id", "i", "--target-az", "az-b"])
+        >>> args = parser.parse_args(["--region", "r", "--instance-id", "i", "--target-az", "az-b"])
         >>> args.instance_id == "i" and args.target_az == "az-b"
         True
-        >>> args = parser.parse_args(["--instance-id", "i", "--target-az", "az-b", "--skip-backup"])
+        >>> args = parser.parse_args(["--region", "r", "--instance-id", "i", "--target-az", "az-b", "--skip-backup"])
         >>> args.skip_backup
         True
     """
@@ -117,6 +119,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional. Path to the output JSON report file.",
     )
+    common.add_platform_arguments(parser)
     return parser
 
 
@@ -129,14 +132,18 @@ def run_backup_and_conversion(
     state_path: str,
     region: str,
     skip_backup: bool,
+    conversion: dict | None = None,
 ) -> dict:
     """Create the pre-backup, start the conversion and poll the job.
 
     1. Unless skip_backup is set, create and wait for the manual backup.
     2. Persist the recovery state after the backup starts or directly as a
        job-phase state when the backup is skipped.
-    3. Start the single-to-HA action, persist the job id and poll it.
-    4. Poll the job until Completed, Failed or timeout.
+    3. Start the single-to-HA action; on an API error or a response without
+       a job/order id, return a Failed conversion with the structured error
+       so the report keeps the evidence collected so far.
+    4. Otherwise persist the job/order id and poll until Completed, Failed
+       or timeout.
 
     Args:
         cmd_prefix: list[str] — Base hcloud RDS command prefix.
@@ -148,9 +155,13 @@ def run_backup_and_conversion(
         region: str — The cloud region.
         skip_backup: bool — When True, skip the manual backup and convert
             directly.
+        conversion: dict | None — Optional dict to populate; the caller can
+            pass the report's conversion section so a later exception keeps
+            the fields collected before the failure.
 
     Returns:
-        dict: conversion section with backup and job results.
+        dict: conversion section with backup and job results; failure
+            entries carry final_status="Failed" and an error object.
 
     Examples:
         # With stubbed hcloud calls the result dict is populated:
@@ -158,7 +169,8 @@ def run_backup_and_conversion(
         # >>> "job_id" in result
         True
     """
-    conversion: dict = {}
+    if conversion is None:
+        conversion = {}
 
     backup_id = ""
     if skip_backup:
@@ -206,7 +218,12 @@ def run_backup_and_conversion(
             "detail": backup_detail,
         }
         if backup_status != "COMPLETED":
-            conversion["error"] = "manual backup did not complete"
+            conversion["final_status"] = "Failed"
+            conversion["error"] = {
+                "error_code": "",
+                "error_msg": "manual backup did not complete",
+            }
+            conversion["detail"] = backup_detail
             return conversion
         LOGGER.info("Manual backup %s completed.", backup_id)
 
@@ -217,13 +234,25 @@ def run_backup_and_conversion(
         charge_mode,
     )
     start_payload = common.run_hcloud(start_cmd, common.DEFAULT_TIMEOUT)
+
+    api_error = common.extract_api_error(start_payload)
+    if api_error is not None:
+        conversion["final_status"] = "Failed"
+        conversion["error"] = api_error
+        conversion["detail"] = common.extract_error_message(start_payload)
+        return conversion
+
     job_id = start_payload.get("job_id", "")
     order_id = start_payload.get("order_id", "")
     if not job_id and not order_id:
-        raise common.HcloudError(
-            "StartInstanceSingleToHaAction returned neither job_id nor "
-            "order_id: {}".format(json.dumps(start_payload))
-        )
+        conversion["final_status"] = "Failed"
+        conversion["error"] = {
+            "error_code": "",
+            "error_msg": "StartInstanceSingleToHaAction returned neither "
+            "job_id nor order_id",
+        }
+        conversion["detail"] = json.dumps(start_payload, ensure_ascii=False)
+        return conversion
     if job_id:
         conversion["job_id"] = job_id
         LOGGER.info("Single-to-HA job started: %s", job_id)
@@ -299,13 +328,16 @@ def run(args: argparse.Namespace) -> int:
     2. Refuse to start while a valid unfinished state exists.
     3. Run the pre-checks, then create the backup (unless skipped) and run
        the job.
-    4. Verify the result, write the report and clear the state.
+    4. Verify the result, write the report and clear the state; conversion
+       and verification failures write the report and return 1.
 
     Args:
         args: argparse.Namespace — Parsed command line arguments.
 
     Returns:
-        int: Exit code (0 on success, 1 on failure).
+        int: Exit code. 0 when the conversion completed and verified, or
+            when the pre-check failed (the report carries the verdict);
+            1 on any other failure.
 
     Examples:
         # Requires hcloud credentials:
@@ -367,6 +399,8 @@ def run(args: argparse.Namespace) -> int:
             or ""
         )
 
+        conversion: dict = {}
+        report["conversion"] = conversion
         conversion = run_backup_and_conversion(
             cmd_prefix,
             args.instance_id,
@@ -376,12 +410,13 @@ def run(args: argparse.Namespace) -> int:
             state_path,
             args.region,
             args.skip_backup,
+            conversion,
         )
-        report["conversion"] = conversion
 
         if conversion.get("final_status") != "Completed":
             LOGGER.error("Conversion did not complete: %s", conversion.get("detail"))
-            return common.write_report(report, args.output, common.timestamp_now())
+            common.write_report(report, args.output, common.timestamp_now())
+            return 1
 
         verify_payload = common.run_hcloud(
             cmd_prefix + [common.CMD_LIST_INSTANCES, "--id={}".format(args.instance_id)],
@@ -391,7 +426,8 @@ def run(args: argparse.Namespace) -> int:
         report["verification"] = verify_detail
         if not verified:
             LOGGER.error("Result verification failed: %s", json.dumps(verify_detail))
-            return common.write_report(report, args.output, common.timestamp_now())
+            common.write_report(report, args.output, common.timestamp_now())
+            return 1
 
         LOGGER.info(
             "Single-to-HA conversion completed and verified for instance %s.",
@@ -404,7 +440,14 @@ def run(args: argparse.Namespace) -> int:
 
     except common.HcloudError as exc:
         LOGGER.error("hcloud error: %s", exc)
-        return common.write_report(report, args.output, common.timestamp_now())
+        conversion = report.setdefault("conversion", {})
+        conversion.setdefault("error", {"error_code": "", "error_msg": str(exc)})
+        if not conversion.get("final_status"):
+            conversion["final_status"] = "Failed"
+        if not conversion.get("detail"):
+            conversion["detail"] = str(exc)
+        common.write_report(report, args.output, common.timestamp_now())
+        return 1
 
 
 def run_pre_checks(cmd_prefix: list[str], instance_id: str, target_az: str) -> dict:
@@ -499,7 +542,8 @@ def run_pre_checks(cmd_prefix: list[str], instance_id: str, target_az: str) -> d
 def main() -> int:
     """Run the single-to-HA conversion workflow.
 
-    1. Parse arguments and set up logging.
+    1. Parse arguments, including the platform-injected compatibility
+       options, and set up logging.
     2. Delegate to run() for the full workflow.
 
     Args:
@@ -513,7 +557,7 @@ def main() -> int:
         # >>> main()
         1
     """
-    args = build_arg_parser().parse_args()
+    args = common.parse_known_arguments(build_arg_parser())
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",

@@ -4,7 +4,8 @@
 
 Overview:
     This module holds the logic shared by the step-split RDS scripts
-    (list_instances.py, list_azs.py, pre_check.py, convert.py, resume.py):
+    (list_instances.py, list_azs.py, pre_check.py, convert.py, resume.py,
+    rds_cost_estimate.py, rds_monitor.py):
     hcloud command execution, project id resolution, RDS command prefix
     building, report writing, recovery state persistence, pre-condition
     checks, backup/job polling, result verification and discovery output
@@ -22,8 +23,10 @@ Detailed Description:
       - ListJobInfo returns `{"job": {...}}`; `job.process` is an empty
         string when the job finishes, so completion is judged by
         `job.status == "Completed"`.
-      - ListFlavors uses independent HA spec codes (e.g. `x.ha`); support is
-        judged by the existence of the `.ha` flavor entry.
+      - ListFlavors uses independent HA spec codes: dedicated and general
+        single specs append `.ha`, armFlavors single specs replace their
+        `.single` suffix with `.ha`; support is judged by the existence of
+        that HA entry (derive_ha_spec_code is the single shared rule).
       - The `nodes` array order is not fixed; master/slave must be located
         by the `role` field.
       - Prepaid instances carry --single_to_ha.is_auto_pay=true so the
@@ -32,6 +35,12 @@ Detailed Description:
         JSON error object on API errors and still exits 0; run_hcloud
         extracts the leading JSON so the error code stays visible, and
         create_pre_backup retries with a fresh name on DBS.201201.
+      - Cross-region discovery uses RMS ListAllResources, whose cli-region
+        channel only accepts cn-north-4; the real region arrives in each
+        resource's region_id. Instance detail for the conversion still comes
+        from the region-scoped ListInstances, because RMS reports a
+        different volumeType vocabulary (ULTRAHIGH) than ListInstances
+        (CLOUDSSD) and must not feed storage quoting.
     Tuning values (poll intervals, limits, subprocess timeout) are module
     constants on purpose: the workflow scripts do not expose them as command
     line options, so users cannot accidentally diverge from the verified
@@ -47,10 +56,11 @@ Workflow:
     5. Provide the pre-condition check functions.
     6. Provide the backup/job polling loops.
     7. Verify a converted instance and format discovery output.
+    8. Provide the platform-injected argument compatibility helpers.
 
 Dependencies:
-    - Python 3.9+ standard library only (json, logging, os, subprocess,
-      time, datetime, uuid).
+    - Python 3.9+ standard library only (argparse, json, logging, os,
+      subprocess, time, datetime, uuid).
     - External: `hcloud` (KooCLI 7.2.2+) installed, configured and
       authenticated. The scripts do not check credentials themselves; the
       SKILL workflow verifies them with ListApiVersionNew beforehand.
@@ -58,6 +68,7 @@ Dependencies:
 
 from __future__ import annotations
 
+import argparse
 import json
 import logging
 import os
@@ -90,16 +101,102 @@ CMD_START_SINGLE_TO_HA = "StartInstanceSingleToHaAction"
 CMD_LIST_JOB_INFO = "ListJobInfo"
 # Verified discovery command names (desktop validation, 2026-10-15).
 CMD_LIST_AUTH_PROJECTS = "KeystoneListAuthProjects"
-CMD_LIST_AVAILABILITY_ZONES = "NovaListAvailabilityZones"
+CMD_LIST_AUTH_DOMAINS = "KeystoneListAuthDomains"
+CMD_LIST_ALL_RESOURCES = "ListAllResources"
+
+# Verified channel regions (remote validation 2026-11-06): RMS only accepts
+# cn-north-4 and BSS only accepts cn-north-1 as the cli-region channel,
+# regardless of where the target instances live.
+RMS_CHANNEL_REGION = "cn-north-4"
+RMS_RESOURCE_TYPE = "rds.instances"
+RMS_MAX_LIMIT = 200
+BSS_CHANNEL_REGION = "cn-north-1"
 
 # Charge modes returned by ListInstances.
 CHARGE_MODE_PREPAID = "prePaid"
 CHARGE_MODE_POSTPAID = "postPaid"
 
+# Instance types returned by ListInstances and RMS haMode.
+INSTANCE_TYPE_SINGLE = "Single"
+INSTANCE_TYPE_HA = "Ha"
+
+# instance_mode values returned by ListFlavors. Only `ha` is a primary/
+# standby flavor; `replica` (read replica) and `cluster` are not.
+FLAVOR_MODE_SINGLE = "single"
+FLAVOR_MODE_HA = "ha"
+
+# AZ status values returned by ListFlavors az_status.
+AZ_STATUS_NORMAL = "normal"
+
 # Recovery state file suffix and phases.
 STATE_FILE_SUFFIX = ".state.json"
 PHASE_BACKUP = "backup"
 PHASE_JOB = "job"
+
+
+def add_platform_arguments(parser: argparse.ArgumentParser) -> None:
+    """Register the platform-injected compatibility options.
+
+    1. Add `--domain_id`, accepted for platform compatibility only.
+    2. Add `--x_user_auth_token`, accepted for platform compatibility only.
+
+    Args:
+        parser: argparse.ArgumentParser — Parser to extend.
+
+    Returns:
+        None
+
+    Examples:
+        >>> parser = argparse.ArgumentParser()
+        >>> add_platform_arguments(parser)
+        >>> parser.parse_known_args(["--domain_id=d"])[0].domain_id
+        'd'
+    """
+    # Yunbao appends these two hidden options to every
+    # `python3 scripts/*.py` command; the underscore spelling is its contract.
+    parser.add_argument(
+        "--domain_id",
+        default=None,
+        help=(
+            "Optional. Domain ID injected by the execution platform; accepted "
+            "for compatibility and not used by this script. Do not set it manually."
+        ),
+    )
+    parser.add_argument(
+        "--x_user_auth_token",
+        default=None,
+        help=(
+            "Optional. IAM token injected by the execution platform; accepted "
+            "for compatibility and not used by this script. Do not set it manually."
+        ),
+    )
+
+
+def parse_known_arguments(
+    parser: argparse.ArgumentParser, argv: list[str] | None = None
+) -> argparse.Namespace:
+    """Parse arguments while still rejecting genuinely unknown options.
+
+    1. Parse with `parse_known_args` so platform-injected options are accepted.
+    2. Reject any residual unknown option through the parser's usage error.
+
+    Args:
+        parser: argparse.ArgumentParser — Parser to use.
+        argv: list[str] | None — Argument list; None reads `sys.argv[1:]`.
+
+    Returns:
+        argparse.Namespace: Parsed arguments.
+
+    Examples:
+        >>> parser = argparse.ArgumentParser()
+        >>> add_platform_arguments(parser)
+        >>> parse_known_arguments(parser, ["--domain_id=d"]).domain_id
+        'd'
+    """
+    args, unknown = parser.parse_known_args(argv)
+    if unknown:
+        parser.error("unrecognized arguments: {}".format(" ".join(unknown)))
+    return args
 
 
 class HcloudError(Exception):
@@ -253,6 +350,34 @@ def extract_error_message(payload: dict) -> str:
             return "{}: {}".format(code, msg)
         return msg or code or "unknown hcloud error"
     return "no error information in payload"
+
+
+def extract_api_error(payload: dict) -> dict | None:
+    """Return the structured API error carried by an hcloud payload.
+
+    1. Treat a payload with either error_code or error_msg as an error.
+    2. Return both fields as strings, using an empty string for a missing
+       field.
+    3. Return None when the payload is not an error object.
+
+    Args:
+        payload: dict — The parsed hcloud JSON payload.
+
+    Returns:
+        dict | None: {"error_code": str, "error_msg": str}, or None when the
+            payload carries no API error.
+
+    Examples:
+        >>> extract_api_error({"error_code": "DBS.200543", "error_msg": "Task not found."})
+        {'error_code': 'DBS.200543', 'error_msg': 'Task not found.'}
+        >>> extract_api_error({"job_id": "j1"}) is None
+        True
+    """
+    error_code = str(payload.get("error_code") or "")
+    error_msg = str(payload.get("error_msg") or "")
+    if not error_code and not error_msg:
+        return None
+    return {"error_code": error_code, "error_msg": error_msg}
 
 
 def extract_project_id(payload: dict, region: str) -> str:
@@ -573,11 +698,107 @@ def check_instance_status(data: dict) -> tuple[bool, str, str, str]:
     return True, status, inst_type, detail
 
 
-def check_flavor_support(data: dict, flavor_ref: str, target_az: str) -> tuple[bool, str, str]:
-    """Check that the instance flavor supports single-to-HA (plan b).
+def derive_ha_spec_code(spec_code: str) -> str:
+    """Derive the HA spec code from a single instance spec code.
 
-    1. Search ListFlavors payload for an entry whose spec_code equals
-       `{flavor_ref}.ha`.
+    1. Replace a trailing `.single` suffix with `.ha` (ARM flavors).
+    2. Otherwise append `.ha` (dedicated and general flavors).
+
+    Verified against the MySQL 8.0 catalog (2026-11-06): dedicated and
+    general single specs carry no suffix and their HA counterpart appends
+    `.ha`; armFlavors single specs end with `.single` and their HA
+    counterpart replaces that suffix with `.ha`. Every HA flavor ends with
+    `.ha`, and the rule matched 48 of the 49 single flavors.
+
+    Args:
+        spec_code: str — The single instance spec code.
+
+    Returns:
+        str: The derived ha spec code.
+
+    Examples:
+        >>> derive_ha_spec_code("rds.mysql.n1.large.2")
+        'rds.mysql.n1.large.2.ha'
+        >>> derive_ha_spec_code("rds.mysql.large.arm2.single")
+        'rds.mysql.large.arm2.ha'
+    """
+    if spec_code.endswith(".single"):
+        return spec_code[: -len(".single")] + ".ha"
+    return spec_code + ".ha"
+
+
+def find_flavor(data: dict, spec_code: str) -> dict | None:
+    """Find one flavor entry by its exact spec code.
+
+    1. Read the flavors list from the ListFlavors payload.
+    2. Return the entry whose spec_code matches exactly, or None.
+
+    Args:
+        data: dict — The parsed ListFlavors JSON payload.
+        spec_code: str — The exact spec code to look up.
+
+    Returns:
+        dict | None: The matching flavor entry, or None when absent.
+
+    Examples:
+        >>> find_flavor({"flavors": [{"spec_code": "x.ha"}]}, "x.ha")["spec_code"]
+        'x.ha'
+        >>> find_flavor({"flavors": []}, "x.ha") is None
+        True
+    """
+    flavors = data.get("flavors") or []
+    return next((f for f in flavors if f.get("spec_code") == spec_code), None)
+
+
+def build_az_rows(
+    flavor: dict, current_az: str
+) -> list[dict]:
+    """Build the per-AZ rows of a flavor for standby node selection.
+
+    1. Read az_status and az_desc from the flavor entry.
+    2. Emit one row per AZ with its code, description, status, whether it
+       is selectable (status normal) and whether it is the instance's
+       current AZ.
+
+    Args:
+        flavor: dict — A ListFlavors flavor entry.
+        current_az: str — The instance's current availability zone.
+
+    Returns:
+        list[dict]: Rows sorted by AZ code, each with keys az_code,
+            az_name, az_status, available and is_current.
+
+    Examples:
+        >>> rows = build_az_rows({"az_status": {"az-b": "normal"},
+        ...                       "az_desc": {"az-b": "可用区二"}}, "az-a")
+        >>> rows[0]["available"]
+        True
+        >>> rows[0]["is_current"]
+        False
+    """
+    az_status = flavor.get("az_status") or {}
+    az_desc = flavor.get("az_desc") or {}
+    rows: list[dict] = []
+    for az_code in sorted(az_status):
+        status = az_status[az_code]
+        rows.append(
+            {
+                "az_code": az_code,
+                "az_name": az_desc.get(az_code, ""),
+                "az_status": status,
+                "available": status == AZ_STATUS_NORMAL,
+                "is_current": az_code == current_az,
+            }
+        )
+    return rows
+
+
+def check_flavor_support(data: dict, flavor_ref: str, target_az: str) -> tuple[bool, str, str]:
+    """Check that the instance flavor supports single-to-HA.
+
+    1. Derive the HA spec code from the single flavor code with the shared
+       derive_ha_spec_code rule (append `.ha` for dedicated/general, replace
+       `.single` with `.ha` for ARM).
     2. Verify that entry exists and its az_status marks the target AZ normal.
 
     Args:
@@ -592,14 +813,19 @@ def check_flavor_support(data: dict, flavor_ref: str, target_az: str) -> tuple[b
         >>> ok, code, _ = check_flavor_support({"flavors": [{"spec_code": "x.ha", "az_status": {"az-a": "normal"}}]}, "x", "az-a")
         >>> ok
         True
+        >>> ok2, code2, _ = check_flavor_support(
+        ...     {"flavors": [{"spec_code": "rds.mysql.large.arm2.ha",
+        ...                   "az_status": {"az-a": "normal"}}]},
+        ...     "rds.mysql.large.arm2.single", "az-a")
+        >>> ok2, code2
+        (True, 'rds.mysql.large.arm2.ha')
     """
-    flavors = data.get("flavors") or []
-    ha_spec_code = "{}.ha".format(flavor_ref)
-    entry = next((f for f in flavors if f.get("spec_code") == ha_spec_code), None)
+    ha_spec_code = derive_ha_spec_code(flavor_ref)
+    entry = find_flavor(data, ha_spec_code)
     if entry is None:
         return False, ha_spec_code, "ha spec {} not found in ListFlavors".format(ha_spec_code)
     az_status = entry.get("az_status") or {}
-    if az_status.get(target_az) != "normal":
+    if az_status.get(target_az) != AZ_STATUS_NORMAL:
         return (
             False,
             ha_spec_code,
@@ -700,7 +926,25 @@ def get_backup_time_reference(
     cmd_prefix = make_rds_prefix(region, project_id)
 
     def first_backup_duration(backup_type: str) -> float | None:
-        """Return the first backup duration for a backup type, or None."""
+        """Return the first backup duration for a backup type, or None.
+
+        1. Query ListBackups for the instance and the given backup type.
+        2. Return None when the response carries no backup record.
+        3. Otherwise return the duration of the first record, which the
+           API returns begin_time-descending.
+
+        Args:
+            backup_type: str — The backup type filter (auto or manual).
+
+        Returns:
+            float | None: Duration in seconds, or None when there is no
+                record for that type.
+
+        Examples:
+            # Requires hcloud credentials:
+            # >>> first_backup_duration("auto")
+            # None
+        """
         payload = run_hcloud(
             cmd_prefix
             + [
@@ -755,8 +999,10 @@ def format_discovery_json(instances: list[dict], zones: list[dict]) -> str:
     3. Serialize with indentation, UTF-8 safe and sorted keys.
 
     Args:
-        instances: list[dict] — Instances from the ListInstances payload.
-        zones: list[dict] — Zones from the NovaListAvailabilityZones payload.
+        instances: list[dict] — Instance summary rows from the RMS discovery
+            path (build_instance_summary / select_single_mysql_instances).
+        zones: list[dict] — Availability zone rows from the HA flavor's
+            az_status (build_az_rows).
 
     Returns:
         str: Pretty printed JSON text.
@@ -772,6 +1018,176 @@ def format_discovery_json(instances: list[dict], zones: list[dict]) -> str:
     if not items:
         return "[]"
     return json.dumps(items, indent=2, ensure_ascii=False, sort_keys=True)
+
+
+def resolve_domain_id(timeout: int) -> str:
+    """Resolve the account domain id of the current AK/SK credentials.
+
+    1. Call IAM KeystoneListAuthDomains on the RMS channel region.
+    2. Return the first domain id, raising when the list is empty.
+
+    Args:
+        timeout: int — Timeout in seconds for the subprocess call.
+
+    Returns:
+        str: The account domain id used by RMS ListAllResources.
+
+    Raises:
+        HcloudError: When no domain is returned for the credentials.
+
+    Examples:
+        # Requires hcloud credentials:
+        # >>> resolve_domain_id(5)
+        Traceback (most recent call last):
+        HcloudError: ...
+    """
+    payload = run_hcloud(
+        [
+            "IAM",
+            "--cli-region={}".format(RMS_CHANNEL_REGION),
+            CMD_LIST_AUTH_DOMAINS,
+        ],
+        timeout,
+    )
+    domains = payload.get("domains") or []
+    if not domains:
+        raise HcloudError(
+            "KeystoneListAuthDomains returned no domain; check that hcloud "
+            "AK/SK authentication is configured."
+        )
+    return domains[0].get("id", "")
+
+
+def list_all_resources(domain_id: str, timeout: int) -> list[dict]:
+    """List every RDS instance of the account across all regions via RMS.
+
+    1. Call RMS ListAllResources on the fixed cn-north-4 channel with
+       limit=RMS_MAX_LIMIT.
+    2. Follow page_info.next_marker until it is empty, accumulating the
+       resources and dropping any repeated id.
+    3. Return the accumulated resource list.
+
+    Args:
+        domain_id: str — The account domain id from resolve_domain_id.
+        timeout: int — Timeout in seconds for each subprocess call.
+
+    Returns:
+        list[dict]: Raw RMS resource entries (properties not yet flattened).
+
+    Raises:
+        HcloudError: When any page call fails.
+
+    Examples:
+        # Requires hcloud credentials:
+        # >>> list_all_resources("d1", 30)
+        []
+    """
+    resources: list[dict] = []
+    seen: set[str] = set()
+    marker = ""
+    while True:
+        cmd = [
+            "RMS",
+            "--cli-region={}".format(RMS_CHANNEL_REGION),
+            CMD_LIST_ALL_RESOURCES,
+            "--domain_id={}".format(domain_id),
+            "--type={}".format(RMS_RESOURCE_TYPE),
+            "--limit={}".format(RMS_MAX_LIMIT),
+        ]
+        if marker:
+            cmd.append("--marker={}".format(marker))
+        payload = run_hcloud(cmd, timeout)
+        for resource in payload.get("resources") or []:
+            resource_id = resource.get("id", "")
+            if resource_id and resource_id in seen:
+                continue
+            if resource_id:
+                seen.add(resource_id)
+            resources.append(resource)
+        marker = (payload.get("page_info") or {}).get("next_marker") or ""
+        if not marker:
+            break
+    return resources
+
+
+def build_instance_summary(resource: dict) -> dict:
+    """Flatten one RMS resource entry into the discovery summary fields.
+
+    1. Read the top-level id, name, region_id and state.
+    2. Read the engine, flavor, HA mode, node count, AZ, storage, charge
+       mode and status from the nested properties map.
+    3. Translate the numeric payMode into the ListInstances vocabulary.
+
+    Args:
+        resource: dict — One RMS ListAllResources resource entry.
+
+    Returns:
+        dict: Summary with keys id, name, region, engine, engine_version,
+            flavor_ref, instance_type, node_num, availability_zone,
+            volume_type, volume_size, charge_mode, status and
+            convertible.
+
+    Examples:
+        >>> r = {"id": "i1", "name": "db", "region_id": "cn-north-4",
+        ...      "state": "Normal", "properties": {"engineName": "mysql",
+        ...      "engineVersion": "8.0.43", "flavorCode": "x", "haMode": "Single",
+        ...      "nodeNum": "1", "azCode": "az-a", "volumeType": "ULTRAHIGH",
+        ...      "dataVolumeSizeInGBs": "40", "payMode": "0"}}
+        >>> s = build_instance_summary(r)
+        >>> s["instance_type"], s["charge_mode"], s["convertible"]
+        ('Single', 'postPaid', True)
+    """
+    properties = resource.get("properties") or {}
+    pay_mode = str(properties.get("payMode", ""))
+    charge_mode = {
+        "0": CHARGE_MODE_POSTPAID,
+        "1": CHARGE_MODE_PREPAID,
+    }.get(pay_mode, "")
+    engine = properties.get("engineName", "")
+    instance_type = properties.get("haMode", "")
+    return {
+        "id": resource.get("id", ""),
+        "name": resource.get("name", ""),
+        "region": resource.get("region_id", ""),
+        "engine": engine,
+        "engine_version": properties.get("engineVersion", ""),
+        "flavor_ref": properties.get("flavorCode", ""),
+        "instance_type": instance_type,
+        "node_num": properties.get("nodeNum", ""),
+        "availability_zone": properties.get("azCode", ""),
+        "volume_type": properties.get("volumeType", ""),
+        "volume_size": properties.get("dataVolumeSizeInGBs", ""),
+        "charge_mode": charge_mode,
+        "status": resource.get("state", ""),
+        "convertible": (
+            engine.lower() == "mysql"
+            and instance_type == INSTANCE_TYPE_SINGLE
+            and resource.get("state", "") == "Normal"
+        ),
+    }
+
+
+def select_single_mysql_instances(summaries: list[dict]) -> list[dict]:
+    """Keep the convertible single MySQL instances.
+
+    1. Keep entries whose convertible flag is true (MySQL, Single, Normal).
+    2. Preserve the input order so the discovery output stays stable.
+
+    Args:
+        summaries: list[dict] — Summaries from build_instance_summary.
+
+    Returns:
+        list[dict]: The filtered summaries.
+
+    Examples:
+        >>> s = [{"region": "r1", "convertible": True},
+        ...      {"region": "r2", "convertible": False}]
+        >>> len(select_single_mysql_instances(s))
+        1
+        >>> select_single_mysql_instances([])
+        []
+    """
+    return [item for item in summaries if item.get("convertible")]
 
 
 def build_backup_name(instance_id: str) -> str:
@@ -1004,9 +1420,11 @@ def poll_prepaid_conversion(
     """Poll a prepaid single-to-HA conversion via the instance state.
 
     1. Repeatedly call ListInstances filtered by instance id.
-    2. Phase A: wait until status leaves ACTIVE (the conversion started).
-    3. Phase B: wait until type is Ha and status is ACTIVE (the conversion
-       completed), then return Completed; return TIMEOUT on the deadline.
+    2. On every poll, return Completed as soon as type is Ha and status is
+       ACTIVE; the check applies to the first sample too and does not depend
+       on having observed an intermediate state.
+    3. Track whether the instance was ever observed leaving ACTIVE only for
+       logging and timeout wording, then return TIMEOUT on the deadline.
 
     Args:
         cmd_prefix: list[str] — ListInstances command up to the instance id
@@ -1041,29 +1459,36 @@ def poll_prepaid_conversion(
             last_type,
             last_status,
         )
-        if not conversion_started:
-            if last_status != "ACTIVE":
-                conversion_started = True
-                LOGGER.info(
-                    "Prepaid conversion %s started (status %s).",
-                    instance_id,
-                    last_status,
-                )
-        elif last_type == "Ha" and last_status == "ACTIVE":
+
+        # The current state is the verdict: the initial Single/ACTIVE state
+        # cannot satisfy type=Ha, so no intermediate observation is required.
+        if last_type == "Ha" and last_status == "ACTIVE":
             return (
                 "Completed",
                 "prepaid conversion {} completed".format(instance_id),
                 time.monotonic() - start,
             )
-        if time.monotonic() >= deadline:
-            return (
-                "TIMEOUT",
-                "prepaid conversion {} still type={} status={} after {}s; "
-                "check the console".format(
-                    instance_id, last_type, last_status, max_poll_time
-                ),
-                time.monotonic() - start,
+
+        if not conversion_started and last_status != "ACTIVE":
+            conversion_started = True
+            LOGGER.info(
+                "Prepaid conversion %s started (status %s).",
+                instance_id,
+                last_status,
             )
+
+        if time.monotonic() >= deadline:
+            if conversion_started:
+                detail = (
+                    "prepaid conversion {} did not reach type=Ha status=ACTIVE "
+                    "within {}s (last type={} status={}); check the console"
+                ).format(instance_id, max_poll_time, last_type, last_status)
+            else:
+                detail = (
+                    "prepaid conversion {} did not start within {}s "
+                    "(still type={} status={}); check the console"
+                ).format(instance_id, max_poll_time, last_type, last_status)
+            return ("TIMEOUT", detail, time.monotonic() - start)
         time.sleep(poll_interval)
 
 

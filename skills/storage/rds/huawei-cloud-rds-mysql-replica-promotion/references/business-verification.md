@@ -1,6 +1,6 @@
 # Business Verification after Single-to-HA Conversion (RDS for MySQL)
 
-> This reference is presented by the SKILL **inside the Step 10 workflow summary** as a notice to the user. Business verification is a user-driven, post-workflow activity, not a workflow step: the SKILL cannot obtain verification results through hcloud, and the user runs these checks in an environment with database credentials and application access, reporting the results back in the conversation. The HA failover check is **optional** and requires the user's explicit decision.
+> This reference is presented by the SKILL **inside the Step 9 workflow summary** as a notice to the user. Business verification is a user-driven, post-workflow activity, not a workflow step: the SKILL cannot obtain verification results through hcloud, and the user runs these checks in an environment with database credentials and application access, reporting the results back in the conversation. The HA failover check is **optional** and requires the user's explicit decision.
 
 ## 1. Verify the Change Result (Console Status)
 

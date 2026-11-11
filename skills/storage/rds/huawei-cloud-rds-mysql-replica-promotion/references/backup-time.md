@@ -1,6 +1,6 @@
 # Backup Time Reference for Single-to-HA Conversion (RDS for MySQL)
 
-> This reference supports the SKILL workflow Step 8 backup-handling confirmation. It documents the verified method for telling the user how long one full backup of the instance roughly takes.
+> This reference supports the SKILL workflow Step 7 backup-handling confirmation. It documents the verified method for telling the user how long one full backup of the instance roughly takes.
 
 ## 1. Purpose
 
@@ -8,11 +8,23 @@ Before asking the user whether to keep the pre-conversion manual backup, the SKI
 
 ## 2. Primary Reference — Latest Automatic Backup
 
+The complete command is `hcloud RDS ListBackups`. Before running it, read the help
+manual rather than assuming the parameter names:
+
+```bash
+hcloud RDS ListBackups --help
+```
+
+The parameters are derived from the workflow context: the instance selected in the
+discovery step (`--instance_id`), that instance's region (`--cli-region`), and the
+project id the pre-check already resolved (`--project_id`).
+
 Query the instance's automatic backups:
 
 ```bash
 hcloud RDS ListBackups \
   --cli-region=<region> \
+  --project_id=<project_id> \
   --instance_id=<instance_id> \
   --backup_type=auto
 ```
@@ -27,11 +39,13 @@ Verified example (2026-10-21, instance `c29f...in01`, cn-north-4, 40 GB CLOUDSSD
 
 ## 3. Supplementary Reference — Latest Manual Backup
 
-When the instance has no automatic backup record, query the manual backups:
+When the instance has no automatic backup record, query the manual backups the same
+way:
 
 ```bash
 hcloud RDS ListBackups \
   --cli-region=<region> \
+  --project_id=<project_id> \
   --instance_id=<instance_id> \
   --backup_type=manual
 ```

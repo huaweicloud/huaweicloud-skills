@@ -1,6 +1,6 @@
 # Cost Estimation for Single-to-HA Conversion (RDS for MySQL)
 
-> This reference supports the SKILL workflow cost assessment step (Step 6). It documents the behavior of `scripts/rds_cost_estimate.py` in compare mode and the verified pricing API facts (remote validation 2026-10-22, instance `c29f...in01`, cn-north-4).
+> This reference supports the SKILL workflow cost assessment step (Step 5). It documents the behavior of `scripts/rds_cost_estimate.py` in compare mode and the verified pricing API facts (remote validation 2026-10-22 and 2026-11-06, cn-north-4 and cn-south-1).
 
 ## 1. Purpose
 
@@ -21,16 +21,36 @@ python3 scripts/rds_cost_estimate.py \
   --output rds_cost_estimate_result.json
 ```
 
-The `--charge-mode` value comes from the Step 5 pre-check report (`pre_check.instance_status.charge_mode`, one of `postPaid`/`prePaid`): `postPaid` quotes only on-demand prices, `prePaid` only monthly/yearly prices, and omitting the flag quotes both modes (backward compatible).
+The SKILL workflow **always** passes `--charge-mode` with the instance's actual charge mode from the Step 4 pre-check report. An instance has exactly one billing mode, so quoting both would show a price that can never apply to it: `postPaid` quotes on-demand prices only, `prePaid` quotes monthly/yearly prices only. The workflow must never omit the flag, because omitting it quotes both modes.
 
-The script derives the HA spec code from the single spec code:
+The script still supports omitting `--charge-mode` for ad-hoc CLI use (backward compatible), but that path is **not** used by the workflow.
 
-| Flavor family | Rule | Example |
-| --- | --- | --- |
-| x86 | append `.ha` | `rds.mysql.x1.large.2` → `rds.mysql.x1.large.2.ha` |
-| ARM | replace `.single` with `.ha` | `rds.mysql.large.arm2.single` → `rds.mysql.large.arm2.ha` |
+The script derives the HA spec code from the single spec code with the shared rule in `rds_common.derive_ha_spec_code`, which the pre-condition check reuses:
 
-Verified fact: all 54 single flavors of MySQL 8.0 have a paired HA flavor; `instance_mode` values are lowercase `single`/`ha`/`replica`.
+| Instance type | `group_type` | Single spec shape | Rule | Example |
+| --- | --- | --- | --- | --- |
+| Dedicated | `dedicated` | no suffix | append `.ha` | `rds.mysql.x1.large.2` → `rds.mysql.x1.large.2.ha` |
+| General-purpose | `general` | no suffix | append `.ha` | `rds.mysql.n1.large.2` → `rds.mysql.n1.large.2.ha` |
+| Kunpeng general-enhanced | `armFlavors` | `.single` suffix | replace `.single` with `.ha` | `rds.mysql.large.arm2.single` → `rds.mysql.large.arm2.ha` |
+
+Verified against the MySQL 8.0 catalog (2026-11-06, 248 flavors): the rule matched 48 of the 49 single flavors. The one miss, `rds.mysql.x1.32xlarge.2`, has **no** HA counterpart at all, so the derivation is correct but the result must still be looked up in `ListFlavors` before claiming support. The reverse also exists: `rds.mysql.x1.48xlarge.4.ha` is an HA flavor with no single counterpart.
+
+`instance_mode` has four values: `single`, `ha`, `replica` (read replica) and `cluster`. Only `ha` is a primary/standby flavor — filtering with "not single" would wrongly pull in 150 replica and cluster entries.
+
+### 2.1 Price multiple is not a fixed 2x
+
+Verified quotes (cn-south-1, CNY, 2026-11-06):
+
+| Instance type | Flavor | On-demand single → HA | Multiple | Monthly single → HA | Multiple |
+| --- | --- | --- | --- | --- | --- |
+| General | `rds.mysql.n1.large.2` | 0.32 → 1.02 | **3.19x** | 156 → 406 | **2.60x** |
+| General | `rds.mysql.n1.large.4` | 0.38 → 1.15 | **3.03x** | 190 → 520 | **2.74x** |
+| General | `rds.mysql.n1.xlarge.2` | 0.75 → 1.90 | **2.53x** | 360 → 805 | **2.24x** |
+| General | `rds.mysql.n1.2xlarge.4` | 1.91 → 4.20 | **2.20x** | 1000 → 2000 | 2.00x |
+| Dedicated | `rds.mysql.x1.large.2` | 0.54 → 1.08 | 2.00x | 275 → 550 | 2.00x |
+| Kunpeng | `rds.mysql.2xlarge.arm2.single` | 1.48 → 2.97 | 2.01x | 712 → 1424 | 2.00x |
+
+General-purpose flavors show a 2.2x–3.2x multiple that shrinks as the flavor grows; dedicated and Kunpeng flavors are consistently about 2x. The SKILL must present the multiple actually quoted and must not state a fixed "about 2x" figure.
 
 ## 3. Storage Spec Mapping
 
@@ -43,7 +63,11 @@ The storage `resource_spec` is derived from the instance `volume.type` and the d
 | ESSD2 | `rds.mysql.volume.essd2` | `rds.mysql.volume.essd2.ha` |
 | GPSSD2 | `rds.mysql.volume.gpssd2` | `rds.mysql.volume.gpssd2.ha` |
 
-The mapping is verified via `ListResourceSpecs` (cloud_service_type `hws.service.type.rds`, resource_type `hws.resource.type.rds.volume`). An unmapped `volume.type` (e.g. `ULTRAHIGH`, which MySQL does not use) produces a warning and the storage quote is skipped.
+The mapping is verified via `ListResourceSpecs` (cloud_service_type `hws.service.type.rds`, resource_type `hws.resource.type.rds.volume`, paginated with `--marker`, and requiring `charge_mode` and `region_code`). `RDS ListStorageTypes` returns exactly these four values as the legal `volume.type` values for MySQL in a region, so the map is complete for the type vocabulary ListInstances actually reports.
+
+**Storage type must come from ListInstances, never from RMS.** RMS `properties.volumeType` reports `ULTRAHIGH` for a MySQL instance whose ListInstances `volume.type` is `CLOUDSSD`; the BSS catalog has no `rds.mysql.*ultrahigh*` entry at all (ULTRAHIGH exists only for HWSQL, MSSQL, PostgreSQL and openGauss). Using the RMS value would silently drop the storage line from the quote.
+
+The BSS catalog also carries IOPS/throughput variants (`rds.mysql.volume.essd2.iops`, `rds.mysql.volume.gpssd2.iops`, `rds.mysql.volume.gpssd2.throughput`, and their `.ha` counterparts) and edge variants (`edgessd`, `edgesas`). Those are not returned by `ListStorageTypes` as `volume.type` values, so an unmapped type still produces a warning and the storage quote is skipped rather than guessing.
 
 ## 4. Output Structure
 
@@ -51,7 +75,7 @@ The compare report contains:
 
 - `single_price` / `ha_price` — per-spec results, each with `on_demand` (true on-demand quote, null when filtered out by `--charge-mode prePaid`) and `period_pricing` (monthly `period_type=2`, yearly `period_type=3`, empty when filtered out by `--charge-mode postPaid`); each price line carries `compute` / `storage` / `total` components
 - `price_delta` — the formatted difference between the HA total and the single total (preferred from the true on-demand amount, then monthly, then yearly)
-- `ha_multiple` — the formatted HA/single total multiple (about 2x for the compute flavor)
+- `ha_multiple` — the formatted HA/single total multiple (about 2x for dedicated and Kunpeng flavors, 2.2x–3.2x for general-purpose flavors; see section 2.1)
 - `query_params.charge_mode` — the instance charge-mode filter (`postPaid`/`prePaid`/null for both)
 - `query_params.storage_specs` — the resolved single/ha storage specs
 - `scope_note` — states that storage is included in the comparison when quoted (detected across both the on-demand and period quote lines)
@@ -63,6 +87,9 @@ The compare report contains:
 - **Storage is quotable** as a second product (`resource_type=hws.resource.type.rds.volume`, `resource_size=<GB>`, `size_measure_id=17`) in both `ListOnDemandResourceRatings` and `ListRateOnPeriodDetail`.
 - Verified prices for 40 GB CLOUDSSD (cn-north-4): single storage 0.08 CNY/h / 40 CNY/month / 400 CNY/year; HA storage 0.088 CNY/h / 64 CNY/month / 640 CNY/year. HA storage is higher: about +10% on-demand, about +60% monthly/yearly.
 - Verified compute prices for `rds.mysql.x1.large.2`: on-demand 0.54 CNY/h, 275 CNY/month, 2,750 CNY/year; HA (`rds.mysql.x1.large.2.ha`): on-demand 1.08 CNY/h, 550 CNY/month, 5,500 CNY/year. The HA compute flavor is exactly 2x the single flavor.
+- **BSS only accepts `cn-north-1` as the `--cli-region` channel**; any other value fails with `cli-region的值不支持,当前支持的区域值如下: cn-north-1`. The real region travels in `product_infos.N.region` and the project id is the target region's project id.
+- **RMS only accepts `cn-north-4` as the `--cli-region` channel**, with the same style of rejection for any other value. It is independent of the region the instances live in.
+- Prepaid responses carry `optional_discount_rating_results` (usually empty) and no `discount_rating_results`; `parse_period` therefore falls back to `official_website_rating_amount`, which is the correct total for these accounts.
 - The previous `period_type=4` hourly prepaid price (0.38 single / 0.76 HA) is **not** the on-demand price; it is about 42% lower and is no longer used as the on-demand reference.
 - All BSS calls use `--cli-region=cn-north-1` (BSS is a global service); the real region is passed in `product_infos.N.region`.
 

@@ -4,7 +4,8 @@
 
 The Huawei Cloud RDS single-to-HA skill uses the `hcloud` CLI to call Huawei Cloud APIs
 (RDS instance query, flavor query, backup policy, manual backup, single-to-HA action, job
-polling, plus IAM and ECS for project/AZ discovery). Authentication is handled through IAM
+polling, plus IAM for project/domain resolution, RMS for cross-region discovery, BSS for
+price quoting and CES for monitoring metrics). Authentication is handled through IAM
 (Identity and Access Management) credentials and is shared by all scripts in this project
 through the hcloud profile.
 
@@ -57,17 +58,55 @@ scripts match `projects[].name == <region>` to resolve the project ID. Key facts
   project_ids, while `domain_id` is globally consistent.
 - The resolved project_id is recorded in the report `metadata` for traceability.
 
-## Availability Zone Discovery
+## Cross-Region Instance Discovery
 
-Availability zones are listed through the ECS service (RDS has no standalone AZ API):
+Instance discovery goes through RMS, which aggregates resources of every region in one
+paged call:
 
 ```bash
-hcloud ECS NovaListAvailabilityZones --cli-region=cn-north-4 --project_id=<project_id>
+# 1. Resolve the account domain id from the current AK/SK.
+hcloud IAM KeystoneListAuthDomains --cli-region=cn-north-4
+
+# 2. Page through every RDS instance of the account.
+hcloud RMS ListAllResources --cli-region=cn-north-4 --domain_id=<domain_id> \
+  --type=rds.instances --limit=200 [--marker=<next_marker>]
 ```
 
-The response's `availabilityZoneInfo[]` carries `zoneName` and `zoneState.available`.
-A zone with `available: false` is not selectable, and the target AZ for the standby node
-must differ from the master node's current AZ.
+Verified facts (2026-11-06):
+
+- RMS **only** accepts `cn-north-4` as its `--cli-region` channel. Any other value fails
+  with `cli-region的值不支持,当前支持的区域值如下: cn-north-4`. The instances' real regions
+  arrive in each resource's `region_id`.
+- `--limit` accepts 1–200; 201 is rejected with `Min.: 1; max.: 200`.
+- Pagination uses `--marker` with the previous response's `page_info.next_marker`.
+- Single instances report `properties.haMode=Single` and `properties.nodeNum=1`; HA
+  instances report `Ha` and `2`. `properties.engineName` is lowercase `mysql`.
+- RMS `properties.volumeType` reports `ULTRAHIGH` where ListInstances reports
+  `CLOUDSSD`. RMS is for discovery only; storage type, storage size, flavor, version and
+  charge mode must be re-read from ListInstances.
+
+## Availability Zone Discovery
+
+Availability is **flavor-scoped**, so zones are read from the HA flavor's `az_status`
+instead of a region-wide zone list:
+
+```bash
+hcloud RDS ListFlavors --cli-region=<region> --project_id=<project_id> \
+  --database_name=MySQL --version_name=8.0 --spec_code=<ha_spec_code>
+```
+
+The response's `az_status` maps each zone to `normal` / `sellout` / `unsupported`, and
+`az_desc` maps the same zone codes to their display names. Only `normal` is selectable.
+
+The ECS zone list (`hcloud ECS NovaListAvailabilityZones`) is **not** usable for this
+decision: it reports a zone as available even when the target RDS flavor is unsupported
+there. Verified example (cn-south-1, 2026-11-06): `cn-south-2b` is `available` at the ECS
+layer, `normal` for `rds.mysql.x1.xlarge.2`, but `unsupported` for
+`rds.mysql.x1.xlarge.2.ha`. The single flavor's `az_status` also differs from its HA
+counterpart, so the HA flavor must be queried.
+
+Choosing the same zone as the current one is allowed (shortest intra-zone latency), but it
+provides no cross-AZ disaster recovery.
 
 ## Required Permissions
 
@@ -75,23 +114,34 @@ The account must have the following permissions to run the conversion workflow:
 
 | Permission | API | Purpose |
 |------------|-----|---------|
-| `rds:instance:list` | RDS ListInstances | Query instances and verify instance type/status |
+| `rds:instance:list` | RDS ListInstances | Read authoritative instance detail; verify type/status |
 | `rds:flavor:list` | RDS ListFlavors | Verify HA flavor support and target AZ availability |
 | `rds:backup:list` | RDS ShowBackupPolicy / ListBackups | Verify backup policy; poll backup status |
 | `rds:backup:create` | RDS CreateManualBackup | Create the pre-conversion manual backup |
 | `rds:instance:singleToHa` | RDS StartInstanceSingleToHaAction | Execute the single-to-HA conversion |
 | `rds:job:list` | RDS ListJobInfo | Poll the conversion job status |
 | `iam:projects:list` | IAM KeystoneListAuthProjects | Resolve the region's project_id |
-| `ecs:availabilityZone:list` | ECS NovaListAvailabilityZones | List availability zones |
+| `iam:domains:list` | IAM KeystoneListAuthDomains | Resolve the account domain_id for RMS |
+| `rms:resources:list` | RMS ListAllResources | Discover instances across all regions |
+| `bss:discount:list` / rating APIs | BSS ListOnDemandResourceRatings, ListRateOnPeriodDetail | Quote single and HA prices |
+| `ces:metric:list` / metric-data read | CES BatchListMetricData, ShowMetricData | Capture the pre-conversion baseline and the post-conversion snapshot |
+| `rds:instance:get` | RDS ShowInstanceConfiguration | Read `max_connections` when absolute connection counts are requested |
 
 ## Region Configuration
 
-Specify the region when running each script (every script requires `--region`, with no
-default value):
+`--region` is always the **instance's** region. The discovery, BSS and conversion channels
+are fixed and independent of it:
+
+| Channel | Fixed region | Why |
+|---------|--------------|-----|
+| RDS / IAM / CES | the instance's region | Region-scoped services |
+| RMS | `cn-north-4` | Only accepted value; aggregates all regions |
+| BSS | `cn-north-1` | Only accepted value; the real region travels in the quote payload |
 
 ```bash
-python3 scripts/list_instances.py --region cn-north-4
-python3 scripts/list_azs.py --region cn-north-4
+python3 scripts/list_instances.py
+python3 scripts/list_azs.py --region cn-north-4 --database-name MySQL \
+  --version-name 8.0 --spec-code rds.mysql.n1.large.2.ha --instance-id <iid>
 python3 scripts/pre_check.py --region cn-north-4 --instance-id <iid> --target-az cn-north-4b
 python3 scripts/convert.py --region cn-north-4 --instance-id <iid> --target-az cn-north-4b
 python3 scripts/resume.py --region cn-north-4 --instance-id <iid> [--target-az cn-north-4b]

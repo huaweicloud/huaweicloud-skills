@@ -7,7 +7,7 @@ Overview:
     by a shell/session timeout) from the state file written by convert.py,
     via the `hcloud` (KooCLI) command line tool. It never re-runs the
     conversion; it polls the persisted backup or job and finishes the
-    verification and report. It is the recovery companion of the Step 8
+    verification and report. It is the recovery companion of the Step 7
     tool of the SKILL workflow.
 
 Detailed Description:
@@ -64,6 +64,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     """Build the command line argument parser.
 
     1. Add the region, instance id, target AZ and output options only.
+    2. Register the platform-injected `--domain_id` and `--x_user_auth_token`
+       options.
 
     Args:
         None
@@ -73,9 +75,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
     Examples:
         >>> parser = build_arg_parser()
-        >>> args = parser.parse_args(["--instance-id", "i"])
+        >>> args = parser.parse_args(["--region", "r", "--instance-id", "i"])
         >>> args.instance_id == "i"
         True
+        >>> parser.parse_args(["--region", "r", "--instance-id", "i"]).confirm
+        False
     """
     parser = argparse.ArgumentParser(
         prog="resume",
@@ -120,6 +124,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "(state has a job id or order id) do not need this flag."
         ),
     )
+    common.add_platform_arguments(parser)
     return parser
 
 
@@ -131,17 +136,19 @@ def run(args: argparse.Namespace, state_path: str) -> int:
     3. Start the conversion only when the state has no job id and no order
        id, and only when --confirm is given; without --confirm write a
        refused report and exit non-zero without calling
-       StartInstanceSingleToHaAction.
+       StartInstanceSingleToHaAction. A start API error is written to the
+       report as a Failed conversion with the structured error.
     4. Poll the persisted job id (ListJobInfo) or the persisted order id
        (prepaid, via the instance state), verify the result and write the
-       report.
+       report; conversion and verification failures return non-zero.
 
     Args:
         args: argparse.Namespace — Parsed command line arguments.
         state_path: str — Recovery state file path.
 
     Returns:
-        int: Exit code (0 on success, 1 on failure).
+        int: Exit code. 0 when the conversion completed and verified; 1 on
+            any failure, with the report written when possible.
 
     Examples:
         # Requires a state file written by a previous run:
@@ -212,7 +219,14 @@ def run(args: argparse.Namespace, state_path: str) -> int:
             }
             if backup_status != "COMPLETED":
                 LOGGER.error("Manual backup did not complete: %s", backup_detail)
-                return common.write_report(report, args.output, common.timestamp_now())
+                report["conversion"]["final_status"] = "Failed"
+                report["conversion"]["error"] = {
+                    "error_code": "",
+                    "error_msg": "manual backup did not complete",
+                }
+                report["conversion"]["detail"] = backup_detail
+                common.write_report(report, args.output, common.timestamp_now())
+                return 1
             LOGGER.info("Manual backup %s completed.", backup_id)
 
         # The job must be started (backup phase) or was already started.
@@ -231,7 +245,14 @@ def run(args: argparse.Namespace, state_path: str) -> int:
                 return 1
             if not args.target_az:
                 LOGGER.error("--target-az is required to start the conversion job.")
-                return common.write_report(report, args.output, common.timestamp_now())
+                report["conversion"]["final_status"] = "Failed"
+                report["conversion"]["error"] = {
+                    "error_code": "",
+                    "error_msg": "--target-az is required to start the conversion job",
+                }
+                report["conversion"]["detail"] = "missing --target-az"
+                common.write_report(report, args.output, common.timestamp_now())
+                return 1
             payload = common.run_hcloud(
                 cmd_prefix + [common.CMD_LIST_INSTANCES, "--id={}".format(args.instance_id)],
                 common.DEFAULT_TIMEOUT,
@@ -249,13 +270,31 @@ def run(args: argparse.Namespace, state_path: str) -> int:
                 charge_mode,
             )
             start_payload = common.run_hcloud(start_cmd, common.DEFAULT_TIMEOUT)
+
+            api_error = common.extract_api_error(start_payload)
+            if api_error is not None:
+                report["conversion"]["final_status"] = "Failed"
+                report["conversion"]["error"] = api_error
+                report["conversion"]["detail"] = common.extract_error_message(
+                    start_payload
+                )
+                common.write_report(report, args.output, common.timestamp_now())
+                return 1
+
             job_id = start_payload.get("job_id", "")
             order_id = start_payload.get("order_id", "")
             if not job_id and not order_id:
-                raise common.HcloudError(
-                    "StartInstanceSingleToHaAction returned neither job_id nor "
-                    "order_id: {}".format(json.dumps(start_payload))
+                report["conversion"]["final_status"] = "Failed"
+                report["conversion"]["error"] = {
+                    "error_code": "",
+                    "error_msg": "StartInstanceSingleToHaAction returned neither "
+                    "job_id nor order_id",
+                }
+                report["conversion"]["detail"] = json.dumps(
+                    start_payload, ensure_ascii=False
                 )
+                common.write_report(report, args.output, common.timestamp_now())
+                return 1
             if job_id:
                 report["conversion"]["job_id"] = job_id
                 LOGGER.info("Single-to-HA job started: %s", job_id)
@@ -309,7 +348,8 @@ def run(args: argparse.Namespace, state_path: str) -> int:
 
         if job_status != "Completed":
             LOGGER.error("Conversion did not complete: %s", job_detail)
-            return common.write_report(report, args.output, common.timestamp_now())
+            common.write_report(report, args.output, common.timestamp_now())
+            return 1
 
         verify_payload = common.run_hcloud(
             cmd_prefix + [common.CMD_LIST_INSTANCES, "--id={}".format(args.instance_id)],
@@ -319,7 +359,8 @@ def run(args: argparse.Namespace, state_path: str) -> int:
         report["verification"] = verify_detail
         if not verified:
             LOGGER.error("Result verification failed: %s", json.dumps(verify_detail))
-            return common.write_report(report, args.output, common.timestamp_now())
+            common.write_report(report, args.output, common.timestamp_now())
+            return 1
 
         LOGGER.info(
             "Single-to-HA conversion resumed, completed and verified for "
@@ -333,13 +374,21 @@ def run(args: argparse.Namespace, state_path: str) -> int:
 
     except common.HcloudError as exc:
         LOGGER.error("hcloud error: %s", exc)
-        return common.write_report(report, args.output, common.timestamp_now())
+        conversion = report.setdefault("conversion", {})
+        conversion.setdefault("error", {"error_code": "", "error_msg": str(exc)})
+        if not conversion.get("final_status"):
+            conversion["final_status"] = "Failed"
+        if not conversion.get("detail"):
+            conversion["detail"] = str(exc)
+        common.write_report(report, args.output, common.timestamp_now())
+        return 1
 
 
 def main() -> int:
     """Run the resume workflow.
 
-    1. Parse arguments and set up logging.
+    1. Parse arguments, including the platform-injected compatibility
+       options, and set up logging.
     2. Delegate to run() with the derived state file path.
 
     Args:
@@ -353,7 +402,7 @@ def main() -> int:
         # >>> main()
         1
     """
-    args = build_arg_parser().parse_args()
+    args = common.parse_known_arguments(build_arg_parser())
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",

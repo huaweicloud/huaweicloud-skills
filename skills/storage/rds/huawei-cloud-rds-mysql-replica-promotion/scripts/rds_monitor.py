@@ -6,9 +6,9 @@ Overview:
     This script pulls a snapshot of the key Cloud Eye Service (CES)
     metrics of Huawei Cloud RDS for MySQL instances through the `hcloud`
     (KooCLI) command line tool and writes a structured JSON report. It is
-    a standalone companion tool of the SKILL workflow, used by the Agent
-    for post-conversion business verification and routine health checks;
-    it never mutates any cloud resource.
+    the Step 6 / Step 8 tool of the SKILL workflow: the Agent captures a
+    pre-conversion baseline and a post-conversion snapshot, then compares
+    them. It never mutates any cloud resource.
 
 Detailed Description:
     The region's project id is resolved automatically via
@@ -23,10 +23,12 @@ Detailed Description:
     per batch of 6 metrics each = 498 metrics, under the 500 limit) with
     the verified metric names (rds001_cpu_util, rds002_mem_util,
     rds039_disk_util, rds003_iops, rds072_conn_usage,
-    rds073_replication_delay) and the literal comma dimension
-    rds_cluster_id,<instance_id>; the batch constraint
-    metrics_count * (to-from)_seconds / 60 <= 3000 is enforced by
-    shrinking the window when needed. When --show-absolute-connections is
+    rds073_replication_delay). The dimension is rds_cluster_id=<instance_id>,
+    encoded per API: the batch call sets dimensions.N.name and
+    dimensions.N.value as separate fields, while the ShowMetricData fallback
+    uses the literal comma form --dim.0=rds_cluster_id,<instance_id>. The
+    batch constraint metrics_count * (to-from)_seconds / 60 <= 3000 is
+    enforced by shrinking the window when needed. When --show-absolute-connections is
     given, ShowInstanceConfiguration provides max_connections so an
     estimated absolute connection count can be computed. Failures degrade
     in layers (instance/metric/API) and never abort the whole run.
@@ -73,7 +75,6 @@ METRIC_REPLICATION_DELAY = "rds073_replication_delay"
 NAMESPACE_RDS = "SYS.RDS"
 DIMENSION_NAME = "rds_cluster_id"
 BATCH_METRIC_LIMIT = 500
-METRICS_PER_INSTANCE = 6
 INSTANCES_PER_BATCH = 83
 BATCH_CONSTRAINT_NUM = 3000
 DEFAULT_WINDOW_MS = 300000
@@ -87,6 +88,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
     1. Add the region, instance input, window, period, absolute
        connections and output options.
+    2. Register the platform-injected `--domain_id` and `--x_user_auth_token`
+       options.
 
     Args:
         None
@@ -162,6 +165,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional. Path to the output JSON report file.",
     )
+    common.add_platform_arguments(parser)
     return parser
 
 
@@ -653,7 +657,9 @@ def resolve_default_output() -> str:
         str: Absolute default output file path.
 
     Examples:
-        >>> resolve_default_output().endswith("rds_monitor_result_")
+        >>> os.path.basename(resolve_default_output()).startswith("rds_monitor_result_")
+        True
+        >>> resolve_default_output().endswith(".json")
         True
     """
     return os.path.join(
@@ -672,11 +678,17 @@ def run(args: argparse.Namespace) -> int:
     5. Optionally compute absolute connections.
     6. Write the structured JSON report and return the exit code.
 
+    Exit code rules: success and partial failure return 0 (failures are
+    recorded in warnings[]), while a total failure (no instance could be
+    resolved) returns 1 even though the report is still written, and a
+    precondition error (project id resolution) returns 1.
+
     Args:
         args: argparse.Namespace — Parsed command line arguments.
 
     Returns:
-        int: Exit code (0 with at least one metric, 1 otherwise).
+        int: Exit code (0 when at least one instance resolved, 1 when every
+            instance failed or a precondition failed).
 
     Examples:
         # Requires hcloud credentials:
@@ -696,8 +708,12 @@ def run(args: argparse.Namespace) -> int:
     )
     warnings.extend(resolve_warnings)
     if not instances:
+        # Every target instance failed to resolve. Still write the report so
+        # the failure reasons stay visible, but exit non-zero: the empty
+        # instances[] is a total failure, not a successful empty snapshot.
         report = build_report(args, [], warnings)
-        return common.write_report(report, args.output, common.timestamp_now())
+        common.write_report(report, args.output, common.timestamp_now())
+        return 1
 
     from_ms, to_ms = resolve_window(args)
     period = args.period
@@ -871,7 +887,8 @@ def build_report(
 def main() -> int:
     """Run the monitoring workflow.
 
-    1. Parse arguments and validate the instance input.
+    1. Parse arguments, including the platform-injected compatibility
+       options, and validate the instance input.
     2. Set up logging and delegate to run().
 
     Args:
@@ -886,7 +903,7 @@ def main() -> int:
         1
     """
     parser = build_arg_parser()
-    args = parser.parse_args()
+    args = common.parse_known_arguments(parser)
     validate_instance_input(parser, args)
     logging.basicConfig(
         level=logging.INFO,

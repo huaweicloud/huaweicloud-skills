@@ -1,32 +1,45 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-"""List the MySQL instances of a Huawei Cloud region as structured JSON.
+"""List the account's convertible single MySQL instances across all regions.
 
 Overview:
-    This script discovers the RDS for MySQL instances of a region via the
-    `hcloud` (KooCLI) command line tool and prints them as pretty JSON to
-    stdout. It is the Step 3 tool of the SKILL workflow: the Agent renders
-    the JSON as a table and asks the user to pick the instance to convert.
+    This script discovers every RDS for MySQL single instance of the
+    account in one call via the `hcloud` (KooCLI) command line tool and
+    prints the convertible ones as pretty JSON to stdout. It is the
+    instance discovery tool of the SKILL workflow: the Agent renders the
+    JSON as a table and asks the user to pick the instance to convert.
 
 Detailed Description:
-    The region's project id is resolved automatically via
-    KeystoneListAuthProjects instead of a --project-id argument. Only
-    MySQL instances are listed (--datastore_type=MySQL). The script is
-    read-only: it never mutates anything and writes no report file. All
-    shared behavior (hcloud execution, project id resolution, JSON
-    formatting) lives in rds_common.
+    Discovery goes through RMS ListAllResources, which aggregates resources
+    of all regions: the account domain id is resolved via IAM
+    KeystoneListAuthDomains, then every page of `type=rds.instances` is
+    fetched. The RMS cli-region channel only accepts cn-north-4, so that
+    value is hard-coded. The script takes no region parameter on purpose:
+    the step must list every single MySQL instance of the account, and any
+    region filter would narrow that set. Pagination follows
+    page_info.next_marker with limit=200 and drops repeated ids.
+
+    Only convertible entries are emitted: engine mysql, haMode Single and
+    state Normal. RMS reports a different volumeType vocabulary (ULTRAHIGH)
+    than ListInstances (CLOUDSSD), so the summary carries the RMS value for
+    display only; the conversion steps re-read the instance from
+    ListInstances for authoritative region, flavor, version, storage and
+    charge mode values. The script is read-only: it never mutates anything
+    and writes no report file.
 
 Workflow:
-    1. Parse the required --region argument.
-    2. Resolve the project id of the region.
-    3. Call ListInstances filtered to MySQL.
-    4. Print the instances as pretty JSON to stdout.
+    1. Parse the command line (no parameters).
+    2. Resolve the account domain id via KeystoneListAuthDomains.
+    3. Fetch all rds.instances pages via RMS ListAllResources.
+    4. Flatten each resource and keep the convertible single MySQL ones.
+    5. Print the selected instances as pretty JSON to stdout.
 
 Dependencies:
     - Python 3.9+ standard library only (argparse, logging, sys).
     - rds_common (same directory, shared helpers).
     - External: `hcloud` (KooCLI 7.2.2+) installed, configured and
-      authenticated.
+      authenticated, with `iam:domains:list` and `rms:resources:list`
+      permissions.
 """
 
 from __future__ import annotations
@@ -43,7 +56,9 @@ LOGGER = logging.getLogger(__name__)
 def build_arg_parser() -> argparse.ArgumentParser:
     """Build the command line argument parser.
 
-    1. Add the region option only, keeping the help manual minimal.
+    1. Register the platform-injected `--domain_id` and `--x_user_auth_token`
+       options; discovery takes no region parameter because it always covers
+       the whole account.
 
     Args:
         None
@@ -53,61 +68,68 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
     Examples:
         >>> parser = build_arg_parser()
-        >>> args = parser.parse_args(["--region", "cn-north-4"])
-        >>> args.region == "cn-north-4"
-        True
+        >>> args, unknown = parser.parse_known_args([])
+        >>> (args.domain_id, args.x_user_auth_token, unknown)
+        (None, None, [])
+        >>> parser.parse_args(["--region", "cn-north-4"])
+        Traceback (most recent call last):
+        SystemExit: 2
     """
     parser = argparse.ArgumentParser(
         prog="list_instances",
         description=(
-            "List the RDS for MySQL instances of a region as pretty JSON "
-            "via the hcloud CLI."
+            "List every convertible single MySQL instance of the account "
+            "across all regions as pretty JSON via the hcloud CLI. Discovery "
+            "uses RMS (fixed cn-north-4 channel) and takes no region "
+            "parameter."
         ),
     )
-    parser.add_argument(
-        "--region",
-        required=True,
-        help="Required. Cloud region (e.g. cn-north-4).",
-    )
+    common.add_platform_arguments(parser)
     return parser
 
 
-def run(args: argparse.Namespace) -> int:
-    """Resolve the project id and print the MySQL instance list.
+def run() -> int:
+    """Resolve the domain, list the instances and print the convertible ones.
 
-    1. Resolve the region project id via KeystoneListAuthProjects.
-    2. Call ListInstances filtered to MySQL instances.
-    3. Print the instances as pretty JSON to stdout.
+    1. Resolve the account domain id via KeystoneListAuthDomains.
+    2. Fetch every rds.instances page via RMS ListAllResources.
+    3. Flatten the resources and keep the convertible single MySQL ones.
+    4. Print the selected instances as pretty JSON to stdout.
 
     Args:
-        args: argparse.Namespace — Parsed command line arguments.
+        None
 
     Returns:
         int: Exit code (0 on success, 1 on failure).
 
     Examples:
         # Requires hcloud credentials:
-        # >>> run(args)
+        # >>> run()
         1
     """
     try:
-        project_id = common.resolve_project_id(args.region, common.DEFAULT_TIMEOUT)
-        prefix = common.make_rds_prefix(args.region, project_id)
-        payload = common.run_hcloud(
-            prefix + [common.CMD_LIST_INSTANCES, "--datastore_type=MySQL"],
-            common.DEFAULT_TIMEOUT,
-        )
-        print(common.format_discovery_json(payload.get("instances") or [], []))
+        domain_id = common.resolve_domain_id(common.DEFAULT_TIMEOUT)
+        resources = common.list_all_resources(domain_id, common.DEFAULT_TIMEOUT)
     except common.HcloudError as exc:
         LOGGER.error("hcloud error: %s", exc)
         return 1
+    summaries = [common.build_instance_summary(resource) for resource in resources]
+    selected = common.select_single_mysql_instances(summaries)
+    LOGGER.info(
+        "Found %d RDS resources across all regions, %d convertible single "
+        "MySQL instances.",
+        len(resources),
+        len(selected),
+    )
+    print(common.format_discovery_json(selected, []))
     return 0
 
 
 def main() -> int:
     """Run the instance discovery workflow.
 
-    1. Parse arguments and set up logging.
+    1. Parse arguments, including the platform-injected compatibility
+       options, and set up logging.
     2. Delegate to run() for resolution and printing.
 
     Args:
@@ -121,13 +143,13 @@ def main() -> int:
         # >>> main()
         1
     """
-    args = build_arg_parser().parse_args()
+    common.parse_known_arguments(build_arg_parser())
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
         stream=sys.stderr,
     )
-    return run(args)
+    return run()
 
 
 if __name__ == "__main__":

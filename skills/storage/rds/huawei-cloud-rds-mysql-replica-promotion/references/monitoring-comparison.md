@@ -1,10 +1,10 @@
 # Monitoring Comparison for Single-to-HA Conversion (RDS for MySQL)
 
-> This reference supports the SKILL workflow monitoring steps: the pre-conversion baseline (Step 7) and the post-conversion comparison (Step 9). It documents the behavior of `scripts/rds_monitor.py` and the verified CES facts behind the comparison criteria.
+> This reference supports the SKILL workflow monitoring steps: the pre-conversion baseline (Step 6) and the post-conversion comparison (Step 8). It documents the behavior of `scripts/rds_monitor.py` and the verified CES facts behind the comparison criteria.
 
 ## 1. Purpose
 
-The monitoring comparison captures a CES metrics snapshot before conversion (baseline) and after conversion, then compares them to judge whether the converted instance is stable, following the criteria of SOP v3 section 7.3.
+The monitoring comparison captures a CES metrics snapshot before conversion (baseline) and after conversion, then compares them to judge whether the converted instance is stable.
 
 ## 2. Script Behavior
 
@@ -21,7 +21,9 @@ python3 scripts/rds_monitor.py \
 - Metrics reported: `cpu_util`, `mem_util`, `disk_util`, `iops`, `connections.usage_percent`, `replication_delay` (the last one null for single instances)
 - The value of each metric is the latest datapoint (`timestamp`-max) in the window; the unit is read from the response (`metrics[].unit`), so the actual unit is always reported
 - Batch query uses `CES BatchListMetricData` (POST); if the whole batch fails the script degrades to per-metric `ShowMetricData`; if the batch succeeds but an individual metric is missing, only that metric is re-queried individually
-- The dimension is `rds_cluster_id,<instance_id>` with a literal comma (hcloud handles URL encoding)
+- The dimension is always `rds_cluster_id=<instance_id>`, but the two CES calls encode it differently:
+  - `CES BatchListMetricData` (the primary path) uses two separate fields per metric: `--metrics.<n>.dimensions.1.name=rds_cluster_id` and `--metrics.<n>.dimensions.1.value=<instance_id>`. It is **not** a single comma-joined string.
+  - `CES ShowMetricData` (the per-metric fallback) uses `--dim.0=rds_cluster_id,<instance_id>` with a literal comma (hcloud handles URL encoding)
 
 ## 3. Verified CES Facts
 
@@ -31,7 +33,7 @@ python3 scripts/rds_monitor.py \
 - Connection-related metrics available in CES include `rds006_conn_count` (absolute count), `rds007_conn_active_count`, `rds072_conn_usage` (usage percentage), `rds_conn_active_usage` and `rds_aborted_connects`. The script uses `rds072_conn_usage`; absolute counts are out of scope.
 - A 300-second window snapshot is stable across runs (verified: two runs 60 s apart gave near-identical values; replication delay stayed 0).
 
-## 4. Comparison Criteria (SOP v3 section 7.3)
+## 4. Comparison Criteria
 
 | Metric | Criterion |
 | --- | --- |
