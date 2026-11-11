@@ -21,7 +21,7 @@ AK, SK, Region, SecurityToken = load_credentials()
 # 参数
 parser = argparse.ArgumentParser(description="查询 IMS 镜像列表")
 parser.add_argument("--project_id", type=str, help="项目 ID，不传则通过 IAM API 根据 --region 自动获取")
-parser.add_argument("--region", type=str, required=True, help="区域，例如 cn-north-4、cn-east-3")
+parser.add_argument("--region", type=str, help="区域，不传时回退环境变量 HW_REGION_NAME（默认 cn-north-4）")
 parser.add_argument("--marker", type=str, help="分页标记，从上次查询结果的 next_marker 获取")
 parser.add_argument("--imagetype", type=str, choices=["gold", "private", "shared", "market"], help="镜像类型: gold(公共镜像), private(私有镜像), shared(共享镜像), market(市场镜像)")
 parser.add_argument("--os_type", type=str, choices=["Linux", "Windows", "Other"], help="操作系统类型: Linux/Windows/Other")
@@ -47,7 +47,8 @@ parser.add_argument("--sort_by", type=str, help="排序字段和方向（客户�
 parser.add_argument("--top", type=int, help="取排序后的前 N 条（客户端截取），需与 --sort_by 配合使用。例如 --sort_by size:asc --top 5 查找综合资源需求最小的 5 个镜像，--sort_by min_disk:desc --top 3 查找最小磁盘要求最大的 3 个镜像")
 args = parser.parse_args()
 
-Region = args.region
+if args.region is not None:
+    Region = args.region
 
 # 参数校验
 if args.top is not None and args.sort_by is None:

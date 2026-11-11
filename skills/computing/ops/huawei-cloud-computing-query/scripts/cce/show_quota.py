@@ -4,7 +4,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from config import load_credentials, build_http_config, get_project_id
+from config import load_credentials, build_http_config, get_project_id, format_api_error, format_empty_result
 from huaweicloudsdkcore.auth.credentials import BasicCredentials
 from huaweicloudsdkcce.v3 import CceClient
 from huaweicloudsdkcce.v3.model import ShowQuotasRequest
@@ -13,19 +13,26 @@ from huaweicloudsdkcce.v3.region.cce_region import CceRegion
 # 参数
 parser = argparse.ArgumentParser(description="查询 CCE 资源配额")
 parser.add_argument("--project_id", type=str, help="项目 ID，不传则通过 IAM API 根据 --region 自动获取")
-parser.add_argument("--region", type=str, required=True, help="区域，例如 cn-north-4、cn-east-3")
+parser.add_argument("--region", type=str, help="区域，不传时回退环境变量 HW_REGION_NAME（默认 cn-north-4）")
 args = parser.parse_args()
 
 # 初始化凭据（放在参数解析之后，保证未配置 AK/SK 时 --help 仍能正常打印）
 AK, SK, Region, SecurityToken = load_credentials()
 
-Region = args.region
+if args.region is not None:
+    Region = args.region
 
 
 # 渲染
 def render(quotas):
     if not quotas:
-        print("没有找到 CCE 配额信息")
+        print(format_empty_result(
+            "CCE 配额信息", Region, args.project_id,
+            hints=[
+                "确认 --region 是否为已开通 CCE 的区域",
+                "确认账号具备 cce:quota:get 权限（或 CCEReadOnlyPolicy）",
+                "若本项目尚未创建过 CCE 资源，配额接口可能返回空列表",
+            ]))
         return
 
     output = "quota_key\tquota_limit\tused\tremain\tunit\tregion_id\tavailability_zone_id\n"
@@ -65,11 +72,11 @@ try:
     quotas = response.quotas or []
 
     if not quotas:
-        print(f"没有找到 CCE 配额信息 (区域: {Region})")
+        render([])
         exit(0)
 
     # 渲染结果
     render(quotas)
 except Exception as e:
-    print(f"cce.quotas 查询失败: {e}")
+    print(format_api_error(e, "CCE 配额查询", Region, args.project_id))
     exit(1)

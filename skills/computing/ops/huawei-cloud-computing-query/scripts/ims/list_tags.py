@@ -20,7 +20,7 @@ AK, SK, Region, SecurityToken = load_credentials()
 # 参数
 parser = argparse.ArgumentParser(description="查询租户 IMS 镜像标签列表（仅用户标签），可按镜像属性过滤")
 parser.add_argument("--project_id", type=str, help="项目 ID，不传则通过 IAM API 根据 --region 自动获取")
-parser.add_argument("--region", type=str, required=True, help="区域，例如 cn-north-4、cn-east-3")
+parser.add_argument("--region", type=str, help="区域，不传时回退环境变量 HW_REGION_NAME（默认 cn-north-4）")
 parser.add_argument("--marker", type=str, help="分页标记，从上次查询结果的 next_marker 获取")
 parser.add_argument("--imagetype", type=str, choices=["gold", "private", "shared", "market"], help="镜像类型过滤: gold(公共)/private(私有)/shared(共享)/market(市场)")
 parser.add_argument("--os_type", type=str, choices=["Linux", "Windows", "Other"], help="操作系统类型过滤: Linux/Windows/Other")
@@ -37,7 +37,8 @@ parser.add_argument("--created_at", type=str, help="镜像创建时间过滤，�
 parser.add_argument("--updated_at", type=str, help="镜像修改时间过滤，格式同created_at")
 args = parser.parse_args()
 
-Region = args.region
+if args.region is not None:
+    Region = args.region
 
 
 # 渲染

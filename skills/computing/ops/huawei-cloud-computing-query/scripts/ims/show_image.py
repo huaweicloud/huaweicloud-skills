@@ -16,11 +16,12 @@ AK, SK, Region, SecurityToken = load_credentials()
 # 参数
 parser = argparse.ArgumentParser(description="查询 IMS 镜像详情，返回镜像的完整信息（包括元数据、大小、格式、OS信息等）")
 parser.add_argument("--project_id", type=str, help="项目 ID，不传则通过 IAM API 根据 --region 自动获取")
-parser.add_argument("--region", type=str, required=True, help="区域，例如 cn-north-4、cn-east-3")
+parser.add_argument("--region", type=str, help="区域，不传时回退环境变量 HW_REGION_NAME（默认 cn-north-4）")
 parser.add_argument("--image_id", type=str, required=True, help="镜像 ID，可通过 list_images.py 获取")
 args = parser.parse_args()
 
-Region = args.region
+if args.region is not None:
+    Region = args.region
 
 
 # 使用 sdk

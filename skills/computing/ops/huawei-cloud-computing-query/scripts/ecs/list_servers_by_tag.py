@@ -20,7 +20,7 @@ AK, SK, Region, SecurityToken = load_credentials()
 # 参数
 parser = argparse.ArgumentParser(description="按标签查询 ECS 服务器列表")
 parser.add_argument("--project_id", type=str, help="项目 ID，不传则通过 IAM API 根据 --region 自动获取")
-parser.add_argument("--region", type=str, required=True, help="区域，例如 cn-north-4、cn-east-3")
+parser.add_argument("--region", type=str, help="区域，不传时回退环境变量 HW_REGION_NAME（默认 cn-north-4）")
 parser.add_argument("--tag_key", type=str, help="标签键（包含该标签的服务器）")
 parser.add_argument("--tag_value", type=str, help="标签值（与 tag_key 配合使用）")
 parser.add_argument("--not_tag_key", type=str, help="排除标签键（不包含该标签的服务器）")
@@ -29,7 +29,8 @@ parser.add_argument("--resource_name", type=str, help="按资源名称搜索（�
 parser.add_argument("--offset", type=int, help="查询偏移量，从 0 开始，用于翻页")
 args = parser.parse_args()
 
-Region = args.region
+if args.region is not None:
+    Region = args.region
 
 
 # 渲染

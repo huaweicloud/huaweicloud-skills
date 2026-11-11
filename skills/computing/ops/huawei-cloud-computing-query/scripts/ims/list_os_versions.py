@@ -19,12 +19,13 @@ AK, SK, Region, SecurityToken = load_credentials()
 # 参数
 parser = argparse.ArgumentParser(description="查询 IMS 镜像支持的 OS 版本列表，用于创建镜像或云服务器时选择操作系统")
 parser.add_argument("--project_id", type=str, help="项目 ID，不传则通过 IAM API 根据 --region 自动获取")
-parser.add_argument("--region", type=str, required=True, help="区域，例如 cn-north-4、cn-east-3")
+parser.add_argument("--region", type=str, help="区域，不传时回退环境变量 HW_REGION_NAME（默认 cn-north-4）")
 parser.add_argument("--tag", type=str, choices=["bms", "uefi", "arm", "x86"], help="OS标签过滤: bms(支持BMS的OS列表)/uefi(支持UEFI启动的OS列表)/arm(ARM架构OS列表)/x86(x86架构OS列表)，不指定则返回所有")
 parser.add_argument("--marker", type=str, help="分页标记，从上次查询结果的 next_marker 获取")
 args = parser.parse_args()
 
-Region = args.region
+if args.region is not None:
+    Region = args.region
 
 
 # 渲染

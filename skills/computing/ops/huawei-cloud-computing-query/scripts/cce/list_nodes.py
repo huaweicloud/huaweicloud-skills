@@ -4,30 +4,32 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from config import load_credentials, build_http_config, get_project_id
+from config import load_credentials, build_http_config, get_project_id, format_api_error, format_empty_result
 from huaweicloudsdkcore.auth.credentials import BasicCredentials
 from huaweicloudsdkcce.v3 import CceClient
-from huaweicloudsdkcce.v3.model import ListNodesRequest
+from huaweicloudsdkcce.v3.model import ListNodesRequest, ListNodePoolsRequest
 from huaweicloudsdkcce.v3.region.cce_region import CceRegion
 
 # 常量
 PAGE_SIZE = 50  # 每页展示条数
-FETCH_SIZE = PAGE_SIZE + 1  # 多查1条用于判断是否还有更多
 API_LIMIT = 100  # 服务端单次请求上限
 
 # 参数
-parser = argparse.ArgumentParser(description="查询 CCE 集群节点列表")
+parser = argparse.ArgumentParser(description="查询 CCE 集群节点列表（支持全量分页）")
 parser.add_argument("--project_id", type=str, help="项目 ID，不传则通过 IAM API 根据 --region 自动获取")
-parser.add_argument("--region", type=str, required=True, help="区域，例如 cn-north-4、cn-east-3")
+parser.add_argument("--region", type=str, help="区域，不传时回退环境变量 HW_REGION_NAME（默认 cn-north-4）")
 parser.add_argument("--cluster_id", type=str, required=True, help="集群 ID（UUID），可通过 list_clusters.py 获取")
 parser.add_argument("--limit", type=int, help=f"每页展示条数，默认 {PAGE_SIZE}，服务端单次请求上限 {API_LIMIT}")
 parser.add_argument("--marker", type=str, help="分页标记，从上次查询结果的 next_marker 获取")
+parser.add_argument("--all", action="store_true", help="自动翻页拉取全部节点（避免节点数超过一页时漏数据）")
+parser.add_argument("--verify", action="store_true", help="与节点池 current_node 汇总数交叉校验节点总数（额外调用 ListNodePools）")
 args = parser.parse_args()
 
 # 初始化凭据（放在参数解析之后，保证未配置 AK/SK 时 --help 仍能正常打印）
 AK, SK, Region, SecurityToken = load_credentials()
 
-Region = args.region
+if args.region is not None:
+    Region = args.region
 
 # 参数校验
 if args.limit is not None and args.limit <= 0:
@@ -42,7 +44,14 @@ if display_limit > API_LIMIT:
 # 渲染
 def render(nodes, showing_count, has_more, next_marker):
     if not nodes:
-        print("没有找到 CCE 节点")
+        print(format_empty_result(
+            "CCE 节点", Region, args.project_id, f"集群 ID: {args.cluster_id}",
+            hints=[
+                "确认集群 ID 正确（可由 list_clusters.py 获取）",
+                "确认集群属于当前 --region 对应的项目",
+                "确认账号具备 cce:node:list 权限（或 CCEReadOnlyPolicy）",
+                "集群刚创建时节点可能仍在创建中，可稍后重试",
+            ]))
         return
 
     output = "id\tname\tstatus\tflavor\taz\tprivate_ip\tpublic_ip\tserver_id\tcreated\n"
@@ -65,13 +74,65 @@ def render(nodes, showing_count, has_more, next_marker):
     if has_more:
         output += f"\n当前返回 {showing_count} 条 CCE 节点，还有更多数据"
         if next_marker:
-            output += f"\n可使用 --marker={next_marker} 继续查询下一页，或使用 --limit 调整每页条数"
+            output += f"\n可使用 --marker={next_marker} 继续查询下一页，或加 --all 一次拉取全部"
         else:
             output += "\n可使用 --limit 调整每页条数，或使用 --cluster_id 确认集群范围"
     else:
         output += f"\n共 {showing_count} 条 CCE 节点"
 
     print(output)
+
+
+# 全量翻页拉取（按 marker 循环，去重并自校验）
+def fetch_all_nodes(client):
+    all_nodes = []
+    seen = set()
+    marker = ""
+    while True:
+        request = ListNodesRequest()
+        request.cluster_id = args.cluster_id
+        request.limit = API_LIMIT
+        if marker:
+            request.marker = marker
+        response = client.list_nodes(request)
+        nodes = response.items or []
+        if not nodes:
+            break
+        for node in nodes:
+            nid = getattr(getattr(node, 'metadata', None), 'uid', '')
+            if nid and nid in seen:
+                continue
+            if nid:
+                seen.add(nid)
+            all_nodes.append(node)
+        page_info = getattr(response, 'page_info', None)
+        next_marker = getattr(page_info, 'next_marker', None) if page_info else None
+        if len(nodes) < API_LIMIT and not next_marker:
+            break
+        if not next_marker or next_marker == marker:
+            break
+        marker = next_marker
+    return all_nodes
+
+
+# 与节点池 current_node 汇总数交叉校验
+def verify_with_node_pools(client):
+    try:
+        request = ListNodePoolsRequest()
+        request.cluster_id = args.cluster_id
+        request.show_default_node_pool = "true"
+        response = client.list_node_pools(request)
+        pools = response.items or []
+    except Exception as e:
+        print(f"\n[校验] 无法获取节点池数据: {e}")
+        return None
+    total = 0
+    for pool in pools:
+        status = getattr(pool, 'status', None)
+        current = getattr(status, 'current_node', None) if status else None
+        if isinstance(current, int):
+            total += current
+    return total
 
 
 # 使用 sdk
@@ -90,6 +151,20 @@ try:
         print("无法获取 CCE 客户端")
         exit(-1)
 
+    if args.all:
+        all_nodes = fetch_all_nodes(client)
+        render(all_nodes, len(all_nodes), False, None)
+        if args.verify:
+            pool_total = verify_with_node_pools(client)
+            if pool_total is None:
+                pass
+            elif pool_total == len(all_nodes):
+                print(f"\n[校验] 通过: 节点列表 {len(all_nodes)} 条与节点池 current_node 汇总一致")
+            else:
+                print(f"\n[校验] 不一致: 节点列表 {len(all_nodes)} 条，节点池 current_node 汇总 {pool_total} 条。"
+                      "若差值来自正在创建/删除的节点属正常；持续不一致请核对节点池与集群范围")
+        exit(0)
+
     # 构建请求，多查1条用于判断是否还有更多
     request = ListNodesRequest()
     request.cluster_id = args.cluster_id
@@ -101,7 +176,7 @@ try:
     nodes = response.items or []
 
     if not nodes:
-        print(f"没有找到 CCE 节点 (区域: {Region}, 集群 ID: {args.cluster_id})")
+        render([], 0, False, None)
         exit(0)
 
     # 判断是否还有更多数据，计算 next_marker
@@ -115,5 +190,5 @@ try:
     # 渲染结果
     render(display_nodes, len(display_nodes), has_more, next_marker)
 except Exception as e:
-    print(f"cce.nodes 查询失败: {e}")
+    print(format_api_error(e, "CCE 节点列表查询", Region, args.project_id, f"集群 ID: {args.cluster_id}"))
     exit(1)

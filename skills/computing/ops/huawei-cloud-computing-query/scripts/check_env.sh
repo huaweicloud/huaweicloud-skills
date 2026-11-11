@@ -1,5 +1,9 @@
 #!/bin/bash
 # 华为云资源查询 - 环境检查前置脚本
+#
+# 结果会缓存 30 分钟（.env_check_cache），命中缓存时跳过依赖安装与 API 校验。
+# 强制重新检查：bash check_env.sh --force 或设置 HW_ENV_CHECK_FORCE=1
+# 缓存有效期：--ttl <秒> 或设置 HW_ENV_CHECK_TTL（0 表示禁用缓存）
 
 # 步骤 1：检查 Python 是否存在
 echo ""
@@ -86,7 +90,8 @@ if [ ! -f "$PYTHON_SCRIPT" ]; then
     exit 1
 fi
 
-"${PYTHON_CMD}" "${PYTHON_SCRIPT}"
+# 透传参数（--force 强制重查、--ttl/--upgrade 等），环境检查结果默认缓存 30 分钟
+"${PYTHON_CMD}" "${PYTHON_SCRIPT}" "$@"
 EXIT_CODE=$?
 
 echo ""

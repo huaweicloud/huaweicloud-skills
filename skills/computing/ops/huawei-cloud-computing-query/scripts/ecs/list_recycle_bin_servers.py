@@ -20,7 +20,7 @@ AK, SK, Region, SecurityToken = load_credentials()
 # 参数
 parser = argparse.ArgumentParser(description="查询 ECS 回收站服务器列表")
 parser.add_argument("--project_id", type=str, help="项目 ID，不传则通过 IAM API 根据 --region 自动获取")
-parser.add_argument("--region", type=str, required=True, help="区域，例如 cn-north-4、cn-east-3")
+parser.add_argument("--region", type=str, help="区域，不传时回退环境变量 HW_REGION_NAME（默认 cn-north-4）")
 parser.add_argument("--name", type=str, help="服务器名称，支持模糊匹配")
 parser.add_argument("--all_tenants", type=str, choices=["0", "1"], help="管理员字段：1-返回所有租户的 VM，0-返回当前租户的 VM")
 parser.add_argument("--availability_zone", type=str, help="可用区，可通过 list_server_az_info.py 获取")
@@ -31,7 +31,8 @@ parser.add_argument("--expect_fields", type=str, help="控制查询输出的额�
 parser.add_argument("--marker", type=str, help="分页标记，从上次查询结果的 next_marker 获取")
 args = parser.parse_args()
 
-Region = args.region
+if args.region is not None:
+    Region = args.region
 
 
 # 渲染

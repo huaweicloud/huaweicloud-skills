@@ -23,6 +23,9 @@ python3 scripts/bms/list_bare_metal_servers.py -h
 python3 scripts/ims/list_images.py -h
 python3 scripts/as/list_scaling_groups.py -h
 python3 scripts/cce/list_clusters.py -h
+python3 scripts/cce/show_node_pool.py -h
+python3 scripts/cce/show_cluster_tags.py -h
+python3 scripts/cce/list_node_pools_by_tag.py -h
 ```
 
 > Note: `scripts/as/*.py` imports `huaweicloudsdkas` and `scripts/bms/*.py` imports `huaweicloudsdkbms`
@@ -67,12 +70,16 @@ powershell -ExecutionPolicy Bypass -File scripts/check_env.ps1
 ```
 
 Expected: Python version check → dependency install → SDK import check → credential check →
-service availability check, all `OK`.
+service availability check, all `OK`. The first passing run writes `.env_check_cache`; a second run
+within 30 minutes must print `命中环境检查缓存` and skip dependency/API checks (no network calls).
+Force a full run with `--force` / `HW_ENV_CHECK_FORCE=1`, disable the cache with `--ttl 0`.
 The SDK check must cover `huaweicloudsdkcore / ecs / iam / ims / as / bms / cce`
 (see `SDK_MODULES` in `scripts/ensure_env.py` and `requirements.txt`).
 
 Required environment variables: `HW_ACCESS_KEY`, `HW_SECRET_KEY`
 (optional: `HW_REGION_NAME` default `cn-north-4`, `HW_PROJECT_ID`, `HW_SECURITY_TOKEN`).
+`--region` is optional for every script and falls back to `HW_REGION_NAME` — verify one script with
+`--region` omitted behaves identically to an explicit region.
 
 ## 4. Read-only live verification (needs valid credentials)
 
@@ -90,6 +97,17 @@ python3 scripts/cce/list_clusters.py --region cn-north-4
 python3 scripts/cce/list_nodes.py --region cn-north-4 --cluster_id <cluster-id>
 python3 scripts/cce/list_node_pools.py --region cn-north-4 --cluster_id <cluster-id>
 python3 scripts/cce/show_quota.py --region cn-north-4
+
+# CCE node full pagination / tags / node pool details
+python3 scripts/cce/list_nodes.py --region cn-north-4 --cluster_id <cluster-id> --all --verify
+python3 scripts/cce/list_node_pools.py --region cn-north-4 --cluster_id <cluster-id> --show_default_node_pool true
+python3 scripts/cce/show_node_pool.py --region cn-north-4 --cluster_id <cluster-id> --nodepool_id <nodepool-id>
+python3 scripts/cce/show_cluster_tags.py --region cn-north-4 --cluster_id <cluster-id>
+python3 scripts/cce/list_node_pools_by_tag.py --region cn-north-4 --cluster_id <cluster-id> --tag env=prod
+
+# ECS flavor details / whole-machine related view
+python3 scripts/ecs/list_servers_details.py --region cn-north-4 --with_related
+python3 scripts/ecs/show_server.py --region cn-north-4 --server_id <server-id> --with_related
 ```
 
 Expected: a tab-separated table plus a summary line. Cross-check one known resource against the console

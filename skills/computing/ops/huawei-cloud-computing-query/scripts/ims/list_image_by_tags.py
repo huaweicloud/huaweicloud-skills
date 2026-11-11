@@ -20,7 +20,7 @@ AK, SK, Region, SecurityToken = load_credentials()
 # 参数
 parser = argparse.ArgumentParser(description="按标签查询 IMS 镜像，支持通过标签键值对和资源属性进行过滤")
 parser.add_argument("--project_id", type=str, help="项目 ID，不传则通过 IAM API 根据 --region 自动获取")
-parser.add_argument("--region", type=str, required=True, help="区域，例如 cn-north-4、cn-east-3")
+parser.add_argument("--region", type=str, help="区域，不传时回退环境变量 HW_REGION_NAME（默认 cn-north-4）")
 parser.add_argument("--marker", type=str, help="分页标记，从上次查询结果的 next_marker 获取")
 parser.add_argument("--action", type=str, choices=["filter", "count"], default="filter", help="操作类型: filter(分页查询)/count(仅返回总数)，默认 filter")
 parser.add_argument("--tag", type=str, action="append", help="包含标签(与关系)，格式: key=value，可多次指定，最多10个key，每个key最多10个values")
@@ -31,7 +31,8 @@ parser.add_argument("--match", type=str, action="append", help="搜索字段，�
 parser.add_argument("--without_any_tag", action="store_true", help="查询所有不带标签的资源，此时忽略tag/not_tag/tag_any/not_tag_any")
 args = parser.parse_args()
 
-Region = args.region
+if args.region is not None:
+    Region = args.region
 
 
 # 渲染

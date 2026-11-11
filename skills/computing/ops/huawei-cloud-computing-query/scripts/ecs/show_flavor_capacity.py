@@ -17,14 +17,15 @@ Offset = 0
 # 参数
 parser = argparse.ArgumentParser(description="查询 ECS 规格容量")
 parser.add_argument("--project_id", type=str, help="项目 ID，不传则通过 IAM API 根据 --region 自动获取")
-parser.add_argument("--region", type=str, required=True, help="区域，例如 cn-north-4、cn-east-3")
+parser.add_argument("--region", type=str, help="区域，不传时回退环境变量 HW_REGION_NAME（默认 cn-north-4）")
 parser.add_argument("--flavor_id", type=str, required=True, help="规格 ID，可通过 list_flavors.py 获取")
 parser.add_argument("--count", type=int, help="数量")
 parser.add_argument("--region_ids", type=str, help="区域 ID 列表，逗号分隔")
 parser.add_argument("--offset", type=int, help="本地渲染分页偏移量，从 0 开始")
 args = parser.parse_args()
 
-Region = args.region
+if args.region is not None:
+    Region = args.region
 
 if args.offset is not None:
     Offset = args.offset

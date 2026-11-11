@@ -4,7 +4,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from config import load_credentials, build_http_config, get_project_id
+from config import load_credentials, build_http_config, get_project_id, format_api_error, format_empty_result
 from huaweicloudsdkcore.auth.credentials import BasicCredentials
 from huaweicloudsdkcce.v3 import CceClient
 from huaweicloudsdkcce.v3.model import ShowClusterRequest
@@ -13,7 +13,7 @@ from huaweicloudsdkcce.v3.region.cce_region import CceRegion
 # 参数
 parser = argparse.ArgumentParser(description="查询 CCE 集群详情")
 parser.add_argument("--project_id", type=str, help="项目 ID，不传则通过 IAM API 根据 --region 自动获取")
-parser.add_argument("--region", type=str, required=True, help="区域，例如 cn-north-4、cn-east-3")
+parser.add_argument("--region", type=str, help="区域，不传时回退环境变量 HW_REGION_NAME（默认 cn-north-4）")
 parser.add_argument("--cluster_id", type=str, required=True, help="集群 ID（UUID），可通过 list_clusters.py 获取")
 parser.add_argument("--detail", type=str, help="是否返回集群详细信息，取值 true 或 false，不传则仅返回基本信息")
 args = parser.parse_args()
@@ -21,7 +21,8 @@ args = parser.parse_args()
 # 初始化凭据（放在参数解析之后，保证未配置 AK/SK 时 --help 仍能正常打印）
 AK, SK, Region, SecurityToken = load_credentials()
 
-Region = args.region
+if args.region is not None:
+    Region = args.region
 
 
 # 渲染
@@ -48,6 +49,9 @@ def render(cluster):
     output += f"description: {getattr(spec, 'description', '') if spec else ''}\n"
     output += f"created: {getattr(metadata, 'creation_timestamp', '') if metadata else ''}\n"
     output += f"updated: {getattr(metadata, 'update_timestamp', '') if metadata else ''}\n"
+    annotations = getattr(metadata, 'annotations', None) if metadata else None
+    if annotations:
+        output += f"annotations: {'; '.join(f'{k}={v}' for k, v in annotations.items())}\n"
 
     # 网络信息
     container_network = getattr(spec, 'container_network', None) if spec else None
@@ -112,11 +116,17 @@ try:
     response = client.show_cluster(request)
     cluster = response
     if not cluster or not getattr(cluster, 'metadata', None):
-        print(f"没有找到 CCE 集群 (区域: {Region}, 集群 ID: {args.cluster_id})")
+        print(format_empty_result(
+            "CCE 集群", Region, args.project_id, f"集群 ID: {args.cluster_id}",
+            hints=[
+                "确认集群 ID 正确（可由 list_clusters.py 获取）",
+                "确认集群属于当前 --region 对应的项目",
+                "确认账号具备 cce:cluster:get 权限（或 CCEReadOnlyPolicy）",
+            ]))
         exit(0)
 
     # 渲染结果
     render(cluster)
 except Exception as e:
-    print(f"cce.cluster 查询失败: {e}")
+    print(format_api_error(e, "CCE 集群详情查询", Region, args.project_id, f"集群 ID: {args.cluster_id}"))
     exit(1)

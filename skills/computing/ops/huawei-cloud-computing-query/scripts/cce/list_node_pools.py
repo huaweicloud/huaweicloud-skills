@@ -4,7 +4,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from config import load_credentials, build_http_config, get_project_id
+from config import load_credentials, build_http_config, get_project_id, format_api_error, format_empty_result
 from huaweicloudsdkcore.auth.credentials import BasicCredentials
 from huaweicloudsdkcce.v3 import CceClient
 from huaweicloudsdkcce.v3.model import ListNodePoolsRequest
@@ -16,7 +16,7 @@ PAGE_SIZE = 50  # 每页展示条数（ListNodePools 接口不支持分页，超
 # 参数
 parser = argparse.ArgumentParser(description="查询 CCE 集群节点池列表")
 parser.add_argument("--project_id", type=str, help="项目 ID，不传则通过 IAM API 根据 --region 自动获取")
-parser.add_argument("--region", type=str, required=True, help="区域，例如 cn-north-4、cn-east-3")
+parser.add_argument("--region", type=str, help="区域，不传时回退环境变量 HW_REGION_NAME（默认 cn-north-4）")
 parser.add_argument("--cluster_id", type=str, required=True, help="集群 ID（UUID），可通过 list_clusters.py 获取")
 parser.add_argument("--show_default_node_pool", type=str, choices=["true", "false"], help="是否展示默认节点池，true/false，不传则默认不展示")
 parser.add_argument("--advance_status", type=str, choices=["true", "false"], help="是否返回节点池的详细状态信息，true/false")
@@ -26,16 +26,24 @@ args = parser.parse_args()
 # 初始化凭据（放在参数解析之后，保证未配置 AK/SK 时 --help 仍能正常打印）
 AK, SK, Region, SecurityToken = load_credentials()
 
-Region = args.region
+if args.region is not None:
+    Region = args.region
 
 
 # 渲染
 def render(node_pools, total_count, has_more):
     if not node_pools:
-        print("没有找到 CCE 节点池")
+        print(format_empty_result(
+            "CCE 节点池", Region, args.project_id, f"集群 ID: {args.cluster_id}",
+            hints=[
+                "确认集群 ID 正确（可由 list_clusters.py 获取）",
+                "确认集群属于当前 --region 对应的项目",
+                "确认账号具备 cce:nodepool:list 权限（或 CCEReadOnlyPolicy）",
+                "默认节点池默认不展示，可加 --show_default_node_pool true",
+            ]))
         return
 
-    output = "id\tname\ttype\tflavor\tinitial_node_count\tcurrent_node\tautoscaling\tphase\tcreated\n"
+    output = "id\tname\ttype\tflavor\tinitial_node_count\tcurrent_node\tautoscaling\tphase\ttags\tcreated\n"
     for node_pool in node_pools:
         metadata = getattr(node_pool, 'metadata', None)
         spec = getattr(node_pool, 'spec', None)
@@ -54,7 +62,9 @@ def render(node_pools, total_count, has_more):
             autoscaling_text = "off"
         current_node = getattr(status, 'current_node', '') if status else ''
         phase = getattr(status, 'phase', '') if status else ''
-        output += f"{pool_id}\t{name}\t{ptype}\t{flavor}\t{initial_node_count}\t{current_node}\t{autoscaling_text}\t{phase}\t{created}\n"
+        user_tags = getattr(node_template, 'user_tags', None) if node_template else None
+        tags_text = ','.join(f"{getattr(t, 'key', '')}={getattr(t, 'value', '')}" for t in user_tags) if user_tags else '-'
+        output += f"{pool_id}\t{name}\t{ptype}\t{flavor}\t{initial_node_count}\t{current_node}\t{autoscaling_text}\t{phase}\t{tags_text}\t{created}\n"
 
     # 汇总信息
     showing_count = len(node_pools)
@@ -98,5 +108,5 @@ try:
     # 渲染结果
     render(display_pools, len(node_pools), len(node_pools) > len(display_pools))
 except Exception as e:
-    print(f"cce.node_pools 查询失败: {e}")
+    print(format_api_error(e, "CCE 节点池列表查询", Region, args.project_id, f"集群 ID: {args.cluster_id}"))
     exit(1)

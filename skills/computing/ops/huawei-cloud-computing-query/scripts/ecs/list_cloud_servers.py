@@ -25,7 +25,7 @@ AK, SK, Region, SecurityToken = load_credentials()
 # 参数
 parser = argparse.ArgumentParser(description="查询 ECS 云服务器列表")
 parser.add_argument("--project_id", type=str, help="项目 ID，不传则通过 IAM API 根据 --region 自动获取")
-parser.add_argument("--region", type=str, required=True, help="区域，例如 cn-north-4、cn-east-3")
+parser.add_argument("--region", type=str, help="区域，不传时回退环境变量 HW_REGION_NAME（默认 cn-north-4）")
 parser.add_argument("--id", type=str, help="云服务器 ID（UUID），精确匹配")
 parser.add_argument("--name", type=str, help="云服务器名称，支持模糊匹配")
 parser.add_argument("--status", type=str, choices=["ACTIVE", "BUILD", "ERROR", "HARD_REBOOT", "MIGRATING", "REBOOT", "RESIZE", "REVERT_RESIZE", "SHELVED", "SHELVED_OFFLOADED", "SHUTOFF", "UNKNOWN", "VERIFY_RESIZE"], help="云服务器状态")
@@ -53,7 +53,8 @@ parser.add_argument("--export", type=str, choices=["csv", "json"], help="把本�
 parser.add_argument("--export_path", type=str, help="导出文件路径，不传时默认写入当前目录 <脚本名>_<时间戳>.<格式>")
 args = parser.parse_args()
 
-Region = args.region
+if args.region is not None:
+    Region = args.region
 
 
 # 解析标签过滤参数（key=value，可重复，多个标签之间为 AND 关系）
@@ -140,19 +141,36 @@ def get_charging_mode(server):
     return CHARGING_MODE_LABELS.get(str(value), str(value))
 
 
+# 规格补充字段：规格名称 / 磁盘类型 / GPU
+def get_flavor_extra(flavor):
+    if not flavor:
+        return '', '', ''
+    name = getattr(flavor, 'name', '') or ''
+    disk = getattr(flavor, 'disk', None)
+    disk = '' if disk is None else str(disk)
+    gpus = getattr(flavor, 'gpus', None) or []
+    gpu_text = ';'.join(
+        f"{getattr(g, 'name', '')}x{getattr(g, 'count', '')}" for g in gpus) if gpus else ''
+    return name, disk, gpu_text
+
+
 # 采集导出数据（字段与表格展示字段一致，另附 ip）
 def collect_export_rows(servers, show_image):
     rows = []
     for server in servers:
         flavor = getattr(server, 'flavor', None)
+        flavor_name, disk, gpus = get_flavor_extra(flavor)
         row = {
             "id": getattr(server, 'id', ''),
             "name": getattr(server, 'name', ''),
             "status": getattr(server, 'status', ''),
             "charging_mode": get_charging_mode(server),
             "flavor_id": getattr(flavor, 'id', '') if flavor else '',
+            "flavor_name": flavor_name,
             "vcpus": str(getattr(flavor, 'vcpus', '')) if flavor else '',
             "ram(GiB)": str(int(getattr(flavor, 'ram', 0)) // 1024) if flavor else '',
+            "disk": disk,
+            "gpus": gpus,
             "availability_zone": getattr(server, 'availability_zone', ''),
             "created": getattr(server, 'created', ''),
         }
@@ -191,7 +209,8 @@ def render(servers, show_image, total_count=None, has_more=False, next_marker=No
         print("没有找到 ECS 云服务器")
         return
 
-    header = "id\tname\tstatus\tcharging_mode\tflavor_id\tvcpus\tram(GiB)\tavailability_zone\tcreated"
+    header = ("id\tname\tstatus\tcharging_mode\tflavor_id\tflavor_name\tvcpus\tram(GiB)"
+              "\tdisk\tgpus\tavailability_zone\tcreated")
     if show_image:
         header += "\timage_id"
     output = header + "\n"
@@ -202,11 +221,13 @@ def render(servers, show_image, total_count=None, has_more=False, next_marker=No
         charging_mode = get_charging_mode(server)
         flavor = getattr(server, 'flavor', None)
         flavor_id = getattr(flavor, 'id', '') if flavor else ''
+        flavor_name, disk, gpus = get_flavor_extra(flavor)
         vcpus = str(getattr(flavor, 'vcpus', '')) if flavor else ''
         ram = str(int(getattr(flavor, 'ram', 0)) // 1024) if flavor else ''
         availability_zone = getattr(server, 'availability_zone', '')
         created = getattr(server, 'created', '')
-        row = f"{sid}\t{name}\t{status}\t{charging_mode}\t{flavor_id}\t{vcpus}\t{ram}\t{availability_zone}\t{created}"
+        row = (f"{sid}\t{name}\t{status}\t{charging_mode}\t{flavor_id}\t{flavor_name}\t{vcpus}\t{ram}"
+               f"\t{disk}\t{gpus}\t{availability_zone}\t{created}")
         if show_image:
             image = getattr(server, 'image', None)
             image_id = getattr(image, 'id', '') if image else ''

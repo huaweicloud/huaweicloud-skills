@@ -15,6 +15,9 @@
 
 import os
 import sys
+import json
+import time
+import hashlib
 import subprocess
 import platform
 import tempfile
@@ -26,6 +29,116 @@ sys.path.insert(0, os.path.dirname(__file__))
 import ssl
 
 ssl._create_default_https_context = ssl._create_unverified_context
+
+
+# ── 环境检查缓存 ──────────────────────────────────────────────────────
+
+CACHE_FILE_NAME = ".env_check_cache"
+DEFAULT_CACHE_TTL = 1800  # 秒，默认 30 分钟内复用上次通过的环境检查结果
+
+# 全局：是否强制刷新缓存
+FORCE_REFRESH = False
+
+
+def _cache_path():
+    return os.path.join(get_project_root(), CACHE_FILE_NAME)
+
+
+def _credential_fingerprint():
+    """对凭据做不可逆指纹，用于判断凭据是否变更（不落盘明文）。"""
+    raw = "|".join([
+        os.getenv("HW_ACCESS_KEY", ""),
+        os.getenv("HW_SECRET_KEY", ""),
+        os.getenv("HW_SECURITY_TOKEN", ""),
+    ])
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def get_cache_ttl():
+    try:
+        ttl = int(os.getenv("HW_ENV_CHECK_TTL", DEFAULT_CACHE_TTL))
+    except ValueError:
+        ttl = DEFAULT_CACHE_TTL
+    return max(0, ttl)
+
+
+def _cache_miss(reason):
+    """打印缓存未命中原因并返回 None（未命中不静默）。"""
+    print(f"  环境检查缓存未命中: {reason}")
+    return None
+
+
+def read_fresh_cache():
+    """读取并校验缓存；命中返回缓存字典，否则返回 None。
+
+    命中条件：TTL 内、region 一致、凭据指纹一致、解释器仍存在且与写入时一致。
+    缓存绑定实际解释器 ``sys.executable``，因此宿主已在 venv 中（skill 目录无
+    ``.venv``）时同样可以命中。
+    """
+    ttl = get_cache_ttl()
+    if ttl == 0:
+        return _cache_miss("缓存已禁用（TTL=0）")
+    path = _cache_path()
+    if not os.path.isfile(path):
+        return _cache_miss("无缓存文件")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            cache = json.load(f)
+    except Exception:
+        return _cache_miss("缓存文件不可读或已损坏")
+
+    checked_at = cache.get("checked_at") or 0
+    if time.time() - checked_at > ttl:
+        return _cache_miss(f"缓存已过期（超过 {ttl}s）")
+    if cache.get("region") != os.getenv("HW_REGION_NAME", "cn-north-4"):
+        return _cache_miss("region 已变化")
+    if cache.get("credential_fingerprint") != _credential_fingerprint():
+        return _cache_miss("凭据指纹已变化")
+    cached_python = cache.get("python") or ""
+    if not cached_python or not os.path.isfile(cached_python):
+        return _cache_miss("缓存记录的解释器路径已失效")
+    if cached_python != sys.executable:
+        return _cache_miss("当前解释器与写入缓存时不一致")
+    return cache
+
+
+def write_cache(project_id):
+    cache = {
+        "checked_at": time.time(),
+        "region": os.getenv("HW_REGION_NAME", "cn-north-4"),
+        "credential_fingerprint": _credential_fingerprint(),
+        "python": sys.executable,
+        "project_id": project_id or "",
+    }
+    try:
+        with open(_cache_path(), "w", encoding="utf-8") as f:
+            json.dump(cache, f, ensure_ascii=False)
+    except Exception:
+        pass
+
+
+def print_cache_hit(cache):
+    checked_at = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(cache.get("checked_at", 0)))
+    ttl = get_cache_ttl()
+    print("=" * 50)
+    print("  华为云资源查询 - 环境确保")
+    print("=" * 50)
+    print()
+    print(f"  命中环境检查缓存（最近一次通过: {checked_at}，有效期 {ttl}s）")
+    print("  跳过依赖安装与凭证/服务 API 校验")
+    project_id = cache.get("project_id") or ""
+    if project_id:
+        os.environ["HW_PROJECT_ID"] = project_id
+        project_id_file = os.path.join(get_project_root(), ".project_id")
+        try:
+            with open(project_id_file, "w") as f:
+                f.write(project_id)
+        except Exception:
+            pass
+        print(f"  HW_PROJECT_ID: {project_id}")
+    print()
+    print("  如需强制重新检查，执行 check_env.sh --force 或设置 HW_ENV_CHECK_FORCE=1")
+    print("=" * 50)
 
 
 # ── 虚拟环境管理 ──────────────────────────────────────────────────────
@@ -487,20 +600,34 @@ def parse_args():
     parser = argparse.ArgumentParser(description="华为云资源查询 - 环境确保脚本")
     parser.add_argument("--upgrade", action="store_true",
                         help="强制升级所有依赖到最新版本")
+    parser.add_argument("--force", action="store_true",
+                        help="强制重新执行全部检查（忽略环境检查缓存）")
+    parser.add_argument("--ttl", type=int, default=None,
+                        help=f"环境检查缓存有效期（秒），默认 {DEFAULT_CACHE_TTL}；0 表示禁用缓存")
     return parser.parse_args()
 
 
 def main():
-    global UPGRADE
+    global UPGRADE, FORCE_REFRESH
     args = parse_args()
     UPGRADE = args.upgrade
+    FORCE_REFRESH = args.force or os.getenv("HW_ENV_CHECK_FORCE", "") == "1" or args.upgrade
+    if args.ttl is not None:
+        os.environ["HW_ENV_CHECK_TTL"] = str(args.ttl)
+
+    # 若系统 Python 受 PEP 668 保护，自动创建 venv 并 reexec
+    _ensure_venv_and_reexec()
+
+    # 缓存命中则走快速路径（不重复安装依赖、不重复调用 API）
+    if not FORCE_REFRESH:
+        cache = read_fresh_cache()
+        if cache:
+            print_cache_hit(cache)
+            return 0
 
     print("=" * 50)
     print("  华为云资源查询 - 环境确保")
     print("=" * 50)
-
-    # 若系统 Python 受 PEP 668 保护，自动创建 venv 并 reexec
-    _ensure_venv_and_reexec()
 
     results = []
 
@@ -548,6 +675,10 @@ def main():
             project_id_file = os.path.join(get_project_root(), ".project_id")
             with open(project_id_file, "w") as f:
                 f.write(project_id)
+
+        # 写入环境检查缓存，后续调用走快速路径
+        write_cache(project_id)
+        print(f"  环境检查结果已缓存（有效期 {get_cache_ttl()}s）")
     else:
         print("  环境确保未完成，请按上述提示修复后重新运行")
     print("=" * 50)

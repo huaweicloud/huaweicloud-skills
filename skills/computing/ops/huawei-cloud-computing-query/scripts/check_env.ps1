@@ -1,5 +1,9 @@
 ﻿<#
 华为云资源查询 - 环境检查前置脚本 (Windows PowerShell)
+
+结果会缓存 30 分钟（.env_check_cache），命中缓存时跳过依赖安装与 API 校验。
+强制重新检查：powershell -File check_env.ps1 --force 或设置 HW_ENV_CHECK_FORCE=1
+缓存有效期：--ttl <秒> 或设置 HW_ENV_CHECK_TTL（0 表示禁用缓存）
 #>
 
 $ErrorActionPreference = "Stop"
@@ -77,7 +81,7 @@ if (-not (Test-Path $pythonScript)) {
 }
 
 try {
-    & $pythonPath.Path $pythonScript
+    & $pythonPath.Path $pythonScript @args
     $exitCode = $LASTEXITCODE
 } catch {
     Write-Output "FAIL: Python 脚本执行异常: $_"

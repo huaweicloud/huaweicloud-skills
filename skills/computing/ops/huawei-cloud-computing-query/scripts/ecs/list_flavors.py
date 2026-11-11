@@ -22,7 +22,7 @@ AK, SK, Region, SecurityToken = load_credentials()
 # 参数
 parser = argparse.ArgumentParser(description="查询 ECS 规格列表")
 parser.add_argument("--project_id", type=str, help="项目 ID，不传则通过 IAM API 根据 --region 自动获取")
-parser.add_argument("--region", type=str, required=True, help="区域，例如 cn-north-4、cn-east-3")
+parser.add_argument("--region", type=str, help="区域，不传时回退环境变量 HW_REGION_NAME（默认 cn-north-4）")
 parser.add_argument("--availability_zone", type=str, help="可用区名称/ID/code，可通过 list_server_az_info.py 获取")
 parser.add_argument("--flavor_id", type=str, help="规格 ID，精确匹配")
 parser.add_argument("--min_vcpus", type=int, help="最小 vCPU 数（客户端过滤），例如 4")
@@ -37,7 +37,8 @@ parser.add_argument("--top", type=int, help="取排序后的前 N 条（客户�
 parser.add_argument("--marker", type=str, help="分页标记，从上次查询结果的 next_marker 获取")
 args = parser.parse_args()
 
-Region = args.region
+if args.region is not None:
+    Region = args.region
 
 # 参数校验
 if args.top is not None and args.sort_by is None:
