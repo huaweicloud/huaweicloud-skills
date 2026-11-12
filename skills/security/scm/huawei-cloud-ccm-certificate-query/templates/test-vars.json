@@ -1,0 +1,45 @@
+{
+  "region": "cn-north-4",
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "list_certificates.py global help",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "python3 scripts/list_certificates.py --help",
+      "note": "Command construction is valid (rc=0). Live list requires AK/SK and scm:cert:list."
+    },
+    {
+      "id": "TC-02",
+      "name": "list subcommand help",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "python3 scripts/list_certificates.py list --help",
+      "note": "List parameters (--name/--status/--expiring/--json/--output) are exposed."
+    },
+    {
+      "id": "TC-03",
+      "name": "show subcommand help",
+      "type": "syntax",
+      "executor": "cli",
+      "command": "python3 scripts/list_certificates.py show --help",
+      "note": "Detail parameter (--cert-id) is exposed."
+    },
+    {
+      "id": "TC-04",
+      "name": "offline unit tests",
+      "type": "functional",
+      "executor": "cli",
+      "command": "python3 -m unittest discover -s skills/security/scm/huawei-cloud-ccm-certificate-query/tests",
+      "note": "Run from the repository root. Pure-function tests: parameter construction, signing, normalization, empty result, pagination, error classification."
+    },
+    {
+      "id": "TC-05",
+      "name": "markdown export offline cases",
+      "type": "functional",
+      "executor": "cli",
+      "command": "python3 -m unittest discover -s skills/security/scm/huawei-cloud-ccm-certificate-query/tests -p test_markdown_export.py",
+      "note": "Run from the repository root. Export naming/path resolution/escaping/empty-list-no-file/--output+--json conflict, with the SCM client stubbed."
+    }
+  ]
+}
