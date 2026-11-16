@@ -2,8 +2,8 @@
 
 API-level examples for the five ECS lifecycle operations (create / start / stop / restart /
 delete) in **Python** and **Java**, followed by a worked, executable create-failure
-troubleshooting example that chains the 6 checks of SKILL.md §2
-(quota → flavor → image → network → keypair → disk).
+troubleshooting example that chains the 6 capacity checks of SKILL.md §2
+(quota → flavor → image → network → keypair → disk) after the IAM/balance precheck.
 
 **SDK examples are a programming-access reference only.** The executable contract of this skill
 is the `hcloud` CLI command set documented in `SKILL.md` and `references/manage-operations.md`.
@@ -15,7 +15,7 @@ for users who integrate ECS management into their own Python/Java programs.
 
 | Part | Verification status |
 | ---- | ------------------- |
-| Python class names, client methods, region classes, model fields (§2, §4) | **Import-verified on this machine** — every symbol was resolved with `python -c`/`python -` against the installed SDK packages (see §5 for the symbol list and §0.2 for the commands) |
+| Python class names, client methods, region classes, model fields (§2, §4) | **Import-verified on this machine** — every symbol was resolved with `python -c`/`python -` against the installed SDK packages (see §6 for the symbol list and §0.2 for the commands) |
 | Python troubleshooting script (§4.2) | **Syntactically checked and import-executed locally** without credentials (imports resolve); no live cloud call was made — this environment has no AK/SK |
 | Java snippets (§3) | ⚠️ **Reference examples — not compiled or executed as part of this repository's build or test pipeline.** Class/method names were verified standalone against the published SDK jars with `javap`, and the snippets as shown compile with `javac`; nothing was run against Huawei Cloud. See the banner at the top of §3 |
 | `hcloud` CLI sequence (§4.4) | Parameter names match `SKILL.md`, which was verified against `hcloud <Service> <Operation> --help` (KooCLI 7.2.12) |
@@ -748,7 +748,7 @@ Report the conclusion exactly as `SKILL.md` §2 requires:
 
 ### 4.4 Minimal reproducible command-line equivalent (hcloud CLI)
 
-The same 6 checks as an agent would actually run them — dual form, as required by `SKILL.md`
+The same 6 capacity checks as an agent would actually run them — dual form, as required by `SKILL.md`
 (every bare `hcloud` command is followed by its `skill-quality-cli` wrapper):
 
 ```bash
@@ -798,12 +798,127 @@ RESULT: FAILED at check #4 (network)
   fix       : extend the subnet CIDR or use another subnet
 ```
 
-## 5. Python symbols used in this document (all import-verified)
+## 5. Batch, tags, billing modes and VNC (issue #1105)
+
+All symbols below were import-verified against the installed `huaweicloudsdkecs`. The executable
+contract is still the CLI in `SKILL.md`; these snippets are for SDK integrations.
+
+### 5.1 Yearly/monthly (`prePaid`) and spot creation
+
+```python
+from huaweicloudsdkcore.auth.credentials import BasicCredentials
+from huaweicloudsdkecs.v2 import (
+    EcsClient, CreateServersRequest, CreateServersRequestBody, PrePaidServer,
+    PrePaidServerRootVolume, PrePaidServerExtendParam,
+)
+from huaweicloudsdkecs.v2.region.ecs_region import EcsRegion
+
+client = EcsClient.new_builder().with_credentials(
+    BasicCredentials(ak, sk, project_id)).with_region(EcsRegion.value_of(region)).build()
+
+# Yearly/monthly: period_type + period_num are mandatory; is_auto_pay triggers the order payment.
+server = PrePaidServer(
+    flavor_ref=flavor_id, image_ref=image_id, name="ecs-prepaid-demo", vpcid=vpc_id,
+    root_volume=PrePaidServerRootVolume(volumetype="SAS", size=40),
+    extendparam=PrePaidServerExtendParam(
+        charging_mode="prePaid", period_type="month", period_num=1,
+        is_auto_pay=False, enterprise_project_id=eps_id,   # 0 = default EP
+    ),
+)
+resp = client.create_servers(CreateServersRequest(body=CreateServersRequestBody(
+    server=server, dry_run=True)))   # always dry-run first; then resend with dry_run=False after confirmation
+print(resp.job_id, resp.server_ids)
+
+# Spot: market_type only takes effect with chargingMode=postPaid.
+spot_ext = PrePaidServerExtendParam(
+    charging_mode="postPaid", market_type="spot", spot_price="0.10",
+    interruption_policy="immediate",
+)
+```
+
+### 5.2 Batch start/stop/reboot resolved by tag
+
+```python
+from huaweicloudsdkecs.v2 import (
+    ListServersDetailsRequest, BatchStartServersRequest, BatchStartServersRequestBody,
+    BatchStartServersOption, ServerId, ShowJobRequest, ShowServerRequest,
+)
+
+# 1) Resolve targets (paginate with marker; tags = "key=value")
+targets = client.list_servers_details(
+    ListServersDetailsRequest(tags="env=test", limit=100)).servers
+ids = [s.id for s in targets]
+preview = [(s.id, s.name, s.status) for s in targets]   # show to the user and count; >50 → second confirm
+
+# 2) Execute per id so one failure cannot abort the batch
+results = {"success": [], "failed": []}
+for server_id in ids:
+    try:
+        r = client.batch_start_servers(BatchStartServersRequest(
+            body=BatchStartServersRequestBody(
+                os_start=BatchStartServersOption(servers=[ServerId(id=server_id)]))))
+        job = client.show_job(ShowJobRequest(job_id=r.job_id))   # poll until SUCCESS/FAIL
+        results["success"].append({"id": server_id, "job_id": r.job_id, "status": job.status})
+    except Exception as exc:                                     # keep going
+        results["failed"].append({"id": server_id, "error": str(exc)})
+```
+
+Replace `batch_start_servers` with `batch_stop_servers` / `batch_reboot_servers` and the matching
+`*Option` / body classes for stop and reboot.
+
+### 5.3 Batch create / delete tags
+
+```python
+from huaweicloudsdkecs.v2 import (
+    BatchCreateServerTagsRequest, BatchCreateServerTagsRequestBody, BatchAddServerTag,
+    BatchDeleteServerTagsRequest, BatchDeleteServerTagsRequestBody, ServerTag,
+)
+
+client.batch_create_server_tags(BatchCreateServerTagsRequest(
+    server_id=server_id,
+    body=BatchCreateServerTagsRequestBody(
+        action="create", tags=[BatchAddServerTag(key="env", value="prod")]),
+))
+client.batch_delete_server_tags(BatchDeleteServerTagsRequest(
+    server_id=server_id,
+    body=BatchDeleteServerTagsRequestBody(action="delete", tags=[ServerTag(key="env")]),
+))
+```
+
+The SDK tag call is per instance; loop over the resolved id list and aggregate like §5.2.
+
+### 5.4 VNC console address
+
+```python
+from huaweicloudsdkecs.v2 import (
+    ShowServerRemoteConsoleRequest, ShowServerRemoteConsoleRequestBody,
+    GetServerRemoteConsoleOption,
+)
+
+console = client.show_server_remote_console(ShowServerRemoteConsoleRequest(
+    server_id=server_id,
+    body=ShowServerRemoteConsoleRequestBody(
+        remote_console=GetServerRemoteConsoleOption(protocol="vnc", type="novnc")),
+)).remote_console
+print(console.url)   # temporary (about 10 min); never log or persist it
+```
+
+### 5.5 Enterprise-project migration
+
+```python
+# The migration API belongs to EPS, not ECS. Resolve the resource_type first with
+# `hcloud EPS ListResourceMapping --cli-region={region}`, then call:
+#   hcloud EPS MigrateResource --enterprise_project_id={eps_id} --resource_id={server_id} \
+#         --resource_type={resource_type} --region_id={region} [--associated=true]
+# Python: use huaweicloudsdkeps.v1 EpsClient.migrate_resource with the same fields.
+```
+
+## 6. Python symbols used in this document (all import-verified)
 
 | Module | Symbols |
 | ------ | ------- |
 | `huaweicloudsdkcore.auth.credentials` | `BasicCredentials(ak, sk, project_id)` |
-| `huaweicloudsdkecs.v2` | `EcsClient` (`create_post_paid_servers`, `batch_start_servers`, `batch_stop_servers`, `batch_reboot_servers`, `delete_servers`, `show_job`, `show_server`, `show_server_limits`, `list_flavors`), `CreatePostPaidServersRequest`, `CreatePostPaidServersRequestBody`, `CreatePostPaidServersResponse` (`job_id`, `server_ids`), `PostPaidServer`, `PostPaidServerRootVolume`, `PostPaidServerNic`, `PostPaidServerSecurityGroup`, `BatchStartServersRequest`, `BatchStartServersRequestBody`, `BatchStartServersOption`, `BatchStopServersRequest`, `BatchStopServersRequestBody`, `BatchStopServersOption`, `BatchRebootServersRequest`, `BatchRebootServersRequestBody`, `BatchRebootSeversOption`, `DeleteServersRequest`, `DeleteServersRequestBody`, `ServerId`, `ShowJobRequest`, `ShowServerRequest`, `ShowServerLimitsRequest`, `ListFlavorsRequest`, `ServerLimits` |
+| `huaweicloudsdkecs.v2` | `EcsClient` (`create_post_paid_servers`, `create_servers`, `batch_start_servers`, `batch_stop_servers`, `batch_reboot_servers`, `batch_create_server_tags`, `batch_delete_server_tags`, `show_server_remote_console`, `delete_servers`, `show_job`, `show_server`, `show_server_limits`, `list_flavors`), `CreatePostPaidServersRequest`, `CreatePostPaidServersRequestBody`, `CreatePostPaidServersResponse` (`job_id`, `server_ids`), `PostPaidServer`, `PostPaidServerRootVolume`, `PostPaidServerNic`, `PostPaidServerSecurityGroup`, `CreateServersRequest`, `CreateServersRequestBody`, `PrePaidServer`, `PrePaidServerRootVolume`, `PrePaidServerExtendParam`, `BatchStartServersRequest`, `BatchStartServersRequestBody`, `BatchStartServersOption`, `BatchStopServersRequest`, `BatchStopServersRequestBody`, `BatchStopServersOption`, `BatchRebootServersRequest`, `BatchRebootServersRequestBody`, `BatchRebootSeversOption`, `BatchCreateServerTagsRequest`, `BatchCreateServerTagsRequestBody`, `BatchAddServerTag`, `BatchDeleteServerTagsRequest`, `BatchDeleteServerTagsRequestBody`, `ServerTag`, `ShowServerRemoteConsoleRequest`, `ShowServerRemoteConsoleRequestBody`, `GetServerRemoteConsoleOption`, `ServerRemoteConsole`, `DeleteServersRequest`, `DeleteServersRequestBody`, `ServerId`, `ShowJobRequest`, `ShowServerRequest`, `ShowServerLimitsRequest`, `ListFlavorsRequest`, `ServerLimits` |
 | `huaweicloudsdkecs.v2.region.ecs_region` | `EcsRegion.value_of(region)` |
 | `huaweicloudsdkims.v2` | `ImsClient` (`list_images`), `ListImagesRequest`, `ListImagesResponse` (`images`), `ImageInfo` |
 | `huaweicloudsdkims.v2.region.ims_region` | `ImsRegion.value_of(region)` |
@@ -816,9 +931,9 @@ RESULT: FAILED at check #4 (network)
 | `huaweicloudsdkevs.v2` | `EvsClient` (`list_volumes`, `cinder_list_quotas`), `ListVolumesRequest`, `VolumeDetail`, `CinderListQuotasRequest`, `CinderListQuotasResponse` (`quota_set`) |
 | `huaweicloudsdkevs.v2.region.evs_region` | `EvsRegion.value_of(region)` |
 
-## 6. Related documents
+## 7. Related documents
 
-- `SKILL.md` §2 — the 6-step create-failure diagnosis (CLI contract) and §3/§4 manage commands
+- `SKILL.md` §2 — the 8-step create-failure diagnosis (CLI contract) and §3/§4 manage commands
 - `references/manage-operations.md` §1 — async `job_id` polling and the reporting format
 - `references/verification-method.md` — static/live verification of the CLI commands
 - `references/iam-policies.md` — least-privilege policies required by these SDK calls

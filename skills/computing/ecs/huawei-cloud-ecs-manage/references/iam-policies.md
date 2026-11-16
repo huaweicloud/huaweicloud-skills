@@ -140,6 +140,69 @@ names that were not verified against a catalogue. If a change operation returns 
 actions work, that is the missing write action — look it up in the catalogue instead of widening the
 policy to `ECS FullAccess`.
 
+## 6. Batch operations, tags, VNC and enterprise projects (issue #1105)
+
+Covers: `huawei_batch_start_ecs_by_tag`, `huawei_batch_stop_ecs_by_tag`,
+`huawei_batch_reboot_ecs_by_tag`, `huawei_batch_tag_ecs`, `huawei_batch_untag_ecs`,
+`huawei_get_ecs_vnc_console`, `huawei_change_ecs_enterprise_project`.
+
+```json
+{
+  "Version": "1.1",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:cloudServers:list",
+        "ecs:cloudServers:get",
+        "ecs:cloudServers:action",
+        "ecs:serverTags:list",
+        "ecs:serverTags:create",
+        "ecs:serverTags:delete",
+        "ecs:cloudServers:remoteConsole",
+        "eps:enterpriseProjects:list",
+        "eps:resources:migrate"
+      ],
+      "Resource": ["*"]
+    }
+  ]
+}
+```
+
+> - Batch start/stop/reboot reuse `ecs:cloudServers:action` (same as the single-instance
+>   `BatchStartServers` / `BatchStopServers` / `BatchRebootServers` calls).
+> - Tag operations map to `ecs:serverTags:list|create|delete` (`ListServerTags`,
+>   `BatchCreateServerTags`, `BatchDeleteServerTags`). Grant `create`/`delete` only when tag
+>   changes are intended.
+> - `ecs:cloudServers:remoteConsole` is required by `ShowServerRemoteConsole`; it returns a
+>   temporary console URL, so grant it only to operators who may access the instance console.
+> - Enterprise-project migration uses the EPS API, not an ECS API: `eps:enterpriseProjects:list`
+>   (read/precheck) + `eps:resources:migrate` (the write). `--associated=true` migrates EVS/EIP too.
+> - `huawei_batch_create_ecs_instances` / `prePaid` / `spot` creation reuse the create permission in
+>   §2 (`ecs:cloudServers:create`); auto-pay orders additionally need the BSS order/pay actions
+>   granted by your finance policy (see §7).
+
+## 7. Account-balance precheck (BSS)
+
+The create-failure diagnosis checks the account balance before reporting a capacity problem.
+KooCLI 7.3.12 reports `Unsupported service: BSS`, so do **not** grant an `hcloud BSS` action — the
+balance is read via the BSS OpenAPI / `huaweicloudsdkbss` SDK (`GET
+/v2/accounts/customer-accounts/balances`, global endpoint) or the Billing Center console.
+
+Relevant BSS permissions (official BSS 「权限及授权项」):
+`bss:balance:view` for the balance read; when an auto-pay order is involved, the account also needs
+the finance policy's order-pay action (commonly `bss:order:pay`, `bss:order:view`). This skill does
+**not** purchase on the user's behalf — the balance check is diagnostic only.
+
+## 8. Diagnosing 403 / 401 correctly
+
+| Symptom | Meaning | Fix |
+| ------- | ------- | --- |
+| `403` + `not authorized`/`Forbidden` while other reads work | A specific action is missing | Grant the action from §1/§2/§6; never use `ECS FullAccess` as a shortcut |
+| `401` / expired credentials / every call fails | Authentication, not authorization | Re-authenticate (`hcloud configure list`) or refresh AK/SK |
+| Reads work, `create` fails `403` | `ecs:cloudServers:create` (or the BSS payment action for auto-pay) is missing | Grant that specific action |
+| `Insufficient account balance` / arrears / failed order | Balance | Recharge in the Billing Center, then retry |
+
 ## Security notes
 
 - Use the least-privilege policy that covers the intended capability group; do not grant

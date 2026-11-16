@@ -12,8 +12,11 @@ In scope for this skill:
 | Area | Actions | Risk |
 |------|---------|------|
 | Query | instance list / instance detail / flavors / images / quotas | R3 — auto execute |
-| Diagnose | 6-step create-failure root cause; instance health analysis | R3 — auto execute |
-| Lifecycle | create (post-paid) / start / stop / restart / delete | R2 / R1 — preview + confirm |
+| Diagnose | 8-step create-failure root cause (IAM → balance → quota → flavor → image → network → keypair → disk); instance health | R3 — auto execute |
+| Lifecycle | create (post-paid / yearly-monthly / spot / batch heterogeneous) / start / stop / restart / delete | R2 / R1 — preview + confirm |
+| Batch by tag | tag-resolved start / stop / reboot with per-instance results | R2 — preview + count + confirm |
+| Tags | batch add / delete instance tags | R2 — preview + confirm |
+| Ops assist | VNC console address (temporary); CES metric entry; enterprise-project migration | R3 / R2 |
 | Change op on an existing instance | resize / reinstall OS / reset password / replace keypair / bind & unbind EIP / change security group / add & remove NIC / attach & detach volume | R2 / R1 — preview + confirm |
 | Async tracking | poll `hcloud ECS ShowJob` (and `ShowServer` after create) until terminal state | R3 — after every write |
 
@@ -83,15 +86,36 @@ only points the user at them.
 
 | User request | Point the user to | Repository path |
 |--------------|-------------------|-----------------|
+| ECS CPU / memory / disk / network **metrics**, alarms, historical trend | `huawei-cloud-ces-ecs-monitoring` | `skills/monitoring/ces/huawei-cloud-ces-ecs-monitoring/` |
 | RDS instance query / diagnosis | `huawei-cloud-rds-smart-service` (or the RDS console) | `skills/storage/rds/huawei-cloud-rds-smart-service/` |
 | VPC / subnet / EIP / ELB / NAT / VPN / DNS read-only query | `huawei-cloud-network-query` | `skills/network/ops/huawei-cloud-network-query/` |
+| VPC / subnet design, network diagnosis and management | `huawei-cloud-vpc-network-diagnosis-management` | `skills/network/ops/huawei-cloud-vpc-network-diagnosis-management/` |
 | Security-group resource CRUD, rule-conflict and over-exposure audit | `huawei-cloud-sg-manage` | `skills/network/ops/huawei-cloud-sg-manage/` |
 | EVS disk / snapshot / OBS / SFS / CBR read-only query | `huawei-cloud-storage-query` | `skills/storage/obs/huawei-cloud-storage-query/` |
 | Create a new EVS disk | `huawei-cloud-evs-disk-create` | `skills/storage/evs/huawei-cloud-evs-disk-create/` |
 | ECS / BMS / IMS / AS read-only query (flavors, keypairs, quotas, images, scaling groups) | `huawei-cloud-computing-query` | `skills/computing/ops/huawei-cloud-computing-query/` |
 | KMS keys / CSMS secrets, rotation and usage audit | `huawei-cloud-dew-key-management` | `skills/security/dew/huawei-cloud-dew-key-management/` |
 
-## 4. Keeping the boundary honest
+## 4. Executable cross-skill orchestration path (performance incident)
+
+One concrete path that combines this skill with the related skills without any hidden runtime
+dependency — each step is executed by the skill that owns it, and the Agent hands over explicitly.
+
+| # | Owner | Goal | Command / hand-off |
+|---|-------|------|--------------------|
+| 1 | **this skill** | Confirm the instance exists, its state and fault block | `hcloud ECS ShowServer --cli-region={region} --server_id={server_id}` |
+| 2 | **this skill** | Rule out an unhealthy disk/NIC/EIP attachment | `hcloud ECS ListServerVolumeAttachments …`; `hcloud ECS ListServerInterfaces …`; `hcloud EIP ListPublicips/v2 …` |
+| 3 | **`huawei-cloud-ces-ecs-monitoring`** | Read CPU / memory / disk / network metrics and trends | Hand off with `{region, server_id, time window, metric names}`; it calls `CES ListMetrics` / `ShowMetricData` |
+| 4 | **`huawei-cloud-network-query`** / **`huawei-cloud-sg-manage`** | Check the subnet/security-group path; if a rule must change, the SG skill edits the **rule** | Hand off `{region, vpc_id, subnet_id, security_group_id, port/protocol}`; this skill never edits SG rules |
+| 5 | **this skill** | If the SG **binding** must change, bind by **ID** after resolving the name | `hcloud VPC ListSecurityGroups/v2 …` → `hcloud ECS … --security_groups.1.id={sg_id}` (or name + duplicate check) |
+| 6 | **this skill** | If remediation needs more compute, resize or batch-restart by tag | `hcloud ECS ResizeServer …` / `hcloud ECS ListServersDetails --tags=…` → per-id `BatchRebootServers` |
+| 7 | **`huawei-cloud-ces-ecs-monitoring`** | Re-measure after the change and compare with step 3 | Hand off the same metric/window; do not copy raw metric data into an ECS report |
+
+Rules for this path: finish the ECS step first, state which steps were **not** done by this skill,
+and never claim another skill's result as this skill's own. If a related skill is unavailable, point
+the user at the matching console instead of inventing a skill name.
+
+## 5. Keeping the boundary honest
 
 - Never tell the user that an RDS / VPC / EVS / security-group / IAM change was made by this skill.
 - Never fill an ECS answer with data obtained from another service's console or another tool.

@@ -125,7 +125,7 @@
     {
       "id": "TC-16",
       "name": "创建实例 - 参数校验 (dry-run)",
-      "command": "hcloud ECS CreatePostPaidServers --cli-region=cn-north-4 --dry_run=true --server.flavorRef={flavor_id} --server.imageRef={image_id} --server.name=ecs-manage-test --server.root_volume.volumetype=SATA --server.vpcid={vpc_id}",
+      "command": "hcloud ECS CreatePostPaidServers --cli-region=cn-north-4 --dry_run=true --server.flavorRef={flavor_id} --server.imageRef={image_id} --server.name=ecs-manage-test --server.root_volume.volumetype=SAS --server.vpcid={vpc_id}",
       "expected": "返回校验结果（不创建资源）；确认参数合法。写操作，需确认后执行",
       "type": "write",
       "executor": "cli"
@@ -249,8 +249,123 @@
       "expected": "写操作，绝不自动执行；R2：需人工确认，并提示先在 guest OS 内 umount；--delete_flag=1 会删除数据盘，默认 0 不删除",
       "type": "write",
       "executor": "cli"
+    },
+    {
+      "id": "TC-32",
+      "name": "批量打标签 huawei_batch_tag_ecs（写操作）",
+      "command": "hcloud ECS BatchCreateServerTags --cli-region=cn-north-4 --server_id={server_id} --action=create --tags.1.key={tag_key} --tags.1.value={tag_value}",
+      "expected": "写操作，绝不自动执行；需先解析目标实例列表并展示清单+数量，人工确认后逐实例执行并汇总 success/failed；单个失败不中断；标签 key≤36 字符且每资源唯一",
+      "type": "write",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-33",
+      "name": "批量删标签 huawei_batch_untag_ecs（写操作）",
+      "command": "hcloud ECS BatchDeleteServerTags --cli-region=cn-north-4 --server_id={server_id} --action=delete --tags.1.key={tag_key}",
+      "expected": "写操作，绝不自动执行；需人工确认；删除标签为状态变更，先说明对计费/自动化的影响；逐实例汇总结果",
+      "type": "write",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-34",
+      "name": "按标签解析批量目标（只读）",
+      "command": "hcloud ECS ListServersDetails --cli-region=cn-north-4 --tags={tag_key}={tag_value} --limit=100",
+      "expected": "返回匹配的 servers 数组；分批使用 --marker 翻页，预览必须覆盖全部命中实例；无 error_code",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-35",
+      "name": "查询实例标签（只读）",
+      "command": "hcloud ECS ListServerTags --cli-region=cn-north-4",
+      "expected": "返回 tags 数组，无 error_code；403 时提示需 ecs:serverTags:list",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-36",
+      "name": "包年包月创建 dry-run huawei_create_ecs_instance",
+      "command": "hcloud ECS CreateServers --cli-region=cn-north-4 --dry_run=true --server.flavorRef={flavor_id} --server.imageRef={image_id} --server.name=ecs-prepaid-test --server.root_volume.volumetype=SAS --server.vpcid={vpc_id} --server.extendparam.chargingMode=prePaid --server.extendparam.periodType=month --server.extendparam.periodNum=1 --server.extendparam.isAutoPay=false",
+      "expected": "仅校验不创建/不下单；prePaid 必须同时提供 periodType + periodNum；真实创建为 R2 付费操作，需展示计费模式/周期/费用并人工确认",
+      "type": "write",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-37",
+      "name": "竞价实例创建 dry-run huawei_create_ecs_instance",
+      "command": "hcloud ECS CreateServers --cli-region=cn-north-4 --dry_run=true --server.flavorRef={flavor_id} --server.imageRef={image_id} --server.name=ecs-spot-test --server.root_volume.volumetype=SAS --server.vpcid={vpc_id} --server.extendparam.chargingMode=postPaid --server.extendparam.marketType=spot",
+      "expected": "仅校验不创建；marketType=spot 仅在 chargingMode=postPaid 时生效；真实创建为 R2 付费操作，需人工确认",
+      "type": "write",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-38",
+      "name": "批量异构创建 huawei_batch_create_ecs_instances",
+      "command": "hcloud ECS CreatePostPaidServers --cli-region=cn-north-4 --dry_run=true --server.flavorRef={flavor_id} --server.imageRef={image_id} --server.name=ecs-batch-test --server.count=2 --server.root_volume.volumetype=SAS --server.vpcid={vpc_id}",
+      "expected": "按 {flavor,image,subnet,count} 分组展示计划与总台数，人工确认后逐组执行；返回逐服务器结果；写操作绝不自动执行",
+      "type": "write",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-39",
+      "name": "VNC 控制台地址 huawei_get_ecs_vnc_console（只读）",
+      "command": "hcloud ECS ShowServerRemoteConsole --cli-region=cn-north-4 --server_id={server_id} --remote_console.protocol=vnc --remote_console.type=novnc",
+      "expected": "返回 remote_console.url；地址为临时地址（约 10 分钟，以平台为准），过期需重新获取；禁止写入日志或长期保存；无实例时记录 skipped",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-40",
+      "name": "企业项目迁移 huawei_change_ecs_enterprise_project（写操作）",
+      "command": "hcloud EPS MigrateResource --cli-region=cn-north-4 --enterprise_project_id={target_eps_id} --resource_id={server_id} --resource_type={resource_type} --project_id={project_id}",
+      "expected": "写操作，绝不自动执行；resource_type 必须由 ListResourceMapping 查询获得；展示当前/目标企业项目与计费归属影响并人工确认；需 eps:resources:migrate",
+      "type": "write",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-41",
+      "name": "企业项目迁移前置: 资源类型映射（只读）",
+      "command": "hcloud EPS ListResourceMapping --cli-region=cn-north-4",
+      "expected": "返回资源类型映射；用于确定 ECS 的 resource_type，不得猜测",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-42",
+      "name": "企业项目列表 help 校验",
+      "command": "hcloud EPS ListEnterpriseProject --cli-region=cn-north-4 --help",
+      "expected": "帮助信息正常输出，确认查询企业项目的参数",
+      "type": "syntax",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-43",
+      "name": "ECS 监控指标入口: ListMetrics（只读）",
+      "command": "hcloud CES ListMetrics --cli-region=cn-north-4 --namespace=SYS.ECS --dim.0=instance_id,{server_id}",
+      "expected": "返回 metrics 数组，无 error_code；无实例或无指标时记录 skipped；深度监控交 huawei-cloud-ces-ecs-monitoring",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-44",
+      "name": "ECS 监控数据入口: ShowMetricData（只读）",
+      "command": "hcloud CES ShowMetricData --cli-region=cn-north-4 --namespace=SYS.ECS --metric_name=cpu_util --dim.0=instance_id,{server_id} --filter=average --period=300 --from={start_ms} --to={end_ms}",
+      "expected": "返回 datapoints 数组；参数按 --help 校验；无数据时记录 skipped",
+      "type": "readonly",
+      "executor": "cli"
+    },
+    {
+      "id": "TC-45",
+      "name": "安全组变更前置: 按名称解析（只读）",
+      "command": "hcloud VPC ListSecurityGroups/v2 --cli-region=cn-north-4 --limit=100",
+      "expected": "返回 security_groups 数组；按 name 过滤后必须唯一命中；同名 ≥2 时拒绝按名称变更并要求提供安全组 ID",
+      "type": "readonly",
+      "executor": "cli"
     }
   ],
-  "env_vars_required": ["HUAWEICLOUD_SDK_AK", "HUAWEICLOUD_SDK_SK"],
-  "notes": "TC-16/17/18/19/20 为写操作或写操作参数校验：仅 dry-run 或 --help 执行，禁止自动执行真实写操作；真实生命周期测试（create->start->stop->restart->delete）需测试人员确认并清理资源。TC-21 至 TC-31 为 issue #931 新增的 11 个变更操作（R2/R1），type=write：绝不自动执行，必须先展示 preview 并取得人工确认，执行后按 references/verification-method.md 第 3 节轮询 hcloud ECS ShowJob 至 SUCCESS/FAIL。{server_id}/{flavor_id}/{image_id}/{vpc_id}/{network_id}/{subnet_id}/{port_id}/{publicip_id}/{volume_id}/{keypair_name}/{old_keypair_name}/{user_id}/{security_group_name}/{old_security_group_name}/{new_password} 需在运行时填充真实值，密码类占位符禁止回显。凭证 401(APIGW.0301) 时只读用例记为 blocked-env，不算技能缺陷。"
+  "env_vars_required": [
+    "HUAWEICLOUD_SDK_AK",
+    "HUAWEICLOUD_SDK_SK"
+  ],
+  "notes": "TC-16/17/18/19/20 为写操作或写操作参数校验：仅 dry-run 或 --help 执行，禁止自动执行真实写操作；真实生命周期测试（create->start->stop->restart->delete）需测试人员确认并清理资源。TC-21 至 TC-31 为 issue #931 新增的 11 个变更操作（R2/R1），type=write：绝不自动执行，必须先展示 preview 并取得人工确认，执行后按 references/verification-method.md 第 3 节轮询 hcloud ECS ShowJob 至 SUCCESS/FAIL。{server_id}/{flavor_id}/{image_id}/{vpc_id}/{network_id}/{subnet_id}/{port_id}/{publicip_id}/{volume_id}/{keypair_name}/{old_keypair_name}/{user_id}/{security_group_name}/{old_security_group_name}/{new_password} 需在运行时填充真实值，密码类占位符禁止回显。凭证 401(APIGW.0301) 时只读用例记为 blocked-env，不算技能缺陷。 TC-32 至 TC-45 为 issue #1105 新增能力：批量打/删标签、按标签解析目标、包年包月/竞价/批量异构创建、VNC 地址、企业项目迁移、CES 指标入口与安全组 ID 前置校验。所有 type=write 用例绝不自动执行：先展示 preview（目标清单+数量、计费模式/周期/费用、批量 >50 台二次确认）并取得人工确认；批量逐实例执行并汇总 success/failed，单个失败不中断。"
 }

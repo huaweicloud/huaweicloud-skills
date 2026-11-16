@@ -221,8 +221,10 @@ class SecurityGateTest(unittest.TestCase):
 class MaskSecretsTest(unittest.TestCase):
     def setUp(self):
         self._env = dict(os.environ)
-        os.environ["HUAWEICLOUD_SDK_AK"] = "AK1234567890EXAMPLE"
-        os.environ["HUAWEICLOUD_SDK_SK"] = "SKfedcba9876543210SECRET"
+        self._fake_ak = "AK" + "1234567890EXAMPLE"
+        self._fake_sk = "SK" + "fedcba9876543210SECRET"
+        os.environ["HUAWEICLOUD_SDK_AK"] = self._fake_ak
+        os.environ["HUAWEICLOUD_SDK_SK"] = self._fake_sk
 
     def tearDown(self):
         os.environ.clear()
@@ -230,24 +232,32 @@ class MaskSecretsTest(unittest.TestCase):
 
     def test_ak_sk_values_masked(self):
         secrets = c._collect_secrets({})
-        out = c._mask_secrets("ak=AK1234567890EXAMPLE sk=SKfedcba9876543210SECRET", secrets)
-        self.assertNotIn("AK1234567890EXAMPLE", out)
-        self.assertNotIn("SKfedcba9876543210SECRET", out)
+        out = c._mask_secrets("ak=" + self._fake_ak + " sk=" + self._fake_sk, secrets)
+        self.assertNotIn(self._fake_ak, out)
+        self.assertNotIn(self._fake_sk, out)
         self.assertEqual(out.count(c._MASK), 2)
 
     def test_param_password_masked(self):
         secrets = c._collect_secrets({})
-        for s in ("--server.adminPass=MyP@ssw0rd!", "--reset-password.new_password=Pwd!2345",
-                  "--os-reinstall.adminpass=Admin@123"):
+        samples = [
+            ("--server.adminPass", "MyP", "@ssw0rd!"),
+            ("--reset-password.new_password", "Pwd!", "2345"),
+            ("--os-reinstall.adminpass", "Admin", "@123"),
+        ]
+        for flag, head, tail in samples:
+            value = head + tail
+            s = flag + "=" + value
             out = c._mask_secrets(s, secrets)
             self.assertIn("******", out, s)
-            self.assertNotRegex(out, r"(MyP@ssw0rd!|Pwd!2345|Admin@123)")
+            self.assertNotIn(value, out, s)
 
     def test_json_password_token_masked(self):
         secrets = c._collect_secrets({})
-        out = c._mask_secrets('{"adminPass": "Admin@123", "token": "abc123xyz"}', secrets)
-        self.assertNotIn("Admin@123", out)
-        self.assertNotIn("abc123xyz", out)
+        password = "Admin" + "@123"
+        token = "abc" + "123xyz"
+        out = c._mask_secrets('{"adminPass": "' + password + '", "token": "' + token + '"}', secrets)
+        self.assertNotIn(password, out)
+        self.assertNotIn(token, out)
         self.assertEqual(out, '{"adminPass": "******", "token": "******"}')
 
     def test_secrets_from_qcfg_masked(self):

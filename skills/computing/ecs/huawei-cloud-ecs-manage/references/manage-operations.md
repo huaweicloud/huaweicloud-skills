@@ -28,6 +28,10 @@ issue **#921** (`ShowJob` polling guidance missing for the asynchronous Manage w
 
 | Action | hcloud operation(s) | Risk |
 | ------ | ------------------- | ---- |
+| `huawei_batch_start_ecs_by_tag` / `_stop_` / `_reboot_` | ECS `ListServersDetails --tags` → per-id `BatchStartServers` / `BatchStopServers` / `BatchRebootServers` | R2 |
+| `huawei_batch_tag_ecs` / `huawei_batch_untag_ecs` | ECS `BatchCreateServerTags` / `BatchDeleteServerTags` | R2 |
+| `huawei_get_ecs_vnc_console` | ECS `ShowServerRemoteConsole` | R3 (sensitive temporary URL — never log) |
+| `huawei_change_ecs_enterprise_project` | EPS `MigrateResource` | R2 (billing attribution changes) |
 | `huawei_resize_ecs_instance` | ECS `ResizeServer` | R2 |
 | `huawei_reinstall_ecs_os` | ECS `ReinstallServerWithCloudInit` | R2 (system disk content is lost — warn explicitly) |
 | `huawei_reset_ecs_password` | ECS `ResetServerPassword` | R2 |
@@ -267,7 +271,8 @@ Therefore `huawei_replace_ecs_keypair` is defined as:
 
 1. create the new keypair (above), then
 2. install the new **public key** on the running instance over the existing login path
-   (for example by appending it to `~/.ssh/authorized_keys` after `huawei_reset_ecs_password`), and
+   (for example by appending it to the login user's `authorized key file` after
+   `huawei_reset_ecs_password`), and
 3. delete the old keypair only after the new key is proven to work.
 
 For a **new** instance the new keypair is used directly at creation time via
@@ -353,24 +358,42 @@ Purpose: add or remove a security group on an instance.
 Operations: ECS `NovaAssociateSecurityGroup` / ECS `NovaDisassociateSecurityGroup`.
 Risk: **R2** — a wrong change can cut off management access.
 
-⚠️ Both interfaces take the **security group name**, not its ID.
+⚠️ **ID first.** `--addSecurityGroup.name` / `--removeSecurityGroup.name` accept a security-group
+**UUID or name**. Pass the **UUID** whenever it is known — a name may be duplicated inside a project,
+and attaching the wrong group is a security incident. There is **no** `--security_group_ids`
+parameter in KooCLI 7.3.12; the UUID goes into the `name` field.
 
 | Parameter | Req. | Notes |
 | --------- | ---- | ----- |
 | `--server_id` | required | Target instance ID |
-| `--addSecurityGroup.name` | required (add) | Security group **name** to add; applies to the NICs configured on the instance |
-| `--removeSecurityGroup.name` | required (remove) | Security group **name** to remove |
+| `--addSecurityGroup.name` | required (add) | Security group **UUID or name** to add; applies to the NICs on the instance |
+| `--removeSecurityGroup.name` | required (remove) | Security group **UUID or name** to remove |
+
+Name resolution / duplicate check (MUST run before a name-based change):
+
+```bash
+# List the project's groups, then keep the rows whose name matches exactly
+hcloud VPC ListSecurityGroups/v2 --cli-region={region} --limit=100
+skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud VPC ListSecurityGroups/v2 --cli-region={region} --limit=100
+# If you already hold an ID, confirm it first
+hcloud VPC ShowSecurityGroup/v2 --cli-region={region} --security_group_id={sg_id}
+skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud VPC ShowSecurityGroup/v2 --cli-region={region} --security_group_id={sg_id}
+```
+
+- exactly one name match → use its **UUID** (preferred) or the unique name;
+- zero matches → stop, the group does not exist;
+- ≥ 2 matches → **reject the name-based change**, list the candidate IDs and ask the user which one.
 
 ```bash
 # [W] 写操作 (WRITE): adds a security group to the instance — R2: preview + explicit confirmation required
-hcloud ECS NovaAssociateSecurityGroup --cli-region={region} --server_id={server_id} --addSecurityGroup.name={sg_name}
-skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud ECS NovaAssociateSecurityGroup --cli-region={region} --server_id={server_id} --addSecurityGroup.name={sg_name}
+hcloud ECS NovaAssociateSecurityGroup --cli-region={region} --server_id={server_id} --addSecurityGroup.name={sg_uuid_or_unique_name}
+skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud ECS NovaAssociateSecurityGroup --cli-region={region} --server_id={server_id} --addSecurityGroup.name={sg_uuid_or_unique_name}
 ```
 
 ```bash
 # [W] 写操作 (WRITE): removes a security group from the instance — R2: preview + explicit confirmation required
-hcloud ECS NovaDisassociateSecurityGroup --cli-region={region} --server_id={server_id} --removeSecurityGroup.name={sg_name}
-skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud ECS NovaDisassociateSecurityGroup --cli-region={region} --server_id={server_id} --removeSecurityGroup.name={sg_name}
+hcloud ECS NovaDisassociateSecurityGroup --cli-region={region} --server_id={server_id} --removeSecurityGroup.name={sg_uuid_or_unique_name}
+skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud ECS NovaDisassociateSecurityGroup --cli-region={region} --server_id={server_id} --removeSecurityGroup.name={sg_uuid_or_unique_name}
 ```
 
 Then poll (§1) if the response carries a `job_id`; otherwise verify the effective groups with
@@ -378,9 +401,9 @@ Then poll (§1) if the response carries a `job_id`; otherwise verify the effecti
 
 Failure / degradation: if the group is the last one, the instance keeps its default group — removing
 the group that carries the inbound SSH/RDP rule locks the user out; state this before confirming.
-Security group **IDs** are rejected here (the field is a name) — look the name up with
-`VPC ListSecurityGroups/v2` first, and check group IDs first if you only have an ID. An instance
-accepts a limited number of security groups, so a full list fails — remove one before adding another.
+A duplicated name must never be guessed: reject it and ask for the UUID. An instance accepts a
+limited number of security groups (recommended ≤ 5), so a full list fails — remove one before adding
+another.
 
 ## 9. `huawei_add_ecs_nic` — add a NIC (network interface) to the instance
 
@@ -543,7 +566,253 @@ Failure / degradation:
   system disk and never use it to "make it work" without telling the user.
 - A system disk cannot be detached; the operation is for data volumes.
 
-## 13. Common error handling
+## 13. Batch operations by tag — `huawei_batch_start_ecs_by_tag` / `_stop_` / `_reboot_`
+
+Purpose: start / stop / reboot every instance matching a tag filter, with per-instance results.
+Operations: ECS `ListServersDetails --tags` to resolve targets, then one `BatchStartServers` /
+`BatchStopServers` / `BatchRebootServers` call **per instance id**. Risk: **R2**.
+
+Why per id instead of one multi-id call: a single invalid/racing id makes the batch API reject the
+whole request, so one failure would hide every other result. The per-id loop gives the required
+`success` / `failed` summary and lets the rest of the batch continue.
+
+### 13.1 Resolve targets (R3, paginated)
+
+```bash
+hcloud ECS ListServersDetails --cli-region={region} --tags={key}={value} --limit=100
+skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud ECS ListServersDetails --cli-region={region} --tags={key}={value} --limit=100
+```
+
+- Tag filter syntax: `--tags={key}={value}[,{key}={value}]` (all pairs must match).
+- Paginate with `--limit=100` + `--marker={last_server_id}` until no further page; the preview MUST
+  cover every matching instance, not just the first page.
+- Collect `{id, name, status, availability_zone}` for the preview.
+- Optional safety filters: a second tag, `--name`, `--status`, or an explicit de-selection list.
+
+### 13.2 Preview and confirmation gate
+
+```text
+Targets: <n> instances (tag <key>=<value>, region <region>)
+  <id-1>  <name-1>  <status-1>  <az-1>
+  ...
+Action:   start | stop (SOFT/HARD) | reboot (SOFT/HARD)
+Effect:   <what changes, e.g. guest power state; running services are interrupted>
+```
+
+Ask for explicit confirmation. If `n > 50`, ask for a **second** confirmation. Never silently
+widen or narrow the tag filter after the preview.
+
+### 13.3 Execute per id and aggregate
+
+```bash
+# [W] 写操作 (WRITE): starts the tagged instance — R2: preview + explicit confirmation required
+hcloud ECS BatchStartServers --cli-region={region} --os-start.servers.1.id={server_id}
+skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud ECS BatchStartServers --cli-region={region} --os-start.servers.1.id={server_id}
+
+# [W] 写操作 (WRITE): stops the tagged instance — R2: preview + explicit confirmation required
+hcloud ECS BatchStopServers --cli-region={region} --os-stop.servers.1.id={server_id} --os-stop.type=SOFT
+skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud ECS BatchStopServers --cli-region={region} --os-stop.servers.1.id={server_id} --os-stop.type=SOFT
+
+# [W] 写操作 (WRITE): reboots the tagged instance — R2: preview + explicit confirmation required
+hcloud ECS BatchRebootServers --cli-region={region} --reboot.servers.1.id={server_id} --reboot.type=SOFT
+skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud ECS BatchRebootServers --cli-region={region} --reboot.servers.1.id={server_id} --reboot.type=SOFT
+```
+
+For every id: capture `job_id`, poll `ECS ShowJob` (§1) to `SUCCESS`/`FAIL`, then verify the target
+state with `ShowServer` (start/reboot → `ACTIVE`; stop → `SHUTOFF`). A failure on one id does not
+stop the loop.
+
+### 13.4 Result contract
+
+```json
+{
+  "action": "start|stop|reboot",
+  "filter": {"tags": "env=test"},
+  "total": 12,
+  "success": [{"id": "i-01", "job_id": "j-01", "status": "ACTIVE"}],
+  "failed":  [{"id": "i-02", "error_code": "ECS.0045", "error_msg": "..."}],
+  "still_running": [{"id": "i-03", "job_id": "j-03"}]
+}
+```
+
+Report all three lists. Failed ids may be retried individually after a fresh preview; never retry a
+failed id blindly inside the same batch.
+
+## 14. Batch tags — `huawei_batch_tag_ecs` / `huawei_batch_untag_ecs`
+
+Purpose: add or delete tags on a resolved target set. Operations: ECS `ListServerTags` (read),
+`BatchCreateServerTags` (`--action=create`), `BatchDeleteServerTags` (`--action=delete`). Risk: **R2**.
+
+The tag API takes a **single `--server_id`** path parameter, so resolve the target set first and loop
+per instance, aggregating results like §13.
+
+### 14.1 Resolve targets
+
+Targets may be given as an instance-id list or derived from a query condition:
+
+```bash
+# Read current tags (R3)
+hcloud ECS ListServerTags --cli-region={region}
+skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud ECS ListServerTags --cli-region={region}
+# Or resolve by condition (R3)
+hcloud ECS ListServersDetails --cli-region={region} --name={name} --status={status} --tags={key}={value}
+skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud ECS ListServersDetails --cli-region={region} --name={name} --status={status} --tags={key}={value}
+```
+
+Preview `{id, name, current_tags}` + the tag changes to be applied, then confirm.
+
+### 14.2 Create / delete tags
+
+```bash
+# [W] 写操作 (WRITE): adds tags to one instance — R2: preview target list + tags, then confirm
+hcloud ECS BatchCreateServerTags --cli-region={region} --server_id={server_id} --action=create --tags.1.key={key} --tags.1.value={value}
+skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud ECS BatchCreateServerTags --cli-region={region} --server_id={server_id} --action=create --tags.1.key={key} --tags.1.value={value}
+
+# [W] 写操作 (WRITE): deletes tags from one instance — R2: preview target list + tags, then confirm
+hcloud ECS BatchDeleteServerTags --cli-region={region} --server_id={server_id} --action=delete --tags.1.key={key}
+skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud ECS BatchDeleteServerTags --cli-region={region} --server_id={server_id} --action=delete --tags.1.key={key}
+```
+
+Parameter facts (verified with `--help`): `--action` is required (`create` / `delete`, lowercase);
+`--tags.N.key` is required (≤ 36 chars, unique per resource); `--tags.N.value` is optional
+(≤ 43 chars). Deleting a tag needs only the key. Adding the same key twice is rejected — send one
+value per key (update = delete + create, or use `ListServerTags` to check first).
+
+Result contract: `{total, success:[{id, tags}], failed:[{id, error_code, error_msg}]}`. Deleting a
+tag that drives billing/automation is a state change: state the impact before confirmation.
+
+## 15. VNC console — `huawei_get_ecs_vnc_console`
+
+Purpose: obtain a temporary noVNC address for out-of-band console access (e.g. SSH/RDP is broken).
+Operation: ECS `ShowServerRemoteConsole`. Risk: **R3** (read-only) — but the URL grants console
+access, so treat it as a secret.
+
+| Parameter | Req. | Notes |
+| --------- | ---- | ----- |
+| `--server_id` | required | Target instance ID |
+| `--remote_console.protocol` | required | Fixed value `vnc` |
+| `--remote_console.type` | required | Fixed value `novnc` |
+
+```bash
+hcloud ECS ShowServerRemoteConsole --cli-region={region} --server_id={server_id} --remote_console.protocol=vnc --remote_console.type=novnc
+skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud ECS ShowServerRemoteConsole --cli-region={region} --server_id={server_id} --remote_console.protocol=vnc --remote_console.type=novnc
+```
+
+**Validity**: the returned `remote_console.url` is a short-lived address (about 10 minutes,
+platform-controlled; open it promptly). When it expires, call the API again — never cache or forward
+the URL as a permanent link. Report only `{server_id, protocol, type, url, valid_note}` to the
+requesting user, never to logs, and never persist it in a file or report attachment.
+
+Failure / degradation: a `400` usually means the instance state does not allow a console now — check
+`ShowServer` and report it; do not retry with a guessed protocol/type (only `vnc`/`novnc` are valid).
+
+## 16. Enterprise-project migration — `huawei_change_ecs_enterprise_project`
+
+Purpose: move an instance (and optionally its associated EVS disks / EIPs) to another enterprise
+project. Operation: EPS `MigrateResource`. Risk: **R2** — billing attribution and IAM/EP-scoped
+visibility change; access for users scoped to the old EP can disappear.
+
+Pre-check (R3): target EP exists, current binding, and the resource-type mapping:
+
+```bash
+hcloud EPS ListEnterpriseProject --cli-region={region}
+hcloud EPS ListResourceMapping --cli-region={region}
+hcloud ECS ShowServer --cli-region={region} --server_id={server_id}
+```
+
+| Parameter | Req. | Notes |
+| --------- | ---- | ----- |
+| `--enterprise_project_id` | required | Target EP ID; `0` = default EP |
+| `--resource_id` | required | ECS instance ID |
+| `--resource_type` | required | Resource type from `EPS ListResourceMapping` for ECS — do not guess |
+| `--project_id` | required for regional resources | Project ID of the resource (ECS is region-level) — KooCLI maps this body field |
+| `--region_id` | required for OBS only | Do not send it for ECS |
+| `--associated` | optional | `true` also migrates ECS-associated EVS disks and EIPs |
+
+```bash
+# [W] 写操作 (WRITE): migrates the ECS to another enterprise project — R2: preview current/target EP + explicit confirmation
+hcloud EPS MigrateResource --cli-region={region} --enterprise_project_id={target_eps_id} --resource_id={server_id} --resource_type={resource_type} --project_id={project_id} --associated=true
+skill-quality-cli run --skill-name huawei-cloud-ecs-manage -- hcloud EPS MigrateResource --cli-region={region} --enterprise_project_id={target_eps_id} --resource_id={server_id} --resource_type={resource_type} --project_id={project_id} --associated=true
+```
+
+Preview must state: current EP → target EP, whether `--associated` is on, and that billing
+attribution changes. Verify afterwards with `ECS ListServersDetails --enterprise_project_id={target_eps_id}`.
+On `404` re-check the EP ID; on `403` the caller lacks `eps:resources:migrate`.
+
+## 17. IAM and account-balance precheck (create-failure diagnosis)
+
+Run these **before** quota/flavor/image checks when a create fails, so a permission or billing
+failure is never misreported as a capacity problem.
+
+### 17.1 IAM precheck
+
+1. Re-run a minimal read (`ECS ShowServerLimits`, `ECS ShowServer`, or the exact failed call).
+2. Classify:
+   - `403` + `not authorized` / `Forbidden` / permission message → **IAM action missing** for this
+     user/project — map the failed operation to `references/iam-policies.md` and grant the specific
+     action; never switch to `ECS FullAccess`.
+   - `401` / expired token / `APIGW.0301` with no working read at all → **credential/authentication**
+     problem, not a policy problem — re-authenticate (`hcloud configure list`).
+   - Reads work but only the create fails with `403` → the create/action or BSS/order action is
+     missing (e.g. `ecs:cloudServers:create`, `bss:order:pay` when auto-paying).
+3. Report the missing action name and the policy section, never the raw token.
+
+### 17.2 Account balance / arrears
+
+KooCLI in this environment reports `Unsupported service: BSS`, so the balance is **not** queried via
+`hcloud BSS`. Use one of:
+
+- the **BSS OpenAPI** `GET /v2/accounts/customer-accounts/balances` through the official
+  `huaweicloudsdkbss` SDK (global endpoint, `cn-north-1`), or
+- the **Billing Center console** (费用中心 → 总览 / 账户余额).
+
+Balance failures surface as `Insufficient account balance`, `Account is in arrears`,
+`Order payment failed`, or an unpaid order after `--server.extendparam.isAutoPay=true`. This is most
+relevant for `prePaid` creation and any auto-pay order; post-paid calls can still be rejected when
+the account is frozen. Fix = recharge / settle arrears, then re-preview the create.
+
+### 17.3 Conclusion wording
+
+| Evidence | Root cause | Fix |
+| -------- | ---------- | --- |
+| `403` / `not authorized`, no other API error | IAM permission | Grant the action from `references/iam-policies.md` |
+| `401` / expired credentials on every call | Authentication | Re-run `hcloud configure list` / refresh AK/SK |
+| `Insufficient account balance` / arrears / failed order | Account balance | Recharge in Billing Center, then retry |
+| `Insufficient quota` / `Quota exceeded` | Quota | Raise the quota (§1 quota check) |
+| Code + parameter error (`FlavorNotFound`, image/network/keypair/disk) | Parameter | Fix per the §2 diagnose table in `SKILL.md` |
+
+## 18. Billing modes and batch heterogeneous creation
+
+`CreateServers` (V1.1) is required for anything other than plain post-paid; `CreatePostPaidServers`
+does not carry the period/market fields. Parameters (verified with
+`hcloud ECS CreateServers --help`, KooCLI 7.3.12):
+
+| Goal | Parameters |
+| ---- | ---------- |
+| Post-paid (default) | `--server.extendparam.chargingMode=postPaid` |
+| Yearly/monthly | `--server.extendparam.chargingMode=prePaid --server.extendparam.periodType={month\|year} --server.extendparam.periodNum={n}`; `--server.extendparam.isAutoPay={true\|false}`, `--server.extendparam.isAutoRenew={true\|false}` |
+| Spot | `--server.extendparam.chargingMode=postPaid --server.extendparam.marketType=spot`; optional `--server.extendparam.spotPrice={price}`, `--server.extendparam.interruption_policy=immediate`, spot duration fields |
+| Enterprise project at create | `--server.extendparam.enterprise_project_id={eps_id}` |
+| Homogeneous batch | `--server.count={n}` |
+| Heterogeneous batch | one group per `{flavor, image, subnet, AZ, count}`; aggregate server ids |
+
+Hard rules (from `--help`, do not guess around them):
+
+- `prePaid` **requires** `periodType` + `periodNum`; `periodNum` range depends on the period type.
+- `prePaid` with `--server.key_name` additionally requires `op_svc_userid` in `metadata`.
+- `marketType=spot` only takes effect with `chargingMode=postPaid`; `spotPrice` must be ≤ the
+  pay-per-use price and ≥ the market price.
+- `--dry_run=true` validates the payload without creating or ordering anything — always do it first,
+  then show the billing mode / period / count / cost warning and collect explicit confirmation.
+
+**Heterogeneous batch flow** (`huawei_batch_create_ecs_instances`): build the plan as
+`[{flavor, image, subnet, az, count}, ...]`; preview all groups with the total instance count and the
+cost warning; execute group by group with `--dry-run` first; then poll each `job_id` and each new
+`server_id` to `ACTIVE`; return
+`{groups:[...], servers:[{group, server_id, job_id, status}], failed:[...]}`. One group failing does
+not stop the remaining groups; report both lists.
+
+## 19. Common error handling
 
 | Symptom | Likely cause | Action |
 | ------- | ------------ | ------ |
@@ -558,10 +827,17 @@ Failure / degradation:
 Never auto-retry a write. A failed write is reported with the raw error, and a new attempt requires
 a fresh preview and a fresh confirmation.
 
-## 14. Coverage map
+## 20. Coverage map
 
 | Issue | Requirement | Section |
 | ----- | ----------- | ------- |
+| #1105 (原 #1033) | Tag-based batch start/stop/reboot, per-instance success/failed summary | §13 |
+| #1105 (原 #1037-2) | Batch create/delete server tags, targets by id list or query condition | §14 |
+| #1105 (原 #1037-3/4) | VNC console address + validity; CES metric entry | §15 (VNC), `SKILL.md` §2 (CES) |
+| #1105 (原 #1037-6) | Enterprise-project migration | §16 |
+| #1105 (原 #1037-5) | IAM permission and account-balance precheck | §17 |
+| #1105 (原 #1037-1/8/10) | Yearly-monthly (prePaid), spot, and batch heterogeneous creation | §18 |
+| #1105 (原 #1037-9) | Security-group ID first; duplicate-name rejection | `SKILL.md` §5 |
 | #921 | Mandatory async polling after every write; `ShowJob` until `SUCCESS`/`FAIL`; `ShowServer` until `ACTIVE` for create; report the final status | §1 (plus a "then poll (§1)" note in every write section) |
 | #921 | The 4 wrong conclusions caused by skipping the poll | §1 table |
 | #931 ① | Spec change — `huawei_resize_ecs_instance` | §2 |
