@@ -9,7 +9,7 @@
 | AC-01 | Can create an inference service with valid params | `id` returned (service identifier; some docs call it `service_id`), status non-terminal |
 | AC-02 | Can dry-run validate create params | `[DRY-RUN]` message, no service created |
 | AC-03 | Can create with health-check JSONs | `id` returned (service identifier), probes applied |
-| AC-04 | Rejects invalid JSON param (envs/health) | Click validation error on malformed JSON |
+| AC-04 | Rejects invalid JSON param (envs/health) — **negative case, EXPECT-FAIL** | Non-zero exit with Click validation error on malformed JSON |
 
 ### Wait-Deploy
 
@@ -53,8 +53,16 @@
 | # | Criterion | Verification |
 | --- | ----------- | ------------- |
 | AC-22 | Can dry-run validate delete | `[DRY-RUN]` message, no deletion |
-| AC-23 | Path traversal rejected via validate_safe_id | Error on `../` service_id |
-| AC-24 | Missing workspace rejected | Click validation error: Missing option '--workspace-id' |
+| AC-23 | Path traversal rejected via validate_safe_id — **negative case, EXPECT-FAIL** | Non-zero exit on `../` service_id (Click BadParameter, exit 2) |
+| AC-24 | Missing workspace rejected — **negative case, EXPECT-FAIL** | Non-zero exit (1) with `参数错误: Request.workspace_id is required` |
+
+> **Negative cases**: AC-04 / AC-23 / AC-24 (and TC-12 / TC-13 in
+> `references/verification-method.md`; the evaluator's TC-F-34 / TC-F-35 are the path-traversal
+> case TC-13) assert that invalid input is **rejected**. Success = non-zero exit code with a
+> readable error. They must never be executed as positive functional cases: a zero exit code
+> here is a failure of the skill's validation layer. Note `--name` must satisfy
+> `^[\u4e00-\u9fa5a-zA-Z0-9_\-./]{3,64}$` — a one-character name fails first and masks the
+> intended error.
 
 ### Parameter Auto-Discovery (Space Asset / Custom Models)
 

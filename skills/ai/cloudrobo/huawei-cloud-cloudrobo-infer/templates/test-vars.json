@@ -20,9 +20,10 @@
       "id": "TC-03",
       "name": "create-service",
       "command": "cloudrobo infer create --name verify-infer --flavor {flavor} --model-json '{\"model_id\": \"{model_id}\", \"model_version_id\": \"{model_version_id}\"}' --workspace-id {workspace_id} --pool-type SHARED --stop-schedule-json '{\"duration\": 60, \"time_unit\": \"MINUTES\"}'",
-      "description": "Create an inference service",
+      "description": "Create an inference service (mutating — requires explicit user confirmation, never auto-run)",
       "expected": "JSON with id returned (service identifier)",
-      "type": "write"
+      "type": "write",
+      "result": "SKIP"
     },
     {
       "id": "TC-04",
@@ -36,33 +37,37 @@
       "id": "TC-05",
       "name": "start-service",
       "command": "cloudrobo infer start --service-id {service_id}",
-      "description": "Start a service",
+      "description": "Start a service (mutating — requires explicit user confirmation, never auto-run)",
       "expected": "Status transitions toward RUNNING",
-      "type": "write"
+      "type": "write",
+      "result": "SKIP"
     },
     {
       "id": "TC-06",
       "name": "stop-service",
       "command": "cloudrobo infer stop --service-id {service_id}",
-      "description": "Stop a service",
+      "description": "Stop a service (mutating — requires explicit user confirmation, never auto-run)",
       "expected": "Status transitions to STOPPED",
-      "type": "write"
+      "type": "write",
+      "result": "SKIP"
     },
     {
       "id": "TC-07",
       "name": "update-service",
       "command": "cloudrobo infer update --service-id {service_id} --description 'Updated description'",
-      "description": "Update service config",
+      "description": "Update service config (mutating — requires explicit user confirmation, never auto-run)",
       "expected": "JSON confirming update",
-      "type": "write"
+      "type": "write",
+      "result": "SKIP"
     },
     {
       "id": "TC-08",
       "name": "delete-service",
       "command": "cloudrobo infer delete --service-id {service_id}",
-      "description": "Delete a service",
+      "description": "Delete a service (mutating — requires explicit user confirmation, never auto-run)",
       "expected": "JSON confirming deletion",
-      "type": "write"
+      "type": "write",
+      "result": "SKIP"
     },
     {
       "id": "TC-09",
@@ -91,21 +96,46 @@
     {
       "id": "TC-12",
       "name": "invalid-json-rejected",
-      "command": "cloudrobo infer create --name x --flavor f --model-json '{\"model_id\": \"m\", \"model_version_id\": \"mv\"}' --workspace-id {workspace_id} --pool-type SHARED --envs-json not-json",
-      "description": "Verify malformed JSON is rejected",
-      "expected": "Error: Invalid JSON (click.BadParameter)",
-      "type": "read"
+      "command": "cloudrobo infer create --name xyz --flavor f --model-json '{\"model_id\": \"m\", \"model_version_id\": \"mv\"}' --workspace-id {workspace_id} --pool-type SHARED --envs-json not-json",
+      "description": "Negative case — Verify malformed JSON is rejected; failure of the command is the PASS criterion",
+      "expected": "EXPECT-FAIL (exit != 0): Invalid value for '--envs-json': Invalid JSON for 'envs'",
+      "type": "negative",
+      "negative": true,
+      "expect_exit": "non-zero"
     },
     {
       "id": "TC-13",
+      "aliases": ["TC-F-34", "TC-F-35"],
       "name": "path-traversal-rejected",
-      "command": "cloudrobo infer show --service-id '../etc/passwd'",
-      "description": "Verify path traversal is rejected via validate_safe_id",
-      "expected": "Error: validation error",
-      "type": "read"
+      "command": "cloudrobo infer show --service-id '../../etc/hosts'",
+      "description": "Negative case (evaluator TC-F-34 / TC-F-35) — Verify path traversal is rejected via validate_safe_id; failure of the command is the PASS criterion",
+      "expected": "EXPECT-FAIL (exit != 0): Invalid value for '--service-id': service_id format invalid (UUID pattern)",
+      "type": "negative",
+      "negative": true,
+      "expect_exit": "non-zero"
     },
     {
       "id": "TC-14",
+      "name": "missing-name-rejected",
+      "command": "cloudrobo infer create --flavor f --model-json '{\"model_id\":\"m\",\"model_version_id\":\"mv\"}' --pool-type SHARED --stop-schedule-json '{\"duration\": 60, \"time_unit\": \"MINUTES\"}'",
+      "description": "Negative case — Verify the client-required --name is rejected by Click before any backend call; failure of the command is the PASS criterion",
+      "expected": "EXPECT-FAIL (exit != 0): Missing option '--name'",
+      "type": "negative",
+      "negative": true,
+      "expect_exit": "non-zero"
+    },
+    {
+      "id": "TC-15",
+      "name": "missing-model-json-rejected",
+      "command": "cloudrobo infer create --name xyz --flavor f --pool-type SHARED --stop-schedule-json '{\"duration\": 60, \"time_unit\": \"MINUTES\"}'",
+      "description": "Negative case — Verify the client-required --model-json is rejected by Click before any backend call; failure of the command is the PASS criterion",
+      "expected": "EXPECT-FAIL (exit != 0): Missing option '--model-json'",
+      "type": "negative",
+      "negative": true,
+      "expect_exit": "non-zero"
+    },
+    {
+      "id": "TC-16",
       "name": "auto-discover-params",
       "command": "cloudrobo asset show-asset --asset-id {model_id} → show-version → download-url → show-asset algorithm",
       "description": "Auto-discover deployment parameters from algorithm asset and config files",
@@ -125,11 +155,13 @@
     "end_ms": "End timestamp in milliseconds (for list-logs)"
   },
   "notes": [
-    "Mutating tests (type=write) require user confirmation before execution",
+    "Cases with result=SKIP are mutating and require user confirmation before execution (never auto-run)",
+    "Cases with negative=true are EXPECT-FAIL: a non-zero exit code is the pass criterion; never execute them as positive functional cases",
     "Deploy/start consume pool compute resources; wait-deploy (TC-09) polls every 5s, default 600s timeout",
     "list-logs (TC-10, TC-11) require milliseconds timestamps",
-    "TC-12/TC-13 verify JSON validation and path traversal protection",
+    "TC-12/TC-13 verify JSON validation and path traversal protection (negative cases, exit != 0 expected)",
+    "TC-14/TC-15 verify client-required options (--name / --model-json) are rejected by Click before any backend call (negative cases)",
     "Cross-package tests query the asset service (list-publication-assets --type model or list-assets --catalog-id <id> --type model)",
-    "For comprehensive end-to-end testing beyond these read-only checks, run the commands from SKILL.md manually"
+    "For comprehensive end-to-end testing beyond these read-only checks, run scripts/test-cli-commands.sh and the commands in SKILL.md manually"
   ]
 }

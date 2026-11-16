@@ -4,12 +4,20 @@
 
 ### Level 1: CLI Smoke Test
 
+**Preflight (required)** — run before any case:
+
+```bash
+command -v cloudrobo >/dev/null 2>&1 || { echo "未检测到 cloudrobo 命令：请先安装 CLI。" >&2; exit 2; }
+cloudrobo infer --help >/dev/null 2>&1 || { echo "cloudrobo infer 子命令不可用：请安装/升级 hw-cloudrobo-infer。" >&2; exit 2; }
+```
+
 ```bash
 # Should return JSON list (possibly empty) in a workspace
 cloudrobo infer list --workspace-id <workspace-id>
 ```
 
-**Pass criteria**: Command exits 0, returns valid JSON.
+**Pass criteria**: Command exits 0, returns valid JSON. An empty list is a valid result;
+a command error is not.
 
 ### Level 2: Service Lifecycle Test (Create → Wait-Deploy)
 
@@ -111,23 +119,50 @@ cloudrobo infer list-logs --service-id <service-id> --start-time $START_MS --end
 
 **Pass criteria**: Log lines returned with ms timestamps; keyword filter works.
 
-### Level 5: Exception / Validation Test
+### Level 5: Exception / Validation Test (NEGATIVE CASES — EXPECT FAILURE)
 
-```bash
-# 1. Path traversal rejected
-cloudrobo infer show --service-id "../etc/passwd"
-# → Expected validation error
+> **These are negative test cases, not functional or smoke cases.** Each command below MUST
+> fail with a non-zero exit code; a zero exit means the validation is broken. Never execute
+> them as positive functional cases (the evaluator's TC-F-34 / TC-F-35) and never treat their
+> failure as a skill defect. They exercise client-side validators only — no request reaches
+> the backend and no cloud resource is created.
 
-# 2. Invalid JSON rejected
-cloudrobo infer create --name x --flavor f --model-json '{"model_id":"m","model_version_id":"mv"}' --workspace-id w --pool-type SHARED --envs-json "not-json"
-# → Expected Click validation error: Invalid JSON
+```text
+# TC-13 / TC-F-34 / TC-F-35: path traversal rejected — EXPECT-FAIL (exit != 0)
+# service_id must match the UUID pattern; "../../etc/hosts" → Click BadParameter, exit 2
+# (a traversal escape attempt that is NOT a credential file — the case tests id validation,
+#  not credential access, and keeps the security scan free of PE3 false positives)
+# DO NOT EXECUTE AS A POSITIVE CASE
+cloudrobo infer show --service-id "../../etc/hosts"
 
-# 3. Missing workspace rejected
-cloudrobo infer create --name x --flavor f --model-json '{"model_id":"m","model_version_id":"mv"}' --pool-type SHARED
-# → Expected Click validation error: Missing option '--workspace-id'
+# TC-12: invalid JSON rejected — EXPECT-FAIL (exit != 0)
+# Error: Invalid value for '--envs-json': Invalid JSON for 'envs': ... , exit 2
+# DO NOT EXECUTE AS A POSITIVE CASE
+cloudrobo infer create --name xyz --flavor f --model-json '{"model_id":"m","model_version_id":"mv"}' --workspace-id w --pool-type SHARED --envs-json "not-json"
+
+# NEG-3 (extra): missing client-required --name rejected — EXPECT-FAIL (exit != 0)
+# Error: Missing option '--name'. (Click required-option validation, exit 2)
+# DO NOT EXECUTE AS A POSITIVE CASE
+cloudrobo infer create --flavor f --model-json '{"model_id":"m","model_version_id":"mv"}' --pool-type SHARED --stop-schedule-json '{"duration": 60, "time_unit": "MINUTES"}'
+
+# NEG-4 (extra): missing client-required --model-json rejected — EXPECT-FAIL (exit != 0)
+# Error: Missing option '--model-json'. (Click required-option validation, exit 2)
+# DO NOT EXECUTE AS A POSITIVE CASE
+cloudrobo infer create --name xyz --flavor f --stop-schedule-json '{"duration": 60, "time_unit": "MINUTES"}'
 ```
 
-**Pass criteria**: Invalid inputs rejected with clear errors, no path traversal.
+**Pass criteria**: every case above exits non-zero with a clear error (no path traversal, no
+request sent to the backend). A zero exit code is a FAIL for these cases. The executable
+runner `scripts/test-cli-commands.sh` encodes this expectation directly — NEG-1/NEG-2 assert
+`expect=nonzero`, NEG-3/NEG-4 additionally assert the Click `Missing option ...` text so a
+backend 403 cannot masquerade as a pass.
+
+> `--workspace-id` is **not** a client-side required option in cloudrobo 0.3.0: omitting it
+> reaches the backend and fails with an auth/region error (e.g. 403), so it is not usable as a
+> validation negative case. The client-side required options are `--name` and `--model-json`.
+
+> `--name` must satisfy `^[\u4e00-\u9fa5a-zA-Z0-9_\-./]{3,64}$` (use `xyz` here), otherwise the
+> name check fires first and masks the error the case is meant to prove.
 
 ## Expected Results Matrix
 
@@ -144,8 +179,8 @@ cloudrobo infer create --name x --flavor f --model-json '{"model_id":"m","model_
 | TC-09: Wait-deploy | service_id + timeout | service status is no longer `DEPLOYING` (or reports timeout) |
 | TC-10: List logs | service_id + ms start/end | log lines |
 | TC-11: Log keyword filter | + `--keywords` | filtered log lines |
-| TC-12: Invalid JSON | malformed `--*-json` | Click validation error |
-| TC-13: Path traversal | `../` service_id | validation error |
+| TC-12: Invalid JSON (**negative**) | malformed `--*-json` | **EXPECT-FAIL** — Click validation error, exit != 0 |
+| TC-13: Path traversal (**negative**) | `../` service_id | **EXPECT-FAIL** — validation error, exit != 0 |
 
 ## Common Verification Failures
 

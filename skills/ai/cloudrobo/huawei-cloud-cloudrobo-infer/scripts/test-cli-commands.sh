@@ -1,27 +1,36 @@
 #!/bin/bash
 # Test script for cloudrobo-infer skill
-# Usage: ./test-cli-commands.sh [-w workspace_id]
-# If a workspace id is provided via -w, workspace-scoped tests will use it; otherwise they run without it.
+# Usage: bash scripts/test-cli-commands.sh [-w workspace_id]
 #
-# Optional env vars (used to drive the actual read-only / no-cost executions):
+# Behaviour:
+#   1) One-time PREFLIGHT — CLI present, `infer` subcommand registered, AK/SK present.
+#      Region is reported when configured (client default otherwise). Any failure prints a
+#      Chinese hint and exits 1 immediately.
+#   2) Negative cases first (client-side validation only): they MUST exit non-zero.
+#   3) Read-only + dry-run cases run in one batch (no sleeps, no prompts).
+#   4) Mutating cases (create / start / stop / update / delete) are never auto-run — they are
+#      reported as SKIP.
+#   5) Every case is scored; failures are collected and the script exits non-zero if any case
+#      failed. No `|| echo` swallowing: a failing command fails the case.
+#
+# Optional env vars:
 #   WORKSPACE_ID / -w  - workspace for list/create (create/list are workspace-scoped)
-#   MODEL_ID           - model asset id to deploy (for create / dry-run create)
-#   MODEL_VERSION_ID   - model version id to deploy (for create / dry-run create)
-#   FLAVOR             - compute flavor (for create / dry-run create)
-#   POOL_ID            - compute pool id, e.g. pool-<resource_id> (for create / dry-run create)
+#   MODEL_ID           - model asset id to deploy (for dry-run create)
+#   MODEL_VERSION_ID   - model version id to deploy (for dry-run create)
+#   FLAVOR             - compute flavor (for dry-run create)
+#   POOL_ID            - compute pool id, e.g. pool-<resource_id> (dry-run create)
 #   POOL_TYPE          - SHARED / DEDICATED (default SHARED)
-#   SERVICE_ID         - existing service id (for show/start/stop/logs/update/delete/wait-deploy)
-#   WAIT_TIMEOUT       - wait-deploy timeout seconds (default 600)
-# When a required input is missing, the test is explicitly skipped with a WARN instead of
-# silently disappearing; dry-run / read-only paths are actually executed when inputs are set.
+#   SERVICE_ID         - existing service id (for show / list-logs / wait-deploy)
+#   WAIT_TIMEOUT       - wait-deploy timeout seconds (default 60 in this script)
+#   OUT_LINES          - max output lines echoed per case (default 8, keeps context small)
 
-set -euo pipefail
+set -uo pipefail
 
-WORKSPACE_ID=""
-
-while getopts ":w:" opt; do
+WORKSPACE_ID="${WORKSPACE_ID:-}"
+while getopts ":w:h" opt; do
     case "$opt" in
         w) WORKSPACE_ID="$OPTARG" ;;
+        h) sed -n '2,30p' "$0"; exit 0 ;;
         \?) echo "Unknown option: -$OPTARG" >&2; exit 1 ;;
         :) echo "Option -$OPTARG requires an argument." >&2; exit 1 ;;
     esac
@@ -34,154 +43,199 @@ FLAVOR=${FLAVOR:-}
 POOL_ID=${POOL_ID:-}
 POOL_TYPE=${POOL_TYPE:-SHARED}
 SERVICE_ID=${SERVICE_ID:-}
-WAIT_TIMEOUT=${WAIT_TIMEOUT:-600}
+WAIT_TIMEOUT=${WAIT_TIMEOUT:-60}
+OUT_LINES=${OUT_LINES:-8}
 
-echo "=== Testing cloudrobo-infer skill ==="
-echo "Workspace ID:   ${WORKSPACE_ID:-<not set>}"
-echo "Model ID:       ${MODEL_ID:-<not set>}"
-echo "Model Version:  ${MODEL_VERSION_ID:-<not set>}"
-echo "Flavor:         ${FLAVOR:-<not set>}"
-echo "Pool ID:        ${POOL_ID:-<not set>}"
-echo "Pool Type:      $POOL_TYPE"
-echo "Service ID:     ${SERVICE_ID:-<not set>}"
-echo "Wait Timeout:   $WAIT_TIMEOUT"
+PASS=0
+FAIL=0
+SKIP=0
+FAILED_CASES=()
+TMPDIR_RUN=$(mktemp -d "${TMPDIR:-/tmp}/cloudrobo-infer-tests.XXXXXX") || {
+    echo "无法创建临时目录，测试终止。" >&2; exit 1; }
+trap 'rm -rf "$TMPDIR_RUN"' EXIT
+
+# ---------------------------------------------------------------- preflight
+echo "=== cloudrobo-infer preflight ==="
+
+command -v cloudrobo >/dev/null 2>&1 || {
+    echo "前置检查失败：未检测到 cloudrobo 命令。请安装聚合客户端 CLI（pip install hw-cloudrobo-client），详见 references/cli-installation-guide.md。" >&2
+    exit 2
+}
+
+if ! cloudrobo infer --help >/dev/null 2>&1; then
+    echo "前置检查失败：cloudrobo infer 子命令不可用。请安装或升级 hw-cloudrobo-client（聚合包，已含推理模块）；cloudrobo --help 可确认已注册命令。" >&2
+    exit 2
+fi
+
+if ! cloudrobo asset --help >/dev/null 2>&1; then
+    echo "前置检查失败：cloudrobo asset 命令组不可用（形如 Error: No such command asset），说明只装了推理模块，模型/资源解析无法进行。请改装聚合客户端 pip install hw-cloudrobo-client 后重试。" >&2
+    exit 2
+fi
+
+USER_CONFIG="${HOME}/.cloudrobo/config.yaml"
+HAS_CREDS=0
+if [ -n "${HUAWEI_CLOUD_AK:-}" ] && [ -n "${HUAWEI_CLOUD_SK:-}" ]; then
+    HAS_CREDS=1
+elif [ -f "$USER_CONFIG" ]; then
+    # Accept either an encrypted (ak_enc) or a plain ak entry; empty quotes ("", '') do not count.
+    CFG_VALUE=$(awk '
+        /^[[:space:]]*(ak_enc|ak):[[:space:]]*/ {
+            v = $0
+            sub(/^[[:space:]]*(ak_enc|ak):[[:space:]]*/, "", v)
+            gsub(/["\047[:space:]]/, "", v)
+            if (length(v) > 0) { print v; exit }
+        }' "$USER_CONFIG" 2>/dev/null)
+    [ -n "${CFG_VALUE:-}" ] && HAS_CREDS=1
+fi
+if [ "$HAS_CREDS" -ne 1 ]; then
+    echo "前置检查失败：未找到 AK/SK。请 export HUAWEI_CLOUD_AK / HUAWEI_CLOUD_SK，或执行 cloudrobo config set ak <ak> sk <sk> 后重试。" >&2
+    exit 2
+fi
+
+REGION=""
+if [ -f "$USER_CONFIG" ]; then
+    REGION=$(cloudrobo config get region 2>/dev/null | tr -d '[:space:]' || true)
+fi
+if [ -z "$REGION" ]; then
+    echo "提示：未在用户配置中读到 region，将使用客户端默认 cn-southwest-2；如需切换：cloudrobo config set region <region>。"
+else
+    echo "Region: $REGION"
+fi
 echo ""
 
-# Test 1: List inference services (requires workspace_id)
+# ---------------------------------------------------------------- helpers
+# run_case <id> <expect: zero|nonzero> <label> <command...>
+run_case() {
+    local id="$1" expect="$2" label="$3"; shift 3
+    local out="$TMPDIR_RUN/$id.log"
+    echo "[$id] $label"
+    "$@" >"$out" 2>&1
+    local rc=$?
+    if { [ "$expect" = "zero" ] && [ "$rc" -eq 0 ]; } || { [ "$expect" = "nonzero" ] && [ "$rc" -ne 0 ]; }; then
+        echo "  PASS (exit=$rc, expected $expect)"
+        PASS=$((PASS + 1))
+        [ "$OUT_LINES" -gt 0 ] && sed -n "1,${OUT_LINES}p" "$out" | sed 's/^/  /'
+    else
+        echo "  FAIL (exit=$rc, expected $expect)"
+        FAIL=$((FAIL + 1))
+        FAILED_CASES+=("$id: $label")
+        sed -n "1,${OUT_LINES}p" "$out" | sed 's/^/  /'
+    fi
+    echo ""
+}
+
+# run_case_reject <id> <regex> <label> <command...>
+# Expects a non-zero exit AND the client-side error text to match <regex>. Used for
+# Click's required-option validation, so the case cannot pass on an unrelated backend
+# error (e.g. 403) that happens to also exit non-zero.
+run_case_reject() {
+    local id="$1" pattern="$2" label="$3"; shift 3
+    local out="$TMPDIR_RUN/$id.log"
+    echo "[$id] $label"
+    "$@" >"$out" 2>&1
+    local rc=$?
+    if [ "$rc" -ne 0 ] && grep -qiE -- "$pattern" "$out"; then
+        echo "  PASS (exit=$rc, expected client-side error text matched)"
+        PASS=$((PASS + 1))
+        [ "$OUT_LINES" -gt 0 ] && sed -n "1,${OUT_LINES}p" "$out" | sed 's/^/  /'
+    else
+        echo "  FAIL (exit=$rc, expected non-zero exit + error text /$pattern/ not matched)"
+        FAIL=$((FAIL + 1))
+        FAILED_CASES+=("$id: $label")
+        sed -n "1,${OUT_LINES}p" "$out" | sed 's/^/  /'
+    fi
+    echo ""
+}
+
+skip_case() {
+    echo "[$1] $2 ... SKIP ($3)"
+    SKIP=$((SKIP + 1))
+    echo ""
+}
+
+# ---------------------------------------------------------------- negative cases
+# These are validation cases: success means the CLI rejects the input (non-zero exit).
+# They exercise client-side validators only and never reach the backend.
+echo "=== Negative cases (EXPECT-FAIL, exit != 0) ==="
+
+run_case NEG-1 nonzero "TC-13 / TC-F-34 / TC-F-35: path traversal service_id is rejected" \
+    cloudrobo infer show --service-id "../../etc/hosts"
+
+run_case NEG-2 nonzero "TC-12: malformed --envs-json is rejected" \
+    cloudrobo infer create --name xyz --flavor f \
+    --model-json '{"model_id":"m","model_version_id":"mv"}' --workspace-id w \
+    --pool-type SHARED --envs-json "not-json"
+
+# NEG-3 / NEG-4 hit Click's own required-option validation (missing --name / --model-json),
+# so they never reach the backend (no 403/405 masking) and the assertion can pin the message.
+run_case_reject NEG-3 "Missing option '--name'|Missing option \"--name\"" \
+    "extra: missing client-required --name is rejected by Click" \
+    cloudrobo infer create --flavor f \
+    --model-json '{"model_id":"m","model_version_id":"mv"}' --pool-type SHARED \
+    --stop-schedule-json '{"duration": 60, "time_unit": "MINUTES"}'
+
+run_case_reject NEG-4 "Missing option '--model-json'|Missing option \"--model-json\"" \
+    "extra: missing client-required --model-json is rejected by Click" \
+    cloudrobo infer create --name xyz --flavor f --pool-type SHARED \
+    --stop-schedule-json '{"duration": 60, "time_unit": "MINUTES"}'
+
+# ---------------------------------------------------------------- read-only batch
+echo "=== Read-only batch ==="
+
 if [ -n "$WORKSPACE_ID" ]; then
-    echo "Test 1: List inference services in workspace $WORKSPACE_ID"
-    cloudrobo infer list --workspace-id "$WORKSPACE_ID"
-    echo ""
+    run_case RO-1 zero "list services in workspace $WORKSPACE_ID" \
+        cloudrobo infer list --workspace-id "$WORKSPACE_ID" --limit 20
 else
-    echo "Test 1: SKIPPED (no WORKSPACE_ID provided — run with -w <workspace_id>)"
-    echo ""
+    skip_case RO-1 "list services" "no WORKSPACE_ID (run with -w <workspace_id>)"
 fi
 
-# Test 2: Dry-run create service (no actual submission, no cost)
-echo "Test 2: Dry-run create inference service"
-if [ -n "$MODEL_ID" ] && [ -n "$MODEL_VERSION_ID" ] && [ -n "$FLAVOR" ]; then
-    DRYRUN_ARGS=(--name verify-infer --flavor "$FLAVOR"
-        --model-json "{\"model_id\": \"$MODEL_ID\", \"model_version_id\": \"$MODEL_VERSION_ID\"}")
-    if [ -n "$WORKSPACE_ID" ]; then
-        DRYRUN_ARGS+=(--workspace-id "$WORKSPACE_ID")
-    fi
-    if [ -n "$POOL_ID" ]; then
-        DRYRUN_ARGS+=(--pool-id "$POOL_ID")
-    fi
-    DRYRUN_ARGS+=(--pool-type "$POOL_TYPE"
-        --stop-schedule-json '{"duration": 60, "time_unit": "MINUTES"}' --dry-run)
-    cloudrobo infer create "${DRYRUN_ARGS[@]}"
-    echo ""
-else
-    echo "SKIPPED: MODEL_ID, MODEL_VERSION_ID and FLAVOR are required to execute the dry-run create."
-    echo "Example:"
-    echo "  cloudrobo infer create --name verify-infer --flavor <flavor> \\"
-    echo "    --model-json '{\"model_id\": \"<model-id>\", \"model_version_id\": \"<model-version-id>\"}' \\"
-    [ -n "$WORKSPACE_ID" ] && echo "    --workspace-id $WORKSPACE_ID \\" || echo "    --workspace-id <workspace-id> \\"
-    echo "    --pool-type SHARED --stop-schedule-json '{\"duration\": 60, \"time_unit\": \"MINUTES\"}' \\"
-    echo "    # optional: --pool-id <pool-id> only for DEDICATED pools \\"
-    echo "    --dry-run"
-    echo ""
-fi
-
-# Test 3: Create service (mutating, requires valid inputs; runs only when no SERVICE_ID yet)
-echo "Test 3: Create inference service"
 if [ -n "$SERVICE_ID" ]; then
-    echo "SKIPPED: SERVICE_ID already provided ($SERVICE_ID); reuse it for the lifecycle tests."
-    echo ""
-elif [ -n "$MODEL_ID" ] && [ -n "$MODEL_VERSION_ID" ] && [ -n "$FLAVOR" ] && [ -n "$WORKSPACE_ID" ]; then
-    echo "WARNING: This creates a real service consuming pool resources. Press Ctrl+C to cancel."
-    sleep 2
-    CREATE_ARGS=(--name verify-infer --flavor "$FLAVOR"
-        --model-json "{\"model_id\": \"$MODEL_ID\", \"model_version_id\": \"$MODEL_VERSION_ID\"}")
-    if [ -n "$WORKSPACE_ID" ]; then
-        CREATE_ARGS+=(--workspace-id "$WORKSPACE_ID")
-    fi
-    if [ -n "$POOL_ID" ]; then
-        CREATE_ARGS+=(--pool-id "$POOL_ID")
-    fi
-    CREATE_ARGS+=(--pool-type "$POOL_TYPE"
-        --stop-schedule-json '{"duration": 60, "time_unit": "MINUTES"}')
-    CREATE_RESULT=$(cloudrobo infer create "${CREATE_ARGS[@]}")
-    echo "$CREATE_RESULT"
-    NEW_SERVICE_ID=$(echo "$CREATE_RESULT" | python3 -c "import sys, json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo "")
-    if [ -n "$NEW_SERVICE_ID" ]; then
-        echo "Created service id: $NEW_SERVICE_ID (set SERVICE_ID=$NEW_SERVICE_ID to run Test4-9/10 against it)"
-        SERVICE_ID="$NEW_SERVICE_ID"
-    fi
-    echo ""
-else
-    echo "SKIPPED: MODEL_ID, MODEL_VERSION_ID, FLAVOR and WORKSPACE_ID are all required to create a real service."
-    echo "Example:"
-    echo "  cloudrobo infer create --name verify-infer --flavor <flavor> \\"
-    echo "    --model-json '{\"model_id\": \"<model-id>\", \"model_version_id\": \"<model-version-id>\"}' \\"
-    [ -n "$WORKSPACE_ID" ] && echo "    --workspace-id $WORKSPACE_ID \\" || echo "    --workspace-id <workspace-id> \\"
-    echo "    --pool-type SHARED --stop-schedule-json '{\"duration\": 60, \"time_unit\": \"MINUTES\"}'"
-    echo "    # optional: --pool-id <pool-id> only for DEDICATED pools"
-    echo ""
-fi
-
-# Test 4-9: Service lifecycle (mutating; requires SERVICE_ID)
-if [ -n "$SERVICE_ID" ]; then
-    echo "Test 4: Show service detail"
-    cloudrobo infer show --service-id "$SERVICE_ID"
-    echo ""
-
-    echo "Test 5: Start service (user must confirm)"
-    echo "WARNING: This starts the service, consuming pool resources. Press Ctrl+C to cancel."
-    sleep 2
-    cloudrobo infer start --service-id "$SERVICE_ID" || echo "Start may fail if already running"
-    echo ""
-
-    echo "Test 6: Stop service (user must confirm)"
-    echo "WARNING: This stops the service. Press Ctrl+C to cancel."
-    sleep 2
-    cloudrobo infer stop --service-id "$SERVICE_ID" || echo "Stop may fail if already stopped"
-    echo ""
-
-    echo "Test 7: List logs (ms timestamps)"
+    run_case RO-2 zero "show service $SERVICE_ID" cloudrobo infer show --service-id "$SERVICE_ID"
     END_MS=$(date +%s%3N 2>/dev/null || echo "0")
     START_MS=$(( END_MS - 3600000 ))
-    cloudrobo infer list-logs --service-id "$SERVICE_ID" --start-time "$START_MS" --end-time "$END_MS" --limit 50 || echo "Logs may be empty if service never ran"
-    echo ""
-
-    echo "Test 8: Update service (user must confirm)"
-    echo "WARNING: This updates the service. Press Ctrl+C to cancel."
-    sleep 2
-    cloudrobo infer update --service-id "$SERVICE_ID" --description "Updated by test" || echo "Update may fail"
-    echo ""
-
-    echo "Test 9: Delete service (user must confirm)"
-    echo "WARNING: This deletes the service. Press Ctrl+C to cancel."
-    sleep 2
-    cloudrobo infer delete --service-id "$SERVICE_ID" || echo "Delete may fail if service already gone"
-    echo ""
+    run_case RO-3 zero "list logs (ms timestamps)" \
+        cloudrobo infer list-logs --service-id "$SERVICE_ID" \
+        --start-time "$START_MS" --end-time "$END_MS" --limit 50
+    run_case RO-4 zero "wait-deploy (client-side polling)" \
+        cloudrobo infer wait-deploy --service-id "$SERVICE_ID" --timeout "$WAIT_TIMEOUT"
 else
-    echo "WARN: Tests 4-9 (show/start/stop/logs/update/delete) are skipped because SERVICE_ID is not set."
-    echo "      Export SERVICE_ID=<id> to execute the service lifecycle tests against an existing service."
-    echo ""
+    skip_case RO-2 "show service" "no SERVICE_ID"
+    skip_case RO-3 "list logs" "no SERVICE_ID"
+    skip_case RO-4 "wait-deploy" "no SERVICE_ID"
 fi
 
-# Test 10: Wait-deploy (requires valid service_id; no cost — client-side polling)
-echo "Test 10: Wait-deploy (CLI convenience)"
-if [ -n "$SERVICE_ID" ]; then
-    cloudrobo infer wait-deploy --service-id "$SERVICE_ID" --timeout "$WAIT_TIMEOUT"
-    echo ""
+# ---------------------------------------------------------------- dry-run batch (no cost)
+echo "=== Dry-run batch (no resource created) ==="
+
+if [ -n "$MODEL_ID" ] && [ -n "$MODEL_VERSION_ID" ] && [ -n "$FLAVOR" ] && [ -n "$WORKSPACE_ID" ]; then
+    DRYRUN_ARGS=(cloudrobo infer create --name verify-infer --flavor "$FLAVOR"
+        --model-json "{\"model_id\": \"$MODEL_ID\", \"model_version_id\": \"$MODEL_VERSION_ID\"}"
+        --workspace-id "$WORKSPACE_ID" --pool-type "$POOL_TYPE"
+        --stop-schedule-json '{"duration": 60, "time_unit": "MINUTES"}' --dry-run)
+    [ -n "$POOL_ID" ] && DRYRUN_ARGS+=(--pool-id "$POOL_ID")
+    run_case DR-1 zero "dry-run create validates parameter assembly" "${DRYRUN_ARGS[@]}"
 else
-    echo "SKIPPED: SERVICE_ID is required to execute wait-deploy."
-    echo "Example:"
-    echo "  cloudrobo infer wait-deploy --service-id <service-id> --timeout 600"
-    echo ""
+    skip_case DR-1 "dry-run create" "MODEL_ID, MODEL_VERSION_ID, FLAVOR and WORKSPACE_ID are required"
 fi
 
-# Test 11: Query model assets (cross-package)
-echo "Test 11: Query model assets (cross-package)"
-echo "Note: list-assets requires --catalog-id (from workspace current) or --repository-id"
-echo "Example: cloudrobo asset list-assets --catalog-id <catalog_id> --type model --limit 5"
-echo "Or search plaza: cloudrobo asset list-publication-assets --type model --actions ONLINE_DEPLOYMENT --action-status ENABLE --limit 5"
-cloudrobo asset list-publication-assets --type model --actions ONLINE_DEPLOYMENT --action-status ENABLE --limit 5 || echo "May return empty if no deployable models"
-echo ""
+# ---------------------------------------------------------------- mutating cases
+# Never auto-run: these create / change / delete real cloud resources.
+skip_case MUT-1 "create/start/stop/update/delete lifecycle" \
+    "mutating operations require explicit user confirmation — run them from SKILL.md manually"
 
-echo "=== Test script completed ==="
-echo "Note: Some tests require actual service IDs (set SERVICE_ID env var), model IDs, or workspace IDs."
-echo "For comprehensive end-to-end testing beyond these read-only checks, run the commands from SKILL.md manually."
+# ---------------------------------------------------------------- summary
+TOTAL=$((PASS + FAIL))
+echo "=== Summary: $TOTAL executed, $SKIP skipped ==="
+echo "  PASS: $PASS   FAIL: $FAIL   SKIP: $SKIP"
+if [ "$FAIL" -gt 0 ]; then
+    echo "  失败用例:" >&2
+    for c in "${FAILED_CASES[@]}"; do echo "    - $c" >&2; done
+    echo "结果：失败 $FAIL 项，请按上面的报错逐条修正后重跑。" >&2
+    exit 1
+fi
+if [ "$TOTAL" -eq 0 ]; then
+    echo "结果：没有任何用例被执行，请检查输入参数。" >&2
+    exit 1
+fi
+echo "结果：全部执行的用例通过（跳过项需提供对应输入或人工确认）。"
+exit 0

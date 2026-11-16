@@ -149,6 +149,11 @@ content = requests.get(resp['file_url']).text
 7. Skill items: keep only `name`+`prompt`; drop `priority`/`description`
 8. Config file content is authoritative over ext_metadata
 
+**`skill_config.json` `strict` field**: `true` means the service accepts only the predefined
+skills (matched by `name`) — users cannot send custom prompts at runtime; `false` or omitted
+means custom prompts are also allowed. If the customer wants custom prompts, ensure `strict`
+is `false` or absent.
+
 ## Status states
 
 Inference service `status` (observed from `list`/`show`) includes lifecycle states such as
@@ -178,146 +183,55 @@ SDK (9 methods) / CLI (9 commands) coverage:
 - `wait-deploy` is a client-side polling helper (both SDK and CLI); it does NOT create or start the service.
 - `list-logs`/`list_infer_service_logs` require **millisecond** timestamps.
 
-## Command Examples (CLI + SDK)
+## InferClient Main-Chain Snippet
 
-### Create an Inference Service
-
-```bash
-cloudrobo infer create --name <service-name> --flavor "<flavor>" --model-json '{"model_id": "<model-id>", "model_version_id": "<model-version-id>"}' --workspace-id <workspace-id> --pool-type <pool-type> --stop-schedule-json '{"duration": 60, "time_unit": "MINUTES"}' [--pool-id pool-<resource-id>] [--description "desc"] [--envs-json '[...]'] [--dry-run]
-```
+Consolidated SDK path for the five main calls — use it when CLI is inconvenient (dynamic
+JSON, cross-package queries). CLI and SDK are 1:1; see the coverage matrix above.
 
 ```python
 from cloudrobo_core.sdk import Config, HttpClient
 from cloudrobo_infer import InferClient
 
-config = Config()
-http_client = HttpClient(config)
-client = InferClient(http_client)
+config = Config()                     # ~/.cloudrobo/config.yaml + CLOUDROBO_* env
+client = InferClient(HttpClient(config))
 
+# 1) create — returns {"id": "..."} (the service identifier; some docs call it service_id)
 service = client.create_infer_service({
-    "name": "vla-infer-v1",
+    "name": "<service-name>",
     "flavor": "<flavor>",
-    "model": {"model_id": "<mid>", "model_version_id": "<mvid>"},
+    "model": {"model_id": "<asset_id>", "model_version_id": "<latest_version_id>"},
     "workspace_id": config.workspace_id,
-    "pool_type": "<pool-type>",
-    "stop_schedule": {"duration": 60, "time_unit": "MINUTES"},
-    "description": "VLA inference service"
+    "pool_type": "<SHARED|DEDICATED>",              # optional: "pool_id": "pool-..." for DEDICATED
+    "stop_schedule": {"duration": 60, "time_unit": "MINUTES"},   # required by the backend
 })
-print(service)  # returns {"id": "..."}; the service identifier field is `id` (some docs call it service_id)
-```
+sid = service["id"]
 
-> **Return identifier**: `create` returns the created service's identifier in the `id` field
-> (e.g. `{"id": "1722b017-..."}`). `show`/`list`/`wait-deploy` identify the service the same
-> way — the top-level identifier key is `id`; some API/SDK docs also refer to it as
-> `service_id`. Feed that value into `--service-id` for all downstream commands.
+# 2) show — service_id must be a UUID; validate_safe_id blocks "../" traversal
+detail = client.show_infer_service(sid)
 
-### Wait-Deploy (CLI convenience)
+# 3) list — top-level "services" array (plus "page_info"), not "items"
+services = client.list_infer_services(workspace_id=config.workspace_id, limit=20)
 
-```bash
-cloudrobo infer wait-deploy --service-id <service-id> [--timeout 600]
-```
-
-```python
-from cloudrobo_core.sdk import Config, HttpClient
-from cloudrobo_infer import InferClient
-
-config = Config()
-http_client = HttpClient(config)
-client = InferClient(http_client)
-
-# After create, the service auto-deploys (CREATING → DEPLOYING → RUNNING).
-# Do NOT call start_infer_service — it will fail with 400 on a DEPLOYING service.
-# start_infer_service is only for restarting a STOPPED service.
-
-# Wait for deployment to complete
-result = client.wait_deploy("<service-id>", timeout=600)
-print(result)  # includes final status (RUNNING, FAILED, etc.)
-```
-
-### List Inference Services
-
-```bash
-cloudrobo infer list --workspace-id <ws> [--limit 20] [--offset 0] [--status <status>]
-  [--name <name>] [--model-id <mid>] [--model-name <mn>] [--model-version-id <mvid>]
-  [--model-version-name <mvn>] [--user-name <un>] [--user-id <uid>]
-  [--sort-key <key>] [--sort-dir <dir>]
-```
-
-```python
-services = client.list_infer_services(workspace_id=config.workspace_id)
-# list returns a top-level `services` array (plus `page_info`), NOT an `items` key.
-for s in services.get("services", []):
-    print(s["id"], s["name"], s["status"])
-```
-
-### Show Service Detail
-
-```bash
-cloudrobo infer show --service-id <service-id>
-```
-
-```python
-svc = client.show_infer_service("<service-id>")
-print(svc["id"], svc["name"], svc["status"])  # identifier field is `id`
-```
-
-### Start / Stop Service
-
-```bash
-cloudrobo infer start --service-id <service-id>
-cloudrobo infer stop  --service-id <service-id>
-```
-
-```python
-client.start_infer_service("<service-id>")
-client.stop_infer_service("<service-id>")
-```
-
-### Update Service
-
-```bash
-cloudrobo infer update --service-id <service-id> --description "new desc" [--model-ext-metadata '<json>'] [--dry-run]
-```
-
-```python
-client.update_infer_service("<service-id>", {"description": "new desc"})
-```
-
-### Delete Service
-
-```bash
-cloudrobo infer delete --service-id <service-id> [--dry-run]
-```
-
-```python
-client.delete_infer_service("<service-id>")
-```
-
-### List Service Logs
-
-```bash
-cloudrobo infer list-logs --service-id <service-id> --start-time <milliseconds> --end-time <milliseconds> [--limit 100] [--keywords "error"] [--is-desc] [--line-num <num>] [--is-count] [--highlight] [--dry-run]
-```
-
-```python
+# 4) list-logs — timestamps in MILLISECONDS
 import time
 end_ms = int(time.time() * 1000)
-start_ms = end_ms - 3600_000
-logs = client.list_infer_service_logs(
-    "<service-id>",
-    {"start_time": start_ms, "end_time": end_ms, "keywords": "error"},
-)
-print(logs)
+logs = client.list_infer_service_logs(sid, {
+    "start_time": end_ms - 3600_000, "end_time": end_ms, "keywords": "error", "limit": 100,
+})
+
+# 5) wait-deploy — client-side polling every 5s until status != "DEPLOYING" (600s default)
+final = client.wait_deploy(sid, timeout=600)   # RUNNING / FAILED / STOPPED ...
 ```
 
-> **Note**: `list-logs`/`list_infer_service_logs` require **millisecond** timestamps.
+> Do NOT call `start_infer_service` after `create` — the service auto-deploys
+> (`CREATING → DEPLOYING → RUNNING`); `start` only restarts a `STOPPED` service.
 
 ## Parameter Resolution & Confirmation
 
 | Parameter | Source | Required | Confirmation Needed |
 | ----------- | -------- | ---------- | --------------------- |
 | `--workspace-id` | `cloudrobo workspace current` (or `list` + `use`) | Yes | Let user choose if no default |
-| `--model-json` | `list-publication-assets` / `list-assets --catalog-id` / `search-assets` → `asset_id` + `show-asset` → `latest_version_id` | Yes (create) | Let user choose model; assemble `{"model_id": "...", "model_version_id": "..."}`; verify `ONLINE_DEPLOYMENT` = `ENABLE` |
+| `--model-json` | `cloudrobo asset list-publication-assets` / `cloudrobo asset list-assets --catalog-id` / `cloudrobo asset search-assets` → `asset_id` + `cloudrobo asset show-asset` → `latest_version_id` | Yes (create) | Let user choose model; assemble `{"model_id": "...", "model_version_id": "..."}`; verify `ONLINE_DEPLOYMENT` = `ENABLE` |
 | `--pool-id` | `cloudrobo resource list-pools --resource-type MODELARTS` → `pool-{resource_id}` (prefix `pool-`) | No (create; required only for dedicated pools) | Let user choose from available pools; may be omitted for SHARED |
 | `--pool-type` | `cloudrobo resource list-pools --resource-type MODELARTS` → `pool_type` | Yes (create) | Paired with pool selection |
 | `--flavor` | `cloudrobo resource list-pools --resource-type MODELARTS` → `config.flavor` (CPU/GPU/ASCEND) | Yes (create) | Let user choose from pool's flavor list |
@@ -356,7 +270,7 @@ for confirmation before execution, especially start because it consumes pool res
 | 403 "Model asset permission deny" | Check `show-asset` — `ONLINE_DEPLOYMENT` action must be `ENABLE`; model status must be `RELEASE` (not `DRAFT`/`CREATING`); plaza models may need subscription first |
 | 500 "Internal error" on create | `--model-json`'s `model_version_id` must be `latest_version_id` from `show-asset`, NOT `actions[].algorithm.version_id` |
 | Missing `--stop-schedule-json` | **Required by backend**; without it creation fails. Format: `{"duration": 60, "time_unit": "MINUTES"}` |
-| `list-assets --repository-id` returns empty | Use `--catalog-id <asset_catalog_id>` (from `workspace current`) instead — `--repository-id` + `--type` filter is unreliable |
+| `cloudrobo asset list-assets --repository-id` returns empty | Use `--catalog-id <asset_catalog_id>` (from `cloudrobo workspace current`) instead — `--repository-id` + `--type` filter is unreliable |
 | model_id/flavor/pool_id | Never hardcoded; resolved dynamically via query commands, then user selects. `pool_id` is now optional — only pass it when the deployment targets a dedicated pool |
 | No algorithm association | Bare model; ask user whether to manually provide optional params (cmd/image/envs/etc.) |
 | download-url 404 | Config file not uploaded; skip that parameter silently |

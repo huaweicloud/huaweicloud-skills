@@ -12,24 +12,9 @@ description: >
 tags:
   - huawei-cloud-cloudrobo
   - infer
-  - inference
   - model-deployment
-  - deploy-model
   - inference-service
-  - service-deployment
-  - start-inference
-  - stop-inference
-  - service-logs
-  - wait-deploy
-  - model-serving
-  - model-inference
-  - 推理
   - 推理服务
-  - 模型部署
-  - 部署模型
-  - 推理服务管理
-  - 服务日志
-  - 模型服务
 ---
 
 > **Windows / PowerShell:** Examples use bash syntax. To run on Windows PowerShell:
@@ -40,36 +25,29 @@ tags:
 ## Overview
 
 The `cloudrobo-infer` skill manages the full lifecycle of CloudRobo **inference services**
-(also called model-serving / inference-service). It lets the agent deploy a model (identified
-by `model_id` + `model_version_id` passed as a `--model-json` JSON object) into a long-running
-inference service, monitor and operate that service (start / stop / update / delete / logs),
-and use `wait-deploy` to poll until the service status is no longer `DEPLOYING`
-(`status != "DEPLOYING"`), at which point it returns any other state (e.g., RUNNING, FAILED, STOPPED).
-> Note: `wait-deploy` only waits on the `DEPLOYING` phase — it does NOT wait through `CREATING`.
-> Read the [Wait-Deploy](references/service-config-catalog.md#wait-deploy-cli-helper) reference for exact semantics.
+(also called model-serving / inference-service): deploy a model (identified by `model_id` +
+`model_version_id` passed as a `--model-json` JSON object) into a long-running service, then
+operate it (start / stop / update / delete / logs), and use `wait-deploy` to poll until the
+service status is no longer `DEPLOYING` (`status != "DEPLOYING"`), returning any other state
+(e.g. RUNNING, FAILED, STOPPED).
+> `wait-deploy` only waits on the `DEPLOYING` phase — it does NOT wait through `CREATING`.
+> Exact semantics: [Wait-Deploy](references/service-config-catalog.md#wait-deploy-cli-helper).
 
 **Applicable scenarios:**
 
 - **Model deployment** — Deploy a model as an inference service (create → wait-deploy)
-- **Wait-Deploy** — Poll every 5s until service status is no longer `DEPLOYING` (5s interval, 600s default)
+- **Wait-Deploy** — Poll every 5s until status is no longer `DEPLOYING` (600s default)
 - **Service O&M** — List deployed services, show detail, update config, start/stop
 - **Log diagnosis** — `list-logs` with millisecond time range and keyword filter
 - **Cross-skill orchestration** — Consume models exported by `cloudrobo-train`; expose the
-  service to `robo-dispatcher` for embodied tasks (via `infer_service_id`).
+  service to `robo-dispatcher` for embodied tasks (via the service `id`).
 
 **Out of Scope:**
 
-- **Model training / dataset** — training jobs, dataset management, and train metrics are handled
-  by the `huawei-cloud-cloudrobo-train` / `huawei-cloud-cloudrobo-dataset` skills, not by this skill.
-- **Robots** — robot management / registration is handled by the `huawei-cloud-cloudrobo-robot` skill.
-- **Dispatch** — embodied task dispatch is handled by the `huawei-cloud-cloudrobo-dispatch` skill;
-  this skill only produces an inference service that dispatch consumes via the service `id`.
-- **Asset / resource / workspace lifecycle** — creating model assets, compute pools, or workspace
-  configuration is covered by the respective `huawei-cloud-cloudrobo-asset` / `-resource` /
-  `-workspace` skills.
-- This skill **does NOT** belong to the train / dataset / robot / dispatch scope. If a user request
-  targets those capabilities, route it to the corresponding skill above (the workflow here is
-  inference-service lifecycle only).
+- Model training / dataset, robots, dispatch, and asset / compute pool / workspace
+  lifecycle are separate CloudRobo capabilities (train / dataset / robot / dispatch /
+  asset / resource / workspace). Route those requests through the matching Agent skill;
+  this skill only produces an inference service that dispatch consumes via its `id`.
 
 **Architecture:**
 
@@ -84,25 +62,48 @@ Agent / LLM
               /v1/infer-services/*
 ```
 
-All operations target the `cloudrobo-service` backend and require a valid `workspace_id`
-(default workspace is used unless explicitly provided). Deploying a service consumes compute
-(pool) resources — always confirm before starting a long-running service.
+All operations target the `cloudrobo-service` backend with a valid `workspace_id`
+(the default workspace is used unless explicitly provided). Deploying a service consumes
+compute (pool) resources — always confirm before starting a long-running service.
 
 ## Prerequisites
 
-- See `references/cli-installation-guide.md` for CLI installation, AK/SK authentication, and
-  workspace configuration.
-- A valid `workspace_id` (resolve via `cloudrobo workspace current` or `list` + `use`).
-- A deployable model: `model_id` (=`asset_id`) + `model_version_id` (=`latest_version_id`),
-  passed to `create` as a single `--model-json` argument:
+- CLI installed, AK/SK configured, workspace resolved — `references/cli-installation-guide.md`.
+- A valid `workspace_id` (`cloudrobo workspace current`, or `list` + `use`).
+- A deployable model: `model_id` (=`asset_id`) + `model_version_id` (=`latest_version_id`):
   `--model-json '{"model_id": "<asset_id>", "model_version_id": "<latest_version_id>"}'`.
-  The model must have `ONLINE_DEPLOYMENT` action with `status: "ENABLE"` in its `show-asset`
-  output. Models in `DRAFT`/`CREATING` status cannot be deployed (403 error).
-- A compute pool: `pool_id` (optional; prefix `resource_id` with `pool-`, i.e. `pool-<resource_id>`, pass it only when deploying to a **dedicated** pool)
-  + `pool_type` + `flavor`, resolved via `cloudrobo resource list-pools --resource-type MODELARTS`. Only pools with
-  `status: "AVAILABLE"` are usable. `pool_id` is no longer required by the backend — it is validated
-  only when a dedicated pool is involved.
-- `--stop-schedule-json` is **required by the backend** for `create`. Format: `{"duration": <N>, "time_unit": "MINUTES"}`.
+  The model must have `ONLINE_DEPLOYMENT` with `status: "ENABLE"` in `show-asset`;
+  `DRAFT`/`CREATING` models are rejected with 403.
+- A compute pool: `pool_type` + `flavor` (`cloudrobo resource list-pools --resource-type
+  MODELARTS`, only `status: "AVAILABLE"` pools). `--pool-id pool-<resource_id>` is
+  **optional** — pass it only for a dedicated pool.
+- `--stop-schedule-json` is **required by the backend**:
+  `{"duration": <N>, "time_unit": "MINUTES"}`.
+- **Region**: `cloudrobo` (0.3.0) has no `--cli-region` command-line option (the root command
+  only accepts `--verbose/-v`; region is not a CLI flag). Set it with
+  `cloudrobo config set region <region>` (persisted to `~/.cloudrobo/config.yaml`) — default
+  `cn-southwest-2`. Never append `--cli-region` to `cloudrobo` commands: an unknown option
+  exits non-zero. `--cli-region` belongs to `hcloud`/KooCLI only, not here.
+
+## 执行前置自检（Preflight — 每条命令前先做）
+
+任一项失败立即输出中文提示并以非零码退出；**禁止静默等待、禁止把空结果当成成功**：
+
+```bash
+command -v cloudrobo >/dev/null 2>&1 || {
+  echo "未检测到 cloudrobo 命令：请先安装聚合客户端 CLI（pip install hw-cloudrobo-client），详见 references/cli-installation-guide.md。" >&2; exit 2; }
+cloudrobo infer --help >/dev/null 2>&1 || {
+  echo "cloudrobo infer 子命令不可用：请安装或升级 hw-cloudrobo-client（聚合包，已含推理模块）后重试（cloudrobo --help 可确认已注册的命令）。" >&2; exit 2; }
+cloudrobo asset --help >/dev/null 2>&1 || {
+  echo "cloudrobo asset 命令组不可用（报错形如 Error: No such command asset）：说明只装了推理模块，模型资料解析无法进行。请改装聚合客户端 pip install hw-cloudrobo-client 后重试。" >&2; exit 2; }
+```
+
+- 凭证缺失不阻断上面的自检，但所有联网命令都会以 401 失败：先
+  `export HUAWEI_CLOUD_AK=<ak> HUAWEI_CLOUD_SK=<sk>` 或
+  `cloudrobo config set ak <ak> sk <sk>`，再重试。
+- `scripts/test-cli-commands.sh` 自检更严：CLI、`infer` 子命令、AK/SK 任一缺失即输出中文
+  提示并 `exit 2`（没有凭证时它不会给出虚假通过）。
+- 查询类命令返回空列表属正常结果（0 条服务），不等同于失败；命令报错则必须如实上报。
 
 ## Workflow
 
@@ -116,300 +117,185 @@ orchestration. The skill then drives the matching command chain and reports stat
 
 Scenario: "我想创建一个推理服务" / "Deploy model X as an inference service."
 
-Core principle: **query each required parameter → present options → let user choose → assemble
-full command → execute.**
+Core principle: **query each required parameter → present options → let user choose →
+assemble full command → execute.**
 
 1. **Resolve workspace** — `cloudrobo workspace current`.
-   - If a default workspace is set → use `workspace_id` and `asset_catalog_id` directly.
-   - If not set → `cloudrobo workspace list` → present workspace names + IDs to the user →
-     `cloudrobo workspace use --workspace-id <id>` → re-run `current` to confirm.
+   - Default workspace set → use its `workspace_id` and `asset_catalog_id`.
+   - Not set → `cloudrobo workspace list` → present names + IDs → `cloudrobo workspace use
+     --workspace-id <id>` → re-run `current` to confirm.
 
-2. **Ask model source & type** — ask the user two questions in this order:
-   - **Source** (where to search, ask first): embodiment plaza (具身广场), workspace assets
-     (空间资产), or custom (自定义). **The source decides the entire parameter policy below** —
-     embodiment plaza models are pre-configured on the platform and must **only** carry the
-     required core parameters; space asset / custom models run the auto-discovery flow.
-   - **Type** (by `ext_metadata.model_type`, ask second): perception (感知), vln (导航),
-     vla (操作), planning (规划).
-   - If the user is vague (e.g. "so101 相关的模型") → skip both questions and use
-     `search-assets` for a global keyword search.
-   - Once the source is known, branch immediately to the matching parameter policy in
-     the [Model Source → Parameter Policy](#model-source--parameter-policy) table before
-     assembling `create`.
+2. **Ask model source & type** — ask in this order:
+   - **Source** (where to search): embodiment plaza (具身广场), workspace assets (空间资产),
+     or custom (自定义). The source decides the entire parameter policy below.
+   - **Type** (by `ext_metadata.model_type`): perception (感知), vln (导航), vla (操作),
+     planning (规划).
+   - Vague request (e.g. "so101 相关的模型") → skip both and use `cloudrobo asset search-assets` by keyword.
+   - Branch immediately to the [Model Source → Parameter Policy](#model-source--parameter-policy)
+     table before assembling `create`.
 
-3. **Query models** — search based on the user's choice:
+3. **Query models**:
    - **Embodiment plaza**: `cloudrobo asset list-publication-assets --type model
-     --actions ONLINE_DEPLOYMENT --action-status ENABLE` (returns RELEASE models with
-     online deployment enabled).
+     --actions ONLINE_DEPLOYMENT --action-status ENABLE`.
    - **Workspace assets**: `cloudrobo asset list-assets --catalog-id <asset_catalog_id>
-     --type model` (note: use `--catalog-id` from workspace, NOT `--repository-id`).
+     --type model` (use `--catalog-id`, NOT `--repository-id`).
    - **Keyword search**: `cloudrobo asset search-assets --keyword "<keyword>" --type model`.
-   - Present matching models (name, asset_id, status, model_type) to the user for selection.
+   - Present matching models (name, asset_id, status, model_type) for selection.
 
 4. **Resolve model version** — `cloudrobo asset show-asset --asset-id <asset_id>`.
-   - Use `latest_version_id` to populate the `model_version_id` field in `--model-json`.
-   - If `version_count > 1` → `cloudrobo asset list-versions --asset-id <id>` → let user choose.
-   - **Verify deployability**: check `actions` array — `ONLINE_DEPLOYMENT` must have
-     `status: "ENABLE"`. If `DISABLE`, the model cannot be deployed (403 error).
-   - **Verify model status**: `status` should be `RELEASE` (plaza) or published state.
-     `DRAFT`/`CREATING` models will be rejected with 403 "Model asset permission deny".
+   - `latest_version_id` → `model_version_id` in `--model-json`.
+   - `version_count > 1` → `cloudrobo asset list-versions --asset-id <id>` → let user choose.
+   - `ONLINE_DEPLOYMENT` must be `ENABLE`; model `status` must be `RELEASE` (or published),
+     otherwise the platform returns 403.
 
-5. **Auto-discover deployment parameters — space asset / custom models ONLY**.
-   **Embodiment plaza models (具身广场): skip this entire step and DO NOT carry any of the
-   parameters below (nothing here, and nothing from `--cmd`/`--image-swr-url`/`--envs-json`/
-   `--skill-config-json`/`--service-invoke-json`/`--readiness-health-json`/`--model-ext-metadata`/
-   `--model-json.mount_path`).** Plaza models are pre-configured on the platform — their
-   orchestration, image, envs, skills, health probes and r2c mapping are already bound to the
-   model. Passing these extra parameters for a plaza model risks invalid/config-mismatch
-   deployment and is exactly the "不该带的参数" this workflow forbids.
+5. **Auto-discover deployment parameters — space asset / custom models ONLY.**
+   **Embodiment plaza models: skip this step entirely** and carry none of
+   `--cmd`/`--image-swr-url`/`--envs-json`/`--skill-config-json`/`--service-invoke-json`/
+   `--readiness-health-json`/`--model-ext-metadata`/`--model-json.mount_path` — plaza models
+   are pre-configured on the platform, and extra parameters risk a mismatched deployment.
 
-   **Space asset / custom models**: after resolving the model version, check whether the model
-   has an associated algorithm asset that provides deployment parameters. These are auto-discovered
-   from the model's algorithm asset and config files:
+   For space asset / custom models, discover from the model's algorithm asset and its config
+   files (algorithm asset → `ext_metadata.command` / `engine.image_url` /
+   `environment_variables` / `deployment_config`; `skill_config.json` and r2c config via the
+   `download-url` API). Full discovery table, `download-url` code, `strict` field and r2c
+   fallback rules: `references/service-config-catalog.md` → "Parameter Auto-Discovery Sources".
 
-   a. **Check ONLINE_DEPLOYMENT action** — in the `show-asset` output from Step 4,
-      look at `actions[]` for `type: "ONLINE_DEPLOYMENT"`. If present and
-      `status: "ENABLE"`, it contains `algorithm.asset_id` + `algorithm.version_id`
-      pointing to the associated algorithm asset.
-
-   b. **Query algorithm asset** (if action found) —
-      `cloudrobo asset show-asset --asset-id <algorithm.asset_id>` then
-      `cloudrobo asset show-version --asset-id <algorithm.asset_id>
-      --version-id <algorithm.version_id>` to get the algorithm's `ext_metadata`:
-      - `ext_metadata.command` → `--cmd`
-      - `ext_metadata.engine.image_url` → `--image-swr-url`
-      - `ext_metadata.environment_variables` (array of `{"name":"K","default":"V"}`)
-        → convert to map `{"K":"V"}` → `--envs-json`
-      - `ext_metadata.deployment_config.model_mount_path` → `--model-json.mount_path`
-      - `ext_metadata.deployment_config.service_invoke` → `--service-invoke-json`
-      - `ext_metadata.deployment_config.readiness_health` → `--readiness-health-json`
-
-   c. **Download skill_config.json** — via the `download-url` API (CLI/SDK not
-      wrapped; use HttpClient directly):
-      ```python
-      from cloudrobo_core.sdk import Config, HttpClient
-      from cloudrobo_asset.client import AssetClient
-      import requests
-
-      config = Config()
-      http = HttpClient(config)
-      asset_client = AssetClient(http)
-
-      resp = http.get(
-          asset_client._url(f'/v1/assets/{asset_id}/versions/{version_id}/download-url'),
-          params={'file_name': 'skill_config.json'}
-      )
-      skill_config = requests.get(resp['file_url']).text
-      ```
-      - Filter skill items to only `name` + `prompt` fields (drop `priority`/
-        `description` extra fields) → `--skill-config-json`
-      - **`strict` field**: controls whether the deployed service accepts only
-        predefined skill prompts or also allows user custom prompts:
-        - `strict: true` — service only accepts the predefined skills (matched
-          by `name`); user cannot input custom prompts at runtime
-        - `strict: false` or omitted — service allows users to input their own
-          custom prompts at runtime, in addition to the predefined skills
-        - If the customer wants to accept custom prompts, ensure `strict` is
-          `false` or not present in the skill_config.json
-
-   d. **Download r2c config** — same `download-url` API, fallback rule:
-      - Try `file_name=r2c_config.yaml` first
-      - If that fails (404), try `file_name=r2c.json`
-      - If both fail (no r2c config file found):
-        - **Ask the user** whether they want to provide their own r2c config file
-        - Explain that while missing `--model-ext-metadata` does not block
-          deployment, it will prevent subsequent robo-dispatcher operations
-          from working (see `huawei-cloud-cloudrobo-dispatch` skill for details
-          on robo-dispatcher workflows)
-        - If user provides a config file, use its content as `--model-ext-metadata`
-        - If user declines, proceed without `--model-ext-metadata` (warn that
-          robo-dispatcher operations will not be available)
-      - File content (raw string) → `--model-ext-metadata`
-
-   > **Priority**: config files > ext_metadata fields > ask user. If a parameter
-   > cannot be discovered, skip it silently (do not block deployment). For
-   > "bare" models with no algorithm association, ask the user whether to
-   > manually provide optional parameters.
+   > **Priority**: config files > ext_metadata fields > ask user. Undiscoverable parameters
+   > are skipped silently (never block deployment). For "bare" models with no algorithm
+   > association, ask the user whether to supply optional parameters manually.
 
 6. **Resolve pool & flavor** — `cloudrobo resource list-pools --resource-type MODELARTS`.
-   - Present available pools (resource_name, pool_type, status, flavors) to the user.
-   - Only pools with `status: "AVAILABLE"` are usable.
-   - Pool fields: `resource_id` → `--pool-id` (prefix with `pool-`, e.g.
-     `pool-d1cc6d45-...`), `pool_type` → `--pool-type` (Choice: `DEDICATED` / `SHARED`).
-   - `--pool-id` is **optional** (backend no longer requires it): omit it for `SHARED`
-     pools; pass `pool-<resource_id>` only when the deployment targets a `DEDICATED` pool.
-   - Flavors are under `config.flavor` grouped by hardware type (CPU/GPU/ASCEND).
-   - Let the user select a pool and a flavor string (e.g. `"1 * SNT9B2 | 24 vCPUs | 192 GiB"`).
+   - Only `status: "AVAILABLE"` pools are usable; present names, pool_type and flavors.
+   - `resource_id` → `--pool-id pool-<resource_id>`; `pool_type` → `--pool-type`
+     (`DEDICATED` / `SHARED`). Omit `--pool-id` for `SHARED` pools.
+   - Flavors live under `config.flavor` grouped by hardware (CPU/GPU/ASCEND); let the user
+     pick (e.g. `"1 * SNT9B2 | 24 vCPUs | 192 GiB"`).
 
-7. **Confirm parameters & deploy** — present the `create` command to the user, **choosing the
-   variant that matches the model source from Step 2** (see the
-   [Model Source → Parameter Policy](#model-source--parameter-policy) table). The two variants
-   must NOT be mixed.
+7. **Confirm parameters & deploy** — present the `create` command using the variant that
+   matches the source from Step 2 (never mix variants):
 
-   **Variant A — embodiment plaza model (具身广场, required core parameters ONLY):**
+   **Variant A — embodiment plaza (required core parameters ONLY):**
    ```bash
    cloudrobo infer create --name <service-name> --flavor "<flavor>" --model-json '{"model_id": "<asset_id>", "model_version_id": "<latest_version_id>"}' --workspace-id <workspace_id> --pool-type <pool_type> --stop-schedule-json '{"duration": 60, "time_unit": "MINUTES"}' [--pool-id pool-<resource_id>] [--dry-run]
    ```
-   - `--pool-id` is optional: omit for `SHARED`; include `pool-<resource_id>` only for a `DEDICATED` pool.
-   - **Do NOT add** `--cmd`/`--image-swr-url`/`--envs-json`/`--skill-config-json`/
-     `--service-invoke-json`/`--readiness-health-json`/`--model-ext-metadata`/`--model-json.mount_path`.
-     Plaza models are pre-configured on the platform; carrying these extra parameters is a
-     deployment risk and is explicitly forbidden by this workflow.
 
-   **Variant B — space asset / custom model (空间资产/自定义, with auto-discovered params):**
+   **Variant B — space asset / custom (core + auto-discovered params):**
    ```bash
    cloudrobo infer create --name <service-name> --flavor "<flavor>" --model-json '{"model_id": "<asset_id>", "model_version_id": "<latest_version_id>", "mount_path": "<mount_path>"}' --workspace-id <workspace_id> --pool-type <pool_type> --stop-schedule-json '{"duration": 60, "time_unit": "MINUTES"}' [--pool-id pool-<resource_id>] [--cmd "<command>"] [--image-swr-url "<image_url>"] [--envs-json '{"KEY":"VALUE"}'] [--skill-config-json '{"skills":[{"name":"...","prompt":"..."}],"strict":true}'] [--service-invoke-json '{"auth_type":"...","port":8080,"protocol":"HTTP"}'] [--readiness-health-json '{"path":"/ready","port":8080}'] [--model-ext-metadata '<r2c_config_file_content>'] [--dry-run]
    ```
-   - Only include parameters that were actually discovered (Step 5); omit undiscovered ones.
-   - `--pool-id` optional: omit for `SHARED`; pass `pool-<resource_id>` for a `DEDICATED` pool.
-   - `--model-json.mount_path` only included when algorithm's `deployment_config` provides it.
-   - `--envs-json` must be converted from asset array format to map format.
-   - `--skill-config-json` skill items keep only `name`+`prompt`; drop `priority`/`description`.
-   - `--model-ext-metadata` takes the raw file content (string).
-   - Recommend `--dry-run` first to validate parameter assembly.
-   - `--stop-schedule-json` is **required by the backend**; without it creation fails.
-     Format: `{"duration": <N>, "time_unit": "MINUTES"}`.
-   - After dry-run succeeds, confirm with the user and execute without `--dry-run`.
-   - The CLI returns the created service's identifier in the `id` field, e.g.
-     `{"id": "1722b017-..."}` — some API/SDK docs also refer to this field as
-     `service_id`. Record that `id` value and pass it to downstream commands as
-     `--service-id <id>` (wait-deploy / show / start / stop / update / delete / list-logs).
 
-8. **Wait for deployment** — `cloudrobo infer wait-deploy --service-id <sid>` to poll every
-   5s until status is no longer `DEPLOYING` (`status != "DEPLOYING"`), returning whatever state
-   follows (e.g., `RUNNING`, `FAILED`).
-   - After `create`, the service auto-enters `CREATING` → `DEPLOYING`. **Do NOT call `start`**
-     immediately after `create` — it will return 400 "Status DEPLOYING does not support start".
-   - `start` is only for restarting a `STOPPED` service, not for initial deployment.
-   - **Precise semantics**: `wait-deploy` returns the moment `status != "DEPLOYING"`. It does NOT
-     wait through the `CREATING` phase — if you call it while the service is still `CREATING`, it
-     returns immediately with the `CREATING` status. In practice, call it after `create` and let
-     the backend transition `CREATING → DEPLOYING → RUNNING`; the helper blocks on `DEPLOYING`.
+   - Include only parameters actually discovered in Step 5; `--pool-id` only for `DEDICATED`.
+   - `--envs-json` takes a **map** (`{"K":"V"}`) — convert the asset's array form first.
+   - `--skill-config-json` skill items keep only `name` + `prompt`.
+   - Run with `--dry-run` first, confirm with the user, then re-run without `--dry-run`.
 
-9. **Report** — output the service `id` (the returned service identifier), model name, flavor,
-   and final status.
-   - If status is `FAILED` → run `cloudrobo infer list-logs` for diagnosis.
-   - **Never auto-delete a failed service.** If cleanup is needed, present the `delete`
-     command and **ask the user for explicit confirmation** before executing it.
+8. **Wait for deployment** — `cloudrobo infer wait-deploy --service-id <sid>` (polls every 5s
+   until `status != "DEPLOYING"`, 600s default).
+   - After `create` the service auto-enters `CREATING` → `DEPLOYING`. **Do NOT call `start`** —
+     it returns 400 "Status DEPLOYING does not support start". `start` only restarts a
+     `STOPPED` service.
+   - If `wait-deploy` returns while still `CREATING`, immediately re-invoke it.
 
-> **Asset note**: model_id/version_id/flavor/pool_id must be resolved dynamically via the
+9. **Report** — output the service `id` (the returned identifier; some docs call it
+   `service_id`), model name, flavor and final status. On `FAILED` → `list-logs` for diagnosis.
+   **Never auto-delete a failed service** — present the `delete` command and ask for explicit
+   confirmation.
+
+> **Asset note**: model_id / version_id / flavor / pool_id must be resolved dynamically via the
 > query commands above; never hardcode them. Always let the user choose from queried options.
 
 ### Model Source → Parameter Policy (authoritative decision table)
 
 This table is the **single source of truth** for which `create` parameters to carry, based on
-the model source resolved in Step 2. It is referenced by `cloudrobo-model-workflow` Stage 3 to
-keep both skills consistent. When creating any inference service, resolve the model source first
-and then apply exactly the matching column — **do not mix variants**.
+the model source resolved in Step 2. `cloudrobo-model-workflow` Stage 3 references it to keep
+both skills consistent. Resolve the source first, then apply exactly the matching column —
+**do not mix variants**.
 
 | Model source (from Step 2) | Search command (Step 3) | Auto-discovery (Step 5) | `create` parameters to carry |
 |----------------------------|-------------------------|--------------------------|------------------------------|
-| **Embodiment plaza (具身广场)** | `asset list-publication-assets --type model --actions ONLINE_DEPLOYMENT --action-status ENABLE` | **SKIP entirely** — model is pre-configured on platform | **Required core only**: `--name`, `--flavor`, `--model-json` (`model_id`+`model_version_id`), `--workspace-id`, `--pool-type`, `--stop-schedule-json`; `--pool-id` only for `DEDICATED` pool. **Do NOT carry** `--cmd`/`--image-swr-url`/`--envs-json`/`--skill-config-json`/`--service-invoke-json`/`--readiness-health-json`/`--model-ext-metadata`/`--model-json.mount_path` |
-| **Space asset / custom (空间资产/自定义)** | `asset list-assets --catalog-id <asset_catalog_id> --type model` / `search-assets --keyword ...` | **Run Step 5 fully** — query algorithm asset (cmd/image/envs/mount_path/service-invoke/readiness-health) + download `skill_config.json` + r2c config | Required core **plus** every parameter actually discovered in Step 5; omit undiscovered ones silently |
-| Unknown model id (user passed explicit id) | `asset show-asset --asset-id <id>` | Determine from `show-asset`: if the model carries an `ONLINE_DEPLOYMENT` action pointing to a platform algorithm → treat as space-asset path (run Step 5). If the model's deployment config is self-contained/pre-configured → carry required core only | As per the resolved path |
+| **Embodiment plaza (具身广场)** | `cloudrobo asset list-publication-assets --type model --actions ONLINE_DEPLOYMENT --action-status ENABLE` | **SKIP entirely** — model is pre-configured on platform | **Required core only**: `--name`, `--flavor`, `--model-json` (`model_id`+`model_version_id`), `--workspace-id`, `--pool-type`, `--stop-schedule-json`; `--pool-id` only for `DEDICATED` pool. **Do NOT carry** `--cmd`/`--image-swr-url`/`--envs-json`/`--skill-config-json`/`--service-invoke-json`/`--readiness-health-json`/`--model-ext-metadata`/`--model-json.mount_path` |
+| **Space asset / custom (空间资产/自定义)** | `cloudrobo asset list-assets --catalog-id <asset_catalog_id> --type model` / `cloudrobo asset search-assets --keyword ...` | **Run Step 5 fully** — query algorithm asset (cmd/image/envs/mount_path/service-invoke/readiness-health) + download `skill_config.json` + r2c config | Required core **plus** every parameter actually discovered in Step 5; omit undiscovered ones silently |
+| Unknown model id (user passed explicit id) | `cloudrobo asset show-asset --asset-id <id>` | Determine from `show-asset`: `ONLINE_DEPLOYMENT` action pointing to a platform algorithm → treat as space-asset path (run Step 5); self-contained/pre-configured config → core only | As per the resolved path |
 
-> **Rationale**: Embodiment plaza models bundle their orchestration, image, envs, health probes,
-> skills and r2c feature mapping on the platform. Re-supplying these in `create` for a plaza model
-> is redundant and risks invalid/mismatched deployment (this is the "不该带的参数不要带" rule). Space
-> asset / custom models have no such bundled config, so their parameters must be auto-discovered and
-> passed explicitly.
-
+> **Rationale**: embodiment plaza models bundle their orchestration, image, envs, health probes,
+> skills and r2c mapping on the platform. Re-supplying these in `create` is redundant and risks
+> an invalid/mismatched deployment (the "不该带的参数不要带" rule). Space asset / custom models
+> have no bundled config, so their parameters must be discovered and passed explicitly.
 
 ### Wait-Deploy Workflow (CLI convenience)
 
 Scenario: "Wait for this inference service to finish deploying."
 
-1. `cloudrobo infer wait-deploy --service-id <sid> [--timeout 600]`
-   - `wait-deploy` is a **CLI client-side polling helper**: it polls `show` every 5s until the
-     service status is no longer `DEPLOYING` (`status != "DEPLOYING"`) and returns any other state
-     (e.g., `RUNNING`, `FAILED`, `STOPPED`).
-   - Default timeout is 600s (CLI `--timeout` range 1–3600); if exceeded, the client raises
-     `RuntimeError` and the CLI reports a timeout error (JSON error + `ClickException`, non-zero exit).
-2. **Feedback** — report final status; on `FAILED` suggest `list-logs` for diagnosis.
+1. `cloudrobo infer wait-deploy --service-id <sid> [--timeout 600]` — client-side polling of
+   `show` every 5s until `status != "DEPLOYING"`; returns any other state (`RUNNING`, `FAILED`,
+   `STOPPED`). Timeout range 1–3600; on timeout it raises `RuntimeError` → JSON error +
+   `ClickException`, non-zero exit.
+2. **Feedback** — report the final status; on `FAILED` suggest `list-logs`.
 
-> **Note**: `wait-deploy` does NOT create the service. Call `create` first, then `wait-deploy`.
-> Do NOT call `start` after `create` — the service auto-deploys (CREATING → DEPLOYING → RUNNING).
-> `start` is only for restarting a `STOPPED` service.
+> `wait-deploy` does NOT create the service — call `create` first, then `wait-deploy`. Do NOT
+> call `start` after `create` (auto-deploys `CREATING → DEPLOYING → RUNNING`); `start` is only
+> for restarting a `STOPPED` service.
 
-### Service O&M / Lookup Workflow (module + workspace)
+### Service O&M / Lookup Workflow
 
 Scenario: "What inference services are running in my workspace?"
 
 1. `cloudrobo infer list --workspace-id <ws> [--status <status>] [--model-id <mid>]
    [--name <name>] [--model-name <mn>] [--model-version-id <mvid>] [--model-version-name <mvn>]
-   [--user-name <un>] [--user-id <uid>]` with pagination (`--limit`/`--offset`)
-   and sorting (`--sort-key`/`--sort-dir`).
+   [--user-name <un>] [--user-id <uid>]` + pagination (`--limit`/`--offset`) and sorting
+   (`--sort-key`/`--sort-dir`).
 2. `cloudrobo infer show --service-id <sid>` for a full config snapshot.
 3. Report status and key fields (model, flavor, status, pool).
 
-### Service Start/Stop Workflow (module)
+### Service Start/Stop Workflow
 
 Scenario: "Stop the inference service behind this API." / "Bring it back up."
 
 1. Confirm the service via `show --service-id <sid>`.
-2. `cloudrobo infer stop --service-id <sid>` or `cloudrobo infer start --service-id <sid>`
-   (mutating; confirm before executing).
+2. `cloudrobo infer stop --service-id <sid>` or `start --service-id <sid>` (mutating; confirm
+   before executing).
 3. Poll `show` until the desired terminal state (`STOPPED` / `RUNNING`).
 
-### Log Diagnosis Workflow (module)
+### Log Diagnosis Workflow
 
 Scenario: "Why is my deployed service failing? Show me its logs."
 
 1. `cloudrobo infer list-logs --service-id <sid> --start-time <ms> --end-time <ms>` — both
-   timestamps are **milliseconds** (13-digit). Optionally filter `--keywords`, `--limit`,
-   `--line-num`, `--is-count`, `--highlight`, `--is-desc`.
-2. Review log lines and correlate with `show` status (e.g. `CREATE_FAILED`/`START_FAILED`).
+   timestamps are **milliseconds** (13-digit). Optional: `--keywords`, `--limit`, `--line-num`,
+   `--is-count`, `--highlight`, `--is-desc`.
+2. Correlate log lines with `show` status (e.g. `CREATE_FAILED`/`START_FAILED`).
 3. Suggest remediation (pool capacity, model artifact, health-check config).
 
-### Service Update / Deletion Workflow (module)
+### Service Update / Deletion Workflow
 
 Scenario: "Reconfigure this service" / "Shut down and remove this service."
 
 - **Update** — `cloudrobo infer update --service-id <sid> [--description <desc>]
-  [--model-ext-metadata <json>] [--dry-run]` (mutating; confirm).
-  - `update` **only supports** `--description` and `--model-ext-metadata`. Changing the
-    image, flavor, model, pool, or stop-schedule of an existing service is **not** supported
-    by `update` — use `delete` + `create` to rebuild the service with the new parameters.
-- **Delete** — `cloudrobo infer delete --service-id <sid> [--dry-run]` (mutating; irreversible; confirm).
-  - `delete` only removes the service itself. It does **NOT** delete the underlying model
-    asset (`model_id`) — model assets must be deleted separately via the
-    `huawei-cloud-cloudrobo-asset` skill (see `cloudrobo asset delete-asset`).
+  [--model-ext-metadata <json>] [--dry-run]` (mutating; confirm). `update` **only supports**
+  `--description` and `--model-ext-metadata`; changing image/flavor/model/pool/stop-schedule
+  is not supported — use `delete` + `create` to rebuild.
+- **Delete** — `cloudrobo infer delete --service-id <sid> [--dry-run]` (mutating;
+  irreversible; confirm). It removes only the service, **not** the model asset — delete assets
+  through the CloudRobo asset skill (`cloudrobo asset delete-asset`).
 
 ### Combined Workflow A — Deploy a trained model (infer + train + asset)
 
 Scenario: "I trained a VLA model; deploy it as an inference service."
 
-1. Resolve workspace: `cloudrobo workspace current` (or `list` + `use`).
-2. Query the trained model: `cloudrobo asset list-assets --catalog-id <asset_catalog_id>
-   --type model` (or use the train skill's `output_models`); obtain `asset_id`.
-3. Resolve model version: `cloudrobo asset show-asset --asset-id <asset_id>` → use
-   `latest_version_id` in the `model_version_id` field of `--model-json`. Verify
-   `ONLINE_DEPLOYMENT` action `status: "ENABLE"`.
-4. Resolve pool & flavor: `cloudrobo resource list-pools --resource-type MODELARTS` → let user select `resource_id`
+1. Resolve workspace (`cloudrobo workspace current`).
+2. Query the model (`cloudrobo asset list-assets --catalog-id <asset_catalog_id> --type model`)
+   → `asset_id`.
+3. `cloudrobo asset show-asset --asset-id <asset_id>` → `latest_version_id`; verify
+   `ONLINE_DEPLOYMENT` = `ENABLE`.
+4. `cloudrobo resource list-pools --resource-type MODELARTS` → user selects `resource_id`
    and `flavor`.
-4a. A trained model is a **space asset** → follow **Variant B / space-asset path** of the
-    Model Deployment Workflow. (If the trained model has algorithm association) Auto-discover
-    deployment parameters per Step 5 — query algorithm asset for
-    cmd/image/envs/service-invoke/readiness-health, download skill_config.json and r2c config.
-    Carrying these is the correct behavior for a space asset; the "do not carry" rule only
-    applies to embodiment plaza models.
-5. `cloudrobo infer create --name <name> --flavor "<flavor>"
-   --model-json '{"model_id": "<asset_id>", "model_version_id": "<latest_version_id>"}'
-   --workspace-id <ws>
-   --pool-type <type> --stop-schedule-json '{"duration": 60, "time_unit": "MINUTES"}'`
-   — add `--pool-id pool-<resource_id>` only when deploying to a `DEDICATED` pool, and any
-   parameters actually discovered in step 4a (per Step 7 Variant B).
-6. `cloudrobo infer wait-deploy --service-id <sid>` — polls every 5s until status is no longer
-   `DEPLOYING` (service auto-deploys after create; do NOT call `start` — it will fail with 400)
-7. Report the service `id` (the returned service identifier) and status. The service is now consumable.
+5. A trained model is a **space asset** → Variant B of Step 7: run Step 5 auto-discovery and
+   carry whatever was discovered.
+6. `cloudrobo infer create ...` (Variant B) → `cloudrobo infer wait-deploy --service-id <sid>`
+   (do NOT call `start` — the service auto-deploys).
+7. Report the service `id` and status; the service is now consumable.
 
-> **Parameter auto-discovery**: For space asset / custom models, deployment parameters
-> (cmd, image, envs, skill-config, health-checks, model-ext-metadata, etc.) are
-> auto-discovered from the model's associated algorithm asset and config files per
-> Step 5 above. See `references/service-config-catalog.md` → "Parameter Auto-Discovery
-> Sources" for the full discovery table, download-url API code, and key rules.
-
-## CLI Command Summary
+## Core Commands
 
 ```bash
 cloudrobo infer <command> [OPTIONS]
@@ -426,83 +312,98 @@ cloudrobo infer <command> [OPTIONS]
 | `delete` | Delete a service | `--service-id` |
 | `list-logs` | Query service logs | `--service-id`, `--start-time` (ms), `--end-time` (ms), `--keywords` |
 
-> **Full CLI/SDK examples, parameter resolution table, and edge cases**: see
-> `references/service-config-catalog.md` → "Command Examples", "Parameter
-> Resolution & Confirmation", and "Edge Cases".
-> SDK exposes 9 methods, CLI exposes 9 commands (0 gaps);
-> `wait-deploy` is a client-side polling helper available in both CLI and SDK.
-> When CLI is inconvenient (dynamic JSON, cross-package queries), use the Python
-> SDK directly — `InferClient` exposes the 9 methods.
+> SDK path: when CLI is inconvenient (dynamic JSON, cross-package queries), use `InferClient`
+> — one consolidated snippet for the five main calls (`create` / `show` / `list` / `list-logs` /
+> `wait-deploy`) lives in `references/service-config-catalog.md` → "InferClient Main-Chain Snippet".
+> Parameter-resolution table and edge cases: same file → "Parameter Resolution &
+> Confirmation", "Edge Cases". SDK exposes 9
+> methods, CLI exposes 9 commands (0 gaps); `wait-deploy` is a client-side polling helper in both.
 >
-> **Return identifier**: `create`/`show`/`list`/`wait-deploy` identify the created service
-> with the `id` field (some API/SDK docs also call it `service_id`). Use that field's value
-> as `--service-id` for all downstream commands — do not expect a top-level `service_id`
-> key in create/show responses.
+> **Return identifier**: `create`/`show`/`list`/`wait-deploy` identify the service with the `id`
+> field (some API/SDK docs call it `service_id`). Use that value as `--service-id` for all
+> downstream commands — there is no top-level `service_id` key in create/show responses.
+
+## Parameter Confirmation
+
+Resolve every value from query commands, present it to the user, then execute. Never hardcode
+IDs or flavors; mutating commands (`create` / `start` / `stop` / `update` / `delete`) need an
+explicit confirmation first.
+
+| Parameter | Required | Resolution |
+| --------- | -------- | ---------- |
+| `--workspace-id` | create / list | `cloudrobo workspace current` (or `list` + `use`) |
+| `--model-json` | create | `model_id` from asset search, `model_version_id` = `latest_version_id` from `show-asset` |
+| `--flavor` | create | `cloudrobo resource list-pools --resource-type MODELARTS` → `config.flavor` |
+| `--pool-type` | create | `SHARED` / `DEDICATED` from the selected pool |
+| `--pool-id` | dedicated pool only | `pool-<resource_id>` from the selected pool |
+| `--stop-schedule-json` | create | `{"duration": <N>, "time_unit": "MINUTES"}` (backend-required) |
+| `--service-id` | show / start / stop / update / delete / logs / wait-deploy | `id` returned by `create`, `show` or `list` |
+| `--dry-run` | create / update / delete | add to preview parameter assembly; no resource is created or changed |
 
 ## Reference Documents
 
-- [CLI Installation Guide](references/cli-installation-guide.md) — cloudrobo CLI installation and configuration
-- [IAM Policies](references/iam-policies.md) — Least-privilege credential & access model
-- [Verification Method](references/verification-method.md) — Verification method details
+- [CLI Installation Guide](references/cli-installation-guide.md) — installation, AK/SK, region, workspace
+- [IAM Policies](references/iam-policies.md) — least-privilege credential & access model
+- [Verification Method](references/verification-method.md) — verification levels and cases (negative cases are marked `EXPECT-FAIL`)
 - [Dataflow Diagram](references/dataflow-diagram.md) — Mermaid data flow diagrams
-- [Acceptance Criteria](references/acceptance-criteria.md) — Acceptance criteria
-- [Service Config Reference](references/service-config-catalog.md) — InferServiceDto fields, health checks, status, logs, parameter auto-discovery, CLI/SDK command examples, parameter resolution & confirmation, edge cases, coverage matrix
+- [Acceptance Criteria](references/acceptance-criteria.md) — acceptance criteria
+- [Service Config Reference](references/service-config-catalog.md) — InferServiceDto fields, health checks, status, logs, parameter auto-discovery, InferClient main-chain snippet, parameter resolution, edge cases, coverage matrix
 
 ## Edge Cases
 
-> See `references/service-config-catalog.md` → "Edge Cases" for the full
-> scenario-handling table (missing model_id, invalid JSON, wrong timestamp unit,
-> 403 permission deny, 500 internal error, missing stop-schedule, r2c config
-> fallback, envs format mismatch, cross-skill invocation, etc.).
+> See `references/service-config-catalog.md` → "Edge Cases" for the full table (missing
+> model_id, invalid JSON, wrong timestamp unit, 403 permission deny, 500 internal error,
+> missing stop-schedule, r2c config fallback, envs format mismatch, cross-skill invocation).
 
 ## Verification Method
 
-### Specification Compliance Verification
+Specification compliance and functional smoke both run the same scripted suite:
 
 ```bash
 bash scripts/test-cli-commands.sh
 ```
 
-### Functional Testing
-
-```bash
-bash scripts/test-cli-commands.sh
-```
+The script runs a one-time preflight (CLI present, `infer` registered, AK/SK present;
+region is reported when configured, otherwise the client default applies), executes the
+read-only and dry-run cases in one batch, scores negative cases as `EXPECT-FAIL`
+(pass means a non-zero exit code), and exits non-zero when any case fails.
 
 ### Test Cases
 
-See `templates/test-vars.json` for the full test case list covering deployment, wait-deploy,
-service lifecycle, logs, and safety scenarios.
+See `templates/test-vars.json` for the full case list (deployment, wait-deploy, lifecycle,
+logs, safety). Cases marked `"result": "SKIP"` are mutating and never auto-run; cases marked
+`"negative": true` must exit non-zero.
 
 ### Verification Checklist
 
 - After `create`, service appears in `list` with correct status
-- After `wait-deploy`, service status is no longer `DEPLOYING` (`status != "DEPLOYING"`; reports timeout/failure with log guidance)
+- After `wait-deploy`, status is no longer `DEPLOYING` (or timeout/failure is reported with log guidance)
 - After `start`/`stop`, `show` reflects the new status
 - After `delete`, `show` returns not-found
 - `list-logs` with **ms** timestamps returns log lines; keyword filter works
-- Invalid JSON / path traversal are rejected; `../` blocked by `validate_safe_id`
-- Mutating operations (especially start) prompt user confirmation
+- Negative cases (`../` service_id, malformed JSON, missing `--name` / `--model-json`) exit non-zero
+  with the client-side error text (Click `Missing option ...`)
+- Mutating operations (especially start) prompt for user confirmation
 
 ## Best Practices
 
 - Resolve each `create` parameter via query commands, then let the user choose — never hardcode
 - **Model source drives parameter policy**: resolve the source (Step 2) first, then apply the
-  [Model Source → Parameter Policy](#model-source--parameter-policy) table. Embodiment plaza models
-  carry **required core params only** (never `--cmd`/`--image-swr-url`/`--envs-json`/
-  `--skill-config-json`/`--service-invoke-json`/`--readiness-health-json`/`--model-ext-metadata`/
-  `--model-json.mount_path`); space asset / custom models run Step 5 auto-discovery and carry
-  whatever is actually discovered
-- Model search: prefer `list-publication-assets --actions ONLINE_DEPLOYMENT --action-status ENABLE`
-  for deployable plaza models; use `list-assets --catalog-id <id>` for workspace models;
-  use `search-assets --keyword "<kw>"` for fuzzy/keyword search
-- `--model-json`'s `model_version_id` must be `latest_version_id` from `show-asset`, NOT `actions[].algorithm.version_id`
-- Always include `--stop-schedule-json '{"duration": N, "time_unit": "MINUTES"}'` in `create` (required by backend); omit `--pool-id` unless deploying to a dedicated pool
-- Use `wait-deploy` after `create` to poll until deployment completes (5s interval, 600s default). Do NOT call `start` after `create` — the service auto-deploys
-- `wait-deploy` returns when `status != "DEPLOYING"`; it only blocks on the `DEPLOYING` phase (not `CREATING`), so call it after `create` and let the backend transition `CREATING → DEPLOYING → RUNNING` — if it returns while still `CREATING`, immediately re-invoke `wait-deploy`
-- Use `--dry-run` on `create` to validate parameter assembly before actual submission
+  [Model Source → Parameter Policy](#model-source--parameter-policy) table. Plaza models carry
+  **required core params only**; space asset / custom models run Step 5 auto-discovery
+- Model search: `cloudrobo asset list-publication-assets --actions ONLINE_DEPLOYMENT --action-status ENABLE`
+  for deployable plaza models; `cloudrobo asset list-assets --catalog-id <id>` for workspace models;
+  `cloudrobo asset search-assets --keyword "<kw>"` for fuzzy search
+- `--model-json`'s `model_version_id` must be `latest_version_id` from `show-asset`, NOT
+  `actions[].algorithm.version_id`
+- Always include `--stop-schedule-json '{"duration": N, "time_unit": "MINUTES"}'` in `create`;
+  omit `--pool-id` unless deploying to a dedicated pool
+- Use `wait-deploy` after `create` (5s interval, 600s default). Do NOT call `start` after
+  `create` — the service auto-deploys; re-invoke `wait-deploy` if it returns while `CREATING`
+- Use `--dry-run` on `create` to validate parameter assembly before submission
 - Report health-check pickup as part of deployment verification
-- Use `list-logs` with `--keywords` to rapidly isolate errors; remember **ms** timestamps
+- Use `list-logs` with `--keywords` to isolate errors fast; remember **ms** timestamps
 - Keep `internet_access_enable` OFF unless the user explicitly needs outbound access
 - Mask sensitive envs/values; never echo credentials
-- Combine with workspace (`cloudrobo workspace current`) and asset skills to resolve workspace/model context; combine with dispatch to execute embodied tasks
+- Combine with workspace (`cloudrobo workspace current`) and asset skills to resolve context;
+  combine with dispatch to execute embodied tasks
