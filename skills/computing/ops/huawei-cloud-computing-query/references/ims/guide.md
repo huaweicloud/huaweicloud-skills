@@ -1,85 +1,61 @@
-# IMS Python Script Usage Guide
+# IMS Query Guide
 
----
+All IMS queries go through one entry: `.venv/bin/python3 scripts/huawei_ims.py <subcommand> [options]`.
+Every subcommand supports `--region` (default `HW_REGION_NAME` or `cn-north-4`), `--project_id`
+(auto-resolved through IAM when omitted) and `--json`.
 
-### list_images.py — Query Image List
+## Subcommands
 
-Purpose: Query the list of IMS images, including ID, name, OS type, OS bit, status, imagetype, visibility.
-Usage: python scripts/ims/list_images.py -h
+| Subcommand | Purpose |
+|------------|---------|
+| `list_images` | Image list with OS, status and visibility |
+| `list_image_by_tags` | Images filtered by tags |
+| `list_image_members` | Members of one image |
+| `show_image_member` | One member of one image |
+| `list_image_tags` | Tags of one image |
+| `list_images_tags` | All image tags of the tenant |
+| `list_tags` | Tenant image tag list |
+| `list_os_versions` | OS versions supported by images |
+| `show_image` | Image details |
+| `show_image_quota` | Image quota |
+| `show_job` | Async job information |
+| `show_job_progress` | Async job progress |
 
----
+## Common options
 
-### list_image_by_tags.py — Query Images by Tag
+| Option | Applies to | Meaning |
+|--------|------------|---------|
+| `--region <region>` | all | Region; falls back to `HW_REGION_NAME` |
+| `--project_id <id>` | all | Project ID; resolved through IAM when omitted |
+| `--limit <n>` | list | Rows displayed, default 20 |
+| `--all` | list | Fetch every page and display all rows |
+| `--fields id,name,status` | list/show | Display only these comma-separated fields |
+| `--json` | all | Raw JSON output |
+| `--imagetype gold` | `list_images` | gold, private, shared or market |
+| `--os_type Linux` | `list_images` | Linux, Windows or Other |
 
-Purpose: Query IMS images by tag, including resource ID, resource name, and status.
-Usage: python scripts/ims/list_image_by_tags.py -h
+## Example
 
----
+```bash
+.venv/bin/python3 scripts/huawei_ims.py list_images --region cn-north-4 --os_type Linux --limit 20
+```
 
-### list_image_members.py — Query Image Member List
+```bash
+.venv/bin/python3 scripts/huawei_ims.py show_image --region cn-north-4 --image_id "<image_id>"
+```
 
-Purpose: Query the list of IMS image members, including member_id, status, member_type, and creation time.
-Usage: python scripts/ims/list_image_members.py -h
+## Output
 
----
+- List output prints `id`, `name` and `status`, at most 20 rows by default, plus `共 N 条，当前返回 M 条`.
+- Use `--all` for the full inventory and `--fields` for a custom column set.
+- Empty results include the region and a short diagnostic hint.
 
-### list_image_tags.py — Query Image Tags
+## Migrating from old script paths
 
-Purpose: Query IMS image tags, including key and value.
-Usage: python scripts/ims/list_image_tags.py -h
+| Old path | New command |
+|----------|-------------|
+| `scripts/ims/list_images.py` | `scripts/huawei_ims.py list_images` |
+| `scripts/ims/show_image.py` | `scripts/huawei_ims.py show_image` |
+| `scripts/ims/<operation>.py` | `scripts/huawei_ims.py <operation>` |
 
----
-
-### list_images_tags.py — Query All Tenant Image Tags
-
-Purpose: Query all IMS image tags for a tenant, including key and values.
-Usage: python scripts/ims/list_images_tags.py -h
-
----
-
-### list_os_versions.py — Query OS Version List Supported by Images
-
-Purpose: Query the list of OS versions supported by IMS images, including platform, os_version_key, OS version, OS bit, and OS type.
-Usage: python scripts/ims/list_os_versions.py -h
-
----
-
-### list_tags.py — Query Tenant Image Tag List
-
-Purpose: Query the list of tenant IMS image tags, including tag.
-Usage: python scripts/ims/list_tags.py -h
-
----
-
-### show_image_quota.py — Query Image Quota
-
-Purpose: Query IMS image quota, including type, used, quota, minimum, and maximum.
-Usage: python scripts/ims/show_image_quota.py -h
-
----
-
-### show_job.py — Query Asynchronous Task Information
-
-Purpose: Query IMS asynchronous task information.
-Usage: python scripts/ims/show_job.py -h
-
----
-
-### show_job_progress.py — Query Asynchronous Task Progress
-
-Purpose: Query IMS asynchronous task progress.
-Usage: python scripts/ims/show_job_progress.py -h
-
----
-
-### show_image.py — Query Image Details
-
-Purpose: Query IMS image details, including id, name, status, visibility, imagetype, protected, os_type, os_bit, os_version, platform, disk_format, min_disk, min_ram, image_size, created_at, updated_at, support_kvm, support_xen, etc.
-Usage: python scripts/ims/show_image.py -h
-
----
-
-### show_image_member.py — Query Image Member Details
-
-Purpose: Query IMS image member details, including image_id, member_id, status, member_type, created_at, updated_at.
-Usage: python scripts/ims/show_image_member.py -h
+The subcommand name always equals the old script file name without the `.py` suffix.

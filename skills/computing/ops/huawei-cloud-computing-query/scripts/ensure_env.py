@@ -4,7 +4,7 @@
 
 一键完成所有环境准备并验证可用性，执行后即可直接运行查询脚本：
   1. 校验必填环境变量 HW_ACCESS_KEY / HW_SECRET_KEY
-  2. 检查 Python 版本是否满足最低要求，若不满足则尝试自动安装
+  2. 检查 Python 版本是否满足最低要求，不满足则给出手动安装提示
   3. 安装 Python 依赖（支持 --upgrade）
   4. 校验华为云 SDK 是否可导入
   5. 校验凭据是否有效（真正调用 IAM API）
@@ -19,7 +19,6 @@ import json
 import time
 import hashlib
 import subprocess
-import platform
 import tempfile
 import argparse
 import urllib.request
@@ -191,9 +190,19 @@ def _ensure_venv_and_reexec():
             return False
         ok(f"虚拟环境已创建: {venv_dir}")
 
-    # 用 venv Python 重新执行当前脚本
+    # 用 venv Python 重新执行当前脚本：以子进程方式运行（输出直通终端），
+    # 拿到退出码后由本进程退出，不替换当前进程镜像。
+    # HW_ENV_REEXEC_GUARD 防止 venv 判定失效时反复自我调用。
+    if os.getenv("HW_ENV_REEXEC_GUARD") == "1":
+        return False
     print(f"  使用虚拟环境 Python: {venv_python}")
-    os.execv(venv_python, [venv_python] + sys.argv)
+    env = dict(os.environ, HW_ENV_REEXEC_GUARD="1")
+    sys.stdout.flush()
+    rc = subprocess.run(
+        [venv_python, os.path.abspath(__file__)] + sys.argv[1:],
+        env=env,
+    ).returncode
+    sys.exit(rc)
 
 def info(msg):
     print(f"  {msg}")
@@ -310,14 +319,14 @@ def print_manual_python_help():
     print()
     info("请安装 Python 3.6+ 后重试，参考：")
     print("    Windows : winget install Python.Python.3.11")
-    print("    Ubuntu  : sudo apt update && sudo apt install -y python3 python3-pip python3-venv")
-    print("    CentOS  : sudo yum install -y python3 python3-pip")
-    print("    Fedora  : sudo dnf install -y python3 python3-pip")
+    print("    Ubuntu  : apt-get install python3 python3-pip python3-venv（以管理员身份执行）")
+    print("    CentOS  : yum install python3 python3-pip（以管理员身份执行）")
+    print("    Fedora  : dnf install python3 python3-pip（以管理员身份执行）")
     print("    macOS   : brew install python@3.11")
 
 
 def check_python():
-    """检查 Python 版本，若不满足则尝试自动安装"""
+    """检查 Python 版本，不满足时给出各平台的手动安装提示（不自动安装系统包）"""
     print("\n[2/5] 检查 Python 版本")
 
     version = sys.version_info[:2]
@@ -330,44 +339,6 @@ def check_python():
         return True
     fail(f"Python {version_str} < {MIN_PYTHON[0]}.{MIN_PYTHON[1]}")
     print_manual_python_help()
-    return False
-
-
-def install_python():
-    """尝试自动安装 Python 3.11"""
-    system = platform.system()
-
-    if system == "Windows":
-        rc, out, err = run_cmd(["winget", "install", "Python.Python.3.11", "--accept-source-agreements", "--accept-package-agreements"])
-        if rc == 0:
-            return True
-        print(f"    winget 安装失败: {err}")
-        return False
-
-    elif system == "Linux":
-        # 尝试 apt（Ubuntu/Debian）
-        rc, _, err = run_cmd(["sudo", "apt", "update"])
-        rc2, _, err2 = run_cmd(["sudo", "apt", "install", "-y", "python3", "python3-pip", "python3-venv"])
-        if rc == 0 and rc2 == 0:
-            return True
-        # 尝试 yum（CentOS/RHEL/EulerOS 旧版）
-        rc, _, err = run_cmd(["sudo", "yum", "install", "-y", "python3", "python3-pip"])
-        if rc == 0:
-            return True
-        # 尝试 dnf（Fedora/EulerOS 新版）
-        rc, _, err = run_cmd(["sudo", "dnf", "install", "-y", "python3", "python3-pip"])
-        if rc == 0:
-            return True
-        print("    apt/yum/dnf 安装失败")
-        return False
-
-    elif system == "Darwin":
-        rc, _, err = run_cmd(["brew", "install", "python@3.11"])
-        if rc == 0:
-            return True
-        print(f"    brew 安装失败: {err}")
-        return False
-
     return False
 
 
@@ -614,6 +585,12 @@ def main():
     FORCE_REFRESH = args.force or os.getenv("HW_ENV_CHECK_FORCE", "") == "1" or args.upgrade
     if args.ttl is not None:
         os.environ["HW_ENV_CHECK_TTL"] = str(args.ttl)
+
+    # 轻量前置：缺少凭证时立即返回，避免无谓的 venv 创建与依赖安装
+    missing = [name for name in REQUIRED_ENV if not os.getenv(name)]
+    if missing:
+        print("FAIL: 未设置 " + ", ".join(missing) + "；请先配置 HW_ACCESS_KEY / HW_SECRET_KEY", file=sys.stderr)
+        return 2
 
     # 若系统 Python 受 PEP 668 保护，自动创建 venv 并 reexec
     _ensure_venv_and_reexec()

@@ -1,9 +1,12 @@
 #!/bin/bash
 # 华为云资源查询 - 环境检查前置脚本
-#
-# 结果会缓存 30 分钟（.env_check_cache），命中缓存时跳过依赖安装与 API 校验。
-# 强制重新检查：bash check_env.sh --force 或设置 HW_ENV_CHECK_FORCE=1
-# 缓存有效期：--ttl <秒> 或设置 HW_ENV_CHECK_TTL（0 表示禁用缓存）
+
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    echo "Usage: bash scripts/check_env.sh [--force] [--ttl <seconds>] [--upgrade]"
+    echo "Checks Python, dependencies, SDK and credentials; results are cached for 30 minutes."
+    exit 0
+fi
+
 
 # 步骤 1：检查 Python 是否存在
 echo ""
@@ -40,8 +43,8 @@ if [ -z "$PYTHON_CMD" ]; then
     echo ""
     echo "请先安装 Python 3.6+，根据当前系统参考："
     echo "  macOS   : brew install python"
-    echo "  Ubuntu  : sudo apt update && sudo apt install -y python3 python3-pip"
-    echo "  CentOS  : sudo yum install -y python3"
+    echo "  Ubuntu  : apt-get install python3 python3-pip（以管理员身份执行）"
+    echo "  CentOS  : yum install python3（以管理员身份执行）"
     exit 1
 fi
 
@@ -109,5 +112,5 @@ if [ "${EXIT_CODE}" -eq 0 ]; then
     exit 0
 else
     echo "✗ 环境未就绪，请按提示修复"
-    exit 1
+    exit "${EXIT_CODE}"
 fi

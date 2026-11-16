@@ -99,32 +99,41 @@
 配置完成后，可执行只读脚本验证：
 
 ```bash
-# 验证 ECS 查询
-python3 scripts/ecs/list_servers_details.py --region cn-north-4
-
-# 验证 BMS 查询
-python3 scripts/bms/list_bare_metal_servers.py --region cn-north-4
-
-# 验证 AS 查询
-python3 scripts/as/list_scaling_groups.py --region cn-north-4
-
-# 验证 IMS 查询
-python3 scripts/ims/list_images.py --region cn-north-4
-
-# 验证 CCE 查询（需要集群 ID 时可由 list_clusters.py 获取）
-python3 scripts/cce/list_clusters.py --region cn-north-4
-python3 scripts/cce/show_quota.py --region cn-north-4
-python3 scripts/cce/list_nodes.py --region cn-north-4 --cluster_id <cluster-id> --all
-python3 scripts/cce/list_node_pools.py --region cn-north-4 --cluster_id <cluster-id>
+.venv/bin/python3 scripts/huawei_ecs.py list_servers_details --region cn-north-4 --limit 20
 ```
 
-`--region` 可省略，省略时回退环境变量 `HW_REGION_NAME`（缺省 cn-north-4），与各脚本参数保持一致。
+```bash
+.venv/bin/python3 scripts/huawei_bms.py list_bare_metal_servers --region cn-north-4 --limit 20
+```
+
+```bash
+.venv/bin/python3 scripts/huawei_as.py list_scaling_groups --region cn-north-4 --limit 20
+```
+
+```bash
+.venv/bin/python3 scripts/huawei_ims.py list_images --region cn-north-4 --limit 20
+```
+
+```bash
+.venv/bin/python3 scripts/huawei_cce.py list_clusters --region cn-north-4 --limit 20
+```
+
+```bash
+.venv/bin/python3 scripts/huawei_cce.py show_quota --region cn-north-4
+```
+
+```bash
+.venv/bin/python3 scripts/huawei_cce.py list_nodes --region cn-north-4 --cluster_id "<cluster_id>" --all
+```
+
+
+`--region` 可省略，省略时回退环境变量 `HW_REGION_NAME`（缺省 cn-north-4），与各子命令参数保持一致。
 
 若返回 `403 Forbidden` / 权限不足，说明账号缺少对应服务的只读权限。
 
 ## 特殊说明
 
-- **AS API 版本查询**（`list_api_versions.py` / `show_api_version.py`）为公开接口，无需 IAM 权限即可访问
+- **AS API 版本查询**（子命令 `list_api_versions` / `show_api_version`）为公开接口，无需 IAM 权限即可访问
 - **CCE 查询**使用 `huaweicloudsdkcce` v3 只读接口（ListClusters / ShowCluster / ListNodes / ShowNode / ListNodePools / ShowNodePool / GetResourceTags / ShowQuotas），不含任何写操作；集群证书没有读接口，插件与日志分析请转 `container/cce/` 下的对应技能
-- **BMS / IMS 查询**部分接口依赖 project_id，若未配置 `HW_PROJECT_ID` 环境变量，脚本会通过 IAM API 自动获取，此时需要 `IAM ReadOnlyAccess` 权限
+- **BMS / IMS 查询**部分接口依赖 project_id，若未配置 `HW_PROJECT_ID` 环境变量，入口会通过 IAM API 自动获取一次并在进程内复用，此时需要 `IAM ReadOnlyAccess` 权限
 - 使用临时 AK/SK 时，需同时配置 `HW_SECURITY_TOKEN` 环境变量

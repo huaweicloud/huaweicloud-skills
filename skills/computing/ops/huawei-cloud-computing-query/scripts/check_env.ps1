@@ -6,6 +6,11 @@
 缓存有效期：--ttl <秒> 或设置 HW_ENV_CHECK_TTL（0 表示禁用缓存）
 #>
 
+if ($args -contains "-h" -or $args -contains "--help") {
+    Write-Output "Usage: powershell -ExecutionPolicy Bypass -File scripts/check_env.ps1 [--force] [--ttl <seconds>]"
+    exit 0
+}
+
 $ErrorActionPreference = "Stop"
 
 Write-Output ""

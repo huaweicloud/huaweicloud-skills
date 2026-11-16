@@ -1,4 +1,5 @@
 import os
+import sys
 from urllib.parse import urlparse
 
 try:
@@ -20,8 +21,8 @@ def load_credentials():
     security_token = os.getenv("HW_SECURITY_TOKEN", "")
 
     if not ak or not sk:
-        print("未配置 AK/SK，请设置环境变量 HW_ACCESS_KEY 和 HW_SECRET_KEY")
-        exit(-1)
+        print("未配置 AK/SK，请设置环境变量 HW_ACCESS_KEY 和 HW_SECRET_KEY", file=sys.stderr)
+        raise SystemExit(2)
 
     return ak, sk, region, security_token
 
