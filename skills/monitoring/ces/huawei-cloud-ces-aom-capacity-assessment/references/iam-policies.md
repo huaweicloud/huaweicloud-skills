@@ -16,7 +16,7 @@ For least privilege, refer to the following Action list (actual actions availabl
 
 ```json
 {
-  "Version": "1.0",
+  "Version": "1.1",
   "Statement": [
     {
       "Effect": "Allow",

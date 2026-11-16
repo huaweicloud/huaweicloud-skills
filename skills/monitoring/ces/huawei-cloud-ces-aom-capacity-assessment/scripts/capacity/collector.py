@@ -29,6 +29,16 @@ class CollectError(Exception):
 # ---------------------------------------------------------------------------
 # CES backend (hcloud CES BatchListMetricData)
 # ---------------------------------------------------------------------------
+def _dims_key(dimensions: Optional[list[dict[str, Any]]]) -> frozenset:
+    """Order-insensitive identity of a dimension list, used to match responses to requests.
+
+    Cloud APIs may reorder dimensions (CES returns them alphabetically), so comparing
+    dimension lists element by element produced false mismatches for 2+ dimension metrics.
+    """
+    return frozenset((str(d.get("name") or ""), str(d.get("value") or ""))
+                     for d in dimensions or [])
+
+
 def build_metric_args(specs: list[dict[str, Any]]) -> list[str]:
     """Convert a batch of metric specs into KooCLI --metrics.N.* arguments.
 
@@ -88,21 +98,24 @@ def call_batch(region: str, specs: list[dict[str, Any]],
         raise CollectError(f"hcloud returned non-JSON: {proc.stdout[:300]}")
     if "metrics" not in data:
         raise CollectError(f"hcloud returned unexpected: {json.dumps(data, ensure_ascii=False)[:300]}")
-    # Align the response to request order (match namespace+metric_name+dimension names)
+    # Align the response to request order (match namespace+metric_name+dimensions).
+    # CES reorders the dimensions of the returned metric (alphabetically), so the match must
+    # compare the dimension name/value pairs as an unordered set — comparing the ordered name
+    # list left every multi-dimension request (e.g. DCS node-level metrics) unmatched.
     out: list[dict[str, Any]] = []
     for req in specs:
         hit = None
-        for m in data["metrics"]:
+        req_key = _dims_key(req.get("dimensions"))
+        for m in data.get("metrics") or []:
             if (m.get("namespace") == req["namespace"]
                     and m.get("metric_name") == req["metric_name"]
-                    and [d.get("name") for d in m.get("dimensions", [])]
-                    == [d.get("name") for d in req.get("dimensions", [])]):
+                    and _dims_key(m.get("dimensions")) == req_key):
                 hit = m
                 break
         if hit is None:
             out.append({"req": req, "datapoints": [], "error": "返回中未找到该指标"})
         else:
-            out.append({"req": req, "datapoints": hit.get("datapoints", []),
+            out.append({"req": req, "datapoints": hit.get("datapoints") or [],
                         "unit": hit.get("unit", "")})
     return out
 
@@ -149,8 +162,7 @@ def _match_aom_sample(sample: dict[str, Any], req: dict[str, Any]) -> bool:
         return False
     if s.get("metric_name") != req["metric_name"]:
         return False
-    return [d.get("name") for d in s.get("dimensions", [])] \
-        == [d.get("name") for d in req.get("dimensions", [])]
+    return _dims_key(s.get("dimensions")) == _dims_key(req.get("dimensions"))
 
 
 def _extract_statistic(data_points: list[dict[str, Any]], statistic: str) -> list[float]:
@@ -197,7 +209,7 @@ def call_aom_batch(region: str, specs: list[dict[str, Any]],
     out: list[dict[str, Any]] = []
     for req in specs:
         hit = None
-        for s in data["samples"]:
+        for s in data.get("samples") or []:
             if _match_aom_sample(s, req):
                 hit = s
                 break
@@ -414,3 +426,596 @@ def hcloud_smoke(region: str, hcloud: str = "hcloud") -> tuple[bool, str]:
             continue
         checks.append(f"{backend}: ok")
     return all_ok, "; ".join(checks)
+
+# ---------------------------------------------------------------------------
+# DMS subtype detection (since v3.5)
+# ---------------------------------------------------------------------------
+DMS_SUBTYPE_DIMS = {
+    "kafka": "kafka_instance_id",
+    "rabbitmq": "rabbitmq_instance_id",
+    "rocketmq": "reliablemq_instance_id",
+}
+
+# hcloud service name + operation for each DMS engine
+DMS_SUBTYPE_APIS = {
+    "kafka":      ("Kafka",    "ShowInstance"),
+    "rabbitmq":   ("RabbitMQ", "ShowInstance"),
+    "rocketmq":   ("RocketMQ", "ShowInstance"),
+}
+
+
+def detect_dms_subtype(region: str, instance_id: str,
+                       hcloud: str = "hcloud",
+                       endpoint: Optional[str] = None,
+                       timeout: int = 30) -> Optional[str]:
+    """Determine the DMS engine type (kafka/rabbitmq/rocketmq) via ShowInstance API.
+
+    Tries `hcloud <Service> ShowInstance --instance_id=xxx` for each engine.
+    The first one that returns a non-error response indicates the engine type.
+    Falls back to CES ListMetrics probing if all ShowInstance calls fail.
+
+    Returns 'kafka'/'rabbitmq'/'rocketmq', or None if all probes fail.
+    """
+    # Strategy 1: ShowInstance (direct, reliable, serial)
+    # DMS ShowInstance requires --project_id path parameter (same as DCS)
+    project_id = _get_project_id(region, hcloud=hcloud, endpoint=endpoint)
+    for subtype, (svc, op) in DMS_SUBTYPE_APIS.items():
+        cmd = [hcloud, svc, op, f"--cli-region={region}",
+               f"--instance_id={instance_id}", "--cli-output=json"]
+        if project_id:
+            cmd.append(f"--project_id={project_id}")
+        if endpoint:
+            cmd.append(f"--cli-endpoint={endpoint}")
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            continue
+        out = proc.stdout.strip()
+        if not out.startswith("{"):
+            continue
+        try:
+            data = json.loads(out)
+        except Exception:
+            continue
+        # ShowInstance returns error_code when instance not found
+        if "error_code" not in data:
+            return subtype
+
+    # Strategy 2: fallback to CES ListMetrics probing
+    for subtype, dim_name in DMS_SUBTYPE_DIMS.items():
+        cmd = [hcloud, "CES", "ListMetrics", f"--cli-region={region}",
+               "--namespace=SYS.DMS",
+               f"--dim.0={dim_name},{instance_id}",
+               "--cli-output=json", "--limit=1"]
+        if endpoint:
+            cmd.append(f"--cli-endpoint={endpoint}")
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            continue
+        if proc.returncode != 0:
+            continue
+        out = proc.stdout.strip()
+        if not out.startswith("{"):
+            continue
+        try:
+            data = json.loads(out)
+        except Exception:
+            continue
+        metrics = data.get("metrics") or []
+        if metrics:
+            return subtype
+    return None
+
+
+# GeminiDB engine types and their CES dimension names
+GEMINIDB_SUBTYPE_DIMS = {
+    "cassandra": "cassandra_cluster_id",
+    "redis": "redis_cluster_id",
+}
+
+
+def detect_geminidb_subtype(region: str, instance_id: str,
+                            hcloud: str = "hcloud",
+                            endpoint: Optional[str] = None,
+                            timeout: int = 30) -> Optional[str]:
+    """Determine the GeminiDB engine type (cassandra/redis).
+
+    Strategy 1: GaussDBforNoSQL ListInstances --id=xxx --datastore_type=<type>
+    Strategy 2: CES ListMetrics probing with cassandra_cluster_id / redis_cluster_id
+
+    Returns 'cassandra'/'redis', or None if all probes fail.
+    """
+    # Strategy 1: GaussDBforNoSQL ListInstances
+    for subtype in GEMINIDB_SUBTYPE_DIMS:
+        cmd = [hcloud, "GaussDBforNoSQL", "ListInstances",
+               f"--cli-region={region}",
+               f"--id={instance_id}",
+               f"--datastore_type={subtype}",
+               "--cli-output=json"]
+        if endpoint:
+            cmd.append(f"--cli-endpoint={endpoint}")
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            continue
+        out = proc.stdout.strip()
+        if not out.startswith("{"):
+            continue
+        try:
+            data = json.loads(out)
+        except Exception:
+            continue
+        if data.get("instances"):
+            return subtype
+
+    # Strategy 2: CES ListMetrics probing
+    for subtype, dim_name in GEMINIDB_SUBTYPE_DIMS.items():
+        cmd = [hcloud, "CES", "ListMetrics", f"--cli-region={region}",
+               "--namespace=SYS.NoSQL",
+               f"--dim.0={dim_name},{instance_id}",
+               "--cli-output=json", "--limit=1"]
+        if endpoint:
+            cmd.append(f"--cli-endpoint={endpoint}")
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            continue
+        if proc.returncode != 0:
+            continue
+        out = proc.stdout.strip()
+        if not out.startswith("{"):
+            continue
+        try:
+            data = json.loads(out)
+        except Exception:
+            continue
+        metrics = data.get("metrics") or []
+        if metrics:
+            return subtype
+    return None
+
+
+def discover_dim_values(region: str, namespace: str,
+                        instance_dim_name: str, instance_id: str,
+                        dim_resource_dim_name: str,
+                        backend: str = "ces",
+                        hcloud: str = "hcloud",
+                        endpoint: Optional[str] = None,
+                        timeout: int = 60,
+                        warnings: Optional[list[str]] = None) -> list[str]:
+    """Discover all available dimension resource IDs for a given instance.
+
+    Queries `hcloud CES ListMetrics` (or CCE-specific APIs for AOM backend) with the
+    instance dimension to list all available metrics, then extracts the unique values
+    of the dim_resource_dim_name dimension.
+
+    `warnings` (optional, appended in place) receives a human-readable note whenever the
+    instance-level discovery came back empty or had to use the namespace-wide fallback,
+    so the caller can surface it instead of silently substituting the instance ID.
+
+    Returns a list of dimension resource ID values (e.g. node IDs, broker IDs, POD names).
+    Returns an empty list if the query fails or no values are found.
+    """
+    if backend == "aom":
+        # CCE: try AOM ListSeries first (most reliable for AOM namespaces),
+        # then CES ListMetrics, then CCE ShowClusterNodes for hostID
+        values = _discover_via_aom(region, namespace, instance_dim_name, instance_id,
+                                   dim_resource_dim_name, hcloud, endpoint, timeout)
+        if values:
+            return values
+        values = _discover_via_ces(region, namespace, instance_dim_name, instance_id,
+                                   dim_resource_dim_name, hcloud, endpoint, timeout,
+                                   warnings=warnings)
+        if values:
+            return values
+        if dim_resource_dim_name == "hostID":
+            values = _discover_cce_nodes(region, instance_id, hcloud, endpoint, timeout)
+            if values:
+                return values
+        _add_warning(warnings, _empty_dim_warning(namespace, instance_dim_name, instance_id,
+                                                 dim_resource_dim_name))
+        return []
+
+    # CES-backed services
+    values = _discover_via_ces(region, namespace, instance_dim_name, instance_id,
+                               dim_resource_dim_name, hcloud, endpoint, timeout,
+                               warnings=warnings)
+    if not values:
+        _add_warning(warnings, _empty_dim_warning(namespace, instance_dim_name, instance_id,
+                                                 dim_resource_dim_name))
+    return values
+
+
+def _empty_dim_warning(namespace: str, instance_dim_name: str, instance_id: str,
+                       dim_resource_dim_name: str) -> str:
+    return (f"dimension discovery: no {dim_resource_dim_name} values found for {namespace} "
+            f"(dim {instance_dim_name}={instance_id}); falling back to the instance ID")
+
+
+def _add_warning(warnings: Optional[list[str]], message: str) -> None:
+    if warnings is not None and message not in warnings:
+        warnings.append(message)
+
+
+def _list_metrics_ces(region: str, namespace: str, hcloud: str,
+                      endpoint: Optional[str], timeout: int,
+                      dim_filter: Optional[str] = None,
+                      limit: int = 1000,
+                      max_pages: int = 5) -> tuple[list[dict], bool]:
+    """Run CES ListMetrics for one namespace, following the marker pagination.
+
+    dim_filter: optional "name,value" sent as --dim.0 (CES matches the **exact**
+    dimension set of a metric, so a metric carrying an extra dimension is not returned).
+
+    Returns (metrics, ok): metrics are de-duplicated across pages; ok is False when at
+    least one page could not be read and no page succeeded (CLI/JSON failure).
+    """
+    collected: list[dict] = []
+    seen: set[tuple] = set()
+    start = ""
+    ok = False
+    for _ in range(max_pages):
+        cmd = [hcloud, "CES", "ListMetrics", f"--cli-region={region}",
+               f"--namespace={namespace}", "--cli-output=json", f"--limit={limit}"]
+        if dim_filter:
+            cmd.append(f"--dim.0={dim_filter}")
+        if start:
+            cmd.append(f"--start={start}")
+        if endpoint:
+            cmd.append(f"--cli-endpoint={endpoint}")
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            break
+        if proc.returncode != 0:
+            break
+        out = proc.stdout.strip()
+        if not out.startswith("{"):
+            break
+        try:
+            data = json.loads(out)
+        except Exception:
+            break
+        ok = True
+        page = data.get("metrics") or []
+        added = 0
+        for m in page:
+            key = (str(m.get("metric_name") or ""),
+                   tuple(sorted((str(d.get("name") or ""), str(d.get("value") or ""))
+                                for d in (m.get("dimensions") or []))))
+            if key in seen:
+                continue
+            seen.add(key)
+            collected.append(m)
+            added += 1
+        meta = data.get("meta_data") or {}
+        marker = str(meta.get("marker") or "").strip()
+        total = meta.get("total")
+        if not marker or marker == start or not page or not added:
+            break
+        if isinstance(total, int) and total > 0 and len(collected) >= total:
+            break
+        start = marker
+    return collected, ok
+
+
+def _extract_dim_values(metrics: list[dict], dim_name: str) -> list[str]:
+    values = set()
+    for m in metrics:
+        for d in m.get("dimensions") or []:
+            if d.get("name") == dim_name and d.get("value"):
+                values.add(str(d.get("value")).strip())
+    values.discard("")
+    return sorted(values)
+
+
+def _metric_belongs_to_instance(metric: dict, instance_dim_name: str, instance_id: str) -> bool:
+    """A namespace-wide metric counts for this instance only when its instance dimension says so."""
+    ids = {str(d.get("value")).strip() for d in metric.get("dimensions") or []
+           if d.get("name") == instance_dim_name}
+    return instance_id in ids
+
+
+def _discover_via_ces(region: str, namespace: str,
+                      instance_dim_name: str, instance_id: str,
+                      dim_resource_dim_name: str,
+                      hcloud: str, endpoint: Optional[str], timeout: int,
+                      warnings: Optional[list[str]] = None) -> list[str]:
+    """Use CES ListMetrics to discover available dimension values.
+
+    Since CES filters on the exact dimension set, an instance-dimension-filtered query
+    misses every metric that carries an extra dimension — DCS/DMS node, broker and shard
+    level metrics only expose e.g. dcs_cluster_redis_node through a namespace-wide
+    listing.  When the filtered query yields no dim-resource values, the namespace-wide
+    listing is used and each metric is attributed to this instance by its instance
+    dimension, so metrics of other instances in the region cannot leak into the result
+    (same attribution rule as detect_dcs_instance_type).
+    """
+    filtered, _ = _list_metrics_ces(region, namespace, hcloud, endpoint, timeout,
+                                   dim_filter=f"{instance_dim_name},{instance_id}")
+    values = _extract_dim_values(filtered, dim_resource_dim_name)
+    if values:
+        return values
+
+    # Fallback: namespace-wide listing + per-instance attribution
+    wide, _ = _list_metrics_ces(region, namespace, hcloud, endpoint, timeout)
+    scoped = [m for m in wide if _metric_belongs_to_instance(m, instance_dim_name, instance_id)]
+    values = _extract_dim_values(scoped, dim_resource_dim_name)
+    if values:
+        _add_warning(warnings,
+                     f"dimension discovery: instance-filtered ListMetrics on {namespace} "
+                     f"(dim {instance_dim_name}={instance_id}) returned no "
+                     f"{dim_resource_dim_name} values; recovered {len(values)} value(s) from a "
+                     f"namespace-wide listing attributed by {instance_dim_name}")
+    return values
+
+
+def _discover_via_aom(region: str, namespace: str,
+                      instance_dim_name: str, instance_id: str,
+                      dim_resource_dim_name: str,
+                      hcloud: str, endpoint: Optional[str], timeout: int) -> list[str]:
+    """Use AOM ListSeries to discover available dimension values for AOM-backed metrics."""
+    cmd = [hcloud, "AOM", "ListSeries", f"--cli-region={region}",
+           f"--series.1.namespace={namespace}",
+           f"--series.1.dimensions.1.name={instance_dim_name}",
+           f"--series.1.dimensions.1.value={instance_id}",
+           "--limit=500", "--cli-output=json"]
+    if endpoint:
+        cmd.append(f"--cli-endpoint={endpoint}")
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return []
+    if proc.returncode != 0:
+        return []
+    out = proc.stdout.strip()
+    if not out.startswith("{"):
+        return []
+    try:
+        data = json.loads(out)
+    except Exception:
+        return []
+    values = set()
+    # AOM ListSeries response: {"series": [{"dimensions": [{"name":.., "value":..}, ...]}, ...]}
+    for s in data.get("series") or []:
+        for d in s.get("dimensions") or []:
+            if d.get("name") == dim_resource_dim_name and d.get("value"):
+                values.add(d["value"])
+    return sorted(values)
+
+
+def _discover_cce_nodes(region: str, cluster_id: str,
+                        hcloud: str, endpoint: Optional[str], timeout: int) -> list[str]:
+    """Use CCE ShowClusterNodes to discover node hostIDs."""
+    cmd = [hcloud, "CCE", "ShowClusterNodes", f"--cli-region={region}",
+           f"--cluster_id={cluster_id}", "--cli-output=json"]
+    if endpoint:
+        cmd.append(f"--cli-endpoint={endpoint}")
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return []
+    if proc.returncode != 0:
+        return []
+    out = proc.stdout.strip()
+    if not out.startswith("{"):
+        return []
+    try:
+        data = json.loads(out)
+    except Exception:
+        return []
+    nodes = data.get("nodes") or (data.get("body") or {}).get("nodes") or []
+    host_ids = []
+    for n in nodes:
+        hid = n.get("hostID") or n.get("host_id") or n.get("id")
+        if hid:
+            host_ids.append(str(hid))
+    return sorted(set(host_ids))
+
+# ---------------------------------------------------------------------------
+# DCS instance type detection (since v3.6)
+# ---------------------------------------------------------------------------
+# DCS instance types and their identifying keywords in the ShowInstance response
+# 单机 -> "single", 主备 -> "ha", Cluster集群 -> "cluster", Proxy集群 -> "proxy"
+DCS_INSTANCE_TYPE_MAP = {
+    "single": "single",
+    "ha": "ha",
+    "cluster": "cluster",
+    "proxy": "proxy",
+    "master_standby": "ha",
+    "master-standby": "ha",
+    "proxy_cluster": "proxy",
+    "proxy-cluster": "proxy",
+}
+
+# Keywords in description field for each DCS instance type
+DCS_DESCRIPTION_KEYWORDS = {
+    "proxy": ["proxy", "代理"],
+    "cluster": ["cluster", "集群"],
+    "ha": ["ha", "主备", "replication"],
+    "single": ["single", "单机"],
+}
+
+
+def _get_project_id(region: str, hcloud: str = "hcloud",
+                    endpoint: Optional[str] = None,
+                    timeout: int = 15) -> Optional[str]:
+    """Resolve project_id for a region via IAM KeystoneListUserProjects."""
+    cmd = [hcloud, "IAM", "KeystoneListUserProjects", f"--cli-region={region}",
+           "--cli-output=json"]
+    if endpoint:
+        cmd.append(f"--cli-endpoint={endpoint}")
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    if proc.returncode != 0:
+        return None
+    out = proc.stdout.strip()
+    if not out.startswith("["):
+        return None
+    try:
+        projects = json.loads(out)
+    except Exception:
+        return None
+    if projects and isinstance(projects, list):
+        # Prefer the project whose name matches the target region
+        for p in projects:
+            if str(p.get("name", "")).strip() == region:
+                pid = p.get("id")
+                if pid:
+                    return str(pid)
+        # Fallback: first project (single-region accounts)
+        pid = projects[0].get("id")
+        if pid:
+            return str(pid)
+    return None
+
+
+def detect_dcs_instance_type(region: str, instance_id: str,
+                             hcloud: str = "hcloud",
+                             endpoint: Optional[str] = None,
+                             timeout: int = 30) -> Optional[str]:
+    """Determine the DCS instance type (single/ha/cluster/proxy).
+
+    Strategy 1: DCS ShowInstance API — check cache_mode / instance_type / type /
+                description fields.  Tries with --project_id first, then without
+                (KooCLI auto-fills --project_id from the configured profile).
+    Strategy 2: CES ListMetrics probing — check if dcs_cluster_redis_node dimension
+                exists for this instance (indicates cluster or proxy); distinguish
+                by checking metric_name patterns in the response.  Falls back to a
+                namespace-only query (no dim filter) if the instance-dim query
+                finds no sub-nodes, because DCS node-level metrics may carry only
+                dcs_cluster_redis_node without dcs_instance_id.  Namespace-only
+                results are attributed to this instance via their dcs_instance_id
+                dimension, so metrics of other DCS instances in the region cannot
+                change the verdict.
+
+    Returns 'single'/'ha'/'cluster'/'proxy'.  Returns None when no probe yields
+    instance-attributable evidence (expand all DCS metrics rather than guessing).
+    """
+    # Strategy 1: DCS ShowInstance
+    project_id = _get_project_id(region, hcloud=hcloud, endpoint=endpoint)
+
+    # Build candidate command variants: with --project_id first, then without
+    # (KooCLI can auto-fill --project_id from the configured profile, same as
+    # the DMS detection code in detect_dms_engine_type).
+    use_pid_variants = []
+    if project_id:
+        use_pid_variants.append(True)   # with --project_id (preferred)
+    use_pid_variants.append(False)      # without --project_id (fallback)
+
+    for use_pid in use_pid_variants:
+        cmd = [hcloud, "DCS", "ShowInstance", f"--cli-region={region}",
+               f"--instance_id={instance_id}", "--cli-output=json"]
+        if use_pid:
+            cmd.append(f"--project_id={project_id}")
+        if endpoint:
+            cmd.append(f"--cli-endpoint={endpoint}")
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            continue
+        out = proc.stdout.strip()
+        if not out.startswith("{"):
+            continue
+        try:
+            inst = json.loads(out)
+        except Exception:
+            continue
+        # ShowInstance returns error_code on failure (wrong project, permissions, etc.)
+        if "error_code" in inst:
+            continue
+        # Check cache_mode first (primary DCS API field for instance architecture),
+        # then instance_type / type as fallbacks for older API versions.
+        for field in ("cache_mode", "instance_type", "type"):
+            val = inst.get(field)
+            if val is not None:
+                val_str = str(val).strip().lower()
+                if val_str in DCS_INSTANCE_TYPE_MAP:
+                    return DCS_INSTANCE_TYPE_MAP[val_str]
+        # Check description field for keywords
+        desc = str(inst.get("description") or "").strip().lower()
+        if desc:
+            for subtype, keywords in DCS_DESCRIPTION_KEYWORDS.items():
+                if any(kw in desc for kw in keywords):
+                    return subtype
+
+    # Strategy 2: CES ListMetrics probing
+    # Query all metrics for this DCS instance and check dimension/metric patterns.
+    # Try two query variants:
+    #   (a) filtered by dcs_instance_id  (b) namespace-only (no dim filter)
+    # Variant (b) is needed because DCS node-level metrics may carry only
+    # dcs_cluster_redis_node without dcs_instance_id, so the filtered query
+    # would miss them.  Variant (b) returns the metrics of *every* DCS instance in the
+    # region, so each returned metric must be attributed to this instance before it can
+    # influence the verdict — otherwise one cluster instance in the same region makes
+    # every single-node instance look like a cluster (cross-instance pollution).
+    has_sub_nodes = False
+    metric_names: set[str] = set()
+    scoped_metrics = 0
+
+    for dim_filter in (True, False):
+        cmd = [hcloud, "CES", "ListMetrics", f"--cli-region={region}",
+               "--namespace=SYS.DCS", "--cli-output=json", "--limit=500"]
+        if dim_filter:
+            cmd.append(f"--dim.0=dcs_instance_id,{instance_id}")
+        if endpoint:
+            cmd.append(f"--cli-endpoint={endpoint}")
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            continue
+        if proc.returncode != 0:
+            continue
+        out = proc.stdout.strip()
+        if not out.startswith("{"):
+            continue
+        try:
+            resp = json.loads(out)
+        except Exception:
+            continue
+        for m in resp.get("metrics") or []:
+            dims = m.get("dimensions") or []
+            inst_ids = {str(d.get("value")).strip() for d in dims
+                        if d.get("name") == "dcs_instance_id"}
+            if dim_filter:
+                # The server-side filter already scoped the result to this instance; reject
+                # only metrics that explicitly carry another instance's id.
+                belongs = (not inst_ids) or (instance_id in inst_ids)
+            else:
+                # Namespace-wide query: attribute a metric to this instance only when its
+                # dcs_instance_id dimension names this instance.
+                belongs = instance_id in inst_ids
+            if not belongs:
+                continue
+            scoped_metrics += 1
+            if any(d.get("name") == "dcs_cluster_redis_node" for d in dims):
+                has_sub_nodes = True
+            metric_names.add(str(m.get("metric_name", "")).lower())
+        # If the filtered query already found sub-nodes, skip the broader query
+        if has_sub_nodes:
+            break
+
+    if not scoped_metrics:
+        # No metric attributable to this instance: the namespace-only result says nothing
+        # about it, so return None (= expand every DCS metric) instead of guessing "single".
+        return None
+
+    if not has_sub_nodes:
+        # No instance-level sub-node dimension → single or ha (both use only instance-level
+        # metrics); CES cannot tell them apart, "single" is the documented instance-metric default.
+        return "single"
+
+    # Has sub-nodes → cluster or proxy; distinguish by metric name patterns
+    # Proxy instances have proxy-specific metrics (e.g., proxy_node_*)
+    if any("proxy" in mn for mn in metric_names):
+        return "proxy"
+    # Cluster instances have data-node-specific metrics
+    if any("data" in mn or "node" in mn for mn in metric_names):
+        return "cluster"
+
+    # Fallback: can't distinguish, return None to expand all
+    return None
+

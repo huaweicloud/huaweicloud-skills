@@ -27,6 +27,18 @@ python3 <SKILL_DIR>/scripts/capacity_cli.py smoke --region cn-east-3
 Expected: `{"ok": true, ...}` with `message` = `CES: ok; AOM: ok` (smoke probes both CES and AOM backends;
 CCE metrics go through AOM; either backend failing is marked in the message). If false, follow `troubleshooting-dns.md`.
 
+## 2b. Expand (auto-fill metrics)
+
+```bash
+python3 <SKILL_DIR>/scripts/capacity_cli.py expand <capacity_assessment_template.xlsx>
+```
+
+Expected: `ok: true`, with `expanded_rows` > 0, `inserted_rows` > 0, `total_metrics` > 0.
+- Each original row should now have 关键指标/云服务维度/云服务维度资源ID filled.
+- Additional rows inserted for remaining metrics, with base info (region/实例类型/实例ID/入口实例ID) copied.
+- For DMS instances, `dms_subtypes_detected` should show the detected engine type.
+- Re-running `expand` should skip all rows (关键指标 already filled).
+
 ## 3. Single-metric collection
 
 ```bash

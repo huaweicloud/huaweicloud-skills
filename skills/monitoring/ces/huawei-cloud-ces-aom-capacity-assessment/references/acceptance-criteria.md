@@ -15,6 +15,17 @@ Checklist for skill delivery acceptance; the skill is usable only when all items
 - [ ] `python3 scripts/capacity_cli.py info` outputs: template instructions + instance-type abbreviations + metric list
 - [ ] `smoke --region <available region>` returns `{"ok": true}` (fix the DNS environment per troubleshooting-dns.md first)
 
+## Expand (auto-fill metrics)
+
+- [ ] `expand <xlsx>` reads rows with only region/实例类型/实例ID/入口实例ID, expands each into one row per supported metric
+- [ ] Original row gets 关键指标/云服务维度/云服务维度资源ID filled (first metric); additional rows inserted for remaining metrics
+- [ ] Inserted rows copy base info (region/实例类型/实例ID/入口实例ID/活动增长倍数) from the original row
+- [ ] For DMS instances, the tool auto-detects subtype (kafka/rabbitmq/rocketmq) and filters metrics accordingly
+- [ ] Rows that already have 关键指标 filled are skipped (idempotent)
+- [ ] For metrics requiring 云服务维度资源ID, every discovered value gets its own row (e.g. both DCS cluster nodes); instance ID is used only when discovery finds nothing
+- [ ] When the instance-filtered dimension query finds nothing, the namespace-wide fallback recovers this instance's sub-resource IDs, and such recoveries / empty discoveries appear in `warnings`
+- [ ] A multi-dimension metric collects even though CES returns the response dimensions in a different order than requested
+
 ## Collection correctness
 
 - [ ] `collect` returns real peak/valley data
@@ -34,7 +45,7 @@ Checklist for skill delivery acceptance; the skill is usable only when all items
 
 ## Error handling
 
-- [ ] Missing required fields (region/实例类型/实例ID/关键指标/入口实例ID) → row skipped/errored with details
+- [ ] Missing required fields (region/实例类型/实例ID/入口实例ID for expand; +关键指标 for assess) → row skipped/errored with details
 - [ ] Metric not in registry → `skipped(metric_mismatch/unsupported_service)`, returns the service's supported-metric list
 - [ ] Valley = 0 → historical "无法计算", T-24 "无法预测"; no ceiling → "现有数据不支持给出建议"
 - [ ] Incompatible multi-entry units → 压力系数 outputs "多入口实例，但单位不兼容"

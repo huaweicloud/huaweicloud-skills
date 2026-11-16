@@ -108,6 +108,109 @@ class MetricRegistry:
         return list(svc.keys())
 
 
+    # ------------------------------------------------------------------
+    # Expansion support (since v3.5)
+    # ------------------------------------------------------------------
+    # DMS subtype prefixes: metric names starting with these indicate the engine type
+    DMS_SUBTYPE_PREFIXES = {
+        "kafka": "DMS Kafka",
+        "rabbitmq": "DMS RabbitMQ",
+        "rocketmq": "DMS RocketMQ",
+    }
+
+    GEMINIDB_SUBTYPE_PREFIXES = {
+        "cassandra": "GeminiDB Cassandra",
+        "redis": "GeminiDB Redis",
+    }
+
+    # DCS instance type → allowed dimension label keywords
+    # single/ha: only instance-level metrics (label contains '实例' but not '数据节点'/'Proxy')
+    # cluster: instance-level + data-node metrics (label contains '实例' or '数据节点')
+    # proxy: proxy-node metrics (label contains 'Proxy')
+    DCS_SUBTYPE_LABELS = {
+        "single":  ["实例"],
+        "ha":      ["实例"],
+        "cluster": ["实例", "数据节点"],
+        "proxy":   ["Proxy"],
+    }
+
+    def metrics_for_service(self, instance_type: str,
+                            subtype: Optional[str] = None) -> list[dict[str, Any]]:
+        """Return all metric entries for a service, optionally filtered by DMS subtype.
+
+        Each returned dict is the full metric entry from metrics.json (with an added
+        'metric_name_cn' key for convenience).
+
+        For DMS, subtype can be 'kafka'/'rabbitmq'/'rocketmq' to filter by engine type.
+        For GeminiDB, subtype can be 'cassandra'/'redis' to filter by engine type.
+        For DCS, subtype can be 'single'/'ha'/'cluster'/'proxy' to filter by instance type.
+        For other services, subtype is ignored (all metrics returned).
+        """
+        itype = (instance_type or "").strip().lower()
+        svc = self.data.get(itype)
+        if not svc:
+            return []
+        results = []
+        for name, entry in svc.items():
+            if subtype and itype == "dms":
+                prefix = self.DMS_SUBTYPE_PREFIXES.get(subtype)
+                if not prefix or not name.startswith(prefix):
+                    continue
+            if subtype and itype == "geminidb":
+                prefix = self.GEMINIDB_SUBTYPE_PREFIXES.get(subtype)
+                if not prefix or not name.startswith(prefix):
+                    continue
+            if subtype and itype == "dcs":
+                allowed_labels = self.DCS_SUBTYPE_LABELS.get(subtype)
+                if allowed_labels:
+                    # Get the metric's dimension label
+                    dim_label = ""
+                    for d in entry.get("dimensions", []):
+                        lbl = d.get("label", "")
+                        if lbl:
+                            dim_label = lbl
+                            break
+                    # Check if the label matches any allowed keyword
+                    if not any(kw in dim_label for kw in allowed_labels):
+                        continue
+            e = dict(entry)
+            e["metric_name_cn"] = name
+            results.append(e)
+        return results
+
+    @staticmethod
+    def get_dim_info(entry: dict) -> dict[str, Any]:
+        """Extract dimension info from a metric entry.
+
+        Returns:
+          {
+            "label": str,                    # dimension label for 云服务维度 column
+            "needs_dim_resource_id": bool,   # whether 云服务维度资源ID is needed
+            "instance_dim_name": str|None,   # dimension name with source="instance_id"
+            "dim_resource_dim_name": str|None,  # dimension name with source="dim_resource_id"
+          }
+        """
+        labels = set()
+        needs_dim_res = False
+        instance_dim_name = None
+        dim_resource_dim_name = None
+        for d in entry.get("dimensions", []):
+            lbl = d.get("label")
+            if lbl:
+                labels.add(lbl.strip())
+            if d.get("source") == "instance_id":
+                instance_dim_name = d.get("name")
+            elif d.get("source") == "dim_resource_id":
+                needs_dim_res = True
+                dim_resource_dim_name = d.get("name")
+        return {
+            "label": "、".join(sorted(labels)) if labels else "",
+            "needs_dim_resource_id": needs_dim_res,
+            "instance_dim_name": instance_dim_name,
+            "dim_resource_dim_name": dim_resource_dim_name,
+        }
+
+
 def build_registry_path(cli_arg: Optional[str]) -> str:
     if cli_arg:
         return cli_arg

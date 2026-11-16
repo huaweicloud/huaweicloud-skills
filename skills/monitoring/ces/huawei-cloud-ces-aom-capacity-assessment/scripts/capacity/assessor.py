@@ -13,7 +13,8 @@ from typing import Any, Optional
 
 from . import calculator, collector
 from .config import convert_value, resolve_region
-from .excel_io import base_name, read_excel, write_updates
+from .excel_io import (canonical_name, cell_get, read_excel,
+                       write_updates, REQUIRED_COLUMNS_ASSESS)
 from .registry import MetricRegistry
 
 SERVICE_CN = {
@@ -27,18 +28,22 @@ SERVICE_CN = {
 
 OUTPUT_COLUMNS_HIST = ["峰谷值倍数", "压力系数", "预计节日上限", "扩容建议"]
 T24_COLUMN_MAP = {
-    "t-24峰谷值增长倍数": "峰谷值倍数",
-    "t-24压力系数": "压力系数",
-    "t-24预计节日上限": "预计节日上限",
-    "t-24是否需要扩容": "扩容建议",
+    "近一天（t-24）峰谷值增长倍数": "峰谷值倍数",
+    "近一天（t-24）压力系数": "压力系数",
+    "近一天（t-24）预计节日上限": "预计节日上限",
+    "近一天（t-24）是否需要扩容": "扩容建议",
 }
 
 
 def _cell_map(row: dict) -> dict[str, Any]:
-    """Build a base-name -> value map from a read_excel row."""
+    """Build a canonical-name -> value map from a read_excel row.
+
+    Canonical names unify alias spellings, so a template column "t-24峰值" and the
+    writer's "近一天（t-24）峰值" resolve to the same key.
+    """
     m: dict[str, Any] = {}
     for k, v in row["cells"].items():
-        b = base_name(k)
+        b = canonical_name(k)
         if b and b not in m:
             m[b] = v
     return m
@@ -116,7 +121,7 @@ class Assessor:
         dim_resource_id = str(cells.get("云服务维度资源ID") or "").strip() or None
         growth = _num(cells.get("活动增长倍数")) or 1.0
 
-        miss = [c for c in ["region", "实例类型", "实例ID", "关键指标", "入口实例ID"]
+        miss = [c for c in REQUIRED_COLUMNS_ASSESS
                 if not (cells.get(c) and str(cells.get(c)).strip())]
         if miss:
             return {"row": row_no, "ok": False, "error": f"required fields missing: {miss}",
@@ -178,9 +183,10 @@ class Assessor:
                 region, spec, _parse_dt(start), _parse_dt(end),
                 period=period, hcloud=self.hcloud, endpoint=endpoint, backend=backend)
         else:
-            # Manual-first (T-24 only): if the row already has t-24峰值/t-24谷值, use them directly, no collection
-            t24p = cells.get("t-24峰值")
-            t24v = cells.get("t-24谷值")
+            # Manual-first (T-24 only): if the row already has t-24峰值/t-24谷值 (template spelling)
+            # or 近一天（t-24）峰值/谷值 (writer spelling), use them directly, no collection
+            t24p = cell_get(cells, "t-24峰值")
+            t24v = cell_get(cells, "t-24谷值")
             target = None
             if (t24p is not None and t24v is not None
                     and str(t24p).strip() != "" and str(t24v).strip() != ""):
@@ -227,6 +233,10 @@ class Assessor:
         res = calculator.assess(mode, t_disp, e_disp, ceiling, growth)
         values = res.as_dict()
 
+        # If any entrance instance row lacks 关键指标, override 扩容建议
+        if entrances.get("entrance_no_metric"):
+            values["扩容建议"] = "入口实例异常，需人工确认"
+
         # Assemble write updates
         updates: list[dict] = []
         updates.append({"row": row_no, "column": "资源上限",
@@ -242,8 +252,8 @@ class Assessor:
                 updates.append({"row": row_no, "column": f"{dt.month}/{dt.day}峰值", "value": dp})
                 updates.append({"row": row_no, "column": f"{dt.month}/{dt.day}谷值", "value": dv})
         else:
-            updates.append({"row": row_no, "column": "t-24峰值", "value": tp_disp})
-            updates.append({"row": row_no, "column": "t-24谷值", "value": tv_disp})
+            updates.append({"row": row_no, "column": "近一天（t-24）峰值", "value": tp_disp})
+            updates.append({"row": row_no, "column": "近一天（t-24）谷值", "value": tv_disp})
             for c, src in T24_COLUMN_MAP.items():
                 updates.append({"row": row_no, "column": c, "value": values[src]})
 
@@ -270,6 +280,7 @@ class Assessor:
         re-collecting when multiple rows share the same entrance instance.
         """
         items = []
+        entrance_no_metric = False
         for eid in entrance_ids:
             eid = str(eid).strip()
             if not eid:
@@ -297,6 +308,7 @@ class Assessor:
                         pass  # fall back to the target region when the entrance row's region cannot be parsed
                 e_type = str(r_cells.get("实例类型") or "").strip().lower()
                 e_metric = str(r_cells.get("关键指标") or "").strip()
+                entrance_no_metric = entrance_no_metric or (not e_metric)
                 e_dim = str(r_cells.get("云服务维度") or "").strip()
                 e_dim_res = str(r_cells.get("云服务维度资源ID") or "").strip() or None
                 e_entry = self.registry.lookup(e_type, e_metric, dim_label=e_dim) if e_type and e_metric else None
@@ -330,7 +342,10 @@ class Assessor:
             items.append(r)
         if not items:
             return {"error": "entrance instances are empty"}
-        return {"items": items}
+        result = {"items": items}
+        if entrance_no_metric:
+            result["entrance_no_metric"] = True
+        return result
 
     def _find_instance_row(self, doc, instance_id):
         for r in doc["rows"]:
