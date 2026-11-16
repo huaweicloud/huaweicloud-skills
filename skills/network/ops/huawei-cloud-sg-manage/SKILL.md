@@ -96,9 +96,19 @@ raw HTTP API calls.** The bundled dispatcher builds and runs the hcloud commands
    `project_id=` if the profile cannot resolve it.
 3. **IAM permissions**: least-privilege policies in `references/iam-policies.md`
    (`vpc:securityGroups:*`, `vpc:securityGroupRules:*`).
-- **`skill-quality-cli`** — ensured by `bash scripts/ensure_cli.sh` (idempotent, skips if present)
-  - Upgrade: run `skill-quality-cli upgrade` manually (no auto-upgrade)
-  - Disable telemetry report: set `SKILL_QUALITY_REPORT=0`
+4. **`skill-quality-cli` quality-reporting wrapper** — install it once before using the
+   wrapped direct-CLI forms below:
+   - `bash scripts/ensure_cli.sh` (idempotent; skips when already installed)
+   - `bash scripts/install_cli.sh` (manual/offline install; fails loudly on download or
+     extraction errors)
+   - Verify with `skill-quality-cli version`; upgrade with `skill-quality-cli upgrade`
+     (manual only, no auto-upgrade); disable reporting with `SKILL_QUALITY_REPORT=0`.
+   - If the wrapper cannot be installed (offline host / no write access), drop the
+     `skill-quality-cli run --skill-name huawei-cloud-sg-manage -- ` prefix and run the
+     identical bare `hcloud ...` command. `未知SDK方法: hcloud` means the wrapper/SDK
+     dispatcher is absent, not that the `hcloud` command is invalid; install the wrapper
+     or use the bare form.
+
 ## Workflow
 
 ```
@@ -125,21 +135,29 @@ raw HTTP API calls.** The bundled dispatcher builds and runs the hcloud commands
 
 ## Core Commands
 
-> All direct `hcloud` commands below are shown in **dual form**: the bare executable
-> command and the identical command wrapped with
-> `skill-quality-cli run --skill-name huawei-cloud-sg-manage -- ` for quality reporting.
-> The bundled dispatcher (`python3 scripts/huawei-cloud.py <action> key=value ...`) is the
-> recommended entry — it routes the 11 actions, builds the hcloud commands and prints JSON.
-> No Python SDK package is needed for any business command.
+> All direct `hcloud` commands below are shown in **dual form**: the wrapped command
+> `skill-quality-cli run --skill-name huawei-cloud-sg-manage -- <hcloud command>` for quality
+> reporting, and the identical bare `<hcloud command>` to use only when the wrapper cannot be
+> installed. The bundled dispatcher (`python3 scripts/huawei-cloud.py <action> key=value ...`)
+> is the recommended entry — it routes the 11 actions, builds the hcloud commands and prints
+> JSON. No Python SDK package is needed for any business command.
 
 ### 1. Query (R3 — read-only, auto execute)
+
+> **⚠️ Wrapping rule**: when `skill-quality-cli` is installed, every direct `hcloud` command in
+> this skill MUST be wrapped with `skill-quality-cli run --skill-name huawei-cloud-sg-manage -- ` —
+> bare `hcloud` calls skip quality reporting.
+> **Exception**: the bundled dispatcher (`python3 scripts/huawei-cloud.py <action> key=value ...`)
+> is the recommended entry — it builds and executes `hcloud` commands internally with quality
+> reporting attached. The wrapping requirement applies only to direct `hcloud VPC ...` CLI calls.
+> **Bare fallback**: when `skill-quality-cli` is not installed and cannot be installed, drop the
+> wrapper prefix and run the identical bare command (`hcloud VPC ...`). Install first with
+> `bash scripts/ensure_cli.sh` (or `bash scripts/install_cli.sh`); `未知SDK方法: hcloud` indicates
+> the wrapper is missing, not an invalid `hcloud` command.
 
 **`huawei_list_security_groups`** — list security groups:
 
 ```bash
-> **⚠️ Mandatory: every direct `hcloud` command in this skill MUST be wrapped with `skill-quality-cli run --skill-name huawei-cloud-sg-manage -- ` — bare `hcloud` calls are strictly forbidden.**
-> **Exception**: the bundled dispatcher (`python3 scripts/huawei-cloud.py <action> key=value ...`) is the recommended entry — it builds and executes `hcloud` commands internally with quality reporting attached. The wrapping requirement applies only to direct `hcloud VPC ...` CLI calls.
-
 python3 scripts/huawei-cloud.py huawei_list_security_groups region=cn-north-4
 python3 scripts/huawei-cloud.py huawei_list_security_groups region=cn-north-4 name=my-sg
 # Direct CLI (optional filters: --name.1=, --id.1=, --enterprise_project_id=, --limit=)
@@ -207,8 +225,9 @@ python3 scripts/huawei-cloud.py huawei_audit_sg_overexposed_rules region=cn-nort
 python3 scripts/huawei-cloud.py huawei_create_security_group name={name} description={desc} region=cn-north-4
 # Step 2 — execute ONLY after user approval:
 python3 scripts/huawei-cloud.py huawei_create_security_group name={name} description={desc} region=cn-north-4 confirmed=true
-# Direct CLI equivalent:
-skill-quality-cli run --skill-name huawei-cloud-sg-manage -- hcloud VPC CreateSecurityGroup/v3 --cli-region={region} --security_group.name={name} --security_group.description={desc}
+# Direct CLI — same two gates (validate first, create only after explicit user approval):
+skill-quality-cli run --skill-name huawei-cloud-sg-manage -- hcloud VPC CreateSecurityGroup/v3 --cli-region={region} --security_group.name={name} --security_group.description={desc} --dry_run=true   # preview: validation only, creates nothing
+skill-quality-cli run --skill-name huawei-cloud-sg-manage -- hcloud VPC CreateSecurityGroup/v3 --cli-region={region} --security_group.name={name} --security_group.description={desc}   # execute ONLY after user confirmation
 ```
 
 **`huawei_create_sg_rule`** — add a security group rule (direction is required; protocol,
@@ -227,8 +246,9 @@ python3 scripts/huawei-cloud.py huawei_create_sg_rule \
   security_group_id={sg_id} direction=ingress protocol=tcp multiport=22 \
   ethertype=IPv4 remote_ip_prefix=10.0.0.0/8 action=allow priority=1 \
   region=cn-north-4 confirmed=true
-# Direct CLI equivalent:
-skill-quality-cli run --skill-name huawei-cloud-sg-manage -- hcloud VPC CreateSecurityGroupRule/v3 --cli-region={region} --security_group_rule.security_group_id={sg_id} --security_group_rule.direction=ingress --security_group_rule.protocol=tcp --security_group_rule.multiport=22 --security_group_rule.remote_ip_prefix=10.0.0.0/8
+# Direct CLI — same two gates (validate first, create only after explicit user approval):
+skill-quality-cli run --skill-name huawei-cloud-sg-manage -- hcloud VPC CreateSecurityGroupRule/v3 --cli-region={region} --security_group_rule.security_group_id={sg_id} --security_group_rule.direction=ingress --security_group_rule.protocol=tcp --security_group_rule.multiport=22 --security_group_rule.remote_ip_prefix=10.0.0.0/8 --dry_run=true   # preview: validation only, creates nothing
+skill-quality-cli run --skill-name huawei-cloud-sg-manage -- hcloud VPC CreateSecurityGroupRule/v3 --cli-region={region} --security_group_rule.security_group_id={sg_id} --security_group_rule.direction=ingress --security_group_rule.protocol=tcp --security_group_rule.multiport=22 --security_group_rule.remote_ip_prefix=10.0.0.0/8   # execute ONLY after user confirmation
 ```
 
 **`huawei_update_security_group`** — update a security group's name/description:
@@ -240,8 +260,9 @@ python3 scripts/huawei-cloud.py huawei_update_security_group \
 # ... then re-run with confirmed=true after user approval:
 python3 scripts/huawei-cloud.py huawei_update_security_group \
   security_group_id={sg_id} name={new_name} description={new_desc} region=cn-north-4 confirmed=true
-# Direct CLI equivalent:
-skill-quality-cli run --skill-name huawei-cloud-sg-manage -- hcloud VPC UpdateSecurityGroup --cli-region={region} --security_group_id={sg_id} --security_group.name={new_name}
+# Direct CLI — same two gates (validate first, update only after explicit user approval):
+skill-quality-cli run --skill-name huawei-cloud-sg-manage -- hcloud VPC UpdateSecurityGroup/v3 --cli-region={region} --security_group_id={sg_id} --security_group.name={new_name} --dry_run=true   # preview: validation only, changes nothing
+skill-quality-cli run --skill-name huawei-cloud-sg-manage -- hcloud VPC UpdateSecurityGroup/v3 --cli-region={region} --security_group_id={sg_id} --security_group.name={new_name}   # execute ONLY after user confirmation
 ```
 
 ### 4. Manage (R1 — preview + confirm)
@@ -254,8 +275,9 @@ the SG and ALL of its rules; instances/ports still associated will lose connecti
 python3 scripts/huawei-cloud.py huawei_delete_security_group security_group_id={sg_id} region=cn-north-4
 # ... then re-run with confirmed=true after user approval:
 python3 scripts/huawei-cloud.py huawei_delete_security_group security_group_id={sg_id} region=cn-north-4 confirmed=true
-# Direct CLI equivalent:
-skill-quality-cli run --skill-name huawei-cloud-sg-manage -- hcloud VPC DeleteSecurityGroup/v3 --cli-region={region} --security_group_id={sg_id}
+# Direct CLI — same gate (no dry_run on delete: confirm the target SG and its rule count first, then delete only after explicit user approval):
+skill-quality-cli run --skill-name huawei-cloud-sg-manage -- hcloud VPC ShowSecurityGroup/v3 --cli-region={region} --security_group_id={sg_id}   # preview: shows the SG to be deleted, changes nothing
+skill-quality-cli run --skill-name huawei-cloud-sg-manage -- hcloud VPC DeleteSecurityGroup/v3 --cli-region={region} --security_group_id={sg_id}   # execute ONLY after user confirmation
 ```
 
 **WARNING (must be shown before execution):** the preview prints the SG name and how many
@@ -270,8 +292,9 @@ connectivity — VPC default is DENY for unmatched traffic:**
 python3 scripts/huawei-cloud.py huawei_delete_sg_rule security_group_rule_id={rule_id} region=cn-north-4
 # ... then re-run with confirmed=true after user approval:
 python3 scripts/huawei-cloud.py huawei_delete_sg_rule security_group_rule_id={rule_id} region=cn-north-4 confirmed=true
-# Direct CLI equivalent:
-skill-quality-cli run --skill-name huawei-cloud-sg-manage -- hcloud VPC DeleteSecurityGroupRule/v3 --cli-region={region} --security_group_rule_id={rule_id}
+# Direct CLI — same gate (no dry_run on delete: confirm the rule first, then delete only after explicit user approval):
+skill-quality-cli run --skill-name huawei-cloud-sg-manage -- hcloud VPC ShowSecurityGroupRule/v2 --cli-region={region} --security_group_rule_id={rule_id}   # preview: shows the rule to be deleted, changes nothing
+skill-quality-cli run --skill-name huawei-cloud-sg-manage -- hcloud VPC DeleteSecurityGroupRule/v3 --cli-region={region} --security_group_rule_id={rule_id}   # execute ONLY after user confirmation
 ```
 
 **WARNING (must be shown before execution):** traffic previously permitted/denied by this
@@ -282,8 +305,8 @@ ports and remote from the preview before proceeding.
 
 | Feature | Description | Example |
 | ------- | ----------- | ------- |
-| Service name | `VPC` (as shown by `hcloud VPC --help`) | `hcloud VPC UpdateSecurityGroup --cli-region=cn-north-4` |
-| Operation name | PascalCase (KooCLI appends `/v2` `/v3` version suffixes to VPC ops) | `ListSecurityGroups`, `ListSecurityGroupRules`, `ShowSecurityGroup`, `CreateSecurityGroupRule`, `UpdateSecurityGroup`, `DeleteSecurityGroup`, `DeleteSecurityGroupRule` |
+| Service name | `VPC` (as shown by `hcloud VPC --help`) | `hcloud VPC UpdateSecurityGroup/v3 --cli-region=cn-north-4` |
+| Operation name | PascalCase **plus the explicit version suffix** — security-group operations use `/v3`, except `ShowSecurityGroupRule/v2` | `ListSecurityGroups/v3`, `ListSecurityGroupRules/v3`, `ShowSecurityGroup/v3`, `CreateSecurityGroupRule/v3`, `UpdateSecurityGroup/v3`, `DeleteSecurityGroup/v3`, `DeleteSecurityGroupRule/v3` |
 | Region parameter | `--cli-region=<value>` | `--cli-region=cn-north-4` |
 | Simple parameter | `--key=value` | `--security_group_id=abc123` |
 | Nested parameter | `--parent.child=value` | `--security_group.name=my-sg`, `--security_group_rule.direction=ingress` |
@@ -292,9 +315,13 @@ ports and remote from the preview before proceeding.
 
 ## Parameter Confirmation
 
-All parameters below were verified against `hcloud VPC <Operation> --help` (KooCLI 7.2.12).
+All parameters below were verified against `hcloud VPC <Operation> --help` (KooCLI 7.2.12 / 7.3.12).
 Common to all commands: `--cli-region` (required), `--project_id` (required by API but
 auto-filled from the authenticated profile when omitted).
+Write operations expose `--dry_run=true` for a validation-only preview
+(`CreateSecurityGroup/v3`, `CreateSecurityGroupRule/v3`, `UpdateSecurityGroup/v3`); the two
+delete operations have no `--dry_run` — preview them with `ShowSecurityGroup/v3` /
+`ShowSecurityGroupRule/v2` and require explicit user confirmation before executing.
 
 ### ListSecurityGroups/v3
 
@@ -353,13 +380,14 @@ auto-filled from the authenticated profile when omitted).
 | `--security_group_rule.enabled` | boolean | No | `--security_group_rule.enabled=true` |
 | `--security_group_rule.description` | string | No | |
 
-### UpdateSecurityGroup
+### UpdateSecurityGroup/v3
 
 | Parameter | Type | Required | Example |
 | --------- | ---- | -------- | ------- |
 | `--security_group_id` | string | **Yes** | `--security_group_id={sg_id}` |
 | `--security_group.name` | string | No | `--security_group.name=new-name` |
 | `--security_group.description` | string | No | `--security_group.description=new-desc` |
+| `--dry_run` | boolean | No | `--dry_run=true` — validation-only preview, changes nothing |
 
 ### DeleteSecurityGroup/v3 / DeleteSecurityGroupRule/v3
 

@@ -13,7 +13,13 @@ fi
 API_URL="https://skillsapi.developer.myhuaweicloud.com/api/quality/cli/latest"
 OBS_BASE="https://obs-skills-repository.obs.cn-north-4.myhuaweicloud.com/skill-quality-cli"
 
-V=$(curl -s "${API_URL}" | python3 -c 'import sys,json;print(json.load(sys.stdin)["version"])' 2>/dev/null)
+# 版本元数据先落盘再解析（不把远端响应直接接进解释器）
+VERSION_JSON=$(mktemp)
+V=""
+if curl -fsS -o "${VERSION_JSON}" "${API_URL}" 2>/dev/null; then
+    V=$(python3 -c 'import sys,json;print(json.load(open(sys.argv[1]))["version"])' "${VERSION_JSON}" 2>/dev/null)
+fi
+rm -f "${VERSION_JSON}"
 if [ -z "$V" ]; then
     echo "警告: 无法获取 skill-quality-cli 最新版本，跳过安装" >&2
     exit 0
