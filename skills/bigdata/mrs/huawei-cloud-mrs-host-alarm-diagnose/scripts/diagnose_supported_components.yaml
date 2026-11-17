@@ -1,0 +1,263 @@
+# 用于前端来获取当前支持哪些服务的故障诊断，以及服务的哪些实例的故障诊断
+# component_name 组件名称
+# roles 角色名称
+
+components:
+  - component_name: "DBService"
+    roles:
+      - "DBService"
+
+  - component_name: "HDFS"
+    roles:
+      - "NameNode"
+      - "DataNode"
+      - "JournalNode"
+      - "ZKFC"
+
+  - component_name: "Yarn"
+    roles:
+      - "ResourceManager"
+      - "NodeManager"
+      - "TimelineServer"
+
+  - component_name: "Mapreduce"
+    roles:
+      - "JobHistoryServer"
+
+  - component_name: "ZooKeeper"
+    roles:
+      - "quorumpeer"
+
+  - component_name: "KrbServer"
+    roles:
+      - "KerberosAdmin"
+      - "KerberosServer"
+
+  - component_name: "Flink"
+    roles:
+      - "FlinkServer"
+      - "FlinkResource"
+
+  - component_name: "LdapServer"
+    roles:
+      - "SlapdServer"
+
+  - component_name: "Hive"
+    roles:
+      - "HiveServer"
+      - "MetaStore"
+      - "WebHCat"
+
+  - component_name: "Loader"
+    roles:
+      - "LoaderServer"
+
+  - component_name: "Doris"
+    roles:
+      - "FE"
+      - "BE"
+      - "DBroker"
+      - "DBalancer"
+
+  - component_name: "Redis"
+    roles:
+      - "Redis_1"
+      - "Redis_2"
+      - "Redis_3"
+      - "Redis_4"
+      - "Redis_5"
+      - "Redis_6"
+      - "Redis_7"
+      - "Redis_8"
+      - "Redis_9"
+      - "Redis_10"
+      - "Redis_11"
+      - "Redis_12"
+      - "Redis_13"
+      - "Redis_14"
+      - "Redis_15"
+      - "Redis_16"
+      - "Redis_17"
+      - "Redis_18"
+      - "Redis_19"
+      - "Redis_20"
+      - "Redis_21"
+      - "Redis_22"
+      - "Redis_23"
+      - "Redis_24"
+      - "Redis_25"
+      - "Redis_26"
+      - "Redis_27"
+      - "Redis_28"
+      - "Redis_29"
+      - "Redis_30"
+      - "Redis_31"
+      - "Redis_32"
+      - "Redis_33"
+      - "Redis_34"
+      - "Redis_35"
+      - "Redis_36"
+      - "Redis_37"
+      - "Redis_38"
+      - "Redis_39"
+      - "Redis_40"
+      - "Redis_41"
+      - "Redis_42"
+      - "Redis_43"
+      - "Redis_44"
+      - "Redis_45"
+      - "Redis_46"
+      - "Redis_47"
+      - "Redis_48"
+      - "Redis_49"
+      - "Redis_50"
+      - "Redis_51"
+      - "Redis_52"
+      - "Redis_53"
+      - "Redis_54"
+      - "Redis_55"
+      - "Redis_56"
+      - "Redis_57"
+      - "Redis_58"
+      - "Redis_59"
+      - "Redis_60"
+      - "Redis_61"
+      - "Redis_62"
+      - "Redis_63"
+      - "Redis_64"
+      - "Redis_65"
+      - "Redis_66"
+      - "Redis_67"
+      - "Redis_68"
+      - "Redis_69"
+      - "Redis_70"
+      - "Redis_71"
+      - "Redis_72"
+      - "Redis_73"
+      - "Redis_74"
+      - "Redis_75"
+      - "Redis_76"
+      - "Redis_77"
+      - "Redis_78"
+      - "Redis_79"
+      - "Redis_80"
+      - "Redis_81"
+      - "Redis_82"
+      - "Redis_83"
+      - "Redis_84"
+      - "Redis_85"
+      - "Redis_86"
+      - "Redis_87"
+      - "Redis_88"
+      - "Redis_89"
+      - "Redis_90"
+      - "Redis_91"
+      - "Redis_92"
+      - "Redis_93"
+      - "Redis_94"
+      - "Redis_95"
+      - "Redis_96"
+      - "Redis_97"
+      - "Redis_98"
+      - "Redis_99"
+      - "Redis_100"
+
+  - component_name: "HetuEngine"
+    roles:
+      - "HSBroker"
+      - "HSConsole"
+      - "HSFabric"
+      - "QAS"
+
+  - component_name: "HBase"
+    roles:
+      - "HMaster"
+      - "RegionServer"
+      - "ThriftServer"
+      - "RESTServer"
+      - "MetricController"
+      - "PhoenixQueryServer"
+
+  - component_name: "Guardian"
+    roles:
+      - "TokenServer"
+
+  - component_name: "Kafka"
+    roles:
+      - "Broker"
+      - "Controller"
+      - "MigrationTool"
+
+  - component_name: "Flume"
+    roles:
+      - "Flume"
+      - "MonitorServer"
+
+  - component_name: "Ranger"
+    roles:
+      - "RangerAdmin"
+      - "RangerUserSync"
+      - "RangerTagSync"
+      - "RangerKms"
+
+  - component_name: "CDL"
+    roles:
+      - "CDLConnector"
+      - "CDLService"
+
+  - component_name: "Elasticsearch"
+    roles:
+      - "EsMaster"
+      - "EsNode"
+
+  - component_name: "Hue"
+    roles:
+      - "Hue"
+
+  - component_name: "Oozie"
+    roles:
+      - "oozie"
+
+  - component_name: "GraphBase"
+    roles:
+      - "LoadBalancer"
+      - "GraphServer"
+
+  - component_name: "LakeSearch"
+    roles:
+      - "SearchServer"
+      - "SearchFactory"
+      - "SearchRac"
+
+  - component_name: "Spark"
+    roles:
+      - "JDBCServer"
+      - "JobHistory"
+      - "SparkResource"
+      - "IndexServer"
+
+  - component_name: "Impala"
+    roles:
+      - "Catalog"
+      - "StateStore"
+      - "Impalad"
+
+  - component_name: "MemArtsCC"
+    roles:
+      - "CCWorker"
+      - "CCSideCar"
+
+  - component_name: "MemArtsStore"
+    roles:
+      - "StoreMaster"
+      - "StoreWorker"
+
+  - component_name: "Kudu"
+    roles:
+      - "KuduMaster"
+      - "KuduTserver"
+
+  - component_name: "ClickHouse"
+    roles:
+      - "ClickHouseServer"
+      - "ClickHouseKeeper"

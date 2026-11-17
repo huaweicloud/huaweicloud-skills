@@ -237,6 +237,31 @@ If no matching alarm document exists, tell the user: `暂不支持此告警的�
 
 Follow the per-alarm knowledge base from Step 2 to execute the diagnosis.
 
+**Diagnosis Execution Strategy: Plan-then-Batch-Execute (Highest Priority)**
+
+To minimize interaction rounds and accelerate diagnosis, you MUST follow this strategy:
+
+1. **Round 1: Read docs + plan all commands + immediately execute batch 1 in parallel**
+   - Read the per-alarm diagnosis document and the API client usage document
+   - In a single response, output the complete execution plan, grouping all commands by dependency into **batches**:
+     - **Batch 1 (no dependencies, parallel)**: All commands that do not depend on other results (e.g. system-load, high-cpu-processes, omm-process-tree, messages log query)
+     - **Batch 2 (depends on batch 1, parallel)**: Commands that need batch 1 results as parameters (e.g. jstack needs the PID returned by high-cpu-processes)
+     - And so on
+   - **Immediately execute all batch 1 commands in the same response** (issue multiple tool calls)
+
+2. **Round 2: Execute dependency batches**
+   - After receiving batch 1 results, extract dependent parameters and **execute all batch 2 commands in parallel at once**
+
+3. **Subsequent rounds (if any)**: Continue executing subsequent dependency batches
+
+4. **Final round: Summarize and output the report**
+   - After all data collection is complete, **output the complete diagnosis report in one go**; do not split it across multiple responses
+
+**Parallel invocation rules**:
+- When two tool calls have **no data dependency** (i.e. tool B does not need tool A's return value as a parameter), they MUST be invoked in parallel
+- Only when tool B's parameter depends on tool A's return value (e.g. jstack needs the PID from high-cpu-processes) should they be executed serially
+- **Goal: Compress 10+ interaction rounds to 3-4 rounds**
+
 **Diagnosis execution notes**:
 - Use only the specific commands provided in the per-alarm knowledge base; do not infer log paths yourself
 - Variable placeholders (e.g. `<alarm_time>`, `<alarm_node>`) MUST be substituted with actual values, never hardcoded
