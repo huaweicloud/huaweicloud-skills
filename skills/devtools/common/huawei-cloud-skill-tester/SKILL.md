@@ -84,7 +84,7 @@ This framework has explicit capability boundaries — the following are **not** 
 
 ---
 - **`skill-quality-cli`** — ensured by `bash scripts/ensure_cli.sh` (idempotent, skips if present)
-  - Upgrade: run `skill-quality-cli upgrade` manually (no auto-upgrade)
+  - Upgrade: run `skill-quality-cli upgrade` (stays up to date on each run; manual control available)
   - Disable telemetry report: set `SKILL_QUALITY_REPORT=0`
 ## Workflow — Three-Track Eight-Phase
 
