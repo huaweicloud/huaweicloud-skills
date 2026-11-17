@@ -120,7 +120,9 @@ def _get_dim_key_for_match(match_type, matched_obj):
 def _dim_key_matches_baseline_dim(dim_key, baseline_dim):
     if not dim_key or not baseline_dim:
         return False
-    return set(dim_key.split(",")) == set(baseline_dim.split(","))
+    # Use subset match: rule dim_key must be a subset of baseline dim
+    # e.g. rule has instance_id, baseline has instance_id,mount_point
+    return set(dim_key.split(",")).issubset(set(baseline_dim.split(",")))
 
 
 def _extract_service_from_namespace(namespace):
@@ -176,7 +178,8 @@ def _is_ces_wildcard_rule(rule):
         return True
     for res in resources:
         for dim in res.get("dimensions", []):
-            if dim.get("value", "") == "*":
+            value = dim.get("value", "")
+            if not value or value == "*":  # None/empty/"*" = product-level wildcard
                 return True
     return False
 
@@ -203,7 +206,7 @@ def _ces_wildcard_dim_key(rule):
     return ""
 
 
-def _collect_instance_dim_rule_info(inst_id, svc_rules, rule_svc, baseline_metric_ids, metric_id_to_name, baseline_dim, baseline_svc=""):
+def _collect_instance_dim_rule_info(inst_id, inst_region, svc_rules, rule_svc, baseline_metric_ids, metric_id_to_name, baseline_dim, baseline_svc=""):
     rule_names = []
     template_names = []
     template_types = []
@@ -211,13 +214,29 @@ def _collect_instance_dim_rule_info(inst_id, svc_rules, rule_svc, baseline_metri
     has_system = False
 
     for rule in svc_rules:
+        # Region filter: skip rules from different regions
+        rule_region = rule.get("region", "")
+        if rule_region and inst_region and rule_region != inst_region:
+            continue
         if _is_ces_wildcard_rule(rule):
             dim_key = _ces_wildcard_dim_key(rule)
             if baseline_svc == "VPC" and dim_key == "bandwidth_id,publicip_id":
                 dim_key = "publicip_id"
             rule_covers = _dim_key_matches_baseline_dim(dim_key, baseline_dim) if dim_key else False
         else:
-            dim_key = _ces_match_instance(inst_id, rule.get("resources", []))
+            # Check resource_ids first (from ListAlarmRuleResources), then fallback to dimensions
+            resource_ids = rule.get("resource_ids", [])
+            if resource_ids and inst_id in resource_ids:
+                dim_key = _ces_match_instance(inst_id, rule.get("resources", []))
+                if not dim_key:
+                    # Derive dim_key from resources structure
+                    for res in rule.get("resources", []):
+                        dim_names = [d.get("name", "") for d in res.get("dimensions", []) if d.get("name")]
+                        if dim_names:
+                            dim_key = ",".join(dim_names)
+                            break
+            else:
+                dim_key = _ces_match_instance(inst_id, rule.get("resources", []))
             if baseline_svc == "VPC" and dim_key == "bandwidth_id,publicip_id":
                 dim_key = "publicip_id"
             rule_covers = _dim_key_matches_baseline_dim(dim_key, baseline_dim) if dim_key else False
@@ -245,25 +264,40 @@ def _format_rule_values(rule_names, template_names, template_types, match_result
     tpl_type_val = "\n".join(template_types)
     match_val = "\n".join(match_results)
     suggestion_val = "优化系统模板" if has_system else "人工复核"
-    return rule_name_val, tpl_name_val, tpl_type_val, match_val, suggestion_val
+    return rule_name_val, suggestion_val
 
 
-def _apply_cell_styles(ws, row_idx, bind_rate_value, match_results, has_system, suggestion_val):
+def _collect_aom_instance_rule_info(inst_id, inst_region, aom_svc_rules, baseline_metric_ids):
+    """Collect rule names for an AOM instance using cluster ID matching.
+
+    Rule names are shown based on cluster ID + region match alone.
+    Metric coverage is calculated separately in bind_analysis.py.
+    """
+    rule_names = []
+    for rule in aom_svc_rules:
+        # Region must match
+        rule_region = rule.get("region", "")
+        if rule_region and inst_region and rule_region != inst_region:
+            continue
+        # Cluster ID matching
+        spec = rule.get("metric_alarm_spec", {})
+        mo = spec.get("monitor_objects", [])
+        cluster_ids = set()
+        for o in mo:
+            if isinstance(o, dict) and o.get("cluster"):
+                cluster_ids.add(o["cluster"])
+        if cluster_ids and inst_id not in cluster_ids:
+            continue
+        rule_names.append(rule.get("alarm_rule_name", ""))
+    return rule_names
+
+
     rate_cell = ws.cell(row=row_idx, column=5)
     if bind_rate_value < 1.0:
         rate_cell.fill = RED_FILL
         rate_cell.font = RED_FONT
 
-    match_cell = ws.cell(row=row_idx, column=11)
-    all_match = all("与基线一致" in r for r in match_results) if match_results else False
-    if all_match:
-        match_cell.fill = GREEN_FILL
-        match_cell.font = GREEN_FONT
-    elif match_results:
-        match_cell.fill = RED_FILL
-        match_cell.font = RED_FONT
-
-    suggestion_cell = ws.cell(row=row_idx, column=12)
+    suggestion_cell = ws.cell(row=row_idx, column=10)
     if has_system:
         suggestion_cell.font = BLUE_FONT
     elif suggestion_val:
@@ -305,17 +339,17 @@ def _set_column_widths_summary(ws):
 HEADERS = [
     "用户名", "云服务类型", "核心实例ID", "Region", "指标维度", "底线指标配置百分比",
     "覆盖的指标", "未覆盖的指标",
-    "告警规则名称", "模板名称", "模板类型", "模板是否与基线匹配", "优化建议",
+    "告警规则名称", "优化建议",
 ]
 
 HEADERS_NO_CUST = [
     "监控体系", "云服务类型", "核心实例ID", "Region", "指标维度", "底线指标配置百分比",
     "覆盖的指标", "未覆盖的指标",
-    "告警规则名称", "模板名称", "模板类型", "模板是否与基线匹配", "优化建议",
+    "告警规则名称", "优化建议",
 ]
 
 
-def _write_report_sheet(ws, instances, rules_by_svc, baseline_by_svc_dim, metric_id_to_name):
+def _write_report_sheet(ws, instances, rules_by_svc, baseline_by_svc_dim, metric_id_to_name, aom_rules_by_svc=None):
     headers = HEADERS_NO_CUST
     for col, h in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col, value=h)
@@ -337,8 +371,11 @@ def _write_report_sheet(ws, instances, rules_by_svc, baseline_by_svc_dim, metric
             uncovered_ids = sorted(baseline_by_svc_dim.get((baseline_svc, baseline_dim), set()))
             uncovered_names = [metric_id_to_name.get(mid, mid) for mid in uncovered_ids]
             uncovered_str = "、".join(uncovered_names) if uncovered_names else ""
+            # For AOM instances, look up rule names by cluster ID even if no metrics matched
+            _rule_names = inst.get("matching_rule_names", [])
+            _rule_name_val = "\n".join(_rule_names) if _rule_names else ""
             values = [
-                "CES",
+                inst.get("monitor_system", "CES"),
                 inst["service"],
                 inst["instance_id"],
                 inst.get("region", ""),
@@ -346,17 +383,14 @@ def _write_report_sheet(ws, instances, rules_by_svc, baseline_by_svc_dim, metric
                 inst["bind_rate"],
                 "",
                 uncovered_str,
-                "",
-                "",
-                "",
-                "",
-                "需先创建告警规则",
+                _rule_name_val,
+                "人工复核",
             ]
             for col, val in enumerate(values, 1):
                 cell = ws.cell(row=row_idx, column=col, value=val)
                 cell.border = THIN_BORDER
                 cell.alignment = Alignment(vertical="center", wrap_text=(col >= 6))
-            suggestion_col = 12
+            suggestion_col = 10
             suggestion_cell = ws.cell(row=row_idx, column=suggestion_col)
             suggestion_cell.font = ORANGE_FONT
             continue
@@ -364,15 +398,12 @@ def _write_report_sheet(ws, instances, rules_by_svc, baseline_by_svc_dim, metric
         if is_no_baseline:
             dim_cn = inst.get("metric_dimension_cn", "")
             values = [
-                "CES",
+                inst.get("monitor_system", "CES"),
                 inst["service"],
                 inst["instance_id"],
                 inst.get("region", ""),
                 dim_cn,
                 inst["bind_rate"],
-                "",
-                "",
-                "",
                 "",
                 "",
                 "",
@@ -382,7 +413,7 @@ def _write_report_sheet(ws, instances, rules_by_svc, baseline_by_svc_dim, metric
                 cell = ws.cell(row=row_idx, column=col, value=val)
                 cell.border = THIN_BORDER
                 cell.alignment = Alignment(vertical="center", wrap_text=(col >= 6))
-            suggestion_col = 12
+            suggestion_col = 10
             suggestion_cell = ws.cell(row=row_idx, column=suggestion_col)
             suggestion_cell.font = BLUE_FONT
             continue
@@ -400,17 +431,14 @@ def _write_report_sheet(ws, instances, rules_by_svc, baseline_by_svc_dim, metric
         baseline_metric_ids = baseline_by_svc_dim.get((baseline_svc, baseline_dim), set())
 
         inst_id = inst["instance_id"]
-        rule_names, template_names, template_types, match_results, has_system = \
-            _collect_instance_dim_rule_info(inst_id, svc_rules, rule_svc, baseline_metric_ids, metric_id_to_name, baseline_dim, baseline_svc)
-
-        rule_name_val, tpl_name_val, tpl_type_val, match_val, suggestion_val = \
-            _format_rule_values(rule_names, template_names, template_types, match_results, has_system)
-
+        _rule_names = inst.get("matching_rule_names", [])
+        rule_name_val = "\n".join(_rule_names) if _rule_names else ""
+        suggestion_val = "已达标" if inst["bind_rate_value"] >= 1.0 else "人工复核"
         dim_cn = inst.get("metric_dimension_cn", "")
         dim_display = dim_cn if dim_cn else baseline_dim
 
         values = [
-            "CES",
+            inst.get("monitor_system", "CES"),
             inst["service"],
             inst["instance_id"],
             inst.get("region", ""),
@@ -419,9 +447,6 @@ def _write_report_sheet(ws, instances, rules_by_svc, baseline_by_svc_dim, metric
             "、".join(covered) if covered else "",
             "、".join(uncovered) if uncovered else "",
             rule_name_val,
-            tpl_name_val,
-            tpl_type_val,
-            match_val,
             suggestion_val,
         ]
 
@@ -430,7 +455,14 @@ def _write_report_sheet(ws, instances, rules_by_svc, baseline_by_svc_dim, metric
             cell.border = THIN_BORDER
             cell.alignment = Alignment(vertical="center", wrap_text=(col >= 6))
 
-        _apply_cell_styles(ws, row_idx, inst["bind_rate_value"], match_results, has_system, suggestion_val)
+        # Inline cell styling
+        _rate_cell = ws.cell(row=row_idx, column=6)
+        if inst["bind_rate_value"] < 1.0:
+            _rate_cell.fill = RED_FILL
+            _rate_cell.font = RED_FONT
+        _sug_cell = ws.cell(row=row_idx, column=10)
+        if suggestion_val:
+            _sug_cell.font = ORANGE_FONT
 
     _set_column_widths(ws)
 
@@ -629,51 +661,58 @@ def generate(input_path, output_path, rules_path, baseline_path):
 
     baseline_by_svc_dim, metric_id_to_name = _build_baseline_lookup(baseline_data)
 
+    # Merge AOM indicator baseline for unified report
+    aom_bl_path = str(Path(output_path).parent / "intermediate" / "aom_indicator_baseline.json")
+    try:
+        aom_bl_data = load_json(aom_bl_path)
+        if aom_bl_data:
+            for rec in aom_bl_data.get("records", []):
+                svc = rec.get("云服务简称", "")
+                dim = rec.get("指标维度", "")
+                mid = rec.get("指标ID", "").strip()
+                if svc and dim and mid:
+                    baseline_by_svc_dim.setdefault((svc, dim), set()).add(mid)
+                    metric_id_to_name[mid] = rec.get("指标名称", mid)
+            logger.info(f"AOM baseline merged into Excel lookup: {len(aom_bl_data.get('records', []))} records")
+    except Exception as e:
+        logger.warning(f"Failed to load AOM baseline for Excel: {e}")
+
     rules = rules_data.get("rules", [])
     rules_by_svc = _build_rules_by_svc(rules)
     _enrich_metric_id_to_name(metric_id_to_name, rules)
 
+    # Load AOM alarm rules for AOM instance rule name display
+    aom_rules_by_svc = None
+    aom_rules_path = str(Path(output_path).parent / "intermediate" / "aom_alarm_rules.json")
+    try:
+        aom_rules_data = load_json(aom_rules_path)
+        if aom_rules_data:
+            aom_rules = aom_rules_data.get("rules", [])
+            aom_rules_by_svc = defaultdict(list)
+            for rule in aom_rules:
+                spec = rule.get("metric_alarm_spec", {})
+                mo = spec.get("monitor_objects", [])
+                if mo and any(o.get("cluster") for o in mo if isinstance(o, dict)):
+                    aom_rules_by_svc["CCE"].append(rule)
+                else:
+                    name = rule.get("alarm_rule_name", "")
+                    for svc in set(s for (s, _) in baseline_by_svc_dim.keys()):
+                        if name.startswith(svc):
+                            aom_rules_by_svc[svc].append(rule)
+                            break
+            logger.info(f"AOM rules loaded for Excel: {len(aom_rules)} rules, {len(aom_rules_by_svc)} services")
+    except Exception as e:
+        logger.warning(f"Failed to load AOM rules for Excel: {e}")
+
     instances = report.get("by_instance", [])
 
-    # Exclude AOM-monitored services from CES no_baseline instances
-    aom_input_path = str(Path(output_path).parent / "intermediate" / "aom_indicator_bind_report.json")
-    aom_services = set()
-    try:
-        aom_report_for_svcs = load_json(aom_input_path)
-        for item in aom_report_for_svcs.get("items", []):
-            aom_services.add(item.get("云服务简称", ""))
-    except Exception:
-        pass
-    instances = [inst for inst in instances
-                 if not (inst.get("bound_status") == "no_baseline" and inst.get("service") in aom_services)]
-
+    # Unified report already contains CES + AOM instances
     instances.sort(key=lambda x: (x["service"], x.get("metric_dimension", ""), x["bind_rate_value"]))
 
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "指标基线绑定率"
-    _write_report_sheet(ws, instances, rules_by_svc, baseline_by_svc_dim, metric_id_to_name)
-
-    # Merge AOM indicator rows into the main sheet
-    # Derive AOM input path from output_path (same workspace)
-    aom_input_path = str(Path(output_path).parent / "intermediate" / "aom_indicator_bind_report.json")
-    # Load core instances for AOM instance IDs
-    core_instances_path = str(Path(output_path).parent / "intermediate" / "core_instances.json")
-    svc_to_instance_ids = {}
-    try:
-        core_data = load_json(core_instances_path)
-        for svc, insts in core_data.get("instances", {}).items():
-            svc_to_instance_ids[svc] = [i.get("instance_id", "") for i in insts]
-    except Exception:
-        pass
-
-    try:
-        aom_report = load_json(aom_input_path)
-        if aom_report and aom_report.get("items"):
-            aom_count = _write_aom_rows(ws, aom_report, len(instances) + 2, svc_to_instance_ids)
-            logger.info(f"AOM indicator rows merged: {aom_count} rows")
-    except Exception as e:
-        logger.warning(f"Failed to merge AOM rows: {e}")
+    _write_report_sheet(ws, instances, rules_by_svc, baseline_by_svc_dim, metric_id_to_name, aom_rules_by_svc)
 
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     wb.save(output_path)

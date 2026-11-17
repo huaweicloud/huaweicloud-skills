@@ -42,7 +42,7 @@ export HW_SECRET_KEY=your_sk
 
 #### Step 2: Core Instance Extraction
 ```bash
-python scripts/generate_core_instance.py
+python scripts/generate_instance.py
 ```
 **Verify**: `<WORKSPACE_DIR>/intermediate/core_instances.json` exists and contains `"instances"` key with non-empty service arrays.
 
@@ -57,7 +57,13 @@ print(f'OK: {total} core instances across {len(data[\"instances\"])} services')
 "
 ```
 
-#### Step 3: Alarm Baseline Extraction
+#### Step 3: Metric Dimension Enrichment
+```bash
+python scripts/enrich_metric_dimension.py
+```
+**Verify**: `<WORKSPACE_DIR>/intermediate/core_instances.json` is updated — instances now have `metric_dimension` field.
+
+#### Step 4: Alarm Baseline Extraction
 ```bash
 python scripts/generate_alarm_baseline.py
 ```
@@ -67,44 +73,31 @@ python scripts/generate_alarm_baseline.py
 - `aom_indicator_baseline.json` — AOM metric baseline (non-empty array)
 - `aom_event_baseline.json` — AOM event baseline (non-empty array)
 
-#### Step 4: CES Alarm Rule Fetch
+#### Step 5: CES Alarm Rule Fetch (Unified)
 ```bash
 python scripts/main_alarm.py
 ```
-**Verify**: `<WORKSPACE_DIR>/intermediate/online_alarm_rules.json` exists and contains alarm rules with `region` field.
+Fetches all CES alarm rules (ListAlarmRules), resolves resource IDs (ListAlarmRuleResources) for rules with non-wildcard dimensions, and splits event-type rules.
+**Verify**: Two files exist:
+- `<WORKSPACE_DIR>/intermediate/online_alarm_rules.json` — metric alarm rules only with `region` and `resource_ids` fields
+- `<WORKSPACE_DIR>/intermediate/online_notification_rules.json` — event-type rules only (type=EVENT.SYS or EVENT.CUSTOM, enabled) with `resource_ids`
 
-#### Step 4b: AOM Alarm Rule Fetch
+#### Step 5b: AOM Alarm Rule Fetch
 ```bash
 python scripts/main_aom_alarm.py
 ```
 **Verify**: Two files exist:
 - `<WORKSPACE_DIR>/intermediate/aom_alarm_rules.json` — AOM metric alarm rules
-- `<WORKSPACE_DIR>/intermediate/aom_event_alarm_rules.json` — AOM event alarm rules
+- `<WORKSPACE_DIR>/intermediate/aom_notification_rules.json` — AOM event alarm rules
 
-#### Step 5: Event-Type Rule Extraction
-```bash
-python scripts/main_event.py
-```
-**Verify**: `<WORKSPACE_DIR>/intermediate/online_notification_rules.json` exists and contains event-type rules only (type=EVENT_SYS or EVENT_CUSTOM).
-
-#### Step 6: Metric Dimension Enrichment
-```bash
-python scripts/enrich_metric_dimension.py
-```
-**Verify**: `<WORKSPACE_DIR>/intermediate/core_instances.json` is updated — instances now have `metric_dimension` field.
-
-#### Step 7: Binding Analysis
+#### Step 7: Binding Analysis (Unified CES + AOM)
 ```bash
 python scripts/bind_analysis.py
 python scripts/event_bind_analysis.py
-python scripts/aom_bind_analysis.py
-python scripts/aom_event_bind_analysis.py
 ```
-**Verify**: Four report JSON files exist:
-- `indicator_bind_report.json` — CES metric binding rates
-- `event_bind_report.json` — CES event binding rates
-- `aom_indicator_bind_report.json` — AOM metric binding rates
-- `aom_event_bind_report.json` — AOM event binding rates
+**Verify**: Two unified report JSON files exist:
+- `indicator_bind_report.json` — metric binding rates (CES + AOM, each instance tagged with `monitor_system`)
+- `event_bind_report.json` — event binding rates (CES + AOM, each instance tagged with `monitor_system`)
 
 #### Step 8: Report Generation
 ```bash
@@ -113,8 +106,8 @@ python scripts/generate_event_excel_report.py
 python scripts/generate_suggestion.py
 ```
 **Verify**: Three final output files exist in `<WORKSPACE_DIR>/`:
-- `indicator_bind_report.xlsx` — opens correctly, contains CES + AOM sheets
-- `event_bind_report.xlsx` — opens correctly, contains CES + AOM sheets
+- `indicator_bind_report.xlsx` — opens correctly, unified CES + AOM metric sheet
+- `event_bind_report.xlsx` — opens correctly, unified CES + AOM event sheet
 - `suggestion_report.html` — opens in browser, shows metric + event sections
 
 ## Integration Verification
@@ -127,16 +120,13 @@ export ALARM_WORKSPACE_DIR="/root/workspace/alarm-test-$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$ALARM_WORKSPACE_DIR/intermediate"
 
 # Run full pipeline
-python scripts/generate_core_instance.py
+python scripts/generate_instance.py
 python scripts/generate_alarm_baseline.py
 python scripts/main_alarm.py
 python scripts/main_aom_alarm.py
-python scripts/main_event.py
 python scripts/enrich_metric_dimension.py
 python scripts/bind_analysis.py
 python scripts/event_bind_analysis.py
-python scripts/aom_bind_analysis.py
-python scripts/aom_event_bind_analysis.py
 python scripts/generate_excel_report.py
 python scripts/generate_event_excel_report.py
 python scripts/generate_suggestion.py
@@ -181,7 +171,7 @@ ls -la "$ALARM_WORKSPACE_DIR/intermediate/"*.json
 | TC-02 | Core instance extraction | 关键资源标记表.xlsx | core_instances.json with instances |
 | TC-03 | Baseline extraction | 告警基线.xlsx | 4 baseline JSON files |
 | TC-04 | CES alarm fetch | AK/SK + regions | online_alarm_rules.json |
-| TC-05 | AOM alarm fetch | AK/SK + regions | aom_alarm_rules.json + aom_event_alarm_rules.json |
+| TC-05 | AOM alarm fetch | AK/SK + regions | aom_alarm_rules.json + aom_notification_rules.json |
 | TC-06 | Metric enrichment | core_instances + baseline | Updated core_instances with metric_dimension |
 | TC-07 | Binding analysis | All intermediate files | 4 binding report JSONs |
 | TC-08 | Report generation | Binding reports | 2 Excel + 1 HTML |

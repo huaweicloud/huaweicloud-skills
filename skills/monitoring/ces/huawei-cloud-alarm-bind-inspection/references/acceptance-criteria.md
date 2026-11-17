@@ -30,7 +30,7 @@ This document defines the quality standards and acceptance criteria for the alar
 | Criterion | Description | Verification |
 |-----------|-------------|--------------|
 | AC-3.1 | AOM metric alarm rules fetched | `aom_alarm_rules.json` non-empty |
-| AC-3.2 | AOM event alarm rules fetched | `aom_event_alarm_rules.json` non-empty |
+| AC-3.2 | AOM event alarm rules fetched | `aom_notification_rules.json` non-empty |
 | AC-3.3 | Multi-region supported | Rules from multiple regions present |
 
 ### 4. Binding Analysis

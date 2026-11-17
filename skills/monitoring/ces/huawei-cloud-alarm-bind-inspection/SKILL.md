@@ -34,26 +34,59 @@ Prerequisites:
 - `hcloud` CLI available (used to auto-fetch Project ID)
 - Third-party dependencies: see `requirements.txt` (includes `huaweicloudsdkces`, `huaweicloudsdkcore`)
 
-### Step 2: Extract Core Instance List from Excel
+### Step 2: Fetch All Instances via RMS API
 
 ```bash
-python scripts/generate_core_instance.py
+python scripts/generate_instance.py
 ```
 
-Extracts the core instance list from the key resource marking Excel (single-customer mode, no per-customer grouping).
+Fetches all cloud resource instances via RMS (Resource Management Service) API and converts them directly to `core_instances.json` format. No intermediate `instances.json` file is produced.
 
-**Pre-checks** (abort if any not met):
-- `assets/关键资源标记表.xlsx` must exist
-- Must contain sheet `关键资源标记`
-- Must contain all columns: `region`, `resource_type`, `resource_id`, `是否核心业务`
-- Must contain at least one data row where `是否核心业务` = `是` with non-empty `resource_type` and `resource_id`
+**Flow**:
+1. `CollectAllResourcesSummary` — get resource overview (which provider+type pairs exist in the account)
+2. Intersect with `PROVIDER_TYPES` (indicator-baseline-supported provider+type list)
+3. Concurrent `ListAllResources` per provider.type (10 threads, auto-paginate)
+4. In-memory convert: map each resource's `(provider, type)` to service short name (e.g. `ecs` → `ECS`, `vpc+publicips` → `EIP`), filter sub-resources (e.g. RDS nodes/proxies), output `{instance_id, raw_service, region}` per instance
+
+**Pre-checks**:
+- `hcloud` CLI available and configured with AK/SK
+- RMS API accessible in the target region
 
 Output: `<WORKSPACE_DIR>/intermediate/core_instances.json`
 
 Output structure:
-- `{"instances": {"ECS": [...], "RDS": [...], ...}}`
+- `{"source": "RMS API (generate_instance.py)", "instances": {"ECS": [...], "RDS": [...], ...}, "instance_counts": <total>}`
 
-### Step 3: Extract Alarm Baseline from Excel
+### Step 3: Enrich Core Instances with metric_dimension
+
+```bash
+python scripts/enrich_metric_dimension.py
+```
+
+Calls each service's ShowInstance API via hcloud CLI to fetch instance attributes (engine, cache_mode, type, etc.) and infer the most specific metric dimension route. Depends only on Step 2 (core_instances.json) — does not depend on alarm rules or baseline data. Dimension values are sourced from module-level constants (SINGLE_DIM_CONSTANTS, MULTI_DIM_CONSTANTS) and hcloud ShowInstance APIs.
+
+`metric_dimension` is a single-value string representing the instance's most specific dimension route, e.g. `"dcs_instance_id,dcs_cluster_redis_node"`. `bind_analysis.py` uses **exact matching**: a baseline dimension must exactly equal the instance's `metric_dimension` to be a hit (e.g. `dcs_instance_id` matches only instances with `metric_dimension == "dcs_instance_id"`, not `"dcs_instance_id,dcs_cluster_redis_node"`).
+
+Service coverage (46 baseline services):
+
+| Category | Services | Approach | API Calls |
+|---|---|---|---|
+| B single-dimension | 22 | Read unique dimension from module-level constants | 0 |
+| C multi-dim + ShowInstance | 18 | Call hcloud ShowInstance to infer | 1 per instance |
+| D multi-dim + indirect | 2 | GAUSSDB/ROMA indirect query or fallback | 1 per instance |
+| A no hcloud | 4 | OBS uses bucket_name; MaaS not available | 0 |
+
+Verified services:
+- **DCS**: engine=Redis + cache_mode=ha → `dcs_instance_id,dcs_cluster_redis_node` (22 baseline metrics)
+- **ELB**: ShowLoadBalancer/v3 includes `listeners[]` and `pools[]` — no extra API needed
+- **VPC/EIP**: ShowPublicip/v3 includes `bandwidth` object — no extra API needed
+- **EG**: ShowDetailOfChannel does not include subscription info — sub-dimensions need extra API
+- **GAUSSDB**: hcloud only has GaussMySql API, cannot query openGauss — fallback handling
+- **ROMA**: ListMqsInstance requires `include_internal` param — fallback on 0 instances
+
+Output: updates `<WORKSPACE_DIR>/intermediate/core_instances.json`
+
+### Step 4: Extract Alarm Baseline from Excel
 
 ```bash
 python scripts/generate_alarm_baseline.py
@@ -76,7 +109,7 @@ AOM baselines extracted from 4 additional sheets:
 5. `AOM-Modelarts事件` sheet: filter `指标级别=底线指标` (15 columns, PromQL event structure)
 6. `AOM事件基线-其他服务` sheet: filter `事件级别=底线事件` (13 columns)
 
-### Step 4: Fetch Online Alarm Rules
+### Step 5: Fetch Online Alarm Rules
 
 Fetches all alarm rules for the current account in the specified region(s) via CES SDK (AK/SK auth). CES alarm rules include resource dimension info and notification config — no separate notification rule fetch needed.
 
@@ -87,12 +120,13 @@ Fetches all alarm rules for the current account in the specified region(s) via C
 python scripts/main_alarm.py
 ```
 
-Auto-reads all regions from `core_instances.json`, calls CES `ListAlarmRules` per region, and merges results. Each rule is tagged with a `region` field for `bind_analysis.py` to filter by instance region.
+Auto-reads all regions from `core_instances.json`, calls CES `ListAlarmRules` per region, and merges results. Each rule is tagged with a `region` field. For every rule with non-empty, non-wildcard dimensions, calls CES `ListAlarmRuleResources` (concurrent, 10 threads) to resolve actual instance IDs into a `resource_ids` array. Finally, splits event-type rules (EVENT.SYS / EVENT.CUSTOM) into a separate file.
 
 Output:
-- `<WORKSPACE_DIR>/intermediate/online_alarm_rules.json` — all alarm rules (with resource dimensions, policy metrics, notification config)
+- `<WORKSPACE_DIR>/intermediate/online_alarm_rules.json` — metric alarm rules only (with resource dimensions, resource_ids, policy metrics, notification config)
+- `<WORKSPACE_DIR>/intermediate/online_notification_rules.json` — event-type alarm rules only (with resource_ids)
 
-#### Step 4b: Fetch AOM Alarm Rules
+#### Step 5b: Fetch AOM Alarm Rules
 
 ```bash
 python scripts/main_aom_alarm.py
@@ -102,103 +136,42 @@ Fetches AOM metric-type and event-type alarm rules separately via hcloud AOM `Li
 
 Output:
 - `<WORKSPACE_DIR>/intermediate/aom_alarm_rules.json` — AOM metric alarm rules
-- `<WORKSPACE_DIR>/intermediate/aom_event_alarm_rules.json` — AOM event alarm rules
-
-### Step 5: Extract Event-Type Alarm Rules
-
-Extracts event-type rules (type=EVENT_SYS or EVENT_CUSTOM) from Step 4's alarm rules, output for event baseline analysis.
-
-```bash
-python scripts/main_event.py
-```
-
-Output:
-- `<WORKSPACE_DIR>/intermediate/online_notification_rules.json` — event-type alarm rules
-
-### Step 6: Enrich Core Instances with metric_dimension
-
-```bash
-python scripts/enrich_metric_dimension.py
-```
-
-Calls each service's ShowInstance API via hcloud CLI to fetch instance attributes (engine, cache_mode, type, etc.) and infer the most specific metric dimension route. Does not depend on alarm rules — determines dimensions even for instances without alarm configuration.
-
-`metric_dimension` is a single-value string representing the instance's most specific dimension route, e.g. `"dcs_instance_id,dcs_cluster_redis_node"`. `bind_analysis.py` uses **subset matching**: a baseline dimension that is a subset of the instance's `metric_dimension` is a hit (e.g. `dcs_instance_id` is a subset of `dcs_instance_id,dcs_cluster_redis_node` — both hit).
-
-Service coverage (46 baseline services):
-
-| Category | Services | Approach | API Calls |
-|---|---|---|---|
-| B single-dimension | 22 | Read unique dimension from baseline | 0 |
-| C multi-dim + ShowInstance | 18 | Call hcloud ShowInstance to infer | 1 per instance |
-| D multi-dim + indirect | 2 | GAUSSDB/ROMA indirect query or fallback | 1 per instance |
-| A no hcloud | 4 | OBS uses bucket_name; MaaS not available | 0 |
-
-Verified services:
-- **DCS**: engine=Redis + cache_mode=ha → `dcs_instance_id,dcs_cluster_redis_node` (22 baseline metrics)
-- **ELB**: ShowLoadBalancer/v3 includes `listeners[]` and `pools[]` — no extra API needed
-- **VPC/EIP**: ShowPublicip/v3 includes `bandwidth` object — no extra API needed
-- **EG**: ShowDetailOfChannel does not include subscription info — sub-dimensions need extra API
-- **GAUSSDB**: hcloud only has GaussMySql API, cannot query openGauss — fallback handling
-- **ROMA**: ListMqsInstance requires `include_internal` param — fallback on 0 instances
-
-Output: updates `<WORKSPACE_DIR>/intermediate/core_instances.json`
+- `<WORKSPACE_DIR>/intermediate/aom_notification_rules.json` — AOM event alarm rules
 
 ### Step 7: Compare and Analyze Alarm Binding Rates
 
-#### 7a: Metric Baseline Binding Analysis
+#### 7a: Metric Baseline Binding Analysis (CES + AOM Unified)
 
 ```bash
-python scripts/bind_analysis.py
+python scripts/bind_analysis.py \
+  --aom-baseline intermediate/aom_indicator_baseline.json \
+  --aom-rules intermediate/aom_alarm_rules.json
 ```
 
-Reads core instance list, metric baseline, and online alarm rules, compares baseline metrics with online rules, and calculates binding rates.
+Reads core instance list, **both** CES and AOM metric baselines, and **both** CES and AOM alarm rules. Routes each service to the correct monitoring system (CES for 44 services, AOM for CCE/CCI/IoTDA/Modelarts), compares baseline metrics with online rules, and calculates binding rates.
 
 Core logic:
-- Baseline grouped by `(service_short_name, metric_dimension)` two-level grouping
+- CES baseline grouped by `(service_short_name, metric_dimension)` two-level grouping
+- AOM baseline grouped by `(云服务简称, 指标维度)` with Chinese dimension names
 - CES alarm rule dimensions extracted from `resources[].dimensions[].name`
-- Metric names extracted from `policies[].metric_name`
-- Wildcard rules (empty resources or dimension value="*") cover all instances of that service
-- **Dimension matching uses subset matching**: when an instance has `metric_dimension` set, a baseline dimension that is a subset of `metric_dimension` is a hit
-- Output at `(instance, metric_dimension)` granularity
+- AOM alarm rules matched by metric ID in PromQL text
+- **Dimension matching uses exact matching**: instance `metric_dimension` must exactly equal baseline dimension
+- Each instance record includes a `monitor_system` field ("CES" or "AOM")
+- Output at `(instance, metric_dimension)` granularity, unified into a single report
 
-Output: `<WORKSPACE_DIR>/intermediate/indicator_bind_report.json`
+Output: `<WORKSPACE_DIR>/intermediate/indicator_bind_report.json` (unified CES + AOM)
 
-#### 7b: Event Baseline Binding Analysis
-
-```bash
-python scripts/event_bind_analysis.py
-```
-
-Reads event-type alarm rules, event baseline, and core instance list, compares baseline events with events in alarm rules, and calculates binding rates.
-
-Core logic:
-- Extract `service` (from namespace) and `event_ids` (from policies[].metric_name) from event-type alarm rules
-- Non-wildcard rules: match instance ID from `resources` dimension values
-- Wildcard rules: cover all instances of that service
-- Map baseline service names to rule service names via a service name mapping table
-
-Output: `<WORKSPACE_DIR>/intermediate/event_bind_report.json`
-
-#### 7c: AOM Metric Baseline Binding Analysis
+#### 7b: Event Baseline Binding Analysis (CES + AOM Unified)
 
 ```bash
-python scripts/aom_bind_analysis.py
+python scripts/event_bind_analysis.py \
+  --aom-baseline intermediate/aom_event_baseline.json \
+  --aom-rules intermediate/aom_notification_rules.json
 ```
 
-Compares AOM metric baseline with AOM metric alarm rules, analyzes binding rates grouped by `(service_short_name, metric_dimension)`. If the service has no core instances, marks `no_core_instances`.
+Reads **both** CES and AOM event baselines and alarm rules. Compares baseline events with events in alarm rules, and calculates binding rates. Each instance record includes a `monitor_system` field.
 
-Output: `<WORKSPACE_DIR>/intermediate/aom_indicator_bind_report.json`
-
-#### 7d: AOM Event Baseline Binding Analysis
-
-```bash
-python scripts/aom_event_bind_analysis.py
-```
-
-Compares AOM event baseline with AOM event alarm rules, analyzes binding rates grouped by `service_short_name`.
-
-Output: `<WORKSPACE_DIR>/intermediate/aom_event_bind_report.json`
+Output: `<WORKSPACE_DIR>/intermediate/event_bind_report.json` (unified CES + AOM)
 
 ### Step 8: Generate Reports
 
@@ -208,7 +181,7 @@ Output: `<WORKSPACE_DIR>/intermediate/aom_event_bind_report.json`
 python scripts/generate_excel_report.py
 ```
 
-Output: `<WORKSPACE_DIR>/indicator_bind_report.xlsx` (CES metric sheet + AOM metric sheet)
+Output: `<WORKSPACE_DIR>/indicator_bind_report.xlsx` (unified CES + AOM metric sheet)
 
 #### 8b: Event Baseline Excel Report
 
@@ -216,7 +189,7 @@ Output: `<WORKSPACE_DIR>/indicator_bind_report.xlsx` (CES metric sheet + AOM met
 python scripts/generate_event_excel_report.py
 ```
 
-Output: `<WORKSPACE_DIR>/event_bind_report.xlsx` (CES event sheet + AOM event sheet)
+Output: `<WORKSPACE_DIR>/event_bind_report.xlsx` (unified CES + AOM event sheet)
 
 #### 8c: Merged HTML Suggestion Report
 
@@ -234,25 +207,24 @@ HTML report includes:
 ### Step Dependencies
 
 ```
-Step 1 ─→ Step 2 ─→ Step 4 ─→ Step 5 ─┐
-              │        └→ Step 4b ──────┐
-              Step 3 ─┼─────────→ Step 6 ─┬→ Step 7a ─→ Step 8a ─┐
-              Step 2 ─┘                └→ Step 7b ─→ Step 8b ─┤
-                  Step 4 ─→ Step 6 ─┘                          ├─→ Step 8c
-                  Step 4b ─→ Step 7c ─→ Step 8a ────────────────┤
-                  Step 4b ─→ Step 7d ─→ Step 8b ────────────────┘
+Step 1 ─→ Step 2 ─┬→ Step 5 ──────────┐
+              │   └→ Step 5b ──────┐   │
+              │   ┌→ Step 3 ───────┼───┼→ Step 7a ─→ Step 8a ─┐
+              │   │                │   └→ Step 7b ─→ Step 8b ─┤
+              └→ Step 4 ──────────┼──────────────────────────→ ├─→ Step 8c
+                               Step 5b ─→ Step 7c ─→ Step 8a ──┤
+                               Step 5b ─→ Step 7d ─→ Step 8b ──┘
 ```
 
 - Step 1 is an environment prerequisite, must execute before all other steps
-- Steps 2 and 3 are independent, can run in parallel
-- Step 4 depends on Step 2 (auto-extracts region list from core_instances.json, multi-region supported)
-- Step 5 depends on Step 4 (extracts event-type rules from alarm rules)
-- Step 6 depends on Step 2 (reads core_instances.json) and Step 3 (reads indicator_baseline.json), does not depend on alarm rules
-- Step 4b depends on Step 2 (extracts regions from core_instances.json)
-- Step 7a depends on outputs of Steps 4, 3, 2, 6
-- Step 7b depends on outputs of Steps 5, 3, 2, 6
-- Step 7c depends on Step 3 (AOM metric baseline), Step 4b (AOM alarm rules), Step 2 (core instances)
-- Step 7d depends on Step 3 (AOM event baseline), Step 4b (AOM event alarm rules), Step 2 (core instances)
+- Steps 2 and 4 are independent, can run in parallel (Step 2 uses RMS API, Step 4 reads Excel baseline)
+- Step 5 depends on Step 2 (auto-extracts region list from core_instances.json, multi-region supported; outputs both metric rules and event rules, disabled rules excluded)
+- Step 3 depends only on Step 2 (reads core_instances.json), does not depend on alarm rules or baseline data; can run in parallel with Step 5/5b after Step 2 completes
+- Step 5b depends on Step 2 (extracts regions from core_instances.json; outputs both metric and event rules, disabled rules excluded)
+- Step 7a depends on outputs of Steps 4, 3, 2, 5
+- Step 7b depends on outputs of Steps 5, 3, 2
+- Step 7c depends on Step 4 (AOM metric baseline), Step 5b (AOM alarm rules), Step 2 (core instances)
+- Step 7d depends on Step 4 (AOM event baseline), Step 5b (AOM event alarm rules), Step 2 (core instances)
 - Steps 7a, 7b, 7c, 7d can run in parallel
 - Step 8a depends on 7a+7c, 8b depends on 7b+7d, 8c depends on 7a+7b+7c+7d
 - Steps 8a, 8b can run in parallel
@@ -273,12 +245,12 @@ Usage:
 ```bash
 # Option 1: explicitly set shared directory (recommended for multi-script runs)
 export ALARM_WORKSPACE_DIR="/root/workspace/alarm-bind-inspection-workspace_$(date +%Y%m%d_%H%M%S)"
-python scripts/generate_core_instance.py
+python scripts/generate_instance.py
 python scripts/main_alarm.py
 # ... all scripts output to the same directory
 
 # Option 2: no env var set (single-script standalone run auto-creates a timestamped directory)
-python scripts/generate_core_instance.py
+python scripts/generate_instance.py
 ```
 
 `<WORKSPACE_DIR>` in the workflow steps above refers to the directory root level; intermediate file paths are `<WORKSPACE_DIR>/intermediate/`.
@@ -287,13 +259,11 @@ python scripts/generate_core_instance.py
 
 ### Core Instance List
 
-- **File**: `assets/关键资源标记表.xlsx`
-- **Sheet**: `关键资源标记`
-- **Extracted columns**:
-  - `resource_type` column
-  - `resource_id` column
-  - `region` column (English Region ID)
-  - `是否核心业务` column (filter rows where value is "是")
+- **Source**: RMS API via `generate_instance.py`
+- **API calls**:
+  - `hcloud RMS CollectAllResourcesSummary` — resource overview (provider + type + region + count)
+  - `hcloud RMS ListAllResources` — full resource listing per provider.type (concurrent, auto-paginate)
+- **Provider-to-service mapping**: `generate_instance.py` maps RMS `(provider, type)` to service short name (e.g. `ecs` → `ECS`, `vpc+publicips` → `EIP`, `nosql` → `GeminiDB`), filtering sub-resources (RDS nodes/proxies, DCS nodes, DMS *_nodes, etc.)
 
 ### Metric Baseline
 
@@ -339,16 +309,14 @@ python scripts/generate_core_instance.py
 ## Resources
 
 ### scripts/
-- `main_alarm.py` — Fetch all alarm rules via CES SDK (AK/SK auth, multi-region)
-- `main_event.py` — Extract event-type rules from alarm rules (type=EVENT_SYS/EVENT_CUSTOM)
 - `generate_alarm_baseline.py` — Extract CES metric/event baseline and AOM metric/event baseline JSON from Excel
+- `main_alarm.py` — Fetch all CES alarm rules (ListAlarmRules) + resolve resource IDs (ListAlarmRuleResources) + split event-type rules (multi-region, unified)
 - `main_aom_alarm.py` — Fetch AOM alarm rules via hcloud AOM (metric + event, multi-region)
-- `aom_bind_analysis.py` — Compare and analyze AOM metric baseline binding rate
-- `aom_event_bind_analysis.py` — Compare and analyze AOM event baseline binding rate
-- `generate_core_instance.py` — Extract core instance list JSON from Excel (single-customer mode)
+
+- `generate_instance.py` — Fetch all instances via RMS API and convert to core_instances.json (no intermediate instances.json)
 - `enrich_metric_dimension.py` — Enrich core instances with metric_dimension (infer via hcloud ShowInstance)
-- `bind_analysis.py` — Compare and analyze metric baseline binding rate
-- `event_bind_analysis.py` — Compare and analyze event baseline binding rate
+- `bind_analysis.py` — Compare and analyze metric baseline binding rate (CES + AOM unified, outputs `indicator_bind_report.json`)
+- `event_bind_analysis.py` — Compare and analyze event baseline binding rate (CES + AOM unified, outputs `event_bind_report.json`)
 - `generate_excel_report.py` — Generate metric baseline Excel report
 - `generate_event_excel_report.py` — Generate event baseline Excel report
 - `generate_suggestion.py` — Generate merged HTML suggestion report (metric + event)
@@ -359,7 +327,7 @@ python scripts/generate_core_instance.py
 
 ### data-sources/
 - `assets/华为云租户面监控告警基线-V26.01-beta.xlsx` — Baseline data source
-- `assets/关键资源标记表.xlsx` — Core instance data source
+- `assets/关键资源标记表.xlsx` — (legacy) Core instance data source, superseded by RMS API in `generate_instance.py`
 
 ### output-files/
 
@@ -375,10 +343,10 @@ python scripts/generate_core_instance.py
 - `ecs_special_events.json` — ECS special events for AI scenarios
 - `aom_indicator_baseline.json` — AOM baseline metrics JSON
 - `aom_event_baseline.json` — AOM baseline events JSON
-- `online_alarm_rules.json` — CES alarm rules
+- `online_alarm_rules.json` — CES metric alarm rules
 - `online_notification_rules.json` — Event-type alarm rules
 - `aom_alarm_rules.json` — AOM metric alarm rules
-- `aom_event_alarm_rules.json` — AOM event alarm rules
+- `aom_notification_rules.json` — AOM event alarm rules
 - `indicator_bind_report.json` — CES metric binding rate analysis
 - `event_bind_report.json` — CES event binding rate analysis
 - `aom_indicator_bind_report.json` — AOM metric binding rate analysis

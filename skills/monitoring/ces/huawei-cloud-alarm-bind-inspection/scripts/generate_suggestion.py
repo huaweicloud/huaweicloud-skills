@@ -117,291 +117,6 @@ def _build_aom_event_html(aom_event_report):
 
 
 
-def merge_aom_into_ces(metric_overview, metric_svc_stat_data, rows_data,
-                       aom_indicator_report, aom_baseline_records, core_instances):
-    """Merge AOM indicator bind report data into CES data structures.
-
-    (a) Overview: unified coverage rate (CES baseline + AOM baseline, CES covered + AOM covered)
-    (b) Service stats: derive fully/partially/unbound from covered_count vs baseline_count
-    (c) Detail rows: map AOM baseline fields to CES METRIC_DETAIL_COLUMNS
-    """
-    if not aom_indicator_report:
-        return metric_overview, metric_svc_stat_data, rows_data
-
-    aom_summary = aom_indicator_report.get("summary", {})
-    aom_items = aom_indicator_report.get("items", [])
-
-    # --- (a) Merge overview ---
-    ces_total_baseline = metric_overview.get("total_baseline_metrics", 0)
-    ces_total_covered = metric_overview.get("total_covered", 0)
-    aom_total_baseline = aom_summary.get("total_baseline_metrics", 0)
-    aom_total_covered = aom_summary.get("total_covered", 0)
-
-    unified_baseline = ces_total_baseline + aom_total_baseline
-    unified_covered = ces_total_covered + aom_total_covered
-    unified_rate = f"{unified_covered / unified_baseline * 100:.1f}%" if unified_baseline > 0 else "N/A"
-
-    # Count AOM instances needing action (items with uncovered metrics and core instances)
-    aom_needing = 0
-    aom_missing = 0
-    for item in aom_items:
-        if item.get("instance_count", 0) > 0 and item.get("uncovered_metrics"):
-            aom_needing += item["instance_count"]
-            aom_missing += len(item["uncovered_metrics"])
-
-    merged_overview = {
-        "total_instances": metric_overview.get("total_instances", 0),
-        "instances_needing_action": metric_overview.get("instances_needing_action", 0) + aom_needing,
-        "total_missing": metric_overview.get("total_missing", 0) + aom_missing,
-        "coverage_rate": unified_rate,
-        "total_baseline_metrics": unified_baseline,
-        "total_covered": unified_covered,
-    }
-
-    # --- (b) Merge service stats ---
-    for item in aom_items:
-        if item.get("instance_count", 0) == 0:
-            continue  # skip services without core instances
-        svc = item.get("云服务简称", "")
-        dim_cn = item.get("指标维度-中文", item.get("指标维度", ""))
-        baseline_count = item.get("baseline_count", 0)
-        covered_count = item.get("covered_count", 0)
-        instance_count = item.get("instance_count", 0)
-        status = item.get("status", "")
-        bind_rate = item.get("bind_rate", "N/A")
-
-        # Derive fully/partially/unbound
-        if status == "no_core_instances" or instance_count == 0:
-            fully, partially, unbound = 0, 0, 0
-        elif covered_count == baseline_count and baseline_count > 0:
-            fully, partially, unbound = instance_count, 0, 0
-        elif covered_count == 0:
-            fully, partially, unbound = 0, 0, instance_count
-        else:
-            fully, partially, unbound = 0, instance_count, 0
-
-        svc_dim_display = f"{svc} - {dim_cn}" if dim_cn else svc
-        is_no_rules = (status == "no_online_rules")
-
-        metric_svc_stat_data.append({
-            "svc_dim": svc_dim_display,
-            "total_inst": instance_count,
-            "baseline_metrics_count": baseline_count,
-            "fully": fully,
-            "partially": partially,
-            "unbound": unbound,
-            "bind_rate": bind_rate,
-            "missing_metrics": len(item.get("uncovered_metrics", [])),
-            "is_no_rules": False,
-            "is_no_baseline": False,
-            "bound_baseline": covered_count,
-            "total_baseline": baseline_count,
-            "monitor_system": "AOM",
-        })
-
-    # --- (c) Merge detail rows ---
-    # Build lookup: (云服务简称, 指标ID) -> baseline record
-    baseline_lookup = {}
-    for rec in aom_baseline_records:
-        svc = rec.get("云服务简称", "")
-        mid = rec.get("指标ID", "").strip()
-        if mid:
-            baseline_lookup[(svc, mid)] = rec
-
-    for item in aom_items:
-        if item.get("instance_count", 0) == 0:
-            continue  # skip services without core instances
-        svc = item.get("云服务简称", "")
-        dim = item.get("指标维度", "")
-        dim_cn = item.get("指标维度-中文", dim)
-        uncovered = item.get("uncovered_metrics", [])
-        if not uncovered:
-            continue
-
-        # Get instance info
-        insts = core_instances.get(svc, [])
-        if insts:
-            inst_id = insts[0].get("instance_id", "")
-            region = insts[0].get("region", "")
-        else:
-            inst_id = "服务级"
-            region = ""
-
-        for mid in uncovered:
-            rec = baseline_lookup.get((svc, mid.strip()))
-            if not rec:
-                # Fallback: create minimal row
-                row = {
-                    "instance_id": inst_id, "region": region,
-                    "service": svc, "metric_dimension": dim,
-                    "metric_dimension_cn": dim_cn, "monitor_system": "AOM",
-                }
-                for _, col_key in METRIC_DETAIL_COLUMNS:
-                    row[col_key] = mid if col_key == "指标ID" else ""
-                rows_data.append(row)
-                continue
-
-            # Map AOM fields to CES METRIC_DETAIL_COLUMNS
-            source_sheet = rec.get("source_sheet", "")
-            row = {
-                "instance_id": inst_id, "region": region,
-                "service": svc, "metric_dimension": dim,
-                "metric_dimension_cn": dim_cn, "monitor_system": "AOM",
-            }
-
-            for col_label, col_key in METRIC_DETAIL_COLUMNS:
-                if col_key == "指标ID":
-                    row[col_key] = rec.get("指标ID", mid)
-                elif col_key == "指标名称":
-                    row[col_key] = rec.get("指标名称", "")
-                elif col_key == "命名空间":
-                    row[col_key] = rec.get("命名空间", "")
-                elif col_key == "重要告警阈值":
-                    row[col_key] = rec.get("重要告警阈值", "")
-                elif col_key == "紧急告警阈值":
-                    row[col_key] = rec.get("紧急告警阈值", "")
-                elif col_key == "告警频率":
-                    row[col_key] = ""
-                elif col_key == "采集周期（秒）":
-                    # CCE has 采集周期, 其他服务 has 统计周期
-                    row[col_key] = rec.get("采集周期", rec.get("统计周期", ""))
-                elif col_key == "比较关系":
-                    # 其他服务 has 运算符
-                    row[col_key] = rec.get("运算符", "")
-                elif col_key == "连续触发次数":
-                    # 其他服务 has 连续周期
-                    row[col_key] = rec.get("连续周期", "")
-                elif col_key == "默认单位":
-                    # CCE has 单位, 其他服务 has 默认单位
-                    row[col_key] = rec.get("默认单位", rec.get("单位", ""))
-                elif col_key == "备注":
-                    row[col_key] = rec.get("备注", "")
-                else:
-                    row[col_key] = ""
-
-            rows_data.append(row)
-
-    return merged_overview, metric_svc_stat_data, rows_data
-
-
-
-def merge_aom_event_into_ces(event_overview_json, event_svc_stat_data, event_rows_data,
-                             aom_event_report, aom_event_baseline_records, core_instances):
-    """Merge AOM event bind report data into CES event data structures.
-
-    (a) Overview: unified event coverage (CES + AOM baseline events, CES + AOM covered)
-    (b) Service stats: convert AOM event items to CES event svc stat format, skip instance_count=0
-    (c) Detail rows: map AOM uncovered_events to CES event detail format (事件ID, 事件名称)
-    """
-    if not aom_event_report:
-        return event_overview_json, event_svc_stat_data, event_rows_data
-
-    aom_summary = aom_event_report.get("summary", {})
-    aom_items = aom_event_report.get("items", [])
-
-    # --- (a) Merge overview ---
-    ces_overview = json.loads(event_overview_json) if event_overview_json and event_overview_json != "{}" else {}
-    ces_total_baseline = ces_overview.get("total_baseline_events", 0)
-    ces_total_covered = ces_overview.get("total_covered_events", 0)
-    aom_total_baseline = aom_summary.get("total_baseline_events", 0)
-    aom_total_covered = aom_summary.get("total_covered", 0)
-
-    unified_baseline = ces_total_baseline + aom_total_baseline
-    unified_covered = ces_total_covered + aom_total_covered
-    unified_rate = f"{unified_covered / unified_baseline * 100:.1f}%" if unified_baseline > 0 else "N/A"
-
-    # Count AOM instances needing action (only items with instances)
-    aom_needing = 0
-    aom_missing = 0
-    for item in aom_items:
-        if item.get("instance_count", 0) > 0 and item.get("uncovered_events"):
-            aom_needing += item["instance_count"]
-            aom_missing += len(item["uncovered_events"])
-
-    merged_overview = {
-        "total_instances": ces_overview.get("total_instances", 0),
-        "bound_instances": ces_overview.get("bound_instances", 0),
-        "overall_rate": unified_rate,
-        "total_covered_events": unified_covered,
-        "total_baseline_events": unified_baseline,
-        "missing_events_total": ces_overview.get("missing_events_total", 0) + aom_missing,
-        "no_rules_instances": ces_overview.get("no_rules_instances", 0),
-        "no_baseline_instances": ces_overview.get("no_baseline_instances", 0),
-    }
-    merged_overview_json = json.dumps(merged_overview, ensure_ascii=False)
-
-    # --- (b) Merge service stats ---
-    for item in aom_items:
-        if item.get("instance_count", 0) == 0:
-            continue  # skip services without core instances
-        svc = item.get("云服务简称", "")
-        baseline_count = item.get("baseline_count", 0)
-        covered_count = item.get("covered_count", 0)
-        instance_count = item.get("instance_count", 0)
-        bind_rate = item.get("bind_rate", "N/A")
-
-        # Derive fully/partially/unbound
-        if covered_count == baseline_count and baseline_count > 0:
-            fully, partially, unbound = instance_count, 0, 0
-        elif covered_count == 0:
-            fully, partially, unbound = 0, 0, instance_count
-        else:
-            fully, partially, unbound = 0, instance_count, 0
-
-        event_svc_stat_data.append({
-            "svc": svc,
-            "total_instances": instance_count,
-            "fully_bound": fully,
-            "partially_bound": partially,
-            "unbound": unbound,
-            "no_online_rules": 0,
-            "baseline_event_count": baseline_count,
-            "covered_baseline": covered_count,
-            "total_baseline": baseline_count,
-            "bind_rate": bind_rate,
-            "monitor_system": "AOM",
-        })
-
-    # --- (c) Merge detail rows ---
-    # Build lookup: (云服务简称, 事件ID) -> baseline record
-    baseline_lookup = {}
-    for rec in aom_event_baseline_records:
-        svc = rec.get("云服务简称", "")
-        eid = rec.get("事件ID", "").strip()
-        if eid:
-            baseline_lookup[(svc, eid)] = rec
-
-    for item in aom_items:
-        if item.get("instance_count", 0) == 0:
-            continue  # skip services without core instances
-        svc = item.get("云服务简称", "")
-        uncovered = item.get("uncovered_events", [])
-        event_names = item.get("event_names", {})
-        if not uncovered:
-            continue
-
-        # Get instance info
-        insts = core_instances.get(svc, [])
-        if insts:
-            inst_id = insts[0].get("instance_id", "")
-            region = insts[0].get("region", "")
-        else:
-            inst_id = "服务级"
-            region = ""
-
-        for eid in uncovered:
-            row = {
-                "instance_id": inst_id,
-                "region": region,
-                "svc": svc,
-                "monitor_system": "AOM",
-                "事件ID": eid,
-                "事件名称": event_names.get(eid, ""),
-            }
-            event_rows_data.append(row)
-
-    return merged_overview_json, event_svc_stat_data, event_rows_data
-
 
 def generate(bind_report_path, baseline_path, output_path, rules_path=None, event_report_path=None, event_baseline_path=None):
     report = load_json(bind_report_path)
@@ -412,6 +127,37 @@ def generate(bind_report_path, baseline_path, output_path, rules_path=None, even
         svc = rec["云服务简称"]
         dim = rec.get("指标维度", "")
         baseline_by_svc_dim[(svc, dim)][rec["指标ID"]] = rec
+
+    # Merge AOM indicator baseline into baseline_by_svc_dim BEFORE process_report_instances
+    # so that AOM services (CCE/CCI/IoTDA/Modelarts) can look up metric details
+    _intermediate_dir = Path(bind_report_path).parent
+    try:
+        aom_bl_path = str(_intermediate_dir / "aom_indicator_baseline.json")
+        aom_bl_data = load_json(aom_bl_path)
+        if aom_bl_data:
+            for rec in aom_bl_data.get("records", []):
+                svc = rec.get("云服务简称", "")
+                dim = rec.get("指标维度", "")
+                mid = rec.get("指标ID", "").strip()
+                if svc and dim and mid:
+                    mapped = {
+                        "指标ID": mid,
+                        "指标名称": rec.get("指标名称", ""),
+                        "命名空间": rec.get("命名空间", ""),
+                        "指标维度-中文": rec.get("指标维度-中文", dim),
+                        "重要告警阈值": rec.get("重要告警阈值", ""),
+                        "紧急告警阈值": rec.get("紧急告警阈值", ""),
+                        "告警频率": "",
+                        "采集周期（秒）": rec.get("采集周期", rec.get("统计周期", "")),
+                        "比较关系": rec.get("运算符", ""),
+                        "连续触发次数": rec.get("连续周期", ""),
+                        "默认单位": rec.get("默认单位", rec.get("单位", "")),
+                        "备注": rec.get("备注", ""),
+                    }
+                    baseline_by_svc_dim[(svc, dim)][mid] = mapped
+            logger.info(f"AOM baseline merged: {len(aom_bl_data.get('records', []))} records")
+    except Exception as e:
+        logger.warning(f"Failed to load AOM indicator baseline: {e}")
 
     logger.info("Generating suggestion report")
     suggestions, total_missing_metrics, instances_needing_action_ids, total_bound_all, total_baseline_all, no_baseline_instances, non_exist_instances = \
@@ -444,8 +190,16 @@ def generate(bind_report_path, baseline_path, output_path, rules_path=None, even
             event_report = load_json(event_report_path)
             event_baseline = load_json(event_baseline_path) if event_baseline_path else {}
             event_section, event_rows_json, event_col_keys_json, svc_stat_json, event_no_baseline_json, event_non_exist_json = build_event_section(event_report, event_baseline)
-            event_overview_json = json.dumps(event_report.get("summary", {}), ensure_ascii=False)
+            event_overview = event_report.get("summary", {})
             event_svc_stat_data = json.loads(svc_stat_json) if svc_stat_json != "[]" else []
+            # Compute instances_needing_action from svc stat data and inject into overview
+            # so JS renderEventOverview() doesn't overwrite with undefined||0
+            event_instances_needing_action = sum(
+                item.get("partially_bound", 0) + item.get("unbound", 0) + item.get("no_online_rules", 0)
+                for item in event_svc_stat_data
+            )
+            event_overview["instances_needing_action"] = event_instances_needing_action
+            event_overview_json = json.dumps(event_overview, ensure_ascii=False)
             event_rows_data = json.loads(event_rows_json) if event_rows_json != "[]" else []
             event_no_baseline_data = json.loads(event_no_baseline_json) if event_no_baseline_json != "[]" else []
             event_non_exist_data = json.loads(event_non_exist_json) if event_non_exist_json != "[]" else []
@@ -453,40 +207,10 @@ def generate(bind_report_path, baseline_path, output_path, rules_path=None, even
         except Exception as e:
             logger.warning(f"Failed to load event report: {e}")
 
-    # AOM sections
-    aom_indicator_report = None
-    aom_event_report = None
-    _intermediate_dir = Path(bind_report_path).parent
-    try:
-        aom_indicator_report = load_json(str(_intermediate_dir / "aom_indicator_bind_report.json"))
-        logger.info("AOM indicator report loaded")
-    except Exception:
-        pass
-    try:
-        aom_event_report = load_json(str(_intermediate_dir / "aom_event_bind_report.json"))
-        logger.info("AOM event report loaded")
-    except Exception:
-        pass
+    # AOM baseline already merged above before process_report_instances
 
-    # No baseline instances — exclude AOM services (they are handled in the merged indicator section)
-    aom_services = set()
-    if aom_indicator_report:
-        for item in aom_indicator_report.get("items", []):
-            aom_services.add(item.get("云服务简称", ""))
-    no_baseline_json_data = sorted(
-        [inst for inst in no_baseline_instances if inst.get("service") not in aom_services],
-        key=lambda x: x["service"],
-    )
+    no_baseline_json_data = sorted(no_baseline_instances, key=lambda x: x["service"])
     no_baseline_json = json.dumps(no_baseline_json_data, ensure_ascii=False)
-
-    # Filter AOM event services from event no-baseline instances
-    aom_event_services = set()
-    if aom_event_report:
-        for item in aom_event_report.get("items", []):
-            aom_event_services.add(item.get("云服务简称", ""))
-    event_no_baseline_data = [
-        inst for inst in event_no_baseline_data if inst.get("service") not in aom_event_services
-    ]
     event_no_baseline_json = json.dumps(event_no_baseline_data, ensure_ascii=False)
 
     # Non-exist instances
@@ -511,72 +235,21 @@ def generate(bind_report_path, baseline_path, output_path, rules_path=None, even
         dim_cn = s.get("metric_dimension_cn", s.get("metric_dimension", ""))
         if metrics:
             for m in metrics:
-                row = {"instance_id": s["instance_id"], "region": s.get("region", ""), "service": s["service"], "metric_dimension": s.get("metric_dimension", ""), "metric_dimension_cn": dim_cn}
+                row = {"instance_id": s["instance_id"], "region": s.get("region", ""), "service": s["service"], "metric_dimension": s.get("metric_dimension", ""), "metric_dimension_cn": dim_cn, "monitor_system": s.get("monitor_system", "CES")}
                 for col_label, col_key in METRIC_DETAIL_COLUMNS:
                     row[col_key] = str(m.get(col_key, ""))
                 rows_data.append(row)
         else:
-            row = {"instance_id": s["instance_id"], "region": s.get("region", ""), "service": s["service"], "metric_dimension": s.get("metric_dimension", ""), "metric_dimension_cn": dim_cn}
+            row = {"instance_id": s["instance_id"], "region": s.get("region", ""), "service": s["service"], "metric_dimension": s.get("metric_dimension", ""), "metric_dimension_cn": dim_cn, "monitor_system": s.get("monitor_system", "CES")}
             for col_label, col_key in METRIC_DETAIL_COLUMNS:
                 row[col_key] = ""
             row["_no_missing"] = True
             rows_data.append(row)
     rows_json = json.dumps(rows_data, ensure_ascii=False)
 
-    # --- Merge AOM indicator data into CES structures ---
-    aom_baseline_records = []
-    try:
-        aom_baseline_path = str(Path(bind_report_path).parent / "aom_indicator_baseline.json")
-        aom_baseline_data = load_json(aom_baseline_path)
-        aom_baseline_records = aom_baseline_data.get("records", []) if aom_baseline_data else []
-    except Exception as e:
-        logger.warning(f"Failed to load AOM indicator baseline: {e}")
-
-    core_instances = {}
-    try:
-        core_path = str(Path(bind_report_path).parent / "core_instances.json")
-        core_data = load_json(core_path)
-        core_instances = core_data.get("instances", {}) if core_data else {}
-    except Exception as e:
-        logger.warning(f"Failed to load core instances: {e}")
-
-    # Build CES overview dict for merge
-    ces_overview = {
-        "total_instances": report["summary"]["total_instances"],
-        "instances_needing_action": len(instances_needing_action_ids),
-        "total_missing": total_missing_metrics,
-        "coverage_rate": metric_coverage_rate,
-        "total_baseline_metrics": total_baseline_all,
-        "total_covered": total_bound_all,
-    }
-
-    merged_overview, metric_svc_stat_data, rows_data = merge_aom_into_ces(
-        ces_overview, metric_svc_stat_data, rows_data,
-        aom_indicator_report, aom_baseline_records, core_instances,
-    )
-
-    # Re-serialize merged data
-    metric_overview_json = json.dumps(merged_overview, ensure_ascii=False)
-    metric_svc_stat_json = json.dumps(metric_svc_stat_data, ensure_ascii=False)
-    rows_json = json.dumps(rows_data, ensure_ascii=False)
-    logger.info(f"After AOM merge: {len(metric_svc_stat_data)} svc stat rows, {len(rows_data)} detail rows")
-
-    # --- Merge AOM event data into CES event structures ---
-    aom_event_baseline_records = []
-    try:
-        aom_event_baseline_path = str(Path(bind_report_path).parent / "aom_event_baseline.json")
-        aom_event_baseline_data = load_json(aom_event_baseline_path)
-        aom_event_baseline_records = aom_event_baseline_data.get("records", []) if aom_event_baseline_data else []
-    except Exception as e:
-        logger.warning(f"Failed to load AOM event baseline: {e}")
-
-    event_overview_json, event_svc_stat_data, event_rows_data = merge_aom_event_into_ces(
-        event_overview_json, event_svc_stat_data, event_rows_data,
-        aom_event_report, aom_event_baseline_records, core_instances,
-    )
-    svc_stat_json = json.dumps(event_svc_stat_data, ensure_ascii=False)
-    event_rows_json = json.dumps(event_rows_data, ensure_ascii=False)
-    logger.info(f"After AOM event merge: {len(event_svc_stat_data)} event svc stat rows, {len(event_rows_data)} event detail rows")
+    # Unified report already has CES + AOM data — no merge needed
+    logger.info(f"Unified report: {len(metric_svc_stat_data)} svc stat rows, {len(rows_data)} detail rows")
+    logger.info(f"Unified event report: {len(event_svc_stat_data)} event svc stat rows, {len(event_rows_data)} event detail rows")
 
     # Service options
     svc_options_data = _build_svc_options(report.get("by_service_dimension", {}))

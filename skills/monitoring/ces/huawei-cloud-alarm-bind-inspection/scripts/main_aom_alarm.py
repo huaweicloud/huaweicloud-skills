@@ -25,7 +25,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("main-aom-alarm")
 
 OUTPUT_METRIC_PATH = str(Path(INTERMEDIATE_DIR) / "aom_alarm_rules.json")
-OUTPUT_EVENT_PATH = str(Path(INTERMEDIATE_DIR) / "aom_event_alarm_rules.json")
+OUTPUT_EVENT_PATH = str(Path(INTERMEDIATE_DIR) / "aom_notification_rules.json")
 CORE_INSTANCES_PATH = str(Path(INTERMEDIATE_DIR) / "core_instances.json")
 
 
@@ -110,6 +110,8 @@ def main(region: str = None):
             logger.warning("No regions found in core_instances.json, falling back to env default")
             target_regions = [None]
         else:
+            _SKIP_REGIONS = {"global"}
+            target_regions = [r for r in target_regions if r not in _SKIP_REGIONS]
             logger.info(f"Multi-region mode: {len(target_regions)} regions: {target_regions}")
 
     # Fetch metric-type and event-type rules for each region
@@ -132,8 +134,13 @@ def main(region: str = None):
         logger.info(f"  {len(event_rules)} event rules")
         all_event_rules.extend(event_rules)
 
-    logger.info(f"Total AOM metric rules: {len(all_metric_rules)}")
-    logger.info(f"Total AOM event rules: {len(all_event_rules)}")
+    # Filter out disabled rules (only keep alarm_rule_enable == True)
+    total_metric_before = len(all_metric_rules)
+    total_event_before = len(all_event_rules)
+    all_metric_rules = [r for r in all_metric_rules if r.get("alarm_rule_enable", False)]
+    all_event_rules = [r for r in all_event_rules if r.get("alarm_rule_enable", False)]
+    logger.info(f"Total AOM metric rules: {len(all_metric_rules)} enabled ({total_metric_before - len(all_metric_rules)} disabled, excluded)")
+    logger.info(f"Total AOM event rules: {len(all_event_rules)} enabled ({total_event_before - len(all_event_rules)} disabled, excluded)")
 
     # Write metric rules
     metric_output = {

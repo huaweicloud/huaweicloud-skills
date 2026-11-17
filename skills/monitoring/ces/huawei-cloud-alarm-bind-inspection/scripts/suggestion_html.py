@@ -35,6 +35,14 @@ def build_event_section(event_report, event_baseline):
     else:
         instances_needing_action = total_instances - summary.get("bound_instances", 0)
 
+    # Build monitor_system lookup from by_instance
+    svc_to_monitor = {}
+    for inst in by_instance:
+        svc = inst.get("svc_dim", inst.get("service", ""))
+        ms = inst.get("monitor_system", "CES")
+        if svc not in svc_to_monitor:
+            svc_to_monitor[svc] = ms
+
     svc_stat_data = []
     event_no_baseline_data = []
     event_non_exist_data = []
@@ -54,6 +62,7 @@ def build_event_section(event_report, event_baseline):
         else:
             svc_stat_data.append({
                 "svc": display_name,
+                "monitor_system": svc_to_monitor.get(svc_dim_key, "CES"),
                 "total_instances": svc_info.get("total_instances", 0),
                 "fully_bound": svc_info.get("fully_bound", 0),
                 "partially_bound": svc_info.get("partially_bound", 0),
@@ -84,7 +93,7 @@ def build_event_section(event_report, event_baseline):
         missing_events = inst.get("missing_events", [])
         if missing_events:
             for ev in missing_events:
-                row = {"instance_id": inst_id, "region": inst_region, "svc": svc}
+                row = {"instance_id": inst_id, "region": inst_region, "svc": svc, "monitor_system": inst.get("monitor_system", "CES")}
                 for col in EVENT_DETAIL_COLUMNS:
                     row[col] = str(ev.get(col, ""))
                 event_rows_data.append(row)
@@ -178,8 +187,8 @@ def build_event_section(event_report, event_baseline):
             </div>
             <table id="event-detail-table" style="table-layout:fixed;">
                 <colgroup>
-                    <col style="width:25%"><col style="width:12%">
-                    <col style="width:10%"><col style="width:25%"><col style="width:28%">
+                    <col style="width:8%"><col style="width:20%">
+                    <col style="width:10%"><col style="width:12%"><col style="width:20%"><col style="width:30%">
                 </colgroup>
                 <thead>
                     <tr>

@@ -51,7 +51,7 @@ def load_json(path):
 
 def convert_svc_summary_to_stat_data(svc_summary):
     svc_stat_data = []
-    for svc_dim_key in sorted(svc_summary.keys()):
+    for svc_dim_key in sorted(svc_summary.keys(), key=lambda k: (0 if svc_summary[k].get("monitor_system", "CES") == "CES" else 1, k)):
         info = svc_summary[svc_dim_key]
         if svc_dim_key.endswith("|无指标基线"):
             continue
@@ -87,7 +87,7 @@ def convert_svc_summary_to_stat_data(svc_summary):
             "is_no_baseline": is_no_baseline,
             "bound_baseline": bound_baseline if not is_no_rules else "-",
             "total_baseline": total_baseline if not is_no_rules else "-",
-            "monitor_system": "CES",
+            "monitor_system": info.get("monitor_system", "CES"),
         })
     return svc_stat_data
 
@@ -156,6 +156,7 @@ def process_report_instances(report, baseline_by_svc_dim):
                 "baseline_metrics_missing": inst.get("baseline_metrics_missing", "N/A"),
                 "bind_rate": inst.get("bind_rate", "0.0%"),
                 "bound_status": "no_online_rules",
+                "monitor_system": inst.get("monitor_system", "CES"),
                 "missing_metrics": missing_details,
             }
             suggestions.append(s)
@@ -222,6 +223,7 @@ def process_report_instances(report, baseline_by_svc_dim):
             "baseline_metrics_missing": inst["baseline_metrics_missing"],
             "bind_rate": inst["bind_rate"],
             "bound_status": inst["bound_status"],
+            "monitor_system": inst.get("monitor_system", "CES"),
             "missing_metrics": missing_details,
         }
         suggestions.append(s)
@@ -254,6 +256,7 @@ def build_svc_summary(suggestions, report_by_service_dimension):
                 "total_instances": info.get("total_instances", 0),
                 "bound_baseline": "-",
                 "total_baseline": "-",
+                "monitor_system": info.get("monitor_system", "CES"),
             }
         else:
             total_inst = info.get("total_instances", 0)
@@ -268,6 +271,7 @@ def build_svc_summary(suggestions, report_by_service_dimension):
                 "total_instances": total_inst,
                 "bound_baseline": info.get("bound_baseline", bound_inst * info.get("baseline_metrics_count", 0)),
                 "total_baseline": info.get("total_baseline", total_inst * info.get("baseline_metrics_count", 0)),
+                "monitor_system": info.get("monitor_system", "CES"),
             }
 
     return svc_summary
