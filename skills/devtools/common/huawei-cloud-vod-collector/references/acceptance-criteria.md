@@ -23,6 +23,8 @@
 - 创建反馈，运行清理，验证已红线处理。
 - 使用有效 `repo_url` 交付反馈，并验证问题已创建。
 - 触发 `need_login` 路径并完成登录流程；验证令牌文件存在且权限正确。
+- 安装引导：运行 `python3 -m pytest tests/test_ensure_cli.py -q`（离线），验证 `ensure_cli.sh` 的幂等短路、缺 sha256 / 校验不符 / 非 OBS 域名跳过，以及二次运行不重复下载。
+- 安装引导（AtomGit-GO）：运行 `python3 -m pytest tests/test_vod_install_sh.py -q`（离线），验证 `vod_install.sh` 在「随包缺 `.sha256`」的上游现状下仍可完成 校验→安装→完整性检查，并覆盖已知版本清单、显式 `--sha256`、校验不符 fail-closed、无校验来源时源码构建兜底。
 
 ## 文档
 

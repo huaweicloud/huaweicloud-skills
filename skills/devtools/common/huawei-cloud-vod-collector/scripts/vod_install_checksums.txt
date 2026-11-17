@@ -1,0 +1,19 @@
+# Known-version SHA256 manifest for AtomGit-GO pre-built archives.
+#
+# Source: https://gitcode.com/weixin_45218422/AtomGit-GO
+# Upstream commit at time of recording: fe01d7af4e567268b5f62f2e8d26863ac2eaf409
+# Format: <sha256>  <archive basename>
+#
+# The upstream repository publishes pre-built archives under build/ but does NOT
+# commit matching .sha256 files, so vod_install.sh uses this manifest as the
+# trusted checksum source for the default documented install path.
+#
+# Refresh after a deliberate upstream upgrade:
+#   1. clone/pull the upstream repo
+#   2. sha256sum build/*.tar.gz
+#   3. add/replace the matching lines below (keep old lines if you still support them)
+#
+# An archive that matches none of these entries is refused (fail-closed) and the
+# installer falls back to a source build; pass --sha256 <file> to override.
+3cefae892b9d87557daeb37e2875ceaa668aa5a973701ac38c9caefb8a0a32b7  atomcode-login_linux_arm_64.tar.gz
+cc918d3152a149243c3bf10f4cf8c62221787bb9ee9d24156ad1aa3b515baaf9  atomcode-login_linux_x86_64.tar.gz

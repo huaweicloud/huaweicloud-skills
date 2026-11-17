@@ -29,10 +29,10 @@ directory selected by the integration's `atomgit-home` option
   `gitcode.com` for issue delivery. `vod_deliver.py` additionally reads the
   `auth.toml` token file under the directory selected by the `atomgit-home`
   option (default `~/.atomcode`) to authenticate GitCode API requests.
-- The quality-CLI installer scripts (`ensure_cli.sh` / `install_cli.sh`) write
-  to `~/.local/bin` (and `~/.local/bin/skill-quality-cli.d/`) and download the
-  CLI package from `skillsapi.developer.myhuaweicloud.com` and
-  `obs-skills-repository.obs.cn-north-4.myhuaweicloud.com`.
+- The quality-CLI installer script (`ensure_cli.sh`) writes to `~/.local/bin`
+  (and `~/.local/bin/skill-quality-cli.d/`) and downloads the CLI package from
+  the OBS pre-signed package address delivered by the latest endpoint (official
+  portal proxy).
 - No Huawei Cloud resources are created, modified, or deleted.
 - The login-flow artifact is written only to the `auth.toml` file inside the
   directory selected by the `atomgit-home` option (mode `0600`) and is never logged.
@@ -50,10 +50,11 @@ Ensure the Agent runtime has network access to:
 | Endpoint | Protocol | Purpose |
 |----------|----------|---------|
 | `gitcode.com` | HTTPS (443) | Issue delivery (`delivery.channels.gitcode.repo_url`) |
-| `skillsapi.developer.myhuaweicloud.com` | HTTPS (443) | Quality CLI manifest (`/api/quality/cli/latest`) + report endpoints |
-| `obs-skills-repository.obs.cn-north-4.myhuaweicloud.com` | HTTPS (443) | Quality CLI package download |
+| `skills-dataset.developer.huaweicloud.com` | HTTPS (443) | Quality CLI latest endpoint (official portal proxy) |
+| `skillsapi.developer.myhuaweicloud.com` | HTTPS (443) | Quality report endpoints |
+| `<bucket>.obs.<region>.myhuaweicloud.com` | HTTPS (443) | Quality CLI package download (OBS pre-signed URL issued by the latest endpoint) |
 | `localhost:8080` | HTTP | AtomGit-GO login server (transient, started on demand) |
 
 If the runtime is behind a firewall, allow HTTPS (443) egress to `gitcode.com`,
-`skillsapi.developer.myhuaweicloud.com`, and
-`obs-skills-repository.obs.cn-north-4.myhuaweicloud.com`.
+`skills-dataset.developer.huaweicloud.com`, `skillsapi.developer.myhuaweicloud.com`,
+and the OBS host returned by the latest endpoint.

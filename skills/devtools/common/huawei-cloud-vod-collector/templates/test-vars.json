@@ -1,0 +1,5 @@
+{
+  "region": "cn-north-4",
+  "description": "Test vars for huawei-cloud-vod-collector. This skill has no direct KooCLI (hcloud) operations: it captures feedback with Python scripts, delivers through the GitCode API, and installs AtomGit-GO via git/go. CLI smoke cases are therefore intentionally empty; offline regression tests live in tests/ (pytest) and are run separately.",
+  "test_cases": []
+}

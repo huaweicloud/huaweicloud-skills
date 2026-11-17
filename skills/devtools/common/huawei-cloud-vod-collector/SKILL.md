@@ -18,7 +18,7 @@ The VoD (Voice of Developer) Collector captures poor developer experiences and i
 It prepares high-quality requirements or issue reports (GitCode issues) for product and engineering teams.
 The skill is declarative: it collects feedback with scripts and a hooks-based capture pipeline, deduplicates (in-session and cross-session), sanitizes, delivers prioritized issues to a GitCode repository, and can additionally fan a delivery notification out to a webhook or email channel.
 
-**Dependency**: Quality telemetry is collected automatically via `skill-quality-cli` (installed by `<SKILL_DIR>/scripts/ensure_cli.sh` if absent; on Windows use `<SKILL_DIR>/scripts/ensure_cli.ps1`).
+**Dependency**: Quality telemetry is collected automatically via `skill-quality-cli` (installed by `<SKILL_DIR>/scripts/ensure_cli.sh` if absent).
 
 ## Core Commands
 
@@ -52,6 +52,8 @@ skill-quality-cli run --skill-name huawei-cloud-vod-collector -- python <SKILL_D
 
 ```bash
 skill-quality-cli run --skill-name huawei-cloud-vod-collector -- bash <SKILL_DIR>/scripts/vod_install.sh
+# Optional: pin a trusted checksum explicitly (skips the bundled known-version manifest)
+skill-quality-cli run --skill-name huawei-cloud-vod-collector -- bash <SKILL_DIR>/scripts/vod_install.sh --sha256 <file>
 skill-quality-cli run --skill-name huawei-cloud-vod-collector -- python <SKILL_DIR>/scripts/vod_deliver.py server-start
 skill-quality-cli run --skill-name huawei-cloud-vod-collector -- curl -s -X POST http://localhost:8080/login/start
 skill-quality-cli run --skill-name huawei-cloud-vod-collector -- python <SKILL_DIR>/scripts/vod_deliver.py login-wait --session-id <session_id>
@@ -106,14 +108,12 @@ pip install -r <SKILL_DIR>/requirements.txt
 Windows is a supported platform (`scripts/vod_install.ps1`; the login server and its shutdown path use Windows process APIs such as `taskkill`).
 
 - The POSIX ownership/permission checks on `auth.toml` (owner uid via `st_uid` / `os.getuid()`, group/other write bits) are skipped when `os.name == "nt"` — on Windows the file is protected by the directory ACL instead. Older revisions raised `AttributeError: module 'os' has no attribute 'getuid'` and crashed (#959); `deliver` now returns its structured JSON result (`success` / `need_login` / error) on Windows as well.
-- **Quality CLI install entry (#929):** the official `install_cli.sh` maps only `linux-x86_64` / `linux-arm64` and the official manifest currently publishes only a `linux-arm64` package, so Windows x86_64 had no supported entry. This skill adds a **local** cross-platform entry — `scripts/install_cli.py` plus `scripts/ensure_cli.ps1`, and a Windows branch in `ensure_cli.sh` — which installs the pure-Python fallback from the SHA256-verified official package when no native package exists. Always run it with `PYTHONUTF8=1` / `PYTHONIOENCODING=utf-8` (the entry scripts set both): the official `cli_entry.py` uses `subprocess.run(..., text=True)` without `encoding`, so Chinese Windows would decode child output as GBK and raise `UnicodeDecodeError`. See [references/cli-installation-guide.md](references/cli-installation-guide.md).
 
----
-- **`skill-quality-cli`** — ensured by `bash <SKILL_DIR>/scripts/ensure_cli.sh` (Linux/macOS, and Git Bash on Windows) or `powershell -NoProfile -ExecutionPolicy Bypass -File <SKILL_DIR>\scripts\ensure_cli.ps1` (Windows PowerShell); idempotent, skips if present. Both export `PYTHONUTF8=1` / `PYTHONIOENCODING=utf-8`, which is required on Chinese Windows (#929) — see [references/cli-installation-guide.md](references/cli-installation-guide.md).
-  - Upgrade: run `skill-quality-cli upgrade` manually (no auto-upgrade)
+- **`skill-quality-cli`** — ensured by `bash <SKILL_DIR>/scripts/ensure_cli.sh` (idempotent, skips if present; on Windows run it from Git Bash with `python3` on `PATH` — Git for Windows only ships `python`/`py`). See [references/cli-installation-guide.md](references/cli-installation-guide.md).
+  - Upgrade: `skill-quality-cli run` only upgrades when the installed version is below the platform's minimum supported version (set `SKILL_QUALITY_NO_AUTO_UPGRADE=1` to disable); otherwise upgrade manually with `skill-quality-cli upgrade`.
   - Disable telemetry report: set `SKILL_QUALITY_REPORT=0`
 
-> **⚠️ Mandatory: every script execution in this skill MUST be wrapped with `skill-quality-cli run --skill-name huawei-cloud-vod-collector -- ` (e.g. `skill-quality-cli run --skill-name huawei-cloud-vod-collector -- python <SKILL_DIR>/scripts/md_io.py write-feedback ...`) — bare invocations of `python` / `md_io.py` / `vod_sanitize.py` / `vod_deliver.py` / `vod_install.*` / `curl` are strictly forbidden. Disable telemetry (opt-out): `SKILL_QUALITY_REPORT=0`. **Bootstrapping exception**: the installers themselves — `ensure_cli.sh` / `install_cli.sh` / `ensure_cli.ps1` / `install_cli.py` — may be executed bare (unwrapped) when `skill-quality-cli` is not yet installed; all other script executions must be wrapped once the CLI exists.
+> **⚠️ Mandatory: every script execution in this skill MUST be wrapped with `skill-quality-cli run --skill-name huawei-cloud-vod-collector -- ` (e.g. `skill-quality-cli run --skill-name huawei-cloud-vod-collector -- python <SKILL_DIR>/scripts/md_io.py write-feedback ...`) — bare invocations of `python` / `md_io.py` / `vod_sanitize.py` / `vod_deliver.py` / `vod_install.*` / `curl` are strictly forbidden. Direct `hcloud` invocations are likewise forbidden: every `hcloud` call goes through `scripts/hcloud-run.sh`, which wraps it with `skill-quality-cli run` and injects `--cli-region` (see [KooCLI region](#koocli-region)). Disable telemetry (opt-out): `SKILL_QUALITY_REPORT=0`. **Bootstrapping exception**: the installer itself — `ensure_cli.sh` — may be executed bare (unwrapped) when `skill-quality-cli` is not yet installed; all other script executions must be wrapped once the CLI exists.
 
 ## Workflow
 
@@ -200,6 +200,7 @@ skill-quality-cli run --skill-name huawei-cloud-vod-collector -- python <SKILL_D
 - Source: https://gitcode.com/weixin_45218422/AtomGit-GO
 
 1. **Check & install**: Execute `skill-quality-cli run --skill-name huawei-cloud-vod-collector -- bash <SKILL_DIR>/scripts/vod_install.sh` (Linux/macOS) or `skill-quality-cli run --skill-name huawei-cloud-vod-collector -- powershell <SKILL_DIR>/scripts/vod_install.ps1` (Windows).  
+   - The upstream repository publishes pre-built archives without `.sha256` sidecars; the installer verifies them against the bundled known-version manifest (`scripts/vod_install_checksums.txt`). Pass `--sha256 <file>` (POSIX) / `-Sha256File <file>` (Windows) to pin a trusted checksum explicitly. If no checksum source is available or the archive does not match the manifest, the installer refuses that archive and falls back to a source build (Go >= 1.22 required) instead of aborting the whole install path.  
 
 2. **Start server**: `skill-quality-cli run --skill-name huawei-cloud-vod-collector -- python <SKILL_DIR>/scripts/vod_deliver.py server-start` → get `pid` from JSON output
 
