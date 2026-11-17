@@ -16,6 +16,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from sg import common, manage, dispatcher  # noqa: E402
 
 
+def _no_prereq_check(*_args, **_kwargs):
+    """These cases exercise failure parsing, not prerequisite checks."""
+    return None
+
+
 class FakeResult:
     def __init__(self, rc, stdout, stderr=""):
         self.returncode = rc
@@ -34,6 +39,7 @@ def fake_subprocess_run_ok(command, **kwargs):
 class ErrorBodyDetectionTest(unittest.TestCase):
     def test_run_hcloud_raises_on_error_code_body(self):
         with mock.patch("shutil.which", return_value="/usr/bin/hcloud"), \
+             mock.patch("sg.common.check_prerequisites", side_effect=_no_prereq_check), \
              mock.patch("subprocess.run", side_effect=fake_subprocess_run_ok):
             with self.assertRaises(RuntimeError) as ctx:
                 common.run_hcloud("VPC", "DeleteSecurityGroupRule/v3", "cn-north-4", {"security_group_rule_id": "x"})
@@ -42,6 +48,7 @@ class ErrorBodyDetectionTest(unittest.TestCase):
 
     def test_env_credentials_respected(self):
         with mock.patch("shutil.which", return_value="/usr/bin/hcloud"), \
+             mock.patch("sg.common.check_prerequisites", side_effect=_no_prereq_check), \
              mock.patch.dict(os.environ, {}, clear=True), \
              mock.patch("sg.common._has_hcloud_profile", return_value=False), \
              mock.patch.dict(os.environ, {"HUAWEI_ACCESS_KEY": "AK", "HUAWEI_SECRET_KEY": "SK"}), \
@@ -53,6 +60,7 @@ class ErrorBodyDetectionTest(unittest.TestCase):
         def fake(command, **kw):
             return FakeResult(0, json.dumps({"error": {"code": "VPC.1234", "message": "bad request"}}))
         with mock.patch("shutil.which", return_value="/usr/bin/hcloud"), \
+             mock.patch("sg.common.check_prerequisites", side_effect=_no_prereq_check), \
              mock.patch("subprocess.run", side_effect=fake):
             with self.assertRaises(RuntimeError) as ctx:
                 common.run_hcloud("VPC", "CreateSecurityGroup/v3", "cn-north-4", {"security_group.name": "n"})
@@ -63,6 +71,7 @@ class ErrorBodyDetectionTest(unittest.TestCase):
         def fake(command, **kw):
             return FakeResult(0, json.dumps({"security_group_rules": [{"id": "r1"}]}))
         with mock.patch("shutil.which", return_value="/usr/bin/hcloud"), \
+             mock.patch("sg.common.check_prerequisites", side_effect=_no_prereq_check), \
              mock.patch("subprocess.run", side_effect=fake):
             data = common.run_hcloud("VPC", "ListSecurityGroupRules/v3", "cn-north-4", {})
             self.assertEqual(data, {"security_group_rules": [{"id": "r1"}]})

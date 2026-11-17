@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from .common import (
+    build_command,
     get_security_group,
     get_security_group_rule,
     list_security_group_rules,
@@ -29,12 +30,10 @@ def _cmd(
     params: Dict[str, Any],
     project_id: Optional[str],
 ) -> str:
-    parts = ["hcloud", "VPC", operation, f"--cli-region={region}", "--cli-output=json"]
-    for key, value in params.items():
-        parts.append(f"--{key}={value}")
-    if project_id:
-        parts.append(f"--project_id={project_id}")
-    return " ".join(parts)
+    """Render the exact hcloud command the runtime executes (credentials omitted)."""
+    return " ".join(
+        build_command("VPC", operation, region, params, project_id, include_credentials=False)
+    )
 
 
 def create_security_group(
@@ -64,7 +63,15 @@ def create_security_group(
             "preview": True,
             "message": "PREVIEW ONLY — no resource was changed. Re-run with confirmed=true after user approval.",
             "command": cmd,
+            "preconditions": [
+                "User approved the name/description/enterprise_project_id shown above.",
+                "The name is unique in this region + project (a duplicate name is allowed by the API but confuses operators).",
+            ],
             "impact": impact,
+            "rollback": (
+                "Delete the group created by this call with its returned id: "
+                f"hcloud VPC DeleteSecurityGroup/v3 --cli-region={region} --security_group_id=<created.security_group.id>"
+            ),
             "warning": WRITE_WARNING,
         }
     data = run_hcloud("VPC", "CreateSecurityGroup/v3", region, params, project_id)
@@ -138,7 +145,15 @@ def create_security_group_rule(
             "preview": True,
             "message": "PREVIEW ONLY — no resource was changed. Re-run with confirmed=true after user approval.",
             "command": cmd,
+            "preconditions": [
+                "The target security group exists in this region and is the intended one.",
+                "User approved direction/protocol/ports/remote/priority shown above.",
+            ],
             "impact": impact,
+            "rollback": (
+                "Delete the rule created by this call with its returned id: "
+                f"hcloud VPC DeleteSecurityGroupRule/v3 --cli-region={region} --security_group_rule_id=<created.security_group_rule.id>"
+            ),
             "warning": WRITE_WARNING,
         }
     data = run_hcloud("VPC", "CreateSecurityGroupRule/v3", region, params, project_id)
@@ -164,23 +179,50 @@ def update_security_group(
     if description:
         params["security_group.description"] = description
 
+    try:
+        current = get_security_group(region, security_group_id, project_id)
+        snapshot = {
+            "name": current.get("name"),
+            "description": current.get("description"),
+        }
+    except RuntimeError as exc:
+        snapshot = {}
+        snapshot_error = str(exc)
+    else:
+        snapshot_error = None
+
     impact = {
         "action": "update security group",
         "security_group_id": security_group_id,
         "new_name": name or "(unchanged)",
         "new_description": description or "(unchanged)",
     }
-    cmd = _cmd("UpdateSecurityGroup", region, params, project_id)
+    cmd = _cmd("UpdateSecurityGroup/v3", region, params, project_id)
     if not confirmed:
         return {
             "success": True,
             "preview": True,
             "message": "PREVIEW ONLY — no resource was changed. Re-run with confirmed=true after user approval.",
             "command": cmd,
+            "preconditions": [
+                "The security group id was read from the target account/region, not guessed.",
+                "User approved the new name/description shown above.",
+            ],
+            "current_values": snapshot,
+            "preview_lookup_error": snapshot_error,
             "impact": impact,
+            "rollback": (
+                "Restore the captured values with: "
+                f"hcloud VPC UpdateSecurityGroup/v3 --cli-region={region} --security_group_id={security_group_id} "
+                f"--security_group.name={snapshot.get('name') or '<unset>'} "
+                f"--security_group.description={snapshot.get('description') or '<unset>'}"
+                if snapshot else
+                f"Capture the previous name/description first with hcloud VPC ShowSecurityGroup/v3 "
+                f"--cli-region={region} --security_group_id={security_group_id}, then restore them via UpdateSecurityGroup/v3."
+            ),
             "warning": WRITE_WARNING,
         }
-    data = run_hcloud("VPC", "UpdateSecurityGroup", region, params, project_id)
+    data = run_hcloud("VPC", "UpdateSecurityGroup/v3", region, params, project_id)
     return {
         "success": True,
         "preview": False,
@@ -195,16 +237,19 @@ def delete_security_group(
     confirmed: bool = False,
     project_id: Optional[str] = None,
 ) -> Dict[str, Any]:
+    lookup_errors: List[str] = []
     try:
         sg = get_security_group(region, security_group_id, project_id)
-    except RuntimeError:
+    except RuntimeError as exc:
         sg = {}
+        lookup_errors.append(str(exc))
     try:
         rules = list_security_group_rules(
             region, project_id, security_group_id=security_group_id
         )
-    except RuntimeError:
+    except RuntimeError as exc:
         rules = []
+        lookup_errors.append(str(exc))
 
     params: Dict[str, Any] = {"security_group_id": security_group_id}
     cmd = _cmd("DeleteSecurityGroup/v3", region, params, project_id)
@@ -220,7 +265,21 @@ def delete_security_group(
             "preview": True,
             "message": "PREVIEW ONLY — no resource was changed. Re-run with confirmed=true after user approval.",
             "command": cmd,
+            "preconditions": [
+                "No instance/NIC is bound to this security group (detach it in ECS/NIC first).",
+                "The rule snapshot below was exported and stored, so the group can be rebuilt.",
+                "The user explicitly confirmed the irreversible deletion.",
+            ],
             "impact": impact,
+            "rules_snapshot": rules,
+            "preview_lookup_error": "; ".join(lookup_errors) or None,
+            "rollback": (
+                "The deletion cannot be undone. To restore service, recreate the group and its rules from "
+                f"`rules_snapshot`: hcloud VPC CreateSecurityGroup/v3 --cli-region={region} "
+                f"--security_group.name={sg.get('name') or '<old-name>'} "
+                f"--security_group.description={sg.get('description') or '<old-description>'}"
+                ", then recreate each saved rule with CreateSecurityGroupRule/v3 and rebind the instances/NICs."
+            ),
             "warning": (
                 "DELETING A SECURITY GROUP is irreversible and removes ALL of "
                 "its rules. Instances/ports still associated with this security "
@@ -246,8 +305,11 @@ def delete_security_group_rule(
 ) -> Dict[str, Any]:
     try:
         rule = get_security_group_rule(region, security_group_rule_id, project_id)
-    except RuntimeError:
+    except RuntimeError as exc:
         rule = {}
+        rule_lookup_error = str(exc)
+    else:
+        rule_lookup_error = None
 
     params: Dict[str, Any] = {"security_group_rule_id": security_group_rule_id}
     cmd = _cmd("DeleteSecurityGroupRule/v3", region, params, project_id)
@@ -268,7 +330,22 @@ def delete_security_group_rule(
             "preview": True,
             "message": "PREVIEW ONLY — no resource was changed. Re-run with confirmed=true after user approval.",
             "command": cmd,
+            "preconditions": [
+                "The rule id came from ListSecurityGroupRules/v3 of the target security group.",
+                "User confirmed the direction/protocol/ports/remote shown above.",
+            ],
+            "captured_rule": rule,
+            "preview_lookup_error": rule_lookup_error,
             "impact": impact,
+            "rollback": (
+                "Recreate the rule with the captured fields: "
+                f"hcloud VPC CreateSecurityGroupRule/v3 --cli-region={region} "
+                "--security_group_rule.security_group_id=<captured.security_group_id> "
+                "--security_group_rule.direction=<captured.direction> "
+                "--security_group_rule.protocol=<captured.protocol> "
+                "--security_group_rule.multiport=<captured.multiport> "
+                "--security_group_rule.remote_ip_prefix=<captured.remote_ip_prefix>"
+            ),
             "warning": (
                 "DELETING A SECURITY GROUP RULE changes network connectivity: "
                 "traffic previously permitted/denied by this rule may be "

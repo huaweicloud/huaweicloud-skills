@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from .common import get_security_group, list_security_group_rules
+from .common import error_payload, get_security_group, list_security_group_rules
 from .rules import (
     format_ports,
     normalize_rule,
@@ -40,14 +40,14 @@ def diagnose_connectivity(
     try:
         sg = get_security_group(region, security_group_id, project_id)
     except RuntimeError as exc:
-        return {"success": False, "error": str(exc)}
+        return error_payload(exc)
 
     try:
         raw_rules = list_security_group_rules(
             region, project_id, security_group_id=security_group_id
         )
     except RuntimeError as exc:
-        return {"success": False, "error": str(exc)}
+        return error_payload(exc)
 
     probe = {
         "direction": direction,

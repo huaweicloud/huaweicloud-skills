@@ -15,7 +15,7 @@ from __future__ import annotations
 from itertools import combinations
 from typing import Any, Dict, List, Optional
 
-from .common import list_security_group_rules
+from .common import error_payload, list_security_group_rules
 from .rules import _cidr_contains, _cidr_overlaps, format_ports, normalize_rule, port_span, ports_intersect
 
 def _same_scope(a: Dict[str, Any], b: Dict[str, Any]) -> bool:
@@ -75,7 +75,7 @@ def analyze_conflicts(
             region, project_id, security_group_id=security_group_id
         )
     except RuntimeError as exc:
-        return {"success": False, "error": str(exc)}
+        return error_payload(exc)
 
     rules = [normalize_rule(r) for r in raw_rules if r.get("id") or r.get("security_group_rule_id")]
     findings: List[Dict[str, Any]] = []

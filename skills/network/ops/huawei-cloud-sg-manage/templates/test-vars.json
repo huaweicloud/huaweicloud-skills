@@ -1,5 +1,6 @@
 {
   "region": "cn-north-4",
+  "notes": "All cases are offline syntax checks (hcloud --help / hcloud version). Preview-gate and error-contract behaviour is covered by tests/test_offline_contract.py, which the CLI smoke executor cannot run (it only executes hcloud/curl commands).",
   "test_cases": [
     {
       "id": "TC-01",
@@ -23,7 +24,7 @@
       "type": "syntax",
       "executor": "cli",
       "command": "hcloud VPC ShowSecurityGroup/v3 --cli-region={region} --help",
-      "note": "--help syntax check (rc=0). Live form: huawei_get_security_group security_group_id={sg_id}."
+      "note": "--help syntax check (rc=0). Live form: huawei_get_security_group security_group_id=<sg-id>."
     },
     {
       "id": "TC-04",
@@ -70,8 +71,8 @@
       "name": "huawei_update_security_group - CLI syntax check (R2 write, --help only)",
       "type": "syntax",
       "executor": "cli",
-      "command": "hcloud VPC UpdateSecurityGroup --cli-region={region} --help",
-      "note": "Write op (R2). Live mutation gated by confirmation policy. --help only."
+      "command": "hcloud VPC UpdateSecurityGroup/v3 --cli-region={region} --help",
+      "note": "Write op (R2). /v3 suffix matches the runtime and SKILL.md. --help only."
     },
     {
       "id": "TC-10",
@@ -91,35 +92,35 @@
     },
     {
       "id": "TC-12",
-      "name": "action router - list_actions returns the 11 huawei_* actions",
+      "name": "KooCLI availability - hcloud version (prerequisite check)",
       "type": "syntax",
       "executor": "cli",
-      "command": "python3 scripts/huawei-cloud.py list_actions",
-      "note": "Must list exactly the 11 registered huawei_* actions (JSON, rc=0)."
+      "command": "hcloud version",
+      "note": "Prints Current KooCLI version: (rc=0). Same check SKILL.md Prerequisites documents."
     },
     {
       "id": "TC-13",
-      "name": "huawei_create_security_group preview gate - no confirmed -> preview only (R2)",
+      "name": "delete-rule preview lookup - CLI syntax check",
       "type": "syntax",
       "executor": "cli",
-      "command": "python3 scripts/huawei-cloud.py huawei_create_security_group name=smoke-test-sg region={region}",
-      "note": "Preview gate: must return preview=true with the exact command and create nothing."
+      "command": "hcloud VPC ShowSecurityGroupRule/v2 --cli-region={region} --help",
+      "note": "Underlying CLI of the huawei_delete_sg_rule preview (captured_rule). --help only."
     },
     {
       "id": "TC-14",
-      "name": "huawei_delete_security_group preview gate - no confirmed -> preview + warning (R1)",
+      "name": "create-rule preview - CLI syntax check",
       "type": "syntax",
       "executor": "cli",
-      "command": "python3 scripts/huawei-cloud.py huawei_delete_security_group security_group_id=sg-smoke-test-id region={region}",
-      "note": "Preview gate: must return preview=true plus the irreversible-deletion warning. No API mutation."
+      "command": "hcloud VPC CreateSecurityGroupRule/v3 --cli-region={region} --security_group_rule.direction=ingress --help",
+      "note": "Preview form used by huawei_create_sg_rule (direction is required). --help only, no request sent."
     },
     {
       "id": "TC-15",
-      "name": "huawei_delete_sg_rule preview gate - no confirmed -> preview + connectivity warning (R1)",
+      "name": "region-scoped read - CLI syntax check",
       "type": "syntax",
       "executor": "cli",
-      "command": "python3 scripts/huawei-cloud.py huawei_delete_sg_rule security_group_rule_id=rule-smoke-test-id region={region}",
-      "note": "Preview gate: must return preview=true plus the connectivity-impact warning. No API mutation."
+      "command": "hcloud VPC ListSecurityGroups/v3 --cli-region={region} --limit=1 --help",
+      "note": "--help only; documents the literal region + limit form used in SKILL.md."
     }
   ]
 }

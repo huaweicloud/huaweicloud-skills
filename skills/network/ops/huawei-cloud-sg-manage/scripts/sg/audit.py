@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from .common import list_security_group_rules
+from .common import error_payload, list_security_group_rules
 from .rules import (
     _cidr_contains,
     format_ports,
@@ -34,7 +34,7 @@ def audit_overexposed(
             region, project_id, security_group_id=security_group_id
         )
     except RuntimeError as exc:
-        return {"success": False, "error": str(exc)}
+        return error_payload(exc)
 
     rules = [normalize_rule(r) for r in raw_rules]
     findings: List[Dict[str, Any]] = []
