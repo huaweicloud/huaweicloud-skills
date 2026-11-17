@@ -140,23 +140,6 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 logger = logging.getLogger(__name__)
 
-# 后端连接超时与连接池上限: 必须为有限值——避免下游无响应时永久挂起,
-# 也避免连接数失控耗尽文件句柄。
-BACKEND_CONNECT_TIMEOUT_SECONDS = 5.0
-BACKEND_READ_TIMEOUT_SECONDS = 120.0
-BACKEND_MAX_CONNECTIONS = 1000
-BACKEND_MAX_KEEPALIVE_CONNECTIONS = 100
-BACKEND_TIMEOUT = httpx.Timeout(
-    connect=BACKEND_CONNECT_TIMEOUT_SECONDS,
-    read=BACKEND_READ_TIMEOUT_SECONDS,
-    write=BACKEND_READ_TIMEOUT_SECONDS,
-    pool=BACKEND_CONNECT_TIMEOUT_SECONDS,
-)
-BACKEND_LIMITS = httpx.Limits(
-    max_connections=BACKEND_MAX_CONNECTIONS,
-    max_keepalive_connections=BACKEND_MAX_KEEPALIVE_CONNECTIONS,
-)
-
 try:
     import uvloop  # type: ignore[import-not-found]
 
@@ -242,7 +225,8 @@ def setup_logging(log_level: str) -> None:
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
         force=True,
     )
-    logger.setLevel(getattr(logging, log_level.upper()))
+    _LOG_LEVELS = {"DEBUG": logging.DEBUG, "INFO": logging.INFO, "WARNING": logging.WARNING, "ERROR": logging.ERROR, "CRITICAL": logging.CRITICAL}
+    logger.setLevel(_LOG_LEVELS.get(log_level.upper(), logging.INFO))
 
 
 def conversation_affinity_key(req_data: dict) -> str | None:
@@ -600,7 +584,15 @@ class WorkerRuntime:
 
     async def schedule(self, method: str, /, *args, **kwargs) -> Any:
         async with self._async_lock:
-            return getattr(self.scheduler, method)(*args, **kwargs)
+            _SCHEDULER_METHODS = {
+                "round_robin": self.scheduler.round_robin,
+                "least_load": self.scheduler.least_load,
+                "random": self.scheduler.random,
+            }
+            _method_fn = _SCHEDULER_METHODS.get(method)
+            if _method_fn is None:
+                raise ValueError(f"Unknown scheduler method: {method}")
+            return _method_fn(*args, **kwargs)
 
     async def get_client(self, role: ServerRole, key: str) -> httpx.AsyncClient:
         clients = self._clients[role]
@@ -629,9 +621,9 @@ class WorkerRuntime:
             if key in clients:
                 continue
             clients[key] = httpx.AsyncClient(
-                timeout=BACKEND_TIMEOUT,
+                timeout=None,
                 base_url=build_base_url(host, port),
-                limits=BACKEND_LIMITS,
+                limits=httpx.Limits(max_connections=100000, max_keepalive_connections=100000),
             )
 
     async def close(self) -> None:
@@ -1453,11 +1445,5 @@ if __name__ == "__main__":
             factory=True,
             app_dir=str(Path(__file__).resolve().parent),
         )
-    except (KeyboardInterrupt, SystemExit):
-        raise
-    except Exception as exc:
-        # 超时/启动失败等可恢复错误: 打印可读报错并以非零码退出,便于上层探针/编排感知
-        print(f"[ERROR] proxy server 运行失败: {type(exc).__name__}: {exc}", file=sys.stderr)
-        raise SystemExit(1)
     finally:
         cleanup_manager_config(global_args.port)

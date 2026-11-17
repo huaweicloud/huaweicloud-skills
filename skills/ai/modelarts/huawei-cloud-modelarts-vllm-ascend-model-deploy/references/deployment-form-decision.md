@@ -4,7 +4,7 @@
 
 **收敛为 3 种**(单机部署 / 多机部署 / PD 分离部署),统一**单部署单元**承载(多机部署为同一部署单元内 2 个推理单元 master+worker;PD 分离为同一部署单元内 3 个推理单元 proxy+prefill+decode;单机为 1 个推理单元 master)。副本数(单副本/多副本)由"用户可靠性需求"在步骤 1.2c 决策,不再独立枚举场景。
 
-> **核心规范(强制,官网+ModelArts 平台约束)**: 部署的第一推理单元(group 0 / `unit_configs[0]`)**不能**出现 worker 或 decode 启动的实例——ModelArts 在线服务所有请求都发送到 group 0,worker/decode 不具备接受请求功能。`unit_configs[0]` 必须是: 单机=master / 多机=master(实例数=1,不加 --headless) / PD 分离=proxy(0 卡自定义规格,运行 `load_balance_proxy_server_example.py`)。
+> **核心规范(强制,官网+ModelArts 平台约束)**: 部署的第一推理单元(group 0 / `unit_configs[0]`)**不能**出现 worker 或 decode 启动的实例——ModelArts 在线服务所有请求都发送到 group 0,worker/decode 不具备接受请求功能。`unit_configs[0]` 必须是: 单机=master / 多机=master(实例数=1,不加 --headless) / PD 分离=proxy(**专属池 0 卡自定义规格 custom_spec card=0;公共池预置 CPU 规格 vcpus≥4/16GB**,运行 `load_balance_proxy_server_example.py`)。
 
 ## 一、3 种部署形式对比(基础概念)
 
@@ -12,7 +12,7 @@
 |------|---------------|-------------------|-------------|
 | 推理单元数 | 1(master) | 2(master + worker) | **3**(proxy + prefill + decode) |
 | data-parallel-size N | N=1 | N>1 | prefill/decode 各自 dp_size(官网 dp_size = 总卡数/tp_size;**实例规格 npu=每实例单节点内所有并行度乘积 TP×PCP 或 TP×DCP,非仅 TP**) |
-| 节点数 | ceil(TP_SIZE / 单节点卡数) | ceil(TP_SIZE × N / 单节点卡数) | prefill 节点数 + decode 节点数(各角色节点数 = ceil(各角色总卡数 / 单节点卡数);PP/DP 多节点时 = 跨节点数;**proxy `card=0` 不额外占节点**,平台自动调度到 P/D 已有节点共享 CPU/内存,不影响其他任务使用卡) |
+| 节点数 | ceil(TP_SIZE / 单节点卡数) | ceil(TP_SIZE × N / 单节点卡数) | prefill 节点数 + decode 节点数(各角色节点数 = ceil(各角色总卡数 / 单节点卡数);PP/DP 多节点时 = 跨节点数;**proxy 不额外占 NPU 卡/节点**(专属池 `custom_spec card=0`;公共池预置 CPU 规格,语义一致),平台自动调度到 P/D 已有节点共享 CPU/内存,不影响其他任务使用卡) |
 | 并行方式 | TP ≤ 单节点卡数 | master+worker 主从结构,master 实例数=1,worker 实例数=N-1,经 rank table group 0 判定 | prefill/decode 各自独立 vLLM 实例,各组内 TP;proxy 独立 HTTP 代理 |
 | KV Cache | 实例内 | 实例内 | prefill↔decode 经 Mooncake KV 传输;proxy 不参与 KV |
 | 部署单元 | 1 | 1 | 1 |
@@ -78,12 +78,12 @@ skill 标准 PD 模板(`templates/start_vllm.pd.sh`)预置能力: **单实例 pr
 1. **1.2a 前 AskUserQuestion 披露**: "该模型文档拓扑(PP/PCP/DCP 多节点并行 + MooncakeConnectorV2)超出 skill 标准 PD 模板能力(单实例 prefill + V1),需基于文档脚本定制适配"
 2. **3.2 基于文档脚本定制** `start_vllm.sh`(**不套用 skill PD 模板**): PD 三角色分支 + 完整 kv-transfer-config(含 `pp_size/pcp_size/dcp_size`)+ 文档参数(MooncakeConnectorV2/`VLLM_USE_V2_MODEL_RUNNER=1` 等)
 3. **实例规格推导**: flavor npu = **每实例单节点内所有并行度乘积**(TP×PCP 或 TP×DCP,以文档为准;如 Prefill TP=4×PCP=4=16 卡占满 A3 单节点);**跨节点 PP/DP 经 count(实例数=PP 节点数 或 DP 节点数)表达**(ModelArts 平台无 PP/PCP/DCP 概念,节点内 PCP/DCP 经每实例卡数表达);违反=npu<TP×PCP 时 vLLM `local_world_size=TP×PCP` 启动 worker,local_rank 越界 `out of bounds` 崩溃
-4. **1.2e 节点数推导**: prefill 节点数(= PP 节点数) + decode 节点数(= DP 节点数),proxy `card=0` 不额外占节点
+4. **1.2e 节点数推导**: prefill 节点数(= PP 节点数) + decode 节点数(= DP 节点数),proxy 不额外占 NPU 卡/节点(专属池 `custom_spec card=0`;公共池预置 CPU 规格,语义一致)
 
 **实例(Kimi K3.1 Pro A3 4P4D)**:
 | 角色 | 文档拓扑 | flavor npu | count(实例数) | 节点数 |
 |------|---------|-----------|--------------|-------|
-| proxy | 1 节点 0 卡 | custom_spec card=0 | 1 | 0(共享 P/D) |
+| proxy | 1 节点 0 卡 | custom_spec card=0(专属池)/ 预置 CPU 规格(公共池) | 1 | 0(共享 P/D) |
 | prefill | 4 节点 PP=4,每节点 TP=4×PCP=4=16 卡占满 | 16(TP×PCP) | 4(PP 节点数) | 4 |
 | decode | 4 节点 DP=4,每节点 TP=16 占满 | 16(TP) | 4(DP 节点数) | 4 |
 | **合计** | 8 节点 | — | — | **8** |
@@ -126,7 +126,7 @@ skill 标准 PD 模板(`templates/start_vllm.pd.sh`)预置能力: **单实例 pr
 |---------|-----------|----------------|----------------|
 | single | 1 | 1 × 1 × TP_SIZE × 1 = TP_SIZE | ceil(TP_SIZE / 单节点卡数) |
 | multi_node | 1 | 1 × 1 × TP_SIZE × N | ceil(TP_SIZE × N / 单节点卡数) |
-| pd(PD 分离) | 3(proxy+prefill+decode) | prefill 总卡数 + decode 总卡数(各角色 = TP × 跨节点数;proxy `card=0` 不占卡) | prefill 节点数 + decode 节点数(各角色节点数 = ceil(各角色总卡数 / 单节点卡数);PP/DP 多节点时 = 跨节点数;**proxy `card=0` 不额外占节点**,平台调度到 P/D 已有节点共享) |
+| pd(PD 分离) | 3(proxy+prefill+decode) | prefill 总卡数 + decode 总卡数(各角色 = TP × 跨节点数;proxy 不占 NPU 卡: 专属池 `card=0`/公共池预置 CPU 规格) | prefill 节点数 + decode 节点数(各角色节点数 = ceil(各角色总卡数 / 单节点卡数);PP/DP 多节点时 = 跨节点数;**proxy 不额外占 NPU 卡/节点**,平台调度到 P/D 已有节点共享) |
 
 2. **AskUserQuestion 让用户提供可部署节点总数 M**(文本输入),并在问题中披露按上表推导的当前形态最小节点数。若 `M < 最小节点数`,在问题中明确提示"节点不足,该形式不可行",请用户改形式或增加资源。
 

@@ -45,15 +45,16 @@ PORT="${PORT:-8080}"
 CHIP_MODEL="${CHIP_MODEL:-}"
 
 # hixlep 配置目录(A5 UB 超平面通信所需,跨节点 TP/PD 分离 KV 经 UB 链路传输;
-# vllm-ascend 通过 additional-config.ascend_local_comm_res_path 读取,
+# hixlep 文件生成到 HIXLEP_PATH,经 ASCEND_LOCAL_COMM_RES 环境变量兜底;
+# --additional-config 不支持 ascend_local_comm_res_path 字段(vLLM 0.30.0 pydantic 校验报 unexpected_keyword_argument),
 # 详见 references/hixlep-guide.md)
 HIXLEP_PATH="${HIXLEP_PATH:-/tmp/hixlep}"
 ROUTE_CONF_PATH="${ROUTE_CONF_PATH:-/lib/route.conf}"
 HCCL_ROOTINFO_PATH="${HCCL_ROOTINFO_PATH:-/etc/hccl_rootinfo.json}"
 # 是否在启动前自动生成 hixlep(默认开启,主机已挂载完整 hixlep 可设 AUTOGEN_HIXLEP=0)
 AUTOGEN_HIXLEP="${AUTOGEN_HIXLEP:-1}"
-# a5_hixlep 脚本目录(随 scripts/a5_hixlep/ 整目录复制到产物目录;
-# generate_ep.py / fix_ub_endpoint.py / gen_route.sh 均在此目录,均可离线直接使用)
+# 离线包目录(随 scripts/a5_hixlep/ 整目录复制到产物目录,
+# 无网环境直接使用;generate_ep.py / fix_ub_endpoint.py / gen_route.sh / wheel 全在此目录下)
 OFFLINE_PKG_DIR="${OFFLINE_PKG_DIR:-${CUR_DIR}/a5_hixlep}"
 
 export ASCEND_RT_VISIBLE_DEVICES
@@ -69,32 +70,6 @@ if [ ! -f "${MODEL_PATH}/config.json" ]; then
     echo "--- content of ${MODEL_PATH} ---" >&2
     ls -la "${MODEL_PATH}" >&2 2>/dev/null || true
     exit 1
-fi
-
-# ---------- 量化参数 × 权重文件交叉校验 ----------
-# BF16 原版权重无 quant_model_description.json,误带 --quantization ascend 会启动崩溃
-# (ModelSlim Quantization Config Not Found);w8a8 量化版权重含该文件,误漏则推理精度退化
-QUANT_DESC="${MODEL_PATH}/quant_model_description.json"
-HAS_QUANT_ARG=0
-for _a in "${MODEL_ARGS[@]:-}" "${EXTRA_ARGS:-}" "${PD_EXTRA_ARGS:-}"; do
-    case "${_a}" in
-        --quantization|--quantization=ascend|--quantization=*) HAS_QUANT_ARG=1 ;;
-    esac
-done
-if [ -n "${QUANTIZATION:-}" ]; then
-    HAS_QUANT_ARG=1
-fi
-if [ "${HAS_QUANT_ARG}" -eq 1 ] && [ ! -f "${QUANT_DESC}" ]; then
-    echo "[ERROR] 启用了 --quantization ascend 但权重目录无 quant_model_description.json" >&2
-    echo "       权重版本与启动参数不匹配: 当前权重未量化(BF16 原版),应移除 --quantization ascend" >&2
-    echo "       quant_model_description.json 仅 w8a8/w8a8-mxfp8/w8a8c8-mxfp8 等量化版权重包含" >&2
-    echo "--- content of ${MODEL_PATH} ---" >&2
-    ls -la "${MODEL_PATH}" >&2 2>/dev/null || true
-    exit 1
-fi
-if [ "${HAS_QUANT_ARG}" -eq 0 ] && [ -f "${QUANT_DESC}" ]; then
-    echo "[WARN] 权重目录含 quant_model_description.json(量化版权重)但未启用 --quantization ascend" >&2
-    echo "      量化版权重不启用 ascend 量化路径会精度退化,核对模型文档是否应加 --quantization ascend" >&2
 fi
 
 # ---------- 网络配置: 根据 POD_IP 反查网卡名 ----------
@@ -173,69 +148,41 @@ export VLLM_ENGINE_READY_TIMEOUT_S="${VLLM_ENGINE_READY_TIMEOUT_S:-1200}"
 # export ACL_OP_INIT_MODE="${ACL_OP_INIT_MODE:-1}"
 # export CPU_AFFINITY_CONF="${CPU_AFFINITY_CONF:-1}"
 # export VLLM_USE_V1="${VLLM_USE_V1:-1}"
-# export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libjemalloc.so.2
+# export LD_PRELOAD=<jemalloc_library_path>  # e.g. /usr/lib/.../libjemalloc shared library
 # 950DT 超平面通信(UBC 协议)自动配置,作为镜像无 hixl 自动生成功能时的兜底
 export ASCEND_LOCAL_COMM_RES="${ASCEND_LOCAL_COMM_RES:-{\"version\":\"1.3\"}}"
 
-# ---------- unofficial-ascend-tools 获取与入口解析 ----------
-# 该 wheel 只提供 console script `mindcluster-tools`(entry_points.txt),没有可供 `python3 -m`
-# 调用的同名模块;且 rankinfo/main.py 无 `if __name__ == "__main__"` 守卫,不能用 `python3 -m` 调用
-# (会 exit 0 且不产出任何文件,把"必然报错"变成"静默失败")。
-install_ascend_tools() {
-    local wheel="${HCCL_TOOLS_WHEEL:-}"
-    if [ -n "${wheel}" ]; then
-        # 显式指定了 HCCL_TOOLS_WHEEL 就必须用它: 文件不存在直接报错,禁止静默回落 PyPI
-        if [ ! -f "${wheel}" ]; then
-            echo "[ERROR] HCCL_TOOLS_WHEEL=${wheel} 不存在,离线安装失败(不会回落到 PyPI),请检查该路径" >&2
-            return 1
-        fi
-        python3 -m pip install --no-index --no-deps --quiet "${wheel}" || {
-            echo "[ERROR] 安装 unofficial-ascend-tools 失败(本地 wheel: ${wheel})" >&2
-            return 1
-        }
+# ---------- RDMA 驱动库加载 ----------
+# 容器内缺失/版本不匹配的 HRN5 RDMA 驱动库会致 HCCL 初始化 RDMA 失败
+# (dev_list is NULL → hcclCommInitRootInfoConfig error code 4);
+# pod 启动场景新拷贝的 so 须经 ldconfig 刷新缓存,否则动态链接器运行时找不到
+load_rdma_driver_lib() {
+    local src_lib="/host-lib64/libhrn5-rdmav34.so"
+    local dst_lib="/usr/local/lib/libhrn5-rdmav34.so"
+    if [ ! -f "${src_lib}" ]; then
+        echo "[rdma] ${src_lib} 不存在,跳过 RDMA 驱动库加载"
         return 0
     fi
-    local bundled="${OFFLINE_PKG_DIR}/unofficial_ascend_tools-0.0.7rc4-py3-none-any.whl"
-    if [ -f "${bundled}" ]; then
-        python3 -m pip install --no-index --no-deps --quiet "${bundled}" || {
-            echo "[ERROR] 安装 unofficial-ascend-tools 失败(内置 wheel: ${bundled})" >&2
-            return 1
-        }
-        return 0
+    mkdir -p /usr/local/lib 2>/dev/null || true
+    if ! cp -f "${src_lib}" "${dst_lib}" 2>/dev/null; then
+        dst_lib="${src_lib}"
     fi
-    echo "[hixlep] 未指定 HCCL_TOOLS_WHEEL,从 PyPI 安装 unofficial-ascend-tools==0.0.7rc4"
-    python3 -m pip install --quiet "unofficial-ascend-tools==0.0.7rc4" || {
-        echo "[ERROR] 安装 unofficial-ascend-tools==0.0.7rc4 失败(PyPI 不可达);离线环境请下载同版本 wheel 后用 HCCL_TOOLS_WHEEL 指定本地路径" >&2
-        return 1
-    }
+    export LD_LIBRARY_PATH="$(dirname "${dst_lib}"):${LD_LIBRARY_PATH:-}"
+    if [ -d /etc/ld.so.conf.d ] && [ -w /etc/ld.so.conf.d ] 2>/dev/null; then
+        echo "/usr/local/lib" > /etc/ld.so.conf.d/local-rdma.conf 2>/dev/null || true
+    fi
+    if ! ldconfig 2>/dev/null; then
+        export LD_PRELOAD="${dst_lib}${LD_PRELOAD:+:${LD_PRELOAD}}"
+    fi
+    echo "[rdma] RDMA 驱动库已加载: ${dst_lib}"
 }
-
-# 调用 rootinfo 并校验产物: console script 优先,不在 PATH(pip install --user 常见)时回退包入口
-run_mindcluster_rootinfo() {
-    local out="$1" rc
-    # &&/|| 形式避免 set -e 下直接退出,保证能捕获真实退出码
-    if command -v mindcluster-tools >/dev/null 2>&1; then
-        mindcluster-tools rootinfo --product_type server --output "${out}" && rc=0 || rc=$?
-    else
-        python3 -c 'from unofficial_ascend_tools.rankinfo.main import main; import sys; sys.exit(main())' \
-            rootinfo --product_type server --output "${out}" && rc=0 || rc=$?
-    fi
-    if [ "${rc}" -ne 0 ]; then
-        echo "[ERROR] mindcluster-tools rootinfo 执行失败(rc=${rc}): 入口解析或工具执行异常,请确认 unofficial-ascend-tools 已安装、Ascend HDK 驱动与 npu-smi 可用" >&2
-        return "${rc}"
-    fi
-    # 不只信退出码: 实测 `python3 -m ...` 形式会 exit 0 却不产出文件,必须断言产物存在且非空
-    if [ ! -s "${out}" ]; then
-        echo "[ERROR] mindcluster-tools rootinfo 退出码 0 但 ${out} 不存在或为空,入口未真正执行" >&2
-        return 1
-    fi
-    return 0
-}
+load_rdma_driver_lib
 
 # ---------- hixlep 自检与按需生成(跨节点 TP/DP 经 UB 链路通信必需) ----------
-# vllm-ascend 通过 additional-config.ascend_local_comm_res_path 显式读取;
+# hixlep 文件生成到 HIXLEP_PATH 供 hixl 读取,ASCEND_LOCAL_COMM_RES 环境变量兜底
+# (--additional-config 不支持 ascend_local_comm_res_path 字段,vLLM 0.30.0 pydantic 校验报 unexpected_keyword_argument);
 # 三类文件均在容器内现生成(无需主机预生成或 ModelArts 挂载主机路径):
-#   1) hccl_rootinfo.json — 运行时安装 unofficial-ascend-tools==0.0.7rc4 生成(主机镜像缺失时)
+#   1) hccl_rootinfo.json — unofficial_ascend_tools wheel 离线生成(主机镜像缺失时)
 #   2) /lib/route.conf    — 内置 gen_route.sh 直接调用(纯 bash,读 /proc/ascend_ub 驱动接口)
 #   3) /etc/hixlep/       — generate_ep.py 生成(读 hccl_rootinfo.json + route.conf)
 generate_hixlep() {
@@ -260,13 +207,24 @@ generate_hixlep() {
     fi
     echo "[hixlep] ${HIXLEP_PATH} 缺失,容器内三步生成(hccl_rootinfo + route.conf + hixlep)"
 
-    # 1) hccl_rootinfo.json 缺失则运行时获取 unofficial-ascend-tools 生成
-    #    该 wheel 不随 skill 内置(二进制文件不在产物文件类型白名单);运行时从 PyPI 安装同版本,
-    #    离线环境可下载同版本 wheel 后用 HCCL_TOOLS_WHEEL 指定本地路径(必须真实存在)。
+    # 1) hccl_rootinfo.json 缺失则用内置 unofficial-ascend-tools 离线 wheel 生成
     if [ ! -s "${HCCL_ROOTINFO_PATH}" ]; then
-        echo "[hixlep] ${HCCL_ROOTINFO_PATH} 缺失,获取 unofficial-ascend-tools==0.0.7rc4 生成"
-        install_ascend_tools || exit 1
-        run_mindcluster_rootinfo "${HCCL_ROOTINFO_PATH}" || exit 1
+        local wheel="${OFFLINE_PKG_DIR}/unofficial_ascend_tools-0.0.7rc4-py3-none-any.whl"
+        if [ ! -f "${wheel}" ]; then
+            echo "[ERROR] 离线包 ${wheel} 不存在,无法生成 hccl_rootinfo.json" >&2
+            exit 1
+        fi
+        echo "[hixlep] ${HCCL_ROOTINFO_PATH} 缺失,离线安装 ${wheel##*/} 生成"
+        python3 -m pip install --no-index --no-deps --quiet "${wheel}" || {
+            echo "[ERROR] 离线安装 unofficial-ascend-tools 失败" >&2
+            exit 1
+        }
+        # wheel 实际包名是 unofficial_ascend_tools,rootinfo 生成经 entry_points 注册的 console script 调用
+        # (python3 -m mindcluster_tools 报 ModuleNotFoundError: No module named 'mindcluster_tools')
+        mindcluster-tools rootinfo --product_type server --output "${HCCL_ROOTINFO_PATH}" || {
+            echo "[ERROR] mindcluster-tools rootinfo 生成 hccl_rootinfo.json 失败" >&2
+            exit 1
+        }
     fi
 
     # 1.5) hccl_rootinfo.json 的 rank_list[].local_id 范围调整:
@@ -397,6 +355,32 @@ fi
 QUANT_OPTS=""
 if [ -n "${QUANTIZATION}" ]; then
     QUANT_OPTS="--quantization ${QUANTIZATION}"
+fi
+
+# ---------- 量化参数 × 权重文件交叉校验(须在参数数组定义之后执行,否则扫描空数组必然误报) ----------
+# BF16 原版权重无 quant_model_description.json,误带 --quantization ascend 会启动崩溃
+# (ModelSlim Quantization Config Not Found);w8a8 量化版权重含该文件,误漏则推理精度退化
+QUANT_DESC="${MODEL_PATH}/quant_model_description.json"
+HAS_QUANT_ARG=0
+for _a in "${MODEL_ARGS[@]:-}" "${EXTRA_ARGS:-}" "${PD_EXTRA_ARGS:-}"; do
+    case "${_a}" in
+        --quantization|--quantization=ascend|--quantization=*) HAS_QUANT_ARG=1 ;;
+    esac
+done
+if [ -n "${QUANTIZATION:-}" ]; then
+    HAS_QUANT_ARG=1
+fi
+if [ "${HAS_QUANT_ARG}" -eq 1 ] && [ ! -f "${QUANT_DESC}" ]; then
+    echo "[ERROR] 启用了 --quantization ascend 但权重目录无 quant_model_description.json" >&2
+    echo "       权重版本与启动参数不匹配: 当前权重未量化(BF16 原版),应移除 --quantization ascend" >&2
+    echo "       quant_model_description.json 仅 w8a8/w8a8-mxfp8/w8a8c8-mxfp8 等量化版权重包含" >&2
+    echo "--- content of ${MODEL_PATH} ---" >&2
+    ls -la "${MODEL_PATH}" >&2 2>/dev/null || true
+    exit 1
+fi
+if [ "${HAS_QUANT_ARG}" -eq 0 ] && [ -f "${QUANT_DESC}" ]; then
+    echo "[WARN] 权重目录含 quant_model_description.json(量化版权重)但未启用 --quantization ascend" >&2
+    echo "      量化版权重不启用 ascend 量化路径会精度退化,核对模型文档是否应加 --quantization ascend" >&2
 fi
 
 # ---------- 启动 vllm-ascend OpenAI 兼容服务(多节点) ----------

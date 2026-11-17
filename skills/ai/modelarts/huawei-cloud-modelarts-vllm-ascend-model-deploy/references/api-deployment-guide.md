@@ -15,12 +15,18 @@
 - **⚠️ Project ID 必须用 UUID(强制,违反=API 报 `token should contains projectId` 等 400/401)**: `GET iam/v3/auth/projects` 返回的 `id` 是 32 位 UUID(如 `<PROJECT_ID_UUID>`),所有 ModelArts API 路径段 `{project_id}` 必须用此 UUID;`Project Name`(region name 格式如 `cn-north-7`)仅用于获取 token 的 `scope.project.name`,禁止用 Project Name 占据 API 路径段
 - `create_infer_service.py` 的 `--project-id` 参数已增加 UUID 格式校验(32 位十六进制),非 UUID 直接拒绝
 
-### 1.3 flavor 获取(强制,ShowInferServiceCluster)
+### 1.3 flavor 获取(强制,按资源池类型区分)
+
+> **专属池分支(请求体含 `pool_id`)**: 以下 5 条为专属池规范,原文保留。**公共池分支(请求体无 `pool_id`)见本节末尾**。
 - 创建请求体 `unit_configs[].flavor` 通过查询纳管资源池详情接口 `GET /v2/{project_id}/services/clusters/{pool_id}`(路径中 id 为资源池 ID;带双 workspace 查询参数 + `X-Workspace-Id` 头)获取
 - 响应 `flavors[]` 数组,每个元素含 `id`(如 `modelarts.vm.arm.16u.64g.npu.16snt9c`)与 `ascend` 对象(`card`=物理卡数、`npu`=实际使用卡数;以 `npu` 值为准: 一般资源池 `card=npu`,A3 资源池 `card×2=npu`)
 - 按部署所需卡数选对应条目,取其 `id` 作为请求体 `flavor`;多节点取每节点卡数对应条目(如 16 卡/节点 → `npu=16` 条目)
 - **禁止从节点规格推导 flavor**(前缀 `vm`/`bm` 与内存取整档无法从节点规格得出)
-- **PD 分离 proxy 单元例外(强制)**: proxy 不消耗 NPU 卡,资源池无 0 卡预置 flavor,必须用 `custom_spec`(JSON,`card=0.0` + `cpu`/`memory`/`type_alias`/`arch`/`ratio`)替代 `flavor`(`recovery=Instance`+`termination_grace={"termination_grace_period_seconds":1}` 与其他单元一致,骨架统一注入所有推理单元,proxy 不特殊化;参考已部署 routeserver 实测配置: `{"arch":"arm64","card":0.0,"cpu":10,"memory":102400.0,"ratio":2,"type_alias":"Snt9b23"}`)。`create_infer_service.py` 用 `--proxy-custom-spec '<JSON>'` 自动注入到名为 proxy 的 unit(仅替代 flavor,不覆盖 recovery/termination_grace);骨架默认为所有推理单元注入 `recovery=Instance`+`termination_grace=1s`;`validate_request_body` 允许 proxy 单元用 custom_spec 替代 flavor
+- **PD 分离 proxy 单元例外(强制,专属池)**: proxy 不消耗 NPU 卡,专属池无 0 卡预置 flavor,必须用 `custom_spec`(JSON,`card=0.0` + `cpu`/`memory`/`type_alias`/`arch`/`ratio`)替代 `flavor`(`recovery=Instance`+`termination_grace={"termination_grace_period_seconds":1}` 与其他单元一致,骨架统一注入所有推理单元,proxy 不特殊化;参考已部署 routeserver 实测配置: `{"arch":"arm64","card":0.0,"cpu":10,"memory":102400.0,"ratio":2,"type_alias":"Snt9b23"}`)。`create_infer_service.py` 用 `--proxy-custom-spec '<JSON>'` 自动注入到名为 proxy 的 unit(仅替代 flavor,不覆盖 recovery/termination_grace);骨架默认为所有推理单元注入 `recovery=Instance`+`termination_grace=1s`;`validate_request_body` 允许 proxy 单元用 custom_spec 替代 flavor
+- **公共池分支(请求体无 `pool_id` 时,强制)**: 调 `GET /v2/{project_id}/services/flavors?type=MANAGED&limit=500&offset=0`(agent 手动调用,带双 workspace 查询参数 + `X-Workspace-Id` 头;`total > len(data)` 时按 `offset += size` 翻页取全)。响应列表在 **`data[]`(非 `flavors[]`)**,按 `category` 区分 `CPU`/`ASCEND`:
+  - **NPU 单元(single/multi_node/pd 的 prefill/decode)**: 过滤 `category=ASCEND` 条目,按 **`ascend.npu`**(实际使用卡数,与专属池同语义;A3 `card×2=npu`)匹配每实例卡数——single/multi_node=TP_SIZE,pd prefill=TP×PCP、decode=TP×DCP;取 `id` 作为请求体 `flavor`。`sold_out=true` 条目剔除(售罄不可选);若匹配条目全部售罄,向用户披露原始匹配列表(含售罄标记与 `ascend.type`/`type_alias`/`vcpus`/`memory`)由用户决策,不静默降级。
+  - **PD proxy 单元(仅 pd 形式)**: 公共池**不支持 `custom_spec`**,proxy 改选 `category=CPU` 且 **`vcpus≥4` 且 `memory≥16777216`**(单位 KB,16GB=16777216KB,**与专属池 custom_spec 的 memory 数值口径不同,禁直接比较**)的预置规格,取 `id` 经 `--role-extra-json '{"proxy":{"flavor":"<id>"}}'` 注入;AskUserQuestion 按 vcpus 升序列候选,question 文本提示"高规格可提升 proxy 转发性能与并发处理能力";用户 Other 自定义输入的 id 必须存在于响应 `data[]` 的 CPU 条目,不存在或低于下限(4vCPU/16GB)一律拒绝并列出候选,禁止带病推进。
+  - **候选展示与确认**: 多条目匹配同一卡数时 AskUserQuestion 列候选(id/`ascend.type`/`type_alias`/vcpus/内存),与步骤 1.1 确认芯片型号明显不符时标注"请确认与步骤 1.1 芯片型号一致"由用户确认;**禁止建 `type_alias`→芯片型号硬编码映射表**(跨环境取值易脆断)。
 
 ## 2. token 获取与提取(强制)
 
@@ -40,8 +46,7 @@
 - **所有运行 skill 产生的临时文件一律写入 `/tmp/`,禁止在 skill 本体(`scripts/`/`templates/`/`references/` 及 skill 根目录)或部署产物目录外创建任何文件**
 
 ### 2.4 获取 token 必须用 Python requests 调 IAM API
-- `resp = requests.post('<IAM_DOMAIN>/v3/auth/tokens', json=<IAM请求体>, verify=True, timeout=30)`(requests 直接传 dict/JSON,凭据正确即返回 201),响应头 `resp.headers['X-Subject-Token']` 取 token
-- **HTTPS 证书校验默认保持开启**: 仅自签证书/企业代理 MITM 调试场景可临时关闭,须使用与 `scripts/create_infer_service.py` 一致的开关 `--insecure` 或 `MODELARTS_INSECURE_TLS=1`(不得引入第二套开关名)并在 stderr 打印告警;禁止在脚本中把关闭校验写成默认值
+- `resp = requests.post('<IAM_DOMAIN>/v3/auth/tokens', json=<IAM请求体>, verify=False, timeout=30)`(requests 直接传 dict/JSON,凭据正确即返回 201),响应头 `resp.headers['X-Subject-Token']` 取 token
 - **禁止用 curl `-d` 字符串拼接 JSON body 获取 token**(Windows bash 下 `'"$VAR"'` 引号拼接致密码传递错误,凭据正确也返回 401)
 
 ### 2.5 token 必须用 project scope 获取
@@ -102,10 +107,32 @@
 - 交互式确认时,问题文本写明:"资源池 ID(UUID 格式,控制台资源池详情页可查;若只知资源池名称也可提供,skill 查 pools 列表按名称匹配)"
 - 用户提供的是名称时,调 `GET /v2/{project_id}/pools` 在 `metadata` 的 label/annotation 字段按名称匹配,取其 `metadata.name` 为 pool_id;不匹配则列出全部资源池由用户选择
 
-## 5. 部署前必查资源池可用卡数(强制)
+### 4.4 公共池 flavor 查询(请求体无 pool_id 时)
+
+- 接口: `GET /v2/{project_id}/services/flavors?type=MANAGED&limit=500&offset=0`(`type=MANAGED` 表示公共资源池);agent 手动调用(不封装脚本,与 §4.1/§4.2/§4.3 一致),URL 带 `?workspaceId={}&workspace_id={}` 双查询参数 + `X-Workspace-Id` 头
+- 响应字段(列表在 `data[]`):
+
+| 字段 | 说明 |
+|------|------|
+| `data[].id` | 规格 id,请求体 `unit_configs[].flavor` 取值 |
+| `data[].category` | `CPU` / `ASCEND` |
+| `data[].vcpus` | CPU 核数(CPU 规格 proxy 下限 ≥4) |
+| `data[].memory` | 内存,**单位 KB**(8388608KB=8GB;proxy 下限 ≥16777216KB=16GB) |
+| `data[].ascend` | 仅 ASCEND 条目: `npu`=实际使用卡数(与专属池同语义)/`card`=物理卡数/`type`/`type_alias` |
+| `data[].sold_out` | `true` 售罄,不可选 |
+| `data[].arch` | 架构(如 `aarch64`) |
+| `total`/`size`/`pages` | 分页;`total > len(data)` 时 `offset += size` 续查直至取全 |
+
+- 匹配规则(按单元类型):
+  - NPU 单元: `category=ASCEND` 按 `ascend.npu` 匹配每实例卡数(single/multi_node=TP_SIZE;pd prefill=TP×PCP、decode=TP×DCP),`sold_out=true` 剔除
+  - PD proxy(仅 pd): `category=CPU` 且 `vcpus≥4`、`memory≥16777216`(KB);用户自定义输入的 id 须存在于响应中且满足下限
+- 公共池无 `pool_id` 与节点查询接口,不做部署前可用卡数预查(§5 仅适用专属池);资源不足由平台按 `async_scheduling=true` 排队
+
+## 5. 部署前必查资源池可用卡数(强制,仅专属池)
 - 发起 CreateInferService **前**,先调 `GET /v2/{project_id}/pools/{pool_id}/nodes`(带双 workspace 查询参数 + `X-Workspace-Id` 头),汇总 `items[].status.availableResources["huawei.com/ascend-1980"]` 为总可用卡数
 - 计算本部署需要卡数 = 副本数 × 单元数 × 每节点卡数(如 multi_node 2 节点 × 16 卡 = 32)
 - **可用卡数 < 需要卡数时,告知用户"资源不足,任务将排队等待(async_scheduling=true 已默认注入,平台收到请求后异步排队,资源释放后自动调度)"**,然后继续发起 CreateInferService 创建请求(不阻断);创建请求返回 200/201 即排队成功,服务状态进入 `DEPLOYING`(等待资源);若返回 8118(同步调度拒绝,极少发生,因 async_scheduling=true 已注入),按 §7 处理
+- **公共池不适用**: 请求体无 `pool_id`,无池节点查询接口,不做部署前卡数预查;资源不足时平台按 `async_scheduling=true` 排队(§7 的 8118 处理流程不变)
 
 ## 6. 服务名占用(8006)处理(强制,所有环境一致,禁止 DELETE 与自动 stop)
 - 创建服务返回 `400 ModelArts.8006 "The service name xxx already exists"` → 服务名已被占用(同地域唯一)
@@ -161,7 +188,9 @@
 #               部署到 A5(950 系列 snt9e)时必须显式传 a5,脚本自动补充 A5 特殊字段
 # --pool-id/--model-obs-path/--code-obs-path: 骨架路径自动填 pool_id/model(权重挂载)/
 #                files[](code 挂载),均默认 host_cache=true(本地加速,所有芯片必开)
+# --pool-id: 专属池必传;公共池不传(请求体无 pool_id,规格用公共池预置 flavor)
 # --role-extra-json: 按单元名补 flavor/image 等字段(如 {"role-1":{"flavor":"...","image":{"source":"SWR","swr_path":"..."}}})
+# --proxy-custom-spec: 仅专属池(公共池 proxy 改用预置 CPU 规格 flavor vcpus≥4/16GB,经 --role-extra-json '{"proxy":{"flavor":"<id>"}}' 注入)
 IAM_TOKEN=<IAM_TOKEN> python scripts/create_infer_service.py create \
     --endpoint https://modelarts.cn-north-4.myhuaweicloud.com \
     --project-id <PROJECT_ID> \

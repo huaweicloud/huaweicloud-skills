@@ -13,7 +13,6 @@
                   GET 查询接口带头 X-Workspace-Id + URL 双查询参数
 
 token: IAM_TOKEN 环境变量(推荐) > --token-file(权限 600) > 交互式输入
-TLS: HTTPS 证书校验默认开启;仅 --insecure 或 MODELARTS_INSECURE_TLS=1 时关闭(打印告警)
 """
 
 import argparse
@@ -249,7 +248,9 @@ PD 分离: 3 个 unit(proxy/prefill/decode);多机部署: 2 个 unit(master/work
         elif str(i) in extra:
             unit.update(extra[str(i)])
         # PD 分离 proxy 单元: --proxy-custom-spec 注入 custom_spec(card=0,替代 flavor)
-        # proxy 不消耗 NPU 卡,资源池无 0 卡预置 flavor,必须用 custom_spec;recovery/termination_grace 与其他单元一致(骨架默认 Instance + 1s)
+        # proxy 不消耗 NPU 卡,专属池无 0 卡预置 flavor,必须用 custom_spec;公共池不支持自定义规格,
+        # proxy 改用预置 CPU 规格 flavor 经 --role-extra-json '{"proxy":{"flavor":"..."}}' 注入;
+        # recovery/termination_grace 与其他单元一致(骨架默认 Instance + 1s)
         proxy_custom_spec = getattr(args, "proxy_custom_spec", "")
         if role_name == "proxy" and proxy_custom_spec:
             try:
@@ -402,26 +403,7 @@ def append_workspace_query(url, workspace_id):
     return f"{url}{sep}workspaceId={workspace_id}&workspace_id={workspace_id}"
 
 
-def tls_verify_enabled(args):
-    """解析 HTTPS 证书校验开关。
-
-    默认开启校验;仅当显式传入 --insecure 或设置环境变量 MODELARTS_INSECURE_TLS=1
-    时才降级为 False(自签证书调试场景),并在 stderr 打印告警。
-    """
-    insecure = bool(getattr(args, "insecure", False)) or os.environ.get(
-        "MODELARTS_INSECURE_TLS", ""
-    ).strip() == "1"
-    if insecure:
-        print(
-            "[警告] 已关闭 HTTPS 证书校验(不安全),仅限自签证书调试环境;"
-            "生产环境请移除 --insecure / MODELARTS_INSECURE_TLS",
-            file=sys.stderr,
-        )
-        return False
-    return True
-
-
-def request_with_auth(method, url, token, body=None, workspace_id=None, verify=True):
+def request_with_auth(method, url, token, body=None, workspace_id=None):
     try:
         import requests
     except ImportError:
@@ -436,9 +418,9 @@ def request_with_auth(method, url, token, body=None, workspace_id=None, verify=T
     print(f"[请求] {method} {url}")
     try:
         if method in ("POST", "PUT", "PATCH"):
-            resp = requests.request(method, url, headers=headers, json=body, timeout=120, verify=verify)
+            resp = requests.request(method, url, headers=headers, json=body, timeout=120, verify=False)
         else:
-            resp = requests.request(method, url, headers=headers, timeout=120, verify=verify)
+            resp = requests.request(method, url, headers=headers, timeout=120, verify=False)
     except requests.exceptions.RequestException as e:
         # 异常 message 可能含 URL 但不含 Authorization 头(requests 不把 header 写进 message)
         # 但保险起见,显式剔除可能的 Authorization/X-Auth-Token 子串后再打印
@@ -548,6 +530,8 @@ def validate_request_body(body):
         if not ucs:
             problems.append(f"group_configs[{i}].unit_configs 缺失或为空")
             continue
+        # 公共/专属按 pool_id 有无推导: 无 pool_id 即公共池,不支持自定义规格(custom_spec)
+        pool_present = bool(g.get("pool_id"))
         for j, uc in enumerate(ucs):
             if not isinstance(uc, dict):
                 problems.append(f"group_configs[{i}].unit_configs[{j}] 不是对象")
@@ -563,7 +547,12 @@ def validate_request_body(body):
             elif not isinstance(uc.get("count"), int) or uc.get("count") < 1:
                 problems.append(f"unit_configs[{j}].count 须为 >=1 的整数")
             if not uc.get("flavor") and not uc.get("custom_spec"):
-                problems.append(f"unit_configs[{j}].flavor 缺失(proxy 单元可用 custom_spec 替代)")
+                problems.append(f"unit_configs[{j}].flavor 缺失(专属池 proxy 单元可用 custom_spec 替代;公共池全部单元(含 proxy)均须用预置规格 flavor)")
+            if not pool_present and uc.get("custom_spec"):
+                problems.append(
+                    f"unit_configs[{j}].custom_spec 公共资源池不支持自定义规格(请求体无 pool_id 即按公共池处理): "
+                    f"公共池须用预置规格 flavor(PD proxy 用 CPU 规格 vcpus≥4/16GB);若本意为专属池请补 --pool-id"
+                )
             if not (uc.get("image") or {}).get("swr_path"):
                 problems.append(f"unit_configs[{j}].image.swr_path 缺失")
             if not uc.get("cmd"):
@@ -612,7 +601,7 @@ def cmd_create(args):
     print(json.dumps(body, indent=2, ensure_ascii=False))
     validate_request_body(body)
     data = request_with_auth("POST", api_url(args.endpoint, args.project_id), args.token, body,
-                             workspace_id=args.workspace_id, verify=args.verify)
+                             workspace_id=args.workspace_id)
     if data is None:
         sys.exit("[错误] 创建服务失败: 无响应")
     print("")
@@ -629,7 +618,7 @@ def cmd_list(args):
     url = api_url(args.endpoint, args.project_id)
     # GET 接口须带双 workspace 查询参数(头 X-Workspace-Id 不起过滤作用)
     url = append_workspace_query(url, args.workspace_id)
-    data = request_with_auth("GET", url, args.token, workspace_id=args.workspace_id, verify=args.verify)
+    data = request_with_auth("GET", url, args.token, workspace_id=args.workspace_id)
     if data is None:
         sys.exit("[错误] 查询服务列表失败: 无响应")
     # GetServices 响应字段是 "data"(非 "services"),取错会误判无服务
@@ -647,7 +636,7 @@ def cmd_show(args):
     url = api_url(args.endpoint, args.project_id, f"/{args.service_id}")
     # GET 接口须带双 workspace 查询参数(头 X-Workspace-Id 不起过滤作用)
     url = append_workspace_query(url, args.workspace_id)
-    data = request_with_auth("GET", url, args.token, workspace_id=args.workspace_id, verify=args.verify)
+    data = request_with_auth("GET", url, args.token, workspace_id=args.workspace_id)
     if data is None:
         sys.exit("[错误] 查询服务详情失败: 无响应")
     print("")
@@ -671,7 +660,7 @@ def cmd_scale(args):
         url = api_url(args.endpoint, args.project_id,
                       f"/{args.service_id}/deployments/{args.deployment_id}/scale")
     body = {"replicas": args.replicas}
-    data = request_with_auth("POST", url, args.token, body, workspace_id=args.workspace_id, verify=args.verify)
+    data = request_with_auth("POST", url, args.token, body, workspace_id=args.workspace_id)
     if data is None:
         sys.exit("[错误] 扩缩容失败: 无响应")
     print(f"[OK] 扩缩容请求已提交: replicas={args.replicas}")
@@ -695,10 +684,6 @@ def parse_args():
                        help="Workspace ID(所有环境需要;POST 创建请求自动注入请求 body 顶层 "
                             "workspace_id 字段(非请求头/URL 查询参数,缺失报 8179);GET 接口自动拼接 "
                             "`?workspaceId={}&workspace_id={}` 双查询参数 + X-Workspace-Id 头)")
-        # 安全: HTTPS 证书校验默认开启,仅显式开关(自签证书调试)才关闭
-        p.add_argument("--insecure", action="store_true",
-                       help="关闭 HTTPS 证书校验(默认开启;仅自签证书调试环境使用,"
-                            "等价于环境变量 MODELARTS_INSECURE_TLS=1,会在 stderr 打印告警)")
 
     # create 专属参数
     p = sub.choices["create"]
@@ -728,7 +713,9 @@ def parse_args():
     p.add_argument("--proxy-custom-spec", default="",
                    help="PD 分离 proxy 单元 custom_spec JSON(card=0,proxy 不消耗 NPU,资源池无 0 卡预置 flavor 时必填),"
                         "如 '{\"arch\":\"arm64\",\"card\":0.0,\"cpu\":10,\"memory\":102400.0,\"ratio\":2,\"type_alias\":\"Snt9b23\"}';"
-                        "传入后自动注入到名为 proxy 的 unit(custom_spec 替代 flavor;recovery/termination_grace 与其他单元一致,骨架默认 Instance+1s)")
+                        "传入后自动注入到名为 proxy 的 unit(custom_spec 替代 flavor;recovery/termination_grace 与其他单元一致,骨架默认 Instance+1s);"
+                        "仅专属池——公共资源池不支持自定义规格,proxy 改用公共池预置 CPU 规格 flavor(vcpus≥4/内存≥16GB),"
+                        "经 --role-extra-json '{\"proxy\":{\"flavor\":\"...\"}}' 注入")
     p.add_argument("--chip-model", choices=["a2", "a3", "a5"], default="a2",
                    help="目标资源池芯片型号: a2(910B)/a3(910C)/a5(950 系列 snt9e)。"
                         "默认 a2,走 A2/A3 已验证的请求体骨架;选 a5 时补充 A5 特殊字段"
@@ -738,7 +725,8 @@ def parse_args():
                         "secret_type 用 dew)。"
                         "group_count(unit_configs[].group_count 单元副本数)为通用必填字段,所有芯片均注入,不属 A5 特殊字段")
     p.add_argument("--pool-id", default="",
-                   help="专属资源池 ID(metadata.name,如 pool-xxxx-...);骨架路径填充 group_configs[].pool_id")
+                   help="专属资源池 ID(metadata.name,如 pool-xxxx-...);公共资源池部署不传"
+                        "(请求体不含 pool_id,规格用公共池预置 flavor)。骨架路径填充 group_configs[].pool_id")
     p.add_argument("--model-obs-path", default="",
                    help="模型权重 OBS 路径(如 obs://bucket/prefix/model/<模型名>);骨架路径生成 "
                         "group_configs[].model 挂载(host_cache=true 本地加速)")
@@ -777,8 +765,6 @@ def main():
         )
     # 安全获取 token(环境变量/--token-file/交互式),并挂到 args 供各子命令使用
     args.token = load_token(args)
-    # HTTPS 证书校验默认开启;仅 --insecure 或 MODELARTS_INSECURE_TLS=1 时降级
-    args.verify = tls_verify_enabled(args)
     dispatch = {
         "create": cmd_create,
         "list": cmd_list,

@@ -29,8 +29,8 @@
 
 | 配置项 | 说明 | 推荐值 |
 |--------|------|--------|
-| 资源池类型 | 公共资源池(开发测试,可能排队)/ 专属资源池(生产,独占) | **专属资源池**(NPU 推理必须) |
-| 选择专属资源池 | 昇腾 NPU 专属资源池,芯片型号与步骤 3.0 确认一致 | 用户资源池 |
+| 资源池类型 | 按 SKILL.md 4.1 确认的 POOL_TYPE: 公共资源池(开发测试,共享可能排队;须有 ASCEND 规格)/ 专属资源池(生产,独占) | **专属资源池**(默认)或 **公共资源池**(POOL_TYPE=公共时) |
+| 选择专属资源池 | 昇腾 NPU 专属资源池,芯片型号与步骤 3.0 确认一致(**仅 POOL_TYPE=专属时出现**;公共池无此项,直接进部署副本数) | 用户资源池 |
 | 部署副本数 R | 副本数 R(group_configs[].count,可靠性维度),默认 R=1 单副本;可靠性需求 R>1 多副本(平台内置流量分发) | **1**(默认)或 >1(步骤 1.1c 决策;节点数按总卡数 = 部署单元 × 推理单元 × TP × 实例数 N 动态推导) |
 
 ### 第 4 步 — 模型配置
@@ -52,7 +52,7 @@
 |--------|------|--------|
 | 单元名称 | 推理单元名(即 API 的 `unit_configs[].name`,只允许 0-16 字符,仅小写字母/数字/连字符,且以字母或数字开头结尾) | **single**: `role-1`;**multi_node**: `master` + `worker`(2 个推理单元,小写);**PD 分离**: `proxy`/`prefill`/`decode`(同一部署单元内,大写 `Prefill`/`Decode` 会报 400) |
 | 单元内实例数(资源实例数) | 单元内实例数(即 API 的 `unit_configs[].count`) | single=1;**multi_node: master=1, worker=N-1**(N=data-parallel-size,用户选;N=2 时 master=1 + worker=1);**PD 分离: proxy=1, prefill=跨节点数(PP 节点数或 DP 节点数,以文档为准), decode=跨节点数(DP 节点数);ModelArts 平台无 PP/PCP/DCP 概念,跨节点 PP/DP 经 count 表达,节点内 PCP/DCP 经每实例卡数表达** |
-| 单元实例规格 | 预置规格;**PD 分离 proxy 用自定义规格**(proxy 不消耗 NPU,资源池无 0 卡预置规格) | single/multi_node: 按节点卡数选预置规格(如 `npu=2`);**pd prefill/decode: 每实例单节点内所有并行度乘积**(prefill=TP×PCP,decode=TP×DCP,以文档为准;如 Kimi K3.1 Pro Prefill TP=4×PCP=4=16 卡占满 A3 单节点,违反=vLLM `local_world_size=TP×PCP` 启动 worker,实例规格 npu<TP×PCP 时 local_rank 越界 `out of bounds` 崩溃);**pd proxy: 自定义规格 `card=0.0`**(如 `{"arch":"arm64","card":0.0,"cpu":10,"memory":102400.0,"ratio":2,"type_alias":"Snt9b23"}`);`recovery=Instance`+`termination_grace=1s` 三种形态所有推理单元共用(proxy 与其他单元一致,不特殊化) |
+| 单元实例规格 | 预置规格;**PD 分离 proxy 按池类型选规格**(proxy 不消耗 NPU: 专属池无 0 卡预置规格,公共池不支持自定义规格) | single/multi_node: 按节点卡数选预置规格(如 `npu=2`);**pd prefill/decode: 每实例单节点内所有并行度乘积**(prefill=TP×PCP,decode=TP×DCP,以文档为准;如 Kimi K3.1 Pro Prefill TP=4×PCP=4=16 卡占满 A3 单节点,违反=vLLM `local_world_size=TP×PCP` 启动 worker,实例规格 npu<TP×PCP 时 local_rank 越界 `out of bounds` 崩溃);**pd proxy: 专属池自定义规格 `card=0.0`**(如 `{"arch":"arm64","card":0.0,"cpu":10,"memory":102400.0,"ratio":2,"type_alias":"Snt9b23"}`);**公共池选预置 CPU 规格 `vcpus≥4` 且 `memory≥16GB`**(如 `modelarts.vm.arm.cpu.8u.32g`,无自定义规格入口);`recovery=Instance`+`termination_grace=1s` 三种形态所有推理单元共用(proxy 与其他单元一致,不特殊化) |
 | 镜像类型 | 自定义镜像 | **容器镜像服务 SWR** 中的 `SWR_IMAGE_ADDRESS`(步骤 2;tag 以模型文档确认的版本为准,不要用 `latest`) |
 | 环境变量                 | **仅注入部署单元配置项,其余脚本自动推导/有默认值**(见 SKILL.md 4.4 分类速查表) | **无需填 `TP_SIZE`/`PORT`/`DATA_PARALLEL_SIZE`/`PREFILL_DP_SIZE`/`DECODE_DP_SIZE`**(脚本按资源池实例规格自动推导、按角色内置默认值,multi_node 的 `DATA_PARALLEL_SIZE=N` 与 PD 的 `PREFILL_DP_SIZE`/`DECODE_DP_SIZE` 由模板按 1.2 确认值固定填入并 export);pd(PD 分离)3 个推理单元分别注入 `VLLM_ROLE=proxy`/`VLLM_ROLE=prefill`/`VLLM_ROLE=decode`(仅此一项)。`MODEL_PATH`/`PORT`/昇腾环境变量等**不用填**(容器内固定/模板默认,PD 三角色 PORT 已在脚本内置 proxy=8080/prefill=8080/decode=7100)。**部署形式已固定在生成的脚本中,无需也不应再传 `DEPLOY_FORM` 环境变量** |
 | 文件存储挂载(code 目录)  | 部署脚本目录,关键                                            | **存储地址 `CODE_OBS_PATH`(如 `obs://<bucket>/models/code/`)→ 挂载路径 `/home/ma-user/code/`→ 本地存储加速`开启`**;`start_vllm.sh`/`health_check.sh`/`get_master_ip.py` 均经此挂载访问,命令一律用容器内路径 `bash /home/ma-user/code/...` |
@@ -105,7 +105,7 @@
 |---------|-----------|--------|--------|---------------------|---------|-------------|
 | **single** 单节点 | 1(默认)或 M | 1 | role-1 | 1 | 无 | 无需环境变量(`TP_SIZE` 脚本按卡数自动推导;`MODEL_NAME` 建议填,非必填) |
 | **multi_node** 多节点 | 1(默认)或 M | **2** | master / worker | master=1, worker=N-1(N=data-parallel-size,用户选;N=2 时 master=1 + worker=1) | **强亲和=同一超节点(亲和组=N)** | ModelArts 注入 `GLOBAL_RANK_TABLE_FILE_PATH`(rank table JSON 路径)与 `POD_IP`(当前节点 IP);脚本经 `get_master_ip.py 0` 读 rank table group 0 取 master IP,与 `POD_IP` 比较判定 master/worker 角色;`DATA_PARALLEL_SIZE=N` 由脚本按方案固定填入,worker 追加 `--headless` |
-| **pd** PD 分离 | 1(默认)或 M | **3**(同一部署单元内) | proxy / prefill / decode | proxy count=1, prefill count=跨节点数(PP 节点数或 DP 节点数), decode count=跨节点数(DP 节点数);实例规格 npu=每实例单节点内所有并行度乘积(TP×PCP 或 TP×DCP) | 无 | **proxy 单元用 custom_spec card=0 替代 flavor**(资源池无 0 卡预置规格);`recovery=Instance`+`termination_grace=1s` 三种形态所有推理单元共用;**同一部署单元内 3 个推理单元分别注入 `VLLM_ROLE=proxy`/`VLLM_ROLE=prefill`/`VLLM_ROLE=decode`**(PORT 已在脚本内按角色内置默认值 proxy=8080/prefill=8080/decode=7100,无需注入) |
+| **pd** PD 分离 | 1(默认)或 M | **3**(同一部署单元内) | proxy / prefill / decode | proxy count=1, prefill count=跨节点数(PP 节点数或 DP 节点数), decode count=跨节点数(DP 节点数);实例规格 npu=每实例单节点内所有并行度乘积(TP×PCP 或 TP×DCP) | 无 | **proxy 单元: 专属池用 custom_spec card=0 替代 flavor(资源池无 0 卡预置规格),公共池用预置 CPU 规格 flavor(vcpus≥4/内存≥16GB)**;`recovery=Instance`+`termination_grace=1s` 三种形态所有推理单元共用;**同一部署单元内 3 个推理单元分别注入 `VLLM_ROLE=proxy`/`VLLM_ROLE=prefill`/`VLLM_ROLE=decode`**(PORT 已在脚本内按角色内置默认值 proxy=8080/prefill=8080/decode=7100,无需注入) |
 
 ## 二、API 端点与鉴权(方式 A)
 
@@ -137,7 +137,7 @@
     {
       "name": "group-0",
       "weight": 100,
-      "pool_id": "<资源池ID>",
+      "pool_id": "<资源池ID>",  # 专属池必填;公共池删除本行(请求体无 pool_id)
       "secret_type": "agency",
       "model": {
         "address": "obs://my-bucket/llm/model/Qwen3-8B",
@@ -154,7 +154,7 @@
           "name": "prefill",
           "count": 2,
           "role": "COMMON",
-          "flavor": "modelarts.vm.arm.16u.64g.npu.16snt9c",  # 从 ShowInferServiceCluster flavors[] 按 ascend.npu=16 取 id
+          "flavor": "modelarts.vm.arm.16u.64g.npu.16snt9c",  # 专属池从 ShowInferServiceCluster flavors[] / 公共池从 MANAGED 规格列表 data[] 按 ascend.npu=16 取 id
           "cmd": "bash /home/ma-user/code/start_vllm.sh",
           "envs": {"VLLM_ROLE": "prefill"},  # PORT 脚本内置默认值 8080,无需注入
           "image": {"source": "SWR", "swr_path": "swr.cn-north-4.myhuaweicloud.com/my-org/vllm-ascend:v0.23.0"},
@@ -170,7 +170,7 @@
           "name": "decode",
           "count": 2,
           "role": "COMMON",
-          "flavor": "modelarts.vm.arm.16u.64g.npu.16snt9c",  # 从 ShowInferServiceCluster flavors[] 按 ascend.npu=16 取 id
+          "flavor": "modelarts.vm.arm.16u.64g.npu.16snt9c",  # 专属池从 ShowInferServiceCluster flavors[] / 公共池从 MANAGED 规格列表 data[] 按 ascend.npu=16 取 id
           "cmd": "bash /home/ma-user/code/start_vllm.sh",
           "envs": {"VLLM_ROLE": "decode"},  # PORT 脚本内置默认值 7100,无需注入
           "image": {"source": "SWR", "swr_path": "swr.cn-north-4.myhuaweicloud.com/my-org/vllm-ascend:v0.23.0"},
@@ -236,7 +236,7 @@
 | `deploy_timeout_minutes` | 否 | Integer | **部署超时时间(分钟),统一设置 300**。**禁止用平台默认(20~60 分钟)**——多节点/大模型(如 GLM-5.2 MoE)首次启动含模型加载 + CUDAGraph 编译,60 分钟不足会触发部署超时失败(`status: FAILED`)。请求体顶层字段,构造后复查未被覆盖丢失。控制台对应"部署超时时间"填 300 分钟 |
 | `group_configs[].name` | 是 | String | 部署组名称(如 group-0) |
 | `group_configs[].weight` | **是** | Integer | 流量权重,必填(如 100) |
-| `group_configs[].pool_id` | 是 | String | 专属资源池 ID |
+| `group_configs[].pool_id` | 是(专属池)/ 不传(公共池) | String | 专属资源池 ID;公共资源池部署请求体不含 `pool_id`(公共/专属按 `pool_id` 有无判定) |
 | `group_configs[].secret_type` | **是** | String | OBS 挂载认证: **`agency`**(委托,控制台默认);`dew`/`obspool`/`obs` 均报错 |
 | `group_configs[].model` | 是 | Object | 权重挂载: `address`=MODEL_PATH、`mount_path`=`/home/ma-user/model/`、`source`=OBS、`type`=MODEL、`read_only`=true、**`host_cache`=true(本地加速,OBS 挂载缓存到主机本地,加速模型权重加载;所有芯片 A2/A3/A5 统一开启)** |
 | `group_configs[].count` | 是 | Integer | **副本数 R(部署单元级,可靠性维度)**: 默认 1(单副本);可靠性需求时 >1(多副本,平台内置流量分发)。与实例数 N(`unit_configs[].count`)正交独立 |
@@ -244,7 +244,7 @@
 | `unit_configs[].name` | 是 | String | 单元名称。**single**: `role-1`;**multi_node**: `master` + `worker`(2 个推理单元);**PD 分离**: `proxy`/`prefill`/`decode`(同一部署单元内)。**命名规范**: 只允许 0-16 字符,仅小写字母/数字/连字符 `-`,且以字母或数字开头结尾——**大写 `Prefill`/`Decode` 报 400** |
 | `unit_configs[].count` | 是 | Integer | **单元内资源实例数(实例数,非节点数)**: single=1;**multi_node: master=1, worker=N-1**(N=data-parallel-size,用户选;N=2 时 master=1 + worker=1);PD 分离: proxy=1, prefill=跨节点数(PP 节点数或 DP 节点数,以文档为准), decode=跨节点数(DP 节点数) |
 | `unit_configs[].role` | 否 | String | 角色: `COMMON` |
-| `unit_configs[].flavor` | 是(非 proxy)/否(proxy 用 custom_spec) | String | **推理实例规格**,从**查询纳管资源池详情(ShowInferServiceCluster)** `GET /v2/{project_id}/services/clusters/{pool_id}` 获取(见 SKILL.md 步骤 0 第 ⑦ 条): 响应 `flavors[]` 中按 `ascend.npu`(实际使用卡数,一般 `card=npu`,A3 `card×2=npu`;**以 `npu` 为准**)选所需卡数条目,取其 `id`(如 `modelarts.vm.arm.16u.64g.npu.16snt9c`)。**禁止从节点规格推导**(前缀 `vm`/`bm` 与内存取整档无法从节点规格得出);**禁止填资源池节点规格**(如 `modelarts.bm.npu.arm.ssd`——这是 ECS 物理机 flavor,报 `400 ModelArts.6404 Flavor not found`)。**PD 分离 proxy 单元例外**: proxy 不消耗 NPU 卡,资源池无 0 卡预置 flavor,必须用 `custom_spec`(JSON,`card=0.0` + `cpu`/`memory`/`type_alias`)替代 `flavor`(`recovery=Instance`+`termination_grace=1s` 与其他单元一致,骨架统一注入,不特殊化);方式 A 用 `--proxy-custom-spec '<JSON>'` 自动注入 |
+| `unit_configs[].flavor` | 是(专属池非 proxy)/ 否(专属池 proxy 用 custom_spec)/ 是(公共池全部单元含 proxy) | String | **推理实例规格**: **专属池**从**查询纳管资源池详情(ShowInferServiceCluster)** `GET /v2/{project_id}/services/clusters/{pool_id}` 获取(见 SKILL.md 步骤 0 第 ⑦ 条): 响应 `flavors[]` 中按 `ascend.npu`(实际使用卡数,一般 `card=npu`,A3 `card×2=npu`;**以 `npu` 为准**)选所需卡数条目,取其 `id`(如 `modelarts.vm.arm.16u.64g.npu.16snt9c`);**公共池**从 `GET /v2/{project_id}/services/flavors?type=MANAGED` 响应 `data[]` 中 `category=ASCEND` 按 `ascend.npu` 取(proxy 选 `category=CPU` 且 `vcpus≥4`/内存≥16GB,`sold_out=true` 剔除,见 `references/api-deployment-guide.md` §4.4)。**禁止从节点规格推导**(前缀 `vm`/`bm` 与内存取整档无法从节点规格得出);**禁止填资源池节点规格**(如 `modelarts.bm.npu.arm.ssd`——这是 ECS 物理机 flavor,报 `400 ModelArts.6404 Flavor not found`)。**PD 分离 proxy 单元例外**: proxy 不消耗 NPU 卡——**专属池**资源池无 0 卡预置 flavor,必须用 `custom_spec`(JSON,`card=0.0` + `cpu`/`memory`/`type_alias`)替代 `flavor`(`recovery=Instance`+`termination_grace=1s` 与其他单元一致,骨架统一注入,不特殊化;方式 A 用 `--proxy-custom-spec '<JSON>'` 自动注入);**公共池**不支持自定义规格,proxy 用预置 CPU 规格 flavor(vcpus≥4/内存≥16GB) |
 | `unit_configs[].cmd` | 是 | String | 启动命令 `bash /home/ma-user/code/start_vllm.sh` |
 | `unit_configs[].envs` | 否 | Object | 环境变量(**pd PD 分离必填 `VLLM_ROLE=proxy\|prefill\|decode`**,3 个推理单元分别注入;**`PORT` 已在脚本内按角色内置默认值 proxy=8080/prefill=8080/decode=7100,无需注入**;**非 single 形式(multi_node/pd)节点 master/worker 角色由 `get_master_ip.py` 读 rank table 自动判定**) |
 | `unit_configs[].image` | **是** | Object | SWR 镜像: `source`=SWR、`swr_path`=SWR_IMAGE_ADDRESS |
@@ -315,7 +315,7 @@
 
 - 单个在线服务最多 **5 个部署**、最多 **10 个版本**、单个部署副本数有上限(以官方约束页为准)
 - 最大昇腾卡规模 **384 卡**;单用户最多 20 个在线服务(新版推理)
-- 部署在线服务仅支持专属资源池、逻辑子池;逻辑资源池**不支持**多角色分离部署、亲和调度
+- 部署在线服务支持专属资源池、公共资源池;逻辑资源池**不支持**多角色分离部署、亲和调度
 - 跨节点 TP(multi_node)必须配置**超节点亲和组实例数=N**(实例数: 跨节点子场景 N=跨节点数,单节点多实例子场景 N=实例数),否则部署后报业务错误(参见故障排除 inference2.0-modelarts-0042)
 - 忙态流控: 单用户 120 次请求/分钟、单接口 1000 次请求/分钟
 

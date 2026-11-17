@@ -483,6 +483,10 @@ def c15_quant_weight_match(ctx):
         c) QUANTIZATION 环境变量驱动(multi_node 模板的 QUANT_OPTS)
       检查 start_vllm.sh 是否包含交叉校验代码段(quant_model_description.json),
       以确认模板已注入该防御。
+      排序校验(硬性): 交叉校验段必须位于参数数组(MODEL_ARGS/PREFILL_ONLY_ARGS/
+      DECODE_ONLY_ARGS)定义**之后**——数组定义前扫描必然展开为空,--quantization
+      ascend 永远检测不到,量化版权重每次启动必误报 WARN、非量化权重防护失效
+      (实测 PD 2P1D GLM-5.3-W8A8C8-mxfp8 量化版权重三模板旧版启动日志全部误报)。
     """
     start = os.path.join(ctx["artifact_dir"], "start_vllm.sh")
     if not os.path.isfile(start):
@@ -494,7 +498,16 @@ def c15_quant_weight_match(ctx):
             "BF16 权重误带 --quantization ascend 会在运行时崩溃。"
             "按 templates/start_vllm.<form>.sh 补充交叉校验代码段"
         )
-    _pass("start_vllm.sh 含量化参数 × 权重文件交叉校验")
+    last_args_def = max(content.rfind(n) for n in ("MODEL_ARGS=(", "PREFILL_ONLY_ARGS=(", "DECODE_ONLY_ARGS=("))
+    check_pos = content.find("HAS_QUANT_ARG")
+    if check_pos < last_args_def:
+        return _fail(
+            "量化交叉校验段位于参数数组定义之前(HAS_QUANT_ARG 起始位置先于最后一个参数数组)"
+            "——扫描时数组展开为空,--quantization ascend 永远检测不到:"
+            "量化版权重每次启动必误报 WARN,非量化权重误带 --quantization 的防护同时失效。"
+            "修复: 将交叉校验段移动到参数数组定义之后、vllm serve 启动命令之前"
+        )
+    _pass("start_vllm.sh 含量化参数 × 权重文件交叉校验(且位于参数数组定义之后)")
 
 
 def c16_kv_transfer_tp_dp_var(ctx):
@@ -566,27 +579,35 @@ def c16_kv_transfer_tp_dp_var(ctx):
 
 
 def c17_flashcomm1_tp_match(ctx):
-    """1.17 enable_flashcomm1 × TP_SIZE 通用交叉校验(硬性,所有部署形式覆盖)。
+    """1.17 enable_flashcomm1 × TP_SIZE × 芯片型号通用交叉校验(硬性,所有部署形式覆盖)。
 
-    根因: vLLM 0.23.0 AscendConfig pydantic 校验强制 `enable_flashcomm1` 仅在
+    根因一: vLLM 0.23.0 AscendConfig pydantic 校验强制 `enable_flashcomm1` 仅在
     tp_size > 1 时可用,TP=1 时 `Assertion failed, Flash Comm v1 is only supported
     when tp_size > 1.`,在 create_engine_config 阶段崩溃(模型权重加载前分钟级
     秒级退出)。该约束与部署形式无关(single/multi_node/pd 任何
     形式 TP=1 均崩),根因常为 agent 误把文档量化版示例(含量化版 enable_flashcomm1)
     当 BF16+TP=1 示例套用。
 
+    根因二: A5(950 系列)上 enable_flashcomm1 的融合算子 aclnnMatmulReduceScatterV2
+    在 HCCL 拓扑提取(mc2_ops_hccl::ExtractNetLayerDetails/InitRankInfo)阶段
+    Segfault,8 worker 全崩 → EngineCore failed to start(实测 950DT TP=8
+    单节点,文档 950 示例含该参数同样触发;与 TP 大小无关,A5 任何 TP 均须移除)。
+
     校验逻辑:
-      a) 未提供 --tp-size 时跳过(无判定依据);
-      b) TP=1 时,start_vllm.sh 全文(MODEL_ARGS/EXTRA_ARGS/PD_EXTRA_ARGS/
+      a) TP=1 时,start_vllm.sh 全文(MODEL_ARGS/EXTRA_ARGS/PD_EXTRA_ARGS/
          --additional-config 任一来源)出现 enable_flashcomm1 即 FAIL;
-      c) TP>1 时不限制(虽 PD 分离按 3.2 仍不带,但本检查仅校验 TP=1 通用约束)。
+      b) --chip-model a5 时,任何 TP 下出现 enable_flashcomm1 即 FAIL;
+      c) 非 A5 且 TP>1 时不限制(虽 PD 分离按 3.2 仍不带,但本检查仅校验
+         TP=1 与 A5 两条通用约束)。
     """
     tp = ctx.get("tp_size")
-    if tp is None:
+    chip = ctx.get("chip_model") or ""
+    is_a5 = chip == "a5"
+    if tp is None and not is_a5:
         _pass("未提供 --tp-size,跳过 enable_flashcomm1 × TP 交叉校验")
         return
-    if tp > 1:
-        _pass(f"TP={tp}>1,enable_flashcomm1 允许(本检查仅拦截 TP=1 通用崩溃)")
+    if tp is not None and tp > 1 and not is_a5:
+        _pass(f"TP={tp}>1 且非 A5,enable_flashcomm1 允许(本检查拦截 TP=1 与 A5 崩溃)")
         return
     start = os.path.join(ctx["artifact_dir"], "start_vllm.sh")
     if not os.path.isfile(start):
@@ -597,6 +618,15 @@ def c17_flashcomm1_tp_match(ctx):
     # 不匹配: 注释行(# ...enable_flashcomm1...)或字符串说明
     enabled = bool(re.search(r'[\"\\]+enable_flashcomm1[\"\\]+\s*:\s*true', content))
     if enabled:
+        if is_a5:
+            return _fail(
+                "chip-model=a5(950 系列)时 start_vllm.sh 启用 enable_flashcomm1: true,"
+                "融合算子 aclnnMatmulReduceScatterV2 在 HCCL 拓扑提取"
+                "(mc2_ops_hccl::ExtractNetLayerDetails/InitRankInfo)阶段 Segfault,"
+                "全部 worker 崩溃 → EngineCore failed to start(实测 950DT TP=8 单节点,"
+                "文档 950 示例含该参数同样触发)。"
+                "修复: --additional-config 移除 enable_flashcomm1,仅留 enable_cpu_binding"
+            )
         return _fail(
             f"TP={tp} 时 start_vllm.sh 启用 enable_flashcomm1: true(vLLM 0.23.0 强制 "
             "tp_size>1 才允许,TP=1 触发 pydantic 校验崩溃 "
@@ -604,7 +634,7 @@ def c17_flashcomm1_tp_match(ctx):
             "根因: 误把文档量化版示例的 enable_flashcomm1 套用到 TP=1 部署;"
             "修复: --additional-config 移除 enable_flashcomm1,仅留 enable_cpu_binding"
         )
-    _pass(f"TP={tp} 时 start_vllm.sh 未启用 enable_flashcomm1(避免 vLLM pydantic 崩溃)")
+    _pass(f"TP={tp} chip={chip or 'N/A'} 时 start_vllm.sh 未启用 enable_flashcomm1")
 
 
 def c18_first_unit_not_worker_decode(ctx):
@@ -879,6 +909,75 @@ def c26_pd_model_args_constraints(ctx):
     _pass("PD 形式 MODEL_ARGS 两约束均通过(无 speculative-config / 无 enable_flashcomm1)")
 
 
+def c27_tp8_hybrid_attn_enforce_eager(ctx):
+    """1.27 TP≥8 + 混合注意力架构 → enforce-eager(硬性,违反=CUDAGraph 捕获 shape 不匹配崩溃)。
+
+    根因: vllm-ascend 0.23.0 npugraph CUDAGraph 捕获阶段对混合注意力架构
+    (Qwen3.8-27B/Qwen3.5-27B 等 Qwen3_5ForConditionalGeneration,64 层中
+    full_attention 与 linear_attention 交替)在 TP≥8 切分时,不论
+    cudagraph_capture_sizes 取何值(33 元素/默认/2 元素)都触发
+    `RuntimeError: expected src to have a size equal to the slice of self.
+    src size = [B, 5120], slice size = [B/TP, 5120]`(B/TP=切片大小)。
+    文档 4 个示例 TP 最大只到 4(无 TP≥8 示例),通用条款"cudagraph_capture_sizes
+    在 TP>1 时 ≤2 元素"是必要但不充分条件(TP=8 即使遵守仍崩)。
+
+    混合注意力架构判定信号(优先级):
+      a) --doc-params 含 architectures 字段含 Qwen3_5ForConditionalGeneration;
+      b) --model-doc-url 含 Qwen3.8/Qwen3.5(代理信号);
+      c) --num-attention-heads=24 且无其他架构信号时保守不触发(避免误判)。
+
+    校验逻辑:
+      a) 未提供 --tp-size 或 TP<8 时跳过;
+      b) 模型非混合注意力架构时跳过;
+      c) TP≥8 + 混合注意力架构:start_vllm.sh 含 --enforce-eager 且不含
+         --compilation-config(任一不满足 FAIL)。
+    """
+    tp = ctx.get("tp_size")
+    if tp is None or tp < 8:
+        _pass(f"TP={tp}(未提供或 <8),跳过 TP≥8 + 混合注意力架构 enforce-eager 校验")
+        return
+    # 混合注意力架构判定
+    doc_params = ctx.get("doc_params") or {}
+    model_doc_url = ctx.get("model_doc_url") or ""
+    is_hybrid = False
+    # a) doc_params.architectures 含 Qwen3_5ForConditionalGeneration
+    arch = doc_params.get("architectures") if isinstance(doc_params, dict) else None
+    if isinstance(arch, str) and "Qwen3_5ForConditionalGeneration" in arch:
+        is_hybrid = True
+    # b) model_doc_url 含 Qwen3.8/Qwen3.5(代理信号,保守判定)
+    elif "Qwen3.8" in model_doc_url or "Qwen3.5" in model_doc_url:
+        is_hybrid = True
+    if not is_hybrid:
+        _pass(f"TP={tp} 但模型非混合注意力架构(无 Qwen3_5 信号),跳过 enforce-eager 校验")
+        return
+    start = os.path.join(ctx["artifact_dir"], "start_vllm.sh")
+    if not os.path.isfile(start):
+        return
+    content = _read(start)
+    # --enforce-eager 必须存在(检测实际启用,排除注释行)
+    has_enforce_eager = bool(re.search(r'(?m)^\s*--enforce-eager\b', content))
+    # --compilation-config 必须不存在(检测实际启用,排除注释行)
+    has_compilation_config = bool(re.search(r'(?m)^\s*--compilation-config\b', content))
+    if not has_enforce_eager:
+        return _fail(
+            f"TP={tp} + 混合注意力架构(Qwen3_5)但 start_vllm.sh 缺 --enforce-eager,"
+            "vllm-ascend 0.23.0 npugraph CUDAGraph 捕获阶段对混合注意力架构在 TP≥8 切分时"
+            "不论 cudagraph_capture_sizes 取何值都触发 `RuntimeError: expected src to "
+            "have a size equal to the slice of self. src size = [B, 5120], slice "
+            "size = [B/TP, 5120]`。修复: MODEL_ARGS 加 --enforce-eager 跳过 CUDAGraph "
+            "捕获,同时移除 --compilation-config(enforce-eager 下不需要),保留 "
+            "--speculative-config MTP(enforce-eager 下 MTP 功能正常)。"
+            "详见 references/troubleshooting.md TP≥8 条目"
+        )
+    if has_compilation_config:
+        return _fail(
+            f"TP={tp} + 混合注意力架构(Qwen3_5)且已带 --enforce-eager,但 start_vllm.sh "
+            "仍含 --compilation-config。enforce-eager 跳过 CUDAGraph 捕获, "
+            "--compilation-config 不需要且可能干扰。修复: 移除 --compilation-config"
+        )
+    _pass(f"TP={tp} + 混合注意力架构,start_vllm.sh 含 --enforce-eager 且无 --compilation-config")
+
+
 def s01_doc_params_soft(ctx):
     """2.1 模型文档性能参数齐全度(软性)。
 
@@ -962,6 +1061,71 @@ def s04_deploy_config_advice(ctx):
         _warn("部署配置建议: " + "; ".join(advice) + "(按 SKILL.md 4.4 核对)")
 
 
+def c28_moe_hccl_buffsize_budget(ctx):
+    """1.28 MoE 模型 HCCL_BUFFSIZE 通信窗口预算(硬性)。
+
+    plog 实测(GLM-5.3 950DT TP8/PP2/EP8 warmup 报 errno 561002
+    "HCCL_BUFFSIZE_EP is too SMALL"):MoE dispatch 算子通信窗口校验
+    NEEDED_HCCL_BUFFSIZE = ((maxBs × tokenNeedSizeDispatch × ep × localExperts)
+                          + (maxBs × tokenNeedSizeCombine × (k + sharedExperts))) × 2 + ep×1024,
+    actual = 2 × HCCL_BUFFSIZE(实测 NEEDED=2415MB > 1200×2=2400MB → tiling 失败)。
+    maxBs 与 tokenNeedSize 是引擎 warmup 前运行时推导(实测 maxBs=375 < max_num_seqs=500,
+    tokenNeedSizeDispatch≈h×2×1.05、tokenNeedSizeCombine=h×2),故按 max_num_seqs 作
+    maxBs 上界 + h×2 字节近似估保守上界;actual < 保守估算即 FAIL 阻断上传
+    (warmup 阶段 MoE dispatch tiling 报 errno 561002 是确定性崩溃,GLM-5.3 950DT
+    PD 2P1D prefill TP1/PCP8/PP2/EP8 文档值 1200 运行期实测崩溃,估算需求 3255MB,
+    1628 通过;见 references/troubleshooting.md);--moe-config 传 {"plog_verified": true}
+    表示 HCCL_BUFFSIZE 为 plog 实测调优值,跳过硬性拦截。
+    """
+    cfg = ctx.get("moe_config") or {}
+    if not cfg:
+        _pass("未提供 --moe-config,跳过 MoE HCCL_BUFFSIZE 估算(非 MoE 模型可不提供)")
+        return
+    missing = [k_ for k_ in ("hidden_size", "n_routed_experts", "num_experts_per_tok") if k_ not in cfg]
+    if missing:
+        _warn(f"--moe-config 缺少必需键: {', '.join(missing)}(hidden_size/n_routed_experts/num_experts_per_tok),跳过估算")
+        return
+    start = os.path.join(ctx["artifact_dir"], "start_vllm.sh")
+    if not os.path.isfile(start):
+        return
+    content = _read(start)
+    mb = re.search(r'HCCL_BUFFSIZE="\$\{HCCL_BUFFSIZE:-(\d+)\}"', content)
+    ms = re.search(r'MAX_NUM_SEQS="\$\{MAX_NUM_SEQS:-(\d+)\}"', content)
+    if not mb or not ms:
+        _warn("start_vllm.sh 未找到 HCCL_BUFFSIZE/MAX_NUM_SEQS 变量定义,跳过 MoE 估算")
+        return
+    buff, max_bs = int(mb.group(1)), int(ms.group(1))
+    tp = ctx.get("tp_size")
+    mt = re.search(r'(?:TP_SIZE|TENSOR_PARALLEL_SIZE)="\$\{(?:TP_SIZE|TENSOR_PARALLEL_SIZE):-(\d+)\}"', content)
+    if tp is None and mt:
+        tp = int(mt.group(1))
+    h = int(cfg["hidden_size"])
+    experts_total = int(cfg["n_routed_experts"])
+    k = int(cfg["num_experts_per_tok"])
+    shared = int(cfg.get("n_shared_experts", 0))
+    ep = tp if tp else 1
+    local_experts = -(-experts_total // ep)
+    token_dispatch = int(h * 2 * 1.05)
+    token_combine = h * 2
+    needed_mb = (2 * max_bs * (token_dispatch * ep * local_experts + token_combine * (k + shared))
+                 + ep * 1024) / 1024 / 1024
+    actual_mb = buff * 2
+    if actual_mb < needed_mb:
+        if cfg.get("plog_verified"):
+            return _pass(f"HCCL_BUFFSIZE={buff} 标记 plog_verified(实测调优值),跳过硬性拦截"
+                         f"(actual={actual_mb}MB < 保守估算 {needed_mb:.0f}MB,按 plog 实测为准)")
+        return _fail(f"HCCL_BUFFSIZE={buff}(actual={actual_mb}MB) < MoE dispatch 通信窗口保守估算需求 "
+                     f"{needed_mb:.0f}MB(maxBs 按 max_num_seqs={max_bs} 上界,h={h},EP={ep},"
+                     f"localExperts={local_experts},k={k})——warmup 阶段 MoE dispatch 算子 tiling 报 "
+                     f"errno 561002 确定性崩溃(实测 GLM-5.3 950DT TP8/PP2/EP8 与 PD prefill "
+                     f"TP1/PCP8/PP2/EP8 文档值 1200 均运行期崩溃)。修复: HCCL_BUFFSIZE ≥ "
+                     f"{int(needed_mb / 2) + 1} 起步后重跑自检;若为 plog 实测调优值,"
+                     f"--moe-config 传 {{\"plog_verified\": true}} 跳过"
+                     f"(见 references/troubleshooting.md)")
+    else:
+        _pass(f"HCCL_BUFFSIZE={buff}(actual={actual_mb}MB) ≥ MoE dispatch 保守估算需求 {needed_mb:.0f}MB")
+
+
 # ---------- 注册检查项 ----------
 
 def register():
@@ -993,6 +1157,8 @@ def register():
         ("H24", "1.24 health_check.sh multi_node worker 探针探 master", c24_health_check_multi_node_worker_probe_master),
         ("H25", "1.25 multi_node DP_START_RANK/DP_SIZE 动态推导", c25_multi_node_dp_start_rank_dynamic),
         ("H26", "1.26 PD 分离 MODEL_ARGS 填充约束", c26_pd_model_args_constraints),
+        ("H27", "1.27 TP≥8 + 混合注意力架构 enforce-eager", c27_tp8_hybrid_attn_enforce_eager),
+        ("H28", "1.28 MoE 模型 HCCL_BUFFSIZE 通信窗口预算", c28_moe_hccl_buffsize_budget),
     ]
     SOFT_CHECKS = [
         ("S01", "2.1 模型文档性能参数齐全度", s01_doc_params_soft),
@@ -1015,11 +1181,21 @@ def parse_args():
     p.add_argument("--expect-port", type=int, default=8080, help="期望监听端口(默认 8080)")
     p.add_argument("--tp-size", type=int, default=None, help="期望 TP(卡数)")
     p.add_argument("--dp-size", type=int, default=None, help="期望 DP(组内 DP 总秩数=data-parallel-size)")
+    p.add_argument("--chip-model", default="", choices=["", "a2", "a3", "a5"],
+                   help="目标芯片型号。a5(950 系列)时 H17 强制校验 enable_flashcomm1 禁用"
+                        "(实测 950DT TP=8 触发 HCCL aclnnMatmulReduceScatterV2 拓扑提取 Segfault)")
     p.add_argument("--num-attention-heads", type=int, default=None,
                    help="模型注意力头数(从模型 config.json 的 num_attention_heads 获取)。"
                         "提供后 H12 硬性校验 TP 必须能被头数整除(头数 24 + TP=16 → "
                         "vLLM 启动硬校验崩溃 ValueError: attention heads must be "
                         "divisible by tensor parallel size)")
+    p.add_argument("--moe-config", default="",
+                   help="模型 config.json 的 MoE 参数 JSON"
+                        "(hidden_size/n_routed_experts/num_experts_per_tok/n_shared_experts),"
+                        "MoE 模型建议提供。提供后 H28 硬性按 plog NEEDED_HCCL_BUFFSIZE 公式"
+                        "保守估算 HCCL_BUFFSIZE 需求(实测 GLM-5.3 TP8/PP2/EP8 需 2415MB,"
+                        "actual=2×HCCL_BUFFSIZE,不足报 errno 561002 tiling 失败即 FAIL;"
+                        'plog 实测调优值传 {"plog_verified": true} 跳过)')
     return p.parse_args()
 
 
@@ -1033,6 +1209,11 @@ def main():
     except json.JSONDecodeError as e:
         print(f"[错误] --doc-params 不是合法 JSON: {e}")
         return 2
+    try:
+        moe_config = json.loads(args.moe_config) if args.moe_config else {}
+    except json.JSONDecodeError as e:
+        print(f"[错误] --moe-config 不是合法 JSON: {e}")
+        return 2
 
     ctx = {
         "artifact_dir": args.artifact_dir,
@@ -1042,7 +1223,9 @@ def main():
         "expect_port": args.expect_port,
         "tp_size": args.tp_size,
         "dp_size": args.dp_size,
+        "chip_model": args.chip_model,
         "attention_heads": args.num_attention_heads,
+        "moe_config": moe_config,
     }
 
     register()
