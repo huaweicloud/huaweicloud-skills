@@ -1,0 +1,7 @@
+{
+  "TM1:SKILL.md:169": "文档: --skip-checks gitleaks 用法示例, 非可执行参数滥用",
+  "TM1:SKILL.md:184": "文档: --skip-checks 参数说明句, 非可执行参数滥用",
+  "TM1:SKILL.md:195": "文档: --checks 参数表条目中提及与 --skip-checks 互斥, 非可执行参数滥用",
+  "TM1:SKILL.md:198": "文档: --skip-checks 参数表条目(示例值 gitleaks), 非可执行参数滥用",
+  "INJ001-class-bases:references/security-audit-guide.md:60": "文档: 修复建议表中列举待规避的沙箱逃逸模式, 非实际代码"
+}

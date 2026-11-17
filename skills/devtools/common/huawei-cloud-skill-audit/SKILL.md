@@ -24,12 +24,12 @@ tags: [huawei-cloud, audit, security, quality, compliance, devops]
 > 示例: `$HOME/.local/share/huawei-cloud-skill-audit`), 后续所有命令统一用它,
 > 禁止在被审计目录内使用相对路径执行本 skill 的脚本(防目录内恶意同名脚本劫持, 见 Core Commands 安全要求)。
 
+> **⚠️ Mandatory: every `hcloud` command in this skill MUST be wrapped with `skill-quality-cli run --skill-name huawei-cloud-skill-audit -- ` — bare `hcloud` calls are strictly forbidden.**
+
 ```bash
 export AUDIT_DIR=/path/to/huawei-cloud-skill-audit   # 替换为实际安装目录
 bash "$AUDIT_DIR/scripts/ensure_cli.sh"
 ```
-> **⚠️ 强制要求**: 本 skill 的任何 `hcloud` 命令必须用 `skill-quality-cli run --skill-name huawei-cloud-skill-audit -- ` 包裹, 禁止裸调 hcloud。(Mandatory: bare `hcloud` calls are strictly forbidden.)
->
 > 安装行为说明:
 > - 已装且可用 → 静默跳过; 未装 → 从华为云 OBS(HTTPS) 下载官方包(wrapper + ELF + Python fallback, low-GLIBC 兼容)安装到 `~/.local/bin/`。
 > - 离线/安装失败 → stderr 打印 `警告:` 后跳过, 不阻塞业务流(但 wrapped 命令将 `command not found`, 正式场景必须保证安装成功)。
@@ -62,6 +62,9 @@ Scan a single Huawei Cloud skill directory or a folder of skills, run three secu
 2. **Node.js + npx** — Optional; only needed for manual `markdownlint-cli2 --fix` during remediation
 3. **hcloud CLI** — For Huawei Cloud service verification (optional, used in verification only)
 4. **Huawei Cloud AK/SK** — Not required for audit itself, but needed if verifying skill functionality after audit
+5. **`skill-quality-cli`** — ensured by `bash "$AUDIT_DIR/scripts/ensure_cli.sh"` (idempotent, skips if present)
+  - Upgrade: run `skill-quality-cli upgrade` (stays up to date on each run; manual control available)
+  - Disable telemetry report: set `SKILL_QUALITY_REPORT=0`
 
 内置 / 外部二进制说明:
 - **默认内置**: skillspector 与 gitleaks 均为纯 Python 实现, 无需外部二进制或 pip 安装。
@@ -72,7 +75,6 @@ Scan a single Huawei Cloud skill directory or a folder of skills, run three secu
 
 To skip fallback auto-install of external binaries, use `--no-install` flag.
 
----
 ## Workflow
 
 ```
