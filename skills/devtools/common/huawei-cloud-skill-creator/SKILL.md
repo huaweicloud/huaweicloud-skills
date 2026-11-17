@@ -43,16 +43,16 @@ bash scripts/ensure_cli.sh
 ```
 
 `ensure_cli.sh` is non-blocking by design (warns and exits 0 even on failure), so **verify it actually
-works**; if the CLI is still missing, run the fail-closed manual installer:
+works**; if the CLI is still missing, re-run the idempotent entry:
 
 ```bash
-command -v skill-quality-cli >/dev/null 2>&1 && skill-quality-cli version >/dev/null 2>&1 || bash scripts/install_cli.sh
+command -v skill-quality-cli >/dev/null 2>&1 && skill-quality-cli version >/dev/null 2>&1 || bash scripts/ensure_cli.sh
 ```
 
-**Failure handling**: if `skill-quality-cli` remains unavailable after `install_cli.sh` (network /
+**Failure handling**: if `skill-quality-cli` remains unavailable after `ensure_cli.sh` (network /
 checksum / platform), **terminate the Pre-check** — do not fall back to bare `hcloud`
-(the Mandatory wrapper below applies to every hcloud call; the bundled quality-CLI installer
-ships in created skills as `scripts/ensure_cli.sh` + `scripts/install_cli.sh`).
+(the Mandatory wrapper below applies to every hcloud call; the bundled `scripts/ensure_cli.sh`
+is copied into created skills unchanged — do not hand-rewrite it).
 
 ### Verification Steps
 
@@ -103,7 +103,7 @@ If **none** of the above are available when Phase 4/5 testing starts, prompt the
 4. **Huawei Cloud AK/SK** — Auto-scan all environment variables prefixed HUAWEI / HW / HWC matching ACCESS_KEY / _AK / SECRET_KEY / _SK. Hardcoding AK/SK in scripts, docs, or command lines is **forbidden**.
 5. **API Reference**: https://console.huaweicloud.com/apiexplorer/#/openapi
 - **skill-quality-cli** — ensured by bash scripts/ensure_cli.sh (idempotent, skips if present)
-  - Upgrade: run skill-quality-cli upgrade manually (no auto-upgrade)
+  - Upgrade: run `skill-quality-cli upgrade` (stays up to date on each run; manual control available)
   - Disable telemetry report: set SKILL_QUALITY_REPORT=0
 ## Workflow — Six-Phase Strict Pipeline
 
@@ -205,7 +205,7 @@ Generate Skill files based on Phase 2 conclusions:
 4. **Create directory structure:**
 
    ```text
-   skills/{skill-name}/  → SKILL.md, references/ (iam-policies.md recommended; cli-installation-guide.md recommended when CLI is used; verification-method.md / dataflow-diagram.md / acceptance-criteria.md recommended), scripts/test-cli-commands.sh, scripts/ensure_cli.sh + scripts/install_cli.sh (quality CLI, required — see rule 14), templates/test-vars.json
+   skills/{skill-name}/  → SKILL.md, references/ (iam-policies.md recommended; cli-installation-guide.md recommended when CLI is used; verification-method.md / dataflow-diagram.md / acceptance-criteria.md recommended), scripts/test-cli-commands.sh, scripts/ensure_cli.sh (quality CLI, required — see rule 14), templates/test-vars.json
    ```
 
 5. **SKILL.md content generation rules:**
@@ -248,13 +248,13 @@ Generate Skill files based on Phase 2 conclusions:
     A stray :/quote/misindent invalidates the frontmatter (critical); regenerate before proceeding.
 13. **Change scope** — A pull request must change only one Skill directory. Use bash scripts/validate-skill.sh -s {skill-path} -b <base-ref> to validate the PR diff when a base ref is available.
 14. **Quality-CLI integration (required for every generated skill)** — the generated skill must carry the same quality-reporting capability as this creator skill itself (skill-quality-cli telemetry, opt-out via SKILL_QUALITY_REPORT=0):
-    - **Scripts**: copy scripts/ensure_cli.sh and scripts/install_cli.sh from THIS skill's scripts/ into the generated skill's scripts/ (identical content — do not hand-rewrite).
+    - **Scripts**: copy scripts/ensure_cli.sh from THIS skill's scripts/ into the generated skill's scripts/ (identical content — do not hand-rewrite).
     - **SKILL.md 4-point embed** (idempotent — skip any part already present):
       a. Overview 末尾加 1 句: **Dependency**: Quality telemetry is collected automatically via skill-quality-cli (installed by scripts/ensure_cli.sh if absent).
-      b. Prerequisites 追加: - **skill-quality-cli** — ensured by bash scripts/ensure_cli.sh (idempotent, skips if present)，另加 2 行   - Upgrade: run skill-quality-cli upgrade manually (no auto-upgrade) 与   - Disable telemetry report: set SKILL_QUALITY_REPORT=0
+      b. Prerequisites 追加: - **skill-quality-cli** — ensured by bash scripts/ensure_cli.sh (idempotent, skips if present)，另加 2 行   - Upgrade: run `skill-quality-cli upgrade` (stays up to date on each run; manual control available) 与   - Disable telemetry report: set SKILL_QUALITY_REPORT=0
       c. 在核心流程第一个 ```bash 代码块内前置强制指令（用生成 skill 自己的 name 替换 <name>）: > **⚠️ Mandatory: every hcloud command in this skill MUST be wrapped with skill-quality-cli run --skill-name <name> -- ** — bare hcloud calls are strictly forbidden.**
       d. 将 SKILL.md 所有 ```bash 代码块内的裸 hcloud <Service> <Operation> ... 命令包裹为 skill-quality-cli run --skill-name <name> -- hcloud ...（已包裹的跳过；<placeholder> 模板行不包）
-    - **references**: 在生成的 references/cli-installation-guide.md 中合并 skill-quality-cli 章节（ensure_cli.sh 幂等就绪 / install_cli.sh 手动安装 / 手动 upgrade / SKILL_QUALITY_REPORT=0 关闭）— 不得删除既有 KooCLI 安装与认证内容。
+    - **references**: 在生成的 references/cli-installation-guide.md 中合并 skill-quality-cli 章节（ensure_cli.sh 幂等就绪 / 手动 upgrade（SKILL_QUALITY_NO_AUTO_UPGRADE=1）/ SKILL_QUALITY_REPORT=0 关闭）— 不得删除既有 KooCLI 安装与认证内容。
     - **Execution name**: 所有嵌入用生成 skill 自身的 frontmatter name，禁止用本 creator 的 name。
     - **Re-validate**: 注入后重跑 bash scripts/validate-skill.sh -s {skill-path}，确认 SKILL.md ≤ 500 行、文件 ≤ 30。
 
@@ -271,7 +271,7 @@ Generate Skill files based on Phase 2 conclusions:
 - **CLI cases** — one case per hcloud command; e.g., `hcloud ECS ListServersDetails --cli-region=cn-north-4 --limit=1`
    - **SDK cases** — one case per SDK call; e.g., list_sub_customer_coupons(limit=1) — note: BSS SDK only supports cn-north-1 and similar regions, use --cli-region=cn-north-1 (or HUAWEI_REGION=cn-north-1) for BSS samples
    - **API cases** — one case per user-provided endpoint; e.g., curl -X GET {endpoint}
-   - **Own-script smoke cases** — 每个自带脚本至少 1 条正例：有 --help/-h 的脚本用 --help 冒烟；否则用 bash -n <脚本绝对路径> 语法检查。脚本路径必须解析为绝对路径（如 bash $PWD/scripts/ensure_cli.sh --help），避免相对路径在执行时失效。示例：bash $PWD/scripts/ensure_cli.sh --help / bash -n $PWD/scripts/validate-skill.sh
+   - **Own-script smoke cases** — 每个自带脚本至少 1 条正例：有 --help/-h 的脚本用 --help 冒烟；否则用 bash -n <脚本绝对路径> 语法检查。脚本路径必须解析为绝对路径（如 bash -n $PWD/scripts/ensure_cli.sh），避免相对路径在执行时失效。注意 ensure_cli.sh 为无参数解析的官方薄 shim，不支持 --help；validate-skill.sh 仅支持 -s/-b，同样不支持 --help——两者均用 bash -n。示例：bash -n $PWD/scripts/ensure_cli.sh / bash -n $PWD/scripts/validate-skill.sh
 
 2. **Save test cases as JSON** → templates/test-vars.json:
 
@@ -345,7 +345,7 @@ Generate Skill files based on Phase 2 conclusions:
    - Reference Documents section (Critical) — match Reference Documents, References, or 参考文档
    - KooCLI Command Format Standard section (Low) — required when CLI is involved; match the English or Chinese heading
    - references/cli-installation-guide.md (Medium) — recommended when CLI is involved, file existence (optional)
-   - Quality-CLI integration (High) — scripts/ensure_cli.sh + scripts/install_cli.sh exist; SKILL.md contains the skill-quality-cli run Mandatory mandate and wrapped hcloud commands
+   - Quality-CLI integration (High) — scripts/ensure_cli.sh exists; SKILL.md contains the skill-quality-cli run Mandatory mandate and wrapped hcloud commands
    - references/iam-policies.md (Medium) — recommended, file existence (optional)
    - references/verification-method.md (Medium) — recommended file existence
    - references/acceptance-criteria.md (Low) — recommended file existence
@@ -419,7 +419,7 @@ hcloud <Service> <Operation> --cli-region=<region> [--key=value ...] — 底层�
 - **hcloud CLI 通用格式**：hcloud <Service> <Operation> --cli-region=<region> [--key=value ...]，详见 KooCLI Command Format Standard。
 - **结构/规范校验（Phase 3/6）**：执行 bash scripts/validate-skill.sh 并传入 -s 参数指向目标 skill 目录（如 -s skills/devtools/common/huawei-cloud-skill-creator）。
 - **功能测试（Phase 4/5）**：执行 bash scripts/test-cli-commands.sh，传入 -s 参数指向 skill 目录、-e 参数选择执行模式（cli/sdk/api/auto）。
-- **质量 CLI 就绪**：执行 bash scripts/ensure_cli.sh（幂等；缺失时自动安装 skill-quality-cli），手动安装用 bash scripts/install_cli.sh。
+- **质量 CLI 就绪**：执行 bash scripts/ensure_cli.sh（幂等；缺失时自动安装 skill-quality-cli），若 CLI 仍缺失，重复执行 bash scripts/ensure_cli.sh（幂等）。
 
 > test-cli-commands.sh 仅执行白名单命令（hcloud/python3/curl/bash 开头），其他命令被拒绝且不会执行。validate-skill.sh 对不存在的 skill 目录会明确报错（exit 1）。
 
