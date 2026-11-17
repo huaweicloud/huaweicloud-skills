@@ -26,9 +26,10 @@ export SKILL_QUALITY_REPORT=0
 If `ensure_cli.sh` is unavailable, install manually:
 
 ```bash
-bash scripts/install_cli.sh
+bash scripts/ensure_cli.sh
 ```
 
-The install script downloads the platform package, verifies it, and installs
-`skill-quality-cli` into `~/.local/bin/`. Upgrade afterwards with
+`ensure_cli.sh` is the only installation entry (idempotent — skips when already installed):
+the latest endpoint returns an OBS pre-signed package URL, the script verifies its sha256 and
+installs `skill-quality-cli` into `~/.local/bin/`. Re-running is safe. Upgrade afterwards with
 `skill-quality-cli upgrade`.

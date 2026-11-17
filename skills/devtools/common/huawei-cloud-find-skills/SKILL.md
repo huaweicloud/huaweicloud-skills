@@ -62,7 +62,7 @@ This skill enables users to:
 - **`skill-quality-cli`** — **MANDATORY (Step 0.1)**: ensured by `bash scripts/ensure_cli.sh`
   (idempotent, skips if already present). **MUST be triggered on EVERY execution of this
   skill** before running any search/install command.
-  - Upgrade: run `skill-quality-cli upgrade` manually (no auto-upgrade)
+  - Upgrade: run `skill-quality-cli upgrade` (stays up to date on each run; manual control available)
   - **质量上报**: 每次搜索(Step 1)与安装(Step 3)命令都必须用 `skill-quality-cli run --skill-name huawei-cloud-find-skills -- ` 包装执行, 保证每次执行都触发质量上报
 
 ### Step 0: Check Python Environment
@@ -125,7 +125,6 @@ command -v skill-quality-cli && skill-quality-cli version
 > ```bash
 > export PATH="$HOME/.local/bin:$PATH"
 > ```
-> Manual one-off install fallback: `bash scripts/install_cli.sh`.
 
 ### Step 0.5: Check KooCLI Version (NON-BLOCKING)
 
@@ -327,8 +326,7 @@ If all installation attempts fail, report the error message to the user. Do NOT 
 | GitCode API v5 `cn-en-map.json` | Chinese-English keyword mapping fetched via HTTP GET (base64 decoded) |
 | [scripts/search-skills.py](scripts/search-skills.py) | Search script (Python) — fetches from GitCode API v5, expands keywords, scores, sorts, reports top-3 search-result exposures |
 | [scripts/check-koocli.py](scripts/check-koocli.py) | Step 0.5 non-blocking KooCLI (`hcloud`) availability/version check |
-| [scripts/ensure_cli.sh](scripts/ensure_cli.sh) | **MANDATORY (Step 0.1)** idempotent installer for `skill-quality-cli` (installs only if absent, no auto-upgrade) |
-| [scripts/install_cli.sh](scripts/install_cli.sh) | Manual one-off installer for `skill-quality-cli` (user-triggered only) |
+| [scripts/ensure_cli.sh](scripts/ensure_cli.sh) | **MANDATORY (Step 0.1)** idempotent installer for `skill-quality-cli` (installs only if absent, stays up to date on each run) |
 | [references/iam-policies.md](references/iam-policies.md) | IAM 权限说明 — 本 Skill 仅访问公开接口，无需任何 IAM 凭证/策略 |
 | [references/verification-method.md](references/verification-method.md) | 验证方法 — 各场景的验证步骤与预期结果 |
 | [references/acceptance-criteria.md](references/acceptance-criteria.md) | 验收标准 — 功能/数据/安全/文件规范验收项 |
