@@ -38,7 +38,7 @@ bash scripts/check_env.sh
 
 | Incorrect form | Why it is rejected |
 |----------------|--------------------|
-| `hcloud ECS ListServersDetails --cli-region=cn-north-4` | KooCLI is not an execution path for this skill |
+| A KooCLI (`hcloud`) invocation | KooCLI is not an execution path for this skill; use the Python subcommands above |
 | `huawei_ecs.py show_server --region cn-north-4` without `--server_id` | required parameter missing, exit 2 |
 | `scripts/ecs/list_servers_details.py` | old per-operation path removed; use the subcommand |
 

@@ -29,6 +29,12 @@ import ssl
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
+try:
+    sys.stdout.reconfigure(line_buffering=True)
+    sys.stderr.reconfigure(line_buffering=True)
+except (AttributeError, ValueError):
+    pass
+
 
 # ── 环境检查缓存 ──────────────────────────────────────────────────────
 
@@ -37,6 +43,44 @@ DEFAULT_CACHE_TTL = 1800  # 秒，默认 30 分钟内复用上次通过的环境
 
 # 全局：是否强制刷新缓存
 FORCE_REFRESH = False
+
+
+# ── 总超时预算 ────────────────────────────────────────────────────────
+
+DEFAULT_TOTAL_TIMEOUT = 120  # 秒，重副作用步骤的整体上限
+
+_START_TS = float(os.getenv("HW_ENV_CHECK_START_TS") or time.time())
+os.environ.setdefault("HW_ENV_CHECK_START_TS", str(_START_TS))
+
+
+def get_total_timeout():
+    try:
+        return max(1, int(float(os.getenv("HW_ENV_CHECK_TIMEOUT", DEFAULT_TOTAL_TIMEOUT))))
+    except (TypeError, ValueError):
+        return DEFAULT_TOTAL_TIMEOUT
+
+
+def remaining_budget():
+    """返回距离总超时还剩多少秒（可能为负）。"""
+    return get_total_timeout() - (time.time() - _START_TS)
+
+
+def step_timeout(default):
+    """单步超时：不超过剩余总预算，避免分步超时突破总超时。"""
+    remaining = remaining_budget()
+    if remaining <= 1:
+        return 1
+    return max(1, int(min(default, remaining)))
+
+
+def budget_exhausted(label):
+    """总预算耗尽时打印可读原因并返回 True。"""
+    if remaining_budget() > 0:
+        return False
+    print(f"\nFAIL: 环境检查总超时（{get_total_timeout()}s）已用尽，{label}未执行", flush=True)
+    print("  可能原因: 依赖镜像或网络不可达", flush=True)
+    print("  处理建议: 检查网络/代理后重试，或设置 HW_ENV_CHECK_TIMEOUT=<更大的秒数>", flush=True)
+    return True
 
 
 def _cache_path():
@@ -179,8 +223,11 @@ def _ensure_venv_and_reexec():
 
     # 创建 venv（如不存在）
     if not os.path.isfile(venv_python):
-        print("\n  PEP 668: 系统 Python 禁止直接 pip install，正在创建虚拟环境...")
-        rc, out, err = run_cmd([sys.executable, "-m", "venv", venv_dir], timeout=60)
+        if budget_exhausted("创建虚拟环境"):
+            sys.exit(3)
+        print("\n  PEP 668: 系统 Python 禁止直接 pip install，正在创建虚拟环境...", flush=True)
+        print(f"  该步骤最长等待 {step_timeout(60)}s", flush=True)
+        rc, out, err = run_cmd([sys.executable, "-m", "venv", venv_dir], timeout=step_timeout(60))
         if rc != 0:
             fail(f"创建虚拟环境失败: {err}")
             if os.name == "nt":
@@ -195,9 +242,10 @@ def _ensure_venv_and_reexec():
     # HW_ENV_REEXEC_GUARD 防止 venv 判定失效时反复自我调用。
     if os.getenv("HW_ENV_REEXEC_GUARD") == "1":
         return False
-    print(f"  使用虚拟环境 Python: {venv_python}")
-    env = dict(os.environ, HW_ENV_REEXEC_GUARD="1")
+    print(f"  使用虚拟环境 Python: {venv_python}", flush=True)
+    env = dict(os.environ, HW_ENV_REEXEC_GUARD="1", PYTHONUNBUFFERED="1")
     sys.stdout.flush()
+    sys.stderr.flush()
     rc = subprocess.run(
         [venv_python, os.path.abspath(__file__)] + sys.argv[1:],
         env=env,
@@ -205,15 +253,15 @@ def _ensure_venv_and_reexec():
     sys.exit(rc)
 
 def info(msg):
-    print(f"  {msg}")
+    print(f"  {msg}", flush=True)
 
 
 def ok(msg):
-    print(f"  OK: {msg}")
+    print(f"  OK: {msg}", flush=True)
 
 
 def fail(msg):
-    print(f"  FAIL: {msg}")
+    print(f"  FAIL: {msg}", flush=True)
 
 
 def get_project_id(region):
@@ -237,6 +285,9 @@ def get_project_id(region):
 
     try:
         http_config = build_http_config()
+        http_config.timeout = (5, 10)
+        http_config.retry_times = 0
+        print(f"  正在通过 IAM 解析 project_id（区域: {region}，单次超时约 10s）...", flush=True)
         credentials = BasicCredentials(ak, sk)
         if security_token:
             credentials = credentials.with_security_token(security_token)
@@ -249,15 +300,15 @@ def get_project_id(region):
         response = client.keystone_list_projects(request)
         projects = response.projects
         if not projects:
-            print(f"未找到可访问的项目 (区域: {region})")
-            exit(0)
+            print(f"  未找到可访问的项目 (区域: {region})", flush=True)
+            return ""
         for project in projects:
             if getattr(project, 'name', '') == region:
                 return project.id
         return projects[0].id
     except Exception as e:
-        print(f"获取项目 ID 失败: {e}")
-        exit(-1)
+        print(f"  获取项目 ID 失败: {e}", flush=True)
+        return ""
 
 
 # ── 工具函数 ──────────────────────────────────────────────────────────
@@ -361,17 +412,19 @@ def _check_deps_already_installed():
 
 def _ensure_pip():
     """确保 pip 可用，若不可用则尝试 ensurepip 引导安装"""
-    rc, _, _ = run_cmd([sys.executable, "-m", "pip", "--version"])
+    rc, _, _ = run_cmd([sys.executable, "-m", "pip", "--version"],
+                       timeout=step_timeout(20))
     if rc == 0:
         return True
 
-    print("  pip 不可用，尝试使用 ensurepip 引导安装...")
-    rc, _, err = run_cmd([sys.executable, "-m", "ensurepip", "--upgrade"])
+    print("  pip 不可用，尝试使用 ensurepip 引导安装...", flush=True)
+    rc, _, err = run_cmd([sys.executable, "-m", "ensurepip", "--upgrade"],
+                         timeout=step_timeout(45))
     if rc == 0:
-        print("  ensurepip 安装 pip 成功")
+        print("  ensurepip 安装 pip 成功", flush=True)
         return True
 
-    print(f"  ensurepip 也失败: {err}")
+    print(f"  ensurepip 也失败: {err}", flush=True)
 
     get_pip_path = os.path.join(tempfile.gettempdir(), "get-pip.py")
     urls = [
@@ -389,7 +442,7 @@ def _ensure_pip():
             print(f"    下载失败: {e}")
             continue
 
-        rc, out, err = run_cmd([sys.executable, get_pip_path], timeout=120)
+        rc, out, err = run_cmd([sys.executable, get_pip_path], timeout=step_timeout(45))
         if rc == 0:
             ok("get-pip.py 安装 pip 成功")
             return True
@@ -408,41 +461,51 @@ def _find_fastest_mirror():
         "https://pypi.tuna.tsinghua.edu.cn/simple",
         "https://mirrors.aliyun.com/pypi/simple",
     ]
+    print("  正在探测依赖镜像源（每个最多 5s）...", flush=True)
     for url in mirrors:
+        if remaining_budget() <= 3:
+            print("  总超时临近，停止镜像探测", flush=True)
+            break
         try:
             req = urllib.request.Request(url, method="HEAD")
-            resp = urllib.request.urlopen(req, timeout=5)
+            resp = urllib.request.urlopen(req, timeout=max(1, min(5, int(remaining_budget()))))
             if resp.status == 200:
-                print(f" 可用镜像：{url}")
+                print(f"  可用镜像：{url}", flush=True)
                 return url
         except Exception:
             continue
-    print(" 无可用镜像源，将尝试官方源")
+    print("  无可用镜像源，将尝试官方源", flush=True)
     return None
 
 
 def install_dependencies():
     """安装 requirements.txt 中的依赖，优先使用国内镜像源"""
-    print("\n[3/5] 安装 Python 依赖")
+    print("\n[3/5] 安装 Python 依赖", flush=True)
 
     root = get_project_root()
     req_file = os.path.join(root, "requirements.txt")
 
     if not os.path.exists(req_file):
-        print(f"  未找到 {req_file}")
+        print(f"  未找到 {req_file}", flush=True)
         return False
 
     # 检查依赖是否已满足（非 --upgrade 模式可跳过安装）
     if not UPGRADE and _check_deps_already_installed():
-        print("  核心依赖已安装，跳过 pip 安装（使用 --upgrade 可强制重新安装）")
+        print("  核心依赖已安装，跳过 pip 安装（使用 --upgrade 可强制重新安装）", flush=True)
         return True
+
+    if budget_exhausted("依赖安装"):
+        return False
+
+    print(f"  开始安装（首次可能耗时数十秒，剩余预算约 {max(0, int(remaining_budget()))}s）...",
+          flush=True)
 
     # 确保 pip 可用
     if not _ensure_pip():
         return False
 
     mirror_url = _find_fastest_mirror()
-    pip_timeout = "30"
+    pip_timeout = "20"
 
     pip_cmd = [sys.executable, "-m", "pip", "install", "-r", req_file]
 
@@ -450,29 +513,30 @@ def install_dependencies():
     if UPGRADE:
         pip_cmd.append("--upgrade")
 
+    def _run_pip(extra_args, source_label):
+        if budget_exhausted("依赖安装"):
+            return False
+        attempt_timeout = step_timeout(45)
+        print(f"  正在从{source_label}安装依赖（最长 {attempt_timeout}s）...", flush=True)
+        rc, out, err = run_cmd(pip_cmd + extra_args, timeout=attempt_timeout)
+        if rc == 0:
+            print(f"  依赖安装成功（{source_label}）", flush=True)
+            return True
+        print(f"  {source_label}安装失败：{(err or out)[-200:]}", flush=True)
+        return False
+
     if mirror_url:
         host = mirror_url.split("//")[1].split("/")[0]
-        rc, out, err = run_cmd(
-            pip_cmd + ["-i", mirror_url, "--trusted-host", host,
-                       "--timeout", pip_timeout, "--retries", "2"],
-            timeout=120,
-        )
-        if rc == 0:
-            print(" 依赖安装成功")
+        if _run_pip(["-i", mirror_url, "--trusted-host", host,
+                     "--timeout", pip_timeout, "--retries", "1"], "镜像源"):
             return True
-        print(f" 镜像源安装失败，尝试官方源：{err[-200:]}")
 
     # 兜底：官方源
-    rc, _, err = run_cmd(
-        pip_cmd + ["--timeout", pip_timeout, "--retries", "2"],
-        timeout=120,
-    )
-
-    if rc == 0:
-        print(" 依赖安装成功（官方源）")
+    if _run_pip(["--timeout", pip_timeout, "--retries", "1"], "官方源"):
         return True
 
-    print(f" 依赖安装失败：{err[-300:]}")
+    print("  依赖安装失败：无法访问依赖镜像或网络不可达", flush=True)
+    print("  处理建议: 检查网络/代理，或预装依赖后使用 HW_ENV_CHECK_TTL 复用检查缓存", flush=True)
     return False
 
 
@@ -491,21 +555,22 @@ SDK_MODULES = [
 
 def check_sdk():
     """校验华为云 SDK 是否可正常导入"""
-    print("\n[4/5] 校验华为云 SDK")
+    print("\n[4/5] 校验华为云 SDK", flush=True)
+    print(f"  正在校验 {len(SDK_MODULES)} 个 SDK 模块（本地导入，无需网络）...", flush=True)
 
     all_ok = True
     for mod in SDK_MODULES:
         try:
             __import__(mod)
-            print(f"  {mod}")
+            print(f"  {mod} 可导入", flush=True)
         except ImportError:
-            print(f"  {mod} 不可导入")
+            print(f"  {mod} 不可导入", flush=True)
             all_ok = False
 
     if all_ok:
-        print("  SDK 校验通过")
+        print("  SDK 校验通过", flush=True)
     else:
-        print("  部分 SDK 不可导入，请运行: pip install -r requirements.txt")
+        print("  部分 SDK 不可导入，请运行: pip install -r requirements.txt", flush=True)
 
     return all_ok
 
@@ -514,7 +579,7 @@ def check_sdk():
 
 def check_credentials():
     """通过调用 IAM API 验证 AK/SK 凭据是否有效"""
-    print("\n[5/5] 校验凭据有效性（调用 IAM API）")
+    print("\n[5/5] 校验凭据有效性（调用 IAM API）", flush=True)
 
     try:
         from config import load_credentials, build_http_config
@@ -526,6 +591,11 @@ def check_credentials():
         AK, SK, Region, SecurityToken = load_credentials()
 
         http_config = build_http_config()
+        # 环境自检不允许长时间等待：缩短短连接超时并关闭自动重试
+        http_config.timeout = (5, 10)
+        http_config.retry_times = 0
+
+        print("  正在调用 IAM API（单次超时约 10s，不等待长时间重试）...", flush=True)
 
         credentials = (
             GlobalCredentials(AK, SK)
@@ -547,12 +617,13 @@ def check_credentials():
         response = client.list_users_v5(request)
 
         user_count = len(response.users) if response.users else 0
-        print(f"  IAM 凭据有效，成功获取用户列表（{user_count} 个用户）")
+        print(f"  IAM 凭据有效，成功获取用户列表（{user_count} 个用户）", flush=True)
         return True
 
     except Exception as e:
-        print(f"  IAM API 调用失败: {e}")
-        print("  可能原因: AK/SK 无效、已过期、或网络不通")
+        print(f"  IAM API 调用失败: {e}", flush=True)
+        print("  可能原因: AK/SK 无效、已过期、或网络不通", flush=True)
+        print("  处理建议: 检查凭据与网络/代理后重试；本步骤已按短超时执行，不会长时间等待", flush=True)
         return False
 
 
@@ -563,8 +634,8 @@ TOTAL_STEPS = 5
 
 
 def skip_step(step_num, label):
-    print(f"\n[{step_num}/{TOTAL_STEPS}] {label}")
-    print("  跳过（前置步骤未通过）")
+    print(f"\n[{step_num}/{TOTAL_STEPS}] {label}", flush=True)
+    print("  跳过（前置步骤未通过）", flush=True)
 
 
 def parse_args():
@@ -602,9 +673,10 @@ def main():
             print_cache_hit(cache)
             return 0
 
-    print("=" * 50)
-    print("  华为云资源查询 - 环境确保")
-    print("=" * 50)
+    print("=" * 50, flush=True)
+    print("  华为云资源查询 - 环境确保", flush=True)
+    print(f"  总超时预算: {get_total_timeout()}s（可用 HW_ENV_CHECK_TIMEOUT 调整）", flush=True)
+    print("=" * 50, flush=True)
 
     results = []
 
@@ -616,38 +688,51 @@ def main():
 
     # 步骤 3：依赖安装
     if all(results):
-        results.append(install_dependencies())
+        if budget_exhausted("依赖安装"):
+            results.append(False)
+        else:
+            results.append(install_dependencies())
     else:
         skip_step(3, "安装 Python 依赖")
         results.append(False)
 
     # 步骤 4：SDK 校验
     if all(results):
-        results.append(check_sdk())
+        if budget_exhausted("SDK 校验"):
+            results.append(False)
+        else:
+            results.append(check_sdk())
     else:
         skip_step(4, "校验华为云 SDK")
         results.append(False)
 
     # 步骤 5：凭据有效性
     if all(results):
-        results.append(check_credentials())
+        if budget_exhausted("凭据校验"):
+            results.append(False)
+        else:
+            results.append(check_credentials())
     else:
         skip_step(5, "校验凭据有效性（调用 IAM API）")
         results.append(False)
 
     # 汇总
     print()
-    print("=" * 50)
+    print("=" * 50, flush=True)
     if all(results):
-        print("  环境确保完成，所有检查项均通过（含 API 验证）")
-        print("  可以正常使用查询脚本")
-        
-        # 自动获取 project_id 并导出到环境变量
+        print("  环境确保完成，所有检查项均通过（含 API 验证）", flush=True)
+        print("  可以正常使用查询脚本", flush=True)
+
+        # 自动获取 project_id 并导出到环境变量（可选步骤，预算不足时跳过）
         region = os.getenv("HW_REGION_NAME", "cn-north-4")
-        project_id = get_project_id(region)
+        project_id = ""
+        if remaining_budget() > 5:
+            project_id = get_project_id(region)
+        else:
+            print("  剩余预算不足，跳过 project_id 自动解析（可显式设置 HW_PROJECT_ID）", flush=True)
         if project_id:
             os.environ["HW_PROJECT_ID"] = project_id
-            print(f"  HW_PROJECT_ID 已自动获取: {project_id}")
+            print(f"  HW_PROJECT_ID 已自动获取: {project_id}", flush=True)
             # 写入到临时文件供 shell 读取
             project_id_file = os.path.join(get_project_root(), ".project_id")
             with open(project_id_file, "w") as f:
@@ -655,12 +740,13 @@ def main():
 
         # 写入环境检查缓存，后续调用走快速路径
         write_cache(project_id)
-        print(f"  环境检查结果已缓存（有效期 {get_cache_ttl()}s）")
+        print(f"  环境检查结果已缓存（有效期 {get_cache_ttl()}s）", flush=True)
     else:
-        print("  环境确保未完成，请按上述提示修复后重新运行")
-    print("=" * 50)
+        print("  环境确保未完成（exit 3），请按上述提示修复后重新运行", flush=True)
+        print("  常见原因: 依赖镜像/网络不可达、SDK 未安装或凭据无效", flush=True)
+    print("=" * 50, flush=True)
 
-    return 0 if all(results) else 1
+    return 0 if all(results) else 3
 
 
 if __name__ == "__main__":

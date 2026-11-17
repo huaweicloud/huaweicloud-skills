@@ -1,7 +1,7 @@
 ---
 name: huawei-cloud-computing-query
 description: |
-  Queries Huawei Cloud computing resources (ECS/BMS/IMS/AS/CCE), Covers ECS instances, flavors, keypairs, quotas, server groups, block devices, NICs, VNC console, BMS bare metal servers/flavors/quotas, IMS images/OS versions/members/quotas, AS scaling groups/configs/policies/activity logs/lifecycle hooks/warm pools/quotas, and CCE clusters/nodes/node pool details/node pool tags/cluster tags/quotas (read-only). No write operations. Cross-category: for cloud disks (EVS) use huawei-cloud-storage-query; for ECS create/start/stop/reboot/delete/resize use huawei-cloud-ecs-manage; for CCE workloads/namespaces/events use the container/cce kubectl-based skills. Use this skill when the user needs to query ECS instance details, list flavors, check BMS availability, browse images, view auto-scaling group/policy status, or inventory CCE clusters and nodes. Triggers include: "弹性云服务器", "ECS", "裸金属", "BMS", "镜像", "IMS", "弹性伸缩", "AS", "伸缩组", "伸缩策略", "规格查询", "CCE", "云容器引擎", "集群", "节点", "节点池", "flavor", "instance", "image", "scaling", "cluster", "node".
+  Queries Huawei Cloud computing resources (ECS/BMS/IMS/AS/CCE), Covers ECS instances, flavors, keypairs, quotas, server groups, block devices, NICs, VNC console, BMS bare metal servers/flavors/quotas, IMS images/OS versions/members/quotas, AS scaling groups/configs/policies/activity logs/lifecycle hooks/warm pools/quotas, and CCE clusters/nodes/node pool details/node pool tags/cluster tags/quotas (read-only). No write operations. Cross-category: for cloud disks (EVS) use the storage query skill; for ECS create/start/stop/reboot/delete/resize use the ECS management skill; for CCE workloads/namespaces/events use the CCE kubectl-based skills. Use this skill when the user needs to query ECS instance details, list flavors, check BMS availability, browse images, view auto-scaling group/policy status, or inventory CCE clusters and nodes. Triggers include: "弹性云服务器", "ECS", "裸金属", "BMS", "镜像", "IMS", "弹性伸缩", "AS", "伸缩组", "伸缩策略", "规格查询", "CCE", "云容器引擎", "集群", "节点", "节点池", "flavor", "instance", "image", "scaling", "cluster", "node".
 triggers: [弹性云服务器, ECS, 裸金属, BMS, 镜像, IMS, 弹性伸缩, AS, 伸缩组, 伸缩策略, 规格查询, CCE, 云容器引擎, 集群, 节点, 节点池, flavor, instance, image, scaling, cluster, node]
 ---
 # Huawei Cloud Resource Query
@@ -65,8 +65,17 @@ powershell -ExecutionPolicy Bypass -File scripts/check_env.ps1
 ```
 
 The check runs light credential and Python checks first, then dependency, SDK and service checks.
-Missing credentials fail fast with exit code 2. Force a re-check with `--force` or
-`HW_ENV_CHECK_FORCE=1`; change the TTL with `--ttl <seconds>` or `HW_ENV_CHECK_TTL`.
+Missing credentials fail fast with exit code 2; a host with credentials but unreachable package
+mirrors or network fails with exit code 3 and a readable hint. The first run may create a virtual
+environment and install the SDK packages, which can take tens of seconds; the whole run is bounded by
+a total timeout (`HW_ENV_CHECK_TIMEOUT`, default 120 seconds) so it never waits silently. Force a
+re-check with `--force` or `HW_ENV_CHECK_FORCE=1`; change the cache TTL with `--ttl <seconds>` or
+`HW_ENV_CHECK_TTL`.
+
+Quick self-check without installing dependencies: run `-h` on any entry script, for example
+`.venv/bin/python3 scripts/huawei_ecs.py list_servers_details -h`. Help handling happens before the
+credential and SDK checks, so it exits 0 and prints the accepted parameters even on a bare host. Use it
+to confirm the skill is executable before spending time on the full environment check.
 
 Environment variables (values are secrets; never echo them):
 
@@ -142,13 +151,13 @@ Environment variables (values are secrets; never echo them):
 | User intent | Entry point |
 |-------------|-------------|
 | Query ECS / BMS / IMS / AS / CCE (read-only) | **this skill** |
-| ECS lifecycle change (create/start/stop/reboot/delete/resize) | `huawei-cloud-ecs-manage` |
+| ECS lifecycle change (create/start/stop/reboot/delete/resize) | ECS management skill (write path) |
 | ECS reinstall OS | ECS console, or KooCLI outside this skill |
-| Cloud disks, snapshots, EVS quotas; OBS buckets / objects | `huawei-cloud-storage-query` |
+| Cloud disks, snapshots, EVS quotas; OBS buckets / objects | Storage query skill |
 | CCE workloads, namespaces, events, pod logs | `container/cce/` kubectl-based skills |
-| CCE metrics; CCE add-ons and node pool resize (write) | `huawei-cloud-cce-metric-analyzer`, `huawei-cloud-cce-cluster-management` |
-| RDS instances / databases | `huawei-cloud-rds-smart-service` |
-| SWR instances / repositories; VOD resources | `huawei-cloud-swr-list`, `huawei-cloud-vod-collector` |
+| CCE metrics; CCE add-ons and node pool resize (write) | CCE metrics and cluster management skills |
+| RDS instances / databases | RDS query skill |
+| SWR instances / repositories; VOD resources | SWR / VOD query skills |
 | DeH / dedicated host | Not covered yet; use the console |
 
 When a request crosses the read-only boundary, name the owning skill and stop; do not attempt a write

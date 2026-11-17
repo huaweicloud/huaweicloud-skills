@@ -81,8 +81,18 @@ fi
 echo "OK: Python ${PYTHON_VERSION} >= 3.6"
 
 # 步骤 3：调用 Python 详细检查
+# 总超时（秒）：仅作兜底，分步超时与可读报错由 ensure_env.py 负责
+TOTAL_TIMEOUT="${HW_ENV_CHECK_TIMEOUT:-120}"
+case "${TOTAL_TIMEOUT}" in
+    ''|*[!0-9]*) TOTAL_TIMEOUT=120 ;;
+esac
+export HW_ENV_CHECK_TIMEOUT="${TOTAL_TIMEOUT}"
+export HW_ENV_CHECK_START_TS="${HW_ENV_CHECK_START_TS:-$(date +%s)}"
+export PYTHONUNBUFFERED=1
+
 echo ""
 echo "[3/3] 执行详细检查"
+echo "  首次执行可能创建虚拟环境并安装依赖，最长等待 ${TOTAL_TIMEOUT}s（可用 HW_ENV_CHECK_TIMEOUT 调整）"
 echo "--------------------------------------------------"
 
 PYTHON_SCRIPT="${SCRIPT_DIR}/ensure_env.py"
@@ -93,12 +103,38 @@ if [ ! -f "$PYTHON_SCRIPT" ]; then
     exit 1
 fi
 
-# 透传参数（--force 强制重查、--ttl/--upgrade 等），环境检查结果默认缓存 30 分钟
-"${PYTHON_CMD}" "${PYTHON_SCRIPT}" "$@"
-EXIT_CODE=$?
+if command -v timeout >/dev/null 2>&1; then
+    # 透传参数（--force 强制重查、--ttl/--upgrade 等），环境检查结果默认缓存 30 分钟
+    timeout --signal=TERM "${TOTAL_TIMEOUT}s" "${PYTHON_CMD}" "${PYTHON_SCRIPT}" "$@"
+    EXIT_CODE=$?
+    TIMED_OUT=0
+    if [ "${EXIT_CODE}" -eq 124 ] || [ "${EXIT_CODE}" -eq 137 ] || [ "${EXIT_CODE}" -eq 143 ]; then
+        TIMED_OUT=1
+    fi
+else
+    # 没有 timeout 命令时的可移植看门狗
+    "${PYTHON_CMD}" "${PYTHON_SCRIPT}" "$@" &
+    CHILD_PID=$!
+    ( sleep "${TOTAL_TIMEOUT}"; kill -TERM "${CHILD_PID}" 2>/dev/null ) &
+    WATCHDOG_PID=$!
+    wait "${CHILD_PID}"
+    EXIT_CODE=$?
+    kill "${WATCHDOG_PID}" 2>/dev/null
+    wait "${WATCHDOG_PID}" 2>/dev/null
+    TIMED_OUT=0
+    if [ "${EXIT_CODE}" -eq 137 ] || [ "${EXIT_CODE}" -eq 143 ]; then
+        TIMED_OUT=1
+    fi
+fi
 
 echo ""
 echo "=================================================="
+
+if [ "${TIMED_OUT}" -eq 1 ]; then
+    echo "FAIL: 环境检查超时（超过 ${TOTAL_TIMEOUT}s），可能网络或依赖镜像不可达"
+    echo "  处理建议: 检查网络/代理后重试，或设置 HW_ENV_CHECK_TIMEOUT=<更大的秒数>"
+    exit 3
+fi
 
 if [ "${EXIT_CODE}" -eq 0 ]; then
     echo "✓ 环境检查通过"
@@ -110,7 +146,10 @@ if [ "${EXIT_CODE}" -eq 0 ]; then
         echo "HW_PROJECT_ID 已设置: $HW_PROJECT_ID"
     fi
     exit 0
+elif [ "${EXIT_CODE}" -eq 2 ]; then
+    echo "✗ 缺少凭证，请设置 HW_ACCESS_KEY / HW_SECRET_KEY 后重试"
+    exit 2
 else
-    echo "✗ 环境未就绪，请按提示修复"
-    exit "${EXIT_CODE}"
+    echo "✗ 环境未就绪（exit 3），请按上述提示修复"
+    exit 3
 fi

@@ -1,0 +1,5 @@
+{
+  "skill": "huawei-cloud-computing-query",
+  "note": "SDK-only skill: no CLI command execution path. Static rendering regression tests live in tests/test_list_rendering.py; live read-only verification is performed by QA.",
+  "test_cases": []
+}

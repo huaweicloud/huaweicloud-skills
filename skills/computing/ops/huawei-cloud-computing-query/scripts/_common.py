@@ -334,18 +334,71 @@ def _call(service, op, args):
             pass
     response = method(request)
     if op.get("list") and getattr(args, "all", False):
-        response = _collect_all_pages(service, method, request, response)
+        response = _collect_all_pages(service, method, request, response, op.get("resp"))
     return response, region, project_id
 
 
-def _response_items(response):
+_LIST_META_FIELDS = {
+    "api_version", "body", "count", "discriminator", "kind", "limit",
+    "marker", "page_info", "raw_content", "request_id", "schema",
+    "servers_links", "start_number", "status_code", "total_count",
+    "total_number", "x_request_id",
+}
+
+
+def _discover_list_fields(response):
+    """Find list-valued attributes on an SDK response (metadata excluded)."""
+    fields = []
+    for name in dir(type(response)):
+        if name.startswith("_") or name in _LIST_META_FIELDS:
+            continue
+        try:
+            value = getattr(response, name)
+        except Exception:
+            continue
+        if isinstance(value, list):
+            fields.append(name)
+    return fields
+
+
+def _response_items(response, resp_fields=None):
+    """Return ``(items, total, known_shape)`` for a list response.
+
+    ``known_shape`` False means the response carried no recognised list
+    field at all, so the caller should treat it as a shape error.  A declared
+    field that is empty/None is a legitimate empty result: it is a known
+    shape and yields ``([], ..., True)``.
+    """
     if isinstance(response, dict):
-        return list(response.get("items") or []), response.get("total")
+        for key in ("items", "resources", "servers", "flavors", "events",
+                    "tags", "images"):
+            value = response.get(key)
+            if isinstance(value, list):
+                return list(value), response.get("total"), True
+        return [], response.get("total"), True
+
+    for attr in list(resp_fields or []):
+        value = getattr(response, attr, None)
+        if isinstance(value, list):
+            return value, None, True
+        if isinstance(value, dict):
+            return [value], None, True
+        if value is None:
+            return [], None, True
+
     for attr in ("items", "resources", "servers", "images", "body"):
         value = getattr(response, attr, None)
         if isinstance(value, list):
-            return value, None
-    return [], None
+            return value, None, True
+
+    for attr in _discover_list_fields(response):
+        value = getattr(response, attr, None)
+        if isinstance(value, list):
+            return value, None, True
+        if isinstance(value, dict):
+            return [value], None, True
+
+    return None, None, False
 
 
 def _next_marker(response):
@@ -360,8 +413,9 @@ def _current_command(request):
     return getattr(request, "_hcs_command", "")
 
 
-def _collect_all_pages(service, method, request, first_response):
-    items, total = _response_items(first_response)
+def _collect_all_pages(service, method, request, first_response, resp_fields=None):
+    items, total, _ = _response_items(first_response, resp_fields)
+    items = items or []
     collected = list(items)
     pages = 1
     page_size = API_LIMIT
@@ -376,7 +430,8 @@ def _collect_all_pages(service, method, request, first_response):
             pages += 1
             request.offset = pages
             response = method(request)
-            items, _ = _response_items(response)
+            items, _, _ = _response_items(response, resp_fields)
+            items = items or []
             collected.extend(items)
     elif service == "as" and "resource_instances" not in _current_command(request):
         start = len(collected)
@@ -384,7 +439,8 @@ def _collect_all_pages(service, method, request, first_response):
             pages += 1
             request.start_number = start
             response = method(request)
-            items, _ = _response_items(response)
+            items, _, _ = _response_items(response, resp_fields)
+            items = items or []
             collected.extend(items)
             start += len(items)
     else:
@@ -393,7 +449,8 @@ def _collect_all_pages(service, method, request, first_response):
             pages += 1
             request.marker = marker
             response = method(request)
-            items, _ = _response_items(response)
+            items, _, _ = _response_items(response, resp_fields)
+            items = items or []
             collected.extend(items)
             marker = _next_marker(response)
 
@@ -538,15 +595,10 @@ def _render_value(value):
 
 
 def _render_list(service, op, args, response):
-    items, total = _response_items(response)
-    if not items:
-        for attr in list(op.get("resp") or []):
-            value = getattr(response, attr, None)
-            if isinstance(value, list):
-                items = value
-                break
-    if not items and not isinstance(response, dict):
+    items, total, known_shape = _response_items(response, op.get("resp"))
+    if not known_shape:
         raise RuntimeFailure(f"unexpected response shape for {args.command}: no list field found")
+    items = items or []
 
     if total is None and not isinstance(response, dict):
         for attr in ("count", "total_count", "total_number"):
