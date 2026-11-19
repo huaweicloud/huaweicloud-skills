@@ -184,6 +184,11 @@ Required and conditional fields are listed under [Required Fields](#required-fie
 }
 ```
 
+> **⚠️ `head_spec` / `worker_spec` / `evs_spec` are NATIVE JSON values, not strings.**
+> `"head_spec": "{\"cpu\":0}"` (a string) is rejected with `Request failed (400): Invalid
+> parameter: head_spec`. Only `dataset_configs`, `envs`, and `inputs` are JSON-array
+> **strings**; `head_spec`/`worker_spec` must be objects and `evs_spec` a number.
+
 > Default task and new output names follow `<pipeline_name>-<stage_id>-<MMDDHHmmss>`;
 > parallel evaluation tasks use the member ID. Suggest names with
 > `custom_pipeline.py suggest-names --pipeline-name teleop --stage convert --stage clean`.
@@ -287,7 +292,7 @@ template):
 {
   "algo_type": "OBS_ASSETS",
   "algo_path": "obs://bucket/config/operator-config/",
-  "job_local_path": "/home/user/config/",
+  "job_local_path": "/tmp/cloudrobo/<operator-name>",
   "algo_entrance": "<command>",
   "image": "<image_url>",
   "algo_id": "<valid-uuid-if-provided>"

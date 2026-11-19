@@ -73,7 +73,7 @@ POD_PENDING, timeouts and DELETED.
 ## Cleaning Failure 数据清洗失败
 
 Stage `cleaning` (`dataset proc`, `fail_fast: true`). Its `target_path` is the
-TrainingReady data path, so a cleaning failure means no TrainingReady output.
+训练就绪数据 data path, so a cleaning failure means no 训练就绪数据 output.
 
 ### Common Causes
 
@@ -82,6 +82,7 @@ TrainingReady data path, so a cleaning failure means no TrainingReady output.
 | Task reports the input dataset is not ready | Conversion output readiness/path or a platform-specific release restriction | Verify the recorded conversion asset/version with `show-version`, diagnose readiness/path/access, and continue with verified DRAFT when supported. Confirm publication only for an established RELEASE requirement |
 | Path not found in logs | `dataset_configs` not built from the conversion output | `obs_path` = conversion `target_path`, `asset_id` = conversion `target_asset_id`, `version_id` from `list-versions`, `asset_name` = conversion `output_name` |
 | Custom cleaning config not applied / config path not found | `CURATION_CONFIG_PATH` input missing, wrong or not `obs://` | Copy the operator's current `ext_metadata.inputs[]` element as returned and set only `url_path` to the user's `obs://` directory. Never use an `obs_path` key. If the operator does not declare the input, tell the user |
+| Operator rejects the upstream dataset although the producer reported SUCCEEDED | The producer's output violates something the consumer enforces but does not declare — feature representation, required layout, missing files | Read the failing operator's log for the exact rejected property, then fix the **producer** and re-run it; re-run the consumer on the new version. Do not hand-patch the dataset. Check the log tail too: a task may fail after already writing partial output, so a populated report/output directory does not mean it succeeded |
 | Image pull failure / access denied / OOM | Same as conversion | Same fixes as [Conversion Failure](#conversion-failure-格式转换失败) |
 
 > If the cleaning operator exposes a `robot` env, its value must be one of the values
@@ -95,7 +96,7 @@ TrainingReady data path, so a cleaning failure means no TrainingReady output.
 
 Stage `evaluation` with parallel members `quality-eval` and `diversity-eval`
 (`dataset eval`). Evaluation is **advisory** (`fail_fast: false`): a failed or skipped
-evaluation does not block the TrainingReady output. Wait for both members to reach a
+evaluation does not block the 训练就绪数据 output. Wait for both members to reach a
 terminal state before Stage 5.
 
 ### Common Causes
@@ -147,7 +148,7 @@ terminal state before Stage 5.
 | Stage | `fail_fast` | On `FAILED` / `DELETED` | Options offered to the user |
 |-------|-------------|-------------------------|-----------------------------|
 | `convert-lerobotv3` | `true` | Pipeline pauses; cleaning and evaluation do not start | **retry** (new task) / **terminate** |
-| `cleaning` | `true` | Pipeline pauses; no TrainingReady output | **retry** (new task) / **terminate** |
+| `cleaning` | `true` | Pipeline pauses; no 训练就绪数据 output | **retry** (new task) / **terminate** |
 | `evaluation` (`quality-eval`, `diversity-eval`) | `false` | Pipeline continues to Stage 5 | **retry** the failed member (new eval task) / **skip** (report as ⚠️ in the summary) |
 
 > **skip** is available for `fail_fast: false` stages. A `fail_fast: true` stage can only
@@ -185,3 +186,39 @@ tasks already submitted cannot be bypassed. Unsubmitted single-input processing 
 the Web UI stops later submissions and leaves existing cloud tasks running. A timed-out
 create may already have succeeded: check list-tasks/show-task by the pending task name,
 then reconcile through resolve-action; never blindly resubmit or edit the state file.
+
+---
+
+## Edge Cases (cross-cutting)
+
+| Scenario | Handling |
+|----------|----------|
+| Missing `workspace_id` | Run `cloudrobo workspace use --workspace-id <id>` or pass `--workspace-id` |
+| AK/SK not set | Configure via `cloudrobo config set ak <ak> sk <sk>` or `HUAWEI_CLOUD_AK` / `HUAWEI_CLOUD_SK` (see [CLI Installation Guide](cli-installation-guide.md)) |
+| Input source not specified | Detect from the given path first; ask only if genuinely ambiguous (local / asset / obs) |
+| Ambiguous confirmation ("plan", "ok") | Do not guess; ask one short clarifying question with options |
+| User's path name doesn't exist verbatim | `ls` the parent, fuzzy-match, echo back the resolved path for confirmation |
+| Several independent choices needed | Ask them in one round with recommended defaults; never split across turns |
+| Value has a safe default (pool / cleaning mode / output name) | State it as a default; do not turn it into a question |
+| About to ask "open the monitor?" | Ask and wait; never launch in the same turn |
+| Required operator not found in the CloudRobo site | Stop and tell the user; never substitute another operator |
+| Multiple operator matches | Show matches and ask the user, or use `operator_id` |
+| `--tags` filter returns nothing | Retry with `--sub-type data_processing` / `data_evaluating` + `--name`; still nothing → stop |
+| `robot_type` not in the operator's `robot` enum | Map to an enumerated value or ask the user |
+| Operator declares no `inputs` / `environment_variables` | Omit `inputs` / `envs` |
+| Undeclared `params.envs` key or `params.inputs` name | Error — tell the user |
+| Missing/empty required task_config field | CLI validation error before submission; check required fields in the task config reference |
+| `--algo-type` vs `task_config.algo_type` | Keep identical (`--algo-type` overrides); `dataset eval create-task` has no `--algo-type` |
+| Dataset version `DRAFT` | Verify version/path and continue; consumed as-is by the platform (no publication step exists for the final dataset) |
+| `wait-task` timeout, task non-terminal | Re-run `wait-task`, report progress; do not resubmit |
+| Task `FAILED` / `DELETED` | Diagnose with `get-log`; create a new task after confirmation |
+| `POD_PENDING` on public pool | Smaller flavor (e.g. 2c4g) or dedicated pool; new task after confirmation |
+| `ROBOT_CONFIG environment variable is not set` | Mount the robot description directory via `inputs` (e.g. `ROBOT_CONFIG_PATH`) if the operator declares it |
+| CLI/SDK requires `robot_config` | Outdated client; upgrade the CloudRobo SDK/CLI — do not add the removed field |
+| Evaluation failed | Informational only; report it, the final training-ready dataset is still produced |
+| Circular `depends_on` | Error, ask the user to fix the YAML |
+| Session interrupted | Resume from `~/.cloudrobo/pipeline-runs/<run_id>/state.json` via `pipeline_state.py show` |
+| Evaluation report link | OBS temporary URL; save/download promptly |
+| Object storage | Must use `obs://` paths |
+| Mutating ops | Plan confirmation before create/import/update/create-task |
+| Cross-skill | Single-task proc/eval CRUD, logs, preview and diagnosis → `huawei-cloud-cloudrobo-dataset`; this skill composes selected preset/workspace operator workflows and offers the 仿真/遥操VLA模型数据处理管线 template |

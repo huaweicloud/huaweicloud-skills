@@ -1,16 +1,22 @@
 # Pipeline Summary Template 管线执行总结模板
 
+> **仅在用户要求时产出本详细模板。** 默认情况下 Stage 5 输出的是
+> [交互规范 §7](user-facing-interaction.md#7-result-summary) 定义的**一页结果**：
+> 结果、位置、下一步 —— 不含 ID、不含分阶段表格、不含实例化 YAML。
+> 用一行提示详情（`需要任务 ID / 完整报告 / 技术细节吗？`），用户接受后再展开本模板。
+> 本模板同时是 Agent 应能回答的内容、以及网页导出摘要的依据。
+
 Output skeleton for **Stage 5** of the pipeline. Produce it when the pipeline reaches the
 end, or when it stops at a terminal state (a blocking stage `FAILED` / `DELETED`, or the
-user terminates). Fill every field from real command output (`show-task`, `list-versions`,
-`show-version`, `eval show-task`, `get-preview`). Write `—` for fields that do not apply,
-and never invent values.
+user terminates), **and the user asked for the detailed view**. Fill every field from real
+command output (`show-task`, `list-versions`, `show-version`, `eval show-task`,
+`get-preview`). Write `—` for fields that do not apply, and never invent values.
 
 For a custom workflow, build stage rows from its actual DAG and operator sources,
 including preset-only/workspace-only combinations. Read final data from
 `pipeline.output.from_stage` and report its verified path/asset/version; for eval-only
 workflows preserve the input and list reports. Do not assume a cleaning output or label
-all results TrainingReady. The numbered conversion/cleaning/evaluation examples below
+all results 训练就绪数据. The numbered conversion/cleaning/evaluation examples below
 describe the optional sim/teleop template, not mandatory custom steps.
 
 **Before writing the summary 生成总结前:**
@@ -21,8 +27,8 @@ describe the optional sim/teleop template, not mandatory custom steps.
   `cloudrobo asset show-version --asset-id <target_asset_id> --version-id <version_id>`.
   Optionally list the output files with
   `cloudrobo dataset proc get-frames --task-id <id> --prefix <target_path without obs://<bucket>/>`.
-- The TrainingReady data path is the **cleaning stage's `target_path`**. There is no
-  separate publish step: cleaning + evaluation complete = TrainingReady data.
+- The 训练就绪数据 data path is the **cleaning stage's `target_path`**. There is no
+  separate publish step: cleaning + evaluation complete = 训练就绪数据 data.
 - Evaluation is advisory (`fail_fast: false`). A failed or skipped evaluation makes the
   run ⚠️ PARTIAL, not ❌ FAILED.
 
@@ -31,18 +37,8 @@ advisory members) · ❌ FAILED (`FAILED` / `DELETED`, or a blocking stage did n
 · ⏭️ SKIPPED (not run / skipped by the user)
 
 **Overall result 总体结果:** ✅ if every stage succeeded. ⚠️ if the cleaning stage succeeded
-(TrainingReady data exists) but an evaluation member failed or was skipped. ❌ if
-conversion or cleaning did not succeed (no TrainingReady data).
-
----
-
-## Version Publication 版本发布
-
-At completion, read the exact recorded output asset/version IDs with `show-version` and
-list the statuses of intermediate and final data outputs. Give one consolidated reminder
-about publishing selected versions, respecting decisions already made. DRAFT is not itself
-a run failure/warning, and publication is not a `finish` condition. Publish only after
-confirmation; do not put asset-version status in task `status` or invent set-result fields.
+(训练就绪数据 data exists) but an evaluation member failed or was skipped. ❌ if
+conversion or cleaning did not succeed (no 训练就绪数据 data).
 
 ## Template 模板
 
@@ -80,16 +76,7 @@ confirmation; do not put asset-version status in task `status` or invent set-res
 | Registered input dataset | <asset name> / <asset_id> / <version_id> |
 | Conversion output | <output_name> / <target_asset_id> / <version_id> / <target_path> |
 | Cleaning output | <output_name> / <target_asset_id> / <version_id> / <target_path> |
-| **TrainingReady data path** | **<cleaning target_path>** (asset <pipeline.output.asset_name>, version <version_id>, status <version status from show-version>) |
-
-### Version Status and Publication 版本状态与发布
-
-| Output | Asset ID | Exact version ID | Verified status (`show-version`) | Publication choice |
-|---|---|---|---|---|
-| <intermediate or final stage output> | <id> | <vid> | <DRAFT / RELEASE / actual state / unverified> | <keep current / confirmed publish / undecided> |
-
-> Consolidated reminder: <list versions not yet published and ask once whether any should
-> be published, unless already decided>. Keeping DRAFT does not block pipeline completion.
+| **训练就绪数据 data path** | **<cleaning target_path>** (asset <pipeline.output.asset_name>, version <version_id>) |
 
 ## 3. Evaluation Reports 评测报告
 
@@ -162,7 +149,7 @@ The Web monitor uses `SUCCEEDED_WITH_WARNINGS` for the advisory-failure `PARTIAL
 above. It exports a concise Markdown summary with verified state output, all attempt IDs,
 report OBS paths and the instantiated JSON plan. Agent-produced Stage 5 summaries retain
 the detailed template above. See [Web Monitor](web-monitor.md) for the `finish` protocol;
-Web cached statuses alone do not establish verified TrainingReady artifacts.
+Web cached statuses alone do not establish verified 训练就绪数据 artifacts.
 
 已校验保留原输入跳过的处理步骤单独列明：步骤、bypass_from、原始资产/版本/路径、兼容性核实说明。
-这是未执行处理的告警，不等同于处理成功或生成新版本；跳过清洗不能声称完成清洗或自动达到 TrainingReady。
+这是未执行处理的告警，不等同于处理成功或生成新版本；跳过清洗不能声称完成清洗或自动达到 训练就绪数据。

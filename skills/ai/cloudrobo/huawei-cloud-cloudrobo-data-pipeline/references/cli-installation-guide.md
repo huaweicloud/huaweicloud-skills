@@ -17,10 +17,40 @@ The pipeline scripts/Web require Python 3.9+, including when the CLI itself supp
 older Python. Miniconda's `python` is valid. Select one verified launcher for this run and
 use it consistently; do not rewrite the machine's PATH or add permanent aliases.
 
+**Never use `which`** — it is not available on Windows Git Bash and causes the whole
+command chain to fail with a non-zero exit code. Use `command -v` (Bash/Git Bash) or
+`Get-Command` (PowerShell) instead. Every preflight command must tolerate a missing
+binary (use `|| true` or `|| echo NOT_FOUND` so the chain does not abort).
+
+### Windows adaptation pitfalls 已验证的 Windows 适配坑
+
+These cost real debugging rounds; apply them before writing any local script.
+
+1. **`/tmp` is not shared between Git Bash and native Python.** Git Bash maps `/tmp` to
+   `C:/Users/<user>/AppData/Local/Temp`, while Windows Python resolves `/tmp` to `C:\tmp`.
+   A file written by Bash under `/tmp` is invisible to `python` (`FileNotFoundError` on a
+   path that exists in the shell). **For any local scratch file consumed by Python, use a
+   project-local directory (e.g. `.workcheck/`) or a native Windows path.** Container paths
+   (`/tmp/cloudrobo/...`) are unaffected.
+2. **Avoid `python - <<'PY'` heredocs.** Write the script to a `.py` file and run it;
+   heredocs get mangled by CRLF/quoting on Git Bash.
+3. **`docker` is often absent on Windows.** Check `command -v docker` before choosing any
+   image-build workflow; if missing, fall back to paths that need no build (OBS-mounted
+   code, CLI-only operations).
+4. **Bash treats `\` as an escape.** Use quoted `C:/...` or `/c/...` paths.
+5. **Inline JSON arguments are fragile.** Write JSON to a file and pass the file path.
+
 | Shell | Locate candidates | Path / syntax |
 |---|---|---|
-| Bash / Git Bash | `command -v python3`, `command -v python`, `command -v py` | Quote paths; on Windows use `C:/...` or `/c/...`; continuation `\`; variables `$NAME` |
-| PowerShell | `Get-Command python3,python,py -ErrorAction SilentlyContinue` | Quote Windows paths; use one-line commands or backtick continuation; variables `$env:NAME` |
+| Bash / Git Bash | `command -v cloudrobo \|\| echo NOT_FOUND`; `command -v python3 \|\| command -v python \|\| command -v py` | Quote paths; on Windows use `C:/...` or `/c/...`; continuation `\`; variables `$NAME` |
+| PowerShell | `Get-Command cloudrobo -ErrorAction SilentlyContinue`; `Get-Command python3,python,py -ErrorAction SilentlyContinue` | Quote Windows paths; use one-line commands or backtick continuation; variables `$env:NAME` |
+
+Example Bash preflight (tolerates missing binaries, never aborts):
+```bash
+command -v cloudrobo && cloudrobo --version || echo "cloudrobo CLI not found"
+command -v python3 || command -v python || command -v py || echo "no python launcher"
+python -c "import sys; print(sys.version)" 2>/dev/null || echo "python not runnable"
+```
 
 Only execute candidates that exist, then verify they really run Python 3.9+ (a launcher
 alias alone is insufficient). For a chosen `python`, use this in either shell:
@@ -42,7 +72,7 @@ cd 'C:/Users/name/My Project/huawei-cloud-cloudrobo-data-pipeline'
 python scripts/pipeline-monitor/server.py --background --open
 ```
 
-Do not paste an unquoted `C:\Users\...` path into Bash: backslashes are escape characters.
+Do not paste an unquoted Windows path with backslashes into Bash: backslashes are escape characters.
 The actual skill directory comes from the user's environment, not the sample above.
 
 ### PowerShell

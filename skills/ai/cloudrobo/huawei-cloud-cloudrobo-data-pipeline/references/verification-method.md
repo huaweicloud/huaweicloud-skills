@@ -257,7 +257,7 @@ cloudrobo dataset eval get-log --task-id <eval_task_id> --is-system true     # f
 
 | Check | Expected |
 |-------|----------|
-| TrainingReady path | Equals the cleaning task's `target_path` |
+| 训练就绪数据 path | Equals the cleaning task's `target_path` |
 | Summary | Follows [Pipeline Summary Template](pipeline-summary-template.md): per-stage status, artifacts, resources, issues, all task IDs, instantiated pipeline.yaml |
 | Failed stages | Reported with error message and log-based cause; success claimed only for verified artifacts |
 | Checkpoint | `~/.cloudrobo/pipeline-runs/<run_id>/state.json` schema v2, written through pipeline_state.py with task CAS and historical attempts |
@@ -276,11 +276,11 @@ cloudrobo dataset eval get-log --task-id <eval_task_id> --is-system true     # f
 | Proc wait | `create-task` without `--wait` → `proc wait-task` → `show-task` |
 | Eval parallel | Both eval tasks created without `--wait`, then `eval wait-task` per task |
 | Handoff | Exact asset/version/path verified via task detail and `show-version` → proc `dataset_configs` or eval matching top-level fields plus single-item `dataset_configs` |
-| Eval advisory | Eval failure did not block TrainingReady output |
+| Eval advisory | Eval failure did not block 训练就绪数据 output |
 | No restart | Failures handled by `get-log` diagnosis + new task after confirmation |
 | Agent / Web boundary | Agent uses CLI; Web uses SDK, without CLI subprocesses |
 | Object storage | Only `obs://` paths |
-| Summary | TrainingReady path, task IDs and issues reported |
+| Summary | 训练就绪数据 path, task IDs and issues reported |
 
 ## CLI Command Reference CLI命令参考
 

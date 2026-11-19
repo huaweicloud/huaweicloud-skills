@@ -49,7 +49,7 @@ flowchart TD
 
     subgraph S3[Stage 3: Cleaning 数据清洗 — cleaning]
         D1[dataset proc create-task] --> D2[dataset proc wait-task]
-        D2 --> D3[dataset proc show-task<br/>target_path = TrainingReady path]
+        D2 --> D3[dataset proc show-task<br/>target_path = 训练就绪数据 path]
     end
 
     subgraph S4[Stage 4: Evaluation 数据评测 — parallel_group, fail_fast false]
@@ -68,7 +68,7 @@ flowchart TD
     D3 -->|exact version + show-version<br/>→ eval top-level fields + dataset_configs.version_id| E1
     D3 --> E2
     E4 -->|get-preview report links| F1
-    D3 -->|TrainingReady data path| F1
+    D3 -->|训练就绪数据 data path| F1
 ```
 
 > **Partial pipeline**: when the user already has converted data, the run starts at
@@ -149,7 +149,7 @@ sequenceDiagram
     CLI->>API: GET /v1/data-eng/eval-tasks/{task_id}/preview
     API-->>Agent: temporary OBS URL (save promptly)
 
-    Agent->>User: Stage 5 pipeline summary (TrainingReady path = cleaning target_path)
+    Agent->>User: Stage 5 pipeline summary (训练就绪数据 path = cleaning target_path)
 ```
 
 ## Failure Handling Flow 故障处理流程

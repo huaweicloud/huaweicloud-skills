@@ -79,7 +79,7 @@ repository root). Commands for each check are detailed in
 
 | # | Criterion | Verification | Status |
 |---|-----------|--------------|--------|
-| AC-25 | Evaluation is advisory (`fail_fast: false`): a failed eval member does not block the TrainingReady output; the run is recorded as SUCCEEDED_WITH_WARNINGS with the missing/failed evaluation identified | Run with a failing eval member; the summary still reports the TrainingReady path | ☐ |
+| AC-25 | Evaluation is advisory (`fail_fast: false`): a failed eval member does not block the 训练就绪数据 output; the run is recorded as SUCCEEDED_WITH_WARNINGS with the missing/failed evaluation identified | Run with a failing eval member; the summary still reports the 训练就绪数据 path | ☐ |
 | AC-26 | For each `SUCCEEDED` eval member, `target_report_path` is read with `eval show-task` and the report link is fetched with `dataset eval get-preview --task-id <id> --file-name <target_report_path without obs://<bucket>/>` | Run the commands | ☐ |
 | AC-27 | Each eval member resolves its own optional `params.inputs` config mounts (e.g. `ROBOT_CONFIG_PATH`); no group-level default; absent mounts run the operator's built-in/default config. A pipeline still using `robot_config` fails validation/init with migration guidance; Web retry drops a legacy `robot_config` and keeps refreshed mounts. Invalid `url_path` values are reported. Robot-dependent metrics and operator limitations are explained; mounts only if declared/needed; no `algo_entrance` workaround | Check distinct/absent mounts in preview, YAML, task configs and Web retry, `robot_config` rejection, and old-client errors without dispatch | ☐ |
 
@@ -97,7 +97,7 @@ repository root). Commands for each check are detailed in
 | # | Criterion | Verification | Status |
 |---|-----------|--------------|--------|
 | AC-32 | A pipeline-artifact summary is produced per [Pipeline Summary Template](pipeline-summary-template.md): run overview with per-stage status, data/versions, confirmed resource configuration (live usage available in Console), issues & recommendations, evaluation reports, all task IDs and the instantiated pipeline.yaml | Check the final output | ☐ |
-| AC-33 | Final data comes from output.from_stage, or the input is preserved for eval-only workflows; no generic TrainingReady claim; success is claimed only for verified artifacts | Compare selected source with `show-task` / `show-version` and Web summary | ☐ |
+| AC-33 | Final data comes from output.from_stage, or the input is preserved for eval-only workflows; no generic 训练就绪数据 claim; success is claimed only for verified artifacts | Compare selected source with `show-task` / `show-version` and Web summary | ☐ |
 
 ## Non-Functional Criteria 非功能标准
 
@@ -162,9 +162,9 @@ declared edge by its actual operator contract and select their own output source
 
 | Start Stage | Required Inputs | Output |
 |-------------|-----------------|--------|
-| Stage 3 (cleaning) | Conversion `target_path`, `target_asset_id`, `target_version_id`, asset name | TrainingReady data + eval reports |
+| Stage 3 (cleaning) | Conversion `target_path`, `target_asset_id`, `target_version_id`, asset name | 训练就绪数据 data + eval reports |
 | Stage 4 (evaluation) | Cleaning `target_path`, `target_asset_id`, `target_version_id`, asset name; optional eval config mounts (`inputs`) | Eval reports with actual metric coverage |
-| Full pipeline | Input source (`local` / `asset` / `obs`), stage operators; optional robot description for selected metrics | TrainingReady data + eval reports |
+| Full pipeline | Input source (`local` / `asset` / `obs`), stage operators; optional robot description for selected metrics | 训练就绪数据 data + eval reports |
 
 ## Sign-off 签收
 

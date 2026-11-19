@@ -1,0 +1,5 @@
+[
+  {"id": 1, "prompt": "用 sim/teleop 模板处理我的本地 ros2 数据", "expected": "Detect source from path, infer data_source_type/robot_type, ONE confirmation round with recommended defaults, Stage 0→5 with non-overlapping waits"},
+  {"id": 2, "prompt": "引导我创建一个自定义管线，清洗后加一个自定义算法", "expected": "Guided authoring, ask reuse-vs-onboard custom operator ONCE, default to onboard-with-recommended-settings, generate pipeline.yaml/draft/preview"},
+  {"id": 3, "prompt": "清洗阶段跳过，直接评测", "expected": "Run compatibility verification (downstream accepts LeRobotV3?), approve skip with --decision skip if compatible, never skip conversion stage"}
+]

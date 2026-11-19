@@ -85,7 +85,7 @@ pipeline:
 | `stages[].algo_entrance` | Conditional | Required when `operator_source=obs` — startup command |
 | `stages[].input_from[]` | No | Ordered data references: proc stage IDs or input:<id>; required to disambiguate multiple waiting dependencies/sources; eval accepts one |
 | `stages[].depends_on[]` | No | Waiting stage IDs; defaults to previous stage without input_from; explicit data references imply their producer dependencies |
-| `stages[].fail_fast` | No | Stage-level bool (not inside `params`); default `true` (a failed stage stops the pipeline). Evaluation stage: `false` (advisory, does not block TrainingReady output) |
+| `stages[].fail_fast` | No | Stage-level bool (not inside `params`); default `true` (a failed stage stops the pipeline). Evaluation stage: `false` (advisory, does not block 训练就绪数据 output) |
 | `stages[].parallel_group[]` | Conditional | Parallel member list; mutually exclusive with `operator`/`operator_id`. Each member is an object `{id, operator \| operator_id, params}`; cloud tasks can run concurrently and the next stage waits until all reach a terminal state; reserve/submit/resolve transactions remain sequential |
 | `stages[].parallel_group[].id` | Yes (per member) | Member label; used in the member's task name |
 | `stages[].parallel_group[].operator` / `operator_id` | Yes (one of) | Exact Chinese operator name or exact asset_id of the member |
@@ -191,7 +191,7 @@ Parse result:
   data_source_type: ros2      # inferred from "sim" (template supports Simulation: StarSea R1 / ROS2) — confirm with user
   robot_type:       r1        # inferred, confirm; maps to ros conversion env robot=galaxea_r1
   conversion operator: 数据转换--ros转LeRobotV3   # set explicitly, confirm
-  output.asset_name: <confirmed TrainingReady dataset name>
+  output.asset_name: <confirmed 训练就绪数据 dataset name>
 ```
 
 > `data_source_type`/`robot_type` inferred from the template's supported data types are
@@ -255,7 +255,7 @@ cloudrobo dataset proc create-task --name "sim-teleop-cleaning-cleaning-<MMDDHHm
 
 cloudrobo dataset proc wait-task --task-id <task_id> --timeout 300 --interval 15
 cloudrobo dataset proc show-task --task-id <task_id>
-# Extract: target_path (TrainingReady), target_asset_id
+# Extract: target_path (训练就绪数据), target_asset_id
 
 cloudrobo asset list-versions --asset-id <target_asset_id> --sort-key created_at --sort-dir desc --limit 1
 cloudrobo asset show-version --asset-id <target_asset_id> --version-id <target_version_id>
@@ -285,14 +285,14 @@ cloudrobo dataset eval get-preview --task-id <diversity_task_id> --file-name <ta
 ```
 
 Evaluation stage has `fail_fast: false` — a failed eval task is reported (diagnose with
-`cloudrobo dataset eval get-log --task-id <id>`) but does not block the TrainingReady output.
+`cloudrobo dataset eval get-log --task-id <id>`) but does not block the 训练就绪数据 output.
 
 ### Stage 5: Output
 
 ```
-TrainingReady dataset: <pipeline.output.asset_name>
-TrainingReady data path: <cleaning target_path>
-TrainingReady asset/version: <cleaning target_asset_id> / <cleaning target_version_id>
+训练就绪数据 dataset: <pipeline.output.asset_name>
+训练就绪数据 data path: <cleaning target_path>
+训练就绪数据 asset/version: <cleaning target_asset_id> / <cleaning target_version_id>
 Conversion task ID: <id>
 Cleaning task ID: <id>
 Quality eval task ID: <id>, report: <link>
@@ -314,7 +314,7 @@ Parse result:
   data_source_type: h5        # template default (Teleop: Guodi A2D H5) — confirm with user
   robot_type:       a2d       # template default — confirm with user
   conversion operator: 数据转换--H5转LeRobotV3   # set explicitly, confirm
-  output.asset_name: <confirmed TrainingReady dataset name>
+  output.asset_name: <confirmed 训练就绪数据 dataset name>
 ```
 
 ### Stage 1: Register OBS Asset
@@ -621,3 +621,71 @@ the eval template (see `references/task-config-catalog.md`).
 For branch A/B → merge C, control-only dependencies and backward-compatible single-source rules, see the
 [multi-input authoring example](custom-pipeline-authoring.md#multi-input). Single-dataset branches are recommended,
 not a hard proc limit. Multi-input requires an explicitly selected operator that supports it; eval remains single-input.
+
+---
+
+## Full plan.json example
+
+`pipeline_state.py init --plan` requires plan.json to declare DAG dependencies explicitly
+(`depends_on` / `input_from`), and an eval stage cannot be a data source. A complete
+schema-valid example:
+
+```json
+{
+  "pipeline_name": "teleop",
+  "workspace_id": "<workspace_id>",
+  "inputs": [
+    {
+      "id": "default",
+      "source_type": "local",
+      "local_path": "/data/raw/",
+      "data_source_type": "ros2",
+      "robot_type": "galaxea_r1"
+    }
+  ],
+  "stages": [
+    {
+      "id": "convert",
+      "kind": "proc",
+      "operator": "数据转换--ros转LeRobotV3",
+      "operator_source": "preset",
+      "depends_on": [],
+      "input_from": ["input:default"],
+      "output_name": "teleop-convert"
+    },
+    {
+      "id": "clean",
+      "kind": "proc",
+      "operator": "数据清洗",
+      "operator_source": "preset",
+      "depends_on": ["convert"],
+      "input_from": ["convert"],
+      "output_name": "teleop-clean"
+    },
+    {
+      "id": "quality-eval",
+      "kind": "eval",
+      "operator": "数据集质量评测-LeRobot",
+      "operator_source": "preset",
+      "depends_on": ["clean"],
+      "input_from": ["clean"],
+      "fail_fast": false
+    }
+  ],
+  "output": {
+    "from_stage": "clean",
+    "asset_name": "teleop-clean"
+  }
+}
+```
+
+Key points:
+
+- `inputs[].id` must be unique with multiple inputs; it may be omitted for a single input
+  (defaults to `default`).
+- Every stage must declare `depends_on` (wait dependencies) and `input_from` (data source)
+  explicitly.
+- `input_from` references an initial input as `input:<id>` and an upstream output by stage
+  `id`.
+- **An eval stage cannot be an `input_from` source** (evaluation only produces reports).
+- `pipeline.output.from_stage` must point to a proc stage, not an eval stage.

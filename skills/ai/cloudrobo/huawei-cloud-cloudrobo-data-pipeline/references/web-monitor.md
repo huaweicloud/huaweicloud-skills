@@ -469,7 +469,7 @@ python scripts/pipeline_state.py --run RUN_ID resolve-skip --stage cleaning --ex
 脚本在共享锁内再次检查状态版本、依赖完成、单输入、未提交/未处理、下游尚未提交以及已知格式约束。
 检查失败不改变状态；不要用 set-result 手工标记成功或清空请求绕过检查。
 校验通过后记录 bypassed=true、status=SKIPPED、bypass_from 和原输入的产物字段，不改写数据绑定或制造新资产。
-下游 resolve-inputs 沿用这份确切数据；摘要标明未执行该处理，最终为完成有告警，不能声称已清洗/转换或 TrainingReady。
+下游 resolve-inputs 沿用这份确切数据；摘要标明未执行该处理，最终为完成有告警，不能声称已清洗/转换或 训练就绪数据。
 已开始/失败的处理任务不能使用这个入口。它也不提供“任意指定外部产物跳过”或自动执行后续管线的能力。
 
 ## 4. 页面与操作 Pages and Actions
@@ -488,7 +488,7 @@ python scripts/pipeline_state.py --run RUN_ID resolve-skip --stage cleaning --ex
 | 日志 | 作业/系统日志，文件选择，最新 64 KB，搜索/错误过滤与跳转，完整日志、下载；默认手动刷新，可选开启运行中每 60 秒自动刷新 |
 | 输出预览 | proc 仅列输出根目录第一层文件夹和文件，不展开子目录，支持手动刷新；当前层文件/评测报告按点击获取预览/下载链接 |
 | 详细资源情况 | 在概览复制任务 ID，到 CloudRobo Console 查询；本地 Web 不提供资源监控或资源查询接口 |
-| 完成摘要 | 已核实的 TrainingReady 产物、统计、步骤表、评测报告、告警；可导出 Markdown |
+| 完成摘要 | 已核实的 训练就绪数据 产物、统计、步骤表、评测报告、告警；可导出 Markdown |
 
 任务时间兼容 ISO 字符串及秒/毫秒时间戳。任务配置仍保存资源池和 worker/head 规格，用于任务提交与重试。
 运行提示过多时在提示区域内查看；完成摘要、运行列表、时间线和步骤抽屉各自容纳长内容。
