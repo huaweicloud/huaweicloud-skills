@@ -96,6 +96,14 @@ All interactive creation workflows follow the **Interaction Rules**: at most one
 
 ### Task Polling and Result Handling
 
+> **🎯 Default: Background Polling (non-blocking)** — long-running tasks should
+> NOT block the user's window. By default run `wait-task` + result verification
+> (`get-preview`/`get-frames`) in the **background** via the Bash tool's
+> `run_in_background: true` flag. Only use foreground (blocking) polling when
+> the user explicitly asks for "synchronous" / "blocking" / "前台等待" execution.
+> See [Background Polling Pattern](#background-polling-pattern-non-blocking) below
+> for the exact flow.
+
 1. **Poll status** — `dataset proc wait-task` / `dataset eval wait-task` (recommended 15s interval),
    report each state change to user, until terminal state (SUCCEEDED/FAILED/DELETED). If
    `wait-task` times out while the task is still non-terminal, re-run `wait-task` — do not
@@ -106,14 +114,86 @@ All interactive creation workflows follow the **Interaction Rules**: at most one
 
 **Eval tasks:** After SUCCEEDED, extract report path from `target_report_path` in task detail, use `dataset eval get-preview --task-id <task-id> --file-name <obs-path-without-bucket>` to get OBS temporary link.
 
+#### Background Polling Pattern (Non-Blocking)
+
+When a task is created (or when resuming polling after a previous `wait-task` timeout),
+**default to launching `wait-task` + post-completion verification (`get-preview` /
+`get-frames` + log retrieval) as a single background shell** so the user keeps full
+control of the window while the task runs. The flow:
+
+1. **Right after `create-task` returns** (or when re-polling a non-terminal task),
+   the agent wraps `wait-task` + verification into one bash script and launches it
+   with `Bash(run_in_background: true)`. The agent immediately tells the user:
+   - the `task_id`
+   - the OBS `target_path` / `output_path`
+   - "已转入后台轮询，您可继续其它操作；任务终态（SUCCEEDED/FAILED/DELETED）后我会主动汇报结果"
+2. **Inside the background script** (one-shot, exits when terminal):
+   ```bash
+   # 1. Poll until terminal
+   cloudrobo dataset proc wait-task --task-id <task-id> --timeout 1800 --interval 15 \
+     > /tmp/wait-task-<task-id>.log 2>&1
+   FINAL_STATUS=$(grep -oP '最终状态: \K\w+' /tmp/wait-task-<task-id>.log | tail -1)
+
+   # 2. Branch on terminal state — verification + logs in the SAME background run
+   if [ "$FINAL_STATUS" = "SUCCEEDED" ]; then
+     echo "=== Output structure (get-frames) ===" >> /tmp/wait-task-<task-id>.log
+     cloudrobo dataset proc get-frames \
+       --task-id <task-id> \
+       --prefix "<obs-output-path-without-bucket>" \
+       --max-keys 50 >> /tmp/wait-task-<task-id>.log 2>&1
+     echo "=== System log tail ===" >> /tmp/wait-task-<task-id>.log
+     cloudrobo dataset proc get-log --task-id <task-id> --is-system true \
+       >> /tmp/wait-task-<task-id>.log 2>&1
+   elif [ "$FINAL_STATUS" = "FAILED" ]; then
+     echo "=== System log (FAILED) ===" >> /tmp/wait-task-<task-id>.log
+     cloudrobo dataset proc get-log --task-id <task-id> --is-system true \
+       >> /tmp/wait-task-<task-id>.log 2>&1
+     echo "=== Job log (FAILED) ===" >> /tmp/wait-task-<task-id>.log
+     cloudrobo dataset proc get-log --task-id <task-id> --is-system false \
+       >> /tmp/wait-task-<task-id>.log 2>&1
+   fi
+   ```
+   (For eval tasks swap `dataset proc` → `dataset eval` and replace `get-frames` with
+   the eval `get-preview` of `target_report_path`.)
+3. **When the background task completes**, the agent receives a completion
+   notification, reads `/tmp/wait-task-<task-id>.log`, and reports to the user:
+   - the terminal status (SUCCEEDED/FAILED/DELETED)
+   - for SUCCEEDED: output structure (folders/files) + system log tail
+   - for FAILED: full system + job logs + suggested fix patterns
+4. **User can keep working** during the wait — they may issue new requests, ask
+   questions, or even start other tasks. The agent does NOT hold the window.
+5. **Long-running tasks (>30 min):** set `--timeout 3600` (or higher) in the
+   background `wait-task` call so a single background run covers the whole job
+   without mid-way timeout churn. If a background `wait-task` itself times out
+   while the cloud task is still non-terminal, the agent re-launches another
+   background `wait-task` (same `task_id`) — never creates a duplicate task.
+6. **Multiple concurrent background polls:** each task gets its own
+   `/tmp/wait-task-<task-id>.log` file; the agent tracks each background shell
+   by its `task_id` and reports each one independently when it completes.
+
+**When to use foreground (blocking) polling instead:**
+- User explicitly requests synchronous execution ("前台等待"、"同步等待"、
+  "block until done")
+- Task is expected to finish within ~2 minutes (e.g. quick dry-run-style validation)
+- User is about to chain an immediate dependent step and wants zero latency
+
+In all other cases — **default to background polling** so the user is never
+blocked by a long-running cloud task.
+
 ### Pipeline Workflow (Task Orchestration)
 
 Scenario: data conversion → data evaluation → download artifact
 
-1. Run processing task, wait for SUCCEEDED
+> **Non-blocking by default:** each `wait-task` step below should run in the
+> background per the [Background Polling Pattern](#background-polling-pattern-non-blocking).
+> Chain step N+1 inside the same background script as step N's terminal-state
+> branch — the agent kicks off the next `create-task`/`wait-task` from within
+> the background shell so the user window is never blocked by any wait step.
+
+1. Run processing task, wait for SUCCEEDED (background poll)
 2. Extract `target_path` and `target_asset_id` from task detail
 3. For the eval task, set top-level `dataset_type`/`dataset_id`(=target_asset_id)/`dataset_name`/`dataset_path`(=target_path) on the task-config
-4. Create evaluation task, wait for SUCCEEDED (`dataset eval wait-task --task-id <eval-task-id>`)
+4. Create evaluation task, wait for SUCCEEDED (`dataset eval wait-task --task-id <eval-task-id>`) (background poll)
 5. Get report: `dataset eval get-preview --file-name <path-from-target_report_path>` (remove `obs://<bucket>/` prefix)
 6. Download artifacts via `download-asset`
 
@@ -150,7 +230,13 @@ Aggregate task stats by status, algorithm ranking, time trend, failure rate. Out
 
 ### Long-Running Task Workflow
 
-Start `wait-task` with timeout. On timeout, report status and elapsed time; user decides: continue / view logs / terminate.
+> **Default to background polling** per the
+> [Background Polling Pattern](#background-polling-pattern-non-blocking): start
+> `wait-task` with a generous `--timeout` (e.g. 3600s for long jobs) as a
+> background shell. The user keeps the window; the agent reports back when the
+> background shell completes.
+
+Start `wait-task` with timeout. On timeout, report status and elapsed time; user decides: continue (re-launch another background `wait-task` with same `task_id` — never create a duplicate task) / view logs / terminate.
 
 ## CLI Command Format Standard
 
@@ -728,8 +814,10 @@ algorithm discovery, pipeline, and custom-operator onboarding scenarios.
 
 ### Verification Checklist
 
-- After creating a task, poll status (recommended 15s interval), report each state change to user
-- On SUCCEEDED: verify output via `get-preview`, output system log
+- After creating a task, **launch `wait-task` + post-completion verification (`get-preview`/`get-frames` + log retrieval) as a single background shell** (Bash `run_in_background: true`) per the [Background Polling Pattern](#background-polling-pattern-non-blocking); immediately tell the user the `task_id` + output path so they can keep working
+- On SUCCEEDED: verify output via `get-preview`/`get-frames`, output system log (run inside the same background shell so results are reported when the shell completes)
+- On FAILED: ask user whether to view logs, fetch system and job logs per the two-step flow
+  (list files → get content)
 - On FAILED: ask user whether to view logs, fetch system and job logs per the two-step flow
   (list files → get content)
 - For pipeline: verify processing exact asset/version/path matches eval top-level fields and `dataset_configs[0]`, then eval
@@ -743,6 +831,7 @@ algorithm discovery, pipeline, and custom-operator onboarding scenarios.
 
 - Always discover operators first via `cloudrobo asset list-publication-assets --type algorithm` before creating a task
 - Use `--dry-run` with `create-task`/`copy-task` to validate task config before actual execution
+- **Default to background polling** — after `create-task` returns, launch `wait-task` + post-completion verification as a single background shell (Bash `run_in_background: true`) per the [Background Polling Pattern](#background-polling-pattern-non-blocking) so the user is never blocked; only use foreground blocking `wait-task` when the user explicitly asks for synchronous execution or the task is expected to finish within ~2 minutes
 - Use `wait-task` with `--timeout` to avoid indefinite polling; report each status transition
 - On task failure, retrieve both system logs (`--is-system true`) and job logs (`--is-system false`),
   analyze error patterns (OOM / path not found / image pull failure / OBS access) and suggest fixes
