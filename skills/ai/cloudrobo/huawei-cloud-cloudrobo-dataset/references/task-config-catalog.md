@@ -67,8 +67,8 @@ Extract fields from query operator results and map to task_config:
 | Algorithm Source          | algo_type Value    | Required Fields                                                                                                 |
 |---------------------------|--------------------|-----------------------------------------------------------------------------------------------------------------|
 | Preset algorithm          | `PRESET_ASSETS`    | `algo_id`, `algo_name`, `algo_entrance`, `image` (extract from operator ext_metadata)                           |
-| Workspace asset algorithm | `WORKSPACE_ASSETS` | `algo_id` (required, asset linkage), `algo_name`, `algo_path` (= asset `code_dir`, mount source — **required**), `job_local_path` (**required**), `algo_entrance` (**absolute** `python3 {job_local_path}/entrypoint.py`), `image` (asset `ext_metadata.engine.image_url`). The asset's `image_source` is `custom` for both Mode A and Mode B 空间资产-算法 (the algorithm asset links the image asset via `engine.asset_id` + `engine.asset_version_id`); verified: missing `algo_path`/`job_local_path` fails at runtime (`//entrypoint.py` no such file) |
-| OBS algorithm             | `OBS_ASSETS`       | `algo_path`, `job_local_path`, `algo_entrance`, `image` (provided by user); `algo_id` **omit it** — direct OBS code mount (Mode B OBS算法). If `algo_id` is provided it must be a valid UUID (asset linkage only, runtime still mounts `algo_path`) |
+| Workspace asset algorithm | `WORKSPACE_ASSETS` | `algo_id` (required, asset linkage), `algo_name`, `algo_path` (= asset `code_dir`, mount source — **required**), `job_local_path` (**required**), `algo_entrance` (**absolute** `python3 {job_local_path}/entrypoint.py`), `image` (asset `ext_metadata.engine.image_url`). The asset's `image_source` is `custom` for both 把代码打进镜像 and 代码放 OBS 并注册算法资产 (the algorithm asset links the image asset via `engine.asset_id` + `engine.asset_version_id`); verified: missing `algo_path`/`job_local_path` fails at runtime (`//entrypoint.py` no such file) |
+| OBS algorithm             | `OBS_ASSETS`       | `algo_path`, `job_local_path`, `algo_entrance`, `image` (provided by user); `algo_id` **omit it** — direct OBS code mount (代码放 OBS 并直接挂载). If `algo_id` is provided it must be a valid UUID (asset linkage only, runtime still mounts `algo_path`) |
 
 ## Operator Inputs Mount (`ext_metadata.inputs`)
 
@@ -166,7 +166,7 @@ Each environment variable should include `key`, `value`, and `description` field
 name, description, optional values, etc.), display to user and confirm specific values, then construct as `envs` string.
 Do not hardcode environment variables for any operator.
 
-**⚠️ EXCLUDE platform-injected input ports from `envs` (verified, Mode A e2e):** inputs declared with
+**⚠️ EXCLUDE platform-injected input ports from `envs` (verified, 把代码打进镜像端到端验证):** inputs declared with
 `access_method=env` (e.g. `SOURCE_DATASET_PATH`) are **injected by the platform at runtime**. If `envs` includes them
 with their fallback `default` (e.g. `/tmp/source/dataset`), that literal placeholder **overrides/blocks the platform
 injection** — the container reads the placeholder instead of the injected JSON map and the task fails with
@@ -341,4 +341,4 @@ fields, other fields cannot be updated.
 |--------------------|-------------------------------|--------------------------------------------|
 | `PRESET_ASSETS`    | `algo_id`                     | —                                          |
 | `WORKSPACE_ASSETS` | `algo_id`, `algo_path`, `job_local_path` | — (both ways need these; 空间资产-算法 additionally carries `algo_id` for asset linkage) |
-| `OBS_ASSETS`       | `algo_path`, `job_local_path` | `algo_id` (omit it — direct OBS code mount, Mode B OBS算法; if provided must be a valid UUID, linkage only) |
+| `OBS_ASSETS`       | `algo_path`, `job_local_path` | `algo_id` (omit it — direct OBS code mount, 代码放 OBS 并直接挂载; if provided must be a valid UUID, linkage only) |

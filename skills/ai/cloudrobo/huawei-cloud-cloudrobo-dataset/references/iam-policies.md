@@ -15,8 +15,8 @@ The AK/SK used for dataset operations should have access **only** to the followi
 | `cloudrobo-service` | Full access to `/v1/data-eng/proc-tasks/*` | `https://cloudrobo.{region}.myhuaweicloud.com` |
 | `cloudrobo-asset-manager` (optional) | Read-only access to publication assets (for algorithm discovery) | `https://cloudrobo-gallery.{region}.myhuaweicloud.com` |
 | `cloudrobo-asset-manager` (custom-operator onboarding — write) | Create assets: `POST /v1/assets` (type=image + type=algorithm + type=dataset); Get asset: `GET /v1/assets/{id}`; Update asset: `PUT /v1/assets/{id}`; Create version: `POST /v1/assets/{id}/versions` | `https://cloudrobo-gallery.{region}.myhuaweicloud.com` |
-| SWR (custom-operator Mode A image push) | docker login, docker build, docker push (image upload) — **Mode A only** | `swr.{region}.myhuaweicloud.com` |
-| OBS (custom-operator Mode B `code_dir` / Source ① data upload) | **Read + write** to the workspace-bound bucket: the customer uploads the code themselves, or the skill uploads the generated files on the customer's choice; the platform reads it at runtime | reachable OBS endpoint (e.g. `obs.cn-southwest-2.myhuaweicloud.com`; the default `obs.{region}.myhuaweicloud.com` may not resolve) |
+| SWR (custom-operator 把代码打进镜像 image push) | docker login, docker build, docker push (image upload) — **仅把代码打进镜像时** | `swr.{region}.myhuaweicloud.com` |
+| OBS (custom-operator 代码放 OBS、运行时挂载 `code_dir` / Source ① data upload) | **Read + write** to the workspace-bound bucket: the customer uploads the code themselves, or the skill uploads the generated files on the customer's choice; the platform reads it at runtime | reachable OBS endpoint (e.g. `obs.cn-southwest-2.myhuaweicloud.com`; the default `obs.{region}.myhuaweicloud.com` may not resolve) |
 
 ## Required Endpoints 必需端点
 
@@ -25,8 +25,8 @@ cloudrobo:
   endpoints:
     cloudrobo-service: "https://cloudrobo.{region}.myhuaweicloud.com"
     cloudrobo-asset-manager: "https://cloudrobo-gallery.{region}.myhuaweicloud.com"
-    swr: "swr.{region}.myhuaweicloud.com"          # custom-operator Mode A only
-    cloudrobo-obs: "https://obs.{region}.myhuaweicloud.com"  # optional, Mode B code_dir / dataset upload
+    swr: "swr.{region}.myhuaweicloud.com"          # custom-operator 仅把代码打进镜像时
+    cloudrobo-obs: "https://obs.{region}.myhuaweicloud.com"  # optional, 代码放 OBS、运行时挂载 code_dir / dataset upload
 ```
 
 ## Credential Configuration 认证配置

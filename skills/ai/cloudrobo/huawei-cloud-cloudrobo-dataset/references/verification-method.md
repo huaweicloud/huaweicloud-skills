@@ -136,22 +136,22 @@ Manual verification via the `cloudrobo asset` CLI (equivalent API paths in
 
 ### Post-Onboarding Verification Checklist 上架后验证清单
 
-- [ ] Mode A: `image_asset_id` is non-empty; `algorithm_asset_id` is non-empty
+- [ ] 把代码打进镜像路线：`image_asset_id` is non-empty; `algorithm_asset_id` is non-empty
 - [ ] `GET /v1/assets/{algorithm_asset_id}` returns `status=available`
-- [ ] Mode A: `engine.image_url` in algorithm asset matches the SWR URL from Phase 2
-- [ ] Mode A SWR login: auto-generated from AK/SK; on auto-credential/login failure the cause was classified (AK/SK invalid/expired, SWR not enabled / IAM permission missing, region mismatch, network) and fixed before retry; `Login Succeeded` verified before build/push
-- [ ] Mode B 空间资产-算法: `engine.image_source` = `custom` + `engine.asset_id` = image asset id + `engine.asset_version_id` = image asset version id (**linked to 空间资产-镜像**) and `code_dir` = customer OBS path (under workspace `default_obs_path`) — 空间资产-算法 only
-- [ ] Mode B task-creation way chosen (空间资产-算法 use created algorithm / OBS算法 mount OBS code directly); 空间资产-算法 proc-task `task_config.algo_type=WORKSPACE_ASSETS` with `algo_id` = Phase 3 algorithm `asset_id` + `algo_path` (= asset `code_dir`) + `job_local_path` + absolute `algo_entrance`, OBS算法 `algo_type=OBS_ASSETS` without `algo_id` **and skips Phase 3 asset registration (no `create-asset` calls)**
+- [ ] 把代码打进镜像路线：`engine.image_url` in algorithm asset matches the SWR URL from Phase 2
+- [ ] 把代码打进镜像 SWR login: auto-generated from AK/SK; on auto-credential/login failure the cause was classified (AK/SK invalid/expired, SWR not enabled / IAM permission missing, region mismatch, network) and fixed before retry; `Login Succeeded` verified before build/push
+- [ ] 代码放 OBS 并注册算法资产: `engine.image_source` = `custom` + `engine.asset_id` = image asset id + `engine.asset_version_id` = image asset version id (**linked to 空间资产-镜像**) and `code_dir` = customer OBS path (under workspace `default_obs_path`) — 空间资产-算法 only
+- [ ] 代码放 OBS、运行时挂载 task-creation way chosen (空间资产-算法 use created algorithm / OBS算法 mount OBS code directly); 空间资产-算法 proc-task `task_config.algo_type=WORKSPACE_ASSETS` with `algo_id` = Phase 3 algorithm `asset_id` + `algo_path` (= asset `code_dir`) + `job_local_path` + absolute `algo_entrance`, OBS算法 `algo_type=OBS_ASSETS` without `algo_id` **and skips Phase 3 asset registration (no `create-asset` calls)**
 - [ ] `tags` includes `"Data Processing"`（not `sub_type` — see API constraint）
 - [ ] Phase 4 dataset source asked first (① 空间资产-数据-新建 / ② 空间资产-数据-复用 / ③ OBS存储); **Source ③ OBS存储 `obs_path` bucket equals the workspace-bound bucket (`default_obs_path` from `cloudrobo workspace current`) — foreign-bucket paths were rejected & re-asked**
 - [ ] Phase 4 proc-task reached `SUCCEEDED`; user log shows `[DONE] Processed N items, success N, failed 0` (legacy Chinese form also OK); output frames non-empty
 - [ ] User's original source directory is unmodified (`git status` or `diff`)
-- [ ] Work copy exists at `/tmp/custom-operator-work-{timestamp}/` with `entrypoint.py` (contains `os.environ.get("SOURCE_DATASET_PATH")`); Mode A also `Dockerfile` with `COPY requirements.txt` before `COPY ./src`
+- [ ] Work copy exists at `/tmp/custom-operator-work-{timestamp}/` with `entrypoint.py` (contains `os.environ.get("SOURCE_DATASET_PATH")`); 把代码打进镜像 also `Dockerfile` with `COPY requirements.txt` before `COPY ./src`
 - [ ] On success: `/tmp/custom-operator-work-*` removed (auto-clean); on failure: retained for `--reuse-workdir`
 - [ ] Failure analysis returns JSON with `priority`, `cause`, `fix`, `matched_line`; P0 (ModuleNotFoundError/docker build ERROR), P1 (FileNotFoundError SOURCE_DATASET_PATH), P2 (TypeError/KeyError), unmatched → P3 "contact support"
 
 ### Failure Analysis 失败分析验证
 
 Failure analysis patterns (P0/P1/P2/P3) and the log-truncation rule (first 64KB) are
-documented in `custom-operator/custom-operator-workflow.md`; the error pattern matrix there is the single
+documented in `custom-operator/failure-analysis-guide.md`; the error pattern matrix there is the single
 source of truth for diagnosing failed custom-operator proc-tasks.

@@ -4,21 +4,26 @@
 #
 # Fallback for when the platform-native `wait-task` cannot stream output (an agent
 # tool may abort a long blocking call). See
-# references/custom-operator/custom-operator-workflow.md section "Progress Feedback".
+# references/custom-operator/progress-feedback.md.
 #
 # Usage: bash poll-task.sh <task-id> [max-polls 120] [sleep-secs 30]
 #   e.g. bash poll-task.sh "$TASK_ID" 120 30
 
 set -u
 
-TASK_ID="${1:-}"
+USAGE="usage: bash poll-task.sh <task-id> [max-polls 120] [sleep-secs 30]"
+
+# No arguments or -h/--help: print usage and exit successfully (nothing to poll).
+case "${1:-}" in
+  ""|-h|--help)
+    echo "$USAGE"
+    exit 0
+    ;;
+esac
+
+TASK_ID="$1"
 MAX_POLLS="${2:-120}"
 SLEEP_SECS="${3:-30}"
-
-if [ -z "$TASK_ID" ]; then
-  echo "usage: bash poll-task.sh <task-id> [max-polls 120] [sleep-secs 30]" >&2
-  exit 2
-fi
 
 START_TS=$(date +%s)
 poll=0

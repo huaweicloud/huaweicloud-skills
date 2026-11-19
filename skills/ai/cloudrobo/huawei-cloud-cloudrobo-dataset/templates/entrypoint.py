@@ -7,7 +7,7 @@ resolves input/output directories, dynamically imports the user's ``process()``
 function from ``src/`` (relative to this file), iterates every collected input item,
 and writes the results to the output directory.
 
-Generation rules (authoritative): references/custom-operator/custom-operator-workflow.md
+Generation rules (authoritative): references/custom-operator/onboarding-phase-0-1.md (Phase 1 code adaptation)
 Step 1.2. The placeholders below are patched in the work copy from
 ``operator_config.yaml`` (``entry.module`` / ``entry.function``).
 """
@@ -106,7 +106,7 @@ def _collect_items(roots: list[Path]):
 
 
 def _load_process():
-    # src/ is resolved relative to __file__: Mode A bakes it at /app/src, Mode B
+    # src/ is resolved relative to __file__: 把代码打进镜像 bakes it at /app/src, 代码放 OBS、运行时挂载
     # mounts it at {job_local_path}/src. Do NOT hardcode /app/src.
     src_dir = Path(__file__).resolve().parent / "src"
     module_path = src_dir / ("%s.py" % MODULE)

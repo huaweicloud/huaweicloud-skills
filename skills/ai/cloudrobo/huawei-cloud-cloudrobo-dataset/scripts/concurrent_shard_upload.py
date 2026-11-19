@@ -6,7 +6,7 @@ Default tool for uploading large datasets (> 50 files / > 50MB) to OBS. A serial
 processes breaks the per-process request ceiling and reaches ~25 req/s with
 4 procs x 16 threads.
 
-Authoritative rules: references/custom-operator/custom-operator-workflow.md
+Authoritative rules: references/custom-operator/obs-upload-guide.md
 section "OBS Upload Guide". Do not hand-roll a replacement - copy this script to
 the build/edge host, edit the CONFIG block, and launch one shard per process.
 

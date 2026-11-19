@@ -7,7 +7,7 @@
 #   3. Source code (changes frequently — isolated from deps layer)
 #   4. entrypoint.py (changes only when skill updates)
 #
-# Image slimming rules (see references/custom-operator/custom-operator-reference.md §Image Slimming):
+# Image slimming rules (see references/custom-operator/deploy-mode-comparison.md §Image Slimming):
 #   - install system packages AND clean their caches in the SAME RUN layer
 #   - pip install with --no-cache-dir, then remove ~/.cache/pip in the same RUN
 #   - prefer multi-stage builds when gcc/headers are needed only at build time
@@ -35,11 +35,11 @@ WORKDIR /app
 #   binutils-extra (HCE binutils ships WITHOUT ld), kernel-headers, python3-devel:
 # RUN dnf install -y binutils binutils-extra gcc make kernel-headers python3-devel \
 #     && dnf clean all && rm -rf /var/cache/dnf
-#   and remove them afterwards to slim the image (see references/custom-operator/custom-operator-reference.md
-#   §Verified production lessons, lesson 5).
+#   and remove them afterwards to slim the image (see references/custom-operator/deploy-mode-comparison.md
+#   §Production lessons, lesson 5).
 # NOTE (network): `docker build` RUN steps do NOT inherit the daemon proxy — pass
-#   --build-arg HTTP_PROXY/HTTPS_PROXY/NO_PROXY (see references/custom-operator/custom-operator-reference.md
-#   §Verified production lessons, lesson 4).
+#   --build-arg HTTP_PROXY/HTTPS_PROXY/NO_PROXY (see references/custom-operator/deploy-mode-comparison.md
+#   §Production lessons, lesson 4).
 
 # ── Layer 2: Python dependencies (cached if requirements.txt unchanged) ──
 # IMPORTANT: Copy requirements.txt BEFORE src/ for layer caching.
@@ -51,7 +51,7 @@ WORKDIR /app
 # NOTE (CPU-only operators): prefer `opencv-python-headless` over `opencv-python`
 # (no X11 libs needed) and install CPU torch via
 #   --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
-# (see references/custom-operator/custom-operator-reference.md §Verified production lessons, lessons 6–7).
+# (see references/custom-operator/deploy-mode-comparison.md §Production lessons, lessons 6–7).
 COPY requirements.txt .
 RUN python3 -m pip install --no-cache-dir -r requirements.txt 2>/dev/null \
     && rm -rf ~/.cache/pip \

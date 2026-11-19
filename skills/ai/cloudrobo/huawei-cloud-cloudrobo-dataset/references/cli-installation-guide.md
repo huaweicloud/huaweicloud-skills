@@ -40,10 +40,10 @@ pip install hw-cloudrobo-client
 
 The root `pyproject.toml` (`cloudrobo-client`) installs all sub-packages.
 
-### Docker Engine 24+ (custom-operator Mode A only) 安装Docker
+### Docker Engine 24+ (custom-operator 仅把代码打进镜像时使用) 安装Docker
 
 The custom-operator onboarding pipeline builds and pushes operator images with the
-local Docker Engine (Mode A image-inbuilt). Docker is **not** required for normal
+local Docker Engine (把代码打进镜像 image-inbuilt). Docker is **not** required for normal
 proc/eval task management.
 
 **Linux:**
@@ -161,9 +161,9 @@ export CLOUDROBO_SWR_NAMESPACE=cloudrobo
 export CLOUDROBO_REGISTRY=swr.cn-east-3.myhuaweicloud.com  # HCS override
 ```
 
-**OBS endpoint reachability (custom-operator Mode B):** the default
+**OBS endpoint reachability (custom-operator 代码放 OBS、运行时挂载):** the default
 `cloudrobo-obs` endpoint `obs.{region}.myhuaweicloud.com` may **not be resolvable**
-from the build environment (observed: NXDOMAIN). Before any OBS operation (Mode B code
+from the build environment (observed: NXDOMAIN). Before any OBS operation (代码放 OBS、运行时挂载 code
 delivery or dataset upload), verify it:
 
 ```bash

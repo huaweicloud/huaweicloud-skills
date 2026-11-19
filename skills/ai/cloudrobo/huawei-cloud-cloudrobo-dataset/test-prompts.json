@@ -1,0 +1,5 @@
+[
+  {"id": 1, "prompt": "创建一个数据处理任务，把 ROS2 bag 转成 LeRobotV3", "expected": "Walk algo discovery (list-publication-assets --name ros转LeRobotV3) → extract ext_metadata → build task_config → create-task → wait-task with 15s interval"},
+  {"id": 2, "prompt": "上一个 proc 任务 FAILED 了，帮我看看怎么回事", "expected": "Fetch system+job logs (two-step: list files → get content), pattern-diagnose (OOM/path-not-found/image-pull/param/access), suggest concrete fix"},
+  {"id": 3, "prompt": "把上次的清洗任务复制重跑一遍", "expected": "Use copy-task (NOT restart), preserve exact dataset_configs[].version_id, fetch from show-task, override name/output-name only"}
+]

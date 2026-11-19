@@ -240,49 +240,54 @@ five-phase flow. The asset/version API paths above plus the proc-task/logs paths
 §API Path Summary are the audit reference for the pipeline.
 
 ```
-PHASE 0: Deploy Mode & Assets      PHASE 1: Code Adaptation     PHASE 2: Build & Push (Mode A only)
-┌──────────────────────────────┐  ┌────────────────────────┐  ┌──────────────────────┐
-│ Ask customer: deploy mode   │  │ Create work copy       │─▶│ docker login (auto-  │
-│  A = image-inbuilt (custom) │  │ Copy user code + sha256 │  │  generated from      │
-│  B = OBS-mounted (preset)   │  │ Generate entrypoint.py │  │  AK/SK; fallback:    │
-│  B → ask task-creation way: │  │ (never touch original) │  │  customer command)   │
-│     空间资产-算法 use asset  │  └────────────────────────┘  │ docker build + tag + │
-│     OBS算法 mount OBS code   │                              │ push (timestamp tag) │
-│ Query image + algorithm     │                              │ Mode B: SKIP         │
-│  assets (same-name + tag)   │                              └──────────┬───────────┘
-     ▼
-PHASE 3: Asset Registration (Mode A / Mode B 空间资产-算法 only)
-┌────────────────────────────────────────────────────────────────┐   image_url writeback
-│ Mode A / B-空间资产-算法 first: create-asset image + algorithm │
-│   (algorithm engine: asset_id + asset_version_id link          │            ▼
-│   the image asset; image_source=custom)                        │   operator_config.json
-│ Mode A resub:     create-version + update-asset                │
-│ Mode B-空间资产-算法 resub: update-asset (code_dir / image_url,│
-│   keep asset_id/asset_version_id link)                         │   engine.image_url = SWR URL
-│ Mode B OBS算法: ⛔ SKIP (no assets — redundant)               │
-└──────────────────────────────────────────┬─────────────────────┘
-                                           ▼
-PHASE 4: Runtime Verification（proc-task）
-┌──────────────────────────────────────────────────────────────────────────────────────┐
-│ Ask input-dataset source: ① create NEW dataset from OBS (auto)                      │
-│    create-asset type=dataset + create-version --url + update-version                 │
-│    --status RELEASE                                                                  │
-│    ② reuse existing workspace dataset (multi-select max 10)                         │
-│ Mode A: WORKSPACE_ASSETS + algo_id → task runs image (custom)                        │
-│ Mode B 空间资产-算法: WORKSPACE_ASSETS + algo_id (Phase 3 algorithm asset links      │
-│    the image asset via engine.asset_id + engine.asset_version_id,                    │
-│    image_source=custom) + algo_path (=asset code_dir) + job_local_path →             │
-│    task links the asset and mounts its code_dir (truly uses the created              │
-│    algorithm)                                                                        │
-│ Mode B OBS算法: OBS_ASSETS + algo_path + job_local_path (no algo_id) →               │
-│    task mounts code_dir directly                                                     │
-│ Verify: job-std-output.log `[DONE] ...` + get-frames non-empty                       │
-│ FAILED → custom-operator/custom-operator-workflow.md (P0/P1/P2/P3)                   │
-└──────────────────────────────────────────────────────────────────────────────────────┘
-     │
-     ▼
-Cleanup & report: server-side local junk (always) → platform junk (confirmed)
-→ verification-report.md (offered)
+阶段0：部署方式与资产检测
+  询问客户选哪条路线（不默认）：
+    ① 把代码打进镜像 —— 代码与依赖一起构建进镜像，每次提交重建并推送新镜像
+    ② 代码放 OBS、运行时挂载 —— 代码上传 OBS，任务运行时挂载进已有运行时镜像
+  若选 ②，再问引用形态：
+    · 注册成空间里的算法资产后引用
+    · 不注册资产、直接挂载 OBS 代码
+  查询同名镜像/算法资产，判断首次提交还是再次提交
+        │
+        ▼
+阶段1：代码适配
+  创建工作副本，复制用户代码并记录校验和，生成 entrypoint.py
+  原始代码始终只读、不改动
+        │
+        ▼
+阶段2：构建并推送镜像
+  ① 把代码打进镜像：docker login（AK/SK 自动生成，失败时请客户提供命令）
+                     → docker build + 打时间戳 tag + push
+  ② 代码放 OBS、运行时挂载：⛔ 跳过本阶段（不构建、不推送）
+        │
+        ▼
+阶段3：资产注册
+  ① 把代码打进镜像
+       首次提交：创建镜像资产 + 算法资产
+                 （算法通过 asset_id + asset_version_id 关联镜像，image_source=custom）
+       再次提交：create-version + update-asset（绝不再 create-asset）
+  ② 代码放 OBS、注册成算法资产
+       首次提交：把运行时镜像注册为镜像资产 + 创建算法资产（同样关联 image_source=custom）
+       再次提交：update-asset 更新 code_dir / image_url，保留资产关联
+  ② 代码放 OBS、不注册资产直接挂载：⛔ 跳过本阶段（不产生任何资产）
+        │
+        ▼
+阶段4：运行时验证（数据处理任务）
+  询问输入数据来源：
+    ① 从 OBS 新建数据集（create-asset + create-version + update-version --status RELEASE）
+    ② 复用工作空间已有数据集（最多 10 个）
+  ① 把代码打进镜像：WORKSPACE_ASSETS + algo_id → 任务运行镜像内代码
+  ② 注册成算法资产：WORKSPACE_ASSETS + algo_id + algo_path（= 资产 code_dir）
+                    + job_local_path → 任务按资产引用并挂载其代码目录
+  ② 不注册资产直接挂载：OBS_ASSETS + algo_path + job_local_path（无 algo_id）
+                       → 任务直接挂载代码目录
+  验证：作业日志出现 `[DONE] ...`，且产物帧非空
+  失败 → 查 custom-operator/failure-analysis-guide.md（P0/P1/P2/P3）
+        │
+        ▼
+阶段5：清理并生成报告
+  服务端本地垃圾文件（总是清理）→ 平台侧垃圾文件（先与客户确认）
+  → 验证报告 verification-report.md（按需提供）
 ```
 
 Runtime injection (during task execution, by platform):

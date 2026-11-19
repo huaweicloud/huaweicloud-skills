@@ -2,32 +2,44 @@
 
 ## Interaction Rules
 
-- At most **one tool call** per turn
+- At most **one user-facing question round** per turn; multiple read-only queries may run in parallel to prepare it
 - Display query results **before** asking the next question
 - Forbid initiating multiple AskUserQuestion calls in parallel
 - Forbid executing Bash queries and AskUserQuestion in the same turn
+- **推荐优先，不要逐项盘问**：每个决策都有推荐默认值。说明默认值并继续；只在答案会实质改变结果时才问（见 [交互规范](../../huawei-cloud-cloudrobo-data-pipeline/references/user-facing-interaction.md)）。
+- **一轮问完**：把所有互不相关的未知项合并到一轮。能推导或用默认值的，不要走固定问卷。
+- **能推就推**：任务名由数据集+操作+时间戳推导；描述由请求推导；算法类型由所选算法推导；资源用默认值。
 
-## Proc-Task Creation (10 steps)
+## Proc-Task Creation (recommended flow)
 
-When the user requests creating a data processing task without providing complete parameters, follow these steps sequentially. If the user provides all parameters upfront, skip the workflow and proceed directly to assemble the configuration and confirm submission.
+用户要求创建数据处理任务但参数不全时，**不要走 10 步问卷**。改为：
 
-### Step 1: Task name
-- Prompt the user to input a task name. Do not provide any options.
-- Wait for user input before proceeding.
-- Do not combine with description or other fields in the same interaction turn.
+1. **推导**一切可推导项（任务名、描述、算法、资源、数据源）。
+2. **一次问**真正开放的选项，每项带推荐默认值。
+3. **展示简短确认摘要**（≤8 行，不含 ID/JSON），确认后提交。
 
-### Step 2: Task description
-- Prompt the user to input a task description. Do not provide any options.
-- Wait for user input before proceeding.
-- Do not combine with task name or other fields in the same interaction turn.
+用户已给全参数时，直接进入摘要并提交。
 
-### Step 3: Select algorithm type
-Ask for algorithm type (`algo_type` field), presenting these 3 options:
-- **Preset Algorithm** (`PRESET_ASSETS`) — Platform built-in public algorithms, default option
+下面的逐步骤说明仍作为字段级规则的权威参考；其中"询问"类步骤仅在**该值无法推导**时使用。
+
+### Legacy step reference (apply selectively)
+
+以下逐步描述各字段。**值可推导或有安全默认值时不要问** —— 用方括号里的推荐值。
+
+### Step 1: Task name [derive: `<dataset-or-op>-<operation>-<MMDDHHmmss>`]
+- 仅当用户要求自定名称时才问。否则生成并在摘要中说明。
+
+### Step 2: Task description [derive from the user's request]
+- 仅当请求中没有可用描述时才问。否则写一行并在摘要中说明。
+
+### Step 3: Select algorithm type [default: PRESET_ASSETS]
+Options, in recommended order:
+- **Preset Algorithm** (`PRESET_ASSETS`) — Platform built-in public algorithms, **default**
 - **Workspace Asset Algorithm** (`WORKSPACE_ASSETS`) — Workspace custom algorithms
 - **OBS Algorithm** (`OBS_ASSETS`) — User-provided algorithms, injected into containers via OBS path
 
-After user selection, proceed to Step 4 (subsequent steps differ by algorithm type).
+仅当没有 preset 覆盖该任务、且用户已有或想新建自定义算子时才问。入驻路径见
+`custom-operator/custom-operator-workflow.md`。
 
 ### Step 4: Algorithm configuration (branches by algorithm type)
 
@@ -55,7 +67,7 @@ After user selection, proceed to Step 4 (subsequent steps differ by algorithm ty
   - `ext_metadata.engine.image_url` → `image`
 - **Additional step**: Ask for container injection path (`data_mount_path`), i.e., the mount path for algorithm data in the container
 - **Onboarding new custom operators**: If the user needs to onboard new custom data processing code
-  (not yet registered as a workspace asset), follow the [Custom Operator Onboarding](../SKILL.md#custom-operator-onboarding-自定义算子入驻)
+  (not yet registered as a workspace asset), follow the [Custom Operator Onboarding](../SKILL.md#custom-operator-onboarding)
   pipeline in SKILL.md (five-phase: deploy-mode choice → code adaptation → Docker image
   build & SWR push / OBS code delivery → asset creation (image + algorithm) → runtime
   verification). After onboarding completes, the new algorithm will appear in the
@@ -69,10 +81,10 @@ After user selection, proceed to Step 4 (subsequent steps differ by algorithm ty
   - **Runtime Image** (`image`) — Container image address (user input or selection)
   - **Startup Command** (`algo_entrance`) — Algorithm startup command (user input)
 - ❌ **Do NOT ask for `algo_id`** — not needed for OBS algorithms (exception: onboarded
-  Mode B operators in 空间资产-算法 — see **4d**, which uses `WORKSPACE_ASSETS` + `algo_id` =
+  代码放 OBS、运行时挂载 operators in 空间资产-算法 — see **4d**, which uses `WORKSPACE_ASSETS` + `algo_id` =
   the Phase 3 algorithm asset id, not `OBS_ASSETS`)
 - ❌ **Do NOT ask for `algo_name`** — not needed for OBS algorithms (exception: onboarded
-  Mode B operators — see **4d**, where `algo_name` IS required)
+  代码放 OBS、运行时挂载 operators — see **4d**, where `algo_name` IS required)
 - **`algo_type` in task-config must be set to `OBS_ASSETS`**
 
 **4d. Custom Operator Tasks (onboarded operators)**
@@ -81,25 +93,20 @@ When the selected algorithm is an **onboarded custom operator** (SKILL.md §Cust
 Operator Onboarding; full five-phase pipeline in
 `custom-operator/custom-operator-workflow.md`), task creation follows the same 10-step flow with
 these operator-specific differences (authoritative detail:
-`custom-operator/custom-operator-workflow.md` §Phase 4):
+`custom-operator/onboarding-phase-4.md`):
 
 - **Precondition (Phase 0-3)**: the operator must already be onboarded (deploy mode
   chosen, assets registered). If not registered yet, run the onboarding pipeline
   first (SKILL.md §Custom Operator Onboarding) — the new algorithm then appears in
   the Step-4 algorithm list.
 - **Step 4 branch** (differs per deploy mode):
-  - **Mode A (image-inbuilt, `image_source=custom`)** — same as **4b WORKSPACE_ASSETS**:
+  - **把代码打进镜像 (image-inbuilt, `image_source=custom`)** — same as **4b WORKSPACE_ASSETS**:
     `algo_id` = algorithm `asset_id`, `algo_name` = `name`,
     `algo_entrance` = `ext_metadata.command`, `image` = `ext_metadata.engine.image_url`.
     No extra fields.
-  - **Mode B (OBS-mounted, `image_source=custom` when 空间资产-算法 links the image asset)** — branches by the **task-creation
-    way** (mandatory choice, asked FIRST):
-    - **⛔ FIRST ask the task-creation way (mandatory; re-ask until unambiguous; use
-       business names in the dialogue, not the 方式 2/3 labels):**
-       **空间资产-算法** (use the created algorithm, `WORKSPACE_ASSETS` +
-      `algo_id` = Phase 3 algorithm `asset_id`) or **OBS算法** (mount the OBS
-      code directly, `OBS_ASSETS`, no `algo_id`)? 对话话术：「请选择本算子创建任务时的算法引用方式：**空间资产-算法**【引用已注册的算法资产，任务关联算法资产运行，会执行资产注册】；**OBS算法**【直接挂载 OBS 路径上的代码运行，不关联算法资产，跳过资产注册】。请问使用哪种？」
-    - **空间资产-算法 (`WORKSPACE_ASSETS`)** — `algo_id` = Phase 3 algorithm `asset_id` (asset
+  - **代码放 OBS、运行时挂载 (OBS-mounted, `image_source=custom` when 空间资产-算法 links the image asset)** —
+    **默认使用空间资产-算法**；仅当用户明确要求不注册资产、直接挂载代码时才用 OBS算法。
+    - **默认 — 空间资产-算法 (`WORKSPACE_ASSETS`)** — `algo_id` = Phase 3 algorithm `asset_id` (asset
       linkage), `algo_name` (**required**), `algo_path` = asset `code_dir` (**required**),
       `job_local_path` (**required**), **absolute** `algo_entrance` =
       `python3 {job_local_path}/entrypoint.py`, `image` = asset
@@ -110,17 +117,17 @@ these operator-specific differences (authoritative detail:
       asset registration is **skipped**; `algo_entrance` MUST be **absolute**
       `python3 {job_local_path}/entrypoint.py` (relative `python entrypoint.py` fails
       with `stdbuf: ... Permission denied`).
-- **Step 8 (input datasets) — MANDATORY source choice FIRST** (operator-specific):
-  ask the customer ① **create a NEW dataset** from customer-uploaded OBS data (auto:
-  `create-asset type=dataset` + `create-version` + `update-version --status RELEASE`,
-  version MUST be RELEASE) or ② **reuse an existing workspace dataset** (exactly one
-  → default; multiple → multi-select max 10). Never infer; re-ask until unambiguous.
+- **Step 8 (input datasets) — 按推荐来源，仅在含糊时问**：
+  ① 若恰好有一个匹配的已有数据集 → **直接复用（默认）**；多个 → 多选（≤10）；
+  ② 否则从用户给的数据路径**自动新建**数据集（`create-asset type=dataset` +
+  `create-version` + `update-version --status RELEASE`，版本必须 RELEASE）；
+  ③ 仅当用户主动提供 `obs://` 路径时才用 OBS存储直挂。只有多个数据集都可能且选错代价高时才问。
 - **Step 5 (envs)**: MUST **exclude platform-injected `SOURCE_DATASET_PATH`** — copying
   its fallback `default` into `envs` blocks the runtime injection and the task fails
   with `SOURCE_DATASET_PATH is not a valid JSON map`; keep only business env vars.
 - **Step 10 (submit)**: create WITHOUT `--wait`, poll `show-task` with a progress
   heartbeat (`../scripts/poll-task.sh`); on FAILED run the failure analysis engine
-  (`custom-operator/custom-operator-workflow.md` §Failure Analysis Guide).
+  (`custom-operator/failure-analysis-guide.md`).
 
 ### Step 5: Configure environment variables
 - Read algorithm's `ext_metadata.environment_variables`
@@ -141,13 +148,16 @@ these operator-specific differences (authoritative detail:
 
 ### Step 6: Job type, resource pool, and instance specification
 
-**6a — Job type**: Ask for job type (`cluster_type` + `task_framework_type` must be paired):
-- Standard Container (CCE + K8S) — Single container job, default
-- Ray Distributed (CCE_RAY + RAY) — Distributed job
+> **默认不要逐项询问 6a–6e。** 套用推荐值并用一行说明
+> （`资源：公共池，4c8g，单容器`）。仅当用户主动要求不同资源、或确实需要分布式/独享池时才问。
 
-**6b — Resource pool type**: Ask for resource pool type:
-- Public Resource Pool (PUBLIC_POOL) — Default
-- Dedicated Resource Pool (DEDICATED_POOL) — Requires additional resource pool query
+**6a — Job type** [default: Standard Container (CCE + K8S)]:
+- Standard Container (CCE + K8S) — Single container job, **default**
+- Ray Distributed (CCE_RAY + RAY) — Distributed job；仅当任务确实多机时才问
+
+**6b — Resource pool type** [default: Public Resource Pool (PUBLIC_POOL)]:
+- Public Resource Pool (PUBLIC_POOL) — **default**
+- Dedicated Resource Pool (DEDICATED_POOL) — 仅当用户要求或公共池配额不足时
 
 **6c — Query resource pools** (branches by type):
 - **PUBLIC_POOL**:
@@ -276,23 +286,23 @@ For each dataset, ask for data source type:
   - `dataset_configs` is a valid JSON string array with at least 1 dataset entry (empty array `"[]"` is invalid)
   - `envs` (if present) is a non-empty JSON string array with `key`/`value`/`description` fields
   - `inputs` (if present) is a JSON string array of complete operator input elements with `url_path` set; omit the field instead of sending `"[]"` (not enforced by the CLI validator)
-- Display configuration summary for user confirmation:
+- Display a **short confirmation summary** (no internal identifiers, no enum values).
+  Render it in the user's language; the template below is the English reference:
+
   ```
-  ==================== Task Configuration to Submit ====================
-  Task Name: xxx
-  Description: xxx
-  Algorithm: xxx
-  Environment Variables: xxx (or "None")
-  Operator Inputs: <name> → obs://... (or "None")
-  Job Type: CCE/K8S
-  Resource Pool: PUBLIC_POOL
-  Worker Spec: 2CPU/4GB x 1
-  Dynamic Storage: 0 GB
-  Input Datasets: xxx
-  Output Type: xxx
-  Output Name/Path: xxx
-  ========================================================================
+  准备执行：
+    任务     <name>
+    处理      <algorithm display name>
+    输入     <dataset name>（<n> 个文件/轨迹）
+    资源     公共池，4c8g，单容器（默认）
+    输出     <output name>
+
+  提交？
   ```
+
+  Omit lines that do not apply. Do **not** print `CCE/K8S`, `PUBLIC_POOL`, `worker_spec`,
+  `evs_spec`, `dataset_configs`, asset IDs, or OBS paths unless the user asks for details
+  (`需要技术细节吗？`).
 - **Submit immediately after displaying summary**: Use AskUserQuestion to ask "Confirm submission" (options: Confirm submission / Need modification). After user confirms, execute `cloudrobo dataset proc create-task --name <name> --algo-type PRESET_ASSETS --task-config '<json>'`
 - Do not ask in multiple steps. Display summary + ask confirmation + submit should be completed in the same turn
 - Do NOT use `--wait`; return control to user after creation
@@ -391,5 +401,6 @@ See [version handoff](task-config-catalog.md#dataset-version-handoff).
 
 ### Step 7: Confirm and submit
 - **Validate non-empty fields**: Ensure common required fields are present and non-empty: `name`, `algo_id`, `algo_name`, `algo_entrance`, `image`, `dataset_type`, `dataset_name`, `dataset_path`, `dataset_configs`, `resource_pool_type`, `worker_spec` (plus `dataset_id` when `dataset_type=BUILD_IN_ASSET`). Check each asset entry has an exact `version_id` and matches the top-level identity. Do not include the removed `robot_config`. `worker_spec` must include `cpu`/`memory` keys. `inputs` (if present) follows the same rules as proc Step 10.
-- Display configuration summary. After user confirmation, execute `cloudrobo dataset eval create-task --name <name> --task-config '<json>'`
+- Display the same **short confirmation summary** as proc Step 10 (no IDs, no enum values).
+  After user confirmation, execute `cloudrobo dataset eval create-task --name <name> --task-config '<json>'`
 - Do NOT use `--wait`; return control to user after creation

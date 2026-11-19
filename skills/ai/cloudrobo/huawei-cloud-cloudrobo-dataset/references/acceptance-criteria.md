@@ -122,17 +122,17 @@
 
 The following acceptance criteria apply to the **custom operator onboarding** pipeline
 (see SKILL.md §Custom Operator Onboarding). Full per-phase criteria live in
-`custom-operator/custom-operator-workflow.md` and `custom-operator/custom-operator-workflow.md` §Phase 4.
+`custom-operator/onboarding-phase-4.md`.
 
 ### Phase 0: Deploy Mode & Asset Detection 部署方式与资产检测
 
 | # | Criterion | Verification | Status |
 |---|-----------|--------------|--------|
-| CO-01 | Deploy mode asked **first** (Mode A image-inbuilt / Mode B OBS-mounted) | Inspect the workflow | Skill asks **A or B** before any build; never infers |
-| CO-02 | Mode A: fresh image tag built + pushed on **every** run | Inspect the workflow | Timestamp tag `{YYYYMMDDHHMMSS}`; no "use existing image" question |
-| CO-03 | Mode B: OBS path starts with workspace `default_obs_path` | Validate path | Rejected / re-asked otherwise |
-| CO-04 | Mode B: code upload mode asked (customer uploads / skill uploads) | Inspect the workflow | Upload mode confirmed (skill upload is a mutation — confirm) |
-| CO-05 | Mode B: preset image `swr.{region}.myhuaweicloud.com/...` format | Validate image URL | Passes SWR URL regex |
+| CO-01 | Deploy mode stated as a **one-line default** (代码放 OBS、运行时挂载), asked only when dependencies clearly need 把代码打进镜像 or the user asks for a custom image | Inspect the workflow | No deployment-mode questionnaire; default stated and continued |
+| CO-02 | 把代码打进镜像路线：fresh image tag built + pushed on **every** run | Inspect the workflow | Timestamp tag `{YYYYMMDDHHMMSS}`; no "use existing image" question |
+| CO-03 | 代码放 OBS 路线：OBS path starts with workspace `default_obs_path` | Validate path | Rejected / re-asked otherwise |
+| CO-04 | 代码放 OBS 路线：code upload mode asked (customer uploads / skill uploads) | Inspect the workflow | Upload mode confirmed (skill upload is a mutation — confirm) |
+| CO-05 | 代码放 OBS 路线：preset image `swr.{region}.myhuaweicloud.com/...` format | Validate image URL | Passes SWR URL regex |
 | CO-06 | Same-name algorithm asset exists → re-submission flag | `list-assets --type algorithm --tags "Data Processing" --exact-name <name>` | Phase 3 runs the re-submission branch |
 
 ### Phase 1: Code Adaptation 代码适配
@@ -141,14 +141,14 @@ The following acceptance criteria apply to the **custom operator onboarding** pi
 |---|-----------|--------------|--------|
 | CO-07 | Work copy created; user's original untouched | `/tmp/custom-operator-work-{ts}/` exists + `git status` on user source | Directory present; no modifications |
 | CO-08 | `entrypoint.py` generated from `templates/entrypoint.py` | Check file in work copy | Multi-dataset aggregation (`SOURCE_DATASET_PATH` JSON map); `src` imported relative to `__file__`; output to `TARGET_DATASET_PATH`/`/output` |
-| CO-09 | `Dockerfile` generated (Mode A only) | Check file in work copy | `COPY requirements.txt` before `COPY ./src`; Mode B has no Dockerfile |
+| CO-09 | `Dockerfile` generated (仅把代码打进镜像时使用) | Check file in work copy | `COPY requirements.txt` before `COPY ./src`; 代码放 OBS 没有 Dockerfile |
 | CO-10 | `operator_config.json` validated | Field constraints check | No validation errors |
 
-### Phase 2: Image Build & Push 镜像构建推送（Mode A；Mode B 跳过）
+### Phase 2: Image Build & Push 镜像构建推送（把代码打进镜像；代码放 OBS 跳过）
 
 | # | Criterion | Verification | Status |
 |---|-----------|--------------|--------|
-| CO-11 | Mode B skips build | Inspect the workflow | No docker login / build / push executed |
+| CO-11 | 代码放 OBS、运行时挂载 skips build | Inspect the workflow | No docker login / build / push executed |
 | CO-12 | SWR login auto-generated from AK/SK | Execute auto-generated command | `Login Succeeded`; on failure **classify the cause (AK/SK invalid/expired, SWR not enabled / IAM permission missing, region mismatch, network) → walk the fix with the customer → re-run; only if still failing, ask for a full command** — never proceed without verified login |
 | CO-13 | Image built + pushed with timestamp tag | `docker images` / `docker push` | Image present; push success; `engine.image_url` written back to `operator_config.json` |
 | CO-14 | Build network probed first | Inspect the workflow | External → plain `docker build`; proxy-fronted → `--build-arg HTTP_PROXY/HTTPS_PROXY` + `NO_PROXY` incl. `*.huawei.com` |
@@ -158,13 +158,13 @@ The following acceptance criteria apply to the **custom operator onboarding** pi
 
 | # | Criterion | Verification | Status |
 |---|-----------|--------------|--------|
-| CO-16 | Mode A first submission: image + algorithm assets created | `create-asset --type image` then `--type algorithm` | Both return `asset_id` |
-| CO-17 | Mode A re-submission: image version + algorithm update | `create-version` (image) + `update-asset` (algorithm) | New image version; `engine.image_url` = new SWR URL; **no new algorithm version** |
+| CO-16 | 把代码打进镜像的首次提交: image + algorithm assets created | `create-asset --type image` then `--type algorithm` | Both return `asset_id` |
+| CO-17 | 把代码打进镜像的再次提交: image version + algorithm update | `create-version` (image) + `update-asset` (algorithm) | New image version; `engine.image_url` = new SWR URL; **no new algorithm version** |
 | CO-17a | Asset names equal the dialogue-confirmed operator name | `show-asset` on image + algorithm assets | Both `name` == confirmed operator name (no silent rename / auto suffix) |
-| CO-18 | Mode B 空间资产-算法 first submission: preset image + algorithm (`image_source=custom`, `engine.asset_id` + `engine.asset_version_id` link the image asset, `code_dir`) | `create-asset` ×2 | Both return `asset_id`; algorithm `engine.asset_id`/`engine.asset_version_id` = image asset id/version id; `code_dir` = OBS path under `default_obs_path` |
-| CO-18a | Mode B OBS算法 (mount OBS code directly) skips Phase 3 | Inspect the workflow | **No `create-asset` calls** — no image/algorithm assets; go straight to Phase 4 |
+| CO-18 | 代码放 OBS 并注册算法资产 first submission: preset image + algorithm (`image_source=custom`, `engine.asset_id` + `engine.asset_version_id` link the image asset, `code_dir`) | `create-asset` ×2 | Both return `asset_id`; algorithm `engine.asset_id`/`engine.asset_version_id` = image asset id/version id; `code_dir` = OBS path under `default_obs_path` |
+| CO-18a | 代码放 OBS 并直接挂载 (mount OBS code directly) skips Phase 3 | Inspect the workflow | **No `create-asset` calls** — no image/algorithm assets; go straight to Phase 4 |
 | CO-19 | No `--sub-type` together with `--tags` | Check algorithm creation request | No `400 Invalid parameter: tags` |
-| CO-20 | `image_url` consistency (Mode A) | Compare algorithm `engine.image_url` vs image asset `url` | Same SWR URL string |
+| CO-20 | `image_url` consistency (把代码打进镜像) | Compare algorithm `engine.image_url` vs image asset `url` | Same SWR URL string |
 | CO-21 | Assets verifiable | `cloudrobo asset show-asset --asset-id <id>` | `status=DRAFT` or `available` |
 
 ### Phase 4: Proc-Task Runtime Verification 任务运行验收（端到端）
@@ -172,13 +172,13 @@ The following acceptance criteria apply to the **custom operator onboarding** pi
 | # | Criterion | Verification | Status |
 |---|-----------|--------------|--------|
 | CO-22 | Dataset source asked first (① 空间资产-数据-新建 / ② 空间资产-数据-复用 / ③ OBS存储) | Inspect the workflow | ① auto: `create-asset --type dataset` + `create-version --url` + `update-version --status RELEASE`; ② reuse: none → remind upload, one → default, multiple → multi-select (max 10); ③ OBS存储: `dataset_configs` entry `{"obs_path":...,"dataset_type":"UDF_OBS_ASSET"}` — no dataset asset created or referenced, no `RELEASE`, and **`obs_path` bucket must equal the workspace-bound bucket (`default_obs_path` from `cloudrobo workspace current`; other OBS buckets rejected & re-asked)** |
-| CO-22a | Multiple data sources → ONE task (Mode A & B) | Inspect the workflow + task list | Several OBS paths / datasets (≤10) → **single `create-task`** with N `dataset_configs` entries; exactly ONE task in `list-tasks`; operator log shows "Resolved N datasets"; no per-dataset task split (batch per-dataset split only on explicit user request + confirmed) |
-| CO-22b | Mode B task-creation way asked first (空间资产-算法 use created algorithm / OBS算法 mount OBS code directly) | Inspect the workflow | Mandatory choice asked in Phase 0; 空间资产-算法: `algo_type=WORKSPACE_ASSETS` with `algo_id` = Phase 3 algorithm `asset_id` + `algo_path` (= asset `code_dir`) + `job_local_path` (Phase 3 registers assets); OBS算法: `algo_type=OBS_ASSETS` with `algo_path` + `job_local_path`, no `algo_id` **and Phase 3 is skipped**; both keep `algo_name` |
-| CO-23 | Mode A proc-task (`WORKSPACE_ASSETS` + `algo_id`) / Mode B 空间资产-算法 (`WORKSPACE_ASSETS` + `algo_id` = Phase 3 asset id + `algo_path` = `code_dir` + `job_local_path`, absolute `algo_entrance`) / Mode B OBS算法 (`OBS_ASSETS` + `algo_path` + `job_local_path`, no `algo_id`, `algo_name` required) | `create-task` | `task_id` returned; unique `output_name` used |
+| CO-22a | Multiple data sources → ONE task (把代码打进镜像与代码放 OBS 两种情况) | Inspect the workflow + task list | Several OBS paths / datasets (≤10) → **single `create-task`** with N `dataset_configs` entries; exactly ONE task in `list-tasks`; operator log shows "Resolved N datasets"; no per-dataset task split (batch per-dataset split only on explicit user request + confirmed) |
+| CO-22b | 代码放 OBS、运行时挂载 task-creation way asked first (空间资产-算法 use created algorithm / OBS算法 mount OBS code directly) | Inspect the workflow | Mandatory choice asked in Phase 0; 空间资产-算法: `algo_type=WORKSPACE_ASSETS` with `algo_id` = Phase 3 algorithm `asset_id` + `algo_path` (= asset `code_dir`) + `job_local_path` (Phase 3 registers assets); OBS算法: `algo_type=OBS_ASSETS` with `algo_path` + `job_local_path`, no `algo_id` **and Phase 3 is skipped**; both keep `algo_name` |
+| CO-23 | 把代码打进镜像 proc-task (`WORKSPACE_ASSETS` + `algo_id`) / 代码放 OBS 并注册算法资产 (`WORKSPACE_ASSETS` + `algo_id` = Phase 3 asset id + `algo_path` = `code_dir` + `job_local_path`, absolute `algo_entrance`) / 代码放 OBS 并直接挂载 (`OBS_ASSETS` + `algo_path` + `job_local_path`, no `algo_id`, `algo_name` required) | `create-task` | `task_id` returned; unique `output_name` used |
 | CO-24 | Task reaches SUCCEEDED + output produced | `show-task` / `get-frames` | `SUCCEEDED`; non-empty `files[]` |
 | CO-24a | Output layout clean | `get-frames` on output prefix | Single-dataset output **flat** at the output root (no `{output_name}`-nested dir); no `.cloudrobo-tmp` folder visible |
 | CO-25 | User log OK | `get-log --file-name job-std-output.log` | `[DONE] Processed N items, success N, failed 0` (legacy Chinese form also OK); CLI-type operators may use their own success summary |
-| CO-26 | Failure handled | Task FAILED | `custom-operator/custom-operator-workflow.md` pattern matched; fix suggested |
+| CO-26 | Failure handled | Task FAILED | `custom-operator/failure-analysis-guide.md` pattern matched; fix suggested |
 | CO-26a | Re-run after rebuild uses the re-submission branch | Inspect the workflow on retry | `create-version` + `update-asset` (never re-`create-asset`); algorithm asset verified pointing at the new image version; fresh `output_name`; re-run `create-task` successful (no HTTP 500) |
 | CO-26b | Cancel/re-issue after a task was created deletes the OLD task first | Inspect the workflow + task list | Show `{task_id}` status → confirm with user 「是否删除/停止旧任务？①删除 ②保留 ③查看日志」→ on ① `delete-task` + `show-task` = `DELETED`; only then create the new task; no orphaned running task left (front-end shows no duplicate "running") |
 | CO-27 | Cleanup + verification report | Final steps | Server-side local junk cleaned (always, this-run scope only); platform junk cleaned (confirmed + `show-asset`/`show-task` verified per item, never batch, never customer assets); `verification-report.md` offered |
