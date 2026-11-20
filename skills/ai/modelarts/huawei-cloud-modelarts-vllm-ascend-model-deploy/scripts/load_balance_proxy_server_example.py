@@ -584,12 +584,7 @@ class WorkerRuntime:
 
     async def schedule(self, method: str, /, *args, **kwargs) -> Any:
         async with self._async_lock:
-            _SCHEDULER_METHODS = {
-                "round_robin": self.scheduler.round_robin,
-                "least_load": self.scheduler.least_load,
-                "random": self.scheduler.random,
-            }
-            _method_fn = _SCHEDULER_METHODS.get(method)
+            _method_fn = getattr(self.scheduler, method, None)
             if _method_fn is None:
                 raise ValueError(f"Unknown scheduler method: {method}")
             return _method_fn(*args, **kwargs)

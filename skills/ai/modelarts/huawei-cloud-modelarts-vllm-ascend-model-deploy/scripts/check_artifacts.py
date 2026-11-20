@@ -1071,10 +1071,12 @@ def c28_moe_hccl_buffsize_budget(ctx):
     actual = 2 × HCCL_BUFFSIZE(实测 NEEDED=2415MB > 1200×2=2400MB → tiling 失败)。
     maxBs 与 tokenNeedSize 是引擎 warmup 前运行时推导(实测 maxBs=375 < max_num_seqs=500,
     tokenNeedSizeDispatch≈h×2×1.05、tokenNeedSizeCombine=h×2),故按 max_num_seqs 作
-    maxBs 上界 + h×2 字节近似估保守上界;actual < 保守估算即 FAIL 阻断上传
-    (warmup 阶段 MoE dispatch tiling 报 errno 561002 是确定性崩溃,GLM-5.3 950DT
-    PD 2P1D prefill TP1/PCP8/PP2/EP8 文档值 1200 运行期实测崩溃,估算需求 3255MB,
-    1628 通过;见 references/troubleshooting.md);--moe-config 传 {"plog_verified": true}
+    maxBs 上界 + h×2 字节近似估保守上界。估算公式近似偏小(GLM-5.3 950DT PD prefill
+    TP1/PCP8/PP2/EP8 估算 3255MB: HCCL_BUFFSIZE=1628(actual=3256MB ≥ 估算)运行期
+    实测仍崩 561002,2048(actual=4096MB)通过——实际需求 ∈ (3256, 4096]),故
+    FAIL 阈值取估算 × 1.25 安全系数(4069MB: 1628 FAIL/2048 PASS 与双实测点吻合),
+    actual < 估算×1.25 即 FAIL 阻断上传(warmup 阶段 MoE dispatch tiling 报
+    errno 561002 是确定性崩溃);--moe-config 传 {"plog_verified": true}
     表示 HCCL_BUFFSIZE 为 plog 实测调优值,跳过硬性拦截。
     """
     cfg = ctx.get("moe_config") or {}
@@ -1110,20 +1112,58 @@ def c28_moe_hccl_buffsize_budget(ctx):
     needed_mb = (2 * max_bs * (token_dispatch * ep * local_experts + token_combine * (k + shared))
                  + ep * 1024) / 1024 / 1024
     actual_mb = buff * 2
-    if actual_mb < needed_mb:
+    required_mb = needed_mb * 1.25
+    if actual_mb < required_mb:
         if cfg.get("plog_verified"):
             return _pass(f"HCCL_BUFFSIZE={buff} 标记 plog_verified(实测调优值),跳过硬性拦截"
-                         f"(actual={actual_mb}MB < 保守估算 {needed_mb:.0f}MB,按 plog 实测为准)")
-        return _fail(f"HCCL_BUFFSIZE={buff}(actual={actual_mb}MB) < MoE dispatch 通信窗口保守估算需求 "
-                     f"{needed_mb:.0f}MB(maxBs 按 max_num_seqs={max_bs} 上界,h={h},EP={ep},"
+                         f"(actual={actual_mb}MB < 估算×1.25 {required_mb:.0f}MB,按 plog 实测为准)")
+        return _fail(f"HCCL_BUFFSIZE={buff}(actual={actual_mb}MB) < MoE dispatch 通信窗口估算需求 "
+                     f"{needed_mb:.0f}MB × 1.25 安全系数 = {required_mb:.0f}MB"
+                     f"(maxBs 按 max_num_seqs={max_bs} 上界,h={h},EP={ep},"
                      f"localExperts={local_experts},k={k})——warmup 阶段 MoE dispatch 算子 tiling 报 "
-                     f"errno 561002 确定性崩溃(实测 GLM-5.3 950DT TP8/PP2/EP8 与 PD prefill "
-                     f"TP1/PCP8/PP2/EP8 文档值 1200 均运行期崩溃)。修复: HCCL_BUFFSIZE ≥ "
-                     f"{int(needed_mb / 2) + 1} 起步后重跑自检;若为 plog 实测调优值,"
-                     f"--moe-config 传 {{\"plog_verified\": true}} 跳过"
+                     f"errno 561002 确定性崩溃(实测 GLM-5.3 950DT PD prefill TP1/PCP8/PP2/EP8: "
+                     f"估算 3255MB 时 1628 贴线值运行期仍崩,2048 通过,公式近似偏小故取 ×1.25)。"
+                     f"修复: HCCL_BUFFSIZE ≥ {int(required_mb / 2) + 1} 起步后重跑自检;"
+                     f"若为 plog 实测调优值,--moe-config 传 {{\"plog_verified\": true}} 跳过"
                      f"(见 references/troubleshooting.md)")
     else:
-        _pass(f"HCCL_BUFFSIZE={buff}(actual={actual_mb}MB) ≥ MoE dispatch 保守估算需求 {needed_mb:.0f}MB")
+        _pass(f"HCCL_BUFFSIZE={buff}(actual={actual_mb}MB) ≥ MoE dispatch 估算需求×1.25 {required_mb:.0f}MB")
+
+
+def c29_proxy_schedule_dispatch_consistency(ctx):
+    """1.29 proxy 调度方法分发一致性(硬性)。
+
+    根因(实测 Qwen3.8-27B pd 部署): load_balance_proxy_server_example.py 的
+    WorkerRuntime.schedule 硬编码方法名字典,急切访问 self.scheduler.round_robin/
+    least_load/random——属性在 SharedProxyScheduler 上不存在(真实方法为 begin_request/
+    reserve_prefill_kv/pick_decoder/release_*/finish_request),AttributeError →
+    /v1/chat/completions 500(/v1/models 不经调度器故正常)。
+    校验: ① self.scheduler.<attr> 属性引用必须有对应 def <name> 定义;
+    ② .schedule(...) 分发的方法名(字符串字面量 + 赋值行字面量解析)必须有对应
+    def <name> 定义。proxy 脚本缺失(非 pd 形式)时跳过。
+    """
+    proxy = os.path.join(ctx["artifact_dir"], "load_balance_proxy_server_example.py")
+    if not os.path.isfile(proxy):
+        _pass("非 pd 形式(proxy 脚本缺失),跳过 proxy 调度分发一致性校验")
+        return
+    content = _read(proxy)
+    defined = set(re.findall(r'^\s*def (\w+)\s*\(', content, re.M))
+    attr_refs = set(re.findall(r'self\.scheduler\.(\w+)', content))
+    missing_attrs = sorted(a for a in attr_refs if a not in defined)
+    dispatched = set(re.findall(r'\.schedule\(\s*["\'](\w+)["\']', content))
+    for var in set(re.findall(r'\.schedule\(\s*(\w+)\s*,', content)):
+        for m in re.finditer(r'^\s*' + re.escape(var) + r'\s*=.*$', content, re.M):
+            dispatched |= set(re.findall(r'["\'](\w+)["\']', m.group(0)))
+    missing_methods = sorted(m for m in dispatched if m not in defined)
+    if missing_attrs or missing_methods:
+        return _fail(
+            f"proxy 调度分发不一致: self.scheduler 未定义属性 {missing_attrs},"
+            f"schedule 分发未定义方法 {missing_methods}——运行期 AttributeError → "
+            f"/v1/chat/completions 500(/v1/models 不经调度器正常);"
+            f"修复: WorkerRuntime.schedule 用 getattr(self.scheduler, method, None) 惰性分发,"
+            f"分发的方法名必须是 SharedProxyScheduler 已定义方法"
+        )
+    _pass("proxy 调度分发一致(self.scheduler 属性引用与 schedule 分发方法均有 def 定义)")
 
 
 # ---------- 注册检查项 ----------
@@ -1159,6 +1199,7 @@ def register():
         ("H26", "1.26 PD 分离 MODEL_ARGS 填充约束", c26_pd_model_args_constraints),
         ("H27", "1.27 TP≥8 + 混合注意力架构 enforce-eager", c27_tp8_hybrid_attn_enforce_eager),
         ("H28", "1.28 MoE 模型 HCCL_BUFFSIZE 通信窗口预算", c28_moe_hccl_buffsize_budget),
+        ("H29", "1.29 proxy 调度方法分发一致性", c29_proxy_schedule_dispatch_consistency),
     ]
     SOFT_CHECKS = [
         ("S01", "2.1 模型文档性能参数齐全度", s01_doc_params_soft),

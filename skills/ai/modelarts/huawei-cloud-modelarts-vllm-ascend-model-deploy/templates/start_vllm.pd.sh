@@ -85,17 +85,33 @@ if [ "${VLLM_ROLE}" = "proxy" ]; then
     DECODER_HOSTS="${DECODER_HOSTS_ENV:-}"
     DECODER_PORTS="${DECODER_PORTS_ENV:-}"
     if [ -n "${GLOBAL_RANK_TABLE_FILE_PATH:-}" ]; then
-        _prefill_master=$(PYTHONUNBUFFERED=1 python3 -c "
+        # 等待 rank table status=completed 再解析: proxy(0 卡)秒级启动,读未完成的 rank table
+        # 会漏注册后启动的实例(实测 PD 1P1D proxy 只注册到一半 decoder);
+        # 超时(600s)后退回 envs 兜底,envs 也为空则由下方错误分支退出
+        _rt_waited=0
+        _derived=""
+        while true; do
+            _derived=$(PYTHONUNBUFFERED=1 python3 -c "
 import json,os
-with open(os.getenv('GLOBAL_RANK_TABLE_FILE_PATH')) as f: rt=json.load(f)
-print(rt['server_group_list'][1]['server_list'][0]['server_ip'])
+try:
+    with open(os.getenv('GLOBAL_RANK_TABLE_FILE_PATH')) as f: rt=json.load(f)
+    if rt.get('status') != 'completed': raise ValueError('status not completed')
+    g1=rt['server_group_list'][1]['server_list']; g2=rt['server_group_list'][2]['server_list']
+    if not g1 or not g2: raise ValueError('empty group')
+    print(g1[0]['server_ip']); print(' '.join(s['server_ip'] for s in g2))
+except Exception:
+    pass
 " 2>/dev/null)
-        _decode_ips=$(PYTHONUNBUFFERED=1 python3 -c "
-import json,os
-with open(os.getenv('GLOBAL_RANK_TABLE_FILE_PATH')) as f: rt=json.load(f)
-servers=rt['server_group_list'][2]['server_list']
-print(' '.join(s['server_ip'] for s in servers))
-" 2>/dev/null)
+            if [ -n "${_derived}" ]; then break; fi
+            if [ "${_rt_waited}" -ge 600 ]; then
+                echo "[WARN] proxy 等待 rank table completed 超时(600s),退回 envs 兜底推导" >&2
+                break
+            fi
+            sleep 5
+            _rt_waited=$((_rt_waited + 5))
+        done
+        _prefill_master=$(echo "${_derived}" | sed -n '1p')
+        _decode_ips=$(echo "${_derived}" | sed -n '2p')
         if [ -n "${_prefill_master}" ]; then PREFILLER_HOSTS="${_prefill_master}"; fi
         if [ -n "${_decode_ips}" ]; then DECODER_HOSTS="${_decode_ips}"; fi
         if [ -n "${_prefill_master}" ]; then PREFILLER_PORTS="${PREFILLER_START_PORT}"; fi
@@ -487,6 +503,30 @@ fi
 # 硬编码为 1 在 TP>1 或 DP>1 时触发 pydantic 校验: conflicting tensor/data parallel size
 KV_TRANSFER_CONFIG="{\"kv_connector\": \"MooncakeConnectorV1\", \"kv_role\": \"${KV_ROLE}\", \"kv_port\": \"${KV_PORT}\", \"kv_buffer_device\": \"npu\", \"kv_connector_extra_config\": {\"prefill\": {\"dp_size\": ${PREFILL_DP_SIZE}, \"tp_size\": ${TP_SIZE}}, \"decode\": {\"dp_size\": ${DECODE_DP_SIZE}, \"tp_size\": ${TP_SIZE}}, \"ascend_local_comm_res_path\": \"${HIXLEP_PATH}\"}}"
 PD_ARGS=(--kv-transfer-config "${KV_TRANSFER_CONFIG}")
+
+# ---------- decode(kv_consumer)启动前等待 prefill group master API 就绪 ----------
+# ModelArts 各推理单元并发启动,平台不保证单元先后顺序,prefill(大权重加载慢)常晚于
+# decode 就绪;decode 的 KV consumer 传输引擎在 prefill(kv_producer)未就绪时 warmup
+# 崩溃(实测 v0.30.0 GLM-5.3 950DT 1P1D: decode 早于 prefill 就绪,warmup 阶段
+# npu_moe_distribute_dispatch_v2 报 error code 561000);等待 group 1 master(暴露 API,
+# 监听 VLLM_START_PORT)的 /health 就绪对齐官网"先 P 后 D 最后 Proxy"启动顺序;
+# WAIT_PREFILL_TIMEOUT=0 跳过等待(单位秒,默认 3600),超时 exit 1 快速失败
+if [ "${VLLM_ROLE}" = "decode" ] && [ "${WAIT_PREFILL_TIMEOUT:-3600}" != "0" ] \
+    && [ -n "${GLOBAL_RANK_TABLE_FILE_PATH:-}" ] && [ -f "${CUR_DIR}/get_master_ip.py" ]; then
+    _pf_ip=$(PYTHONUNBUFFERED=1 python3 "${CUR_DIR}/get_master_ip.py" 1)
+    if [ -n "${_pf_ip}" ]; then
+        _w_waited=0
+        until curl -sf --max-time 5 "http://${_pf_ip}:${VLLM_START_PORT}/health" >/dev/null 2>&1; do
+            if [ "${_w_waited}" -ge "${WAIT_PREFILL_TIMEOUT:-3600}" ]; then
+                echo "[ERROR] 等待 prefill master(${_pf_ip}:${VLLM_START_PORT}/health)就绪超时(${WAIT_PREFILL_TIMEOUT}s),decode 退出" >&2
+                exit 1
+            fi
+            sleep 10
+            _w_waited=$((_w_waited + 10))
+        done
+        echo "[pd] prefill master(${_pf_ip}) /health 已就绪(等待 ${_w_waited}s),启动 decode"
+    fi
+fi
 
 # ---------- 启动 vllm-ascend OpenAI 兼容服务(PD 角色实例) ----------
 # 不同模型的参数(如 --quantization, --dtype, --trust-remote-code)以
