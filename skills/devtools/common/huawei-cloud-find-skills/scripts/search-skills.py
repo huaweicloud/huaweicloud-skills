@@ -10,7 +10,11 @@ Index loading uses dual-source fallback: GitCode API v5 (primary) → Gitee raw
 (backup). On GitCode 429 (Too Many Requests) or network failure, the script
 automatically switches to the Gitee raw source, which has an independent IP
 and WAF, unaffected by GitCode rate limits. A local cache (TTL 1h) avoids
-repeated network calls within the same session.
+repeated network calls within the same session; the cache is consulted before
+any network source.
+
+Both index files are fetched and parsed at most once per process, and the
+fallback re-search runs at most once, reusing the already-parsed skill fields.
 """
 
 import argparse
@@ -80,6 +84,44 @@ GENERIC_KEYWORDS = {
     "agent", "市场", "market", "类目", "category",
     "安装", "install",
 }
+
+# 英文虚词/垃圾 token 噪声集: 用户输入里它们不承载检索意图, 但会以子串命中
+# 大量技能的 triggers/desc, 把「没有这个技能」放大成全量结果(如
+# `-k zzz-nonsense-qqq-no-such-skill` 曾返回 148 条)。检索前先剔除,
+# 保证「无匹配即无结果」与技能标题承诺的检索收敛一致。
+EN_NOISE_WORDS = frozenset({
+    "a", "an", "the", "and", "or", "of", "in", "on", "at", "to", "for", "is",
+    "are", "was", "were", "be", "been", "being", "it", "its", "this", "that",
+    "these", "those", "with", "without", "from", "by", "as", "if", "then",
+    "than", "so", "such", "not", "no", "yes", "any", "some", "every", "each",
+    "other", "into", "over", "under", "about", "after", "before", "again",
+    "also", "just", "only", "very", "too", "can", "will", "would", "should",
+    "could", "may", "might", "must", "shall", "have", "has", "had", "do",
+    "does", "did", "i", "you", "your", "yours", "he", "she", "we", "us",
+    "they", "them", "my", "me", "our", "their", "there", "here", "what",
+    "which", "who", "whom", "whose", "when", "where", "why", "how", "please",
+    "want", "need", "would", "like", "ok", "okay",
+})
+
+
+def is_noise_token(tok):
+    """英文虚词 / 单字母 / 重复字符垃圾 token(zzz、qqq)判为噪声。
+
+    中文 token 不受影响(虚词表只含 ASCII), 日文/其它非 ASCII 词也照常检索。
+    """
+    t = (tok or "").strip()
+    if not t:
+        return True
+    if not re.fullmatch(r"[A-Za-z0-9_.\-]+", t):
+        return False  # 含中文等非 ASCII 字符 → 不是英文噪声
+    low = t.lower()
+    if low in EN_NOISE_WORDS:
+        return True
+    if re.fullmatch(r"[A-Za-z]", t):
+        return True
+    if re.fullmatch(r"([A-Za-z])\1+", t):
+        return True
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -201,14 +243,16 @@ def load_json_dual_source(filename, label):
     raise RuntimeError(f"N02: Failed to fetch {label} from all sources ({', '.join(errors)})")
 
 
-def load_index():
-    data, _ = load_json_dual_source("index.json", "index.json")
-    return data
+# 进程内单次加载: index.json / cn-en-map.json 每进程只拉取+解析一次,
+# 后续调用复用已解析对象(缓存命中优先于网络由 load_json_dual_source 保证)。
+_LOADED_FILES = {}
 
 
-def load_cn_en_map():
-    data, _ = load_json_dual_source("cn-en-map.json", "cn-en-map.json")
-    return data
+def load_json_once(filename, label):
+    """Load an index file at most once per process; reuse the parsed object."""
+    if filename not in _LOADED_FILES:
+        _LOADED_FILES[filename] = load_json_dual_source(filename, label)
+    return _LOADED_FILES[filename]
 
 
 # ---------------------------------------------------------------------------
@@ -299,18 +343,35 @@ def is_clean_synonym_key(k):
     return not any(w in k for w in INTENT_KEYWORDS)
 
 
+# 反向映射索引(EN → 干净 CN 同义词列表)按 cn-en-map 对象构建一次后复用:
+# 原实现每个关键词都全表扫描 cn-en_map.items(), 一次检索最多扫 3 遍。
+_SYNONYM_INDEX = {"map_id": None, "index": {}}
+
+
+def cn_synonyms_for(cn_en_map, p_lower):
+    """返回映射到英文词 p_lower 的干净中文同义词(按 map 原顺序, 去重由调用方完成)。"""
+    if _SYNONYM_INDEX["map_id"] != id(cn_en_map):
+        index = {}
+        for cn, en in cn_en_map.items():
+            if not isinstance(en, str) or not is_clean_synonym_key(cn):
+                continue
+            index.setdefault(en, []).append(cn)
+        _SYNONYM_INDEX["map_id"] = id(cn_en_map)
+        _SYNONYM_INDEX["index"] = index
+    return _SYNONYM_INDEX["index"].get(p_lower, [])
+
+
 def expand_keywords(raw_keyword, cn_en_map):
     if not raw_keyword:
         return [], []
-    parts = [p for p in split_cjk_latin(raw_keyword).replace(",", " ").replace(";", " ").split() if p]
+    parts = [p for p in split_cjk_latin(raw_keyword).replace(",", " ").replace(";", " ").split()
+             if p and not is_noise_token(p)]
     expanded = list(parts)
     for p in parts:
         p_lower = p.lower()
         if p in cn_en_map and is_clean_map_key(p):
             expanded.append(cn_en_map[p])
-        for cn, en in cn_en_map.items():
-            if en == p_lower and is_clean_synonym_key(cn):
-                expanded.append(cn)
+        expanded.extend(cn_synonyms_for(cn_en_map, p_lower))
     all_kws = sorted(set(expanded))
     specific = [kw for kw in all_kws if not is_generic(kw)]
     generic = [kw for kw in all_kws if is_generic(kw)]
@@ -573,6 +634,7 @@ def score_skill(fields, specific_kws, generic_kws, user_intent="", explain=False
     matched = []
     detail = {}
     name_hit = service_hit = desc_hit = False
+    specific_hits = 0
     for kw in specific_kws:
         k = kw.lower()
         s = 0
@@ -596,6 +658,7 @@ def score_skill(fields, specific_kws, generic_kws, user_intent="", explain=False
             total += s
             matched.append(kw)
             detail[kw] = areas
+            specific_hits += 1
     for kw in generic_kws:
         k = kw.lower()
         s = 0
@@ -642,7 +705,7 @@ def score_skill(fields, specific_kws, generic_kws, user_intent="", explain=False
             total *= INTENT_BOOST
     total = int(total)
     if explain:
-        return total, matched, {"detail": detail, "type": stype}
+        return total, matched, {"detail": detail, "type": stype, "specific_hits": specific_hits}
     return total, matched
 
 
@@ -665,6 +728,45 @@ def build_result(fields, score, matched):
         "triggers": fields["triggers"][:5],
         "matched": matched,
     }
+
+
+def rescore(skills, specific_kws, generic_kws, category, user_intent):
+    """对已解析字段的 skill 列表重打分(不重新加载索引、不重复提取字段)。
+
+    与主检索同口径: 有关键词(specific)时必须真正命中至少一个 specific 词,
+    仅命中泛词的技能不入选, 避免「无关关键词 → 全量结果」。
+    """
+    rows = []
+    for skill in skills:
+        if not category_matches(skill["category"], category):
+            continue
+        sc, matched, extra = score_skill(skill, specific_kws, generic_kws,
+                                         user_intent=user_intent, explain=True)
+        if sc <= 0:
+            continue
+        if specific_kws and extra["specific_hits"] == 0:
+            continue
+        rows.append(build_result(skill, sc, matched))
+    rows.sort(key=lambda r: r["score"], reverse=True)
+    return rows
+
+
+def fallback_keywords(keyword, skills):
+    """整词命中不足时的单次回退关键词来源。
+
+    英文 token 回退与中文复合词拆分回退天然互斥(纯中文整词不含英文 token,
+    纯英文/混合词无法通过整词中文正则), 因此合并为一次判定、一次重打分。
+    返回 (mode, 回退关键词串, 复合词拆分说明) 或 None。
+    """
+    en_tokens = [t for t in re.findall(r"[A-Za-z]{2,}", keyword) if not is_noise_token(t)]
+    if en_tokens:
+        return "tokens", " ".join(en_tokens), ""
+    kw_cjk = keyword.strip()
+    if re.fullmatch(_CJK_RUN, kw_cjk) and len(kw_cjk) >= 4:
+        sub_words = split_cjk_compound(kw_cjk, build_cjk_vocab(skills))
+        if sub_words:
+            return "cjk", " ".join(sub_words), " + ".join(sub_words)
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -743,7 +845,7 @@ def main():
         print("ERROR: missing keyword and category (U02)", file=sys.stderr)
         return 1
 
-    idx, idx_source = load_json_dual_source("index.json", "index.json")
+    idx, idx_source = load_json_once("index.json", "index.json")
     raw_skills = idx.get("skills", [])
     skills = [extract_skill_fields(s) for s in raw_skills]
     all_service_codes = set()
@@ -778,13 +880,25 @@ def main():
         return 0
 
     if args.keyword:
-        cn_en_map, map_source = load_json_dual_source("cn-en-map.json", "cn-en-map.json")
+        cn_en_map, map_source = load_json_once("cn-en-map.json", "cn-en-map.json")
         specific_kws, generic_kws = expand_keywords(args.keyword, cn_en_map)
     else:
         specific_kws, generic_kws = [], []
+        cn_en_map = {}
         map_source = "n/a"
     has_specific = bool(specific_kws)
     user_intent = detect_user_intent(args.keyword)
+
+    # 关键词被噪声过滤清空(全部是 no/the/zzz/qqq 这类虚词或垃圾 token)时,
+    # 不存在有意义的检索词: 直接返回无结果, 而不是退化成「浏览全量」。
+    if args.keyword and not specific_kws and not generic_kws:
+        print(f"No results for keyword='{args.keyword}' category='{args.category}'")
+        print()
+        print("  Keyword carries no searchable term (stop words / junk characters only).")
+        print("  Use a service name or skill capability instead, e.g. 'ecs', 'obs 桶策略', 'cce 告警'.")
+        print("  Browse available categories: python search-skills.py -l")
+        print(f"  [data source: index: {idx_source}]")
+        return 0
 
     # 精确技能名短路: 关键词(单一 token)与某 skill name 完全一致(忽略大小写)时,
     # 直接只返回该技能, 其余条目不再以 1-3 分兜底混入。
@@ -816,54 +930,32 @@ def main():
         sc, matched, extra = score_skill(skill, specific_kws, generic_kws, user_intent=user_intent, explain=True)
         if has_specific and sc == 0:
             continue
+        # 有关键词时, 只命中泛词(huawei/cloud/skill…)不算命中: 否则一个不存在的
+        # 关键词会通过泛词子串命中把全量技能拉进结果(检索收敛)。
+        if has_specific and extra["specific_hits"] == 0:
+            continue
         results.append(build_result(skill, sc, matched))
         if args.explain:
             explain_info[skill["name"]] = extra
 
     results.sort(key=lambda r: r["score"], reverse=True)
 
+    # 回退(至多一次): 整词命中不足时, 英文 token 或中文复合词拆分后再检索一次;
+    # 复用已解析的 skills 字段与同一份 cn-en-map, 不重新加载索引。
     if has_specific and len(results) <= 1:
-        en_tokens = re.findall(r'[A-Za-z]{2,}', args.keyword)
-        if en_tokens:
-            retry_kw = " ".join(en_tokens)
-            retry_specific, retry_generic = expand_keywords(retry_kw, cn_en_map)
+        fb = fallback_keywords(args.keyword, skills)
+        if fb:
+            fb_mode, fb_kw, fb_note = fb
+            retry_specific, retry_generic = expand_keywords(fb_kw, cn_en_map)
             if retry_specific:
-                retry_results = []
-                for skill in skills:
-                    category = skill["category"]
-                    if not category_matches(category, args.category):
-                        continue
-                    sc, matched = score_skill(skill, retry_specific, retry_generic, user_intent=user_intent)
-                    if sc > 0:
-                        retry_results.append(build_result(skill, sc, matched))
-                if len(retry_results) > 1:
-                    retry_results.sort(key=lambda r: r["score"], reverse=True)
+                retry_results = rescore(skills, retry_specific, retry_generic,
+                                        args.category, user_intent)
+                adopted = (len(retry_results) > 1 if fb_mode == "tokens"
+                           else len(retry_results) > len(results))
+                if adopted:
                     results = retry_results
-                    specific_kws = retry_specific
-                    generic_kws = retry_generic
-
-    # 中文复合词回退(issue #1004): 整词未命中(<=1 结果)且关键词为单一连写中文复合词时,
-    # 用语料子串词典做最长匹配拆分, 子词联合搜索, 命中更多则采用并标注拆分。
-    if has_specific and len(results) <= 1:
-        kw_cjk = args.keyword.strip()
-        if re.fullmatch(_CJK_RUN, kw_cjk) and len(kw_cjk) >= 4:
-            sub_words = split_cjk_compound(kw_cjk, build_cjk_vocab(skills))
-            if sub_words:
-                retry_specific, retry_generic = expand_keywords(" ".join(sub_words), cn_en_map)
-                if retry_specific:
-                    retry_results = []
-                    for skill in skills:
-                        if not category_matches(skill["category"], args.category):
-                            continue
-                        sc, matched = score_skill(skill, retry_specific, retry_generic, user_intent=user_intent)
-                        if sc > 0:
-                            retry_results.append(build_result(skill, sc, matched))
-                    if len(retry_results) > len(results):
-                        retry_results.sort(key=lambda r: r["score"], reverse=True)
-                        results = retry_results
-                        specific_kws = retry_specific
-                        generic_kws = retry_generic
-                        cjk_split_note = " + ".join(sub_words)
+                    specific_kws, generic_kws = retry_specific, retry_generic
+                    cjk_split_note = fb_note
 
     impressions = report_search_results_impressions(results)
 

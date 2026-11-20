@@ -56,11 +56,14 @@ python scripts/search-skills.py -l                   # 列出可用类目
 
 ```bash
 python scripts/search-skills.py -k "不存在的关键词xyz123"
+python scripts/search-skills.py -k 'zzz-nonsense-qqq-no-such-skill'   # 英文虚词/垃圾 token
+python scripts/search-skills.py -k 'zzz'
 python scripts/search-skills.py -c "nonexistent-category"
 ```
 
 **预期结果**：
-- 输出 "No results for keyword=..." 提示
+- 输出 "No results for keyword=..." 提示；**不得**返回全量技能（检索收敛：英文虚词 `no`/`the`/`such` 与垃圾 token `zzz`/`qqq` 在扩展前被剔除，且有关键词时仅命中泛词不算命中）
+- 关键词全部为虚词/垃圾字符（如 `-k zzz`）→ 输出 "Keyword carries no searchable term" 并建议改用服务名，不退化为全量浏览
 - 仅关键词无结果 → 输出 Fallback suggestions（含 `-l` 浏览类目入口）
 - `-c` 值不存在 → 提示 "Category '...' was not found in the index."，给出近似类目候选并列出可用类目清单（由 `index.json` 聚合，不写死任何类目）
 - `-c` 存在但关键词无命中 → 提示该类目下的技能数并建议不带关键词浏览
@@ -75,21 +78,54 @@ python scripts/search-skills.py
 - 输出 Usage 提示（`-k` / `-c` / `-l` 三种用法）
 - 脚本以非零状态退出（参数错误）
 
+### 6. 安装落盘与生效验证（AI DevSpace / CodeArts AI Shell / Hermes）
+
+按 SKILL.md **Step 3.3** 的矩阵执行，判定只看真实落盘与运行时清单，不看任何"想象中的目录"：
+
+```bash
+npx skills ls                                  # 已安装技能 + 落盘路径（项目级/用户级）
+ls -l .agents/skills/<skill-name>/SKILL.md     # 项目级安装
+ls -l ~/.agents/skills/<skill-name>/SKILL.md   # 用户级（-g）安装
+ls -l ~/.hermes/skills/<skill-name>/SKILL.md   # Hermes 技能根
+```
+
+**预期结果**：
+- `npx skills ls` 的路径与上面 `ls` 结果一致存在于磁盘 → 安装成功
+- 当前会话技能清单未更新（扫描发生在会话启动时）→ **未生效**，新开会话/重载窗口后可见，无需重装
+- `npx skills ls` 有记录但目录不存在 → 链接失败，按 Step 3.2 的手动复制方案修复
+- Hermes：目录存在且新会话 `skills_list` 能看到 → 生效
+
+### 7. 类目归属验证（索引侧，外部依赖）
+
+```bash
+python3 scripts/search-skills.py -c "devtools/common/obs"
+python3 scripts/search-skills.py -c "common"
+```
+
+**预期结果**：
+- `devtools/common/obs` 的结果中**不出现** `huawei-cloud-find-skills`
+- `common`（或 `common/utility`）能检索到 `huawei-cloud-find-skills`
+
+> 类目数据由外部索引仓库（`developer-skill/skills-group-contribution`）生成，本仓库不含 `index.json`。
+> 上述两项在索引侧修正前会失败——属**外部依赖**，记录在 SKILL.md § Category Ownership & External Dependency。
+
 ## 安装流程验证
 
 1. 执行关键词搜索，从结果中取一个 skill 名
-2. 按 SKILL.md Step 3 执行安装命令：
+2. 按 SKILL.md Step 3 执行安装命令（单条命令、无管道包裹）：
    ```bash
    npx skills add https://gitcode.com/huaweicloud/huaweicloud-skills.git#master --skill <skill-name> -y
    ```
 3. **预期结果**：
-   - 安装命令执行成功，无报错
+   - 安装命令执行成功，无报错（退出码 0）
    - 安装前已调用 install-count API（fire-and-forget，失败不阻塞安装）
+   - 按上面第 6 项可独立判定安装是否落盘、是否需要新会话生效
 
 ## 与官方索引一致性验证
 
 - 将脚本输出与
   `https://gitcode.com/developer-skill/skills-group-contribution`（branch `test-for-index`）中的
   `skills-index/index.json` 内容比对
-- **预期结果**：脚本输出的 skill 名称、分类、服务与索引文件一致（数据为每次
-  运行实时拉取，无本地缓存）
+- **预期结果**：脚本输出的 skill 名称、分类、服务与索引文件一致
+- 数据来自 GitCode → Gitee 回退的实时拉取；本机 `~/.cache/huawei-cloud-find-skills/` 命中缓存时（TTL 1h）
+  不再请求网络，输出应与实时拉取逐字一致
