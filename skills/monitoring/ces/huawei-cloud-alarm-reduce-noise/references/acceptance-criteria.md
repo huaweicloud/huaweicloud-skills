@@ -14,38 +14,46 @@ This document defines the quality standards and acceptance criteria for the alar
 | AC-1.3 | hcloud CLI available | `check_env.py` outputs `[OK] hcloud CLI found` |
 | AC-1.4 | AK/SK configured via environment variables | `alarm.py` runs without auth errors |
 
-### 2. Alarm Data Collection
+### 2. Core Instance Discovery
 
 | Criterion | Description | Verification |
 |-----------|-------------|--------------|
-| AC-2.1 | CES alarm histories fetched for all regions | `alarm_result.json` contains entries for each region in 关键资源标记表 |
-| AC-2.2 | CES alarm rules fetched | `ces_alarm_rules.json` contains rule list per region |
-| AC-2.3 | AOM alarm rules fetched | `ces_alarm_rules.json` includes AOM rules (merged with CES) |
-| AC-2.4 | Multi-region format used | `alarm_result.json` has `{"alarms": {region_name: {...}}}` structure |
-| AC-2.5 | Time range parameter respected | `--days 7` collects alarms from last 7 days only |
-| AC-2.6 | Project ID auto-fetched per region | No manual Project ID configuration required |
+| AC-2.1 | RMS API accessible | `generate_instance.py` runs without errors |
+| AC-2.2 | core_instances.json generated | File contains `{"resources": {region: [resource_ids]}}` structure |
+| AC-2.3 | At least one region discovered | core_instances.json contains >=1 region (multi-region is optional) |
 
-### 3. Alarm Analysis
+### 3. Alarm Data Collection
 
 | Criterion | Description | Verification |
 |-----------|-------------|--------------|
-| AC-3.1 | Core resource filtering works | Only alarms for resources with 是否核心业务="是" are analyzed |
-| AC-3.2 | Health score calculated (0-100) | Report shows health score for each region |
-| AC-3.3 | 告警治理 dimension analyzed | Report includes routing, dedup, suppression, silence sections |
-| AC-3.4 | 告警收敛 dimension analyzed | Report includes alarm storm, temporal correlation sections |
-| AC-3.5 | 告警关联 dimension analyzed | Report includes root cause, derived alarm sections |
-| AC-3.6 | 长久未恢复告警 analyzed | Report includes 7/14/30/90 day unresolved alarm levels |
-| AC-3.7 | TOP10 high-frequency alarms listed | Only core resource alarms included |
-| AC-3.8 | Daily alarm trend present | Report shows per-day alarm count trend |
+| AC-3.1 | CES alarm histories fetched for all regions | `alarm_result.json` contains entries for each region in core_instances.json |
+| AC-3.2 | CES alarm rules fetched | `ces_alarm_rules.json` contains rule list per region |
+| AC-3.3 | AOM alarm rules fetched | `ces_alarm_rules.json` includes AOM rules (merged with CES) |
+| AC-3.4 | Multi-region format used | `alarm_result.json` has `{"alarms": {region_name: {...}}}` structure |
+| AC-3.5 | Time range parameter respected | `--days 7` collects alarms from last 7 days only |
+| AC-3.6 | Project ID auto-fetched per region | No manual Project ID configuration required |
 
-### 4. Report Generation
+### 4. Alarm Analysis
 
 | Criterion | Description | Verification |
 |-----------|-------------|--------------|
-| AC-4.1 | HTML report generated | `alarm-noise-report.html` exists and opens in browser |
-| AC-4.2 | Region switcher works | Dropdown at report top, switching updates all sections |
-| AC-4.3 | 降噪建议 included | Suggestions sorted by priority (高/中/长期) |
-| AC-4.4 | Report is self-contained | No external dependencies (CSS/JS inline) |
+| AC-4.1 | Core resource filtering works | Only alarms for resources in core_instances.json are analyzed |
+| AC-4.2 | Health score calculated (0-100) | Report shows health score for each region |
+| AC-4.3 | 告警治理 dimension analyzed | Report includes routing, dedup, suppression, silence sections |
+| AC-4.4 | 告警收敛 dimension analyzed | Report includes alarm storm, temporal correlation sections |
+| AC-4.5 | 告警关联 dimension analyzed | Report includes root cause, derived alarm sections |
+| AC-4.6 | 长久未恢复告警 analyzed | Report includes 7/14/30/90 day unresolved alarm levels |
+| AC-4.7 | TOP10 high-frequency alarms listed | Only core resource alarms included |
+| AC-4.8 | Daily alarm trend present | Report shows per-day alarm count trend |
+
+### 5. Report Generation
+
+| Criterion | Description | Verification |
+|-----------|-------------|--------------|
+| AC-5.1 | HTML report generated | `alarm-noise-report.html` exists and opens in browser |
+| AC-5.2 | Region switcher works | Dropdown at report top, switching updates all sections |
+| AC-5.3 | 降噪建议 included | Suggestions sorted by priority (高/中/长期) |
+| AC-5.4 | Report is self-contained | No external dependencies (CSS/JS inline) |
 
 ## Technical Acceptance Criteria
 
@@ -53,7 +61,7 @@ This document defines the quality standards and acceptance criteria for the alar
 
 | Criterion | Description |
 |-----------|-------------|
-| AC-T1.1 | Regions auto-extracted from 关键资源标记表.xlsx "Region" column |
+| AC-T1.1 | Regions auto-discovered from core_instances.json (generated via RMS API) |
 | AC-T1.2 | hcloud CLI uses `--cli-region` for region-specific API calls |
 | AC-T1.3 | Project ID fetched per region via `hcloud IAM KeystoneListProjects` |
 | AC-T1.4 | HTML report provides searchable region switcher dropdown |
@@ -71,7 +79,7 @@ This document defines the quality standards and acceptance criteria for the alar
 
 | Criterion | Description |
 |-----------|-------------|
-| AC-T3.1 | Missing Excel file produces clear error message |
+| AC-T3.1 | RMS API failure produces clear error message |
 | AC-T3.2 | API failures (CES/AOM) are logged and don't crash the pipeline |
 | AC-T3.3 | Empty alarm histories result in valid report (0 alarms), not a crash |
 | AC-T3.4 | Region with no alarms handled gracefully in multi-region report |
@@ -98,7 +106,7 @@ This document defines the quality standards and acceptance criteria for the alar
 
 ### 2. Data Accuracy
 - Health score = weighted sum of 5 dimensions (告警总量, 严重告警占比, 告警收敛率, 长久未恢复告警, 趋势)
-- Only core resource alarms counted in analysis (filtered by 关键资源标记表)
+- Only core resource alarms counted in analysis (filtered by core_instances.json from RMS API)
 - Alarm storm threshold: >30 times = high risk, >100 times = severe
 - Unresolved alarm levels: >7d (info), >14d (info), >30d (warning), >90d (danger)
 
@@ -111,9 +119,9 @@ This document defines the quality standards and acceptance criteria for the alar
 ## Compliance Acceptance Criteria
 
 ### 1. Huawei Cloud Standards
-- Uses official hcloud CLI for CES and AOM API calls
+- Uses official hcloud CLI for CES, AOM, and RMS API calls
 - Follows Huawei Cloud region naming conventions (cn-north-4, cn-east-3, etc.)
-- Supports multi-region collection from 关键资源标记表
+- Supports multi-region collection auto-discovered via RMS API
 
 ### 2. Security Standards
 - Read-only operations only — no resource creation, modification, or deletion
@@ -127,18 +135,18 @@ This document defines the quality standards and acceptance criteria for the alar
 - [ ] Python 3.10+ installed
 - [ ] hcloud CLI installed and configured
 - [ ] AK/SK with required IAM permissions configured (see iam-policies.md)
-- [ ] `assets/关键资源标记表.xlsx` with valid "Region" and "是否核心业务" columns
 - [ ] `requirements.txt` dependencies installed
 
 ### Acceptance Test Execution
 1. Run `python3 scripts/check_env.py` — verify all prerequisites met
-2. Run `python3 scripts/alarm.py --days 7` — verify alarm data collected
-3. Run `python3 scripts/analyze_alarm.py` — verify HTML report generated
-4. Open report in browser — verify all sections render correctly
-5. Switch regions in report — verify data updates
-6. Verify all functional criteria (AC-1.x through AC-4.x)
-7. Verify all technical criteria (AC-T1.x through AC-T4.x)
-8. Confirm no cloud resources were modified (read-only)
+2. Run `python3 scripts/generate_instance.py` — verify core instances discovered via RMS API
+3. Run `python3 scripts/alarm.py --days 7` — verify alarm data collected
+4. Run `python3 scripts/analyze_alarm.py` — verify HTML report generated
+5. Open report in browser — verify all sections render correctly
+6. Switch regions in report — verify data updates
+7. Verify all functional criteria (AC-1.x through AC-5.x)
+8. Verify all technical criteria (AC-T1.x through AC-T4.x)
+9. Confirm no cloud resources were modified (read-only)
 
 ## References
 

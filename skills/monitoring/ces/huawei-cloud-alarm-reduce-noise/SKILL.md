@@ -1,7 +1,7 @@
 ---
 name: huawei-cloud-alarm-reduce-noise
-tags: [huawei-cloud, alarm, ces, aom, noise-reduction, alarm-optimization]
-triggers: 告警降噪, 告警优化, 告警治理, 告警收敛, 告警风暴, 告警太多, 分析告警, CES告警, AOM告警, 华为云告警, 告警分析报告, 生成告警报告, alarm noise reduction, alarm optimization
+tags: [huawei-cloud, alarm, ces, aom, noise-reduction]
+triggers: [告警降噪, 告警优化, 告警治理, 告警收敛分析, 告警风暴, 告警太多, 告警数据分析, CES告警降噪, AOM告警降噪, 华为云告警, 告警分析报告, 生成告警报告, "alarm noise reduction", "alarm optimization"]
 description: >
   Huawei Cloud CES+AOM alarm noise reduction analysis skill. Analyzes CES
   (Cloud Eye Service) and AOM (Application Operations Management) alarm data,
@@ -9,8 +9,8 @@ description: >
   and optimization plans. Analysis covers four dimensions: alarm governance,
   alarm convergence, alarm correlation, and long-unresolved alarms. Supports
   core resource filtering and outputs an HTML optimization report. Use this skill
-  when the user mentions 告警降噪, 告警优化, 告警治理, 告警收敛, 告警风暴,
-  告警太多, 分析告警, CES告警, AOM告警, 华为云告警, 告警分析报告, 生成告警报告,
+  when the user mentions 告警降噪, 告警优化, 告警治理, 告警收敛分析, 告警风暴,
+  告警太多, 告警数据分析, CES告警降噪, AOM告警降噪, 华为云告警, 告警分析报告, 生成告警报告,
   or needs to (1) analyze alarm data distribution and trends, (2) identify alarm
   types that need priority handling, (3) generate noise reduction strategies and
   recommendations, (4) output an HTML optimization report.
@@ -27,11 +27,11 @@ This skill analyzes Huawei Cloud CES (Cloud Eye Service) and AOM (Application Op
 3. **Alarm Correlation** - Root cause analysis, derived alarm identification, suppression rule suggestions
 4. **Long-Unresolved Alarms** - Tiered by 7/14/30/90 days, identifies long-unresolved alarms
 
-Regions and core resources are automatically loaded from the key resource marker table (assets/关键资源标记表.xlsx). Only core resource alarms are analyzed.
+Regions and core resources are automatically discovered via Huawei Cloud RMS (Resource Management Service) API. Only core resource alarms are analyzed.
 
 Authentication: Huawei Cloud AK/SK via environment variables (HW_ACCESS_KEY / HW_SECRET_KEY), using hcloud CLI to call CES and AOM APIs.
 
-Multi-region format: region list is auto-read from the key resource marker table. The HTML report provides a region switcher at the top. Only core resource alarms are analyzed.
+Multi-region format: region list is auto-discovered via RMS API. The HTML report provides a region switcher at the top. Only core resource alarms are analyzed.
 
 ## Use Cases & Example Prompts
 
@@ -71,11 +71,24 @@ Frequent alarms due to high resource utilization, need scaling or optimization r
 
 This skill executes via Python scripts. Main commands:
 
-| Command | Description | Write Operation |
-|---------|-------------|-----------------|
-| `python3 scripts/check_env.py` | Check runtime environment (Python version, dependencies, hcloud CLI) | No |
-| `python3 scripts/alarm.py --days 7` | Collect CES+AOM alarm data for the last 7 days | No |
-| `python3 scripts/analyze_alarm.py` | Analyze alarm data and generate HTML noise reduction report | No |
+> **Shared workspace prerequisite (required):** `generate_instance.py`, `alarm.py`, and
+> `analyze_alarm.py` must read and write the **same** directory. Export
+> `ALARM_REDUCE_NOISE_WORKSPACE_DIR` **before the first command** and keep it exported for every
+> following command. Without it, each script creates its own timestamped directory and the later
+> steps exit 1 because they cannot find `core_instances.json` / `alarm_result.json`.
+>
+> ```bash
+> export ALARM_REDUCE_NOISE_WORKSPACE_DIR="/root/workspace/alarm-reduce-noise-workspace_$(date +%Y%m%d_%H%M%S)"
+> mkdir -p "$ALARM_REDUCE_NOISE_WORKSPACE_DIR"
+> ```
+
+| Command | Description | Write Operation | Shared Workspace |
+|---------|-------------|-----------------|------------------|
+| `python3 scripts/check_env.py` | Check runtime environment (Python version, dependencies, hcloud CLI) | No | Not required |
+| `python3 scripts/generate_instance.py` | Fetch all instances via RMS API, generate core_instances.json | No | **Required** — run the `export` above first |
+| `python3 scripts/alarm.py --days 7` | Collect CES+AOM alarm data for the last 7 days | No | **Required** — same directory as above |
+| `python3 scripts/analyze_alarm.py` | Analyze alarm data and generate HTML noise reduction report | No | **Required** — same directory as above |
+| `bash scripts/run_all.sh --days 7` | Run the three steps above in one shared workspace (recommended) | No | Handled automatically |
 
 ### Environment Check
 
@@ -83,17 +96,48 @@ This skill executes via Python scripts. Main commands:
 python3 scripts/check_env.py
 ```
 
-### Collect Alarm Data
+### Fetch All Instances via RMS API
+
+**Workspace prerequisite:** run the `export ALARM_REDUCE_NOISE_WORKSPACE_DIR=...` command from the prerequisite above first, so that `alarm.py` and `analyze_alarm.py` can read `core_instances.json` from the same directory.
 
 ```bash
+export ALARM_REDUCE_NOISE_WORKSPACE_DIR="/root/workspace/alarm-reduce-noise-workspace_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$ALARM_REDUCE_NOISE_WORKSPACE_DIR"
+python3 scripts/generate_instance.py
+```
+
+This calls `hcloud RMS CollectAllResourcesSummary` to get a resource overview, intersects with `PROVIDER_TYPES` (alarm baseline-supported providers), then concurrently fetches all instances via `hcloud RMS ListAllResources`. The result is written to `<WORKSPACE_DIR>/core_instances.json` in the format `{source, resources: {region: [resource_id_list]}}`. This file determines which regions to collect alarms from and which resources are considered core resources.
+
+### Collect Alarm Data
+
+**Workspace prerequisite:** required. `ALARM_REDUCE_NOISE_WORKSPACE_DIR` must be the directory exported for the previous step, and `core_instances.json` must already exist there. Both `--days 1` and `--days 7` read `core_instances.json` from this directory; if the variable is unset, the script creates a different timestamped directory and exits 1 with "core_instances.json 不存在".
+
+```bash
+# Reuse the SAME directory exported for generate_instance.py (do not create a new one).
+# If the variable is empty, re-export the directory used by the previous step first.
+echo "workspace: ${ALARM_REDUCE_NOISE_WORKSPACE_DIR:?must be exported -- see the shared workspace prerequisite}"
 python3 scripts/alarm.py --days 7
 ```
 
 ### Analyze and Generate Report
 
+**Workspace prerequisite:** required. `ALARM_REDUCE_NOISE_WORKSPACE_DIR` must be the directory exported for the previous steps, and both `alarm_result.json` and `core_instances.json` must already exist there.
+
 ```bash
+# Reuse the SAME directory exported for alarm.py (do not create a new one).
+echo "workspace: ${ALARM_REDUCE_NOISE_WORKSPACE_DIR:?must be exported -- see the shared workspace prerequisite}"
 python3 scripts/analyze_alarm.py
 ```
+
+### Run the Full Pipeline in One Command
+
+`run_all.sh` exports one shared workspace and runs `generate_instance.py` → `alarm.py` → `analyze_alarm.py` in order, so the shared state can never be lost. Extra arguments are passed to `alarm.py` (for example `--days 7`).
+
+```bash
+bash scripts/run_all.sh
+```
+
+If `ALARM_REDUCE_NOISE_WORKSPACE_DIR` is already exported, `run_all.sh` reuses it; otherwise it creates a timestamped directory and prints it.
 
 ## Quick Start
 
@@ -121,24 +165,46 @@ HW_REGION_NAME=cn-south-1
 
 Proceed to subsequent steps only after the environment check passes.
 
-### Step 2: Check Key Resource Marker Table
+### Step 2: Set Up Shared Workspace & Fetch Instances via RMS API
 
-Before collecting alarm data, verify that the key resource marker table (`assets/关键资源标记表.xlsx`) contains data rows. This table determines which regions to collect alarms from and which resources are considered core business resources.
+Before running the pipeline, set up a shared workspace directory so that all three scripts (generate_instance.py → alarm.py → analyze_alarm.py) read and write to the same location. Without this, each script creates its own timestamped directory and cannot find files from previous steps. **Keep this variable exported for Steps 4 and 5** — if you open a new shell, re-export the same directory (or use `bash scripts/run_all.sh`) before running `alarm.py` / `analyze_alarm.py`.
 
-Check method: read the Excel file and confirm it has at least one data row (beyond the header).
+```bash
+# Create a shared workspace directory for this run
+export ALARM_REDUCE_NOISE_WORKSPACE_DIR="/root/workspace/alarm-reduce-noise-workspace_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$ALARM_REDUCE_NOISE_WORKSPACE_DIR"
+```
 
-**If the table has data** → proceed to Step 3.
+Then fetch all cloud instances via the RMS (Resource Management Service) API. This replaces the former manual Excel-based key resource marker table with automatic resource discovery.
 
-**If the table is empty** → **STOP**. Do NOT attempt to auto-discover or auto-populate resources. Present the table structure to the user and ask them to fill it in:
+```bash
+python3 scripts/generate_instance.py
+```
 
-| Column | Description | Example |
-|--------|-------------|---------|
-| Region | Resource region | cn-south-1 |
-| resource_type | Resource type | ECS, RDS, ELB, CCE... |
-| resource_id | Resource ID | 46ef6243-xxxx-xxxx-xxxx-xxxxxxxxxxxx |
-| 是否核心业务 | Mark as core resource | 是 |
+This script:
+1. Calls `hcloud RMS CollectAllResourcesSummary` to get a resource overview (which providers/types exist in the current account)
+2. Intersects with `PROVIDER_TYPES` (alarm baseline-supported provider+type combinations) to determine which resources to fetch
+3. Concurrently (10 threads) calls `hcloud RMS ListAllResources` for each matched provider.type, with automatic pagination
+4. Groups all resource IDs by `region_id` and writes to `<WORKSPACE_DIR>/core_instances.json`
 
-Only after the user confirms the table is filled should you proceed to Step 3.
+The output file `core_instances.json` has the format:
+```json
+{
+  "source": "RMS API (generate_instance.py)",
+  "resources": {
+    "cn-north-4": ["resource-id-1", "resource-id-2", ...],
+    "cn-east-3": ["resource-id-3", ...]
+  }
+}
+```
+
+This file determines:
+- **Which regions** to collect alarms from (all keys in `resources`)
+- **Which resources** are considered core resources (all resource IDs in the values)
+
+All resources matching `PROVIDER_TYPES` are included, encompassing both main instances and sub-resources (nodes, proxies, etc.) — this ensures comprehensive alarm coverage for noise reduction analysis.
+
+After successful execution, proceed to Step 3.
 
 ### Step 3: Select Analysis Parameters
 
@@ -159,7 +225,7 @@ Determine the time parameter for subsequent commands based on user selection:
 - "近30天" → add `--days 30`
 - "自定义日期范围" → ask for start/end dates, add `--start-date YYYY-MM-DD --end-date YYYY-MM-DD`
 
-> **Regions and core resources**: The region list and core resources are automatically loaded from `assets/关键资源标记表.xlsx` — no manual specification needed. The "Region" column determines which regions to collect from, and rows with "是否核心业务" = "是" determine the analysis scope.
+> **Regions and core resources**: The region list and core resources are automatically loaded from `core_instances.json` (generated in Step 2 via RMS API) — no manual specification needed.
 
 ### Step 4: Collect Alarm Data
 
@@ -175,7 +241,7 @@ The time parameter depends on the Step 3 selection:
 - Last 30 days → `--days 30`
 - Custom range → `--start-date YYYY-MM-DD --end-date YYYY-MM-DD`
 
-The script automatically reads the "Region" column from `assets/关键资源标记表.xlsx` to get the region list. For each region, it auto-fetches the corresponding project_id via hcloud CLI's `--cli-region` parameter — no extra configuration needed.
+The script reads `core_instances.json` from the shared workspace directory (`$ALARM_REDUCE_NOISE_WORKSPACE_DIR` set in Step 2). For each region, it auto-fetches the corresponding project_id via hcloud CLI's `--cli-region` parameter — no extra configuration needed.
 
 After execution, an `alarm_result.json` file is generated in the workspace directory (default: `/root/workspace/alarm-reduce-noise-workspace_YYYYMMDD_HHMMSS/`, timestamped). The output uses a multi-region structure: `{"alarms": {region_name: {...}}}`. The `ces_alarm_rules.json` file also uses a multi-region structure: `{region_name: [rule_list]}`.
 
@@ -187,7 +253,7 @@ Use the Python script to analyze alarm_result.json and generate an HTML report i
 python3 scripts/analyze_alarm.py
 ```
 
-The script always loads core resources from `assets/关键资源标记表.xlsx`, filters alarms by region, and only analyzes core resource alarms. The `--input` and `--output` parameters are optional; when omitted, the script defaults to reading `alarm_result.json` from the workspace directory and outputting `alarm-noise-report.html`.
+The script loads `core_instances.json` and `alarm_result.json` from the shared workspace directory (`$ALARM_REDUCE_NOISE_WORKSPACE_DIR` set in Step 2), filters alarms by region, and only analyzes core resource alarms. The `--input` and `--output` parameters are optional; when omitted, the script defaults to reading from the workspace directory and outputting `alarm-noise-report.html`.
 
 ### Input Data Format
 
@@ -232,11 +298,14 @@ Usage:
 ```bash
 # Method 1: Explicitly set shared directory (recommended for multi-script runs)
 export ALARM_REDUCE_NOISE_WORKSPACE_DIR="/root/workspace/alarm-reduce-noise-workspace_$(date +%Y%m%d_%H%M%S)"
+python scripts/generate_instance.py
 python scripts/alarm.py --days 7
 python scripts/analyze_alarm.py
 # All scripts output to the same directory
 
 # Method 2: No env var set (single script standalone run, auto-creates timestamped directory)
+# WARNING: do NOT run generate_instance.py -> alarm.py -> analyze_alarm.py this way; each
+# invocation gets a different directory and the later steps cannot find the earlier output.
 python scripts/analyze_alarm.py
 ```
 
@@ -285,6 +354,6 @@ Analysis contents:
 - Tier by duration: >7 days (info), >14 days (info), >30 days (warning), >90 days (danger)
 - Unresolved alarm detail list
 
-## Reference
+## Reference Documents
 
-For detailed analysis methodology, see [references/alarm-analysis.md](references/alarm-analysis.md)
+For detailed analysis methodology, see [references/alarm-analysis.md](references/alarm-analysis.md). Installation, IAM policies, acceptance criteria and verification steps live in `references/` as well.

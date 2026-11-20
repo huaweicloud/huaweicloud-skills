@@ -19,11 +19,12 @@
 import json
 import argparse
 import os
+import sys
 from datetime import datetime, timedelta
 from collections import defaultdict
 import html
 from pathlib import Path
-from workspace import WORKSPACE_DIR, MARKING_TABLE_PATH
+from workspace import WORKSPACE_DIR
 
 
 def get_alarm_timestamp_ms(alarm):
@@ -509,7 +510,7 @@ def analyze_alarm_correlation(alarms):
     return results
 def analyze_top10_alarms(alarms, core_ids=None, alarm_rules=None):
     """分析TOP10告警"""
-    from core_resources import is_core_resource
+    from generate_instance import is_core_resource
     key_counts = defaultdict(int)
     key_details = {}
 
@@ -586,7 +587,10 @@ def analyze_unresolved(alarms, end_date_str=None):
 
     unresolved = []
     for alarm in alarms:
-        if alarm.get('recover_time'):
+        # 跳过已恢复告警: recover_time 非零 或 alarm_status 为 ok/recovered
+        if alarm.get("recover_time"):
+            continue
+        if alarm.get("alarm_status", "").lower() in ("ok", "recovered"):
             continue
 
         start_time_ms = get_alarm_timestamp_ms(alarm)
@@ -652,6 +656,15 @@ def score_color(score):
 def calculate_health_score(alarms, convergence_results, unresolved_results, daily_trend):
     """计算健康度评分（0-100），5维加权"""
     total = len(alarms)
+
+
+    if total == 0:
+        print("  ⚠️ 无告警数据，健康度评分置 0")
+        return {
+            "total": 0, "volume": 0, "severity": 0,
+            "convergence": 0, "unresolved": 0, "trend": 0,
+            "no_data": True,
+        }
 
     if total <= 50:
         volume = 100
@@ -1653,7 +1666,7 @@ def generate_html_report(alarms, username, time_range, rule_results, suppression
     notification_count = sum(len(a.get('notification_ids') or []) for a in alarms)
 
     if core_ids:
-        from core_resources import is_core_resource
+        from generate_instance import is_core_resource
         core_alarm_count = sum(1 for a in alarms if is_core_resource(a, core_ids))
         core_resource_count = len(set(
             a.get('alarm_resource', {}).get('resourceId', '')
@@ -1742,7 +1755,7 @@ def generate_region_sections(alarms, username, time_range, rule_results,
     notification_count = sum(len(a.get('notification_ids') or []) for a in alarms)
 
     if core_ids:
-        from core_resources import is_core_resource
+        from generate_instance import is_core_resource
         core_alarm_count = sum(1 for a in alarms if is_core_resource(a, core_ids))
         core_resource_count = len(set(
             a.get('alarm_resource', {}).get('resourceId', '')
@@ -2919,7 +2932,10 @@ def _run_analysis_for_region(alarms, username, time_range, alarm_rules, core_ids
 
     print(f"  Calculating health score...")
     health_score = calculate_health_score(alarms, convergence_results, unresolved_results, daily_trend)
-    print(f"  Health score: {health_score['total']}/100")
+    if health_score.get("no_data"):
+        print(f"  Health score: 0/100 (无告警数据)")
+    else:
+        print(f"  Health score: {health_score['total']}/100")
     print(f"  Building action lists...")
     action_lists = build_action_lists(
         convergence_results, unresolved_results, rule_results,
@@ -2941,7 +2957,7 @@ def _run_analysis_for_region(alarms, username, time_range, alarm_rules, core_ids
 
 def main_batch(args):
     """多区域分析入口"""
-    from core_resources import load_core_resources, is_core_resource
+    from generate_instance import load_core_resources, is_core_resource
 
     print(f"Loading multi-region alarm data from: {args.input}")
     region_data = load_multi_region_data(args.input)
@@ -2958,7 +2974,7 @@ def main_batch(args):
     else:
         print("ces_alarm_rules.json not found, CES expression column will show '未匹配'")
 
-    # 始终加载核心资源标记表，按区域过滤
+    # 加载核心资源（从 core_instances.json），按区域过滤
     core_resource_map = load_core_resources(args.core_resources)
     print(f"Loaded core resources for {len(core_resource_map)} regions")
 
@@ -3069,14 +3085,33 @@ def main(args=None):
         parser = argparse.ArgumentParser(description='告警降噪分析工具')
         parser.add_argument('--input', '-i', default=str(Path(WORKSPACE_DIR) / 'alarm_result.json'), help='输入告警JSON文件路径（默认: <WORKSPACE_DIR>/alarm_result.json）')
         parser.add_argument('--output', '-o', default=str(Path(WORKSPACE_DIR) / 'alarm-noise-report.html'), help='输出HTML报告路径（默认: <WORKSPACE_DIR>/alarm-noise-report.html）')
-        parser.add_argument('--core-resources', dest='core_resources', default=MARKING_TABLE_PATH, help='核心资源标记表xlsx路径（默认: assets/关键资源标记表.xlsx）')
+        parser.add_argument('--core-resources', dest='core_resources', default=str(Path(WORKSPACE_DIR) / 'core_instances.json'), help='core_instances.json路径（默认: <WORKSPACE_DIR>/core_instances.json）')
         args = parser.parse_args()
 
+    if not os.path.exists(args.input):
+        print(f"❌ 未找到告警数据文件: {args.input}")
+        print("   请先运行: python3 scripts/alarm.py --days 7")
+        print(f"   并确认已 export ALARM_REDUCE_NOISE_WORKSPACE_DIR={WORKSPACE_DIR}")
+        sys.exit(1)
+
+    if not os.path.exists(args.core_resources):
+        print(f"❌ 未找到核心资源文件: {args.core_resources}")
+        print("   请先运行: python3 scripts/generate_instance.py")
+        print(f"   并确认已 export ALARM_REDUCE_NOISE_WORKSPACE_DIR={WORKSPACE_DIR}")
+        sys.exit(1)
+
     # 检测多区域格式
-    multi_data = load_multi_region_data(args.input)
+    try:
+        multi_data = load_multi_region_data(args.input)
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"❌ 读取告警数据失败: {e}")
+        print(f"   文件: {args.input}")
+        sys.exit(1)
     if multi_data is None:
-        print("Error: Input file is not in multi-region format. Expected {\"alarms\": {...}} structure.")
-        return
+        print("❌ 告警数据格式不支持：需要多区域结构 {\"alarms\": {...}}。")
+        print(f"   文件: {args.input}")
+        print("   请用 python3 scripts/alarm.py 重新采集告警数据。")
+        sys.exit(1)
 
     main_batch(args)
 

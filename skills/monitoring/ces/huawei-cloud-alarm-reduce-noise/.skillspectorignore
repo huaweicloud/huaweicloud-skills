@@ -2,5 +2,12 @@
   "PE3:.gitignore:2": "False positive: .gitignore entry that prevents .env from being committed — this is a security best practice, not credential access",
   "PE3:scripts/config.py:21": "False positive: comment documenting that .env is gitignored; no credential access occurs",
   "PE3:scripts/config.py:22": "False positive: load_dotenv() loads env vars from .env for local dev convenience; .env is gitignored, gitleaks verified no hardcoded secrets",
-  "PE3:scripts/config.py:78": "False positive: error message text mentioning .env as optional; actual credentials come from environment variables"
+  "PE3:scripts/config.py:78": "False positive: error message text mentioning .env as optional; actual credentials come from environment variables",
+  "DES001-rm-rf-system:references/cli-installation-guide.md:196": "doc: hcloud uninstall example in documentation, not executable code",
+  "SC2:references/cli-installation-guide.md:23": "doc: hcloud install URL in documentation",
+  "SC2:references/cli-installation-guide.md:26": "doc: hcloud install URL in documentation",
+  "SC2:references/cli-installation-guide.md:108": "doc: hcloud install URL in Dockerfile example",
+  "TM1:references/cli-installation-guide.md:196": "doc: uninstall cleanup example in documentation",
+  "TM1:references/cli-installation-guide.md:197": "doc: uninstall cleanup example in documentation",
+  "TM1:references/cli-installation-guide.md:202": "doc: cache cleanup example in documentation"
 }

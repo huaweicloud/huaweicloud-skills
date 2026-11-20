@@ -19,7 +19,7 @@ from alarm_api import (
 )
 from tool import set_json_dict, write_data_to_json
 from config import get_region
-from workspace import WORKSPACE_DIR, MARKING_TABLE_PATH
+from workspace import WORKSPACE_DIR
 
 
 def _collect_single_region(region: str, start_time: datetime, end_time: datetime):
@@ -87,6 +87,7 @@ def alarm_batch(regions: list, start_time: datetime = None, end_time: datetime =
     """
     all_alarms = {}
     all_rules = {}
+    failed_regions = []
 
     for region in regions:
         print(f"\n=== 采集区域: {region} ===")
@@ -99,6 +100,7 @@ def alarm_batch(regions: list, start_time: datetime = None, end_time: datetime =
             print(f"  告警数: {alarm_data['alarm_num']}, 规则数: {len(alarm_rules)}")
         except Exception as e:
             print(f"  采集失败: {e}")
+            failed_regions.append(region)
             all_alarms[region] = {
                 "username": region,
                 "region": region,
@@ -109,6 +111,12 @@ def alarm_batch(regions: list, start_time: datetime = None, end_time: datetime =
             }
             all_rules[region] = []
 
+
+    # If all regions failed, exit with non-zero code and do not write empty reports
+    if failed_regions and len(failed_regions) == len(regions):
+        print(f"❌ 所有 {len(failed_regions)} 个区域采集均失败: {failed_regions}")
+        print("   未写入空报告，请检查认证/网络/端点后重试。")
+        sys.exit(1)
     output_path = output or (WORKSPACE_DIR + '/alarm_result.json')
     set_json_dict(output_path, data={"alarms": all_alarms})
 
@@ -162,7 +170,7 @@ def filter_alarm_fields(alarm_history: list) -> list:
 
 if __name__ == "__main__":
     import argparse
-    from core_resources import load_core_regions
+    from generate_instance import load_core_regions
     parser = argparse.ArgumentParser(description='告警数据采集（华为云 CES + AOM）')
     parser.add_argument('-o', '--output', default=None,
                         help='输出JSON文件路径（默认: <WORKSPACE_DIR>/alarm_result.json）')
@@ -174,20 +182,19 @@ if __name__ == "__main__":
                         help='查询截止日期（格式：YYYY-MM-DD）')
     args = parser.parse_args()
 
-    # 从核心资源标记表自动读取区域列表
-    regions = load_core_regions(MARKING_TABLE_PATH)
+    # Validate --days: must be positive
+    if args.days is not None and args.days <= 0:
+        print(f"❌ --days 必须为正整数，当前值: {args.days}")
+        sys.exit(1)
+
+    # 从 core_instances.json 自动读取区域列表（由 generate_instance.py 生成）
+    regions = load_core_regions()
     if not regions:
-        print("❌ 关键资源标记表为空，无法确定采集区域。")
-        print(f"   文件路径: {MARKING_TABLE_PATH}")
-        print("   请在表中填入数据，列说明：")
-        print("     Region        - 资源所在区域（如 cn-south-1）")
-        print("     resource_type - 资源类型（如 ECS、RDS）")
-        print("     resource_id   - 资源ID（如 46ef6243-xxxx-xxxx-xxxx-xxxxxxxxxxxx）")
-        print('     是否核心业务   - 填"是"标记为核心资源')
-        print("   填好后重新执行本流程。")
+        print("❌ core_instances.json 不存在或为空，无法确定采集区域。")
+        print("   请先运行: python3 scripts/generate_instance.py")
         sys.exit(1)
     else:
-        print(f"从标记表读取到 {len(regions)} 个区域: {regions}")
+        print(f"从 core_instances.json 读取到 {len(regions)} 个区域: {regions}")
 
     # 确定时间范围
     start_time = None

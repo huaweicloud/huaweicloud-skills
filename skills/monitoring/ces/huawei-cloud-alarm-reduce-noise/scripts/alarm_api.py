@@ -155,6 +155,11 @@ def _map_alarm_history(raw: dict, region: str) -> dict:
     # 时间字段: CES v2 返回 ISO 8601 字符串，转为毫秒时间戳
     alarm_start_time = _iso_to_ms(raw.get('begin_time'))
     last_occur_time = _iso_to_ms(raw.get('last_alarm_time'))
+    # 恢复时间: CES v2 可能返回 recovery_time，或通过 status 判定
+    recover_time = _iso_to_ms(raw.get("recovery_time"))
+    alarm_status = raw.get("status", "")
+    if not recover_time and alarm_status in ("ok", "recovered", "OK", "RECOVERED"):
+        recover_time = last_occur_time or alarm_start_time
 
     # alarm_trigger_time: 累计触发次数，CES v2 单条记录代表一次触发
     alarm_trigger_time = 1
@@ -178,6 +183,7 @@ def _map_alarm_history(raw: dict, region: str) -> dict:
         'alarm_resource': alarm_resource,
         'meta_data': meta_data,
         'enterprise_project_id': raw.get('enterprise_project_id', ''),
+        'recover_time': recover_time,
         'update_time': 0,
     }
 

@@ -22,8 +22,6 @@ This guide provides complete installation, configuration, and verification proce
 # Download and run official installation script (interactive)
 curl -sSL https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/hcloud_install.sh -o ./hcloud_install.sh && bash ./hcloud_install.sh
 
-# Non-interactive installation (skip confirmation)
-curl -sSL https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/hcloud_install.sh -o ./hcloud_install.sh && bash ./hcloud_install.sh -y
 ```
 
 ### Verify Installation
@@ -52,12 +50,12 @@ echo $HOSTTYPE
 # AMD 64-bit system
 curl -LO "https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-linux-amd64.tar.gz"
 tar -zxvf huaweicloud-cli-linux-amd64.tar.gz
-sudo mv hcloud /usr/local/bin/
+mv hcloud /usr/local/bin/  # requires write permission
 
 # ARM 64-bit system
 curl -LO "https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-linux-arm64.tar.gz"
 tar -zxvf huaweicloud-cli-linux-arm64.tar.gz
-sudo mv hcloud /usr/local/bin/
+mv hcloud /usr/local/bin/  # requires write permission
 ```
 
 ### 2. macOS Systems
@@ -74,12 +72,12 @@ uname -a
 # Intel chips (AMD 64-bit)
 curl -LO "https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-mac-amd64.tar.gz"
 tar -zxvf huaweicloud-cli-mac-amd64.tar.gz
-sudo mv hcloud /usr/local/bin/
+mv hcloud /usr/local/bin/  # requires write permission
 
 # Apple Silicon (ARM 64-bit)
 curl -LO "https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/huaweicloud-cli-mac-arm64.tar.gz"
 tar -zxvf huaweicloud-cli-mac-arm64.tar.gz
-sudo mv hcloud /usr/local/bin/
+mv hcloud /usr/local/bin/  # requires write permission
 ```
 
 ### 3. Windows Systems
@@ -105,7 +103,6 @@ docker run --rm -it swr.cn-north-4.myhuaweicloud.com/huawei-cloud/koocli:latest 
 ```dockerfile
 FROM ubuntu:latest
 RUN apt-get update -y && apt-get install curl -y
-RUN curl -sSL https://cn-north-4-hdn-koocli.obs.cn-north-4.myhuaweicloud.com/cli/latest/hcloud_install.sh -o ./hcloud_install.sh && bash ./hcloud_install.sh -y
 WORKDIR /workspace
 ENTRYPOINT ["/usr/local/bin/hcloud"]
 ```
@@ -133,8 +130,8 @@ hcloud configure init --cli-profile alarm-reduce-noise
 hcloud configure init --cli-profile dev
 hcloud configure init --cli-profile prod
 
-# Use specific profile
-hcloud CES ListAlarmHistories --cli-profile=dev --cli-region=cn-north-4
+# Use default profile (or add --cli-profile=<name> for a named profile)
+hcloud CES ListAlarmHistories --cli-region=cn-north-4
 ```
 
 ## Verification for This Skill
@@ -161,7 +158,7 @@ hcloud IAM KeystoneListProjects --cli-region=cn-north-4
 
 #### Insufficient Permissions
 ```bash
-sudo bash ./hcloud_install.sh
+bash ./hcloud_install.sh  # requires write permission
 ```
 
 #### Command Not Found
@@ -174,9 +171,9 @@ export PATH=$PATH:/usr/local/bin
 #### sha256sum Command Not Found
 ```bash
 # Ubuntu/Debian:
-sudo apt-get install coreutils
+apt-get install coreutils  # requires write permission
 # CentOS/RHEL:
-sudo yum install coreutils
+yum install coreutils  # requires write permission
 ```
 
 ### Network Issues
@@ -195,8 +192,8 @@ hcloud update
 ### Uninstall KooCLI
 ```bash
 # Linux/macOS:
-sudo rm -f /usr/local/bin/hcloud
-sudo rm -rf /usr/local/hcloud/
+rm -f /usr/local/bin/hcloud  # requires write permission
+rm -rf /usr/local/hcloud/  # requires write permission
 rm -rf ~/.hcloud/
 ```
 

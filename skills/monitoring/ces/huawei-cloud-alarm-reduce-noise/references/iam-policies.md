@@ -24,6 +24,13 @@ This skill requires read-only IAM permissions to query alarm histories and alarm
 |------------|-------------|---------|
 | `iam:projects:list` | List projects (KeystoneListProjects) | `config.py` for auto Project ID fetch |
 
+### RMS (Resource Management Service) — Instance Discovery
+
+| Permission | Description | Used By |
+|------------|-------------|---------|
+| `rms:resources:list` | List all resources (ListAllResources) | `generate_instance.py` via hcloud CLI |
+| `rms:resourcesSummary:list` | Collect resource summary (CollectAllResourcesSummary) | `generate_instance.py` via hcloud CLI |
+
 ## Minimum Required Permissions
 
 The following custom policy grants the minimum permissions required by this skill:
@@ -38,7 +45,9 @@ The following custom policy grants the minimum permissions required by this skil
         "ces:alarmHistories:list",
         "ces:alarmRules:list",
         "aom:alarmRule:list",
-        "iam:projects:list"
+        "iam:projects:list",
+        "rms:resources:list",
+        "rms:resourcesSummary:list"
       ],
       "Resource": "*"
     }
@@ -122,6 +131,12 @@ hcloud AOM ListMetricOrEventAlarmRule --cli-region=cn-north-4 --limit=1
 
 # Test IAM project list (for Project ID auto-fetch)
 hcloud IAM KeystoneListProjects --cli-region=cn-north-4
+
+# Test RMS resource summary (for instance discovery)
+hcloud RMS CollectAllResourcesSummary --cli-region=cn-north-4
+
+# Test RMS resource list (for instance discovery)
+hcloud RMS ListAllResources --cli-region=cn-north-4 --type=ecs.cloudservers --limit=1
 ```
 
 ## Troubleshooting Permission Issues
@@ -141,9 +156,15 @@ hcloud IAM KeystoneListProjects --cli-region=cn-north-4
 - Alternatively, set `HW_PROJECT_ID` environment variable manually
 - Check hcloud CLI is installed and configured: `hcloud IAM KeystoneListProjects --cli-region=cn-north-4`
 
-### 4. Multi-region Permission Errors
+### 4. RMS Instance Discovery Fails (Step 2)
+- Ensure `rms:resources:list` and `rms:resourcesSummary:list` permissions are granted
+- Verify RMS API access: `hcloud RMS CollectAllResourcesSummary --cli-region=cn-north-4`
+- If using a sub-account, RMS permissions may not be available by default — create a custom policy
+- RMS is a global service; permissions apply across regions
+
+### 5. Multi-region Permission Errors
 - IAM permissions are project-scoped; ensure the user has access to all target regions
-- Regions are auto-read from `assets/关键资源标记表.xlsx` "Region" column
+- Regions are auto-discovered via RMS API (core_instances.json)
 - Use a cross-project policy or grant permissions in each target project
 
 ## Security Best Practices
@@ -158,3 +179,4 @@ hcloud IAM KeystoneListProjects --cli-region=cn-north-4
 - IAM Documentation: https://support.huaweicloud.com/usermanual-iam/iam_01_0001.html
 - CES Documentation: https://support.huaweicloud.com/api-ces/ces_03_0001.html
 - AOM Documentation: https://support.huaweicloud.com/api-aom/aom_04_0001.html
+- RMS Documentation: https://support.huaweicloud.com/api-rms/rms_02_0001.html
