@@ -64,7 +64,7 @@ delivery:
   channels:
     gitcode:
       enabled: true
-      repo_url: "https://gitcode.com/developer-skill/vod-skill.git"
+      repo_url: "https://gitcode.com/VodTeam/VOD-Common.git"
       labels:
         - "VoD"
     # Notification channels are delivered by `vod_deliver.py notify`
