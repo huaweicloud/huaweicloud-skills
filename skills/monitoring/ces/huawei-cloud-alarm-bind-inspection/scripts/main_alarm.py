@@ -15,11 +15,17 @@ Outputs:
 Usage:
     python main_alarm.py                     # multi-region from core_instances.json
     python main_alarm.py --region cn-south-1 # single region override
+
+Exit codes:
+    0 — at least one region was fetched (empty per-region result is legitimate)
+    1 — every region failed / was unsupported: nothing is written, so downstream
+        steps fail loudly instead of producing an empty report
 """
 
 import argparse
 import json
 import logging
+import sys
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -266,12 +272,26 @@ def main(region: str = None):
 
     # Step 1: Fetch all alarm rules from each region
     all_rules = []
+    succeeded_regions = []
+    failed_regions = []
+    unsupported_regions = []
     for r in target_regions:
         label = r or "env-default"
-        if r:
-            ensure_public_endpoint(r)
-        logger.info(f"Fetching alarm rules from region: {label}")
-        rules = fetch_all_alarm_rules(region=r)
+        try:
+            if r:
+                ensure_public_endpoint(r)
+            logger.info(f"Fetching alarm rules from region: {label}")
+            try:
+                rules = fetch_all_alarm_rules(region=r)
+            except KeyError as e:
+                logger.warning(f"  Region {label} not supported by CES SDK, skipping: {e}")
+                unsupported_regions.append(label)
+                continue
+        except Exception as e:
+            logger.warning(f"  Failed to fetch alarm rules from region {label}: {e}")
+            failed_regions.append(label)
+            continue
+        succeeded_regions.append(label)
         if not rules:
             logger.warning(f"  No alarm rules from region {label}")
         else:
@@ -280,6 +300,17 @@ def main(region: str = None):
             if not rule.get("region"):
                 rule["region"] = r or ""
         all_rules.extend(rules)
+
+    # Fail loudly when no region produced data: writing empty reports here
+    # would surface downstream as "0 rules / empty coverage" instead of an
+    # error, which reads like a healthy tenant with nothing to alarm on.
+    if target_regions and not succeeded_regions:
+        logger.error(
+            "All regions failed, no alarm rules could be fetched "
+            f"(failed={failed_regions}, unsupported={unsupported_regions}). "
+            "Not writing empty reports; check credentials/endpoint/network and retry."
+        )
+        sys.exit(1)
 
     logger.info(f"Total alarm rules across all regions: {len(all_rules)}")
 

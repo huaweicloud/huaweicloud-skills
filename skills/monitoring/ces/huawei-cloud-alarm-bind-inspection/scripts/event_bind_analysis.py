@@ -21,7 +21,7 @@ import argparse
 import logging
 from pathlib import Path
 from collections import defaultdict
-from workspace import INTERMEDIATE_DIR
+from workspace import INTERMEDIATE_DIR, resolve_input_path, resolve_output_path
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("event-bind-analysis")
@@ -759,5 +759,7 @@ if __name__ == "__main__":
     parser.add_argument("--aom-rules", default=DEFAULT_AOM_RULES)
     parser.add_argument("--output", default=DEFAULT_OUTPUT)
     args = parser.parse_args()
-    analyze(args.core, args.notification_rules, args.event_baseline, args.output,
-            args.aom_baseline, args.aom_rules)
+
+    analyze(resolve_input_path(args.core), resolve_input_path(args.notification_rules),
+            resolve_input_path(args.event_baseline), resolve_output_path(args.output),
+            resolve_input_path(args.aom_baseline), resolve_input_path(args.aom_rules))

@@ -18,10 +18,11 @@ bind_analysis.py uses subset matching: any baseline dimension that is a subset
 of metric_dimension is considered applicable to this instance.
 """
 
-import json
-import subprocess
 import argparse
+import json
 import logging
+import subprocess
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 sys_path_scripts = str(Path(__file__).parent)
 import sys
@@ -76,7 +77,7 @@ def hcloud_cli(service, operation, region, **params):
         return None
 
 
-# ── Dimension constants (module-level) ────────────
+# Dimension constants (module-level)
 
 SINGLE_DIM_CONSTANTS = {
     "CBH": "server_id",
@@ -131,7 +132,7 @@ MULTI_DIM_CONSTANTS = {
 }
 
 
-# ── B class: single-dimension handlers (no API call) ──────────────────────
+# B class: single-dimension handlers (no API call)
 
 def handler_single_dim(svc, inst, **kwargs):
     """Return the unique dimension from SINGLE_DIM_CONSTANTS. No API call needed."""
@@ -142,7 +143,10 @@ def handler_single_dim(svc, inst, **kwargs):
     return ""
 
 
-# ── C class: multi-dimension handlers (call hcloud ShowInstance) ───────────
+# DCS node-level RMS types (all lowercase, matched via strip().lower())
+DCS_NODE_TYPES = {"node", "nodes", "proxy", "proxies", "proxynode", "proxynodes"}
+
+# C class: multi-dimension handlers (call hcloud ShowInstance)
 #   Return values come from MULTI_DIM_CONSTANTS[svc][index] instead of
 #   hardcoded strings. Index mapping is documented per handler.
 
@@ -167,9 +171,10 @@ def handler_dcs(svc, inst, **kwargs):
     cache_mode = data.get("cache_mode", "") if data else ""
     engine = data.get("engine", "") if data else ""
 
-    if rms_type == "node":
+    if rms_type.strip().lower() in DCS_NODE_TYPES:
         name_lower = rms_name.lower()
-        if "proxy" in name_lower:
+        type_lower = rms_type.strip().lower()
+        if "proxy" in name_lower or "proxy" in type_lower:
             # Cluster 模式开启 proxy → proxy2 节点；Proxy/HA 模式 → proxy 节点
             if cache_mode == "cluster":
                 return C[1]  # dcs_instance_id,dcs_cluster_proxy2_node
@@ -214,7 +219,7 @@ def handler_rds(svc, inst, **kwargs):
     db_type = instances[0].get("datastore", {}).get("type", "")
 
     if db_type == "MySQL":
-        if rms_type == "nodes":
+        if rms_type.strip().lower() == "nodes":
             return C[4]  # rds_cluster_id,rds_instance_id
         return C[3]      # rds_cluster_id
 
@@ -240,17 +245,42 @@ def handler_gemini_db(svc, inst, **kwargs):
     rms_type = inst.get("rms_type", "")
     region = inst.get("region", "")
     inst_id = inst.get("instance_id", "")
-    data = hcloud_cli("GaussDBforNoSQL", "ListInstances", region, instance_id=inst_id)
-    if not data:
-        return ""
-    instances = data.get("instances", [])
-    if not instances:
-        return ""
-    engine = instances[0].get("engine", "")
+    rms_name = inst.get("rms_name", "")
 
-    # Redis 有实例级 [3] 和节点级 [4] 两种维度，用 rms_type 区分
-    if engine == "redis":
-        if rms_type == "node":
+    # Bug fix: API param is --id, not --instance_id
+    # For instance-level IDs (rms_type=="instances"), query directly.
+    # For node-level IDs (rms_type=="nodes"), --id won't match; list all
+    # and find the parent instance by name prefix (rms_name starts with instance name).
+    if rms_type.strip().lower() == "nodes":
+        data = hcloud_cli("GaussDBforNoSQL", "ListInstances", region)
+        if not data:
+            return ""
+        instances = data.get("instances", [])
+        engine = ""
+        for db_inst in instances:
+            db_name = db_inst.get("name", "")
+            if db_name and rms_name.startswith(db_name):
+                engine = db_inst.get("engine", "")
+                break
+        if not engine and instances:
+            # fallback: if only one instance, assume it's the parent
+            if len(instances) == 1:
+                engine = instances[0].get("engine", "")
+    else:
+        data = hcloud_cli("GaussDBforNoSQL", "ListInstances", region, id=inst_id)
+        if not data:
+            return ""
+        instances = data.get("instances", [])
+        if not instances:
+            return ""
+        engine = instances[0].get("engine", "")
+
+    if not engine:
+        return ""
+
+    # Redis and rocksDB (Redis-compatible) have instance-level [3] and node-level [4]
+    if engine in ("redis", "rocksDB"):
+        if rms_type.strip().lower() == "nodes":
             return C[4]  # redis_cluster_id,redis_node_id
         return C[3]      # redis_cluster_id
 
@@ -641,7 +671,7 @@ def handler_cce(svc, inst, **kwargs):
     不在 CES 指标基线中，使用模块级常量。
     """
     rms_type = inst.get("rms_type", "")
-    if rms_type == "nodes":
+    if rms_type.strip().lower() == "nodes":
         return CCE_DIM_NODE
     return CCE_DIM_CLUSTER
 
@@ -657,7 +687,7 @@ def handler_obs(svc, inst, **kwargs):
     return "bucket_name"
 
 
-# ── D class: indirect handlers ─────────────────────────────────────────────
+# D class: indirect handlers
 
 def handler_gaussdb(svc, inst, **kwargs):
     """
@@ -749,7 +779,7 @@ def handler_roma(svc, inst, **kwargs):
     return ""
 
 
-# ── Handler registry ───────────────────────────────────────────────────────
+# Handler registry
 
 MULTI_DIM_HANDLERS = {
     "DCS": handler_dcs,
@@ -799,20 +829,29 @@ def _get_handler(svc):
     return None
 
 
-# ── Main enrich logic ──────────────────────────────────────────────────────
+# Main enrich logic
 
-def enrich(core_path):
+def enrich(core_path, max_workers=10):
     """
     Enrich metric_dimension for all core instances using ShowInstance APIs.
     Dimension values are sourced from module-level constants and hcloud ShowInstance APIs.
     Writes metric_dimension (single string) and metric_dimension_source='baseline_constant'
     back to core_instances.json.
+
+    Uses ThreadPoolExecutor for concurrent API calls (default 10 workers).
+    Each instance is independent — handler reads only its own attributes and
+    hcloud_cli spawns a separate subprocess per call, so parallelism is safe.
     """
     core_data = load_json(core_path)
     core_instances = core_data.get("instances", {})
 
     enriched_count = 0
     skipped_count = 0
+
+    # Phase 1: collect tasks
+    # Each task = (core_svc, baseline_svc, handler, inst) that needs a handler call.
+    # Undeterminable services and already-enriched instances are handled inline.
+    tasks = []
 
     for core_svc, insts in core_instances.items():
         baseline_svc = CORE_TO_BASELINE_SVC.get(core_svc, core_svc)
@@ -832,14 +871,28 @@ def enrich(core_path):
                 logger.info("Already enriched: %s/%s", core_svc, inst_id)
                 continue
 
-            try:
-                dim = handler(baseline_svc, inst,
-                              single_dim_constants=SINGLE_DIM_CONSTANTS,
-                              multi_dim_constants=MULTI_DIM_CONSTANTS)
-            except Exception as e:
-                logger.warning("Handler for %s failed on %s: %s", baseline_svc, inst_id, e)
-                dim = ""
+            tasks.append((core_svc, baseline_svc, handler, inst))
 
+    logger.info("Total tasks to process: %d (max_workers=%d)", len(tasks), max_workers)
+
+    # Phase 2: concurrent execution
+    # Worker function — returns result; inst dict is updated by the main thread.
+    def _worker(task):
+        core_svc, baseline_svc, handler, inst = task
+        inst_id = inst.get("instance_id", "")
+        try:
+            dim = handler(baseline_svc, inst,
+                          single_dim_constants=SINGLE_DIM_CONSTANTS,
+                          multi_dim_constants=MULTI_DIM_CONSTANTS)
+        except Exception as e:
+            logger.warning("Handler for %s failed on %s: %s", baseline_svc, inst_id, e)
+            dim = ""
+        return (core_svc, inst_id, dim, inst)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(_worker, t): t for t in tasks}
+        for future in as_completed(futures):
+            core_svc, inst_id, dim, inst = future.result()
             if dim:
                 inst["metric_dimension"] = dim
                 inst["metric_dimension_source"] = "baseline_constant"

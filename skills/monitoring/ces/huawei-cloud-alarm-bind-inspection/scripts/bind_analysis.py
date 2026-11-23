@@ -21,7 +21,7 @@ from collections import defaultdict
 
 sys.path.insert(0, str(Path(__file__).parent))
 from regions import regions as REGIONS_LIST
-from workspace import INTERMEDIATE_DIR
+from workspace import INTERMEDIATE_DIR, resolve_input_path, resolve_output_path
 
 REGION_CN_TO_ID = {r["name"]: r["id"] for r in REGIONS_LIST}
 
@@ -760,5 +760,7 @@ if __name__ == "__main__":
     parser.add_argument("--aom-rules", default=DEFAULT_AOM_RULES)
     parser.add_argument("--output", default=DEFAULT_OUTPUT)
     args = parser.parse_args()
-    analyze(args.core, args.baseline, args.rules, args.output,
-            args.aom_baseline, args.aom_rules)
+
+    analyze(resolve_input_path(args.core), resolve_input_path(args.baseline),
+            resolve_input_path(args.rules), resolve_output_path(args.output),
+            resolve_input_path(args.aom_baseline), resolve_input_path(args.aom_rules))

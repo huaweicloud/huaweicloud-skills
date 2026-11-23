@@ -78,7 +78,7 @@ def fetch_all_alarm_rules(region: str = None):
 
     except Exception as e:
         logger.error(f"{RED}fetch_all_alarm_rules failed: {e}{RESET}")
-        return result
+        raise
 
 
 def fetch_alarm_rule_policies(alarm_id: str, region: str = None):

@@ -122,6 +122,8 @@ python scripts/main_alarm.py
 
 Auto-reads all regions from `core_instances.json`, calls CES `ListAlarmRules` per region, and merges results. Each rule is tagged with a `region` field. For every rule with non-empty, non-wildcard dimensions, calls CES `ListAlarmRuleResources` (concurrent, 10 threads) to resolve actual instance IDs into a `resource_ids` array. Finally, splits event-type rules (EVENT.SYS / EVENT.CUSTOM) into a separate file.
 
+A single region failing is tolerated (it is logged and skipped). If **every** region fails or is unsupported, the script writes nothing and exits `1` instead of emitting an empty rule set — an empty report must never be mistaken for a tenant that has nothing to alarm on.
+
 Output:
 - `<WORKSPACE_DIR>/intermediate/online_alarm_rules.json` — metric alarm rules only (with resource dimensions, resource_ids, policy metrics, notification config)
 - `<WORKSPACE_DIR>/intermediate/online_notification_rules.json` — event-type alarm rules only (with resource_ids)
@@ -255,6 +257,8 @@ python scripts/generate_instance.py
 
 `<WORKSPACE_DIR>` in the workflow steps above refers to the directory root level; intermediate file paths are `<WORKSPACE_DIR>/intermediate/`.
 
+Relative paths given to `bind_analysis.py` / `event_bind_analysis.py` are resolved against `<WORKSPACE_DIR>` first, then `<INTERMEDIATE_DIR>` for bare filenames; if neither exists, the original path is returned as-is (may be relative to CWD). This is why the examples above can pass `intermediate/aom_alarm_rules.json`. For `--output`: a relative output path is always created under `<WORKSPACE_DIR>` (parent directories are created as needed), never relative to the current working directory — even though the file does not exist yet.
+
 ## Data Sources
 
 ### Core Instance List
@@ -314,7 +318,7 @@ python scripts/generate_instance.py
 - `main_aom_alarm.py` — Fetch AOM alarm rules via hcloud AOM (metric + event, multi-region)
 
 - `generate_instance.py` — Fetch all instances via RMS API and convert to core_instances.json (no intermediate instances.json)
-- `enrich_metric_dimension.py` — Enrich core instances with metric_dimension (infer via hcloud ShowInstance)
+- `enrich_metric_dimension.py` — Enrich core instances with metric_dimension (infer via hcloud ShowInstance, 10-thread concurrent)
 - `bind_analysis.py` — Compare and analyze metric baseline binding rate (CES + AOM unified, outputs `indicator_bind_report.json`)
 - `event_bind_analysis.py` — Compare and analyze event baseline binding rate (CES + AOM unified, outputs `event_bind_report.json`)
 - `generate_excel_report.py` — Generate metric baseline Excel report
@@ -383,7 +387,7 @@ python scripts/generate_instance.py
 hcloud AOM ListMetricOrEventAlarmRule --cli-region=cn-north-4
 
 # Instance detail fetch (inside enrich_metric_dimension.py)
-hcloud ECS ShowServer --cli-region=cn-north-4
+hcloud ECS ShowServer --cli-region=cn-north-4 --server_id=<instance_id>
 
 # Project ID auto-fetch (inside config.py)
 hcloud IAM KeystoneListProjects --cli-region=cn-north-4
