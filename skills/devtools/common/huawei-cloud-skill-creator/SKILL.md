@@ -205,7 +205,8 @@ Generate Skill files based on Phase 2 conclusions:
 4. **Create directory structure:**
 
    ```text
-   skills/{skill-name}/  → SKILL.md, references/ (iam-policies.md recommended; cli-installation-guide.md recommended when CLI is used; verification-method.md / dataflow-diagram.md / acceptance-criteria.md recommended), scripts/test-cli-commands.sh, scripts/ensure_cli.sh (quality CLI, required — see rule 14), templates/test-vars.json
+   skills/{skill-name}/  → SKILL.md, references/ (iam-policies.md recommended; cli-installation-guide.md recommended when CLI is used; verification-method.md / dataflow-diagram.md / acceptance-criteria.md recommended), scripts/ensure_cli.sh (quality CLI, required — see rule 14)
+   transient test artifacts (Phase 4/5 only, removed in Phase 6): scripts/test-cli-commands.sh, templates/test-vars.json (legacy: templates/test-var.json)
    ```
 
 5. **SKILL.md content generation rules:**
@@ -361,12 +362,7 @@ Generate Skill files based on Phase 2 conclusions:
    - SKILL.md line count ≤ 500 (Medium) — split excess content into references/
    - File extensions in allowlist (Medium) — reject extensionless files and extensions outside the 46-type allowlist
 
-3. **Final report:**
-   - Merge Phase 1-6 phase summaries
-   - Output complete creation report
-   - Mark all incomplete items
-
-4. **Final six-phase completeness check:**
+3. **Final six-phase completeness check:**
 
    ```
    Check phase-1-summary.json exists → If missing, restart from Phase 1
@@ -374,12 +370,25 @@ Generate Skill files based on Phase 2 conclusions:
    Check phase-3-summary.json exists → If missing, restart from Phase 3
    Check phase-4-summary.json exists → If missing, restart from Phase 4
    Check phase-5-summary.json exists → If missing, restart from Phase 5
-   Check phase-6-summary.json exists → If missing, restart from Phase 6
    ```
 
-   **All phases complete → Creation done. Missing phases → Restart from the missing phase.**
+   All present → continue. Missing → restart from the missing phase; never clean up or report on an incomplete run. (phase-6-summary.json is written by the final report below; on re-entry its presence confirms Phase 6 already ran.)
 
-5. **Clean up phase summary files:** After the completeness check passes, delete all
+4. **Cleanup transient test artifacts** (only after the completeness check passes, before the final report is emitted). These files exist solely for Phase 4/5 testing and must not ship in the delivered package; delete by **explicit whitelist only**: `templates/test-vars.json`, `templates/test-var.json` (legacy spelling variant), `scripts/test-cli-commands.sh`.
+   - **Path guard** — verify `{skill-path}` is a real `skills/{category}/{subcategory}/{skill-name}/` directory and quote it; never delete from an unresolved, empty, or unrelated path.
+   - **Whitelist only** — never wildcard (`templates/*`, `scripts/*`) and never touch `SKILL.md`, `references/`, `scripts/ensure_cli.sh`, other bundled scripts, or business templates/artifacts.
+   - **Idempotent** — delete only when present; missing = `not_present`, not a failure, so re-runs are safe.
+   - **Record** — write `deleted` / `not_present` per path as `cleaned_test_artifacts` into phase-6-summary.json and the final creation report.
+
+5. **Post-cleanup validation** — re-run `bash scripts/validate-skill.sh -s {skill-path}`; FAIL must be 0 (validation does not need the test files). Record the result in phase-6-summary.json / the report; on failure mark the report not passed and state the reason.
+
+6. **Final report:**
+   - Merge Phase 1-6 phase summaries
+   - Output the complete creation report, including `cleaned_test_artifacts` (deleted / not_present
+     per path) and the post-cleanup validation result
+   - Mark all incomplete items
+
+7. **Clean up phase summary files:** After the completeness check passes, delete all
    phase-*-summary.json files under the skill directory. **Only** run the deletion after
    the completeness check fully passes and the <skill-path> has been verified (it must be a
    legitimate directory of the skill under test). Do **not** chain the deletion onto other
@@ -387,7 +396,7 @@ Generate Skill files based on Phase 2 conclusions:
 
    **Note:** Only perform cleanup after the completeness check **fully passes**. If there are missing phases, do not clean up; restart from the missing phase.
 
-**Output:** phase-6-summary.json — Final creation report + compliance check results
+**Output:** phase-6-summary.json — Final creation report + compliance check results + `cleaned_test_artifacts` (deleted / not_present per whitelisted path) + post-cleanup validation result
 
 ## KooCLI Command Format Standard
 
@@ -427,7 +436,7 @@ hcloud <Service> <Operation> --cli-region=<region> [--key=value ...] — 底层�
 
 | Parameter | Required | Description | Example |
 | ----------- | ---------- | ------------- | --------- |
-| skill-path | Yes | Target Skill directory path | e.g., huawei-cloud-ecs-manage |
+| skill-path | Yes | Target Skill directory path | e.g., huawei-cloud-example-manage |
 | region | No | Huawei Cloud region (BSS only supports cn-north-1 and similar regions) | cn-north-4 (BSS: cn-north-1) |
 | executor | No | Execution mode (cli/sdk/api) | cli |
 
@@ -447,6 +456,9 @@ hcloud <Service> <Operation> --cli-region=<region> [--key=value ...] — 底层�
 | templates/test-vars.json missing when running tests | test-cli-commands.sh reports FATAL and exits 1 (no tests executed). Re-run Phase 4 to generate templates/test-vars.json before testing |
 | User refuses resource lifecycle testing | Inform user: resource lifecycle testing is a required step and cannot be skipped; if user still refuses, terminate process |
 | Phase 6 finds missing phases | Restart from the missing phase until all 6 phases are complete |
+| Phase 6 transient test artifact already absent | Skip it (`not_present`); only whitelisted existing files are deleted, absence is not a failure |
+| Phase 6 cleanup target path unresolved or outside the skill | Stop the cleanup and fix the path; never delete from an empty, unresolved, or unrelated directory |
+| Re-run Phase 4/5 after Phase 6 cleanup | Phase 4 regenerates `templates/test-vars.json` / test cases, then Phase 6 cleans again (idempotent) |
 | SDK has method but actual API path unknown | Read SDK source grep _http_info {service}_client.py to get real path |
 | BSS service SDK initialization fails (GlobalCredentials) | BSS is global and must use GlobalCredentials with with_endpoints, not BasicCredentials with with_region; **BSS 仅支持 cn-north-1 等区域（--cli-region=cn-north-1 / HUAWEI_REGION=cn-north-1）** |
 | list_sub_customer_coupons query returns 400 | BSS limit parameter maximum is 100, not the default 200; use region cn-north-1 for BSS SDK samples |
@@ -482,6 +494,6 @@ bash scripts/test-cli-commands.sh -s {skill-path} -e {cli|sdk|api}   # CLI prior
 - **Credentials Mandatory** — if AK/SK missing after the Pre-check, output the env-var setup template for out-of-band fill; never ask the user to paste AK/SK into chat; if still unconfigured, terminate
 - **BSS SDK** must use GlobalCredentials + with_endpoints, not BasicCredentials with with_region.
 - **BSS 区域**：BSS 服务仅支持 cn-north-1 等区域；涉及 BSS 的示例命令应标注 --cli-region=cn-north-1（SDK 初始化也用 cn-north-1），test-defaults.json 中 region: cn-north-1 即为此口径。
-- **Cleanup** — resources created during lifecycle testing must be released in Phase 6
+- **Cleanup** — resources created during lifecycle testing must be released in Phase 6; transient test artifacts (`templates/test-vars.json`, `templates/test-var.json`, `scripts/test-cli-commands.sh`) are removed by an explicit whitelist after the completeness check, while `SKILL.md`, `references/`, `scripts/ensure_cli.sh` and business artifacts are preserved
 - **Least privilege** — iam-policies.md provides least-privilege policy JSON; the skillPath in skills-lock.json is skills/devtools/common/huawei-cloud-skill-creator/SKILL.md
 - **IAM authoring (official only)** — IAM action names MUST be verified via GetAuthorizationSchemaV5 / docs / ListPoliciesV5; never inferred; Version 5.0 for IAM 5.0, 1.1 only for legacy v3
