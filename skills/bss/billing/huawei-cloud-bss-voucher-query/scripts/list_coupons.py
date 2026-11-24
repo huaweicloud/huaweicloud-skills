@@ -32,6 +32,7 @@ Usage:
                                     [--status available] [--name plan-2026]
                                     [--project-id proj-xxx] [--coupon-id CP...]
                                     [--expiring 30] [--expired] [--usage-analysis]
+                                    [--export xlsx,html] [--out-dir DIR]
 
 Environment overrides (mostly for tests):
     VOUCHER_QUERY_HCLOUD_BIN   hcloud executable (default "hcloud")
@@ -47,8 +48,14 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 from skill_quality_sdk import quality_report
+from report_export import (
+    DEFAULT_EXPIRING_DAYS,
+    ExportError,
+    ensure_out_dir,
+    export_report,
+    parse_formats,
+)
 
-DEFAULT_REGION = "cn-north-1"
 DEFAULT_PAGE_SIZE = 100
 MAX_PAGE_SIZE = 100
 MAX_PAGES = 100
@@ -56,6 +63,10 @@ SERVICE = "BSS"
 ALLOWED_OPERATION = "ListSubCustomerCoupons"
 ALLOWED_ORDER_OPERATION = "ListCustomerOrders"
 BSS_ENDPOINT = "https://bss.myhuaweicloud.com"
+# BSS is a global service and KooCLI only accepts the cn-north-1 channel
+# region; other values fail at the CLI layer before the BSS call is signed.
+BSS_SUPPORTED_REGIONS = ("cn-north-1",)
+DEFAULT_REGION = BSS_SUPPORTED_REGIONS[0]
 
 # The real BSS coupon-list operation is ListSubCustomerCoupons; "ListCoupons"
 # is accepted as a read-only alias and normalised to the real operation.
@@ -172,7 +183,37 @@ _AUTH_PATTERNS = (
     "权限不足",
     "permission denied",
 )
+# BSS business error codes that mean "not authorized for this operation".
+# CBC.0151 is what the coupon API returns when the identity lacks
+# billing:coupon:view (or a related billing permission).
+_AUTH_ERROR_CODES = frozenset({
+    "cbc.0151",
+    "apigw.0301",
+    "apigw.0302",
+})
+_REGION_UNSUPPORTED_PATTERNS = (
+    "cli-region的值不支持",
+    "cli-region is not supported",
+    "region is not supported",
+    "region not supported",
+    "不支持的区域",
+    "支持的区域值如下",
+)
 _USE_ERROR_MARKER = "[use_error]"
+# KooCLI builds that carry no BSS service reject the call with
+# `[USE_ERROR]Unsupported service: BSS` before the request is signed. That is
+# not a credential or API failure — it means the CLI catalog is incomplete, so
+# the SDK fallback must take over instead of hard-failing (SKILL.md promises a
+# transparent SDK fallback).
+_UNSUPPORTED_SERVICE_PATTERNS = (
+    "unsupported service",
+    "not supported service",
+    "service not supported",
+    "service not found",
+    "不支持的 service",
+    "不支持的服务",
+    "服务不存在",
+)
 
 
 class VoucherQueryError(Exception):
@@ -181,6 +222,10 @@ class VoucherQueryError(Exception):
 
 class GuardError(VoucherQueryError):
     """A write intent was detected and blocked (skill is read-only)."""
+
+
+class UsageError(VoucherQueryError):
+    """An invalid argument value was supplied (region/status/days/page size)."""
 
 
 class ConfigError(VoucherQueryError):
@@ -280,15 +325,75 @@ def extract_json(stdout):
         raise ApiError("hcloud 输出无法解析为 JSON：%s" % text[:200])
 
 
-def classify_hcloud_failure(stdout, stderr, returncode):
-    """Map a failed hcloud invocation to a domain error with hints."""
+def extract_error_envelope(payload):
+    """Return ``{code, message}`` when a response body is an error envelope.
+
+    hcloud can return an HTTP error payload (``error_code`` / ``error_msg``)
+    while still exiting with code 0. Treating that as an empty result would
+    silently turn an auth/permission failure into "no vouchers".
+    """
+    if not isinstance(payload, dict):
+        return None
+    code = payload.get("error_code") or payload.get("errorCode")
+    message = payload.get("error_msg") or payload.get("errorMsg")
+    if code is None and message is None:
+        return None
+    return {
+        "code": str(code or "").strip(),
+        "message": str(message or "").strip(),
+    }
+
+
+def classify_hcloud_failure(stdout, stderr, returncode, error=None):
+    """Map a failed hcloud invocation / error payload to a domain error."""
     blob = (stderr + " " + stdout).strip()
     low = blob.lower()
+    if error is None:
+        try:
+            error = extract_error_envelope(extract_json(stdout))
+        except VoucherQueryError:
+            error = None
+    if error:
+        code = error.get("code", "")
+        message = error.get("message", "")
+        detail = ("%s %s" % (code, message)).strip()[:300]
+        code_low = code.lower()
+        if code_low in _AUTH_ERROR_CODES or any(
+                p in (code + " " + message).lower() for p in _AUTH_PATTERNS):
+            return AuthError(
+                "无权限访问 BSS 代金券（%s）：请检查 IAM 权限（需只读 "
+                "billing:coupon:view，按企业项目筛选时还需 billing:order:view），"
+                "参见 references/iam-policies.md。详情：%s"
+                % (code or "鉴权失败", detail)
+            )
+        if any(p in (code + " " + message).lower()
+               for p in _CREDENTIAL_MISSING_PATTERNS):
+            return ConfigError(
+                "AK/SK 凭证无效或未配置（%s）：请先运行 hcloud configure 或设置"
+                "凭证环境变量（严禁在对话中粘贴 AK/SK），参见"
+                " references/cli-installation-guide.md。详情：%s"
+                % (code or "凭证错误", detail)
+            )
+        if any(p in (code + " " + message).lower()
+               for p in _REGION_UNSUPPORTED_PATTERNS):
+            return UsageError(
+                "BSS 仅支持 --region %s（当前值被 CLI 拒绝）：%s"
+                % ("/".join(BSS_SUPPORTED_REGIONS), detail)
+            )
+        return ApiError(
+            "BSS 接口返回错误（%s）：%s"
+            % (code or "未知错误码", detail)
+        )
+    if any(p in low for p in _REGION_UNSUPPORTED_PATTERNS):
+        return UsageError(
+            "BSS 仅支持 --region %s，请改用受支持的 SDK 区域（BSS 为全局服务）："
+            "%s" % ("/".join(BSS_SUPPORTED_REGIONS), blob[:300])
+        )
     if _USE_ERROR_MARKER in low:
         return ApiError(
-            "hcloud 参数错误（KooCLI 拒绝了该参数组合，退出码 %s）：BSS "
-            "%s 真实参数清单可通过 `hcloud BSS %s --help` 查看。详情：%s"
-            % (returncode, ALLOWED_OPERATION, ALLOWED_OPERATION, blob[:300])
+            "hcloud 参数/环境错误（KooCLI 拒绝了该调用）：BSS %s 真实参数清单"
+            "可通过 `hcloud BSS %s --help` 查看。详情：%s"
+            % (ALLOWED_OPERATION, ALLOWED_OPERATION, blob[:300])
         )
     if any(p in low for p in _CREDENTIAL_MISSING_PATTERNS) and not re.search(
             r"\b40[13]\b", blob):
@@ -305,6 +410,18 @@ def classify_hcloud_failure(stdout, stderr, returncode):
     return ApiError(
         "hcloud 调用失败（退出码 %s）：%s" % (returncode, blob[:300])
     )
+
+
+def hcloud_service_unsupported(stdout, stderr):
+    """True when KooCLI rejects the call because its catalog lacks BSS.
+
+    Older / trimmed KooCLI builds answer `hcloud BSS ...` with
+    `[USE_ERROR]Unsupported service: BSS` even though the binary itself is
+    present. This is a CLI-coverage gap, not a credential or BSS API failure,
+    so the caller should fall back to the official SDK.
+    """
+    low = (stdout + " " + stderr).lower()
+    return any(pattern in low for pattern in _UNSUPPORTED_SERVICE_PATTERNS)
 
 
 def extract_items(payload, keys):
@@ -459,6 +576,11 @@ def fetch_order_projects(region, order_ids, max_orders=50):
         try:
             payload = extract_json(stdout)
         except VoucherQueryError:
+            continue
+        # Best-effort order lookup: an error envelope (e.g. no
+        # billing:order:view) leaves the project as "-" instead of failing
+        # the whole coupon query.
+        if extract_error_envelope(payload):
             continue
         orders = extract_items(payload, ("order_infos", "orders", "records"))
         projects = []
@@ -654,21 +776,26 @@ def list_coupons_via_sdk(region, coupon_id=None, status=None, coupon_type=None,
             "huaweicloudsdkbss。详情：%s" % exc
         )
 
-    def _env_credential(markers):
-        for key, value in os.environ.items():
-            upper = key.upper()
-            if not upper.startswith(("HUAWEI", "HW_", "HWC")):
-                continue
-            if any(marker in upper for marker in markers) and value:
-                return value
-        return None
+    # Explicit whitelist only — never enumerate os.environ. Scanning the whole
+    # environment for HUAWEI/HW_/HWC prefixes harvests unrelated secrets and is
+    # blocked by the security scanner (E2 Env Variable Harvesting).
+    _AK_ENV_NAMES = ("HUAWEICLOUD_SDK_AK", "HUAWEI_ACCESS_KEY")
+    _SK_ENV_NAMES = ("HUAWEICLOUD_SDK_SK", "HUAWEI_SECRET_KEY")
 
-    ck1 = _env_credential(("ACCESS_KEY", "_AK"))
-    ck2 = _env_credential(("SECRET_KEY", "_SK"))
+    def _env_pair():
+        for ak_name, sk_name in zip(_AK_ENV_NAMES, _SK_ENV_NAMES):
+            ak = (os.environ.get(ak_name) or "").strip()
+            sk = (os.environ.get(sk_name) or "").strip()
+            if ak and sk:
+                return ak, sk
+        return None, None
+
+    ck1, ck2 = _env_pair()
     if not ck1 or not ck2:
         raise ConfigError(
             "SDK 回退缺少 AK/SK 凭证：官方 SDK 的 GlobalCredentials 不会自动读取环境"
-            "变量，且当前环境未检测到 HUAWEI_*/HW_*/HWC_* 形式的 AK/SK 环境变量。"
+            "变量，且当前环境未检测到受支持的环境变量（HUAWEICLOUD_SDK_AK / "
+            "HUAWEICLOUD_SDK_SK，或 HUAWEI_ACCESS_KEY / HUAWEI_SECRET_KEY）。"
             "请在会话外设置 HUAWEICLOUD_SDK_AK / HUAWEICLOUD_SDK_SK（严禁在对话中粘贴"
             " AK/SK），参见 references/cli-installation-guide.md。"
         )
@@ -725,7 +852,13 @@ def list_coupons(region, coupon_id=None, status=None, coupon_type=None, name=Non
     coupon API carries no project field), then filtered by `--project-id`
     locally (mirroring the `--name` client-side strategy).
     """
+    if str(region or "").strip() not in BSS_SUPPORTED_REGIONS:
+        raise UsageError(
+            "不支持的 BSS Region：%r。BSS 为全局服务，KooCLI 仅接受 --region %s。"
+            % (region, "/".join(BSS_SUPPORTED_REGIONS))
+        )
     status_int = parse_status(status)
+    # validate_query_args() rejects unknown status values before this point.
     client_status = None if status_int is not None else status
     coupons = []
     offset = 0
@@ -742,8 +875,20 @@ def list_coupons(region, coupon_id=None, status=None, coupon_type=None, name=Non
             )
             break
         if returncode != 0 or _USE_ERROR_MARKER in (stdout + " " + stderr).lower():
+            if hcloud_service_unsupported(stdout, stderr):
+                coupons = list_coupons_via_sdk(
+                    region, coupon_id=coupon_id, status=status_int,
+                    coupon_type=coupon_type, limit=limit, max_pages=max_pages,
+                )
+                break
             raise classify_hcloud_failure(stdout, stderr, returncode)
         payload = extract_json(stdout)
+        # hcloud may answer an auth/permission failure with exit code 0 and a
+        # top-level error envelope; never render that as an empty voucher list.
+        error = extract_error_envelope(payload)
+        if error:
+            raise classify_hcloud_failure(
+                stdout, stderr, returncode, error=error)
         batch = extract_coupons(payload)
         coupons.extend(batch)
         if not _has_more(batch, len(coupons), limit, payload,
@@ -870,6 +1015,156 @@ def render_usage_table(rows):
     return "\n".join(lines)
 
 
+def describe_filters(args):
+    """One human-readable filter description (used by the screen and reports)."""
+    filters = []
+    for label, value in (
+        ("status", args.status), ("name", args.name),
+        ("coupon_id", args.coupon_id), ("project_id", args.project_id),
+    ):
+        if value is not None and str(value) != "":
+            filters.append("%s=%s" % (label, value))
+    if args.expiring:
+        filters.append("expiring<=%sd" % args.expiring)
+    if args.expired:
+        filters.append("expired")
+    return ", ".join(filters)
+
+
+def _available_status_values():
+    aliases = sorted({k for k in STATUS_ALIASES if not str(k).isdigit()})
+    codes = "/".join(str(code) for code in sorted(STATUS_LABELS))
+    return "%s（数字状态码 %s）" % ("/".join(aliases), codes)
+
+
+def validate_query_args(args):
+    """Reject unsupported region / status / day / page-size values early."""
+    region = str(getattr(args, "region", DEFAULT_REGION) or "").strip()
+    if region not in BSS_SUPPORTED_REGIONS:
+        raise UsageError(
+            "不支持的 BSS Region：%r。BSS 为全局服务，KooCLI 仅接受 --region %s。"
+            % (region, "/".join(BSS_SUPPORTED_REGIONS))
+        )
+    status = getattr(args, "status", None)
+    if status is not None and str(status).strip() != "" and parse_status(status) is None:
+        raise UsageError(
+            "未知的代金券状态：%r。可用值：%s。"
+            % (status, _available_status_values())
+        )
+    expiring = getattr(args, "expiring", None)
+    if expiring is not None and expiring < 1:
+        raise UsageError(
+            "--expiring 需要正整数天数（例如 --expiring 30），收到 %r。" % expiring
+        )
+    page_size = getattr(args, "page_size", None)
+    if page_size is not None and not (1 <= page_size <= MAX_PAGE_SIZE):
+        raise UsageError(
+            "--page-size 必须在 1..%d 之间（BSS 上限），收到 %r。"
+            % (MAX_PAGE_SIZE, page_size)
+        )
+
+
+def _report_view(args):
+    if args.usage_analysis:
+        return "使用率分析"
+    if args.expired:
+        return "已过期"
+    if args.expiring:
+        return "%d 天内到期" % args.expiring
+    return "全部代金券"
+
+
+def collect_report_data(args, formats=None):
+    """Run the query / filters / aggregation exactly once.
+
+    Returns a single dict ``{coupons, usage_rows, expiring_rows, meta,
+    formats}`` that both the screen output and the report export consume, so a
+    report can never drift from what the console shows (no second query).
+
+    - ``coupons`` — the rows the screen renders (same filters, same order).
+    - ``usage_rows`` — per-enterprise-project aggregation (``None`` when neither
+      ``--usage-analysis`` nor ``--export`` asked for it).
+    - ``expiring_rows`` — near-expiry / expired detail for the report sheet.
+    """
+    formats = parse_formats(getattr(args, "export", None)) if formats is None else formats
+    validate_query_args(args)
+    operation = guard_operation(args.operation)
+    limit = min(max(args.page_size, 1), MAX_PAGE_SIZE)
+    coupons = list_coupons(
+        args.region,
+        coupon_id=args.coupon_id,
+        status=args.status,
+        coupon_type=args.coupon_type,
+        name=args.name,
+        limit=limit,
+        operation=operation,
+        project_id=args.project_id,
+    )
+
+    need_usage = bool(args.usage_analysis or formats)
+    attributed = coupons
+    if need_usage and any("project_ids" not in c for c in coupons):
+        attributed = enrich_coupons_with_projects(args.region, coupons)
+    usage_rows = usage_analysis(attributed) if need_usage else None
+
+    # The screen keeps its original columns (no project attribution unless it
+    # was asked for); the report gets the attributed copy. Both come from the
+    # same query and the same filter order, so counts and amounts match.
+    if args.usage_analysis:
+        visible = list(attributed)
+        report_coupons = list(attributed)
+    else:
+        visible = filter_expiry(coupons, args.expiring, args.expired)
+        report_coupons = filter_expiry(attributed, args.expiring, args.expired)
+
+    expiring_rows = []
+    expiring_label = ""
+    expired_count = 0
+    if formats:
+        if args.expiring or args.expired:
+            expiring_rows = filter_expiry(attributed, args.expiring, args.expired)
+            expiring_label = ("已过期" if args.expired
+                             else "%d 天内到期" % args.expiring)
+        else:
+            expiring_rows = filter_expiry(attributed, DEFAULT_EXPIRING_DAYS, False)
+            expiring_label = "%d 天内到期" % DEFAULT_EXPIRING_DAYS
+        expired_count = len(filter_expiry(attributed, None, True))
+
+    total_face = sum(_coupon_face(c) for c in visible)
+    total_balance = sum(_coupon_balance(c) for c in visible)
+    # Status / type labels + flattened use_limits, exactly like the screen table.
+    report_coupons = [normalize_coupon(c) for c in report_coupons]
+    expiring_rows = [normalize_coupon(c) for c in expiring_rows]
+    meta = {
+        "region": args.region,
+        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "filters": {
+            "status": args.status, "name": args.name,
+            "coupon_id": args.coupon_id, "project_id": args.project_id,
+            "expiring": args.expiring, "expired": bool(args.expired),
+            "coupon_type": args.coupon_type, "page_size": limit,
+        },
+        "filters_text": describe_filters(args),
+        "view": _report_view(args),
+        "coupon_count": len(visible),
+        "total_face": total_face,
+        "total_balance": total_balance,
+        "total_used": max(total_face - total_balance, 0.0),
+        "expiring_label": expiring_label,
+        "expired_count": expired_count,
+        "source": "hcloud BSS %s / %s（只读）" % (
+            ALLOWED_OPERATION, ALLOWED_ORDER_OPERATION),
+    }
+    return {
+        "coupons": report_coupons,
+        "screen_coupons": visible,
+        "usage_rows": usage_rows,
+        "expiring_rows": expiring_rows,
+        "meta": meta,
+        "formats": formats,
+    }
+
+
 @quality_report(skill_name="huawei-cloud-bss-voucher-query", skill_version="1.0.0")
 def main(argv=None):
     parser = argparse.ArgumentParser(
@@ -893,13 +1188,18 @@ def main(argv=None):
                         help="按代金券类型过滤（1=代金券 2=折扣券 3=产品券 4=现金券）")
     parser.add_argument("--project-id", dest="project_id",
                         help="按企业项目 ID 过滤（ListSubCustomerCoupons 无该服务端参数，"
-                             "走本脚本订单归属本地过滤，需 bss:order:view 只读权限）")
+                             "走本脚本订单归属本地过滤，需 billing:order:view 只读权限）")
     parser.add_argument("--expiring", type=int, default=None, metavar="DAYS",
                         help="仅列出 N 天内到期（未过期）的代金券")
     parser.add_argument("--expired", action="store_true",
                         help="仅列出已过期的代金券")
     parser.add_argument("--usage-analysis", action="store_true", dest="usage_analysis",
                         help="按企业项目汇总面额/余额/使用率统计")
+    parser.add_argument("--export", metavar="{xlsx,html}",
+                        help="导出可视化报表：xlsx（四表工作簿）/ html（自包含图表），"
+                             "可组合如 --export xlsx,html")
+    parser.add_argument("--out-dir", dest="out_dir", default=None,
+                        help="报表输出目录（默认当前目录；同名文件不覆盖，自动加序号）")
     parser.add_argument("--page-size", type=int, default=DEFAULT_PAGE_SIZE,
                         dest="page_size",
                         help="分页大小（BSS 上限 %d，默认 %d）"
@@ -911,74 +1211,55 @@ def main(argv=None):
 
     try:
         guard_write_intent(" ".join(argv if argv is not None else sys.argv[1:]))
-        operation = guard_operation(args.operation)
+        guard_operation(args.operation)
         for flag_name, flag_value in (
             ("--status", args.status), ("--name", args.name),
             ("--coupon-id", args.coupon_id), ("--project-id", args.project_id),
         ):
             if flag_value is not None and str(flag_value) != "":
                 guard_write_intent(str(flag_value))
-        limit = min(max(args.page_size, 1), MAX_PAGE_SIZE)
-        coupons = list_coupons(
-            args.region,
-            coupon_id=args.coupon_id,
-            status=args.status,
-            coupon_type=args.coupon_type,
-            name=args.name,
-            limit=limit,
-            operation=operation,
-            project_id=args.project_id,
-        )
-        if args.usage_analysis:
-            enrich = [c for c in coupons if "project_ids" not in c]
-            if enrich:
-                coupons = enrich_coupons_with_projects(args.region, coupons)
-            rows = usage_analysis(coupons)
-        else:
-            coupons = filter_expiry(coupons, args.expiring, args.expired)
-            rows = None
-    except VoucherQueryError as exc:
+        formats = parse_formats(args.export)
+        out_dir = ensure_out_dir(args.out_dir) if formats else None
+        data = collect_report_data(args, formats)
+    except (VoucherQueryError, ExportError) as exc:
         print("[错误] %s" % exc, file=sys.stderr)
         return 1
 
-    if rows is not None:
+    coupons = data["screen_coupons"]
+    rows = data["usage_rows"]
+
+    if args.usage_analysis:
         print("Region %s 的 BSS 代金券使用率分析（按企业项目汇总）：" % args.region)
-        if not rows:
+        if rows:
+            print(render_usage_table(rows))
+        else:
             print("（无数据）")
-            return 0
-        print(render_usage_table(rows))
-        return 0
-
-    if args.as_json:
+    elif args.as_json:
         print(json.dumps(coupons, ensure_ascii=False, indent=2))
-        return 0
-
-    if args.names_only:
+    elif args.names_only:
         print("Region %s 的 BSS 代金券名称列表（共 %d 张）："
               % (args.region, len(coupons)))
         for name in coupon_names(coupons):
             print("- %s" % name)
-        return 0
-
-    if not coupons:
-        filters = []
-        for label, value in (
-            ("status", args.status), ("name", args.name),
-            ("coupon_id", args.coupon_id), ("project_id", args.project_id),
-        ):
-            if value is not None and str(value) != "":
-                filters.append("%s=%s" % (label, value))
-        if args.expiring:
-            filters.append("expiring<=%sd" % args.expiring)
-        if args.expired:
-            filters.append("expired")
-        suffix = "（过滤条件: %s）" % ", ".join(filters) if filters else ""
+    elif not coupons:
+        filters = describe_filters(args)
+        suffix = "（过滤条件: %s）" % filters if filters else ""
         print("当前区域（%s）无 BSS 代金券%s。" % (args.region, suffix))
-        return 0
+    else:
+        print("Region %s 的 BSS 代金券列表（共 %d 张，完整字段）："
+              % (args.region, len(coupons)))
+        print(render_table(coupons))
 
-    print("Region %s 的 BSS 代金券列表（共 %d 张，完整字段）："
-          % (args.region, len(coupons)))
-    print(render_table(coupons))
+    if formats:
+        try:
+            results = export_report(data, formats, out_dir)
+        except ExportError as exc:
+            print("[错误] %s" % exc, file=sys.stderr)
+            return 1
+        for item in results:
+            print("已导出%s：%s（代金券 %d 条 / 临期 %d 条 / 企业项目 %d 个）"
+                  % (item["label"], item["path"], item["records"],
+                     len(data["expiring_rows"] or []), len(rows or [])))
     return 0
 
 
