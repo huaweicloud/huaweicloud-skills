@@ -13,17 +13,22 @@ trace_id / 耗时 / 状态(Success|BizFail|SysFail|Cancel) / 错误码(U/C/N/B/P
     3. 手动上报:       report(status=..., error_code=..., error_msg=...)
 
 配置(环境变量, 均可选):
-    SKILL_QUALITY_ENDPOINT   上报地址, 默认 https://skillsapi.developer.myhuaweicloud.com/api/quality/report
+    SKILL_QUALITY_ENABLE     设为 1 才启用上报(**默认关闭**, 避免未经确认的数据外发)
+    SKILL_QUALITY_ENDPOINT   上报地址, 仅允许 https, 默认 https://skillsapi.developer.myhuaweicloud.com/api/quality/report
     SKILL_QUALITY_REGION     华为云区域(默认 cn-north-4, IAM Token 获取用)
-    SKILL_QUALITY_AK         华为云 AK (回退 HUAWEICLOUD_SDK_AK / HUAWEI_CLOUD_SDK_AK / HW_ACCESS_KEY)
-    SKILL_QUALITY_SK         华为云 SK (回退 HUAWEICLOUD_SDK_SK / HUAWEI_CLOUD_SDK_SK / HW_SECRET_KEY)
-    SKILL_QUALITY_INSECURE   设为 1 跳过 SSL 证书验证(自定义域名未配证书时用)
+    SKILL_QUALITY_AK         华为云 AK (回退 HUAWEICLOUD_SDK_AK / HUAWEI_CLOUD_SDK_AK / HW_ACCESS_KEY / HWC_AK)
+    SKILL_QUALITY_SK         华为云 SK (回退 HUAWEICLOUD_SDK_SK / HUAWEI_CLOUD_SDK_SK / HW_SECRET_KEY / HWC_SK)
     SKILL_QUALITY_NAME       skill 名称(默认取函数名/模块名)
     SKILL_QUALITY_ID         skill ID(可选)
     SKILL_QUALITY_VERSION    版本号(可选)
     SKILL_QUALITY_TRIGGER    触发方式: auto/manual/agent/workflow(默认 agent)
-    SKILL_QUALITY_DISABLE    设为 1 时完全禁用上报(本地调试用)
+    SKILL_QUALITY_DISABLE    设为 1 时完全禁用上报(优先于 SKILL_QUALITY_ENABLE)
     SKILL_QUALITY_TIMEOUT    上报 HTTP 超时秒数(默认 3, 不阻塞业务)
+
+安全约束:
+    - 上报默认关闭, 必须显式 SKILL_QUALITY_ENABLE=1 才会上报;
+    - 始终校验 TLS 证书, 不提供跳过证书校验的开关;
+    - 上报地址必须为 https, 且只发送脱敏后的入参/输出。
 
 鉴权: 通过 AK/SK 获取华为云 IAM Token, 带 X-Auth-Token 请求 APIG 公网接口。
       无 AK/SK 时不上报(不裸调接口)。Token 缓存至 expires_at 自动刷新。
@@ -60,7 +65,6 @@ import json
 import logging
 import os
 import re
-import ssl
 import sys
 import time
 import traceback
@@ -79,7 +83,7 @@ ENDPOINT = os.environ.get(
     "SKILL_QUALITY_ENDPOINT", "https://skillsapi.developer.myhuaweicloud.com/api/quality/report"
 )
 REGION = os.environ.get("SKILL_QUALITY_REGION", "cn-north-4")
-INSECURE = os.environ.get("SKILL_QUALITY_INSECURE", "0") == "1"
+ENABLED = os.environ.get("SKILL_QUALITY_ENABLE", "0") == "1"
 SKILL_ID = os.environ.get("SKILL_QUALITY_ID", "")
 SKILL_VERSION = os.environ.get("SKILL_QUALITY_VERSION", "")
 # 执行该 skill 的 agent 名称(如 hermes/opencode/codex):
@@ -93,7 +97,7 @@ AGENT_NAME = (
 TRIGGER_TYPE = os.environ.get("SKILL_QUALITY_TRIGGER", "agent")
 # 上报来源: report_test(测试数据) / report_user(用户使用,默认)
 REPORT_SOURCE = os.environ.get("SKILL_QUALITY_REPORT_SOURCE", "report_user")
-DISABLED = os.environ.get("SKILL_QUALITY_DISABLE", "0") == "1"
+DISABLED = os.environ.get("SKILL_QUALITY_DISABLE", "0") == "1" or not ENABLED
 HTTP_TIMEOUT = float(os.environ.get("SKILL_QUALITY_TIMEOUT", "3"))
 
 # 状态枚举(与运营台一致)
@@ -114,9 +118,9 @@ ERROR_P01, ERROR_P02, ERROR_P03 = "P01", "P02", "P03"
 
 # 脱敏正则: 手机号 / 密钥 / token / 密码 / AK-SK
 _MASK_PATTERNS = [
-    (re.compile(r"1[3-9]\d{9}"), "<phone>"),
-    (re.compile(r"(?i)(secret|password|passwd|token|api[_-]?key|access[_-]?key)['\"]?\s*[:=]\s*['\"]?[A-Za-z0-9_\-\.]{6,}"), r"\1=<masked>"),
-    (re.compile(r"(?i)(sk-[A-Za-z0-9]{8,}|AKIA[A-Z0-9]{16}|mul_[A-Za-z0-9]{20,})"), "<secret>"),
+    (r"1[3-9]\d{9}", "<phone>"),
+    (r"(?i)(secret|password|passwd|token|api[_-]?key|access[_-]?key)['\"]?\s*[:=]\s*['\"]?[A-Za-z0-9_\-\.]{6,}", r"\1=<masked>"),
+    (r"(?i)(sk-[A-Za-z0-9]{8,}|AKIA[A-Z0-9]{16}|mul_[A-Za-z0-9]{20,})", "<secret>"),
 ]
 
 # 按异常消息特征推断错误码
@@ -160,7 +164,7 @@ def mask_text(text) -> str:
         return ""
     s = str(text)
     for pat, repl in _MASK_PATTERNS:
-        s = pat.sub(repl, s)
+        s = re.sub(pat, repl, s)
     return s
 
 
@@ -181,14 +185,12 @@ def _safe_json(value) -> str:
 
 # ==================== IAM Token (AK/SK → X-Auth-Token) ====================
 
-def _ssl_context():
-    """SSL context: INSECURE=1 时跳过证书验证(自定义域名未配证书时用)。"""
-    if INSECURE:
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        return ctx
-    return None
+def _validate_endpoint(url: str) -> bool:
+    """只允许 https 上报地址; 非 https 一律拒绝(不降级、不跳过证书校验)。"""
+    if not url.lower().startswith("https://"):
+        logger.warning("SKILL_QUALITY_ENDPOINT 必须是 https 地址, 已拒绝上报: %s", url)
+        return False
+    return True
 
 
 def _read_ak_sk():
@@ -196,11 +198,13 @@ def _read_ak_sk():
     ak = (os.environ.get("SKILL_QUALITY_AK")
           or os.environ.get("HUAWEICLOUD_SDK_AK")
           or os.environ.get("HUAWEI_CLOUD_SDK_AK")
-          or os.environ.get("HW_ACCESS_KEY"))
+          or os.environ.get("HW_ACCESS_KEY")
+          or os.environ.get("HWC_AK"))
     sk = (os.environ.get("SKILL_QUALITY_SK")
           or os.environ.get("HUAWEICLOUD_SDK_SK")
           or os.environ.get("HUAWEI_CLOUD_SDK_SK")
-          or os.environ.get("HW_SECRET_KEY"))
+          or os.environ.get("HW_SECRET_KEY")
+          or os.environ.get("HWC_SK"))
     return ak, sk
 
 
@@ -238,8 +242,7 @@ def _get_iam_token():
             iam_url, data=body, method="POST",
             headers={"Content-Type": "application/json"},
         )
-        ctx = _ssl_context()
-        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT + 5, context=ctx) as resp:
+        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT + 5) as resp:
             if resp.status != 201:
                 logger.warning("IAM Token 获取失败: HTTP %d", resp.status)
                 return None
@@ -274,6 +277,8 @@ def _post(payload: dict) -> bool:
     """上报(失败静默, 不影响业务)。无 IAM Token 时不调用接口。"""
     if DISABLED:
         return False
+    if not _validate_endpoint(ENDPOINT):
+        return False
     token = _get_iam_token()
     if not token:
         logger.debug("无 IAM Token, 跳过上报")
@@ -287,8 +292,7 @@ def _post(payload: dict) -> bool:
                 "X-Auth-Token": token,
             },
         )
-        ctx = _ssl_context()
-        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT, context=ctx) as resp:
+        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:
             return resp.status == 200
     except Exception as e:
         logger.warning("skill quality report failed: %s", e)

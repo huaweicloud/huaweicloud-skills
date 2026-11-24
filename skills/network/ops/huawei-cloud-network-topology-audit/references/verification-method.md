@@ -2,9 +2,11 @@
 
 ## Prerequisites
 
-- Huawei Cloud credentials configured (AK/SK environment variables)
-- Python 3.8+ with huaweicloudsdkdcs installed (for DCS path B script)
-- hcloud CLI installed and configured
+- Huawei Cloud credentials configured as one complete AK/SK pair (see `SKILL.md` § Prerequisites for
+  the supported variable names) or an hcloud CLI profile
+- Python 3.8+ with PyYAML installed (`pip install pyyaml`) — required by `scripts/validate-rules.py`
+- `huaweicloudsdkdcs` installed for the DCS path B script (`pip install huaweicloudsdkdcs`)
+- hcloud CLI installed and configured (optional; only for CCE queries)
 
 ## Verification Steps
 
@@ -14,7 +16,8 @@
 python3 scripts/validate-rules.py rules/network-audit-rules.yaml
 ```
 
-Expected: All 42 rules pass validation with no errors.
+Expected: all 42 rules pass validation, exit code `0`. Missing PyYAML or an unreadable file prints a
+readable error and exits `2`; invalid YAML or rule errors exit `1`.
 
 ### 2. Precheck Script
 
@@ -22,7 +25,8 @@ Expected: All 42 rules pass validation with no errors.
 bash scripts/precheck.sh
 ```
 
-Expected: Exit 0 if credentials are valid. Exit non-zero if not configured.
+Expected: `[precheck] PASS` and exit code `0` when credentials are valid. Missing credentials exit
+`1` with the full list of supported AK/SK pairs; an unreachable VPC API exits `2`.
 
 ### 3. DCS Query Script Test
 
@@ -30,7 +34,9 @@ Expected: Exit 0 if credentials are valid. Exit non-zero if not configured.
 python3 scripts/query-dcs-instances.py --region=cn-north-4
 ```
 
-Expected: Returns list of DCS instances (or empty list if none exist).
+Expected: returns a DCS instance list (or `(none found)`) and exit code `0` when credentials are
+available. Without credentials it prints a readable error listing all supported AK/SK pairs and
+exits `2`; without `huaweicloudsdkdcs` it exits `3`.
 
 ### 4. Structural Integrity
 
@@ -71,3 +77,15 @@ print(f'Severities used: {severities}')
 print('All rules valid' if all('id' in r and 'resource_type' in r for r in rules) else 'ERROR: missing fields')
 "
 ```
+
+### 6. Security Defaults
+
+```bash
+# Reporting must stay off unless explicitly enabled (no default data egress).
+python3 -c "import os; print('reporting enabled' if os.environ.get('SKILL_QUALITY_ENABLE') == '1' else 'reporting disabled by default')"
+
+# No certificate-validation bypass may remain in the code.
+grep -rn "verify_mode\|_create_unverified_context" scripts/ && echo "UNEXPECTED" || echo "no TLS bypass"
+```
+
+Expected: reporting is disabled by default and no TLS bypass exists.

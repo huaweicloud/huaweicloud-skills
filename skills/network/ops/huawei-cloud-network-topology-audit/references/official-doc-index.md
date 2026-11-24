@@ -18,9 +18,12 @@ Since CCE uses path A (existing skill), these are for verification:
 
 | Resource | hcloud Command | CLI Reference |
 |----------|---------------|---------------|
-| List Clusters | `hcloud CCE ListClusters` | https://support.huaweicloud.com/api-cce/ListClusters.html |
-| List Nodes | `hcloud CCE ListNodes` | https://support.huaweicloud.com/api-cce/ListNodes.html |
-| Show Cluster | `hcloud CCE ShowCluster` | https://support.huaweicloud.com/api-cce/ShowCluster.html |
+| List Clusters | `hcloud CCE ListClusters --cli-region=<region>` | https://support.huaweicloud.com/api-cce/ListClusters.html |
+| List Nodes | `hcloud CCE ListNodes --cli-region=<region>` | https://support.huaweicloud.com/api-cce/ListNodes.html |
+| Show Cluster | `hcloud CCE ShowCluster --cli-region=<region>` | https://support.huaweicloud.com/api-cce/ShowCluster.html |
+
+> Standard KooCLI format: `hcloud <Service> <Operation> --cli-region=<region> [--key=value ...]`;
+> `--cli-region` is mandatory for every call.
 
 ## Huawei Cloud SDK Packages
 

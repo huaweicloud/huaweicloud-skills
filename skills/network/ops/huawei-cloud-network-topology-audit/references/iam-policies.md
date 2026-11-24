@@ -59,5 +59,8 @@ This skill is read-only. The minimum IAM permissions required are:
 ## Security Notes
 
 - This policy grants read-only access only. No write operations are allowed.
+- No wildcard (`*`) actions and no `*` resources are granted; every action is an explicit
+  `service:resource:list|get` read permission.
+- No identity/credential/administration permissions are granted (no IAM, KMS, or key management).
 - Review the policy regularly and remove permissions for services not in use.
 - For production environments, consider scoping to specific resource tags or projects.

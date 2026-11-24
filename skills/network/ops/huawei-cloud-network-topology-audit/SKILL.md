@@ -1,6 +1,6 @@
 ---
 name: huawei-cloud-network-topology-audit
-description: >-
+description: |
   Orchestrator skill that audits Huawei Cloud network topology for security and configuration risks.
   Given a user-described access path (e.g., "ELB web-elb → CCE prod-cce → RDS prod-db"), it resolves
   the real topology, expands to the full VPC network surface, evaluates risks against an extensible
@@ -68,20 +68,31 @@ User describes access path (natural language)
 
 ## Prerequisites
 
-1. **Huawei Cloud credentials** — Environment variables (`HUAWEI_ACCESS_KEY` / `HUAWEI_SECRET_KEY` or
-   `HW_AK` / `HW_SK` / `HWC_ACCESS_KEY` / `HWC_SECRET_KEY`) or hcloud CLI config
+1. **Huawei Cloud credentials** — one complete AK/SK pair in the environment, or an hcloud CLI
+   profile (hcloud configure set --cli-region=<region>). Supported pairs, checked in this order
+   (identical in `scripts/precheck.sh` and `scripts/query-dcs-instances.py`):
+   - `HUAWEICLOUD_SDK_AK` / `HUAWEICLOUD_SDK_SK`
+   - `HUAWEI_ACCESS_KEY` / `HUAWEI_SECRET_KEY`
+   - `HW_ACCESS_KEY` / `HW_SECRET_KEY`
+   - `HWC_AK` / `HWC_SK`
+   - `HWC_ACCESS_KEY` / `HWC_SECRET_KEY`
+
+   Never commit real keys to the repository or paste them into examples.
 2. **Python 3.8+** — Required for scripts in `scripts/`
-3. **huaweicloudsdk packages** — For path B resources (DCS): `pip install huaweicloudsdkdcs`
-4. **Network access** — To GitCode for find-skills index queries
-5. **hcloud CLI** (optional) — For CCE cluster queries via CCE management skill
+3. **PyYAML** — Required by `scripts/validate-rules.py`: `pip install pyyaml`
+4. **huaweicloudsdk packages** — For path B resources (DCS): `pip install huaweicloudsdkdcs`
+   (also `pip install huaweicloudsdkvpc` if you use the SDK fallback in `scripts/precheck.sh`)
+5. **Network access** — To GitCode for find-skills index queries
+6. **hcloud CLI** (optional) — For CCE cluster queries via CCE management skill
 
 ### Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `SKILL_QUALITY_ENDPOINT` | No | Report endpoint, default https://skillsapi.developer.myhuaweicloud.com/api/quality/report |
+| `SKILL_QUALITY_ENABLE` | No | Set `1` to opt in to quality reporting; **disabled by default** |
+| `SKILL_QUALITY_ENDPOINT` | No | Report endpoint (https only), default https://skillsapi.developer.myhuaweicloud.com/api/quality/report |
 | `SKILL_QUALITY_NAME` | No | Skill name (auto-detected) |
-| `SKILL_QUALITY_DISABLE` | No | Set `1` to disable reporting (local dev) |
+| `SKILL_QUALITY_DISABLE` | No | Set `1` to force-disable reporting (overrides `SKILL_QUALITY_ENABLE`) |
 | `SKILL_QUALITY_TIMEOUT` | No | Report timeout in seconds (default 3) |
 
 ## Workflow
@@ -105,8 +116,8 @@ Parse the user's natural-language access path:
    name="web-elb")
 2. For each resource type, look up the appropriate query skill in
    `references/resource-skill-mapping.md`
-3. Call `huawei-cloud-find-skills` (via its search script) to confirm the query skill exists
-   in the current index
+3. Use the skill discovery index (search script) to confirm the query skill exists in the
+   current index
 4. Build a structured collection plan:
    - Path A resources → dispatch to query skill
    - Path B resources → use self-written script
@@ -119,18 +130,18 @@ Execute the collection plan:
 
 #### Path A (existing query skills)
 
-| Resource | Query Skill | Key Queries |
-|----------|-------------|-------------|
-| VPC | `huawei-cloud-network-query` | ListVpcs, ShowVpc |
-| Subnet | `huawei-cloud-network-query` | ListSubnets |
-| Security Group | `huawei-cloud-network-query` | ListSecurityGroups, ShowSecurityGroup |
-| Route Table | `huawei-cloud-network-query` | ListRouteTables |
-| EIP | `huawei-cloud-network-query` | ListPublicips |
-| ELB | `huawei-cloud-network-query` | ListLoadBalancers, ListListeners, ListPools |
-| NAT | `huawei-cloud-network-query` | ListNatGateways, ListSnatRules, ListDnatRules |
-| ECS | `huawei-cloud-computing-query` | ListServersDetails |
-| RDS | `huawei-cloud-rds-smart-service` | ListInstances |
-| CCE | `huawei-cloud-cce-cluster-management` | ListClusters, ListNodes |
+| Resource | Query Skill Category | Key Queries |
+|----------|----------------------|-------------|
+| VPC | network inventory query skill | ListVpcs, ShowVpc |
+| Subnet | network inventory query skill | ListSubnets |
+| Security Group | network inventory query skill | ListSecurityGroups, ShowSecurityGroup |
+| Route Table | network inventory query skill | ListRouteTables |
+| EIP | network inventory query skill | ListPublicips |
+| ELB | network inventory query skill | ListLoadBalancers, ListListeners, ListPools |
+| NAT | network inventory query skill | ListNatGateways, ListSnatRules, ListDnatRules |
+| ECS | compute inventory query skill | ListServersDetails |
+| RDS | database inventory query skill | ListInstances |
+| CCE | CCE cluster query skill | ListClusters, ListNodes |
 
 #### Path B (self-written scripts)
 
@@ -211,14 +222,87 @@ bash scripts/mermaid-to-ascii.sh
 
 **Output**: Final Markdown report (saved to a file and presented to the user)
 
+## KooCLI Command Format (Standard)
+
+All KooCLI (`hcloud`) commands in this skill and its references follow one standard form. Every
+invocation carries an explicit region with `--cli-region=<region>`; the service name is in
+PascalCase and the operation is in PascalCase as well.
+
+```
+hcloud <Service> <Operation> --cli-region=<region> [--key=value ...]
+```
+
+| Part | Rule | Example |
+|------|------|---------|
+| `<Service>` | KooCLI service name, PascalCase | `VPC`, `ELB`, `NAT`, `ECS`, `RDS`, `CCE` |
+| `<Operation>` | KooCLI operation, PascalCase | `ListVpcs`, `ListLoadBalancers`, `ListClusters` |
+| `--cli-region` | **Required**; `--cli-region=<region>`, never omit or leave as an empty value | `--cli-region=cn-north-4` |
+| `--key=value` | Optional request parameters, `=` form | `--limit=1` |
+
+- `--region` and `--cli-region` are different flags: `--region` is this skill's Python script
+  parameter, while `--cli-region` is the KooCLI parameter.
+- Examples in this document use `<region>` or a concrete region such as `cn-north-4`.
+- When this skill runs inside the skill pipeline, wrap KooCLI calls as
+  `skill-quality-cli run --skill-name huawei-cloud-network-topology-audit -- hcloud ...`.
+
+## Examples
+
+Run every command from the skill root directory. The commands below are exactly the ones used by
+the evaluation and are safe to copy.
+
+### Example 1: Validate the rule directory
+
+```bash
+python3 scripts/validate-rules.py rules/network-audit-rules.yaml
+```
+
+Expected: `PASSED: All rules valid` and exit code `0`. If PyYAML is missing the script prints an
+install hint and exits `2`; a missing rule file also exits `2`; invalid YAML or rule errors exit `1`.
+No Python traceback is printed.
+
+### Example 2: Connectivity precheck
+
+```bash
+bash scripts/precheck.sh
+```
+
+Expected: `[precheck] PASS` and exit code `0`. Missing credentials exit `1` with the full list of
+supported AK/SK pairs; an unreachable VPC API after credentials were found exits `2`.
+
+### Example 3: Query DCS instances
+
+```bash
+python3 scripts/query-dcs-instances.py --region=cn-north-4
+```
+
+Expected with credentials: a DCS instance list (or `(none found)`) and exit code `0`.
+Without credentials: a readable error listing all supported AK/SK pairs and exit code `2`.
+If `huaweicloudsdkdcs` is not installed: a readable install hint and exit code `3`.
+
+### Example 4: KooCLI CCE query
+
+```bash
+hcloud CCE ListClusters --cli-region=cn-north-4
+```
+
+Expected: cluster list for the region. `--cli-region` is mandatory.
+
+### Example 5: Mermaid ASCII fallback
+
+```bash
+echo 'graph TD; A-->B' | bash scripts/mermaid-to-ascii.sh
+```
+
+Expected: an ASCII topology fallback (no network access, no rendering service).
+
 ## Core Commands
 
-| Command | Purpose |
-|---------|---------|
-| `bash scripts/precheck.sh` | Step 1: Connectivity precheck |
-| `python3 scripts/validate-rules.py rules/network-audit-rules.yaml` | Step 6: Validate rule directory |
-| `bash scripts/mermaid-to-ascii.sh` | Step 7: Mermaid ASCII fallback |
-| `python3 scripts/query-dcs-instances.py --region {region}` | Path B: Query DCS instances (SDK) |
+| Command | Purpose | Exit codes |
+|---------|---------|-----------|
+| `bash scripts/precheck.sh` | Step 1: Connectivity precheck | `0` pass, `1` missing credentials/dependency, `2` API unreachable |
+| `python3 scripts/validate-rules.py rules/network-audit-rules.yaml` | Step 6: Validate rule directory | `0` valid, `1` rule/YAML error, `2` missing PyYAML or unreadable file |
+| `bash scripts/mermaid-to-ascii.sh` | Step 7: Mermaid ASCII fallback | `0` |
+| `python3 scripts/query-dcs-instances.py --region {region}` | Path B: Query DCS instances (SDK) | `0` success, `2` missing credentials, `3` missing SDK, `1` API error |
 
 ## Parameter Confirmation
 
@@ -230,9 +314,18 @@ bash scripts/mermaid-to-ascii.sh
 
 ## Quality Reporting
 
-This Skill integrates [skill_quality_sdk.py](scripts/skill_quality_sdk.py) for execution quality
-reporting. Every run automatically reports trace_id, status (success/biz_fail/sys_fail/cancel),
-error code, cost, and masked input/output to the operations console.
+This Skill bundles [skill_quality_sdk.py](scripts/skill_quality_sdk.py) for optional execution
+quality reporting. Reporting is **disabled by default**: nothing is sent anywhere unless the operator
+explicitly opts in with `SKILL_QUALITY_ENABLE=1`. When enabled, each run reports trace_id, status
+(success/biz_fail/sys_fail/cancel), error code, cost, and masked input/output to the operations
+console.
+
+### Security Defaults
+
+- Reporting is opt-in; the default is no network egress and no data collection.
+- The report endpoint must be an `https://` URL; calls always verify TLS certificates, and there is
+  no switch to skip certificate or hostname validation.
+- Inputs and outputs are masked (phone numbers, secrets, tokens) before transmission.
 
 ### Integration
 
@@ -257,7 +350,7 @@ error code, cost, and masked input/output to the operations console.
 | P | Platform | P01 report generation failed |
 
 Reporting is non-blocking and fails silently — it never interrupts the Skill main flow.
-Disable via `SKILL_QUALITY_DISABLE=1` for local testing.
+Enable explicitly with `SKILL_QUALITY_ENABLE=1`; force-disable with `SKILL_QUALITY_DISABLE=1`.
 
 ## Reference Documents
 

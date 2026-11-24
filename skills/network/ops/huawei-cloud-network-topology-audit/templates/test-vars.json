@@ -1,0 +1,12 @@
+{
+  "region": "cn-north-4",
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "VPC read-only API smoke",
+      "command": "hcloud VPC ListVpcs --cli-region={region} --limit=1",
+      "type": "read",
+      "executor": "cli"
+    }
+  ]
+}

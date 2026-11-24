@@ -9,12 +9,30 @@ Checks:
   - Resource types are from the allowed list
   - Condition is non-empty
 
+Requirements:
+    Python 3.8+ and PyYAML (``pip install pyyaml``).
+
 Usage:
     python3 validate-rules.py rules/network-audit-rules.yaml
+
+Exit codes:
+    0  all rules valid
+    1  validation errors or invalid YAML
+    2  missing dependency / unreadable input file
 """
 
+import os
 import sys
-import yaml
+
+try:
+    import yaml
+except ImportError:
+    print(
+        "ERROR: PyYAML is required to validate the rule directory but is not installed.\n"
+        "Install it with: pip install pyyaml",
+        file=sys.stderr,
+    )
+    sys.exit(2)
 
 ALLOWED_SEVERITIES = {"critical", "high", "medium", "low", "info"}
 
@@ -31,15 +49,26 @@ def validate(path):
     errors = []
     warnings = []
 
+    if not os.path.isfile(path):
+        print(f"ERROR: Rule file not found: {path}", file=sys.stderr)
+        print("Usage: python3 validate-rules.py <path/to/network-audit-rules.yaml>", file=sys.stderr)
+        sys.exit(2)
+
     try:
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             rules = yaml.safe_load(f)
     except yaml.YAMLError as e:
-        print(f"YAML parse error: {e}")
+        print(f"ERROR: YAML parse error in {path}: {e}", file=sys.stderr)
         sys.exit(1)
+    except OSError as e:
+        print(f"ERROR: Cannot read rule file {path}: {e}", file=sys.stderr)
+        sys.exit(2)
 
     if not isinstance(rules, list):
-        print(f"ERROR: Expected a list of rules, got {type(rules).__name__}")
+        print(
+            f"ERROR: Expected a list of rules in {path}, got {type(rules).__name__}",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     print(f"Loaded {len(rules)} rules from {path}")
