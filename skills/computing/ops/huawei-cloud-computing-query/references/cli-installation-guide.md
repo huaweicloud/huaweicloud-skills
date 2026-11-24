@@ -14,15 +14,15 @@ this skill, never as a substitute for a query subcommand here.
 | Request | Where to go |
 |---------|-------------|
 | ECS create / start / stop / reboot / delete / resize | `huawei-cloud-ecs-manage` |
-| ECS reinstall OS | ECS console, or KooCLI `hcloud ECS ReinstallServerWithCloudInit` / `ReinstallServerWithoutCloudInit` |
+| ECS reinstall OS | ECS console (this skill does not cover it); KooCLI is an out-of-scope fallback documented on the official Huawei Cloud KooCLI site |
 | CCE workloads, namespaces, events, pod logs | kubectl-based `container/cce/` skills |
 | CCE node pool resize / scale-out | `huawei-cloud-cce-cluster-management` |
 | EVS / OBS / SFS / CBR queries | `huawei-cloud-storage-query` |
 | AS batch decommission and other AS writes | No skill yet; use the AS console |
 
-The KooCLI commands listed above are **documentation only** and must not be copied into a shell as
-part of this skill's workflow. They also require a `server_id` (or the equivalent resource ID) that
-this skill can help you look up first.
+KooCLI usage is **documentation only** and must not be copied into a shell as part of this skill's
+workflow. Those operations also require a `server_id` (or the equivalent resource ID) that this skill
+can help you look up first.
 
 ## Installing KooCLI
 
@@ -36,8 +36,8 @@ script published by Huawei Cloud; Windows and macOS use the matching official pa
 | Windows | Official KooCLI MSI package |
 | macOS | Official KooCLI package from the Huawei Cloud KooCLI documentation |
 
-After installation, configure credentials with `hcloud configure set` and verify access with
-`hcloud configure list`. Keep AK/SK out of shell history and logs.
+After installation, configure credentials and verify the active profile following the official
+KooCLI documentation. Keep AK/SK out of shell history and logs.
 
 ## Why this skill does not call KooCLI
 

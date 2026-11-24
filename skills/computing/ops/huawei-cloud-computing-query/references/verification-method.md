@@ -55,6 +55,9 @@ that wrap the script (for example `check_env.sh`) still see the real exit code.
 
 ## 3. Environment self-check
 
+The default check is lightweight: Python version, entry-script syntax and SDK importability. It does
+not create a venv, install dependencies or call a cloud API, so it succeeds on a bare host.
+
 ```bash
 bash scripts/check_env.sh
 ```
@@ -63,20 +66,34 @@ bash scripts/check_env.sh
 powershell -ExecutionPolicy Bypass -File scripts/check_env.ps1
 ```
 
-Expected: the script first checks `HW_ACCESS_KEY` / `HW_SECRET_KEY`, then Python, dependencies, SDK
-and service availability. Missing credentials fail fast with exit code 2 and a readable hint. A
-passing run writes `.env_check_cache`; a second run within 30 minutes prints `命中环境检查缓存` and
-skips dependency and API checks. Force a full run with `--force` / `HW_ENV_CHECK_FORCE=1`.
+Expected without AK/SK: exit code 0 in under 10 seconds with `SKIP: credentials not configured`.
+A skip/failure result is cached in `.env_check_cache` for 5 minutes (a pass for 30 minutes); a second
+run prints `命中环境检查缓存` and returns the same exit code without repeating the work.
 
-Required environment variables: `HW_ACCESS_KEY`, `HW_SECRET_KEY`
-(optional: `HW_REGION_NAME` default `cn-north-4`, `HW_PROJECT_ID`, `HW_SECURITY_TOKEN`).
+Run the strict check before live queries; it installs the SDK and validates credentials through IAM:
+
+```bash
+bash scripts/check_env.sh --full
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/check_env.ps1 --full
+```
+
+Expected: missing credentials fail fast with exit code 2 and a readable hint; unreachable package
+mirrors or network fail with exit code 3. Force a re-check with `--force` / `HW_ENV_CHECK_FORCE=1`.
+
+Required credentials are resolved in this order: `HW_ACCESS_KEY` / `HW_SECRET_KEY`, then
+`HUAWEI_ACCESS_KEY` / `HUAWEI_SECRET_KEY`, then `AKSK` (a single slash-joined `AK/SK` value).
+Optional: `HW_REGION_NAME` (default `cn-north-4`), `HW_PROJECT_ID`, `HW_SECURITY_TOKEN`; the
+`HUAWEI_*` aliases of the optional variables are accepted too.
 
 ## 4. Failure behaviour
 
 | Situation | Expected result |
 |-----------|-----------------|
 | `-h` / `--help` with no credentials | exit 0, no traceback |
-| Query with no `HW_ACCESS_KEY` / `HW_SECRET_KEY` | exit 2, `missing AK/SK` hint on stderr |
+| Query with no AK/SK in any supported alias (`HW_*`, `HUAWEI_*`, `AKSK`) | exit 2, `missing AK/SK` hint on stderr |
 | SDK not installed | exit 3, `run scripts/check_env.sh first` hint |
 | API or network error | exit 3, readable cause and suggestion |
 | Required parameter missing | exit 2 with the parser's usage message |

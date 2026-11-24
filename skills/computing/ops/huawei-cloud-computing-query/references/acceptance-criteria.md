@@ -23,6 +23,10 @@ bash scripts/check_env.sh
 ```
 
 ```bash
+bash scripts/check_env.sh --full
+```
+
+```bash
 .venv/bin/python3 scripts/huawei_ecs.py list_servers_details --region cn-north-4 --limit 20
 ```
 
@@ -42,6 +46,9 @@ bash scripts/check_env.sh
 | `huawei_ecs.py show_server --region cn-north-4` without `--server_id` | required parameter missing, exit 2 |
 | `scripts/ecs/list_servers_details.py` | old per-operation path removed; use the subcommand |
 
+- The default environment check is lightweight: it exits 0 on a bare host and prints
+  `SKIP: credentials not configured`; `--full` is the strict variant that installs dependencies and
+  validates credentials (missing credentials → exit 2)
 - Documented examples uniformly use the `--region <region>` form; the equivalent `--region=<region>`
   form is also accepted by argparse. This is a writing convention only, not a rejected form
 - Scripts run with the skill venv Python (see Execution Method), never with a system interpreter that
@@ -63,8 +70,12 @@ bash scripts/check_env.sh
 ## 4. Security Criteria
 
 ✅ Correct:
-- Credentials come from `HW_ACCESS_KEY` / `HW_SECRET_KEY` / `HW_SECURITY_TOKEN` / `HW_PROJECT_ID`
-- Secret values are never echoed, logged, or embedded in output
+- Credentials resolve in this order: `HW_ACCESS_KEY` / `HW_SECRET_KEY`, then
+  `HUAWEI_ACCESS_KEY` / `HUAWEI_SECRET_KEY`, then `AKSK` (a single slash-joined `AK/SK` value)
+- Optional `HW_SECURITY_TOKEN` / `HW_PROJECT_ID` are read from the same families
+  (`HUAWEI_SECURITY_TOKEN` / `HUAWEI_PROJECT_ID` are accepted aliases)
+- Secret values are never echoed, logged, or embedded in output; diagnostics report only the
+  environment variable name or source family
 
 ❌ Incorrect:
 - Hard-coded AK/SK in scripts, commands, or test cases

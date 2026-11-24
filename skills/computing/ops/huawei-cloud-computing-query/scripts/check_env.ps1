@@ -1,14 +1,29 @@
 ﻿<#
 华为云资源查询 - 环境检查前置脚本 (Windows PowerShell)
 
-结果会缓存 30 分钟（.env_check_cache），命中缓存时跳过依赖安装与 API 校验。
+默认轻量模式：只做 Python 版本、脚本语法、SDK 可导入性和凭证存在性检查；
+不创建 venv、不安装依赖、不调用云 API。缺少 AK/SK 时打印 SKIP 并以 0 退出。
+严格模式：--full，安装依赖并调用 IAM 校验凭证；缺凭证 exit 2。
+
+结果会缓存：通过默认 30 分钟，失败/跳过默认 5 分钟（.env_check_cache）。
 强制重新检查：powershell -File check_env.ps1 --force 或设置 HW_ENV_CHECK_FORCE=1
 缓存有效期：--ttl <秒> 或设置 HW_ENV_CHECK_TTL（0 表示禁用缓存）
 #>
 
-if ($args -contains "-h" -or $args -contains "--help") {
-    Write-Output "Usage: powershell -ExecutionPolicy Bypass -File scripts/check_env.ps1 [--force] [--ttl <seconds>]"
-    exit 0
+$mode = "light"
+$passthru = @()
+
+foreach ($arg in $args) {
+    switch -Regex ($arg) {
+        '^(-h|--help)$' {
+            Write-Output "Usage: powershell -ExecutionPolicy Bypass -File scripts/check_env.ps1 [--full] [--force] [--ttl <seconds>]"
+            Write-Output "Default: lightweight static check; works without credentials and exits 0."
+            exit 0
+        }
+        '^--full$'  { $mode = "full" }
+        '^--light$' { $mode = "light" }
+        default     { $passthru += $arg }
+    }
 }
 
 $ErrorActionPreference = "Stop"
@@ -16,6 +31,11 @@ $ErrorActionPreference = "Stop"
 Write-Output ""
 Write-Output "=================================================="
 Write-Output "  华为云资源查询 - 环境检查"
+if ($mode -eq "full") {
+    Write-Output "  （严格模式：安装依赖并校验凭证）"
+} else {
+    Write-Output "  （轻量模式：不创建 venv、不安装依赖；严格校验请使用 --full）"
+}
 Write-Output "=================================================="
 
 # 步骤 1：检查 Python 是否存在
@@ -74,7 +94,13 @@ Write-Output "OK: Python $versionStr >= 3.6"
 
 # 步骤 3：调用 Python 详细检查
 Write-Output ""
-Write-Output "[3/3] 执行详细检查"
+if ($mode -eq "full") {
+    Write-Output "[3/3] 执行详细检查"
+    $modeArg = "--full"
+} else {
+    Write-Output "[3/3] 执行轻量静态检查（不创建 venv、不安装依赖）"
+    $modeArg = "--light"
+}
 Write-Output "--------------------------------------------------"
 
 $scriptDir = Split-Path $MyInvocation.MyCommand.Definition -Parent
@@ -86,7 +112,7 @@ if (-not (Test-Path $pythonScript)) {
 }
 
 try {
-    & $pythonPath.Path $pythonScript @args
+    & $pythonPath.Path $pythonScript $modeArg @passthru
     $exitCode = $LASTEXITCODE
 } catch {
     Write-Output "FAIL: Python 脚本执行异常: $_"
@@ -95,6 +121,15 @@ try {
 
 Write-Output ""
 Write-Output "=================================================="
+
+if ($mode -eq "light") {
+    if ($exitCode -eq 0) {
+        Write-Output "✓ 轻量环境检查通过（严格校验请执行 scripts/check_env.ps1 --full）"
+        exit 0
+    }
+    Write-Output "✗ 轻量环境检查未通过（exit $exitCode），请按提示修复"
+    exit $exitCode
+}
 
 if ($exitCode -eq 0) {
     Write-Output "✓ 环境检查通过"

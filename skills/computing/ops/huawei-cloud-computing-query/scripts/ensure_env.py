@@ -3,7 +3,7 @@
 华为云资源查询 - 环境确保脚本
 
 一键完成所有环境准备并验证可用性，执行后即可直接运行查询脚本：
-  1. 校验必填环境变量 HW_ACCESS_KEY / HW_SECRET_KEY
+  1. 校验必填凭据 HW_ACCESS_KEY/HW_SECRET_KEY、HUAWEI_ACCESS_KEY/HUAWEI_SECRET_KEY 或 AKSK=AK/SK
   2. 检查 Python 版本是否满足最低要求，不满足则给出手动安装提示
   3. 安装 Python 依赖（支持 --upgrade）
   4. 校验华为云 SDK 是否可导入
@@ -40,6 +40,7 @@ except (AttributeError, ValueError):
 
 CACHE_FILE_NAME = ".env_check_cache"
 DEFAULT_CACHE_TTL = 1800  # 秒，默认 30 分钟内复用上次通过的环境检查结果
+DEFAULT_FAILURE_CACHE_TTL = 300  # 秒，失败/跳过结果只缓存 5 分钟，避免重跑放大成本
 
 # 全局：是否强制刷新缓存
 FORCE_REFRESH = False
@@ -87,12 +88,19 @@ def _cache_path():
     return os.path.join(get_project_root(), CACHE_FILE_NAME)
 
 
+def _resolved_credentials():
+    """通过 config 的统一入口解析凭据（含 HUAWEI_* / AKSK 回退）。"""
+    from config import resolve_credentials
+    return resolve_credentials()
+
+
 def _credential_fingerprint():
     """对凭据做不可逆指纹，用于判断凭据是否变更（不落盘明文）。"""
+    creds = _resolved_credentials()
     raw = "|".join([
-        os.getenv("HW_ACCESS_KEY", ""),
-        os.getenv("HW_SECRET_KEY", ""),
-        os.getenv("HW_SECURITY_TOKEN", ""),
+        creds["ak"],
+        creds["sk"],
+        creds["security_token"],
     ])
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
@@ -105,21 +113,41 @@ def get_cache_ttl():
     return max(0, ttl)
 
 
+def get_failure_cache_ttl():
+    """失败/跳过结果使用短 TTL，避免旧失败长期掩盖配置修复。"""
+    try:
+        ttl = int(os.getenv("HW_ENV_CHECK_FAIL_TTL", DEFAULT_FAILURE_CACHE_TTL))
+    except ValueError:
+        ttl = DEFAULT_FAILURE_CACHE_TTL
+    return max(0, ttl)
+
+
 def _cache_miss(reason):
     """打印缓存未命中原因并返回 None（未命中不静默）。"""
     print(f"  环境检查缓存未命中: {reason}")
     return None
 
 
-def read_fresh_cache():
+def _entry_ttl(cache):
+    """取缓存条目写入时的 TTL，并允许当前配置把它调小。"""
+    configured = get_cache_ttl()
+    if configured == 0:
+        return 0
+    try:
+        stored = int(cache.get("ttl", configured))
+    except (TypeError, ValueError):
+        stored = configured
+    return max(0, min(stored, configured))
+
+
+def read_fresh_cache(mode=None):
     """读取并校验缓存；命中返回缓存字典，否则返回 None。
 
-    命中条件：TTL 内、region 一致、凭据指纹一致、解释器仍存在且与写入时一致。
+    命中条件：TTL 内、模式一致、region 一致、凭据指纹一致、解释器仍存在且与写入时一致。
     缓存绑定实际解释器 ``sys.executable``，因此宿主已在 venv 中（skill 目录无
     ``.venv``）时同样可以命中。
     """
-    ttl = get_cache_ttl()
-    if ttl == 0:
+    if get_cache_ttl() == 0:
         return _cache_miss("缓存已禁用（TTL=0）")
     path = _cache_path()
     if not os.path.isfile(path):
@@ -130,10 +158,17 @@ def read_fresh_cache():
     except Exception:
         return _cache_miss("缓存文件不可读或已损坏")
 
+    entry_mode = cache.get("mode") or "full"
+    if mode and entry_mode != mode:
+        return _cache_miss(f"缓存模式不一致（缓存={entry_mode}，当前={mode}）")
+
+    ttl = _entry_ttl(cache)
+    if ttl == 0:
+        return _cache_miss("缓存已禁用（TTL=0）")
     checked_at = cache.get("checked_at") or 0
     if time.time() - checked_at > ttl:
         return _cache_miss(f"缓存已过期（超过 {ttl}s）")
-    if cache.get("region") != os.getenv("HW_REGION_NAME", "cn-north-4"):
+    if cache.get("region") != _resolved_credentials()["region"]:
         return _cache_miss("region 已变化")
     if cache.get("credential_fingerprint") != _credential_fingerprint():
         return _cache_miss("凭据指纹已变化")
@@ -145,10 +180,18 @@ def read_fresh_cache():
     return cache
 
 
-def write_cache(project_id):
+def write_cache(project_id="", mode="full", status="ok", reason="", exit_code=0, ttl=None):
+    """写入环境检查结果（成功 30 分钟，失败/跳过默认 5 分钟）。"""
+    if ttl is None:
+        ttl = get_cache_ttl() if status == "ok" else get_failure_cache_ttl()
     cache = {
         "checked_at": time.time(),
-        "region": os.getenv("HW_REGION_NAME", "cn-north-4"),
+        "mode": mode,
+        "status": status,
+        "reason": reason,
+        "exit_code": int(exit_code),
+        "ttl": int(ttl),
+        "region": _resolved_credentials()["region"],
         "credential_fingerprint": _credential_fingerprint(),
         "python": sys.executable,
         "project_id": project_id or "",
@@ -162,13 +205,21 @@ def write_cache(project_id):
 
 def print_cache_hit(cache):
     checked_at = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(cache.get("checked_at", 0)))
-    ttl = get_cache_ttl()
+    mode = cache.get("mode") or "full"
+    status = cache.get("status") or "ok"
+    ttl = _entry_ttl(cache)
+    status_label = {"ok": "通过", "skip": "跳过", "fail": "未通过"}.get(status, status)
     print("=" * 50)
     print("  华为云资源查询 - 环境确保")
     print("=" * 50)
     print()
-    print(f"  命中环境检查缓存（最近一次通过: {checked_at}，有效期 {ttl}s）")
-    print("  跳过依赖安装与凭证/服务 API 校验")
+    print(f"  命中环境检查缓存（模式: {mode}，状态: {status_label}，最近一次: {checked_at}，有效期 {ttl}s）")
+    if status == "ok":
+        print("  跳过依赖安装与凭证/服务 API 校验")
+    else:
+        reason = cache.get("reason") or ""
+        for line in [part.strip() for part in reason.split(";") if part.strip()]:
+            print(f"  {line}")
     project_id = cache.get("project_id") or ""
     if project_id:
         os.environ["HW_PROJECT_ID"] = project_id
@@ -273,15 +324,16 @@ def get_project_id(region):
     :param region: 区域名称，如 cn-north-4
     :return: 项目 ID 字符串
     """
-    from config import load_credentials, build_http_config
+    from config import build_http_config
     from huaweicloudsdkcore.auth.credentials import BasicCredentials
     from huaweicloudsdkiam.v3 import IamClient
     from huaweicloudsdkiam.v3.model import KeystoneListProjectsRequest
     from huaweicloudsdkiam.v3.region.iam_region import IamRegion
 
-    ak = os.getenv("HW_ACCESS_KEY", "")
-    sk = os.getenv("HW_SECRET_KEY", "")
-    security_token = os.getenv("HW_SECURITY_TOKEN", "")
+    creds = _resolved_credentials()
+    ak = creds["ak"]
+    sk = creds["sk"]
+    security_token = creds["security_token"]
 
     try:
         http_config = build_http_config()
@@ -338,23 +390,23 @@ def get_project_root():
 
 # ── 步骤 1：校验环境变量 ─────────────────────────────────────────────
 
-REQUIRED_ENV = ["HW_ACCESS_KEY", "HW_SECRET_KEY"]
-
-
 def check_env_vars():
-    """校验必填环境变量，只检查是否设置，绝不输出值"""
+    """校验必填凭据，只报告变量名与来源，绝不输出值"""
     print("\n[1/5] 校验全局环境变量")
 
-    all_ok = True
-    for var in REQUIRED_ENV:
-        if os.getenv(var):
-            print(f" {var} 已设置")
-        else:
-            print(f" {var} 未设置")
-            all_ok = False
+    creds = _resolved_credentials()
+    if creds["ak"]:
+        print(f" AK 已设置（来源: {creds['ak_source']}）")
+    else:
+        print(" AK 未设置（尝试 HW_ACCESS_KEY / HUAWEI_ACCESS_KEY / AKSK）")
+    if creds["sk"]:
+        print(f" SK 已设置（来源: {creds['sk_source']}）")
+    else:
+        print(" SK 未设置（尝试 HW_SECRET_KEY / HUAWEI_SECRET_KEY / AKSK）")
 
-    if not all_ok:
-        print("\n  必需的全局环境变量未设置，请配置 HW_ACCESS_KEY 和 HW_SECRET_KEY")
+    if not (creds["ak"] and creds["sk"]):
+        print("\n  必需的全局环境变量未设置，请配置 HW_ACCESS_KEY / HW_SECRET_KEY、"
+              "HUAWEI_ACCESS_KEY / HUAWEI_SECRET_KEY，或 AKSK=AK/SK")
         return False
 
     print("  全局环境变量校验通过")
@@ -391,6 +443,115 @@ def check_python():
     fail(f"Python {version_str} < {MIN_PYTHON[0]}.{MIN_PYTHON[1]}")
     print_manual_python_help()
     return False
+
+
+# ── 轻量模式（默认；无凭证也可成功退出） ─────────────────────────────
+
+LIGHT_SKIP_CREDENTIALS = "SKIP: credentials not configured"
+
+
+def check_scripts_compile():
+    """编译 scripts/ 下的入口脚本，捕获语法错误（不导入、不联网）。"""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    py_files = sorted(
+        os.path.join(script_dir, name)
+        for name in os.listdir(script_dir)
+        if name.endswith(".py")
+    )
+    print(f"  正在编译 {len(py_files)} 个脚本（本地语法检查）...", flush=True)
+    rc, out, err = run_cmd(
+        [sys.executable, "-m", "py_compile"] + py_files,
+        timeout=step_timeout(20),
+    )
+    if rc == 0:
+        ok("入口脚本语法检查通过")
+        return True
+    fail("入口脚本存在语法错误")
+    detail = err or out
+    if detail:
+        print("  " + detail.replace("\n", "\n  ")[-600:], flush=True)
+    return False
+
+
+def check_sdk_light():
+    """探测 SDK 是否已安装；缺失只提示跳过，不安装、不算失败。"""
+    missing = []
+    for mod in SDK_MODULES:
+        try:
+            __import__(mod)
+        except ImportError:
+            missing.append(mod)
+    if not missing:
+        ok(f"{len(SDK_MODULES)} 个 SDK 模块可导入")
+        return True
+    shown = ", ".join(missing[:3]) + (" ..." if len(missing) > 3 else "")
+    print(f"  SKIP: SDK 未安装（{shown}）；--full 会安装依赖", flush=True)
+    return False
+
+
+def run_light_checks():
+    """默认轻量入口：仅静态检查，不创建 venv、不安装依赖、不调用云 API。"""
+    print("=" * 50, flush=True)
+    print("  华为云资源查询 - 轻量环境检查", flush=True)
+    print("  不创建 venv、不安装依赖、不调用云 API", flush=True)
+    print("=" * 50, flush=True)
+
+    print("\n[1/3] 检查 Python 版本", flush=True)
+    version = sys.version_info[:2]
+    version_str = f"{version[0]}.{version[1]}"
+    info(f"当前 Python: {version_str}")
+    if version < MIN_PYTHON:
+        fail(f"Python {version_str} < {MIN_PYTHON[0]}.{MIN_PYTHON[1]}")
+        print_manual_python_help()
+        reason = f"FAIL: Python {version_str} < {MIN_PYTHON[0]}.{MIN_PYTHON[1]}"
+        write_cache(mode="light", status="fail", reason=reason, exit_code=1)
+        return 1
+    ok(f"Python {version_str} >= {MIN_PYTHON[0]}.{MIN_PYTHON[1]}")
+
+    print("\n[2/3] 编译入口脚本", flush=True)
+    compile_ok = check_scripts_compile()
+
+    print("\n[3/3] 探测华为云 SDK", flush=True)
+    sdk_ok = check_sdk_light()
+
+    skips = []
+    if not sdk_ok:
+        skips.append("SKIP: SDK not installed")
+    creds = _resolved_credentials()
+    if not (creds["ak"] and creds["sk"]):
+        print(f"  {LIGHT_SKIP_CREDENTIALS}", flush=True)
+        skips.append(LIGHT_SKIP_CREDENTIALS)
+    else:
+        print(f"  AK/SK 已设置（AK 来源: {creds['ak_source']}，SK 来源: {creds['sk_source']}；"
+              "轻量模式不调用 API）", flush=True)
+
+    exit_code = 0 if compile_ok else 3
+    if exit_code != 0:
+        status = "fail"
+        reason = "FAIL: entry scripts failed the syntax check"
+    elif skips:
+        status = "skip"
+        reason = "; ".join(skips)
+    else:
+        status = "ok"
+        reason = ""
+
+    ttl_used = get_cache_ttl() if status == "ok" else get_failure_cache_ttl()
+    write_cache(mode="light", status=status, reason=reason, exit_code=exit_code)
+
+    print()
+    print("=" * 50, flush=True)
+    if exit_code == 0:
+        print("  轻量环境检查完成", flush=True)
+        if skips:
+            print("  存在跳过项；完整校验（安装依赖 + 校验凭据）请执行: bash scripts/check_env.sh --full", flush=True)
+        else:
+            print("  完整校验请执行: bash scripts/check_env.sh --full", flush=True)
+    else:
+        print("  轻量环境检查未通过：请先修复入口脚本语法错误", flush=True)
+    print(f"  结果已缓存（有效期 {ttl_used}s）", flush=True)
+    print("=" * 50, flush=True)
+    return exit_code
 
 
 # ── 步骤 3：安装依赖 ─────────────────────────────────────────────────
@@ -640,6 +801,10 @@ def skip_step(step_num, label):
 
 def parse_args():
     parser = argparse.ArgumentParser(description="华为云资源查询 - 环境确保脚本")
+    parser.add_argument("--light", action="store_true",
+                        help="仅做轻量静态检查（不创建 venv、不安装依赖），无凭证时 exit 0")
+    parser.add_argument("--full", action="store_true",
+                        help="执行完整严格校验（安装依赖并校验凭证）；缺凭证 exit 2")
     parser.add_argument("--upgrade", action="store_true",
                         help="强制升级所有依赖到最新版本")
     parser.add_argument("--force", action="store_true",
@@ -649,29 +814,26 @@ def parse_args():
     return parser.parse_args()
 
 
-def main():
-    global UPGRADE, FORCE_REFRESH
-    args = parse_args()
-    UPGRADE = args.upgrade
-    FORCE_REFRESH = args.force or os.getenv("HW_ENV_CHECK_FORCE", "") == "1" or args.upgrade
-    if args.ttl is not None:
-        os.environ["HW_ENV_CHECK_TTL"] = str(args.ttl)
+def run_full_checks():
+    """严格模式：安装依赖、校验 SDK 并调用 IAM 验证凭据；失败结果写短 TTL 缓存。"""
+    # 缓存命中则走快速路径（成功/失败都复用，避免重复创建 venv 与安装依赖）
+    if not FORCE_REFRESH:
+        cache = read_fresh_cache(mode="full")
+        if cache:
+            print_cache_hit(cache)
+            return int(cache.get("exit_code", 0) or 0)
 
     # 轻量前置：缺少凭证时立即返回，避免无谓的 venv 创建与依赖安装
-    missing = [name for name in REQUIRED_ENV if not os.getenv(name)]
-    if missing:
-        print("FAIL: 未设置 " + ", ".join(missing) + "；请先配置 HW_ACCESS_KEY / HW_SECRET_KEY", file=sys.stderr)
+    creds = _resolved_credentials()
+    if not (creds["ak"] and creds["sk"]):
+        reason = ("FAIL: 未设置 AK/SK；请先配置 HW_ACCESS_KEY / HW_SECRET_KEY、"
+                  "HUAWEI_ACCESS_KEY / HUAWEI_SECRET_KEY，或 AKSK=AK/SK")
+        print(reason, file=sys.stderr)
+        write_cache(mode="full", status="fail", reason=reason, exit_code=2)
         return 2
 
     # 若系统 Python 受 PEP 668 保护，自动创建 venv 并 reexec
     _ensure_venv_and_reexec()
-
-    # 缓存命中则走快速路径（不重复安装依赖、不重复调用 API）
-    if not FORCE_REFRESH:
-        cache = read_fresh_cache()
-        if cache:
-            print_cache_hit(cache)
-            return 0
 
     print("=" * 50, flush=True)
     print("  华为云资源查询 - 环境确保", flush=True)
@@ -724,7 +886,7 @@ def main():
         print("  可以正常使用查询脚本", flush=True)
 
         # 自动获取 project_id 并导出到环境变量（可选步骤，预算不足时跳过）
-        region = os.getenv("HW_REGION_NAME", "cn-north-4")
+        region = _resolved_credentials()["region"]
         project_id = ""
         if remaining_budget() > 5:
             project_id = get_project_id(region)
@@ -739,14 +901,37 @@ def main():
                 f.write(project_id)
 
         # 写入环境检查缓存，后续调用走快速路径
-        write_cache(project_id)
+        write_cache(project_id, mode="full", status="ok", exit_code=0)
         print(f"  环境检查结果已缓存（有效期 {get_cache_ttl()}s）", flush=True)
-    else:
-        print("  环境确保未完成（exit 3），请按上述提示修复后重新运行", flush=True)
-        print("  常见原因: 依赖镜像/网络不可达、SDK 未安装或凭据无效", flush=True)
-    print("=" * 50, flush=True)
+        print("=" * 50, flush=True)
+        return 0
 
-    return 0 if all(results) else 3
+    reason = "FAIL: 环境确保未完成（依赖镜像/网络不可达、SDK 未安装或凭据无效）"
+    print("  环境确保未完成（exit 3），请按上述提示修复后重新运行", flush=True)
+    print("  常见原因: 依赖镜像/网络不可达、SDK 未安装或凭据无效", flush=True)
+    print("=" * 50, flush=True)
+    write_cache(mode="full", status="fail", reason=reason, exit_code=3)
+    print(f"  失败结果已缓存（有效期 {get_failure_cache_ttl()}s，--force 可立即重查）", flush=True)
+    return 3
+
+
+def main():
+    global UPGRADE, FORCE_REFRESH
+    args = parse_args()
+    UPGRADE = args.upgrade
+    FORCE_REFRESH = args.force or os.getenv("HW_ENV_CHECK_FORCE", "") == "1" or args.upgrade
+    if args.ttl is not None:
+        os.environ["HW_ENV_CHECK_TTL"] = str(args.ttl)
+
+    if args.light and not args.full:
+        if not FORCE_REFRESH:
+            cache = read_fresh_cache(mode="light")
+            if cache:
+                print_cache_hit(cache)
+                return int(cache.get("exit_code", 0) or 0)
+        return run_light_checks()
+
+    return run_full_checks()
 
 
 if __name__ == "__main__":

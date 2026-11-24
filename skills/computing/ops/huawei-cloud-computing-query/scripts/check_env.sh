@@ -1,12 +1,37 @@
 #!/bin/bash
 # 华为云资源查询 - 环境检查前置脚本
+#
+# 默认轻量模式：只做 Python 版本、脚本语法、SDK 可导入性和凭证存在性检查；
+# 不创建 venv、不安装依赖、不调用云 API。缺少 AK/SK 时打印 SKIP 并以 0 退出，
+# 因此可以安全地在无凭证裸机或评测环境中作为文档主推命令。
+# 严格模式：--full，安装依赖并调用 IAM 校验凭证；缺凭证 exit 2，网络/镜像不可达 exit 3。
 
-if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
-    echo "Usage: bash scripts/check_env.sh [--force] [--ttl <seconds>] [--upgrade]"
-    echo "Checks Python, dependencies, SDK and credentials; results are cached for 30 minutes."
-    exit 0
+MODE="light"
+ARGS=()
+
+usage() {
+    echo "Usage: bash scripts/check_env.sh [--full] [--force] [--ttl <seconds>] [--upgrade]"
+    echo "Default: lightweight static check; works without credentials and exits 0."
+    echo "  --full     strict check: install dependencies and validate credentials"
+    echo "  --force    ignore the cached environment-check result"
+    echo "  --ttl <s>  cache TTL in seconds (0 disables the cache)"
+}
+
+for arg in "$@"; do
+    case "$arg" in
+        -h|--help) usage; exit 0 ;;
+        --full) MODE="full" ;;
+        --light) MODE="light" ;;
+        *) ARGS+=("$arg") ;;
+    esac
+done
+
+echo ""
+if [ "$MODE" = "full" ]; then
+    echo "  （严格模式：安装依赖并校验凭证）"
+else
+    echo "  （轻量模式：不创建 venv、不安装依赖；严格校验请使用 --full）"
 fi
-
 
 # 步骤 1：检查 Python 是否存在
 echo ""
@@ -81,7 +106,7 @@ fi
 echo "OK: Python ${PYTHON_VERSION} >= 3.6"
 
 # 步骤 3：调用 Python 详细检查
-# 总超时（秒）：仅作兜底，分步超时与可读报错由 ensure_env.py 负责
+# 总超时（秒）：轻量/严格模式统一兜底，分步超时与可读报错由 ensure_env.py 负责
 TOTAL_TIMEOUT="${HW_ENV_CHECK_TIMEOUT:-120}"
 case "${TOTAL_TIMEOUT}" in
     ''|*[!0-9]*) TOTAL_TIMEOUT=120 ;;
@@ -90,9 +115,16 @@ export HW_ENV_CHECK_TIMEOUT="${TOTAL_TIMEOUT}"
 export HW_ENV_CHECK_START_TS="${HW_ENV_CHECK_START_TS:-$(date +%s)}"
 export PYTHONUNBUFFERED=1
 
-echo ""
-echo "[3/3] 执行详细检查"
-echo "  首次执行可能创建虚拟环境并安装依赖，最长等待 ${TOTAL_TIMEOUT}s（可用 HW_ENV_CHECK_TIMEOUT 调整）"
+if [ "$MODE" = "full" ]; then
+    MODE_ARG="--full"
+    echo ""
+    echo "[3/3] 执行详细检查"
+    echo "  首次执行可能创建虚拟环境并安装依赖，最长等待 ${TOTAL_TIMEOUT}s（可用 HW_ENV_CHECK_TIMEOUT 调整）"
+else
+    MODE_ARG="--light"
+    echo ""
+    echo "[3/3] 执行轻量静态检查（不创建 venv、不安装依赖，最长等待 ${TOTAL_TIMEOUT}s）"
+fi
 echo "--------------------------------------------------"
 
 PYTHON_SCRIPT="${SCRIPT_DIR}/ensure_env.py"
@@ -104,8 +136,9 @@ if [ ! -f "$PYTHON_SCRIPT" ]; then
 fi
 
 if command -v timeout >/dev/null 2>&1; then
-    # 透传参数（--force 强制重查、--ttl/--upgrade 等），环境检查结果默认缓存 30 分钟
-    timeout --signal=TERM "${TOTAL_TIMEOUT}s" "${PYTHON_CMD}" "${PYTHON_SCRIPT}" "$@"
+    # 透传参数（--force 强制重查、--ttl/--upgrade 等），结果默认缓存；
+    # 失败/跳过结果使用短 TTL（ensure_env.py 内默认 300s），避免重复全量重跑。
+    timeout --signal=TERM "${TOTAL_TIMEOUT}s" "${PYTHON_CMD}" "${PYTHON_SCRIPT}" "${MODE_ARG}" "${ARGS[@]}"
     EXIT_CODE=$?
     TIMED_OUT=0
     if [ "${EXIT_CODE}" -eq 124 ] || [ "${EXIT_CODE}" -eq 137 ] || [ "${EXIT_CODE}" -eq 143 ]; then
@@ -113,7 +146,7 @@ if command -v timeout >/dev/null 2>&1; then
     fi
 else
     # 没有 timeout 命令时的可移植看门狗
-    "${PYTHON_CMD}" "${PYTHON_SCRIPT}" "$@" &
+    "${PYTHON_CMD}" "${PYTHON_SCRIPT}" "${MODE_ARG}" "${ARGS[@]}" &
     CHILD_PID=$!
     ( sleep "${TOTAL_TIMEOUT}"; kill -TERM "${CHILD_PID}" 2>/dev/null ) &
     WATCHDOG_PID=$!
@@ -136,9 +169,18 @@ if [ "${TIMED_OUT}" -eq 1 ]; then
     exit 3
 fi
 
+if [ "$MODE" = "light" ]; then
+    if [ "${EXIT_CODE}" -eq 0 ]; then
+        echo "✓ 轻量环境检查通过（严格校验请执行 bash scripts/check_env.sh --full）"
+        exit 0
+    fi
+    echo "✗ 轻量环境检查未通过（exit ${EXIT_CODE}），请按上述提示修复"
+    exit "${EXIT_CODE}"
+fi
+
 if [ "${EXIT_CODE}" -eq 0 ]; then
     echo "✓ 环境检查通过"
-    
+
     # 读取自动获取的 project_id 并导出
     PROJECT_ID_FILE="${PROJECT_ROOT}/.project_id"
     if [ -f "$PROJECT_ID_FILE" ]; then
@@ -147,7 +189,7 @@ if [ "${EXIT_CODE}" -eq 0 ]; then
     fi
     exit 0
 elif [ "${EXIT_CODE}" -eq 2 ]; then
-    echo "✗ 缺少凭证，请设置 HW_ACCESS_KEY / HW_SECRET_KEY 后重试"
+    echo "✗ 缺少凭证，请设置 HW_ACCESS_KEY / HW_SECRET_KEY、HUAWEI_ACCESS_KEY / HUAWEI_SECRET_KEY，或 AKSK=AK/SK 后重试"
     exit 2
 else
     echo "✗ 环境未就绪（exit 3），请按上述提示修复"

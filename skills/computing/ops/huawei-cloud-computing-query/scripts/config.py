@@ -9,22 +9,116 @@ except ImportError:
     pass
 
 
+DEFAULT_REGION = "cn-north-4"
+
+# 凭据别名按优先级排列：平台注入的 HUAWEI_* / AKSK 与本地 HW_* 等价。
+# AKSK 是单个环境变量，值为 "AK/SK"（斜杠拼接，只取第一个斜杠拆分）。
+CREDENTIAL_FAMILIES = (
+    ("HW_ACCESS_KEY", "HW_SECRET_KEY"),
+    ("HUAWEI_ACCESS_KEY", "HUAWEI_SECRET_KEY"),
+    ("AKSK", "AKSK"),
+    ("HUAWEICLOUD_SDK_AK", "HUAWEICLOUD_SDK_SK"),
+    ("HUAWEICLOUD_ACCESS_KEY", "HUAWEICLOUD_SECRET_KEY"),
+)
+SECURITY_TOKEN_ENV_ALIASES = (
+    "HW_SECURITY_TOKEN",
+    "HUAWEI_SECURITY_TOKEN",
+    "HUAWEICLOUD_SDK_SECURITY_TOKEN",
+    "HUAWEICLOUD_SECURITY_TOKEN",
+)
+REGION_ENV_ALIASES = ("HW_REGION_NAME", "HUAWEI_REGION_NAME", "HUAWEICLOUD_REGION")
+PROJECT_ID_ENV_ALIASES = (
+    "HW_PROJECT_ID",
+    "HUAWEI_PROJECT_ID",
+    "HUAWEICLOUD_SDK_PROJECT_ID",
+    "HUAWEICLOUD_PROJECT_ID",
+)
+
+CREDENTIAL_HELP = (
+    "HW_ACCESS_KEY / HW_SECRET_KEY, HUAWEI_ACCESS_KEY / HUAWEI_SECRET_KEY, "
+    "or AKSK=AK/SK"
+)
+
+
+def _first_env(*names):
+    """按顺序返回第一个非空环境变量值，忽略纯空白值。"""
+    for name in names:
+        value = os.getenv(name, "")
+        if value and value.strip():
+            return value.strip()
+    return ""
+
+
+def _aksk_parts():
+    """把 ``AKSK="AK/SK"`` 拆成 AK 与 SK（不落日志）。"""
+    raw = os.getenv("AKSK", "")
+    if not raw:
+        return "", ""
+    if "/" in raw:
+        ak, sk = raw.split("/", 1)
+        return ak.strip(), sk.strip()
+    return raw.strip(), ""
+
+
+def resolve_credentials():
+    """按统一优先级解析 AK/SK 与可选 region/token，返回来源名便于诊断。
+
+    优先级：HW_ACCESS_KEY → HUAWEI_ACCESS_KEY → AKSK，SK 同序回退。
+    完整的一对凭据永远优先于更早出现的半对；不会把不同变量族的 AK 与 SK
+    随意拼在一起（仅在完全没有完整一对时才逐项回退）。
+    """
+    ak = ""
+    sk = ""
+    ak_source = ""
+    sk_source = ""
+
+    for ak_name, sk_name in CREDENTIAL_FAMILIES:
+        if ak_name == "AKSK":
+            candidate_ak, candidate_sk = _aksk_parts()
+            source_ak = source_sk = "AKSK"
+        else:
+            candidate_ak = (os.getenv(ak_name, "") or "").strip()
+            candidate_sk = (os.getenv(sk_name, "") or "").strip()
+            source_ak, source_sk = ak_name, sk_name
+
+        if candidate_ak and candidate_sk:
+            ak, sk, ak_source, sk_source = candidate_ak, candidate_sk, source_ak, source_sk
+            break
+        if not ak and candidate_ak:
+            ak, ak_source = candidate_ak, source_ak
+        if not sk and candidate_sk:
+            sk, sk_source = candidate_sk, source_sk
+
+    return {
+        "ak": ak,
+        "sk": sk,
+        "security_token": _first_env(*SECURITY_TOKEN_ENV_ALIASES),
+        "region": _first_env(*REGION_ENV_ALIASES) or DEFAULT_REGION,
+        "ak_source": ak_source,
+        "sk_source": sk_source,
+    }
+
+
+def has_credentials(creds=None):
+    """判断是否同时解析到 AK 与 SK。"""
+    creds = creds or resolve_credentials()
+    return bool(creds["ak"] and creds["sk"])
+
+
 def load_credentials():
     """从环境变量加载华为云凭据
 
     支持永久 AK/SK 和临时 AK/SK（含 SecurityToken）。
-    设置 HW_SECURITY_TOKEN 环境变量即可启用临时凭证模式。
+    AK/SK 解析顺序见 :func:`resolve_credentials`；设置
+    ``HW_SECURITY_TOKEN``（或 ``HUAWEI_SECURITY_TOKEN``）即可启用临时凭证模式。
     """
-    ak = os.getenv("HW_ACCESS_KEY", "")
-    sk = os.getenv("HW_SECRET_KEY", "")
-    region = os.getenv("HW_REGION_NAME", "cn-north-4")
-    security_token = os.getenv("HW_SECURITY_TOKEN", "")
+    creds = resolve_credentials()
 
-    if not ak or not sk:
-        print("未配置 AK/SK，请设置环境变量 HW_ACCESS_KEY 和 HW_SECRET_KEY", file=sys.stderr)
+    if not has_credentials(creds):
+        print(f"未配置 AK/SK，请设置环境变量 {CREDENTIAL_HELP}", file=sys.stderr)
         raise SystemExit(2)
 
-    return ak, sk, region, security_token
+    return creds["ak"], creds["sk"], creds["region"], creds["security_token"]
 
 
 def load_credentials_optional():
@@ -33,11 +127,8 @@ def load_credentials_optional():
     用于公开接口（如 API 版本查询），不要求 AK/SK 必须存在。
     如果 AK/SK 未配置，返回空字符串，由调用方决定如何处理。
     """
-    ak = os.getenv("HW_ACCESS_KEY", "")
-    sk = os.getenv("HW_SECRET_KEY", "")
-    region = os.getenv("HW_REGION_NAME", "cn-north-4")
-    security_token = os.getenv("HW_SECURITY_TOKEN", "")
-    return ak, sk, region, security_token
+    creds = resolve_credentials()
+    return creds["ak"], creds["sk"], creds["region"], creds["security_token"]
 
 
 def _get_proxy_url():
@@ -85,12 +176,13 @@ def get_project_id(region, ak=None, sk=None, security_token=None):
     """通过 IAM API 根据区域名自动获取项目 ID。
     凭据参数可选，不传则从环境变量加载。
     """
+    creds = resolve_credentials()
     if ak is None:
-        ak = os.getenv("HW_ACCESS_KEY", "")
+        ak = creds["ak"]
     if sk is None:
-        sk = os.getenv("HW_SECRET_KEY", "")
+        sk = creds["sk"]
     if security_token is None:
-        security_token = os.getenv("HW_SECURITY_TOKEN", "")
+        security_token = creds["security_token"]
 
     from huaweicloudsdkcore.auth.credentials import BasicCredentials
     from huaweicloudsdkiam.v3 import IamClient
@@ -133,7 +225,7 @@ def _error_cause(text):
                 "确认该 AK/SK 的 project 与 --region 是否一致（project/region 一一对应）；"
                 "若使用 IAM 子用户，检查其是否被授权访问该区域的项目，详见 references/iam-policies.md")
     if "401" in text or "unauthorized" in lowered or "apigw.0301" in lowered:
-        return ("AK/SK 无效或已过期（401 Unauthorized）", "检查 HW_ACCESS_KEY / HW_SECRET_KEY / HW_SECURITY_TOKEN 是否正确且未过期")
+        return ("AK/SK 无效或已过期（401 Unauthorized）", "检查 HW_ACCESS_KEY / HW_SECRET_KEY / HW_SECURITY_TOKEN（或 HUAWEI_ACCESS_KEY / HUAWEI_SECRET_KEY / AKSK）是否正确且未过期")
     if "403" in text or "forbidden" in lowered or "not authorized" in lowered:
         return ("权限不足（403 Forbidden）", "为该账号补充对应服务的只读权限（CCE 可授予系统策略 CCEReadOnlyPolicy），详见 references/iam-policies.md")
     if "404" in text or "not found" in lowered:

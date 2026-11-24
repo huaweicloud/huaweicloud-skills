@@ -2,7 +2,7 @@
 name: huawei-cloud-computing-query
 description: |
   Queries Huawei Cloud computing resources (ECS/BMS/IMS/AS/CCE), Covers ECS instances, flavors, keypairs, quotas, server groups, block devices, NICs, VNC console, BMS bare metal servers/flavors/quotas, IMS images/OS versions/members/quotas, AS scaling groups/configs/policies/activity logs/lifecycle hooks/warm pools/quotas, and CCE clusters/nodes/node pool details/node pool tags/cluster tags/quotas (read-only). No write operations. Cross-category: for cloud disks (EVS) use the storage query skill; for ECS create/start/stop/reboot/delete/resize use the ECS management skill; for CCE workloads/namespaces/events use the CCE kubectl-based skills. Use this skill when the user needs to query ECS instance details, list flavors, check BMS availability, browse images, view auto-scaling group/policy status, or inventory CCE clusters and nodes. Triggers include: "弹性云服务器", "ECS", "裸金属", "BMS", "镜像", "IMS", "弹性伸缩", "AS", "伸缩组", "伸缩策略", "规格查询", "CCE", "云容器引擎", "集群", "节点", "节点池", "flavor", "instance", "image", "scaling", "cluster", "node".
-triggers: [弹性云服务器, ECS, 裸金属, BMS, 镜像, IMS, 弹性伸缩, AS, 伸缩组, 伸缩策略, 规格查询, CCE, 云容器引擎, 集群, 节点, 节点池, flavor, instance, image, scaling, cluster, node]
+triggers: [弹性云服务器, ECS, 裸金属, BMS, 镜像, IMS, 弹性伸缩, AS, 伸缩组, 伸缩策略, 规格查询, CCE, 云容器引擎, 集群, 节点池, flavor, instance, image, scaling]
 ---
 # Huawei Cloud Resource Query
 
@@ -53,8 +53,11 @@ without the `.py` suffix; for example `scripts/huawei_ecs.py list_servers_detail
 
 ## Prerequisites
 
-Run the environment check once per session. A passing result is cached for 30 minutes in
-`.env_check_cache`, so repeated calls are cheap.
+Run the lightweight environment check once per session. It is safe on a bare host with neither
+credentials nor the SDK: it checks Python, compiles the entry scripts and probes the SDK imports,
+prints `SKIP: credentials not configured` when AK/SK are absent, and exits 0 in under 10 seconds.
+Results are cached in `.env_check_cache`; a pass is reused for 30 minutes and a skip/failure for 5
+minutes, so repeated calls stay cheap.
 
 ```bash
 bash scripts/check_env.sh
@@ -64,13 +67,22 @@ bash scripts/check_env.sh
 powershell -ExecutionPolicy Bypass -File scripts/check_env.ps1
 ```
 
-The check runs light credential and Python checks first, then dependency, SDK and service checks.
-Missing credentials fail fast with exit code 2; a host with credentials but unreachable package
-mirrors or network fails with exit code 3 and a readable hint. The first run may create a virtual
-environment and install the SDK packages, which can take tens of seconds; the whole run is bounded by
-a total timeout (`HW_ENV_CHECK_TIMEOUT`, default 120 seconds) so it never waits silently. Force a
-re-check with `--force` or `HW_ENV_CHECK_FORCE=1`; change the cache TTL with `--ttl <seconds>` or
-`HW_ENV_CHECK_TTL`.
+Run the strict check only when you are about to execute live queries; it creates the virtual
+environment, installs the SDK packages and validates the credentials through IAM.
+
+```bash
+bash scripts/check_env.sh --full
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/check_env.ps1 --full
+```
+
+The strict check fails fast with exit code 2 when credentials are missing; a host with credentials but
+unreachable package mirrors or network fails with exit code 3 and a readable hint. The first strict run
+may take tens of seconds; the whole run is bounded by a total timeout (`HW_ENV_CHECK_TIMEOUT`, default
+120 seconds) so it never waits silently. Force a re-check with `--force` or `HW_ENV_CHECK_FORCE=1`;
+change the pass-cache TTL with `--ttl <seconds>` or `HW_ENV_CHECK_TTL`.
 
 Quick self-check without installing dependencies: run `-h` on any entry script, for example
 `.venv/bin/python3 scripts/huawei_ecs.py list_servers_details -h`. Help handling happens before the
@@ -79,10 +91,15 @@ to confirm the skill is executable before spending time on the full environment 
 
 Environment variables (values are secrets; never echo them):
 
-- `HW_ACCESS_KEY` / `HW_SECRET_KEY` — required AK/SK
+- AK/SK — required; the resolver tries these in order: `HW_ACCESS_KEY` / `HW_SECRET_KEY`, then
+  `HUAWEI_ACCESS_KEY` / `HUAWEI_SECRET_KEY`, then `AKSK` (a single slash-joined `AK/SK` value).
+  `HUAWEICLOUD_SDK_AK` / `HUAWEICLOUD_SDK_SK` are accepted as a low-priority alias
 - `HW_REGION_NAME` — optional, default `cn-north-4`; fallback for every `--region`
+  (`HUAWEI_REGION_NAME` / `HUAWEICLOUD_REGION` are also accepted)
 - `HW_PROJECT_ID` — optional project ID; otherwise resolved once through IAM and reused
+  (`HUAWEI_PROJECT_ID` / `HUAWEICLOUD_PROJECT_ID` are also accepted)
 - `HW_SECURITY_TOKEN` — optional, required only for temporary AK/SK
+  (`HUAWEI_SECURITY_TOKEN` is also accepted)
 
 ## Workflow
 

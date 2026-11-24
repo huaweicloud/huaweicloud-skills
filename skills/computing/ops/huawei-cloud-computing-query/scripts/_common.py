@@ -29,7 +29,15 @@ DEFAULT_LIMIT = 20
 API_LIMIT = 1000
 
 _PROJECT_CACHE = {}
-_CREDENTIAL_KEYS = ("HW_ACCESS_KEY", "HW_SECRET_KEY", "HW_SECURITY_TOKEN")
+_CREDENTIAL_KEYS = (
+    "HW_ACCESS_KEY", "HW_SECRET_KEY", "HW_SECURITY_TOKEN",
+    "HUAWEI_ACCESS_KEY", "HUAWEI_SECRET_KEY", "HUAWEI_SECURITY_TOKEN", "AKSK",
+)
+_REGION_ENV_KEYS = ("HW_REGION_NAME", "HUAWEI_REGION_NAME", "HUAWEICLOUD_REGION")
+_PROJECT_ID_ENV_KEYS = (
+    "HW_PROJECT_ID", "HUAWEI_PROJECT_ID",
+    "HUAWEICLOUD_SDK_PROJECT_ID", "HUAWEICLOUD_PROJECT_ID",
+)
 
 _SERVICE_SPECS = {
     "ecs": {
@@ -187,27 +195,35 @@ def run(service, registry):
 
 
 def _load_credentials(service):
-    ak = os.getenv("HW_ACCESS_KEY", "")
-    sk = os.getenv("HW_SECRET_KEY", "")
-    token = os.getenv("HW_SECURITY_TOKEN", "")
-    if not ak or not sk:
+    from config import resolve_credentials
+    creds = resolve_credentials()
+    if not (creds["ak"] and creds["sk"]):
         raise CredentialError(
-            "missing AK/SK: set HW_ACCESS_KEY and HW_SECRET_KEY "
-            "(HW_SECURITY_TOKEN is required for temporary credentials)"
+            "missing AK/SK: set HW_ACCESS_KEY/HW_SECRET_KEY, "
+            "HUAWEI_ACCESS_KEY/HUAWEI_SECRET_KEY, or AKSK=AK/SK "
+            "(HW_SECURITY_TOKEN/HUAWEI_SECURITY_TOKEN is required for temporary credentials)"
         )
-    return ak, sk, token
+    return creds["ak"], creds["sk"], creds["security_token"]
 
 
 def _region(args):
-    return getattr(args, "region", None) or os.getenv("HW_REGION_NAME", DEFAULT_REGION)
+    explicit = getattr(args, "region", None)
+    if explicit:
+        return explicit
+    for key in _REGION_ENV_KEYS:
+        value = os.getenv(key, "")
+        if value:
+            return value
+    return DEFAULT_REGION
 
 
 def _resolve_project_id(region, explicit=None, ak=None, sk=None, token=None):
     if explicit:
         return explicit
-    env_pid = os.getenv("HW_PROJECT_ID", "")
-    if env_pid:
-        return env_pid
+    for env_key in _PROJECT_ID_ENV_KEYS:
+        env_pid = os.getenv(env_key, "")
+        if env_pid:
+            return env_pid
     cache_key = (region, bool(ak))
     if cache_key in _PROJECT_CACHE:
         return _PROJECT_CACHE[cache_key]
