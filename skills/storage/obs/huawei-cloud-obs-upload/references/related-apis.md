@@ -157,18 +157,23 @@ obsutil cp <LocalPath> obs://<BucketName>/<Prefix> -r -p=10
 |-----------|---------|-------------|
 | `-flat` | off | Discard local directory structure (for directory uploads, decide by asking the customer first; for single files, can be used directly) |
 | `-r` | - | Recursively upload directory |
-| `-p` | 5 | Concurrency |
-| `-threshold` | 50MB | Multipart upload threshold |
-| `-fr` | resume | Resumable upload mode |
+| `-p` | 5 | Maximum concurrent parts per multipart upload task |
+| `-threshold` | 50MB | Multipart upload threshold; must be smaller than the file size to enable multipart |
+| `-ps` | auto (9MB fallback) | Part size (`100KB`~`5GB`) |
+| `-cpd` | `~/.obsutil_checkpoint` | Checkpoint directory used for multipart resume |
+| `-j` | 5 | Maximum concurrent batch tasks for directory/multi-file uploads |
+| `-fr` | off | Generate a result manifest for a single-file upload; **not** a resume switch |
 | `-v` | off | Verbose log mode |
 | `-config` | default config | Specify obsutil config file |
 
 > **⚠️ Large file upload notes**
 >
-> - Single object max size: 48.8TB
-> - Large files automatically use multipart upload, default part size 9MB
-> - For unstable networks, reduce concurrency (`-p=3`)
-> - Upload interruption supports resumable upload (enabled by default)
+> - Single object max size: 48.8TB (multipart); a non-multipart upload is limited to 5GB
+> - Multipart starts only when the file is larger than `-threshold`; direct upload creates no
+>   checkpoint and cannot resume
+> - Part size defaults to `auto` (9MB fallback); for unstable networks reduce `-p` (`1`~`3`)
+> - Resume = rerun the same command with the same `-cpd`; `-t` is the security token, not a timeout
+> - Full parameter matrix and 200MB/1GB/10GB samples: [large-file-upload.md](large-file-upload.md)
 
 **Error handling:**
 1. `bucket not exist`: Confirm bucket name is correct; bucket names are globally unique and must match exactly

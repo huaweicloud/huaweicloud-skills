@@ -152,15 +152,20 @@ Upload of large files or many files times out or is very slow.
 **Solution:**
 
 ```bash
-# Increase concurrency
-obsutil cp <LocalPath> obs://<BucketName>/<Prefix> -r -p=10
+# Directory uploads: increase batch concurrency (one task per file)
+obsutil cp <LocalDirPath> obs://<BucketName>/<Prefix> -r -p=10
 
 # Decrease concurrency (for unstable networks)
 obsutil cp <LocalPath> obs://<BucketName>/<Prefix> -r -p=3
 
-# Adjust part size (for large file scenarios)
-obsutil cp <LocalPath> obs://<BucketName>/<Prefix> -threshold=100MB
+# Large single file: force multipart and keep a checkpoint
+obsutil cp <LocalFilePath> obs://<BucketName>/<ObjectKey> -flat \
+  -threshold=9MB -ps=9MB -p=5 -cpd="$HOME/.obsutil_checkpoint" -f
 ```
+
+> **`-threshold` must be smaller than the file size.** If it is larger, obsutil uses direct
+> upload, creates no checkpoint, and cannot resume. See
+> [large-file-upload.md](large-file-upload.md) for the full parameter matrix.
 
 ### 2. Resume after upload interruption
 
@@ -168,13 +173,27 @@ obsutil cp <LocalPath> obs://<BucketName>/<Prefix> -threshold=100MB
 Network interruption or abnormal program exit during upload.
 
 **Solution:**
-```bash
-# Use resumable upload (enabled by default)
-obsutil cp <LocalPath> obs://<BucketName>/<Prefix> -r -fr
 
-# View resumable upload records
-obsutil ls -failed -limit=100
+Multipart resume is enabled by default **only when multipart is actually used** (the file is
+larger than `-threshold`). There is no `-resume` switch, and `-fr` only generates a result
+manifest — it does **not** enable resume. If the failed run printed a `Task id:`, retry it with
+`obsutil cp -recover=<TaskId>`.
+
+```bash
+# Start a multipart upload (threshold must be below the file size)
+obsutil cp <LocalFilePath> obs://<BucketName>/<ObjectKey> -flat \
+  -threshold=9MB -ps=9MB -p=5 -cpd="$HOME/.obsutil_checkpoint" -f
+
+# After a failure/interruption, check the checkpoint (read-only)
+ls -lh "$HOME/.obsutil_checkpoint/upload/"
+
+# Rerun the exact same command; completed parts are reused
+obsutil cp <LocalFilePath> obs://<BucketName>/<ObjectKey> -flat \
+  -threshold=9MB -ps=9MB -p=5 -cpd="$HOME/.obsutil_checkpoint" -f
 ```
+
+> Keep the source path, target URL, `-threshold`/`-ps`, and `-cpd` unchanged. A successful task
+> deletes its checkpoint automatically.
 
 ### 3. Upload reports "access denied"
 
@@ -226,6 +245,67 @@ obsutil ls -limit=100
 # Confirm Endpoint configuration is correct
 obsutil config -help
 ```
+
+### 5. Large file (200MB+) upload keeps timing out
+
+**Problem:**
+A 200MB-or-larger file repeatedly reports `timeout`, `i/o timeout`, `connection reset`, or
+`dial tcp ... i/o timeout`; retrying the same whole-file command does not help.
+
+**Diagnostic order:**
+
+1. **Check whether multipart is actually enabled.**
+   `-threshold` is the switch between direct upload and multipart upload. If the file is smaller
+   than or equal to `-threshold`, obsutil uses direct upload, which **creates no checkpoint and
+   cannot resume**. For a 200MB file, set `-threshold=9MB`, not `-threshold=500MB`.
+2. **Check whether a checkpoint is produced.** After an interruption:
+   ```bash
+   ls -lh "$HOME/.obsutil_checkpoint/upload/"
+   ```
+   No checkpoint file means the task ran in direct-upload mode. Rerun with a smaller
+   `-threshold`.
+3. **Confirm the timeout is tuned in the config file, not with `-t`.**
+   `-t` is the security token for temporary AK/SK, not a timeout. Set `socketTimeout` (default
+   310s) in `~/.obsutilconfig`:
+   ```ini
+   connectTimeout=60
+   socketTimeout=600
+   maxRetryCount=5
+   ```
+4. **Reduce part concurrency and size on an unstable link.**
+   ```bash
+   obsutil cp <LocalFilePath> obs://<BucketName>/<ObjectKey> -flat \
+     -threshold=9MB -ps=9MB -p=2 -cpd="$HOME/.obsutil_checkpoint" -f
+   ```
+   Increase `-p` again (for example, to `5` to `8`) only after the link is stable.
+5. **Check bandwidth.** A 200MB file on a 1Mbps link needs about 27 minutes before overhead. If the
+   host's egress is that slow, upload from a host with better bandwidth or schedule the upload off
+   peak hours.
+6. **Check Region/Endpoint matching.** Run `obsutil ls` and confirm the bucket's `Location` matches
+   the endpoint in `~/.obsutilconfig`. `NoSuchBucket` is often an endpoint/region mismatch, not a
+   missing bucket.
+7. **Check AK/SK permission.** `AccessDenied` means the IAM user or bucket policy lacks
+   `obs:object:PutObject` (multipart `UploadPart`/`CompleteMultipartUpload` are covered by the same
+   action).
+8. **Run the same command again.** Multipart resume is automatic; the rerun uploads only the
+   remaining parts.
+
+### 6. Multipart failure / OBS error code quick reference
+
+| Error code / output | Likely cause | Fix |
+|---------------------|--------------|-----|
+| `NoSuchBucket` / `Bucket ... does not exist` | Wrong bucket name or Region/Endpoint mismatch | Correct the bucket name; align the endpoint with the bucket region |
+| `AccessDenied` / `403 Forbidden` | Missing `obs:object:PutObject`, bucket policy, or ACL restriction | Grant the object write permission and check the bucket policy/ACL |
+| `InvalidAccessKeyId` / `SignatureDoesNotMatch` | Invalid AK/SK, missing security token for temporary credentials, or endpoint mismatch | Reconfigure credentials; pass the security token with `-t` (not a timeout) |
+| `RequestTimeTooSkewed` | Local clock skew | Sync the system clock (NTP) and retry |
+| `SlowDown` / HTTP 503 | Server-side throttling | Lower `-p`, wait, then retry |
+| `RequestTimeout` / `i/o timeout` | Network timeout or small `socketTimeout` | Raise `socketTimeout`, lower `-p`, check firewall/proxy |
+| `Connection reset by peer` | Network/middlebox interruption | Retry (resume is automatic), lower `-p`, check proxy/MTU |
+| `InvalidPart` / `InvalidPartOrder` / `NoSuchUpload` | Multipart state inconsistent, stale checkpoint, or source file changed | Rerun the same command; if `NoSuchUpload` persists, remove that task's checkpoint and upload again |
+| `EntityTooLarge` | A part exceeds 5GB | Lower `-ps` (keep it above `100KB`) |
+| `InvalidArgument` on `-threshold`/`-ps` | Invalid value or unit | Use values such as `9MB`; `-ps` must be within `100KB` to `5GB` |
+
+> Full parameter matrix and 200MB/1GB/10GB samples: [large-file-upload.md](large-file-upload.md).
 
 ---
 

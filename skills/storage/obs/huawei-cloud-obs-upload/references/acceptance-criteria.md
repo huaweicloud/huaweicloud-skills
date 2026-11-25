@@ -139,6 +139,60 @@ obsutil cp /home/user/data/ obs://my-bucket/ -r -flat  # Incorrect: using -flat 
 --from=2025-05-01     # Incorrect: CES requires Unix timestamp, not date string
 ```
 
+### 7. Large file upload (200MB+) — multipart assertions
+
+A large-file command must actually enable multipart upload, keep a checkpoint, and use the config
+file (not `-t`) for timeout tuning.
+
+#### ✅ Correct
+```bash
+# 200MB single file: threshold < file size, explicit part size, explicit checkpoint, part concurrency
+obsutil cp /data/records-200mb.tar.gz obs://my-bucket/datasets/records-200mb.tar.gz \
+  -flat -threshold=9MB -ps=9MB -p=5 -cpd="$HOME/.obsutil_checkpoint" -f
+
+# Resume: rerun the exact same command after an interruption
+obsutil cp /data/records-200mb.tar.gz obs://my-bucket/datasets/records-200mb.tar.gz \
+  -flat -threshold=9MB -ps=9MB -p=5 -cpd="$HOME/.obsutil_checkpoint" -f
+
+# 1GB: larger parts; 10GB: even larger parts (keep ceil(size/ps) <= 10000)
+obsutil cp /data/archive-1gb.tar obs://my-bucket/datasets/archive-1gb.tar \
+  -flat -threshold=16MB -ps=16MB -p=8 -cpd="$HOME/.obsutil_checkpoint" -f
+obsutil cp /data/backup-10gb.tar obs://my-bucket/backups/backup-10gb.tar \
+  -flat -threshold=32MB -ps=64MB -p=8 -cpd="$HOME/.obsutil_checkpoint" -f
+
+# Timeout/retry tuning belongs in ~/.obsutilconfig
+# connectTimeout=60
+# socketTimeout=600
+# maxRetryCount=5
+```
+
+#### ❌ Incorrect
+```bash
+# Incorrect: threshold >= file size -> direct upload, no checkpoint, no resume
+obsutil cp /data/records-200mb.tar.gz obs://my-bucket/records-200mb.tar.gz -threshold=500MB -p=5
+
+# Incorrect: -t is the security token, not an upload timeout
+obsutil cp /data/records-200mb.tar.gz obs://my-bucket/records-200mb.tar.gz -t=600
+
+# Incorrect: -fr only generates a result manifest; it does not enable resume
+obsutil cp /data/records-200mb.tar.gz obs://my-bucket/records-200mb.tar.gz -fr
+
+# Incorrect: 10GB with 1MB parts = 10240 parts, above the 10000-part limit
+obsutil cp /data/backup-10gb.tar obs://my-bucket/backup-10gb.tar -threshold=1MB -ps=1MB
+```
+
+**Assertions for a large-file upload answer:**
+
+- The 200MB sample MUST include `-threshold`, `-ps`, `-p`, and `-cpd`; `-threshold` MUST be less
+  than 200MB.
+- The answer MUST state that rerunning the same command resumes from the checkpoint; `-fr` MUST NOT
+  be presented as a resume switch.
+- The answer MUST state that `-t` is the security token, not a timeout; timeout tuning MUST point
+  to `socketTimeout` (default 310s) in `~/.obsutilconfig`.
+- 200MB / 1GB / 10GB samples MUST keep the part count at or below 10000.
+- Multipart failures MUST be diagnosed in the order: `-threshold` vs file size → checkpoint
+  presence → bandwidth/part concurrency → Region/Endpoint → AK/SK permission → clock.
+
 ---
 
 ## Correct SDK Code Patterns
@@ -193,8 +247,8 @@ obs_client = ObsClient(
 #### ❌ Incorrect
 ```python
 obs_client = ObsClient(
-    access_key_id="XXXXXXXXXX",      # Prohibited: Hardcoded AK
-    secret_access_key="YYYYYYYYYY",   # Prohibited: Hardcoded SK
+    access_key_id="XXXXXXXXXX",      # FORBIDDEN: Hardcoded AK
+    secret_access_key="YYYYYYYYYY",   # FORBIDDEN: Hardcoded SK
     server='obs.cn-south-1.myhuaweicloud.com'
 )
 ```

@@ -3,7 +3,7 @@ name: huawei-cloud-obs-upload
 description: |
   Upload a local file or directory to a specified Huawei Cloud OBS (Object Storage Service) bucket with obsutil, and set up a scheduled/periodic upload task (crontab) that syncs a local directory to an OBS bucket. Also lists OBS buckets with storage capacity and object count.
   Use this skill when the user wants to: (1) upload a specific local file or directory to a named OBS bucket, (2) set up a scheduled/periodic upload task that automatically syncs a local directory to a named OBS bucket, (3) list their OBS buckets and check capacity and object count.
-  Triggers include: user mentions "upload to OBS bucket", "上传文件到OBS", "上传目录到OBS", "定时上传到OBS", "目录同步到OBS桶", "OBS scheduled upload", "OBS周期上传", "OBS bucket capacity check", "OBS桶容量查询". Generic phrases such as "object storage", "upload file" or "upload directory" alone are NOT sufficient to trigger this skill.
+  Triggers include: user mentions "upload to OBS bucket", "上传文件到OBS", "上传目录到OBS", "定时上传到OBS", "目录同步到OBS桶", "OBS scheduled upload", "OBS周期上传", "OBS bucket capacity check", "OBS桶容量查询", "OBS large file upload", "OBS大文件上传", "OBS上传超时", "OBS multipart upload", "OBS分片上传". Generic phrases such as "object storage", "upload file" or "upload directory" alone are NOT sufficient to trigger this skill.
 tags: ["obs upload", "obs", "obsutil"]
 ---
 
@@ -63,7 +63,7 @@ Upload local files or directories to Huawei Cloud OBS buckets, list OBS buckets 
 | Operation | Recommended alternative |
 |-----------|-------------------------|
 | Download object | Use `obsutil cp obs://<Bucket>/<Key> <LocalPath>` manually, or the OBS console |
-| Create bucket | Use the dedicated skill [huawei-cloud-obs-bucket-create](https://skills.huaweicloud.com/detail/huawei-cloud-obs-bucket-create), or the OBS console |
+| Create bucket | Use the OBS console (Bucket > Create Bucket), or a dedicated bucket-creation workflow — bucket creation is out of scope for this skill |
 | Copy object | Use `hcloud OBS CopyObject` manually, or the OBS console |
 | Lifecycle configuration | Use the OBS console (Bucket > Lifecycle), or `hcloud OBS SetBucketLifecycle` |
 | Restore archived object | Use `obsutil restore obs://<Bucket>/<Key>` manually, or the OBS console |
@@ -83,7 +83,8 @@ Huawei Cloud OBS Upload Management
 │   ├── 2b. For directory: ask customer whether to preserve directory structure (decide -flat)
 │   ├── 2c. Warn data persists remotely + get explicit user confirmation
 │   ├── 2d. obsutil cp: single file (-flat) or directory (-r, optional -flat by customer answer)
-│   └── 2e. Verify upload result
+│   ├── 2e. Verify upload result
+│   └── 2f. Large file (≥100MB): multipart (-threshold/-ps/-p) + checkpoint resume (-cpd)
 └── Task 3: ScheduledUpload       (Schedule periodic upload of local directory to target bucket)
     ├── 3a. Confirm local dir + bucket + prefix + schedule period with user
     ├── 3b. Ask customer whether to preserve directory structure (decide -flat)
@@ -148,11 +149,11 @@ obsutil version
 
 > **⚠️ hcloud parameter format requirements**
 >
-> hcloud (KooCLI) cloud-service API commands (uppercase module, e.g. `hcloud CES ShowMetricData`) **must use the `--param=value` format** (connected with equals sign); space-separated format is not supported.
+> hcloud (KooCLI) cloud-service API commands (uppercase module, e.g. `hcloud CES ShowMetricData`) **must use the `--param=value` format** (connected with equals sign); space-separated format is not supported. Always pass the region explicitly as `--cli-region=<Region>` (`--region=<Region>` is accepted as an alias); never rely on an implicit default.
 >
-> ✅ Correct: `hcloud CES ShowMetricData --region=cn-south-1 --namespace=SYS.OBS`
+> ✅ Correct: `hcloud CES ShowMetricData --cli-region=cn-south-1 --namespace=SYS.OBS`
 >
-> ❌ Incorrect: `hcloud CES ShowMetricData --region cn-south-1`
+> ❌ Incorrect: `hcloud CES ShowMetricData --cli-region cn-south-1`
 >
 > **Note:** `hcloud obs` (lowercase, obsutil mode) directly maps to obsutil commands and uses obsutil parameter style (e.g. `hcloud obs ls`, `hcloud obs config -i=...`); the `--param=value` rule does not apply. There is no `hcloud OBS ListBuckets` command — use `hcloud obs ls` to list buckets.
 
@@ -214,7 +215,7 @@ Ensure the IAM user has the required permissions. See [references/iam-policies.m
 - `obs:bucket:list` — List buckets
 - `obs:bucket:get` — Get bucket attributes (capacity, object count)
 - `obs:object:get` — Read object information
-- `obs:object:put` — Upload objects
+- `obs:object:PutObject` — Upload objects
 
 **Permission boundaries:**
 
@@ -252,7 +253,7 @@ List buckets via obsutil, then query bucket capacity and object count using CES 
 
 ### Task 2: Upload Local File or Directory to Target Bucket
 
-Upload files or directories to a specified OBS bucket using obsutil, supporting single file and directory upload.
+Upload files or directories to a specified OBS bucket using obsutil, supporting single file, directory, and large-file (multipart, resumable) upload.
 
 > **⚠️ Upload operations require obsutil, not hcloud**
 >
@@ -274,6 +275,34 @@ Upload files or directories to a specified OBS bucket using obsutil, supporting 
 3. **2c. Get explicit user confirmation** — restate the target (path → bucket/prefix), warn that data persists remotely, and obtain approval
 4. **2d. Execute upload** — `obsutil cp` single file or directory (with/without `-flat` per customer answer)
 5. **2e. Verify result** — check upload exit code and confirm object exists in bucket
+6. **2f. Large file (≥100MB) or repeated timeout** — force multipart with `-threshold` smaller than the file, choose `-ps`/`-p`, keep `-cpd` checkpoints, and tune `connectTimeout`/`socketTimeout`/`maxRetryCount` in `~/.obsutilconfig`; rerun the same command to resume
+
+#### Large file multipart quick reference
+
+> **Three facts:** (1) `-threshold` must be smaller than the file size, otherwise obsutil uses
+> direct upload with **no checkpoint and no resume**; (2) after a failure/interruption, **rerun the
+> same command** to resume from the `-cpd` checkpoint; (3) **`-t` is the security token, not a
+> timeout** — timeouts come from `socketTimeout` (default 310s).
+
+| Parameter | Meaning | 200MB starting value |
+|-----------|---------|----------------------|
+| `-threshold` | Multipart threshold; file must be larger than this value | `9MB` |
+| `-ps` | Part size (`100KB`~`5GB`, or `auto`) | `9MB` |
+| `-p` | Max concurrent parts per object (default 5) | `5` (unstable link: `1`~`3`) |
+| `-cpd` | Checkpoint directory (default `~/.obsutil_checkpoint`) | `$HOME/.obsutil_checkpoint` |
+| `-j` | Max concurrent batch tasks for directory/multi-file uploads (default 5) | directory only |
+| `connectTimeout` | Config key: connection timeout in seconds (default 30) | `60` |
+| `socketTimeout` | Config key: read/write timeout in seconds (default 310) | `600` |
+| `maxRetryCount` | Config key: retries per failed request/part (default 3) | `5` |
+
+```bash
+# 200MB sample: threshold < file size, explicit part size, checkpoint, part concurrency
+obsutil cp /data/records-200mb.tar.gz \
+  obs://my-bucket/datasets/records-200mb.tar.gz \
+  -flat -threshold=9MB -ps=9MB -p=5 -cpd="$HOME/.obsutil_checkpoint" -f
+```
+
+📄 Parameter matrix + 200MB/1GB/10GB samples + error codes → [references/large-file-upload.md](references/large-file-upload.md)
 
 ### Task 3: Schedule Periodic Upload of Local Directory to Target Bucket
 
@@ -322,6 +351,10 @@ obsutil cp <LocalDirPath> obs://<BucketName>/<Prefix> -r -f -u
 # Scheduled incremental upload, flatten files
 obsutil cp <LocalDirPath> obs://<BucketName>/<Prefix> -r -flat -f -u
 
+# Large file (≥100MB) or repeated timeout: multipart + resumable checkpoint
+obsutil cp <LocalFilePath> obs://<BucketName>/<ObjectKey> -flat \
+  -threshold=9MB -ps=9MB -p=5 -cpd="$HOME/.obsutil_checkpoint" -f
+
 # List buckets
 obsutil ls
 ```
@@ -357,6 +390,7 @@ hcloud CES ShowMetricData \
 > - Upload: **MUST use obsutil cp** — hcloud CLI has no PutObject support
 > - List buckets: **MUST use `hcloud obs ls`** — there is no `hcloud OBS ListBuckets` command
 > - `-flat` for directory uploads: **MUST follow the customer's explicit answer**, never default
+> - Large files: **MUST keep `-threshold` smaller than the file size** to enable multipart/checkpoint; resume by rerunning the same command with the same `-cpd`; `-t` is the security token, **not** a timeout
 > - hcloud cloud-service API params (uppercase module, e.g. `hcloud CES ...`): **MUST use `--param=value` format**; `hcloud obs` (obsutil mode) uses obsutil parameter style
 > - AK/SK: **MUST NOT appear in conversation**; user configures obsutil credentials in their terminal
 
@@ -401,6 +435,7 @@ hcloud version && obsutil version && hcloud obs ls -limit=1
 |----------|-------------|
 | [task-list-buckets-with-stats.md](references/task-list-buckets-with-stats.md) | Task 1: List buckets with capacity and object count |
 | [task-upload-file.md](references/task-upload-file.md) | Task 2: Upload file or directory |
+| [large-file-upload.md](references/large-file-upload.md) | Large file multipart upload: parameter matrix, 200MB/1GB/10GB samples, error codes, timeout diagnosis |
 | [task-scheduled-upload.md](references/task-scheduled-upload.md) | Task 3: Scheduled upload |
 | [related-apis.md](references/related-apis.md) | API and CLI command details |
 | [iam-policies.md](references/iam-policies.md) | IAM permission policies |
