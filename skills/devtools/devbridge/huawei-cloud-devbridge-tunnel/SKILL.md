@@ -4,7 +4,7 @@ description: |
   Create and manage DevBridge development tunnels on Huawei Cloud to securely expose local development services to remote devices.
   Based on DevBridge CLI v0.2.x and API Key authentication.
   Use this skill when the user wants to: (1) install and configure the DevBridge CLI, (2) create/list/update/delete tunnels, (3) manage tunnel ports and protocols, (4) host local services through tunnels, (5) connect to remote tunnels from another device, (6) manage authentication and API Keys.
-  Trigger: user mentions "DevBridge", "开发隧道", "开发者隧道", "dev tunnel", "tunnel", "host local service", "expose local port", "connect tunnel", "托管本地服务", "隧道端口", "devbridge", "DevSpace", "开发空间隧道"
+  Triggers include: user mentions "DevBridge", "开发隧道", "开发者隧道", "dev tunnel", "tunnel", "host local service", "expose local port", "connect tunnel", "托管本地服务", "隧道端口", "devbridge", "DevSpace", "开发空间隧道"
 tags: [huawei-cloud, devbridge, tunnel, devtools, cloud]
 ---
 
@@ -18,23 +18,10 @@ DevBridge is a development tunnel service that allows developers to expose local
 
 ### Architecture
 
-```
-Developer Device (Host)                    Remote Device (Connect)
-┌──────────────────────┐                  ┌──────────────────────┐
-│  Local Service :8080 │                  │  localhost:8080      │
-│         │            │                  │         ▲            │
-│  devbridge host      │                  │  devbridge connect   │
-│         │            │                  │         │            │
-└─────────┼────────────┘                  └─────────┼────────────┘
-          │ Outbound connection                     │ Outbound connection
-          ▼                                         ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              DevBridge Relay Service (Huawei Cloud)              │
-│                                                                  │
-│  Tunnel (id) ── Port ── API Key / Token ── Access Policy         │
-│  Address: https://<tunnelId>.<clusterId>.myhuaweicloud.com       │
-└─────────────────────────────────────────────────────────────────┘
-```
+- **Host device**: a local service (for example `localhost:8080`) plus `devbridge host` for the tunnel.
+- **Relay service (Huawei Cloud)**: holds the tunnel (id), port, credentials and access policy; the public address is `https://<tunnelId>.<clusterId>.myhuaweicloud.com`.
+- **Connect device**: `devbridge connect` maps the tunnel to a local address such as `localhost:8080`.
+- Host and Connect both open **outbound** connections to the relay, so no inbound port is opened on the hosting device.
 
 > **2026-09-20 域名升级通知**：DevBridge 隧道域名已切换，原 `*.cn-north-4-bridge.myhuaweicloud.com` 变更为新集群域名（如 `*.devbridge-s2.hwtunnel.com`）。**旧版端侧（v0.1.x）已无法连接**，必须使用 v0.2.x 并重新创建隧道。以 `devbridge host` 实际输出的 Tunnel URL 为准。
 
@@ -77,7 +64,7 @@ Developer Device (Host)                    Remote Device (Connect)
 | `db_create` | `devbridge create` | Create tunnel, **returns just the tunnel ID** (stdout) |
 | `db_port_create` | `devbridge port create` | Create port (adapts port, protocol, anonymous flags) |
 | `db_host` | `devbridge host` | Start hosting **in background**, returns PID (stdout), tunnel URL (stderr) |
-| `db_host_bg` | `devbridge host` + nohup bash -c | Background host (legacy alias, use `db_host` instead) |
+| `db_host_bg` | `devbridge host` in a background shell job | Background host (legacy alias, use `db_host` instead) |
 | `db_connect` | `devbridge connect` | Start connect **in background**, returns PID (stdout) |
 | `db_list` | `devbridge list` | List tunnels |
 | `db_show` | `devbridge show` | Show tunnel details |
@@ -99,7 +86,7 @@ Developer Device (Host)                    Remote Device (Connect)
 
 ## Prerequisites
 
-> **CRITICAL — Do NOT ask the user for confirmation during prerequisite checks.** `db_init` silently and automatically: (1) install CLI if missing, (2) upgrade if v0.1.x (old domain, cannot connect), (3) check auth, (4) auto-login via `DEVBRIDGE_API_KEY` or `HW_API_KEY` env var. Only surface output if a check fails.
+> **Prerequisite checks need consent before changing the machine or the account.** Read-only checks (`devbridge version`, `devbridge auth status`, `db_list`) run silently. Before `db_init` (1) installs the CLI, (2) upgrades a v0.1.x client, or (3) performs a login, tell the user what will change and get an explicit "yes". Credentials supplied out-of-band via `DEVBRIDGE_API_KEY` / `HW_API_KEY` count as consent for the login step. For approved automation only, set `DEVBRIDGE_AUTO_SETUP=1` (or `DEVBRIDGE_YES=1`) to skip the interactive prompt; never enable it by default.
 
 ```bash
 source <skill_directory>/scripts/devbridge_cmd.sh
@@ -112,10 +99,11 @@ For automation environments, use an **API Key** (see [references/iam-policies.md
 
 > **Install script note**: in non-interactive / headless environments, always pass `-s` (silent) to the install script: `... | bash -s -- -s`. Without it, the script may prompt "overwrite?" reading `/dev/tty` and fail where no terminal exists.
 
-> **GitCode 私有仓库安装**：`npx skills add` 不支持 GitCode token 认证。从私有仓库安装 skill 时，先 `git clone` 再手动复制：
+> **GitCode 私有仓库安装**：`npx skills add` 不支持 GitCode 私有仓库认证。不要把访问令牌拼接进 clone URL（会留在 shell 历史、进程参数与日志中）。先配置系统凭证助手（如 git-credential-manager / osxkeychain / libsecret）并交互式输入凭据，再正常 clone 并复制：
 > ```bash
-> git clone https://oauth2:<token>@gitcode.com/<org>/<repo>.git /tmp/repo
-> cp -r /tmp/repo/skills/devtools/devbridge/huawei-cloud-devbridge-tunnel/ ~/.agents/skills/huawei-cloud-devbridge-tunnel/
+> git config --global credential.helper manager   # 或 osxkeychain / libsecret
+> git clone https://gitcode.com/<org>/<repo>.git /tmp/repo   # 由凭证助手弹出认证，URL 不含密钥
+> cp -r /tmp/repo/skills/devtools/devbridge/huawei-cloud-devbridge-tunnel/ "${SKILL_INSTALL_DIR:-$HOME/.agents}/skills/huawei-cloud-devbridge-tunnel/"
 > ```
 
 ### Permission / Auth Failure Handling
@@ -136,7 +124,7 @@ When any DevBridge command fails due to invalid or missing credentials:
 
 ## Workflow
 
-> **CRITICAL — Zero confirmation during tunnel creation.** Execute the entire flow (check CLI → load adaptation layer → check auth → create tunnel → configure port → start hosting) **fully automatically with ZERO user interaction**. Do NOT ask the user to confirm parameters or pause between steps. Only surface output after everything is done. **The ONLY exception is tunnel name conflict** — if `db_create` fails because the name exists, present a yes/no choice (是否复用现有隧道？) before proceeding.
+> **Creation exposes a service to the public network, so confirm before creating.** Read-only steps (check CLI → load adaptation layer → check auth) may run silently. Before `db_create` / `db_port_create` / `db_host`, summarize the resolved parameters (tunnel name, port, protocol, expiration, anonymous access) and get an explicit "yes". Anonymous access (`-a`) stays denied by default and requires a **separate explicit confirmation**. If `db_create` reports that the name exists, present a yes/no choice (是否复用现有隧道？) before reusing it.
 
 ### Default Parameters
 
@@ -153,7 +141,7 @@ When any DevBridge command fails due to invalid or missing credentials:
 
 ### Parameter Resolution
 
-For each parameter, if the user explicitly specified a value, use it. Otherwise, use the default. Do not ask to confirm — silently merge and proceed.
+For each parameter, if the user explicitly specified a value, use it; otherwise use the default. Merge read-only values silently, but summarize the final set (tunnel name, port, protocol, expiration, anonymous access) and obtain confirmation before the first creating command.
 
 - Tunnel name: user mentions a name (e.g., "创建一个叫 my-api 的隧道" → `my-api`)
 - Port: user mentions a port number (e.g., "暴露 3000 端口" → `3000`)
@@ -188,7 +176,7 @@ echo "Tunnel URL: $TUNNEL_URL"
 
 ```bash
 devbridge version
-# 下载安装脚本到临时文件再执行（避免管道直接执行）
+# 先向用户说明将安装/升级 CLI 并取得同意，再下载安装脚本到临时文件执行（避免管道直接执行）
 curl -fsSL https://gitcode.com/CloudDeveloperDepartment/devbrige/releases/download/latest/install.sh -o /tmp/devbridge_install.sh
 bash /tmp/devbridge_install.sh -s
 devbridge version
@@ -199,8 +187,9 @@ devbridge version
 ```bash
 export PATH="$HOME/.huawei/bin:$PATH"
 source <skill_directory>/scripts/devbridge_cmd.sh
-db_init
-devbridge auth status 2>/dev/null || devbridge auth login --api-key "$HW_API_KEY"
+db_init                       # 只读检查自动执行；安装/升级/登录会先请求同意
+devbridge auth status         # 已登录即可直接继续；未登录时按提示引导用户完成登录
+devbridge auth login --api-key "$HW_API_KEY"   # 仅在取得同意、且密钥来自环境变量时使用
 ```
 
 ### Step 3: Create a Tunnel
@@ -211,7 +200,7 @@ devbridge auth status 2>/dev/null || devbridge auth login --api-key "$HW_API_KEY
 db_create <name> -d "<description>" -e <expiration>
 ```
 
-> **Tunnel name conflict handling — the ONLY exception to zero confirmation.** If `db_create` fails with "This tunnel name is already in use":
+> **Tunnel name conflict handling.** If `db_create` fails with "This tunnel name is already in use", confirm with the user before reusing anything:
 > 1. Run `db_list` to find the existing tunnel.
 > 2. Check usage status silently: `db_port_list <tunnelId>` (ports configured?), `ps aux | grep "devbridge host <tunnelId>" | grep -v grep` (active host?), `ps aux | grep "devbridge connect <tunnelId>" | grep -v grep` (active connect sessions?).
 > 3. Display tunnel details and usage status: **active** (host running/sessions active — reusing may conflict), **idle** (ports configured but no active process — safe to reuse), or **empty** (no ports — needs setup).
@@ -232,7 +221,7 @@ db_port_create <tunnelId> -p <port> --protocol <protocol>
 ### Step 5: Host Local Service
 
 ```bash
-nohup python3 -m http.server <port> > /tmp/devbridge-service.log 2>&1 &
+python3 -m http.server <port> > /tmp/devbridge-service.log 2>&1 &   # 本地服务在后台运行，PID 由 $! 获取
 db_host <tunnelId>                   # 后台托管，输出 PID 和 Tunnel URL 到 stdout
 TUNNEL_URL=$(db_tunnel_url <tunnelId>)  # 获取权威公网 URL
 echo "$TUNNEL_URL"
@@ -255,7 +244,7 @@ Access the service via `http://localhost:8080` on the remote device.
 ```bash
 db_processes                    # List running processes
 db_process_stop <pid>           # Stop host/connect process
-db_delete <tunnelId>            # Delete tunnel
+db_delete <tunnelId>            # Delete tunnel (prompts for confirmation; --yes for approved automation)
 ```
 
 ## Core Commands
@@ -267,8 +256,8 @@ db_delete <tunnelId>            # Delete tunnel
 | Command | Description |
 |---------|-------------|
 | `devbridge auth login` | Interactive login (opens browser). |
-| `devbridge auth login --api-key <key>` | Login with API Key. |
-| `HW_API_KEY=<key> devbridge auth login` | Login using API Key from environment variable. |
+| `devbridge auth login --api-key "$HW_API_KEY"` | Login with API Key read from an environment variable (never pass a literal key on the command line). |
+| `devbridge auth login` | Login using the API Key already exported in `HW_API_KEY` / `DEVBRIDGE_API_KEY`. |
 | `devbridge auth status` | Check current login status. |
 | `devbridge auth logout` | Clear local credentials. |
 
@@ -282,8 +271,8 @@ db_delete <tunnelId>            # Delete tunnel
 | `db_list` | List active tunnels in the current workspace. |
 | `db_show <tunnelId>` | Show tunnel details. |
 | `db_update <tunnelId> -n <name> -d <desc> -e <hours>` | Update tunnel name/description/expiration. |
-| `db_delete <tunnelId>` | Delete a tunnel. |
-| `db_delete_all` | Delete all tunnels in the current workspace. |
+| `db_delete <tunnelId> [--yes]` | Delete a tunnel; confirms interactively unless `--yes` is passed by approved automation. |
+| `db_delete_all [--yes]` | Delete all tunnels in the current workspace; requires typing `delete-all` unless `--yes` is passed. |
 | `devbridge token <tunnelId> -s host` | Issue a new Host token. |
 | `devbridge token <tunnelId> -s connect` | Issue a new Connect token. |
 | `devbridge set <tunnelId>` | Set the default tunnel for this machine. |
@@ -299,7 +288,7 @@ db_delete <tunnelId>            # Delete tunnel
 | `devbridge port show <tunnelId> -p <port>` | Show port details. |
 | `devbridge port update <tunnelId> -p <port> -a` | Update port anonymous access policy (allow). |
 | `devbridge port update <tunnelId> -p <port> --deny-anonymous` | Update port anonymous access policy (deny). |
-| `db_port_delete <tunnelId> -p <port>` | Delete a port. |
+| `db_port_delete <tunnelId> -p <port> [--yes]` | Delete a port; confirms interactively unless `--yes` is passed. |
 
 ### Host and Connect
 
@@ -307,10 +296,10 @@ db_delete <tunnelId>            # Delete tunnel
 |---------|-------------|
 | `db_host <tunnelId>` | Host all configured ports of an existing tunnel. |
 | `devbridge host -p 8080 -e 8` | Create a temporary tunnel and host immediately. |
-| `devbridge host <tunnelId> --api-key <key>` | Host using API Key auth (skip token issuance). |
-| `devbridge host <tunnelId> --token <jwt>` | Host using an explicit JWT token. |
+| `devbridge host <tunnelId> --api-key "$HW_API_KEY"` | Host using an API Key taken from an environment variable. |
+| `devbridge host <tunnelId> --token "$DEVBRIDGE_TOKEN"` | Host using a JWT taken from an environment variable. |
 | `db_connect <tunnelId>` | Connect to a tunnel and establish local port mapping. |
-| `devbridge connect <tunnelId> --api-key <key>` | Connect using API Key auth. |
+| `devbridge connect <tunnelId> --api-key "$HW_API_KEY"` | Connect using an API Key taken from an environment variable. |
 
 ### Diagnostics
 
@@ -320,7 +309,9 @@ db_delete <tunnelId>            # Delete tunnel
 | `db_ping <uri>` | Send HTTP ping to a URI, print status code and latency. 默认 3 秒限时（`devbridge ping` 是持续命令，避免脚本挂起）；`DB_PING_SECONDS=0` 时直通持续观测。 |
 | `devbridge -v <command>` | Enable debug logging for any command. |
 
-## Parameters
+## Parameter Confirmation
+
+Confirm the resolved values (tunnel name, port, protocol, expiration, anonymous access) before the first creating command. Destructive commands (`db_delete`, `db_delete_all`, `db_port_delete`) always prompt for confirmation; `--yes` is accepted only for approved automation.
 
 | Parameter | CLI Flag | Default | Range / Constraint | Description |
 |-----------|----------|---------|---------------------|-------------|
@@ -337,7 +328,9 @@ db_delete <tunnelId>            # Delete tunnel
 | `-t` / `--token` | `host`, `connect` | None | — | JWT token auth. |
 | `-v` / `--verbose` | global | false | — | Enable debug logging. |
 
-> **Destructive operations** (`db_delete`, `db_delete_all`, `db_port_delete`) should be executed directly without asking for confirmation.
+> **Destructive operations** (`db_delete`, `db_delete_all`, `db_port_delete`) always require explicit confirmation: list the affected tunnel/port first, then wait for the user to type `yes` (or pass `--yes` only in approved automation via `DEVBRIDGE_YES=1`). `db_delete_all` additionally requires typing the phrase `delete-all`.
+
+> **Credential handling**: pass secrets through environment variables (`HW_API_KEY`, `DEVBRIDGE_API_KEY`, `DEVBRIDGE_TOKEN`). Command-line flags are visible in process argv and shell history, so avoid literal keys/tokens in `--api-key` / `--token`.
 
 ## Output Format
 
@@ -405,7 +398,7 @@ db_tunnel_url <tunnelId> # Public URL accessible
 
 ## Best Practices
 
-1. **Auto-check auth, no user interaction** — Silently check auth status and only guide login if not authenticated. API Key via `HW_API_KEY` is recommended for automation.
+1. **Check auth read-only, then ask before login** — `devbridge auth status` is safe to run silently; guide the user through login only when needed. API Key via `HW_API_KEY` is recommended for automation.
 2. **Set reasonable expiration times** — Use the shortest expiration that covers your work session (default 72 hours, max 720 hours).
 3. **Deny anonymous access by default** — Only allow (`-a`) when the user explicitly requests it or content is explicitly public.
 4. **Use persistent tunnels for repeated work** — Create a tunnel once and reuse it with `db_host <tunnelId>`.
@@ -415,7 +408,7 @@ db_tunnel_url <tunnelId> # Public URL accessible
 8. **Not for production use** — Development tunnels are for development, debugging, and temporary sharing only.
 9. **Keep CLI upgraded to v0.2.x** — The 2026-09-20 domain switch invalidated old clients; older versions can no longer connect.
 
-## Reference Documentation
+## Reference Documents
 
 - [CLI Installation Guide](references/cli-installation-guide.md) — DevBridge CLI installation, PATH configuration, and verification.
 - [API Key & Access](references/iam-policies.md) — API Key management, authentication methods, permission failure handling.
@@ -429,10 +422,10 @@ db_tunnel_url <tunnelId> # Public URL accessible
 
 ### Security
 
-- **Never hardcode API Key in scripts, logs, or config files.** Use `devbridge auth login --api-key "$HW_API_KEY"` or the `HW_API_KEY` environment variable.
-- **Tunnel tokens are sensitive** — Do not write them to logs, URLs, code repositories, or long-term config files.
-- **Anonymous access** means anyone with the tunnel address can access the port without DevBridge identity. Enable only for explicitly public content.
-- **`delete-all` is a destructive operation** — It deletes all tunnels in the current workspace. Execute directly without asking the user. 共享/复用工作区时先 `db_list` 确认，避免连带删除他人隧道。
+- **Never hardcode an API Key in scripts, logs, or config files.** Read it from `HW_API_KEY` / `DEVBRIDGE_API_KEY` at runtime; avoid literal `--api-key` values because argv is visible to other local processes.
+- **Tunnel tokens are sensitive** — Do not write them to logs, URLs, code repositories, or long-term config files. Pass them via `DEVBRIDGE_TOKEN` when a JWT is required.
+- **Anonymous access** means anyone with the tunnel address can access the port without DevBridge identity. It stays denied by default; enabling `-a` requires an explicit, separate confirmation and is only for intentionally public content.
+- **`delete-all` is destructive** — It removes every tunnel in the current workspace. List tunnels with `db_list` first, then require the user to type `delete-all` (or pass `--yes` only in approved automation). 共享/复用工作区时尤其要避免连带删除他人隧道。
 
 ### Limitations
 

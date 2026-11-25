@@ -17,11 +17,11 @@ Authenticate with an **API Key** (AK/SK is no longer supported in v0.2.x):
 ```http
 GET /open-api-public/v1/relay/tunnels HTTP/1.1
 Host: hdspace-partner.cn-north-4.myhuaweicloud.com
-X-Api-Key: <api-key>
+X-Api-Key: $HW_API_KEY
 Content-Type: application/json
 ```
 
-Create and manage API Keys at `https://devstation.connect.huaweicloud.com/space/devbridge/apikey`.
+Create and manage API Keys at `https://devstation.connect.huaweicloud.com/space/devbridge/apikey`. Inject the key from a protected environment variable or secret manager; never embed a literal key in source, logs, or shared config.
 
 ## Response Envelope
 
@@ -210,7 +210,7 @@ Verify full code semantics against the live API / error message text before buil
 
 Programmatic Host/Connect is normally done through the CLI (`devbridge host` / `devbridge connect`). The CLI supports:
 
-- `--api-key` / `-k` — API Key auth, skip Token issuance
-- `--token` / `-t` — JWT token auth, skip API and port lookup (tunnel ID required)
+- `--api-key` / `-k` — API Key auth, skip Token issuance (prefer `--api-key "$HW_API_KEY"`)
+- `--token` / `-t` — JWT token auth, skip API and port lookup (tunnel ID required; prefer `--token "$DEVBRIDGE_TOKEN"`)
 
 For detailed behavior, see [cli-command-reference.md](cli-command-reference.md).

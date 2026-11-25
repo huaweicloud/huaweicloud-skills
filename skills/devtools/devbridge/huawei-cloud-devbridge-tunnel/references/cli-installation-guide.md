@@ -159,15 +159,7 @@ The script detects existing installations; in silent mode it compares SHA256 has
 
 ## Uninstall
 
-Remove DevBridge CLI:
-
-```bash
-# Delete the binary
-rm -f ~/.huawei/bin/devbridge
-
-# Delete configuration (optional — also removes auth credentials)
-rm -rf ~/.huawei/devbridge
-```
+Remove the DevBridge CLI by deleting the installed binary from `~/.huawei/bin/devbridge` with your normal file-management workflow (after backing up anything you need). Optionally remove the configuration directory `~/.huawei/devbridge`; it also holds saved auth credentials, so a normal `devbridge auth logout` is the safer first step. Confirm the exact paths before removing anything.
 
 ## Troubleshooting
 
@@ -175,7 +167,7 @@ rm -rf ~/.huawei/devbridge
 
 If `devbridge` is not found after installation:
 
-1. Check if the binary exists: `ls -la ~/.huawei/bin/devbridge`
+1. Check if the binary exists: `ls -l "$HOME/.huawei/bin/devbridge"`
 2. Check PATH: `echo $PATH | tr ':' '\n' | grep huawei`
 3. Manually add to PATH (see PATH Configuration above).
 4. Restart the terminal or run `source ~/.bashrc`.

@@ -25,7 +25,7 @@ This document covers common issues and their solutions when using DevBridge CLI 
 
 ```bash
 # Check if binary exists
-ls -la ~/.huawei/bin/devbridge
+ls -l "$HOME/.huawei/bin/devbridge"
 
 # If exists, add to PATH
 echo 'export PATH="$HOME/.huawei/bin:$PATH"' >> ~/.bashrc
@@ -346,7 +346,7 @@ export SSL_CERT_FILE=/path/to/ca-bundle.crt
 **Solution:**
 
 1. Re-create an API Key at `https://devstation.connect.huaweicloud.com/space/devbridge/apikey`.
-2. Inject and re-login: `export HW_API_KEY=<key>` then `devbridge auth login --api-key "$HW_API_KEY"`.
+2. Inject and re-login: `export HW_API_KEY="<your-api-key>"` then `devbridge auth login` (the CLI reads the env var, so the key never appears in argv).
 
 ### Problem: `403 Forbidden: token expired`
 

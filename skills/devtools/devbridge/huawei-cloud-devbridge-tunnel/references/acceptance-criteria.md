@@ -22,6 +22,8 @@ This document defines the pass/fail criteria for testing the DevBridge tunnel sk
 | AC-14 | Limits / Diagnose | Quota and diagnostics commands work | `devbridge limits`, `devbridge echo`, `devbridge ping` |
 | AC-15 | Security | No API Key / tokens in output/logs | Verify no credentials in command output |
 | AC-16 | Cleanup | All test resources deleted | `devbridge list` shows no test tunnels |
+| AC-17 | Destructive guard | Delete operations require explicit confirmation | `db_delete` / `db_port_delete` reject without `yes`; `db_delete_all` requires the `delete-all` phrase |
+| AC-18 | Credential hygiene | Secrets come from environment variables, never literal argv | Commands use `"$HW_API_KEY"` / `"$DEVBRIDGE_TOKEN"`; no literal key in docs or scripts |
 
 ## Detailed Criteria
 
@@ -104,7 +106,7 @@ command not found: devbridge
 **Preconditions:** AC-3 passes.
 
 **Steps:**
-1. Run `devbridge delete <tunnelId>`.
+1. Run `db_delete <tunnelId>` and confirm when prompted (or pass `--yes` only for approved automation).
 2. Run `devbridge list`.
 
 **Pass criteria:** Deleted tunnel no longer appears in list.
@@ -139,7 +141,7 @@ command not found: devbridge
 **Preconditions:** AC-8 passes.
 
 **Steps:**
-1. Run `devbridge port delete <tunnelId> -p 8080`.
+1. Run `db_port_delete <tunnelId> -p 8080` and confirm when prompted.
 2. Run `devbridge port list <tunnelId>`.
 
 **Pass criteria:** Port 8080 no longer appears in port list.
@@ -216,8 +218,8 @@ command not found: devbridge
 **Preconditions:** All preceding ACs executed.
 
 **Steps:**
-1. Delete all test tunnels: run `devbridge delete <tunnelId>` for each.
-2. Run `devbridge list`.
+1. Delete all test tunnels: run `db_delete <tunnelId>` for each and confirm each prompt.
+2. Run `devbridge list` to verify no test tunnels remain.
 
 **Pass criteria:** No test tunnels remain.
 

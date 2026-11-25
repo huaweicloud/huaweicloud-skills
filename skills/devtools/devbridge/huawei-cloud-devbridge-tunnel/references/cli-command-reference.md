@@ -29,8 +29,8 @@ Log in to DevBridge.
 # Interactive login (browser)
 devbridge auth login
 
-# API Key login
-devbridge auth login --api-key <key>
+# API Key login (read the secret from the environment, not a literal argv value)
+devbridge auth login --api-key "$HW_API_KEY"
 
 # API Key via environment variable
 export HW_API_KEY="<your-api-key>"
@@ -268,8 +268,8 @@ devbridge host abc123
 # Create a temporary tunnel and host port 8080 immediately (expires in 8h)
 devbridge host -p 8080 -d "隧道描述" -e 8
 
-# Host with API Key auth
-devbridge host abc123 --api-key <key>
+# Host with API Key auth (environment variable; argv is visible to local processes)
+devbridge host abc123 --api-key "$HW_API_KEY"
 ```
 
 **Output:**
@@ -300,7 +300,7 @@ devbridge connect <tunnelId> [flags]
 
 ```bash
 devbridge connect abc123
-devbridge connect abc123 --api-key <key>
+devbridge connect abc123 --api-key "$HW_API_KEY"
 ```
 
 **Output:**
@@ -314,7 +314,7 @@ Forwarding localhost:8080 -> tunnel port: 8080
 
 ### `token` — Issue Tunnel Token
 
-Issue an access token for a tunnel.
+Issue a scoped tunnel token (Host or Connect) for a tunnel. Store the returned token in a secret manager or environment variable, not in argv or logs.
 
 ```bash
 devbridge token <tunnelId> [flags]
@@ -423,5 +423,7 @@ devbridge completion powershell  # PowerShell
 - Authentication uses **API Key** (`--api-key` / `HW_API_KEY`) or interactive login; **AK/SK is removed**.
 - Tunnel domain switched 2026-09-20: old `*.cn-north-4-bridge.myhuaweicloud.com` no longer works; use v0.2.x client and recreate tunnels.
 - `list` and `port list` no longer support `--json` output.
-- `host`/`connect` support `--api-key`/`-k` to skip token issuance and `--token`/`-t` for explicit JWT.
+- `host`/`connect` support `--api-key`/`-k` to skip token issuance and `--token`/`-t` for an explicit JWT.
+- Prefer environment variables (`HW_API_KEY`, `DEVBRIDGE_TOKEN`) over literal `--api-key` / `--token` values: command-line arguments appear in process argv and shell history.
+- Destructive subcommands (`delete`, `delete-all`, `port delete`) require explicit confirmation; the skill's `db_*` wrappers prompt for it.
 - Port protocol default is `auto`; anonymous access default is **deny**.

@@ -205,10 +205,10 @@ Connect is running. Press Ctrl+C to stop.
 
 Stop Host and Connect processes with `Ctrl+C`.
 
-Delete the test tunnel:
+Delete the test tunnel (the wrapper asks for confirmation; answering `yes` is required):
 
 ```bash
-devbridge delete <tunnelId>
+db_delete <tunnelId>
 ```
 
 **Expected output:**
@@ -256,7 +256,7 @@ echo "=== Step 7: Limits ==="
 devbridge limits
 
 echo "=== Step 10: Cleanup ==="
-devbridge delete "$TUNNEL_ID"
+db_delete "$TUNNEL_ID"
 
 echo "=== Verification Complete ==="
 ```

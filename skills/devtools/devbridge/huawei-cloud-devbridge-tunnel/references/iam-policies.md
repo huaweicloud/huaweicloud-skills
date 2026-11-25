@@ -67,16 +67,20 @@ Logging out clears CLI-saved credentials but does not delete created tunnels. Do
 `host` and `connect` support `--api-key` / `-k` to authenticate directly via API Key, skipping TunnelToken issuance:
 
 ```bash
-devbridge host <tunnelId> --api-key <key>
-devbridge connect <tunnelId> --api-key <key>
+devbridge host <tunnelId> --api-key "$HW_API_KEY"
+devbridge connect <tunnelId> --api-key "$HW_API_KEY"
 ```
+
+> **Avoid literal secrets in argv**: prefer exporting the key as `HW_API_KEY` / `DEVBRIDGE_API_KEY` and letting the CLI read it; a value typed after `--api-key` is visible in process argv and may be captured by shell history or logs.
 
 Explicit JWT token mode (for integrating other clients, skips API calls):
 
 ```bash
-devbridge host <tunnelId> --token <jwt>
-devbridge connect <tunnelId> --token <jwt>
+devbridge host <tunnelId> --token "$DEVBRIDGE_TOKEN"
+devbridge connect <tunnelId> --token "$DEVBRIDGE_TOKEN"
 ```
+
+> JWT values are bearer credentials: inject them from a protected environment variable or secret manager, never hardcode them in scripts, logs, or shared configuration.
 
 `--token` mode skips token issuance and port lookup; ports are delivered by the gateway over the relay channel. The tunnel ID must be explicitly specified. Host tokens cannot be used for Connect, and Connect tokens cannot be used for Host.
 
