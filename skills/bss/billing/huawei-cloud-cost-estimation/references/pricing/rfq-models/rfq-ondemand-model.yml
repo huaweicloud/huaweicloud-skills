@@ -1,0 +1,32 @@
+name: RFQOnDemandModel
+type: semantic_ontology
+pricing_mode: on_demand
+source_operation: BSS/ListOnDemandResourceRatings
+shared_file: rfq-core.yml
+facts:
+  - name: RFQ_OnDemand_Header
+    grain: "One record per ListOnDemandResourceRatings request."
+    fields_from: request_fields
+    attributes:
+      inquiry_precision: {meaning: "Returned-price precision option; it does not change usage meaning."}
+    child_facts: [RFQ_OnDemand_Line]
+  - name: RFQ_OnDemand_Line
+    grain: "One record per DemandProductInfo in product_infos[]."
+    parent_fact: RFQ_OnDemand_Header
+    fields_from: line_fields
+    attributes:
+      usage_factor: {dimension: Dim_UsageType}
+      usage_value: {meaning: "Quote usage expressed for the current billing factor and unit."}
+      usage_measure_id: {dimension: Dim_MeasureUnit, role: usage_unit}
+dimensions:
+  Dim_UsageType:
+    business_key: code
+    scope_keys: [service_type_code, resource_type_code]
+    source_operations: [BSS/ListUsageTypes]
+    scope_binding: {service_type_code: cloud_service_type, resource_type_code: resource_type}
+invariants:
+  - "Behavioral limits: ../../gotchas.md G03–G06."
+contract_sections:
+  - BSS/ListOnDemandResourceRatings
+  - "Capacity and units"
+  - "Read prices and handle exceptions"

@@ -1,0 +1,58 @@
+name: RFQCore
+type: semantic_ontology
+domain: huawei_cloud_cost_estimation
+description: "Shared quote-input semantics. A model uses fields_from to reference a field set here and attributes to add mode-specific fields; this is a documentation convention, not automatic YAML inheritance."
+command_contracts_file: ../commands.md
+models:
+  period: rfq-period-model.yml
+  on_demand: rfq-ondemand-model.yml
+
+request_fields:
+  project_id: {dimension: Dim_Project}
+line_fields:
+  id: {meaning: "Unique within a request and links response items; not a cross-request identifier."}
+  cloud_service_type: {dimension: Dim_CloudServiceType}
+  resource_type: {dimension: Dim_ResourceType}
+  resource_spec: {dimension: Dim_ResourceSpec}
+  region: {dimension: Dim_Region}
+  subscription_num: {meaning: "Purchased quantity, distinct from per-item capacity and usage."}
+  available_zone: {dimension: Dim_AvailabilityZone, meaning: "Optional AZ filter; omission does not establish availability in every AZ."}
+  resource_size: {meaning: "Per-item purchased capacity or scale, paired with size_measure_id when the product contract requires it."}
+  size_measure_id: {dimension: Dim_MeasureUnit, role: capacity_unit}
+
+dimensions:
+  Dim_Project:
+    business_key: id
+    source_operations: [IAM/KeystoneListProjects, IAM/KeystoneListAuthProjects]
+  Dim_CloudServiceType:
+    business_key: service_type_code
+    source_operations: [BSS/ListServiceTypes]
+  Dim_ResourceType:
+    business_key: resource_type_code
+    parent_dimension: Dim_CloudServiceType
+    source_bindings:
+      BSS/ListServiceResources: {records: 'infos[].basic_info', parent_key: product_owner_service}
+      BSS/ListResourceTypes: {records: 'resource_types[]', parent_key: service_type_code}
+  Dim_Region:
+    business_key: region_code
+    source_documents: [https://developer.huaweicloud.com/endpoint]
+  Dim_AvailabilityZone:
+    business_key: az_code
+    parent_dimension: Dim_Region
+    source_rule: "Use the target service and region AZ definitions; ECS can use ECS/NovaListAvailabilityZones, while other services require their own source."
+  Dim_MeasureUnit:
+    business_key: measure_id
+    source_operations: [BSS/ListMeasureUnits]
+  Dim_ResourceSpec:
+    business_key: [cloud_service_type, resource_type, region_code, charge_mode, resource_spec]
+    source_operations: [BSS/ListResourceSpecs]
+    source_documents: [https://support.huaweicloud.com/api-oce/qct_00008.md]
+
+relations:
+  field_binding: "dimension binds a field to that dimension business_key; names are labels, and specifications require the five-part match below."
+  project_scope: "For BSS quotes, project_id must be a valid accessible project of the quoted customer; it need not match the product region."
+  specification: "Match line service, resource type, specification and region with the candidate identity; region maps to region_code and charge_mode derives from the model billing mode using the command contract."
+  availability_zone: "Check region membership when an AZ is supplied; an ECS AZ lookup does not establish another service availability."
+  units: "Unit applicability: ../../gotchas.md G04."
+  response: "Match response items by request-line id; amount paths, discounts and reconciliation belong to the command contract, without a universal price multiplication formula."
+evidence_boundary: "Response and quote limits: ../../gotchas.md G01–G06."

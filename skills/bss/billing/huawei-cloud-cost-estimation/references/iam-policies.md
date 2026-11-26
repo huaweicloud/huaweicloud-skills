@@ -1,38 +1,12 @@
-# IAM least privilege
+# IAM scope and permissions
 
-IAM actions vary by account type, site, and service version; before relying on them, confirm against API Explorer
-and runtime `hcloud <Service> <Operation> --help`. On insufficient permission, report back so the user can grant
-the missing permission: never work around a failed query with a write permission, and never retry with self-granted privileges.
+Read `gotchas.md` G01 for error handling. Identify the operation, account/customer scope and denied action from current help, the 403 response and API Explorer; the user's administrator grants permissions. Do not elevate privileges yourself.
 
-## Price inquiry (read-only)
-
-| Level | Operation | Purpose |
-| --- | --- | --- |
-| BSS price inquiry | `ListRateOnPeriodDetail`, `ListOnDemandResourceRatings` | Obtain a period or on-demand quote |
-| BSS dictionary | `ListServiceTypes`, `ListResourceTypes`, `ListServiceResources`, `ListResourceSpecs`, `ListMeasureUnits`, `ListConversions` | Resolve service, resource, spec, and measure |
-| Product helper | `ECS/NovaListAvailabilityZones` | When the user specifies an AZ |
-| Identity scope | `IAM/KeystoneListAuthProjects`, `IAM/KeystoneListProjects` | Resolve accessible projects |
-
-The usual price-inquiry policy is `bss:order:view` plus the corresponding read-only BSS/IAM actions.
-
-## Provisioning (write)
-
-Write permission follows the service that owns the allowlisted operation (for example `ECS/CreateServers` needs an ECS
-write action), while dependency lookups need only the read-only actions of the corresponding service. This file does not enumerate
-write actions per service: take the action named in the current 403 error message and API Explorer as authoritative, and report back so an administrator can grant it.
-
-## Partner price inquiry on behalf of a customer
-
-Use the token obtained from the customer's authorization to call `KeystoneListAuthProjects`, resolve the customer
-`project_id` for the target region, then run the price inquiry. Stop if authorization fails; do not widen the scope.
-
-## Permission and throttling failure handling
-
-| Symptom | Handling |
+| Workflow | Required scope |
 | --- | --- |
-| `403 Forbidden` / `CBC.0151` | Record the operation and account scope, then recommend granting the corresponding action (for price inquiry, read-only only) |
-| `429` | Wait 2 seconds and retry once; stop if it still fails |
+| Pricing | Read-only BSS pricing/dictionaries, including `ListUsageTypes`; commonly `bss:order:view` plus matching read actions |
+| Project discovery | IAM `KeystoneListAuthProjects` / `KeystoneListProjects`; select projects per `gotchas.md` G02 |
+| Provisioning | The allowlisted service's create actions; dependency lookups need only read actions |
+| Partner quote | Customer-authorized token; select projects per `gotchas.md` G02 |
 
-Parameter errors (such as `CBC.0100` / `CBC.99006006` / `CBC.99006055`) are covered in the trap section of
-`pricing/commands.md`. Historical bills, balance, and reconciliation are out of scope for this skill; use
-Cost Center or a dedicated read-only billing skill.
+Use current service action definitions, which vary by account/site/version. A failed read needs the relevant read permission, not broader write access. Partner authorization failure stops that scope. Historical bills and balances follow the routing in `../SKILL.md`.

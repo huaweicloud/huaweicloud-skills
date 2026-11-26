@@ -1,0 +1,24 @@
+name: RFQPeriodModel
+type: semantic_ontology
+pricing_mode: period
+source_operation: BSS/ListRateOnPeriodDetail
+shared_file: rfq-core.yml
+facts:
+  - name: RFQ_Header
+    grain: "One record per ListRateOnPeriodDetail request."
+    fields_from: request_fields
+    child_facts: [RFQ_Line]
+  - name: RFQ_Line
+    grain: "One record per PeriodProductInfo in product_infos[]."
+    parent_fact: RFQ_Header
+    fields_from: line_fields
+    attributes:
+      period_type: {meaning: "Purchase-period type, interpreted together with period_num."}
+      period_num: {meaning: "Number of purchase periods."}
+      fee_installment_mode: {meaning: "Installment option; applicable products and defaults are in the command contract."}
+invariants:
+  - "Behavioral limits: ../../gotchas.md G03–G06."
+contract_sections:
+  - BSS/ListRateOnPeriodDetail
+  - "Capacity and units"
+  - "Read prices and handle exceptions"
