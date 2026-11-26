@@ -1,0 +1,10 @@
+{
+  "_description": "This skill drives the DevBox CLI (`devbox`) and the DevBox SDKs (devbox-sdk / devbox-js-sdk), not KooCLI (`hcloud`). It therefore declares no hcloud test cases: the bundled smoke runner cannot execute non-hcloud commands, and reporting skipped cases as passes would be misleading.",
+  "_how_to_verify": [
+    "Offline (no API key, no network): pip install devbox-sdk && python3 evals/run_evals.py   # runs every SDK example against an in-process mock",
+    "Offline API claims: pip install devbox-sdk && python3 evals/verify_api_claims.py",
+    "Live (needs HW_DEVBOX_API_KEY + network): python3 scripts/devbox_check.py --smoke, then bash examples/cli/quickstart.sh",
+    "Full procedure: references/verification-method.md"
+  ],
+  "test_cases": []
+}
